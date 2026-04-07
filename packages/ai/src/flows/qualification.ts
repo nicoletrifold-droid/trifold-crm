@@ -234,25 +234,35 @@ export function extractCollectedData(
     }
   }
 
-  // Extract visit availability — detect day/time mentions
+  // Extract visit availability — only when a DAY reference is present.
+  // Time-only mentions (10h, de manhã) are NOT sufficient to trigger scheduling.
   if (!updated.visit_availability) {
-    const visitKeywords = [
-      "sábado", "sabado", "domingo", "segunda", "terça", "terca",
-      "quarta", "quinta", "sexta", "amanhã", "amanha",
+    // Keywords that confirm a day → set visit_availability
+    const dayKeywords = [
+      "sábado", "sabado", "domingo",
+      "segunda-feira", "terça-feira", "terca-feira",
+      "quarta-feira", "quinta-feira", "sexta-feira",
+      "amanhã", "amanha", "hoje", "depois de amanhã", "depois de amanha",
       "semana que vem", "próxima semana", "proxima semana",
-      "pode ser", "vou passar", "vou aí", "vou ai",
-      "quero visitar", "quero conhecer", "quero ir",
-      "posso ir", "posso visitar", "posso passar",
-      "10h", "10 horas", "9h", "11h", "14h", "15h", "16h",
-      "de manhã", "de manha", "à tarde", "a tarde",
       "esse sábado", "esse sabado", "nesse sábado",
     ]
-    for (const kw of visitKeywords) {
-      if (lower.includes(kw.toLowerCase())) {
-        updated.visit_availability = aiResponse.trim()
-        break
-      }
+
+    // Keywords that indicate visit intent → set visit_availability
+    const visitIntentKeywords = [
+      "quero visitar", "quero conhecer", "quero ir",
+      "posso ir", "posso visitar", "posso passar",
+      "vou passar", "vou aí", "vou ai",
+    ]
+
+    const hasDayOrIntent = [...dayKeywords, ...visitIntentKeywords].some(
+      (kw) => lower.includes(kw.toLowerCase())
+    )
+
+    if (hasDayOrIntent) {
+      updated.visit_availability = aiResponse.trim()
     }
+    // Time-only keywords (10h, de manhã, à tarde) intentionally excluded —
+    // Nicole should ask for the day before scheduling
   }
 
   return updated

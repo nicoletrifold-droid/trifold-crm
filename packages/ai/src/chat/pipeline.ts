@@ -27,6 +27,30 @@ import {
 } from "../flows"
 import { buildSystemPrompt as buildPromptFromCode } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
+import { STAGE_IDS } from "@trifold/shared"
+
+/**
+ * Validates that a visit_availability string contains a day reference,
+ * not just a time. Uses word boundaries to avoid false positives
+ * like "segunda opção" or "próximo passo".
+ */
+function hasConfirmedDay(availability: unknown): boolean {
+  if (!availability || typeof availability !== "string") return false
+  const lower = availability.toLowerCase()
+  const patterns = [
+    /\bs[aá]bado\b/, /\bdomingo\b/,
+    /\bsegunda[-\s]?feira\b/, /\bter[cç]a[-\s]?feira\b/,
+    /\bquarta[-\s]?feira\b/, /\bquinta[-\s]?feira\b/, /\bsexta[-\s]?feira\b/,
+    /\bamanh[aã]\b/, /\bhoje\b/, /\bdepois de amanh/,
+    /\bsemana que vem\b/,
+    /\bpr[oó]xim[oa]\s+(?:semana|s[aá]bado|domingo|segunda|ter[cç]a|quarta|quinta|sexta)/,
+    /\b\d{1,2}\/\d{1,2}\b/,
+    /\bquero\s+(?:visitar|conhecer|ir)\b/,
+    /\bposso\s+(?:ir|visitar|passar)\b/,
+    /\bvou\s+(?:passar|a[ií])\b/,
+  ]
+  return patterns.some((p) => p.test(lower))
+}
 
 interface ConversationState {
   id: string
@@ -227,15 +251,17 @@ export async function processMessageWithMetadata(
     .eq("id", conversationId)
     .single()
 
-  // 6.5 Get current lead summary for memory context
+  // 6.5 Get current lead summary + stage for context
   let currentSummary: string | null = null
+  let leadStageId: string | null = null
   if (conversation?.lead_id) {
     const { data: leadData } = await supabase
       .from("leads")
-      .select("ai_summary")
+      .select("ai_summary, stage_id")
       .eq("id", conversation.lead_id)
       .single()
     currentSummary = leadData?.ai_summary ?? null
+    leadStageId = leadData?.stage_id ?? null
   }
 
   // 7. Build system prompt with flow context + datetime + memory
@@ -256,11 +282,17 @@ export async function processMessageWithMetadata(
     ? `\nMEMORIA DO LEAD (informacoes de conversas anteriores):\n${currentSummary}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
     : ""
 
+  // No-Show context — empathetic re-engagement
+  const noShowContext = leadStageId === STAGE_IDS.no_show
+    ? "\n=== NO-SHOW CONTEXT ===\nEste lead faltou a uma visita agendada anteriormente. Seja empatica, NAO culpe e NAO mencione \"falta\" ou \"nao compareceu\". Pergunte naturalmente se quer remarcar: algo como \"Vi que nao conseguimos nos encontrar, quer marcar outro dia?\". Se o lead mencionar um dia, agende normalmente.\n=== END NO-SHOW CONTEXT ===\n"
+    : ""
+
   const systemPrompt =
     buildSystemPrompt(agentConfig, ragContext, state) +
     dateTimeContext +
     propertyDataContext +
     memoryContext +
+    noShowContext +
     buildFlowContext(qualificationStep, qualificationScore, identifiedPropertyId) +
     yardenGateContext
 
@@ -389,12 +421,7 @@ export async function processMessageWithMetadata(
   if (conversation?.lead_id) {
     const leadId = conversation.lead_id
 
-    const STAGE_IDS = {
-      novo: "00000000-0000-0000-0001-000000000001",
-      em_qualificacao: "00000000-0000-0000-0001-000000000002",
-      qualificado: "00000000-0000-0000-0001-000000000003",
-      visita_agendada: "00000000-0000-0000-0001-000000000004",
-    }
+    // STAGE_IDS imported from @trifold/shared
 
     // [12.2 AC11] Single batch update — accumulate all changes, apply once
     const leadPatch: Record<string, unknown> = {}
@@ -458,7 +485,7 @@ export async function processMessageWithMetadata(
       .limit(1)
       .maybeSingle()
 
-    if (finalData.visit_availability && !state?.visit_proposed && !existingAppt && conversation.org_id) {
+    if (finalData.visit_availability && hasConfirmedDay(finalData.visit_availability) && !state?.visit_proposed && !existingAppt && conversation.org_id) {
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
       if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1)

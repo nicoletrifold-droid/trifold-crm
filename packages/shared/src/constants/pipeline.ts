@@ -2,6 +2,7 @@ export const PIPELINE_STAGES = [
   "novo",
   "qualificado",
   "agendado",
+  "no_show",
   "visitou",
   "proposta",
   "fechado",

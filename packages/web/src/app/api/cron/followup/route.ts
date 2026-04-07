@@ -207,6 +207,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // --- No-show detection ---
+  const noShowDetected = await processNoShowDetection(supabase, now)
+
   // --- Post-visit follow-up ---
   // Find completed appointments with no post_visit follow-up log in the last 48h
   let postVisitSent = 0
@@ -315,8 +318,8 @@ export async function POST(request: NextRequest) {
     level: processed > 0 ? "info" : "info",
     category: "cron",
     event_type: "FOLLOWUP_EXECUTED",
-    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} messages, ${postVisitSent} post-visit`,
-    metadata: { processed, alerts_created: alertsCreated, messages_sent: messagesSent, post_visit_sent: postVisitSent },
+    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} messages, ${postVisitSent} post-visit, ${noShowDetected} no-show`,
+    metadata: { processed, alerts_created: alertsCreated, messages_sent: messagesSent, post_visit_sent: postVisitSent, no_show_detected: noShowDetected },
     source: "api/cron/followup",
   })
 
@@ -325,5 +328,82 @@ export async function POST(request: NextRequest) {
     alerts_created: alertsCreated,
     messages_sent: messagesSent,
     post_visit_sent: postVisitSent,
+    no_show_detected: noShowDetected,
   })
+}
+
+const NO_SHOW_STAGE_ID = "00000000-0000-0000-0001-000000000009"
+
+/**
+ * Detect appointments that are 48h+ past scheduled_at with no feedback.
+ * Mark as no_show, move lead to No-Show stage, reset conversation state.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function processNoShowDetection(
+  supabase: any,
+  now: Date
+): Promise<number> {
+  const threshold = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+
+  const { data: staleAppointments } = await supabase
+    .from("appointments")
+    .select("id, lead_id, org_id, scheduled_at")
+    .in("status", ["scheduled", "confirmed"])
+    .lt("scheduled_at", threshold.toISOString())
+
+  if (!staleAppointments || staleAppointments.length === 0) return 0
+
+  let count = 0
+  for (const appt of staleAppointments) {
+    // Mark appointment as no_show
+    await supabase
+      .from("appointments")
+      .update({ status: "no_show" })
+      .eq("id", appt.id)
+
+    // Move lead to No-Show stage
+    await supabase
+      .from("leads")
+      .update({ stage_id: NO_SHOW_STAGE_ID })
+      .eq("id", appt.lead_id)
+
+    // Reset conversation state (visit_proposed + visit_availability)
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("lead_id", appt.lead_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (conv) {
+      const { data: state } = await supabase
+        .from("conversation_state")
+        .select("collected_data")
+        .eq("conversation_id", conv.id)
+        .single()
+
+      if (state) {
+        const cleaned = { ...(state.collected_data as Record<string, unknown>) }
+        delete cleaned.visit_availability
+        await supabase
+          .from("conversation_state")
+          .update({ visit_proposed: false, collected_data: cleaned })
+          .eq("conversation_id", conv.id)
+      }
+    }
+
+    // Activity log
+    await supabase.from("activities").insert({
+      org_id: appt.org_id,
+      lead_id: appt.lead_id,
+      type: "appointment_no_show",
+      description: "Visita nao realizada — sem feedback do corretor apos 48h",
+      metadata: { appointment_id: appt.id },
+    })
+
+    count++
+  }
+
+  return count
 }

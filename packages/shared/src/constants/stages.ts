@@ -1,0 +1,17 @@
+/**
+ * Kanban stage UUIDs — single source of truth.
+ * Used by: pipeline.ts, feedback route, followup cron.
+ */
+export const STAGE_IDS = {
+  novo: "00000000-0000-0000-0001-000000000001",
+  em_qualificacao: "00000000-0000-0000-0001-000000000002",
+  qualificado: "00000000-0000-0000-0001-000000000003",
+  visita_agendada: "00000000-0000-0000-0001-000000000004",
+  no_show: "00000000-0000-0000-0001-000000000009",
+  visitou: "00000000-0000-0000-0001-000000000005",
+  negociando: "00000000-0000-0000-0001-000000000006",
+  fechou: "00000000-0000-0000-0001-000000000007",
+  perdido: "00000000-0000-0000-0001-000000000008",
+} as const
+
+export type StageSlug = keyof typeof STAGE_IDS

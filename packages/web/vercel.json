@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/enrich-leads",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/followup",
+      "schedule": "0 */2 * * *"
     }
   ]
 }

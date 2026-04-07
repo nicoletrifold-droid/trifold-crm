@@ -98,6 +98,28 @@ export async function POST(
       )
     }
 
+    // Move lead to "Visitou" stage — only if in earlier stages (prevent regression)
+    const VISITOU_STAGE_ID = "00000000-0000-0000-0001-000000000005"
+    const NON_REGRESSION_STAGES = [
+      "00000000-0000-0000-0001-000000000001", // novo
+      "00000000-0000-0000-0001-000000000002", // em_qualificacao
+      "00000000-0000-0000-0001-000000000003", // qualificado
+      "00000000-0000-0000-0001-000000000004", // visita_agendada
+      "00000000-0000-0000-0001-000000000009", // no_show
+    ]
+    const { data: leadForStage } = await supabase
+      .from("leads")
+      .select("stage_id")
+      .eq("id", appointment.lead_id)
+      .single()
+
+    if (leadForStage && NON_REGRESSION_STAGES.includes(leadForStage.stage_id)) {
+      await supabase
+        .from("leads")
+        .update({ stage_id: VISITOU_STAGE_ID })
+        .eq("id", appointment.lead_id)
+    }
+
     // Create activity log
     await supabase.from("activities").insert({
       org_id: appointment.org_id,

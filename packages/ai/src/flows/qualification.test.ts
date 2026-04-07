@@ -331,7 +331,7 @@ describe("extractCollectedData", () => {
     expect(result.bedrooms).toBe(3)
   })
 
-  it("extracts visit availability", () => {
+  it("extracts visit availability from intent keyword", () => {
     const result = extractCollectedData("Quero visitar o apartamento", {})
     expect(result.visit_availability).toBeTruthy()
   })
@@ -340,6 +340,21 @@ describe("extractCollectedData", () => {
     const result = extractCollectedData("Pode ser esse sábado às 10h", {})
     expect(result.visit_availability).toBeTruthy()
     expect(result.visit_availability).toContain("sábado")
+  })
+
+  it("does NOT extract visit from time-only mention", () => {
+    const result = extractCollectedData("Pode ser às 10h", {})
+    expect(result.visit_availability).toBeUndefined()
+  })
+
+  it("does NOT extract visit from 'de manhã' alone", () => {
+    const result = extractCollectedData("Prefiro de manhã", {})
+    expect(result.visit_availability).toBeUndefined()
+  })
+
+  it("extracts visit from day keyword 'amanhã'", () => {
+    const result = extractCollectedData("Posso amanhã de manhã", {})
+    expect(result.visit_availability).toBeTruthy()
   })
 
   it("preserves existing data and merges new extractions", () => {
