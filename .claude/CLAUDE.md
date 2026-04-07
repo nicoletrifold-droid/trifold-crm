@@ -2,6 +2,33 @@
 
 You are working with Synkra AIOS, an AI-Orchestrated System for Full Stack Development.
 
+## REGRA ZERO — Desenvolvimento SEMPRE via Agentes AIOS
+
+**TODO desenvolvimento DEVE passar pelos agentes AIOS.** Nunca implementar, testar ou fazer push diretamente.
+
+| Ação | Agente OBRIGATÓRIO | Ativação |
+|------|-------------------|----------|
+| Criar story | `@sm` | `/AIOS:agents:sm` ou `@sm` |
+| Validar story | `@po` | `/AIOS:agents:po` ou `@po` |
+| Implementar código | `@dev` | `/AIOS:agents:dev` ou `@dev` |
+| Quality gate | `@qa` | `/AIOS:agents:qa` ou `@qa` |
+| Git push / PR / deploy | `@devops` | `/AIOS:agents:devops` ou `@devops` |
+
+**Fluxo mínimo para qualquer mudança de código:**
+```
+@dev *develop → @qa *qa-gate → @devops *push
+```
+
+**Para features completas (com story):**
+```
+@sm *draft → @po *validate → @dev *develop → @qa *qa-gate → @devops *push
+```
+
+**VIOLAÇÕES BLOQUEANTES:**
+- Fazer `git push` sem @devops = BLOQUEADO
+- Implementar sem ativar @dev = VIOLAÇÃO
+- Deploy sem quality gate @qa = VIOLAÇÃO
+
 <!-- AIOS-MANAGED-START: core-framework -->
 ## Core Framework Understanding
 
