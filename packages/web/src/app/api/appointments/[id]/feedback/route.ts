@@ -99,13 +99,10 @@ export async function POST(
     }
 
     // Move lead to "Visitou" stage — only if in earlier stages (prevent regression)
-    const VISITOU_STAGE_ID = "00000000-0000-0000-0001-000000000005"
+    const { STAGE_IDS } = await import("@trifold/shared")
     const NON_REGRESSION_STAGES = [
-      "00000000-0000-0000-0001-000000000001", // novo
-      "00000000-0000-0000-0001-000000000002", // em_qualificacao
-      "00000000-0000-0000-0001-000000000003", // qualificado
-      "00000000-0000-0000-0001-000000000004", // visita_agendada
-      "00000000-0000-0000-0001-000000000009", // no_show
+      STAGE_IDS.novo, STAGE_IDS.em_qualificacao, STAGE_IDS.qualificado,
+      STAGE_IDS.visita_agendada, STAGE_IDS.no_show,
     ]
     const { data: leadForStage } = await supabase
       .from("leads")
@@ -116,7 +113,7 @@ export async function POST(
     if (leadForStage && NON_REGRESSION_STAGES.includes(leadForStage.stage_id)) {
       await supabase
         .from("leads")
-        .update({ stage_id: VISITOU_STAGE_ID })
+        .update({ stage_id: STAGE_IDS.visitou })
         .eq("id", appointment.lead_id)
     }
 

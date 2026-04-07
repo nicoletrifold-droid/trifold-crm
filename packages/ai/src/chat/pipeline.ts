@@ -34,20 +34,20 @@ import { STAGE_IDS } from "@trifold/shared"
  * not just a time. Uses word boundaries to avoid false positives
  * like "segunda opção" or "próximo passo".
  */
-function hasConfirmedDay(availability: unknown): boolean {
+export function hasConfirmedDay(availability: unknown): boolean {
   if (!availability || typeof availability !== "string") return false
   const lower = availability.toLowerCase()
   const patterns = [
     /\bs[aá]bado\b/, /\bdomingo\b/,
-    /\bsegunda[-\s]?feira\b/, /\bter[cç]a[-\s]?feira\b/,
-    /\bquarta[-\s]?feira\b/, /\bquinta[-\s]?feira\b/, /\bsexta[-\s]?feira\b/,
-    /\bamanh[aã]\b/, /\bhoje\b/, /\bdepois de amanh/,
+    /\bsegunda[-\s]?feira/, /\bter[cç]a[-\s]?feira/, /\bquarta[-\s]?feira/,
+    /\bquinta[-\s]?feira/, /\bsexta[-\s]?feira/,
+    /\bamanh[aã]/, /\bhoje\b/, /\bdepois de amanh/,
     /\bsemana que vem\b/,
     /\bpr[oó]xim[oa]\s+(?:semana|s[aá]bado|domingo|segunda|ter[cç]a|quarta|quinta|sexta)/,
     /\b\d{1,2}\/\d{1,2}\b/,
     /\bquero\s+(?:visitar|conhecer|ir)\b/,
     /\bposso\s+(?:ir|visitar|passar)\b/,
-    /\bvou\s+(?:passar|a[ií])\b/,
+    /\bvou\s+(?:passar|a[ií])/,
   ]
   return patterns.some((p) => p.test(lower))
 }

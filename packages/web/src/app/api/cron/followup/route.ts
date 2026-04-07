@@ -332,7 +332,9 @@ export async function POST(request: NextRequest) {
   })
 }
 
-const NO_SHOW_STAGE_ID = "00000000-0000-0000-0001-000000000009"
+import { STAGE_IDS } from "@trifold/shared"
+
+const NO_SHOW_STAGE_ID = STAGE_IDS.no_show
 
 /**
  * Detect appointments that are 48h+ past scheduled_at with no feedback.
