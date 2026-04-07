@@ -310,11 +310,16 @@ export async function processMessageWithMetadata(
       const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
       messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
     } else {
-      // Visita passou ou foi cancelada — resetar
+      // Visita passou ou foi cancelada — resetar visit_proposed E limpar visit_availability
+      // para evitar que o pipeline crie um novo agendamento com dados antigos
+      const cleanedData = { ...collectedData }
+      delete cleanedData.visit_availability
       await supabase
         .from("conversation_state")
-        .update({ visit_proposed: false })
+        .update({ visit_proposed: false, collected_data: cleanedData })
         .eq("conversation_id", conversationId)
+      // Sync local state
+      delete collectedData.visit_availability
     }
   }
 
@@ -443,7 +448,17 @@ export async function processMessageWithMetadata(
     }
 
     // Visit scheduling — overrides qualification stage
-    if (finalData.visit_availability && !state?.visit_proposed && conversation.org_id) {
+    // Double-check: no existing future appointment for this lead (prevents duplicates)
+    const { data: existingAppt } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("lead_id", leadId)
+      .in("status", ["scheduled", "confirmed"])
+      .gte("scheduled_at", new Date().toISOString())
+      .limit(1)
+      .maybeSingle()
+
+    if (finalData.visit_availability && !state?.visit_proposed && !existingAppt && conversation.org_id) {
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
       if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1)
