@@ -129,13 +129,16 @@ export function extractCollectedData(
     }
   }
 
-  // Extract property interest
+  // Extract property interest — only when ONE property is mentioned (not comparisons)
   if (!updated.property_interest) {
-    if (lower.includes("vind")) {
+    const mentionsVind = lower.includes("vind")
+    const mentionsYarden = lower.includes("yarden")
+    if (mentionsVind && !mentionsYarden) {
       updated.property_interest = "vind"
-    } else if (lower.includes("yarden")) {
+    } else if (mentionsYarden && !mentionsVind) {
       updated.property_interest = "yarden"
     }
+    // If both mentioned, skip — let identifyProperty handle disambiguation
   }
 
   // Extract bedroom preferences (AC9 — with spelled-out numbers)

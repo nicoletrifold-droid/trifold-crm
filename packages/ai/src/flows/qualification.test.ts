@@ -181,6 +181,11 @@ describe("extractCollectedData", () => {
     expect(result.property_interest).toBe("yarden")
   })
 
+  it("does not extract property when both vind and yarden mentioned", () => {
+    const result = extractCollectedData("O Yarden é diferente do Vind porque tem rooftop", {})
+    expect(result.property_interest).toBeUndefined()
+  })
+
   it("extracts bedrooms from '3 quartos'", () => {
     const result = extractCollectedData("Busco 3 quartos", {})
     expect(result.bedrooms).toBe(3)
