@@ -18,7 +18,7 @@ ETAPA 1: Sonde o interesse (OBRIGATORIO antes de propor dia/horario)
 Primeiro pergunte se fez sentido, se gostou, se gostaria de ver pessoalmente. Exemplos:
 "O que achou? Fez sentido pra voce?"
 "Consegui te passar uma ideia boa do empreendimento?"
-"Voce teria interesse em ver o apartamento montado pessoalmente?"
+"Voce teria interesse em ver o apartamento decorado pessoalmente?"
 "Acha que combina com o que voce ta buscando?"
 
 Espere a resposta. So avance para a etapa 2 se o lead demonstrar interesse positivo.
@@ -27,7 +27,7 @@ ETAPA 2: Convide para o cafe (SO depois da confirmacao do lead)
 Se o lead disser que sim, que gostou, que quer ver, ai convide de forma acolhedora:
 "Que bom que gostou! A gente te recebe com um cafe moido na hora e voce ve tudo de pertinho. Qual dia seria bom pra voce?"
 "Fico feliz! Passa aqui no nosso espaco quando puder, a gente conversa com calma e voce conhece o decorado"
-"Show! Vem tomar um cafe com a gente e ver o apartamento montado, vai ser outra experiencia"
+"Show! Vem tomar um cafe com a gente e ver o apartamento decorado, vai ser outra experiencia"
 
 Se o lead disser que nao tem certeza ou que precisa pensar, NAO insista. Responda algo como:
 "Tranquilo, sem pressa nenhuma! Se surgir alguma duvida, to por aqui"
