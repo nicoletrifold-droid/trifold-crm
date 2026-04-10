@@ -3,19 +3,60 @@ import { createClient } from "@supabase/supabase-js"
 import { logEvent } from "@web/lib/logger"
 
 const CRON_SECRET = process.env.CRON_SECRET
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+
+/**
+ * Send a follow-up message to the lead via Telegram.
+ * Skips silently if lead is not a Telegram user (phone doesn't start with "tg:").
+ */
+async function sendFollowUpMessage(phone: string, message: string): Promise<boolean> {
+  if (!phone.startsWith("tg:")) {
+    return false // Not a Telegram lead — skip
+  }
+
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error("[FOLLOWUP] TELEGRAM_BOT_TOKEN not configured — message not sent")
+    return false
+  }
+
+  const chatId = phone.replace("tg:", "")
+
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: message }),
+        signal: AbortSignal.timeout(30000),
+      }
+    )
+
+    if (!res.ok) {
+      const errText = await res.text()
+      console.error(`[FOLLOWUP] Telegram API error ${res.status}: ${errText}`)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error("[FOLLOWUP] Telegram send failed:", err)
+    return false
+  }
+}
 
 /**
  * Follow-up cron engine.
- * POST /api/cron/followup
+ * GET /api/cron/followup (Vercel Cron sends GET requests)
  *
  * For each active follow_up_rule:
  * - Find leads in that stage where last message is older than alert_days / nicole_takeover_days
  * - If broker hasn't sent a message since last lead/Nicole message:
  *   - alert_days exceeded → create follow_up_log entry type='alert_broker'
- *   - nicole_takeover_days exceeded → render template and create log type='nicole_sent'
+ *   - nicole_takeover_days exceeded → render template, send via Telegram, create log type='nicole_sent'
  * - Respect: max 1 followup per lead per 48h, business hours only
  */
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   // Validate cron secret — fail-closed
   const authHeader = request.headers.get("authorization")
   if (!CRON_SECRET) {
@@ -157,13 +198,26 @@ export async function POST(request: NextRequest) {
           message,
         })
 
-        // Send the message via Nicole's pipeline
-        // Insert message into the conversation as assistant
+        // Send the message via Telegram
+        const sent = await sendFollowUpMessage(lead.phone, message)
+
+        if (sent) {
+          logEvent({
+            level: "info",
+            category: "cron",
+            event_type: "FOLLOWUP_TELEGRAM_SENT",
+            message: `Follow-up sent to lead ${lead.id} via Telegram`,
+            metadata: { lead_id: lead.id, type: "nicole_sent", stage: stage.name },
+            source: "api/cron/followup",
+          })
+        }
+
+        // Save message to conversation history (regardless of Telegram send status)
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
           content: message,
-          metadata: { source: "followup_cron", rule_id: rule.id },
+          metadata: { source: "followup_cron", rule_id: rule.id, telegram_sent: sent },
         })
 
         // Update conversation timestamp
@@ -177,8 +231,8 @@ export async function POST(request: NextRequest) {
           org_id: rule.org_id,
           lead_id: lead.id,
           type: "followup_nicole_sent",
-          description: `Nicole enviou follow-up automatico na etapa "${stage.name}"`,
-          metadata: { rule_id: rule.id, stage_id: rule.stage_id },
+          description: `Nicole enviou follow-up automatico na etapa "${stage.name}"${sent ? " (Telegram)" : " (salvo, envio pendente)"}`,
+          metadata: { rule_id: rule.id, stage_id: rule.stage_id, telegram_sent: sent },
         })
 
         messagesSent++
@@ -276,7 +330,22 @@ export async function POST(request: NextRequest) {
         message,
       })
 
-      // Get or create conversation for the lead
+      // Send via Telegram
+      const leadPhone = (leadData as { phone?: string }).phone || ""
+      const postVisitTgSent = await sendFollowUpMessage(leadPhone, message)
+
+      if (postVisitTgSent) {
+        logEvent({
+          level: "info",
+          category: "cron",
+          event_type: "FOLLOWUP_TELEGRAM_SENT",
+          message: `Post-visit follow-up sent to lead ${appt.lead_id} via Telegram`,
+          metadata: { lead_id: appt.lead_id, type: "post_visit", appointment_id: appt.id },
+          source: "api/cron/followup",
+        })
+      }
+
+      // Save to conversation history
       const { data: conversations } = await supabase
         .from("conversations")
         .select("id")
@@ -291,7 +360,7 @@ export async function POST(request: NextRequest) {
           conversation_id: conversationId,
           role: "assistant",
           content: message,
-          metadata: { source: "post_visit_followup", appointment_id: appt.id },
+          metadata: { source: "post_visit_followup", appointment_id: appt.id, telegram_sent: postVisitTgSent },
         })
 
         await supabase
@@ -305,8 +374,8 @@ export async function POST(request: NextRequest) {
         org_id: appt.org_id,
         lead_id: appt.lead_id,
         type: "followup_post_visit",
-        description: `Nicole enviou follow-up pos-visita (interesse: ${interestLevel || "nao informado"})`,
-        metadata: { appointment_id: appt.id },
+        description: `Nicole enviou follow-up pos-visita (interesse: ${interestLevel || "nao informado"})${postVisitTgSent ? " (Telegram)" : ""}`,
+        metadata: { appointment_id: appt.id, telegram_sent: postVisitTgSent },
       })
 
       postVisitSent++
