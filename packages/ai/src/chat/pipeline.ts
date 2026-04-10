@@ -25,6 +25,8 @@ import {
   generateHandoffSummary,
   updateLeadMemory,
 } from "../flows"
+import { extractFactsFromMessage } from "../flows/memory-extraction"
+import { loadMemoryContext } from "../memory/loader"
 import { buildSystemPrompt as buildPromptFromCode } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
 import { STAGE_IDS } from "@trifold/shared"
@@ -277,10 +279,22 @@ export async function processMessageWithMetadata(
   // Property live data context
   const propertyDataContext = buildPropertyDataContext(properties, identifiedPropertyId)
 
-  // Lead memory context
-  const memoryContext = currentSummary
-    ? `\nMEMORIA DO LEAD (informacoes de conversas anteriores):\n${currentSummary}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
-    : ""
+  // Lead memory context — Progressive Loading (MemPalace-inspired L1/L2/L3)
+  let memoryContext = ""
+  if (conversation?.lead_id) {
+    try {
+      const memCtx = await loadMemoryContext(supabase, conversation.lead_id, message, currentSummary)
+      const parts = [memCtx.l1Snapshot, memCtx.l2TopicMemories, memCtx.l3DeepSearch].filter(Boolean)
+      if (parts.length > 0) {
+        memoryContext = `\n${parts.join("\n\n")}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
+      }
+    } catch {
+      // Fallback to ai_summary if progressive loading fails
+      memoryContext = currentSummary
+        ? `\nMEMORIA DO LEAD (informacoes de conversas anteriores):\n${currentSummary}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
+        : ""
+    }
+  }
 
   // No-Show context — empathetic re-engagement
   const noShowContext = leadStageId === STAGE_IDS.no_show
@@ -595,24 +609,72 @@ export async function processMessageWithMetadata(
     current_property_id: identifiedPropertyId ?? state?.current_property_id ?? null,
   })
 
-  // 12.5 Update lead memory — skip on handoff (handoffSummary is definitive)
+  // 12.5 Memory system — regex extraction + lead_facts + Haiku batch (MemPalace-inspired)
   if (conversation?.lead_id && !handoffResult.trigger) {
     const leadId = conversation.lead_id
-    updateLeadMemory({
-      anthropic,
-      currentSummary,
-      userMessage: message,
-      assistantMessage,
-      collectedData: finalData,
-    }).then(async (newSummary) => {
-      if (newSummary) {
-        const { error } = await supabase
-          .from("leads")
-          .update({ ai_summary: newSummary })
-          .eq("id", leadId)
-        if (error) console.error("Error saving lead memory:", error.message)
+
+    // 12.5a Deterministic regex extraction → lead_facts (zero-cost, every message)
+    try {
+      const extractedFacts = extractFactsFromMessage(message)
+      for (const fact of extractedFacts) {
+        // Temporal invalidation: expire old fact if predicate changes
+        await supabase
+          .from("lead_facts")
+          .update({ valid_to: new Date().toISOString() })
+          .eq("lead_id", leadId)
+          .eq("predicate", fact.predicate)
+          .is("valid_to", null)
+          .neq("object", fact.object)
+
+        // Insert new fact (only if different from current active)
+        const { data: existing } = await supabase
+          .from("lead_facts")
+          .select("id")
+          .eq("lead_id", leadId)
+          .eq("predicate", fact.predicate)
+          .eq("object", fact.object)
+          .is("valid_to", null)
+          .limit(1)
+          .maybeSingle()
+
+        if (!existing) {
+          await supabase.from("lead_facts").insert({
+            lead_id: leadId,
+            predicate: fact.predicate,
+            object: fact.object,
+            confidence: fact.confidence,
+          })
+        }
       }
-    }).catch((err) => console.error("Lead memory update failed:", err))
+    } catch (err) {
+      console.error("Regex extraction failed (non-blocking):", err)
+    }
+
+    // 12.5b Haiku memory update — every 5 messages (batch mode)
+    // Count recent messages to decide if it's time for a Haiku pass
+    const { count: msgCount } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", conversationId)
+
+    const shouldRunHaiku = (msgCount ?? 0) % 5 === 0
+
+    if (shouldRunHaiku) {
+      updateLeadMemory({
+        anthropic,
+        currentSummary,
+        userMessage: message,
+        assistantMessage,
+        collectedData: finalData,
+      }).then(async (newSummary) => {
+        if (newSummary) {
+          await supabase
+            .from("leads")
+            .update({ ai_summary: newSummary })
+            .eq("id", leadId)
+        }
+      }).catch((err) => console.error("Lead memory update failed:", err))
+    }
   }
 
   // 13. Return response with metadata
