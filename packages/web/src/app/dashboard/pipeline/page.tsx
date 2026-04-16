@@ -12,7 +12,7 @@ export default async function PipelinePage({
   const user = await getServerUser()
   const supabase = await createClient()
 
-  const [{ data: stages }, { data: properties }, { data: brokers }] =
+  const [{ data: stages }, { data: properties }, { data: brokers }, { data: campaigns }] =
     await Promise.all([
       supabase
         .from("kanban_stages")
@@ -31,6 +31,10 @@ export default async function PipelinePage({
         .eq("role", "broker")
         .eq("is_active", true)
         .order("name"),
+      supabase
+        .from("campaigns")
+        .select("id, name")
+        .order("created_at", { ascending: false }),
     ])
 
   let leadsQuery = supabase
@@ -50,6 +54,21 @@ export default async function PipelinePage({
 
   if (filters.broker_id) {
     leadsQuery = leadsQuery.eq("assigned_broker_id", filters.broker_id)
+  }
+
+  if (filters.campaign_id) {
+    const { data: campaignLeadIds } = await supabase
+      .from("campaign_entries")
+      .select("lead_id")
+      .eq("campaign_id", filters.campaign_id)
+      .not("lead_id", "is", null)
+
+    const ids = (campaignLeadIds ?? []).map((e) => e.lead_id).filter(Boolean)
+    if (ids.length > 0) {
+      leadsQuery = leadsQuery.in("id", ids)
+    } else {
+      leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000")
+    }
   }
 
   const { data: leads } = await leadsQuery.order("updated_at", {
@@ -124,6 +143,24 @@ export default async function PipelinePage({
 
           <div>
             <label className="block text-xs font-medium text-gray-500">
+              Campanha
+            </label>
+            <select
+              name="campaign_id"
+              defaultValue={filters.campaign_id ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            >
+              <option value="">Todas</option>
+              {campaigns?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500">
               Score
             </label>
             <select
@@ -145,7 +182,7 @@ export default async function PipelinePage({
             Filtrar
           </button>
 
-          {(filters.property_id || filters.broker_id || filters.score) && (
+          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id) && (
             <Link
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50"

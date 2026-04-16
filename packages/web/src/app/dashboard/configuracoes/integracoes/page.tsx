@@ -1,4 +1,6 @@
 import { getServerUser } from "@web/lib/auth"
+import { createClient } from "@web/lib/supabase/server"
+import { GoogleIntegrationCard } from "./google-integration-card"
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -40,7 +42,16 @@ function ConfigField({
 }
 
 export default async function IntegracoesPage() {
-  await getServerUser()
+  const user = await getServerUser()
+  const supabase = await createClient()
+
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("google_oauth_tokens")
+    .eq("id", user.orgId)
+    .single()
+
+  const googleConnected = !!(org?.google_oauth_tokens as Record<string, unknown> | null)?.refresh_token
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://seu-dominio.com"
 
@@ -139,6 +150,9 @@ export default async function IntegracoesPage() {
           />
         </div>
       </div>
+
+      {/* Google Forms */}
+      <GoogleIntegrationCard connected={googleConnected} />
 
       {/* Google Ads */}
       <div className="rounded-lg bg-white p-6 shadow-sm">

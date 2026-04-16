@@ -57,14 +57,72 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 })
   }
 
-  // Parse the incoming message
+  // Parse the incoming webhook payload
   const entry = body.entry?.[0]
   const changes = entry?.changes?.[0]
   const value = changes?.value
+
+  // --- Campaign status tracking (Story 15.12) ---
+  const statuses = value?.statuses as Array<{ id: string; status: string; recipient_id: string }> | undefined
+  if (statuses?.length) {
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      for (const st of statuses) {
+        const recipientId = st.recipient_id
+        // Normalize: remove 55 prefix if 13 digits
+        const phone =
+          recipientId.startsWith("55") && recipientId.length === 13
+            ? recipientId.slice(2)
+            : recipientId
+
+        const waStatus = st.status // sent, delivered, read, failed
+
+        // Find campaign entries for this phone that haven't reached terminal state
+        const { data: entries } = await supabaseAdmin
+          .from("campaign_entries")
+          .select("id, campaign_id, org_id, whatsapp_status")
+          .eq("phone", phone)
+          .not("whatsapp_status", "in", "(read,failed)")
+
+        for (const ce of entries ?? []) {
+          const updates: Record<string, unknown> = { whatsapp_status: waStatus }
+          if (waStatus === "delivered" || waStatus === "read") {
+            updates.is_valid_phone = true
+          } else if (waStatus === "failed") {
+            updates.is_valid_phone = false
+          }
+
+          await supabaseAdmin
+            .from("campaign_entries")
+            .update(updates)
+            .eq("id", ce.id)
+
+          await supabaseAdmin.from("campaign_events").insert({
+            org_id: ce.org_id,
+            campaign_id: ce.campaign_id,
+            entry_id: ce.id,
+            channel: "whatsapp",
+            event_type: waStatus,
+            metadata: { wamid: st.id, recipient_id: recipientId },
+          })
+        }
+      }
+    } catch (statusError) {
+      // Isolated — don't affect message processing
+      logEvent({
+        level: "error",
+        category: "webhook",
+        event_type: "CAMPAIGN_STATUS_TRACKING_ERROR",
+        message: `Error tracking campaign WhatsApp statuses: ${statusError instanceof Error ? statusError.message : "Unknown"}`,
+        source: "api/webhook/whatsapp",
+      })
+    }
+  }
+
+  // --- Message processing ---
   const messages = value?.messages
 
   if (!messages?.[0]) {
-    // Status update or other non-message event
     return NextResponse.json({ status: "ok" })
   }
 
@@ -317,6 +375,32 @@ export async function POST(request: NextRequest) {
         }),
       })
       return NextResponse.json({ status: "ok" })
+    }
+
+    // --- Campaign reply tracking (Story 15.12) ---
+    try {
+      const { data: campaignEntries } = await supabase
+        .from("campaign_entries")
+        .select("id, campaign_id, org_id")
+        .eq("phone", from.startsWith("55") && from.length === 13 ? from.slice(2) : from)
+        .eq("has_responded", false)
+
+      for (const ce of campaignEntries ?? []) {
+        await supabase
+          .from("campaign_entries")
+          .update({ has_responded: true })
+          .eq("id", ce.id)
+
+        await supabase.from("campaign_events").insert({
+          org_id: ce.org_id,
+          campaign_id: ce.campaign_id,
+          entry_id: ce.id,
+          channel: "whatsapp",
+          event_type: "replied",
+        })
+      }
+    } catch {
+      // Isolated — don't affect message processing
     }
 
     // If AI is active, process with Nicole

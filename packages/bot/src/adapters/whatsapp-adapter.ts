@@ -1,4 +1,4 @@
-import type { MessagingAdapter, ParsedMessage } from "./messaging-adapter"
+import type { MessagingAdapter, ParsedMessage, TemplateComponent } from "./messaging-adapter"
 
 interface WhatsAppConfig {
   phoneNumberId: string
@@ -43,6 +43,24 @@ export class WhatsAppAdapter implements MessagingAdapter {
       to,
       type: "document",
       document: { link: url, filename },
+    })
+  }
+
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    languageCode: string,
+    components?: TemplateComponent[]
+  ): Promise<void> {
+    await this.callApi("messages", {
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        ...(components?.length ? { components } : {}),
+      },
     })
   }
 

@@ -12,6 +12,7 @@ import {
   Bell,
   Activity,
   BarChart3,
+  Megaphone,
   GraduationCap,
   Settings,
   Shield,
@@ -30,6 +31,7 @@ const NAV_ITEMS_BASE = [
   { href: "/dashboard/alertas", label: "Alertas", icon: <Bell className={ICON_SIZE} /> },
   { href: "/dashboard/atividades", label: "Atividades", icon: <Activity className={ICON_SIZE} /> },
   { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} /> },
+  { href: "/dashboard/campaigns", label: "Campanhas", icon: <Megaphone className={ICON_SIZE} /> },
   { href: "/dashboard/treinamento", label: "Treinamento", icon: <GraduationCap className={ICON_SIZE} /> },
   { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> },
 ]
