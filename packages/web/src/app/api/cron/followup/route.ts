@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import { logEvent } from "@web/lib/logger"
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -409,9 +409,8 @@ const NO_SHOW_STAGE_ID = STAGE_IDS.no_show
  * Detect appointments that are 48h+ past scheduled_at with no feedback.
  * Mark as no_show, move lead to No-Show stage, reset conversation state.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processNoShowDetection(
-  supabase: any,
+  supabase: SupabaseClient,
   now: Date
 ): Promise<number> {
   const threshold = new Date(now.getTime() - 48 * 60 * 60 * 1000)
