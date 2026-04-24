@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { GoogleIntegrationCard } from "./google-integration-card"
@@ -55,6 +56,16 @@ export default async function IntegracoesPage() {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://seu-dominio.com"
 
+  const { data: metaAccount } = await supabase
+    .from("meta_ad_accounts")
+    .select("status")
+    .eq("org_id", user.orgId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const metaAdsStatus = metaAccount?.status ?? null
+
   // Check environment variable status
   const metaAppSecretConfigured = !!process.env.META_APP_SECRET
   const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
@@ -80,7 +91,24 @@ export default async function IntegracoesPage() {
               Receba leads de campanhas do Facebook e Instagram
             </p>
           </div>
-          <StatusBadge active={metaAppSecretConfigured} />
+          <div className="flex items-center gap-3">
+            {metaAdsStatus === "active" && (
+              <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                Conectado
+              </span>
+            )}
+            {metaAdsStatus === "error" && (
+              <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                Erro
+              </span>
+            )}
+            {metaAdsStatus === "disconnected" && (
+              <span className="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+                Não testado
+              </span>
+            )}
+            <StatusBadge active={metaAppSecretConfigured} />
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <ConfigField
@@ -92,6 +120,14 @@ export default async function IntegracoesPage() {
             label="META_APP_SECRET"
             value={metaAppSecretConfigured ? "Configurado" : "Não configurado"}
           />
+        </div>
+        <div className="mt-4">
+          <Link
+            href="/dashboard/configuracoes/integracoes/meta-ads"
+            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+          >
+            {metaAdsStatus ? "Gerenciar conexão →" : "Configurar conexão →"}
+          </Link>
         </div>
       </div>
 

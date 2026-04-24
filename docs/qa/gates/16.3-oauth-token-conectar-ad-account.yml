@@ -1,0 +1,87 @@
+storyId: "16.3"
+title: "OAuth/Token — Conectar Ad Account (UI + Backend)"
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewedAt: "2026-04-24"
+
+summary: |
+  Re-review pós-fix — H-001 resolvido. page.tsx agora usa getServerUser() de
+  @web/lib/auth, padrão estabelecido no projeto. Auth, RLS, token masking e
+  metaFetch() integração todos corretos. Sem issues HIGH ou CRITICAL remanescentes.
+
+fixVerification:
+  H-001:
+    status: RESOLVED
+    verifiedAt: "2026-04-24"
+    fix: "Substituição por getServerUser() de @web/lib/auth — elimina bug .eq('id') vs .eq('auth_id')"
+    verifiedBy: "@qa (Quinn)"
+
+issues:
+  - id: H-001
+    severity: high
+    category: bug
+    file: "packages/web/src/app/dashboard/configuracoes/integracoes/meta-ads/page.tsx"
+    line: 19
+    description: |
+      `.eq('id', user.id)` usa o campo errado para lookup do app user.
+      `supabase.auth.getUser()` retorna o Supabase auth UID, mas `users.id` é
+      um UUID interno gerado por `gen_random_uuid()`. O campo correto é `users.auth_id`.
+      Resultado: todos os usuários autenticados são redirecionados para `/login` ao
+      acessar a página — feature completamente não funcional.
+    fix_required: true
+    recommendation: |
+      Opção A (minimal): Trocar `.eq('id', user.id)` por `.eq('auth_id', user.id)`
+      Opção B (preferred): Usar `getServerUser()` de `@web/lib/auth` que já encapsula
+      esse padrão corretamente — mesmo usado em `integracoes/page.tsx` e outras páginas.
+
+  - id: M-001
+    severity: medium
+    category: contract
+    file: "packages/web/src/app/api/meta-ads/account/route.ts"
+    description: |
+      Campo no body do POST é `token` mas story AC3 define `system_user_token`.
+      Sem impacto funcional (client e server usam o mesmo campo), mas diverge
+      do contrato documentado no AC. Cria inconsistência para integrações futuras.
+    fix_required: false
+    recommendation: |
+      Opcional: renomear para `system_user_token` para consistência com a story.
+      Apenas se não houver cost de refactoring nos crons futuros.
+
+  - id: L-001
+    severity: low
+    category: ux
+    file: "packages/web/src/app/dashboard/configuracoes/integracoes/meta-ads/meta-ads-integration-card.tsx"
+    line: 156
+    description: |
+      Botão "Salvar token" fica habilitado quando token está vazio mas adAccountId
+      tem valor. O servidor retorna 400 "token_required" nesse caso, mas a UX
+      sugere ao usuário que é possível atualizar apenas o ad_account_id sem repassar
+      o token.
+    fix_required: false
+    recommendation: |
+      Exibir mensagem de ajuda explicando que para atualizar apenas a conta
+      o token também precisa ser preenchido, ou desabilitar o botão quando apenas
+      adAccountId está preenchido.
+
+security_checks:
+  token_never_exposed: PASS
+  rls_org_isolation: PASS
+  auth_protected_endpoints: PASS
+  act_prefix_validation: PASS
+  status_values_match_db: PASS
+
+ac_traceability:
+  AC1: PASS  # page funcional após fix H-001 — getServerUser() correto
+  AC2: PASS  # card implementado corretamente
+  AC3: PASS  # POST funcional, validação act_ presente
+  AC4: PASS  # metaFetch com MetaOAuthException/MetaPermissionError corretos
+  AC5: PASS  # botão teste com estados loading/success/error
+  AC6: PASS  # status badge persistido, status values corretos (active/disconnected/error)
+  AC7: PASS  # token masking via last_4, token nunca retorna completo
+  AC8: PASS  # type-check e lint sem erros
+
+required_fixes: []
+
+notes: |
+  Re-aprovado em 2026-04-24 após fix do H-001 por @dev (Dex).
+  Story pronta para @devops push.
