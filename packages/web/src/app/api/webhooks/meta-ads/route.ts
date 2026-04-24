@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse, after } from "next/server"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import crypto from "crypto"
+
+const META_API_BASE = "https://graph.facebook.com/v21.0"
 
 function getSupabaseAdmin() {
   return createClient(
@@ -9,8 +11,6 @@ function getSupabaseAdmin() {
   )
 }
 
-const DEFAULT_STAGE_ID = "00000000-0000-0000-0001-000000000001"
-
 // GET — Webhook verification (Meta sends this to verify the endpoint)
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -18,9 +18,7 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get("hub.verify_token")
   const challenge = searchParams.get("hub.challenge")
 
-  const verifyToken = process.env.META_WHATSAPP_VERIFY_TOKEN
-
-  if (mode === "subscribe" && token === verifyToken) {
+  if (mode === "subscribe" && token === process.env.META_WHATSAPP_VERIFY_TOKEN) {
     return new Response(challenge, { status: 200 })
   }
 
@@ -32,44 +30,78 @@ export async function POST(request: NextRequest) {
   const appSecret = process.env.META_APP_SECRET
   const rawBody = await request.text()
 
-  // HMAC signature verification — fail-closed
   if (!appSecret) {
-    console.error("META_APP_SECRET not configured — webhook blocked")
+    console.error("[META-WEBHOOK] META_APP_SECRET not configured — webhook blocked")
     return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
   }
 
   const signature = request.headers.get("x-hub-signature-256")
   const expectedSignature =
-    "sha256=" +
-    crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex")
+    "sha256=" + crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex")
+  const signatureValid = signature === expectedSignature
 
-  if (signature !== expectedSignature) {
+  if (!signatureValid) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any
+  let body: Record<string, unknown>
   try {
     body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 })
   }
 
-  const entry = body.entry?.[0]
-  const changes = entry?.changes?.[0]
-  const value = changes?.value
+  const entry = body.entry as Array<Record<string, unknown>> | undefined
+  const firstEntry = entry?.[0] as Record<string, unknown> | undefined
+  const changes = firstEntry?.changes as Array<Record<string, unknown>> | undefined
+  const value = changes?.[0]?.value as Record<string, unknown> | undefined
 
   if (!value?.leadgen_id) {
-    // Not a lead form submission
     return NextResponse.json({ status: "ok" })
   }
 
+  const leadgenId = value.leadgen_id as string
+
+  // AC6: Log estruturado com resultado real da validação
+  console.log(
+    JSON.stringify({
+      type: "meta_webhook_received",
+      leadgen_id: leadgenId,
+      form_id: value.form_id ?? null,
+      ad_id: value.ad_id ?? null,
+      campaign_id: value.campaign_id ?? null,
+      page_id: firstEntry?.id ?? null,
+      timestamp: new Date().toISOString(),
+      signature_valid: signatureValid,
+      processing: "async",
+    })
+  )
+
+  // AC3: Retornar 200 imediatamente; processamento é async via after()
+  after(async () => {
+    await processLeadAsync(leadgenId, value, firstEntry ?? {})
+  })
+
+  return NextResponse.json({ status: "ok" })
+}
+
+// ---------------------------------------------------------------------------
+// Async processing
+// ---------------------------------------------------------------------------
+
+async function processLeadAsync(
+  leadgenId: string,
+  webhookValue: Record<string, unknown>,
+  entry: Record<string, unknown>
+) {
   const supabase = getSupabaseAdmin()
 
   try {
-    // Extract lead data from field_data array
+    // AC1 + AC2: Buscar dados do lead via Graph API (ou usar field_data do payload se disponível)
+    const leadData = await fetchLeadData(leadgenId, webhookValue)
+
     const fieldData: Array<{ name: string; values: string[] }> =
-      value.field_data ?? []
+      leadData?.field_data ?? []
 
     const getField = (name: string): string | null => {
       const field = fieldData.find(
@@ -84,96 +116,95 @@ export async function POST(request: NextRequest) {
     const email = getField("email")
     const phone = getField("phone_number") ?? getField("phone")
 
-    if (!phone && !email) {
-      console.error("Meta Ads webhook: no phone or email in lead data")
-      return NextResponse.json({ status: "ok" })
+    // Usar campaign_id do payload ou do que veio da Graph API
+    const campaignId =
+      (webhookValue.campaign_id as string | undefined) ??
+      (leadData?.campaign_id as string | undefined) ??
+      null
+
+    // AC4: Resolver nome da campanha
+    const campaignName = campaignId ? await resolveCampaignName(campaignId) : null
+
+    const orgId = await resolveOrgId(supabase)
+    if (!orgId) {
+      console.error("[META-WEBHOOK] No active org found — lead not created")
+      return
     }
 
-    // Get the org from whatsapp_config (same Meta app)
-    const { data: config } = await supabase
-      .from("whatsapp_config")
-      .select("org_id")
-      .eq("status", "active")
-      .single()
+    const defaultStageId = await getDefaultStageId(supabase, orgId)
 
-    if (!config) {
-      console.error("No active WhatsApp config found for Meta Ads webhook")
-      return NextResponse.json({ status: "ok" })
-    }
-
-    const orgId = config.org_id
-
-    // Check if lead already exists (by phone)
+    // AC8: Verificar lead existente pelo phone
     let leadId: string | null = null
-
     if (phone) {
-      const { data: existingLead } = await supabase
+      const { data: existing } = await supabase
         .from("leads")
         .select("id")
         .eq("phone", phone)
         .eq("org_id", orgId)
         .single()
 
-      if (existingLead) {
-        leadId = existingLead.id
+      if (existing) {
+        leadId = existing.id
       }
     }
 
-    // Extract campaign/UTM data
-    const utmCampaign = value.campaign_name ?? value.ad_group_name ?? null
-    const utmSource = "meta_ads"
-    const utmMedium = value.platform ?? "facebook"
-    const utmContent = value.ad_name ?? null
+    const utmData = {
+      utm_source: "meta_ads",
+      utm_medium: (webhookValue.platform as string | undefined) ?? "facebook",
+      utm_campaign: campaignName ?? null,
+      utm_content: (webhookValue.ad_name as string | undefined) ?? null,
+    }
 
-    if (!leadId) {
-      // Create new lead
+    const metaMetadata = {
+      leadgen_id: leadgenId,
+      form_id: (webhookValue.form_id as string | undefined) ??
+        (leadData?.form_id as string | undefined) ?? null,
+      ad_id: (webhookValue.ad_id as string | undefined) ??
+        (leadData?.ad_id as string | undefined) ?? null,
+      ad_group_id: (webhookValue.adgroup_id as string | undefined) ?? null,
+      campaign_id: campaignId,
+      page_id: entry?.id ?? null,
+      field_data: fieldData,
+      // AC7: flag de dados parciais
+      incomplete: !phone && !email,
+    }
+
+    if (leadId) {
+      // AC8: Atualizar lead existente com dados de campanha sem sobrescrever utm existente
+      await supabase
+        .from("leads")
+        .update({
+          ...utmData,
+          metadata: metaMetadata,
+        })
+        .eq("id", leadId)
+        .is("utm_campaign", null) // só atualiza se utm_campaign ainda não preenchido
+    } else {
+      // Criar novo lead — mesmo sem phone/email (AC7)
       const { data: newLead } = await supabase
         .from("leads")
         .insert({
           org_id: orgId,
           name: name ?? null,
           email: email ?? null,
-          phone: phone ?? null,
+          phone: phone ?? "meta_ads_lead",
           channel: "meta_ads",
           source: "meta_ads",
-          stage_id: DEFAULT_STAGE_ID,
-          utm_campaign: utmCampaign,
-          utm_source: utmSource,
-          utm_medium: utmMedium,
-          utm_content: utmContent,
-          metadata: {
-            leadgen_id: value.leadgen_id,
-            form_id: value.form_id,
-            ad_id: value.ad_id,
-            ad_group_id: value.adgroup_id,
-            campaign_id: value.campaign_id,
-            page_id: entry?.id,
-            field_data: fieldData,
-          },
+          stage_id: defaultStageId,
+          ...utmData,
+          metadata: metaMetadata,
         })
         .select("id")
         .single()
 
       leadId = newLead?.id ?? null
-    } else {
-      // Update existing lead with UTM data if missing
-      await supabase
-        .from("leads")
-        .update({
-          utm_campaign: utmCampaign,
-          utm_source: utmSource,
-          utm_medium: utmMedium,
-          utm_content: utmContent,
-        })
-        .eq("id", leadId)
     }
 
     if (!leadId) {
-      console.error("Failed to find or create lead from Meta Ads webhook")
-      return NextResponse.json({ status: "ok" })
+      console.error("[META-WEBHOOK] Failed to create or find lead", { leadgen_id: leadgenId })
+      return
     }
 
-    // Create activity log
     await supabase.from("activities").insert({
       org_id: orgId,
       lead_id: leadId,
@@ -181,15 +212,134 @@ export async function POST(request: NextRequest) {
       description: "Lead criado via Meta Ads Lead Form",
       metadata: {
         source: "meta_ads",
-        leadgen_id: value.leadgen_id,
-        form_id: value.form_id,
-        campaign_name: utmCampaign,
+        leadgen_id: leadgenId,
+        form_id: metaMetadata.form_id,
+        campaign_name: campaignName,
+        incomplete: metaMetadata.incomplete,
       },
     })
-
-    return NextResponse.json({ status: "ok" })
   } catch (error) {
-    console.error("Meta Ads webhook error:", error)
-    return NextResponse.json({ status: "ok" })
+    console.error("[META-WEBHOOK] processLeadAsync error:", error)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Graph API helpers
+// ---------------------------------------------------------------------------
+
+interface MetaLeadData {
+  id: string
+  field_data: Array<{ name: string; values: string[] }>
+  ad_id?: string
+  campaign_id?: string
+  form_id?: string
+  created_time?: string
+}
+
+// AC1 + AC2: Busca dados do lead via Graph API; usa field_data do payload se já disponível
+async function fetchLeadData(
+  leadgenId: string,
+  webhookValue: Record<string, unknown>
+): Promise<MetaLeadData | null> {
+  const inlineFieldData = webhookValue.field_data as
+    | Array<{ name: string; values: string[] }>
+    | undefined
+
+  // AC2: Se field_data veio preenchido no payload (sandbox/test), usar diretamente
+  if (inlineFieldData && inlineFieldData.length > 0) {
+    return {
+      id: leadgenId,
+      field_data: inlineFieldData,
+      ad_id: webhookValue.ad_id as string | undefined,
+      campaign_id: webhookValue.campaign_id as string | undefined,
+      form_id: webhookValue.form_id as string | undefined,
+    }
+  }
+
+  const token = process.env.META_PAGE_ACCESS_TOKEN
+  if (!token) {
+    console.error("[META-WEBHOOK] META_PAGE_ACCESS_TOKEN not configured — cannot fetch lead data")
+    return null
+  }
+
+  return fetchWithRetry(() =>
+    fetch(
+      `${META_API_BASE}/${leadgenId}?access_token=${token}&fields=field_data,ad_id,campaign_id,form_id,created_time`
+    ).then((res) => {
+      if (!res.ok) throw new Error(`Graph API error ${res.status}`)
+      return res.json() as Promise<MetaLeadData>
+    })
+  )
+}
+
+// AC4: Resolver nome da campanha a partir do campaign_id
+async function resolveCampaignName(campaignId: string): Promise<string | null> {
+  const token = process.env.META_PAGE_ACCESS_TOKEN
+  if (!token) return null
+
+  const result = await fetchWithRetry(() =>
+    fetch(
+      `${META_API_BASE}/${campaignId}?access_token=${token}&fields=name`
+    ).then((res) => {
+      if (!res.ok) throw new Error(`Graph API campaign error ${res.status}`)
+      return res.json() as Promise<{ id: string; name: string }>
+    })
+  )
+
+  return result?.name ?? null
+}
+
+// AC5: Retry com backoff exponencial (1s → 2s → 4s)
+async function fetchWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T | null> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries - 1
+      console.error(
+        `[META-WEBHOOK] Graph API attempt ${attempt + 1}/${maxRetries} failed:`,
+        error instanceof Error ? error.message : error
+      )
+      if (isLastAttempt) return null
+      await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+    }
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Supabase helpers
+// ---------------------------------------------------------------------------
+
+async function resolveOrgId(supabase: SupabaseClient): Promise<string | null> {
+  const { data } = await supabase
+    .from("whatsapp_config")
+    .select("org_id")
+    .eq("status", "active")
+    .single()
+
+  return data?.org_id ?? null
+}
+
+// AC9: Stage ID dinâmico via kanban_stages (substitui DEFAULT_STAGE_ID hardcoded)
+async function getDefaultStageId(supabase: SupabaseClient, orgId: string): Promise<string> {
+  const { data } = await supabase
+    .from("kanban_stages")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("is_default", true)
+    .single()
+
+  if (data?.id) return data.id
+
+  // Fallback: primeiro estágio por posição
+  const { data: firstStage } = await supabase
+    .from("kanban_stages")
+    .select("id")
+    .eq("org_id", orgId)
+    .order("position", { ascending: true })
+    .limit(1)
+    .single()
+
+  return firstStage?.id ?? "00000000-0000-0000-0001-000000000001"
 }
