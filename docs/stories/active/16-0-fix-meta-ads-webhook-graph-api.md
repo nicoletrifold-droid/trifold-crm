@@ -327,13 +327,39 @@ async function getDefaultStageId(supabase: SupabaseClient, orgId: string): Promi
 | 2026-04-24 | @sm (River) | Story criada — Draft |
 | 2026-04-24 | @po (Pax) | Validação GO — 9/10 — status atualizado para Ready |
 | 2026-04-24 | @dev (Dex) | Implementação completa — 10/10 tasks concluídas — Ready for Review |
+| 2026-04-24 | @qa (Quinn) | QA Gate — veredicto CONCERNS — 4 issues (2 MEDIUM, 2 LOW) — gate file criado |
+| 2026-04-24 | @dev (Dex) | QA fixes aplicados — REQ-001 (AC8 metadata update), SEC-001 (AbortSignal.timeout), REL-001 (phone null) — TEST-001 registrado como tech-debt Story 16.6 |
+
+## QA Results
+
+**Revisor:** @qa (Quinn)
+**Data:** 2026-04-24
+**Veredicto:** CONCERNS
+**Gate file:** `docs/qa/gates/16.0-fix-meta-ads-webhook-graph-api.yml`
+
+### Resumo
+
+Fix crítico implementado corretamente — webhook agora busca dados via Graph API assincronamente. ACs 1-7, 9-10 aprovados. Concerns documentados:
+
+| ID | Severidade | Descrição |
+|---|---|---|
+| REQ-001 | MEDIUM | AC8 incompleto — `.is("utm_campaign", null)` impede update de `metadata` em leads com utm já preenchido |
+| SEC-001 | MEDIUM | Sem `AbortSignal.timeout()` nos fetch calls dentro de `after()` |
+| REL-001 | LOW | `phone: "meta_ads_lead"` como fallback pode causar colisões no dedup futuro |
+| TEST-001 | LOW | Sem testes automatizados — registrar como tech-debt para Story 16.6 |
+
+### Recomendação
+
+Fixes REQ-001 e SEC-001 recomendados antes do merge para produção. REL-001 e TEST-001 podem ser resolvidos em Story 16.6.
+
+---
 
 ## Definition of Done
 
-- [ ] Handler POST retorna 200 imediatamente (processamento async)
+- [x] Handler POST retorna 200 imediatamente (processamento async)
 - [ ] Leads de Meta Ads chegam com nome/telefone/email preenchidos
 - [ ] Nome da campanha resolvido em `utm_campaign`
-- [ ] Log estruturado em todos os eventos
-- [ ] Lint e typecheck passando
+- [x] Log estruturado em todos os eventos
+- [x] Lint e typecheck passando
 - [ ] @qa PASS
 - [ ] @devops push realizado

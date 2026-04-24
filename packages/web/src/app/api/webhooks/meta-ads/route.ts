@@ -135,16 +135,18 @@ async function processLeadAsync(
 
     // AC8: Verificar lead existente pelo phone
     let leadId: string | null = null
+    let existingUtmCampaign: string | null = null
     if (phone) {
       const { data: existing } = await supabase
         .from("leads")
-        .select("id")
+        .select("id, utm_campaign")
         .eq("phone", phone)
         .eq("org_id", orgId)
         .single()
 
       if (existing) {
         leadId = existing.id
+        existingUtmCampaign = existing.utm_campaign ?? null
       }
     }
 
@@ -170,15 +172,14 @@ async function processLeadAsync(
     }
 
     if (leadId) {
-      // AC8: Atualizar lead existente com dados de campanha sem sobrescrever utm existente
+      // AC8: metadata sempre atualizado; utm_* só atualizado se ainda não preenchido
       await supabase
         .from("leads")
         .update({
-          ...utmData,
           metadata: metaMetadata,
+          ...(existingUtmCampaign === null ? utmData : {}),
         })
         .eq("id", leadId)
-        .is("utm_campaign", null) // só atualiza se utm_campaign ainda não preenchido
     } else {
       // Criar novo lead — mesmo sem phone/email (AC7)
       const { data: newLead } = await supabase
@@ -187,7 +188,7 @@ async function processLeadAsync(
           org_id: orgId,
           name: name ?? null,
           email: email ?? null,
-          phone: phone ?? "meta_ads_lead",
+          phone: phone ?? null,
           channel: "meta_ads",
           source: "meta_ads",
           stage_id: defaultStageId,
@@ -264,7 +265,8 @@ async function fetchLeadData(
 
   return fetchWithRetry(() =>
     fetch(
-      `${META_API_BASE}/${leadgenId}?access_token=${token}&fields=field_data,ad_id,campaign_id,form_id,created_time`
+      `${META_API_BASE}/${leadgenId}?access_token=${token}&fields=field_data,ad_id,campaign_id,form_id,created_time`,
+      { signal: AbortSignal.timeout(10_000) }
     ).then((res) => {
       if (!res.ok) throw new Error(`Graph API error ${res.status}`)
       return res.json() as Promise<MetaLeadData>
@@ -279,7 +281,8 @@ async function resolveCampaignName(campaignId: string): Promise<string | null> {
 
   const result = await fetchWithRetry(() =>
     fetch(
-      `${META_API_BASE}/${campaignId}?access_token=${token}&fields=name`
+      `${META_API_BASE}/${campaignId}?access_token=${token}&fields=name`,
+      { signal: AbortSignal.timeout(10_000) }
     ).then((res) => {
       if (!res.ok) throw new Error(`Graph API campaign error ${res.status}`)
       return res.json() as Promise<{ id: string; name: string }>
