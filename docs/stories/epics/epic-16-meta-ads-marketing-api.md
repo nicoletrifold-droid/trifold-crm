@@ -1,8 +1,9 @@
 ---
 epic: 16
 title: Meta Ads Marketing API Integration
-status: Draft
+status: InProgress
 created_at: 2026-04-24
+updated_at: 2026-04-24
 created_by: Morgan (@pm)
 analyst_input: Gap Analysis Report 2026-04-24 (@analyst)
 priority: High
@@ -10,6 +11,8 @@ sub_epics:
   - 16A: Fundação (Foundation)
   - 16B: Sync & Analytics
   - 16C: UX & Stories Pendentes
+stories_done: [16.0]
+stories_next: [16.1, 16.2, 16.3]
 ---
 
 # Epic 16 — Meta Ads Marketing API Integration
@@ -61,7 +64,7 @@ Evoluir a integração Meta Ads de **"apenas receber leads via webhook"** para *
 | `META_APP_SECRET` | Existe | Já usada no webhook atual |
 | `META_SYSTEM_USER_TOKEN` | **Faltando** | Gerar no Business Manager |
 | `META_AD_ACCOUNT_ID` | **Faltando** | `act_xxxxx` da conta de anúncios |
-| `META_PAGE_ACCESS_TOKEN` | **Faltando** | Para `GET /{leadgen_id}` |
+| `META_PAGE_ACCESS_TOKEN` | Documentado em `.env.example` | Para `GET /{leadgen_id}` — configurar no Vercel |
 | App Review (Standard Tier) | **A iniciar** | Para rate limit de insights — iniciar imediatamente |
 | Epic 7 stories (7.2, 7.4) | Pendente | Incorporadas como 16.11, 16.12 |
 
@@ -75,7 +78,8 @@ Evoluir a integração Meta Ads de **"apenas receber leads via webhook"** para *
 
 ---
 
-#### Story 16.0 — Fix Meta Ads Webhook: Graph API Fetch ⚡ CRÍTICO
+#### Story 16.0 — Fix Meta Ads Webhook: Graph API Fetch ✅ DONE
+- **Status:** DONE — pushed para produção em 2026-04-24
 - **Executor:** `@dev` | **Quality Gate:** `@architect`
 - **Quality Gate Tools:** `[api_integration_review, async_processing_validation, error_handling]`
 - **Complexidade:** M (4h)
@@ -385,7 +389,7 @@ META_API_VERSION=v21.0       # Já default no código atual
 
 ## Compatibilidade
 
-- [ ] Webhook existente `/api/webhooks/meta-ads` mantém mesma interface (apenas add async fetch)
+- [x] Webhook existente `/api/webhooks/meta-ads` — corrigido e compatível (Story 16.0 DONE)
 - [ ] Schema `leads` sem modificações estruturais (apenas leitura para ROAS)
 - [ ] Enum `lead_source` já inclui `meta_ads` e `whatsapp_click_to_ad`
 - [ ] Novas tabelas isoladas (não afetam tabelas existentes)

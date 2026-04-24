@@ -10,9 +10,39 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, "")
 }
 
-function extractFormId(url: string): string | null {
-  const match = url.match(/\/forms\/d\/([a-zA-Z0-9_-]+)/)
-  return match?.[1] ?? null
+async function extractFormId(url: string): Promise<string | null> {
+  let resolved = url
+  if (/forms\.gle\//.test(url)) {
+    try {
+      const res = await fetch(url, { method: "GET", redirect: "follow" })
+      resolved = res.url
+    } catch {
+      return null
+    }
+  }
+
+  // Editor URL: /forms/d/{FORM_ID}/...
+  const editorMatch = resolved.match(/\/forms\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/)
+  if (editorMatch && editorMatch[1] !== "e") {
+    return editorMatch[1]
+  }
+
+  // Published URL: /forms/d/e/.../viewform — fetch HTML to find real ID
+  if (/\/forms\/d\/e\//.test(resolved)) {
+    try {
+      const pageUrl = resolved.includes("/viewform")
+        ? resolved
+        : resolved.replace(/\/?$/, "/viewform")
+      const res = await fetch(pageUrl)
+      const html = await res.text()
+      const fbMatch = html.match(/\/forms\/d\/([a-zA-Z0-9_-]{20,})/)
+      if (fbMatch && fbMatch[1] !== "e") return fbMatch[1]
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
 
 // POST — Create campaign
@@ -47,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
 
   const slug = slugify(name)
-  const google_form_id = form_url ? extractFormId(form_url) : null
+  const google_form_id = form_url ? await extractFormId(form_url) : null
 
   const { data, error } = await supabase
     .from("campaigns")

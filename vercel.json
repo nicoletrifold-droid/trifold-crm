@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "buildCommand": "pnpm turbo build --filter=@trifold/web",
+  "outputDirectory": "packages/web/.next",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/enrich-leads",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/followup",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/campaign-poll",
+      "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/keep-alive",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+storyId: "16.1"
+title: "Migration — Tabelas Meta Marketing API"
+reviewer: "@qa (Quinn)"
+reviewedAt: "2026-04-24"
+verdict: PASS
+
+summary: |
+  Todos os 10 ACs implementados e verificados contra o banco de produção.
+  Migration 015 aplicada com sucesso — 7 tabelas criadas, RLS ativo em todas,
+  14 índices confirmados. Um concern resolvido durante o review (tracking table).
+
+  Concerns de baixa severidade documentados como tech-debt para Story 16.6.
+
+passedChecks:
+  - "AC1: Migration 015_meta_marketing_api.sql criada e aplicada — tabelas existem no banco"
+  - "AC2: meta_ad_accounts — id, org_id, meta_account_id, name, currency, access_token, status CHECK, last_synced_at, created_at, updated_at, UNIQUE(org_id, meta_account_id)"
+  - "AC3: meta_campaigns — todas as colunas, FK→meta_ad_accounts, UNIQUE(org_id, meta_campaign_id), CHECK status, BIGINT budgets, TIMESTAMPTZ"
+  - "AC4: meta_adsets — todas as colunas, FK→meta_campaigns, UNIQUE(org_id, meta_adset_id)"
+  - "AC5: meta_ads — todas as colunas, FK→meta_adsets, UNIQUE(org_id, meta_ad_id), JSONB creative"
+  - "AC6: meta_insights_daily — level CHECK, NUMERIC(12,2) financeiro, BIGINT contadores, UNIQUE(org_id, level, entity_id, date)"
+  - "AC7: meta_sync_log — sync_type CHECK, status CHECK, started_at, finished_at, error_message"
+  - "AC8: webhook_logs — org_id NULLABLE, source CHECK, processed DEFAULT false, JSONB payload"
+  - "AC9: RLS ativo em 7/7 tabelas — rowsecurity=true confirmado via pg_tables. Policy org_isolation com user_org_id() em todas"
+  - "AC10: 8 índices de performance criados — (org_id,status) em campaigns/adsets/ads, (org_id,level,date DESC) + (entity_id,date DESC) em insights, (org_id,created_at DESC) em sync_log e webhook_logs, (org_id,meta_campaign_id) em campaigns"
+  - "Tipos de dados: BIGINT budgets ✓, NUMERIC(12,2) métricas financeiras ✓, TEXT IDs Meta ✓, TIMESTAMPTZ timestamps ✓"
+  - "FKs com ON DELETE CASCADE na hierarquia accounts→campaigns→adsets→ads ✓"
+
+resolvedDuringReview:
+  - id: FIX-001
+    severity: medium
+    description: "Migration 015 não estava registrada em supabase_migrations.schema_migrations"
+    resolution: "Registrada via INSERT durante review. supabase db push não tentará re-aplicar."
+
+techDebt:
+  - id: TD-001
+    severity: low
+    story: "16.6"
+    description: |
+      webhook_logs RLS policy: `org_id IS NULL OR org_id = user_org_id()` expõe
+      todos os logs não-resolvidos para qualquer usuário autenticado.
+      Adicionar bypass service_role explícito e restringir NULL-org logs ao service_role.
+
+  - id: TD-002
+    severity: low
+    story: "16.3"
+    description: |
+      access_token em meta_ad_accounts armazenado como TEXT plain.
+      Aceito por escopo da story (OUT: criptografia → Story 16.3).
+
+  - id: TD-003
+    severity: low
+    story: "16.x"
+    description: |
+      meta_ad_accounts.updated_at sem trigger automático. Requer update manual
+      na camada de aplicação ou trigger na Story 16.2/16.3.

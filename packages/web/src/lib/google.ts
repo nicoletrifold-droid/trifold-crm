@@ -8,7 +8,11 @@ export interface OAuthTokens {
   scope: string
 }
 
-const SCOPES = ["https://www.googleapis.com/auth/forms.responses.readonly"]
+const SCOPES = [
+  "https://www.googleapis.com/auth/forms.body.readonly",
+  "https://www.googleapis.com/auth/forms.responses.readonly",
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
+]
 
 export function getOAuth2Client() {
   return new google.auth.OAuth2(
@@ -72,4 +76,33 @@ export function getFormsClient(tokens: OAuthTokens) {
     expiry_date: tokens.expiry_date,
   })
   return google.forms({ version: "v1", auth: client })
+}
+
+export function getDriveClient(tokens: OAuthTokens) {
+  const client = getOAuth2Client()
+  client.setCredentials({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expiry_date: tokens.expiry_date,
+  })
+  return google.drive({ version: "v3", auth: client })
+}
+
+/**
+ * Find the internal form ID by searching Google Drive for a form with the given title.
+ * Returns the file/form ID or null.
+ */
+export async function findFormIdByTitle(
+  tokens: OAuthTokens,
+  title: string
+): Promise<string | null> {
+  const drive = getDriveClient(tokens)
+  const escapedTitle = title.replace(/'/g, "\\'")
+  const res = await drive.files.list({
+    q: `mimeType='application/vnd.google-apps.form' and name='${escapedTitle}' and trashed=false`,
+    fields: "files(id,name)",
+    pageSize: 5,
+  })
+  const files = res.data.files ?? []
+  return files.length > 0 ? files[0].id! : null
 }

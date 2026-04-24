@@ -1,0 +1,13 @@
+.turbo
+.git
+.aios-core
+.claude
+.gemini
+.codex
+.cursor
+.antigravity
+.github
+docs
+scripts
+bin
+node_modules

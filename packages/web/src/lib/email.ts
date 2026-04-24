@@ -16,7 +16,7 @@ export async function sendEmail(params: {
 
   try {
     const { data, error } = await resend.emails.send({
-      from: "Trifold <contato@trifold.eng.br>",
+      from: "Trifold <contato@trifold.com.br>",
       to: params.to,
       subject: params.subject,
       html: params.html,
