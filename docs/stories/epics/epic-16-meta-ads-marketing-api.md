@@ -11,8 +11,8 @@ sub_epics:
   - 16A: Fundação (Foundation)
   - 16B: Sync & Analytics
   - 16C: UX & Stories Pendentes
-stories_done: [16.0]
-stories_next: [16.1, 16.2, 16.3]
+stories_done: [16.0, 16.1, 16.2]
+stories_next: [16.3, 16.4, 16.5]
 ---
 
 # Epic 16 — Meta Ads Marketing API Integration
