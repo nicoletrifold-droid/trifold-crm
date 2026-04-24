@@ -2,7 +2,7 @@
 epic: 16
 story: 16.2
 title: Meta Marketing API Client (Shared Lib)
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-24
 created_by: River (@sm)
@@ -235,6 +235,7 @@ O projeto usa TypeScript strict. Garantir:
 | 2026-04-24 | @po (Pax) | Validação 10-point: 9.5/10 — GO. Status: Draft → Ready |
 | 2026-04-24 | @dev (Dex) | Implementação completa — 5 arquivos criados, type-check ✅, lint ✅. Status: Ready → Ready for Review |
 | 2026-04-24 | @qa (Quinn) | Review completo — verdict PASS. 3 concerns LOW documentados em gate file. |
+| 2026-04-24 | @devops (Gage) | Push realizado — 16a92ad..08dddd7. Status: Done |
 
 ## Definition of Done
 
@@ -243,4 +244,4 @@ O projeto usa TypeScript strict. Garantir:
 - [x] `npm run type-check` passa sem erros
 - [x] `npm run lint` passa sem erros
 - [x] @qa PASS (gate: `docs/qa/gates/16.2-meta-marketing-api-client.yml`)
-- [ ] @devops push realizado
+- [x] @devops push realizado
