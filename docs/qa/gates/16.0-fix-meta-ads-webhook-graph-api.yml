@@ -2,104 +2,55 @@ storyId: "16.0"
 title: "Fix Meta Ads Webhook — Graph API Fetch"
 reviewer: "@qa (Quinn)"
 reviewedAt: "2026-04-24"
-verdict: CONCERNS
+verdict: PASS
 
 summary: |
-  A correção crítica do bug principal está implementada corretamente: o webhook
-  agora busca dados via Graph API de forma assíncrona ao invés de assumir que
-  field_data chega no payload. Retorno 200 imediato com after() está correto.
-  HMAC validação fail-closed OK. Retry com backoff OK.
+  Todos os 10 ACs implementados e verificados. Concerns do gate anterior (CONCERNS)
+  resolvidos pelo @dev em commit dd96c04:
+  - REQ-001: metadata sempre atualizado; utm_* condicional via existingUtmCampaign
+  - SEC-001: AbortSignal.timeout(10_000) em ambos os fetch calls
+  - REL-001: phone=null ao invés de "meta_ads_lead" no insert
+  - TEST-001: registrado como tech-debt para Story 16.6
 
-  A story pode avançar para @devops push com as observações documentadas abaixo.
-  AC8 tem implementação incompleta — recomendado fix antes do merge.
+  Story aprovada para @devops push.
 
-issues:
+resolvedIssues:
   - id: REQ-001
-    severity: medium
-    category: requirements
-    description: |
-      AC8 implementação incompleta. O UPDATE de leads existentes (linha 173-181)
-      usa filtro `.is("utm_campaign", null)` que condiciona TODO o update — incluindo
-      o campo `metadata` — à ausência de utm_campaign. Resultado: leads com
-      utm_campaign já preenchido não têm metadata atualizado com o novo leadgen_id,
-      form_id, etc. O comportamento correto é SEMPRE atualizar metadata, e
-      condicionalmente atualizar utm_* se estiver vazio.
-    recommendation: |
-      Separar o update em dois campos:
-        .update({
-          metadata: metaMetadata,  // sempre atualiza
-          ...utmData,              // condicional — mas tratar via upsert or coalesce
-        })
-      Ou usar dois updates: primeiro metadata incondicional, depois utm_* com IS NULL check.
-      Alternativamente: incluir `utm_campaign` no select e só incluir utmData no update
-      se utm_campaign for null no resultado do select.
+    status: RESOLVED
+    resolution: |
+      select("id, utm_campaign") captura utm atual. Update usa
+      ...(existingUtmCampaign === null ? utmData : {}) — metadata sempre enviado,
+      utmData só incluído quando utm_campaign era null. WHERE filter removido.
 
   - id: SEC-001
-    severity: medium
-    category: security
-    description: |
-      Sem timeout nas chamadas fetch() dentro de fetchWithRetry(). Se a Graph API
-      da Meta responder lentamente ou nunca fechar a conexão, o handler async dentro
-      de after() pode ficar rodando indefinidamente consumindo recursos da instância
-      Vercel (até o timeout de função da plataforma, ~300s por padrão).
-    recommendation: |
-      Adicionar AbortSignal.timeout() em cada fetch:
-        fetch(url, { signal: AbortSignal.timeout(10_000) })
-      Isso garante que cada tentativa individual falha em 10s e o retry com backoff
-      (1+2+4 = 7s) não passa de ~20s total por operação.
+    status: RESOLVED
+    resolution: |
+      { signal: AbortSignal.timeout(10_000) } adicionado em ambos os fetch():
+      linha 269 (fetchLeadData) e linha 285 (resolveCampaignName).
 
   - id: REL-001
-    severity: low
-    category: reliability
-    description: |
-      O fallback `phone: "meta_ads_lead"` (linha 190) em leads sem telefone pode
-      criar colisões no dedup: múltiplos leads sem telefone vindos de Meta Ads terão
-      phone="meta_ads_lead" e o check de dedup na linha 138-148 retornará o mesmo
-      lead existente para eventos futuros do mesmo formulário.
-    recommendation: |
-      Usar `phone: null` para leads incompletos e garantir que a query de dedup
-      (`.eq("phone", phone)`) só execute quando phone !== null. A lógica atual
-      já tem `if (phone)` antes do select — mas o insert usa o fallback string
-      que vai se tornar um phone válido para dedup futuros. Usar `null` resolve
-      o problema e mantém a coluna semanticamente correta.
+    status: RESOLVED
+    resolution: |
+      phone: phone ?? null no insert (linha 191). Leads sem telefone entram
+      com phone=null — dedup query já tem `if (phone)` guard, sem colisão.
 
   - id: TEST-001
-    severity: low
-    category: tests
-    description: |
-      Nenhum teste automatizado foi escrito. A story lista cenários de teste
-      manuais (checkboxes não marcados) mas não tem jest/vitest specs. Para uma
-      integração de webhook crítica (P0), cobertura automatizada seria ideal.
-    recommendation: |
-      Criar ao menos testes unitários para: fetchWithRetry() (retry logic),
-      fetchLeadData() (inline vs API branch), getDefaultStageId() (fallback chain).
-      Story 16.6 (webhook logs) pode incluir testes de integração do handler completo.
-      Aceitar como tech-debt rastreado para Story 16.6.
+    status: TECH_DEBT
+    resolution: |
+      Registrado no Change Log da story. Será endereçado em Story 16.6
+      junto com tabela webhook_logs e testes de integração do handler.
 
 passedChecks:
-  - "AC1: Graph API fetch implementado corretamente via GET /v21.0/{leadgen_id}"
-  - "AC2: Backward compat com field_data inline (sandbox) — lógica correta"
-  - "AC3: after() implementado, 200 retornado antes do processamento async"
-  - "AC4: resolveCampaignName() implementado com fetchWithRetry"
-  - "AC5: fetchWithRetry() com backoff 1s→2s→4s (Math.pow(2, attempt)*1000)"
-  - "AC6: Log estruturado com signature_valid usando variável real (não hardcoded)"
-  - "AC7: Lead criado com metadata.incomplete=true quando Graph API falha"
-  - "AC9: getDefaultStageId() dinâmico via kanban_stages.is_default + fallback by position"
-  - "AC10: META_PAGE_ACCESS_TOKEN documentado em .env.example"
-  - "Security: HMAC-SHA256 fail-closed (assinatura inválida → 403)"
-  - "Security: META_PAGE_ACCESS_TOKEN não logado em plaintext"
-  - "TypeScript: sem erros, sem any implícito"
-  - "ESLint: zero erros no arquivo modificado"
-
-recommendation: |
-  CONCERNS — Aprovado com observações.
-
-  Prioridade dos fixes antes do merge:
-  1. REQ-001 (MEDIUM): Fix AC8 — separar metadata update do utm_* update
-  2. SEC-001 (MEDIUM): Adicionar AbortSignal.timeout(10_000) nos fetch calls
-  3. REL-001 (LOW): Usar phone=null ao invés de "meta_ads_lead" em leads incompletos
-  4. TEST-001 (LOW): Registrar como tech-debt — resolver em Story 16.6
-
-  O fix principal (Graph API fetch async) está correto e resolve o bug crítico
-  de leads sendo descartados em produção. Os concerns não bloqueiam o merge
-  mas REQ-001 e SEC-001 são recomendados antes de ir para produção.
+  - "AC1: Graph API fetch via GET /v21.0/{leadgen_id}?fields=field_data,..."
+  - "AC2: Inline field_data (sandbox) usado diretamente sem chamada API"
+  - "AC3: after() — 200 retornado antes do processamento async"
+  - "AC4: resolveCampaignName() com retry para campaign_id"
+  - "AC5: fetchWithRetry() backoff 1s→2s→4s"
+  - "AC6: Log JSON estruturado com signature_valid real"
+  - "AC7: Lead incompleto criado com metadata.incomplete=true, phone=null"
+  - "AC8: metadata sempre atualizado; utm_* condicional (FIXED)"
+  - "AC9: getDefaultStageId() dinâmico via kanban_stages"
+  - "AC10: META_PAGE_ACCESS_TOKEN em .env.example"
+  - "SEC: HMAC fail-closed, token não logado, AbortSignal.timeout (FIXED)"
+  - "TypeScript: zero erros"
+  - "ESLint: zero erros"

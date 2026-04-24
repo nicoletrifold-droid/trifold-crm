@@ -329,28 +329,27 @@ async function getDefaultStageId(supabase: SupabaseClient, orgId: string): Promi
 | 2026-04-24 | @dev (Dex) | Implementação completa — 10/10 tasks concluídas — Ready for Review |
 | 2026-04-24 | @qa (Quinn) | QA Gate — veredicto CONCERNS — 4 issues (2 MEDIUM, 2 LOW) — gate file criado |
 | 2026-04-24 | @dev (Dex) | QA fixes aplicados — REQ-001 (AC8 metadata update), SEC-001 (AbortSignal.timeout), REL-001 (phone null) — TEST-001 registrado como tech-debt Story 16.6 |
+| 2026-04-24 | @qa (Quinn) | Re-review — veredicto PASS — todos os 10 ACs verificados — aprovado para @devops push |
 
 ## QA Results
 
 **Revisor:** @qa (Quinn)
 **Data:** 2026-04-24
-**Veredicto:** CONCERNS
+**Veredicto final:** PASS
 **Gate file:** `docs/qa/gates/16.0-fix-meta-ads-webhook-graph-api.yml`
 
-### Resumo
+### Histórico
 
-Fix crítico implementado corretamente — webhook agora busca dados via Graph API assincronamente. ACs 1-7, 9-10 aprovados. Concerns documentados:
-
-| ID | Severidade | Descrição |
+| Gate | Veredicto | Issues |
 |---|---|---|
-| REQ-001 | MEDIUM | AC8 incompleto — `.is("utm_campaign", null)` impede update de `metadata` em leads com utm já preenchido |
-| SEC-001 | MEDIUM | Sem `AbortSignal.timeout()` nos fetch calls dentro de `after()` |
-| REL-001 | LOW | `phone: "meta_ads_lead"` como fallback pode causar colisões no dedup futuro |
-| TEST-001 | LOW | Sem testes automatizados — registrar como tech-debt para Story 16.6 |
+| Gate v1 | CONCERNS | REQ-001 (M), SEC-001 (M), REL-001 (L), TEST-001 (L) |
+| Gate v2 | **PASS** | Todos resolvidos — TEST-001 como tech-debt Story 16.6 |
 
-### Recomendação
+### Todos os 10 ACs verificados
 
-Fixes REQ-001 e SEC-001 recomendados antes do merge para produção. REL-001 e TEST-001 podem ser resolvidos em Story 16.6.
+AC1 ✅ AC2 ✅ AC3 ✅ AC4 ✅ AC5 ✅ AC6 ✅ AC7 ✅ AC8 ✅ AC9 ✅ AC10 ✅
+
+Story aprovada para `@devops` push.
 
 ---
 
