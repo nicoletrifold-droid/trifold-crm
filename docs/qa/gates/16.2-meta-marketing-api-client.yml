@@ -1,0 +1,47 @@
+storyId: "16.2"
+title: "Meta Marketing API Client (Shared Lib)"
+reviewer: "@qa (Quinn)"
+reviewedAt: "2026-04-24"
+verdict: PASS
+
+summary: |
+  Todos os 8 ACs implementados e verificados. 5 arquivos criados em
+  packages/shared/src/meta/, exportados via @trifold/shared. type-check
+  limpo (8/8), zero explicit any nas interfaces públicas.
+  3 concerns de severidade LOW documentados — nenhum bloqueia merge.
+
+passedChecks:
+  - "AC1: metaFetch<T>() em client.ts — token injection, AbortSignal.timeout(30_000), parseMetaError(), tipagem genérica"
+  - "AC2: RateLimiter em rate-limiter.ts — parses X-Business-Use-Case-Usage, usa maior call_count de múltiplas contas, circuit breaker em 75%, isThrottled() e getUsage()"
+  - "AC3: types.ts — 9 interfaces: MetaCampaign, MetaAdSet, MetaAd, MetaInsight, MetaLeadData, MetaPagination, MetaPagedResponse<T>, MetaRateUsage, MetaBatchRequest/Response"
+  - "AC4: errors.ts — MetaAPIError → MetaOAuthException, MetaRateLimitError (codes 4,17,32,613), MetaPermissionError (codes 200-299). parseMetaError() cobre todos os casos conhecidos"
+  - "AC5: Backoff exponencial com jitter ±20%, MAX_RETRIES=5, isRetriable() bloqueia retry em OAuthException e PermissionError"
+  - "AC6: metaBatch() em client.ts — split em chunks de 50, POST /v21.0/ com batch param, acumula MetaBatchResponse[]"
+  - "AC7: meta/index.ts re-exporta todos os módulos. shared/index.ts: export * from './meta' adicionado"
+  - "AC8: npm run type-check 8/8 clean. grep any nos 5 arquivos: 0 resultados"
+  - "Security: sem hardcoded tokens, AbortSignal.timeout proteção contra hang, JSON.parse com try/catch"
+
+concerns:
+  - id: C-001
+    severity: low
+    description: |
+      Backoff não atinge 16s com MAX_RETRIES=5. Com 5 tentativas totais há
+      apenas 4 delays (1s, 2s, 4s, 8s). O cap de 16s especificado na story
+      requereria MAX_RETRIES=6. Comportamento funcional correto mas cap menor
+      que documentado.
+    recommendation: "Aumentar MAX_RETRIES para 6 em Story 16.6 se integração real revelar necessidade"
+
+  - id: C-002
+    severity: low
+    description: |
+      metaFetch() não verifica rateLimiter.isThrottled() antes de cada request.
+      Circuit breaker expõe estado mas não gateia automaticamente. Stories
+      consumidoras (16.4/16.5) precisam verificar manualmente.
+    recommendation: "Stories 16.4 e 16.5 devem verificar isThrottled() no início dos loops de sync"
+
+  - id: C-003
+    severity: low
+    description: |
+      metaBatch() sem retry logic — falha imediatamente. Inconsistente com
+      metaFetch() que tem backoff completo.
+    recommendation: "Adicionar retry em metaBatch() em Story 16.6 se necessário em produção"

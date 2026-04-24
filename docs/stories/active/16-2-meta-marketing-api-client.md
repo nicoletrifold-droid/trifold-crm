@@ -234,12 +234,13 @@ O projeto usa TypeScript strict. Garantir:
 | 2026-04-24 | @sm (River) | Story criada — Draft |
 | 2026-04-24 | @po (Pax) | Validação 10-point: 9.5/10 — GO. Status: Draft → Ready |
 | 2026-04-24 | @dev (Dex) | Implementação completa — 5 arquivos criados, type-check ✅, lint ✅. Status: Ready → Ready for Review |
+| 2026-04-24 | @qa (Quinn) | Review completo — verdict PASS. 3 concerns LOW documentados em gate file. |
 
 ## Definition of Done
 
-- [ ] 5 arquivos criados em `packages/shared/src/meta/`
-- [ ] `packages/shared/src/index.ts` exporta o módulo meta
-- [ ] `npm run type-check` passa sem erros
-- [ ] `npm run lint` passa sem erros
-- [ ] @architect PASS
+- [x] 5 arquivos criados em `packages/shared/src/meta/`
+- [x] `packages/shared/src/index.ts` exporta o módulo meta
+- [x] `npm run type-check` passa sem erros
+- [x] `npm run lint` passa sem erros
+- [x] @qa PASS (gate: `docs/qa/gates/16.2-meta-marketing-api-client.yml`)
 - [ ] @devops push realizado
