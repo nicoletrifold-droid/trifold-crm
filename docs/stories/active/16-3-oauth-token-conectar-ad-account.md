@@ -2,7 +2,7 @@
 epic: 16
 story: 16.3
 title: OAuth/Token — Conectar Ad Account (UI + Backend)
-status: Draft
+status: Ready
 priority: P1-ALTO
 created_at: 2026-04-24
 created_by: River (@sm)
@@ -292,6 +292,7 @@ Os crons (16.4, 16.5) lerão as credenciais do banco, não de env vars.
 | Data | Agente | Ação |
 |---|---|---|
 | 2026-04-24 | @sm (River) | Story criada — Draft |
+| 2026-04-24 | @po (Pax) | Validação 10-point: 9.5/10 — GO. Status: Draft → Ready |
 
 ## Definition of Done
 
