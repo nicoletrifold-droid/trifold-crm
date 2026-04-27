@@ -19,6 +19,7 @@ interface LeadCardProps {
     updated_at: string
     ai_summary?: string | null
     source?: string | null
+    utm_campaign?: string | null
   }
   propertyName?: string
   brokerName?: string
@@ -132,6 +133,11 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
             {badge.label}
           </span>
           {lead.source && <SourceBadge source={lead.source} size="xs" />}
+          {lead.source === "whatsapp_click_to_ad" && lead.utm_campaign && (
+            <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-medium text-green-600">
+              {lead.utm_campaign.length > 16 ? lead.utm_campaign.slice(0, 16) + "…" : lead.utm_campaign}
+            </span>
+          )}
           <div className="flex flex-1 items-center gap-1.5">
             <div className="h-1 flex-1 rounded-full bg-stone-100">
               <div

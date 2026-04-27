@@ -14,6 +14,8 @@ interface LeadQuickData {
   interest_level: string | null
   source: string | null
   channel: string | null
+  utm_campaign: string | null
+  metadata: Record<string, unknown> | null
   ai_summary: string | null
   created_at: string
   updated_at: string
@@ -37,6 +39,13 @@ interface LeadDetailDrawerProps {
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
 
+function getCTWAWindowLabel(ctwaExpiresAt: string | undefined): string | null {
+  if (!ctwaExpiresAt) return null
+  const diffMs = new Date(ctwaExpiresAt).getTime() - Date.now()
+  if (diffMs <= 0) return "Expirada"
+  return `Expira em ${Math.ceil(diffMs / (1000 * 60 * 60))}h`
+}
+
 async function fetchLeadData(id: string) {
   const supabase = createClient()
 
@@ -45,7 +54,7 @@ async function fetchLeadData(id: string) {
       .from("leads")
       .select(
         `id, name, phone, email, qualification_score, interest_level,
-         source, channel, ai_summary, created_at, updated_at,
+         source, channel, utm_campaign, metadata, ai_summary, created_at, updated_at,
          has_down_payment, preferred_bedrooms, preferred_floor,
          preferred_view, preferred_garage_count,
          stage:kanban_stages(id, name, color),
@@ -127,6 +136,13 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   const stage = (lead?.stage as unknown as Array<{ id: string; name: string; color: string | null }>)?.[0] ?? null
   const property = (lead?.property_interest as unknown as Array<{ id: string; name: string }>)?.[0] ?? null
   const broker = (lead?.broker as unknown as Array<{ id: string; name: string; email: string }>)?.[0] ?? null
+
+  // CTWA attribution data (computed outside JSX to satisfy react-hooks/purity)
+  const isCTWA = lead?.source === "whatsapp_click_to_ad"
+  const ctwaReferral = isCTWA ? ((lead?.metadata?.referral ?? {}) as Record<string, unknown>) : null
+  const ctwaClid = ctwaReferral ? (ctwaReferral.ctwa_clid as string | undefined) : undefined
+  const ctwaExpiresAt = isCTWA ? (lead?.metadata?.ctwa_window_expires_at as string | undefined) : undefined
+  const ctwaWindowLabel = getCTWAWindowLabel(ctwaExpiresAt)
 
   return (
     <>
@@ -222,6 +238,26 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 <div className="flex justify-between items-center">
                   <dt className="text-stone-500">Origem</dt>
                   <dd><SourceBadge source={lead.source} /></dd>
+                </div>
+              )}
+              {isCTWA && lead.utm_campaign && (
+                <div className="flex justify-between items-center">
+                  <dt className="text-stone-500">Campanha</dt>
+                  <dd className="font-medium text-stone-900 text-right max-w-[60%] truncate">{lead.utm_campaign}</dd>
+                </div>
+              )}
+              {isCTWA && ctwaClid && (
+                <div className="flex justify-between">
+                  <dt className="text-stone-500">CTWA ID</dt>
+                  <dd className="font-mono text-stone-500 text-[11px]">{ctwaClid.slice(0, 8)}…</dd>
+                </div>
+              )}
+              {isCTWA && ctwaWindowLabel && (
+                <div className="flex justify-between">
+                  <dt className="text-stone-500">Janela CTWA</dt>
+                  <dd className={`text-[11px] font-medium ${ctwaWindowLabel === "Expirada" ? "text-stone-400" : "text-green-600"}`}>
+                    {ctwaWindowLabel}
+                  </dd>
                 </div>
               )}
               {lead.channel && (

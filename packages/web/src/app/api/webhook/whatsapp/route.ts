@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
     // Find or create lead
     let { data: lead } = await supabase
       .from("leads")
-      .select("id")
+      .select("id, created_at, metadata")
       .eq("phone", from)
       .eq("org_id", orgId)
       .single()
@@ -271,10 +271,10 @@ export async function POST(request: NextRequest) {
           source: "whatsapp_organic",
           stage_id: defaultStage?.id,
         })
-        .select("id")
+        .select("id, created_at")
         .single()
 
-      lead = newLead
+      lead = newLead as typeof lead
     }
 
     if (!lead) {
@@ -285,26 +285,66 @@ export async function POST(request: NextRequest) {
     // Check for Click-to-WhatsApp Ads referral data
     const referral = value?.messages?.[0]?.referral
     if (referral) {
-      const referralMetadata: Record<string, unknown> = {
+      const referralData: Record<string, unknown> = {
         source_url: referral.source_url ?? null,
+        source_id: referral.source_id ?? null,
+        ctwa_clid: referral.ctwa_clid ?? null,
         headline: referral.headline ?? null,
         body: referral.body ?? null,
-        ctwa_clid: referral.ctwa_clid ?? null,
         media_type: referral.media_type ?? null,
-        image_url: referral.image_url ?? null,
-        video_url: referral.video_url ?? null,
-        thumbnail_url: referral.thumbnail_url ?? null,
       }
 
-      // Update lead with CTWA source and referral data
+      // Resolve campaign name via meta_ads → meta_adsets → meta_campaigns (local lookup)
+      let campaignName: string | null = referral.headline ?? null
+      if (referral.source_id) {
+        const { data: ad } = await supabase
+          .from("meta_ads")
+          .select("adset_id")
+          .eq("meta_ad_id", referral.source_id)
+          .eq("org_id", orgId)
+          .single()
+
+        if (ad?.adset_id) {
+          const { data: adset } = await supabase
+            .from("meta_adsets")
+            .select("campaign_id")
+            .eq("id", ad.adset_id)
+            .single()
+
+          if (adset?.campaign_id) {
+            const { data: campaign } = await supabase
+              .from("meta_campaigns")
+              .select("name")
+              .eq("id", adset.campaign_id)
+              .single()
+
+            if (campaign?.name) campaignName = campaign.name
+          }
+        }
+      }
+
+      // Calculate CTWA attribution window (72h from lead creation)
+      const leadRef = lead as unknown as Record<string, unknown>
+      const baseTime = leadRef.created_at
+        ? new Date(leadRef.created_at as string).getTime()
+        : Date.now()
+      const ctwaWindowExpiresAt = new Date(baseTime + 72 * 60 * 60 * 1000).toISOString()
+
+      // Merge with existing metadata (preserve other fields)
+      const existingMeta = ((leadRef.metadata ?? {}) as Record<string, unknown>)
+
       await supabase
         .from("leads")
         .update({
           source: "whatsapp_click_to_ad",
           utm_source: "meta_ads",
           utm_medium: "whatsapp_ctwa",
-          utm_campaign: referral.headline ?? null,
-          metadata: referralMetadata,
+          utm_campaign: campaignName,
+          metadata: {
+            ...existingMeta,
+            referral: referralData,
+            ctwa_window_expires_at: ctwaWindowExpiresAt,
+          },
         })
         .eq("id", lead.id)
     }

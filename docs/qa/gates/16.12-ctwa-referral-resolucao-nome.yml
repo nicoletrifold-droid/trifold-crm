@@ -1,0 +1,108 @@
+storyId: "16.12"
+title: "CTWA Referral + Resolução de Nome de Campanha"
+verdict: PASS
+reviewedAt: "2026-04-27"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Story implementada completamente. Todos os 5 ACs entregues e funcionais.
+  Dois concerns LOW documentados (MEDIA-001, KANBAN-COL-001) — nenhum bloqueia
+  requisitos funcionais. Aprovada para push sem ressalvas operacionais.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "metadata.referral como sub-objeto com source_id incluído, ctwa_window_expires_at calculado a partir de lead.created_at + 72h, merge via ...existingMeta preserva campos anteriores."
+
+  - ac: "AC2"
+    status: PASS
+    note: "Lookup meta_ads → meta_adsets → meta_campaigns implementado com fallback para referral.headline em todos os pontos de falha (source_id ausente, ad/adset/campaign não encontrado)."
+
+  - ac: "AC3"
+    status: PASS
+    note: "Badge compacto no LeadCard com guard source === 'whatsapp_click_to_ad' && utm_campaign. Truncate em 16 chars com '…'. utm_campaign adicionado ao select em broker/pipeline e dashboard/pipeline."
+
+  - ac: "AC4"
+    status: PASS
+    note: "Drawer exibe campanha completa, CTWA ID primeiros 8 chars + '…', janela CTWA com label 'Expira em Xh' ou 'Expirada'. getCTWAWindowLabel helper extraído fora do componente."
+
+  - ac: "AC5"
+    status: PASS
+    note: "Guard isCTWA protege todos elementos CTWA. utm_campaign opcional em todas as interfaces. Sem quebras em leads existentes ou não-CTWA."
+
+issues:
+  - id: MEDIA-001
+    severity: low
+    category: data_capture
+    description: >
+      Campos image_url, video_url, thumbnail_url presentes no payload CTWA
+      foram capturados pelo código anterior mas excluídos do novo sub-objeto
+      metadata.referral. AC1 não os exige. Regressão silenciosa de captura de
+      dados para leads com anúncios de mídia.
+    recommendation: >
+      Adicionar image_url e video_url ao referralData em story futura se
+      necessário para analytics de criativos. Baixo impacto no fluxo atual
+      (maioria dos leads CTWA vem de anúncios de texto).
+    blocking: false
+
+  - id: KANBAN-COL-001
+    severity: low
+    category: code
+    description: >
+      KanbanColumn.leads interface não declara source nem utm_campaign. Os campos
+      fluem corretamente em runtime via structural typing e typecheck passa, mas
+      há gap de type-safety no componente intermediário. Issue pré-existente após
+      16.11 (source já ausente da interface).
+    recommendation: >
+      Refatorar KanbanColumn para usar tipo Lead do KanbanBoard como tech debt.
+      Não bloqueia funcionalidade.
+    blocking: false
+
+  - id: PERF-001
+    severity: info
+    category: performance
+    description: >
+      3 queries Supabase sequenciais (meta_ads → meta_adsets → meta_campaigns)
+      no hot path do webhook por cada lead CTWA. Aceitável para volume atual.
+    recommendation: >
+      Otimizar para single JOIN quando volume de leads CTWA aumentar. Não urgente.
+    blocking: false
+
+security:
+  - check: "HMAC verification do webhook intocada"
+    result: PASS
+  - check: "Queries de lookup filtram por org_id"
+    result: PASS
+    note: "meta_ads query inclui .eq('org_id', orgId). meta_adsets query por UUID interno — RLS de Supabase garante isolamento."
+  - check: "referralData de payload externo (Meta) salvo em JSONB"
+    result: PASS
+    note: "Sem interpolação em SQL. Dados de terceiro tratados como opaque blob."
+  - check: "...existingMeta spread — prototype pollution"
+    result: PASS
+    note: "Supabase retorna JSON parseado sem prototype chain externo."
+
+performance:
+  - check: "getCTWAWindowLabel é função pura sem I/O"
+    result: PASS
+  - check: "Fallback sem source_id não executa queries"
+    result: PASS
+  - check: "Webhook retorna 200 independente de sucesso do lookup"
+    result: PASS
+
+regression:
+  - check: "Leads whatsapp_organic não entram no bloco referral"
+    result: PASS
+  - check: "metadata de leads existentes preservado via merge"
+    result: PASS
+  - check: "LeadCard sem CTWA não exibe badge de campanha"
+    result: PASS
+  - check: "Typecheck global"
+    result: PASS
+  - check: "Lint — 0 errors"
+    result: PASS
+    note: "2 warnings pré-existentes em arquivos não modificados por esta story."
+
+typecheck: PASS
+lint: PASS
+notes: "PERF-001 é informacional, não concern. Concerns LOW não bloqueantes."

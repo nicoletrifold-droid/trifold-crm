@@ -38,6 +38,7 @@ interface Lead {
   updated_at: string
   ai_summary?: string | null
   source?: string | null
+  utm_campaign?: string | null
   properties?: { name: string } | null
   users?: { name: string } | null
 }

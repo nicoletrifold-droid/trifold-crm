@@ -16,7 +16,7 @@ export default async function BrokerPipelinePage() {
       .from("leads")
       .select(
         `id, name, phone, stage_id, qualification_score, interest_level,
-         property_interest_id, assigned_broker_id, created_at, updated_at, source,
+         property_interest_id, assigned_broker_id, created_at, updated_at, source, utm_campaign,
          properties:property_interest_id(name)`
       )
       .eq("assigned_broker_id", user.id)
