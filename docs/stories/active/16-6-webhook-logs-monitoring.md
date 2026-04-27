@@ -2,7 +2,7 @@
 epic: 16
 story: 16.6
 title: Webhook Logs + Monitoring
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-27
 created_by: River (@sm)
@@ -356,4 +356,4 @@ async function sendTelegramAdminAlert(message: string): Promise<void> {
 - [x] `npm run type-check` passa sem erros
 - [x] `npm run lint` passa sem erros
 - [x] @qa PASS
-- [ ] @devops push realizado
+- [x] @devops push realizado
