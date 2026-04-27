@@ -1,0 +1,62 @@
+storyId: "16.4"
+title: "Cron Sync — Hierarquia Campanhas/AdSets/Ads"
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewedAt: "2026-04-27"
+
+summary: |
+  Implementação sólida. Todos os 8 ACs atendidos. Paginação por cursor correta
+  (do-while com guard em paging.next), upserts idempotentes com onConflict correto
+  para as três tabelas, MetaOAuthException tratado sem 5xx. Correções do @po
+  (status 'partial' e account_id inexistente) aplicadas corretamente. Sem issues
+  CRITICAL ou HIGH. 1 MEDIUM de robustez documentado.
+
+issues:
+  - id: M-001
+    severity: medium
+    category: robustness
+    file: "packages/web/src/app/api/cron/meta-sync-entities/route.ts"
+    line: 64
+    description: |
+      Insert em meta_sync_log não verifica erro de escrita. Se a inserção falhar,
+      syncLog = null e o sync continua sem rastreamento. Os guards `if (syncLog)`
+      presentes em todo o código previnem crash, mas uma falha de DB no log
+      passaria silenciosamente — tornando difícil diagnosticar execuções não rastreadas.
+    fix_required: false
+    recommendation: |
+      Adicionar log de warning quando syncLog é null após o insert:
+        const { data: syncLog, error: logErr } = await supabase...
+        if (logErr) console.warn('[META_SYNC] Failed to create sync log:', logErr.message)
+
+security_checks:
+  cron_secret_validated: PASS
+  admin_client_used_correctly: PASS
+  token_not_exposed_in_response: PASS
+  no_explicit_any: PASS
+  error_messages_safe: PASS
+
+pagination_checks:
+  do_while_loop_correct: PASS
+  cursor_guard_prevents_infinite_loop: PASS
+  api_calls_counted: PASS
+
+upsert_checks:
+  meta_campaigns_onConflict: PASS   # org_id,meta_campaign_id ✓
+  meta_adsets_onConflict: PASS      # org_id,meta_adset_id ✓
+  meta_ads_onConflict: PASS         # org_id,meta_ad_id ✓
+  unresolved_fk_skipped_safely: PASS
+
+ac_traceability:
+  AC1: PASS  # auth CRON_SECRET, busca contas active, admin client
+  AC2: PASS  # campos corretos, paginação, upsert campaigns
+  AC3: PASS  # paginação, lookup campaignMap, upsert adsets
+  AC4: PASS  # paginação, lookup adsetMap, upsert ads
+  AC5: PASS  # meta_sync_log insert/update, sem account_id, sem 'partial'
+  AC6: PASS  # vercel.json com "0 */4 * * *"
+  AC7: PASS  # MetaOAuthException → continue 200, outros → throw 500
+  AC8: PASS  # type-check ✅ lint ✅ zero any
+
+required_fixes: []
+
+notes: |
+  M-001 é melhoria de robustez não bloqueante. Story pronta para @devops push.

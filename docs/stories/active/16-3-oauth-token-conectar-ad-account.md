@@ -2,7 +2,7 @@
 epic: 16
 story: 16.3
 title: OAuth/Token — Conectar Ad Account (UI + Backend)
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-24
 created_by: River (@sm)
@@ -295,6 +295,7 @@ Os crons (16.4, 16.5) lerão as credenciais do banco, não de env vars.
 | 2026-04-24 | @po (Pax) | Validação 10-point: 9.5/10 — GO. Status: Draft → Ready |
 | 2026-04-24 | @dev (Dex) | Implementação completa — 4 arquivos criados + integracoes/page.tsx atualizado. type-check ✅ lint ✅. Status: Ready → Ready for Review |
 | 2026-04-24 | @dev (Dex) | Fix H-001 (QA) — page.tsx substituído por getServerUser() de @web/lib/auth. Elimina bug .eq('id') vs .eq('auth_id'). type-check ✅ |
+| 2026-04-24 | @devops (Gage) | Push realizado — b2c295d..676e6fa. Status: Ready for Review → Done |
 
 ## QA Results
 
@@ -325,4 +326,4 @@ Story pronta para @devops push.
 - [x] `npm run type-check` passa sem erros
 - [x] `npm run lint` passa sem erros
 - [x] @qa PASS
-- [ ] @devops push realizado
+- [x] @devops push realizado

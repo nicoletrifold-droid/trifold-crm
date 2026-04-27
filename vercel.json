@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/keep-alive",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/meta-sync-entities",
+      "schedule": "0 */4 * * *"
     }
   ]
 }
