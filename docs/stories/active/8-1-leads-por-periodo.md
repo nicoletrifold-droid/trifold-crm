@@ -106,3 +106,17 @@ M (Media) — 2-3 horas
 - `packages/web/src/components/analytics/leads-chart.tsx` — Client component: grafico de barras + filtros AC3-AC7 (NEW)
 
 ## Status: Ready for Review
+
+## QA Results
+
+**Verdict: PASS** | Reviewer: Quinn (@qa) | 2026-04-27 | Iteração 1
+
+Todos os 10 ACs verificados. Typecheck 0 erros, Lint 0 erros.
+
+**Concerns não-bloqueantes:**
+- `CHART-LIMIT-001` (MEDIUM): sem `.limit()` no query de leads — aceitável no volume atual, tech debt para escala futura
+- `CHART-PEAK-002` (LOW): `peakPeriod` empty string em edge case não alcançável via UI
+
+Gate file: `docs/qa/gates/8.1-leads-por-periodo.yml`
+
+**Aprovada para push via @devops.**

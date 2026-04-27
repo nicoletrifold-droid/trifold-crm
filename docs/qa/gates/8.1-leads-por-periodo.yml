@@ -1,0 +1,137 @@
+storyId: "8.1"
+title: "Leads por Período — Gráfico Interativo (ACs 3-7)"
+verdict: PASS
+reviewedAt: "2026-04-27"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Story 8.1 implementa ACs 3-7 com qualidade satisfatória. Gráfico de barras interativo
+  (recharts) com toggle de granularidade, seletor de período, filtros de empreendimento
+  e origem, e tooltip com breakdown por propriedade. Todos os 10 ACs verificados.
+  Typecheck 0 erros, Lint 0 erros. Um concern MEDIUM (sem .limit() no query de leads)
+  não-bloqueante para o volume atual. Aprovada para push.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "Página /dashboard/analytics existe. LeadsChart integrado como primeiro bloco após título."
+
+  - ac: "AC2"
+    status: PASS
+    note: "BarChart (recharts) com dataKey='count' no XAxis=period e YAxis=count. Antes desta story o gráfico não existia — AC2 agora de fato entregue."
+
+  - ac: "AC3"
+    status: PASS
+    note: "GRANULARITY_OPTIONS: Dia|Semana|Mês. Botões com estado ativo orange-500. setGranularity dispara re-fetch via useCallback."
+
+  - ac: "AC4"
+    status: PASS
+    note: "PRESET_OPTIONS: 7d|30d|90d|Custom. Presets calculam from/to via getPresetRange(). Custom exibe dois <input type='date'> condicionais. fetchData retorna early se custom sem datas."
+
+  - ac: "AC5"
+    status: PASS
+    note: "propertyOptions = [{id:'', name:'Todos'}, ...properties]. properties vêm do server component via prop. Filtro aplicado in-JS no aggregation loop (property_interest_id === propertyId)."
+
+  - ac: "AC6"
+    status: PASS
+    note: "SOURCE_OPTIONS: Todos/''/WhatsApp/whatsapp_organic, Meta Ads/meta_ads, CTWA/whatsapp_click_to_ad, Manual/walk_in. Filtro aplicado via .eq('source', source) no Supabase query."
+
+  - ac: "AC7"
+    status: PASS
+    note: "CustomTooltip: formatPeriodFull(label), total d.count, breakdown Object.entries(d.byProperty).sort(desc). byProperty sempre retorna split de TODAS as properties (não filtrado por property selecionada) — correto para mostrar composição real no tooltip."
+
+  - ac: "AC8"
+    status: PASS
+    note: "3 cards: Total no período, Média diária (Math.round(total/days*10)/10), Pico com label formatado. Renderizados condicionalmente {summary && (...)}."
+
+  - ac: "AC9"
+    status: PASS
+    note: "GET /api/analytics/leads-by-period?from&to&granularity&property&source. Parâmetros from/to obrigatórios, granularity validado contra allowlist. Retorna {data:[], summary:{total, dailyAvg, peakPeriod, peakCount}}."
+
+  - ac: "AC10"
+    status: PASS
+    note: "API requireAuth() + requireRole(['admin','supervisor']). Retorna apenas counts agregados — nenhum dado bruto de lead exposto. LeadsChart faz client-side fetch via API protegida (interpretação válida: server processa, client não expõe dados brutos)."
+
+issues:
+  - id: CHART-LIMIT-001
+    severity: medium
+    category: performance
+    description: >
+      O query de leads em /api/analytics/leads-by-period não tem .limit(). Para ranges
+      longos (90d) em CRMs com volume alto (ex: 10k+ leads), o Supabase pode retornar
+      todas as linhas sem paginação, aumentando latência. Atualmente o CRM está em
+      volume baixo — não é um problema presente, mas é technical debt para escala.
+    recommendation: >
+      Adicionar .limit(50000) como guardrail de segurança, ou migrar para SQL RPC
+      aggregated (como planejado na story) que faz GROUP BY no banco e retorna apenas
+      N rows de contagens, não todas as linhas brutas. Sugestão para story futura.
+    blocking: false
+
+  - id: CHART-PEAK-002
+    severity: low
+    category: behavior
+    description: >
+      Se generatePeriods() retornar array vazio (edge case: from > to, não alcançável
+      via UI normal), summary.peakPeriod = "" e formatPeriodLabel("") renderiza
+      "Invalid Date" no card de pico. Não alcançável na prática — presets sempre geram
+      range válido, custom range requer ambas as datas preenchidas.
+    recommendation: >
+      Adicionar guard: peakPeriod ? formatPeriodLabel(peakPeriod, granularity) : "—"
+      no componente. Defensive programming simples. Pode ser corrigido junto com
+      CHART-LIMIT-001 em story futura.
+    blocking: false
+
+security:
+  - check: "Autenticação na API"
+    result: PASS
+    note: "requireAuth() + requireRole(['admin','supervisor']) — mesmo padrão do /api/analytics/route.ts existente."
+  - check: "Validação de parâmetros"
+    result: PASS
+    note: "from/to required (400 se ausentes). granularity validado contra allowlist. source cast para enum union type do Supabase."
+  - check: "Dados expostos"
+    result: PASS
+    note: "API retorna counts e nomes de propriedades (public info). Nenhum dado PII, token, ou lead bruto exposto."
+  - check: "XSS no componente"
+    result: PASS
+    note: "React JSX auto-escaping. Sem dangerouslySetInnerHTML. Nomes de propriedades renderizados como text nodes."
+
+performance:
+  - check: "Queries paralelas"
+    result: PASS
+    note: "Promise.all([leadsQuery, propertiesQuery]) — execução paralela no servidor."
+  - check: "Gap filling determinístico"
+    result: PASS
+    note: "generatePeriods() gera array completo de períodos no servidor. Client recebe array com zeros já preenchidos — sem gaps no gráfico."
+  - check: "Tick thinning no XAxis"
+    result: PASS
+    note: "Para data.length > 31: filtra 1 em cada N ticks para evitar sobreposição no eixo X. Lógica correta."
+  - check: "Loading state"
+    result: PASS
+    note: "Spinner overlay durante fetch. setLoading(true) antes do fetch, false no finally. UX adequada."
+
+regression:
+  - check: "analytics/page.tsx — seções existentes preservadas"
+    result: PASS
+    note: "Period cards, funil, by property, by source, broker performance, lost reasons intactos. LeadsChart adicionado como primeiro bloco."
+  - check: "analytics/route.ts não modificado"
+    result: PASS
+    note: "API existente de analytics intocada. Nenhuma regressão."
+  - check: "properties query reutilizada"
+    result: PASS
+    note: "properties já era fetchada no server component. Reutilizada sem query extra — sem overhead adicional."
+  - check: "Typecheck global"
+    result: PASS
+    note: "0 erros TypeScript em todo o workspace."
+  - check: "Lint"
+    result: PASS
+    note: "0 erros. 2 warnings pré-existentes em arquivos não modificados por esta story."
+
+typecheck: PASS
+lint: PASS
+notes: >
+  CHART-LIMIT-001 (MEDIUM) e CHART-PEAK-002 (LOW) são concerns não-bloqueantes.
+  Ambos adequados para CRM em escala atual. Sugerido: corrigir em próxima story de
+  polish/performance do analytics. Story 8.1 encerra a implementação do gráfico
+  de leads por período — AC2 que estava marcado como done mas sem código de gráfico
+  agora está de fato entregue com recharts + todos os filtros interativos.
