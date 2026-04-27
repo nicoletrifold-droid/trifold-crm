@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/meta-sync-entities",
       "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/meta-sync-insights",
+      "schedule": "0 9 * * *"
     }
   ]
 }

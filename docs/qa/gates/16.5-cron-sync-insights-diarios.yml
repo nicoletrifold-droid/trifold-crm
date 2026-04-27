@@ -1,0 +1,96 @@
+storyId: "16.5"
+title: "Cron Sync — Insights Diários (Meta Ads)"
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewedAt: "2026-04-27"
+
+summary: |
+  Implementação sólida seguindo o padrão estabelecido em 16.4. Todos os 10 ACs atendidos.
+  entity_id correto por nível (Meta ID, não UUID), conversão de tipos precisa (parseFloat para
+  métricas monetárias, parseInt/Math.round para contagens), extração de actions[] robusta com
+  fallback "0"/"null" adequados. MetaOAuthException sem 5xx. Sem issues CRITICAL ou HIGH.
+  2 achados MEDIUM não-bloqueantes documentados.
+
+issues:
+  - id: M-001
+    severity: medium
+    category: robustness
+    file: "packages/web/src/app/api/cron/meta-sync-insights/route.ts"
+    line: 120
+    description: |
+      Insert em meta_sync_log não verifica erro de escrita. Se a inserção falhar,
+      syncLog = null e o sync continua sem rastreamento. Os guards `if (syncLog)`
+      presentes em todo o código previnem crash, mas uma falha de DB no log
+      passaria silenciosamente — mesmo padrão de M-001 do 16.4.
+    fix_required: false
+    recommendation: |
+      Adicionar log de warning quando syncLog é null após o insert:
+        const { data: syncLog, error: logErr } = await supabase...
+        if (logErr) console.warn('[META_INSIGHTS] Failed to create sync log:', logErr.message)
+
+  - id: M-002
+    severity: medium
+    category: maintainability
+    file: "packages/web/src/app/api/cron/meta-sync-insights/route.ts"
+    line: 148
+    description: |
+      Mapeamento de campos dos insights está duplicado 3 vezes (campaign/adset/ad).
+      O código é funcional e correto, mas uma função auxiliar buildInsightRow() reduziria
+      a superfície de manutenção futura se novos campos forem adicionados.
+    fix_required: false
+    recommendation: |
+      Refatorar oportunisticamente em Story 16.7 (backfill) que já tocará este arquivo.
+
+security_checks:
+  cron_secret_validated: PASS
+  admin_client_used_correctly: PASS
+  token_not_exposed_in_response: PASS
+  no_explicit_any: PASS
+  error_messages_safe: PASS
+
+pagination_checks:
+  do_while_loop_correct: PASS
+  cursor_guard_prevents_infinite_loop: PASS
+  api_calls_counted: PASS
+
+upsert_checks:
+  meta_insights_daily_onConflict: PASS   # org_id,level,entity_id,date ✓
+  entity_id_is_meta_id_not_uuid: PASS    # i.campaign_id / i.adset_id / i.ad_id ✓
+  date_uses_date_start: PASS             # date: i.date_start (YYYY-MM-DD) ✓
+
+type_conversion_checks:
+  spend_parseFloat: PASS
+  ctr_parseFloat: PASS
+  cpc_parseFloat: PASS
+  cpm_parseFloat: PASS
+  frequency_parseFloat: PASS
+  impressions_parseInt: PASS
+  reach_parseInt: PASS
+  clicks_parseInt: PASS
+  leads_extractActionValue_roundsFloat: PASS  # Math.round(parseFloat) ✓
+  messaging_conversations_parseInt: PASS
+  cost_per_lead_parseFloat_or_null: PASS
+
+actions_extraction_checks:
+  leads_action_type_lead: PASS
+  messaging_action_type_correct: PASS  # 'onsite_conversion.messaging_conversation_started_7d' ✓
+  cost_per_lead_from_cost_per_action_type: PASS
+  actions_jsonb_full_array_stored: PASS
+
+ac_traceability:
+  AC1: PASS   # auth CRON_SECRET, busca contas active, admin client
+  AC2: PASS   # level=campaign, entity_id=campaign_id, onConflict correto
+  AC3: PASS   # level=adset, entity_id=adset_id, onConflict correto
+  AC4: PASS   # level=ad, entity_id=ad_id, onConflict correto
+  AC5: PASS   # leads, messaging_conversations_started, cost_per_lead, actions JSONB
+  AC6: PASS   # parseFloat para NUMERIC, parseInt/round para INT/BIGINT
+  AC7: PASS   # meta_sync_log sync_type='insights', sem account_id
+  AC8: PASS   # vercel.json "0 9 * * *"
+  AC9: PASS   # MetaOAuthException → continue 200, outros → throw 500
+  AC10: PASS  # type-check ✅ lint ✅ zero any
+
+required_fixes: []
+
+notes: |
+  M-001 e M-002 são melhorias de robustez/manutenibilidade não bloqueantes.
+  Story pronta para @devops push.
