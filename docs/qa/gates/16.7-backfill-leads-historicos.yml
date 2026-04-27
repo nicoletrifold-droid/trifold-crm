@@ -1,0 +1,68 @@
+storyId: "16.7"
+title: "Backfill — Leads Históricos via Lead Forms API"
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewed_at: "2026-04-27"
+
+summary: >
+  Todos os 7 ACs satisfeitos. Script one-shot com CLI args validados, paginação cursor
+  correta, dedup idempotente por metadata->>leadgen_id, lógica de criação idêntica ao
+  webhook handler, MetaOAuthException aborta imediatamente, pausa 5s entre chunks.
+  3 issues LOW identificados — nenhum bloqueia merge.
+
+ac_coverage:
+  - id: AC1
+    status: PASS
+    note: "CLI --form-id/--from obrigatórios com exit(1), --to/--org-id/--dry-run opcionais"
+  - id: AC2
+    status: PASS
+    note: "buildChunks 7 dias, fetchChunk com paginação cursor, pausa 5s entre chunks (não entre páginas)"
+  - id: AC3
+    status: PASS
+    note: "Dedup via .eq('metadata->>leadgen_id', lead.id).maybeSingle() — idempotente"
+  - id: AC4
+    status: PASS
+    note: "getField(), source/channel=meta_ads, stage dinâmica, activity lead_created, dry-run sem INSERT"
+  - id: AC5
+    status: PASS
+    note: "resolveOrgId: meta_ad_accounts → whatsapp_config fallback → exit(1)"
+  - id: AC6
+    status: PASS
+    note: "[CHUNK] por iteração, [ERROR] por lead, sumário final com todos os contadores"
+  - id: AC7
+    status: PASS
+    note: "type-check ✅ lint ✅ 0 errors, sem any explícito"
+
+issues:
+  - severity: low
+    category: ux
+    description: >
+      Sem validação fromDate < toDate. Se --to anterior a --from,
+      buildChunks retorna array vazio e o script conclui silenciosamente
+      com "Chunks processados: 0" sem indicar o problema.
+    recommendation: "Adicionar guard: if (toDate <= fromDate) { console.error(...); process.exit(1) }"
+
+  - severity: low
+    category: ux
+    description: >
+      --to não validado contra isNaN. Uma data inválida como --to=abc
+      resultaria em NaN/Invalid Date sem erro explícito.
+    recommendation: "Adicionar isNaN(toDate.getTime()) check após criação do toDate"
+
+  - severity: low
+    category: code
+    description: >
+      Inconsistência de nomenclatura: campo no metadata é 'ad_group_id' mas
+      o campo raw da API (MetaLeadRecord.adgroup_id) e webhook usam 'adgroup_id'.
+      Não causa erro funcional — apenas inconsistência semântica.
+    recommendation: "Normalizar para 'adgroup_id' em story futura para consistência com webhook"
+
+security:
+  credentials_via_env: PASS
+  sql_injection: PASS
+  oauth_abort: PASS
+  service_role_usage: PASS
+  dry_run_isolation: PASS
+
+idempotency: PASS
+rate_limit_compliance: PASS

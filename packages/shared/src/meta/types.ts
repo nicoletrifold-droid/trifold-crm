@@ -45,6 +45,15 @@ export interface MetaLeadData {
   field_data: Array<{ name: string; values: string[] }>
 }
 
+export interface MetaLeadRecord {
+  id: string
+  field_data: Array<{ name: string; values: string[] }>
+  created_time: string
+  ad_id?: string
+  adgroup_id?: string
+  campaign_id?: string
+}
+
 export interface MetaPagination {
   cursors: { before: string; after: string }
   next?: string
