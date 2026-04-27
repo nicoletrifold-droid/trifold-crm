@@ -43,5 +43,7 @@ export async function GET(request: NextRequest) {
     .map(([source, count]) => ({ source, count }))
     .sort((a, b) => b.count - a.count)
 
-  return NextResponse.json({ data: sources })
+  const total = sources.reduce((sum, s) => sum + s.count, 0)
+
+  return NextResponse.json({ sources, total })
 }

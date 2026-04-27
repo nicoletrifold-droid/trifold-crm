@@ -34,7 +34,8 @@ interface LeadDetailDrawerProps {
   onClose: () => void
 }
 
-import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, SOURCE_LABELS as sourceLabels } from "@web/lib/constants"
+import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
+import { SourceBadge } from "@web/components/ui/source-badge"
 
 async function fetchLeadData(id: string) {
   const supabase = createClient()
@@ -218,11 +219,9 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 </div>
               )}
               {lead.source && (
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <dt className="text-stone-500">Origem</dt>
-                  <dd className="font-medium text-stone-900">
-                    {sourceLabels[lead.source] ?? lead.source}
-                  </dd>
+                  <dd><SourceBadge source={lead.source} /></dd>
                 </div>
               )}
               {lead.channel && (

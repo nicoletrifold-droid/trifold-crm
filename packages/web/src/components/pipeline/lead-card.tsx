@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { MANDATORY_FIELDS } from "@trifold/shared"
 import { getDaysSinceContact, getTimeAgo } from "@web/lib/time"
+import { SourceBadge } from "@web/components/ui/source-badge"
 
 interface LeadCardProps {
   lead: {
@@ -17,6 +18,7 @@ interface LeadCardProps {
     created_at: string
     updated_at: string
     ai_summary?: string | null
+    source?: string | null
   }
   propertyName?: string
   brokerName?: string
@@ -123,12 +125,13 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
           )}
         </div>
 
-        {/* Property Badge + Progress */}
+        {/* Property Badge + Source Badge + Progress */}
         <div className="mt-2 flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${badge.bg} ${badge.text}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
             {badge.label}
           </span>
+          {lead.source && <SourceBadge source={lead.source} size="xs" />}
           <div className="flex flex-1 items-center gap-1.5">
             <div className="h-1 flex-1 rounded-full bg-stone-100">
               <div

@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
+import { SourceBadge } from "@web/components/ui/source-badge"
 
 export default async function LeadsPage({
   searchParams,
@@ -17,7 +18,7 @@ export default async function LeadsPage({
     .from("leads")
     .select(
       `
-      id, name, phone, email, qualification_score, interest_level, updated_at,
+      id, name, phone, email, qualification_score, interest_level, updated_at, source,
       stage:kanban_stages(id, name, color),
       property_interest:properties!property_interest_id(id, name),
       broker:users!assigned_broker_id(id, name)
@@ -78,6 +79,7 @@ export default async function LeadsPage({
               <th className="px-6 py-3">Telefone</th>
               <th className="px-6 py-3">Empreendimento</th>
               <th className="px-6 py-3">Etapa</th>
+              <th className="px-6 py-3">Origem</th>
               <th className="px-6 py-3">Corretor</th>
               <th className="px-6 py-3">Score</th>
               <th className="px-6 py-3">Último contato</th>
@@ -131,6 +133,9 @@ export default async function LeadsPage({
                       <span className="text-sm text-gray-400">-</span>
                     )}
                   </td>
+                  <td className="px-6 py-4">
+                    <SourceBadge source={(lead as unknown as Record<string, unknown>).source as string | null} />
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {broker?.name ?? "-"}
                   </td>
@@ -175,7 +180,7 @@ export default async function LeadsPage({
             {(!leads || leads.length === 0) && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-6 py-8 text-center text-sm text-gray-500"
                 >
                   Nenhum lead encontrado.

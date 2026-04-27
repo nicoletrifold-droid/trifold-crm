@@ -1,0 +1,106 @@
+storyId: "16.11"
+title: "Badge de Origem + Filtro Pipeline"
+verdict: CONCERNS
+reviewedAt: "2026-04-27"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Story implementada completamente. Todos os 6 ACs entregues e funcionais.
+  Dois concerns documentados (LOW e MEDIUM) — nenhum bloqueia os requisitos
+  funcionais. Aprovada para push com observações.
+
+ac_traceability:
+  - ac: "AC1"
+    status: CONCERNS
+    note: "SourceBadge funcional para 7 origens. Concern: walk_in exibe label 'Outro' em vez de 'Walk-in' — SOURCE_LABELS_SHORT não inclui walk_in."
+  - ac: "AC2"
+    status: PASS
+    note: "Badge xs no LeadCard, source no select do Supabase, interface estendida opcionalmente."
+  - ac: "AC3"
+    status: PASS
+    note: "Drawer substitui texto simples por SourceBadge. Import de sourceLabels corretamente removido."
+  - ac: "AC4"
+    status: PASS
+    note: "Coluna Origem entre Etapa e Corretor. colSpan=9 correto."
+  - ac: "AC5"
+    status: PASS
+    note: "Filtro multi-select client-side com useMemo. sourceCounts derivado de leads (post-DnD). Botão Todos reseta filtros."
+  - ac: "AC6"
+    status: CONCERNS
+    note: "API retorna { sources, total } conforme spec. Concern: requireRole(['admin','supervisor']) é mais restritivo que o spec ('requer autenticação' sem role restriction)."
+
+issues:
+  - id: WALK-001
+    severity: low
+    category: ui
+    description: >
+      SourceBadge exibe label 'Outro' para leads com source='walk_in'. A cor
+      laranja é aplicada corretamente (SOURCE_STYLE tem walk_in), mas
+      SOURCE_LABELS_SHORT não inclui walk_in → fallback para 'Outro'.
+    recommendation: >
+      Adicionar walk_in: 'Walk-in' ao SOURCE_LABELS_SHORT em constants.ts,
+      ou incluir map local no SourceBadge. Baixo impacto: walk_in é raro
+      no fluxo atual (leads via WhatsApp/Meta Ads).
+    blocking: false
+
+  - id: ROLE-001
+    severity: medium
+    category: requirements
+    description: >
+      GET /api/analytics/sources aplica requireRole(['admin','supervisor']),
+      retornando 403 para corretores. AC6 especifica apenas 'requer autenticação'
+      sem restrição de role. O kanban não chama essa API (filtro client-side),
+      portanto nenhum AC funcional é afetado.
+    recommendation: >
+      Confirmar se a restrição é intencional (analytics = admin/supervisor apenas)
+      ou se deve ser aberta para todos os roles autenticados. Se intencional,
+      documentar no AC6 da story. Se não, remover requireRole do route.
+    blocking: false
+
+  - id: TYPE-001
+    severity: low
+    category: code
+    description: >
+      dashboard/leads/page.tsx usa cast verboso para acessar source:
+      `(lead as unknown as Record<string, unknown>).source as string | null`.
+      Funcional mas menos type-safe que uma tipagem explícita.
+    recommendation: >
+      Criar tipo explícito para o lead retornado pela query Supabase incluindo
+      source. Tech debt para refactor futuro — não bloqueia.
+    blocking: false
+
+security:
+  - check: "Autenticação na API analytics/sources"
+    result: PASS
+    note: "requireAuth() presente, RLS do Supabase garante isolamento por org_id."
+  - check: "XSS em SourceBadge"
+    result: PASS
+    note: "Labels renderizados de mapa estático, sem interpolação de input do usuário."
+  - check: "Filtro client-side — injection surface"
+    result: PASS
+    note: "Dados já carregados do servidor, filtro puramente .filter() em memória."
+
+performance:
+  - check: "useMemo em sourceCounts e filteredLeads"
+    result: PASS
+  - check: "useCallback em toggleSource"
+    result: PASS
+  - check: "Limite na API analytics"
+    result: PASS
+    note: "limit(10000) protege contra datasets muito grandes."
+
+regression:
+  - check: "LeadCard interface — consumers existentes"
+    result: PASS
+    note: "source é optional — nenhum consumer existente quebra."
+  - check: "KanbanBoard DnD — handleDragEnd usa leads completo"
+    result: PASS
+  - check: "lead-detail-drawer — sem import morto"
+    result: PASS
+  - check: "colSpan atualizado de 8 para 9"
+    result: PASS
+
+typecheck: PASS
+lint: PASS
+notes: "2 warnings de lint pré-existentes em arquivos não modificados por esta story (enrich-leads/route.ts, campaigns/page.tsx)."
