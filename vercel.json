@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/meta-sync-insights",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/webhook-health",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

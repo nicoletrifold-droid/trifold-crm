@@ -2,7 +2,7 @@
 epic: 16
 story: 16.5
 title: Cron Sync — Insights Diários (Meta Ads)
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-27
 created_by: River (@sm)
@@ -397,6 +397,7 @@ Story pronta para @devops push.
 | 2026-04-27 | @po (Pax) | Validação 10-point: 9/10 — GO. Sem correções necessárias. Status: Draft → Ready |
 | 2026-04-27 | @dev (Dex) | Implementação completa — route.ts criado + vercel.json atualizado. type-check ✅ lint ✅. Status: Ready → Ready for Review |
 | 2026-04-27 | @qa (Quinn) | Review PASS — AC1-AC10 ✅, M-001/M-002 não-bloqueantes documentados. Gate: docs/qa/gates/16.5-cron-sync-insights-diarios.yml |
+| 2026-04-27 | @devops (Gage) | Push realizado — dace220..929caf7. Status: Ready for Review → Done |
 
 ## Definition of Done
 
@@ -408,4 +409,4 @@ Story pronta para @devops push.
 - [x] `meta_sync_log` com `sync_type='insights'` funcionando
 - [x] `MetaOAuthException` tratado sem crash
 - [x] @qa PASS
-- [ ] @devops push realizado
+- [x] @devops push realizado

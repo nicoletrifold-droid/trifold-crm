@@ -1,0 +1,134 @@
+storyId: "16.6"
+title: "Webhook Logs + Monitoring"
+reviewer: "@qa (Quinn)"
+reviewedAt: "2026-04-27"
+verdict: PASS
+
+summary: |
+  Story 16.6 aprovada após ciclo de review + fix. Todos os 5 ACs implementados e verificados.
+  Issues C-001 e C-002 identificados na primeira review e corrigidos pelo @dev:
+  - C-001: insert síncrono movido para antes de todos os early returns
+  - C-002: admin endpoint usa createAdminClient() sem filtro de org_id
+  C-003 (LOW) permanece como debt registrado — padrão existente no projeto, não bloqueia.
+  type-check ✅ lint ✅.
+
+revision_history:
+  - date: "2026-04-27"
+    verdict: CONCERNS
+    issues_found: [C-001, C-002, C-003]
+    sent_to: "@dev para fix de C-001 e C-002"
+  - date: "2026-04-27"
+    verdict: PASS
+    fixes_verified: [C-001, C-002]
+    remaining_debt: [C-003]
+
+ac_checklist:
+  - ac: AC1
+    status: PASS
+    notes: |
+      Insert síncrono ocorre antes de todos os early returns do POST handler.
+      Assinatura inválida: loga com signature_valid=false + processing_error="invalid_signature", retorna 403.
+      Sem leadgen_id (ping): loga com event_type="ping" + processed=true, retorna 200.
+      JSON parse inválido: impossível logar sem body — único early return aceitável antes do insert.
+      Happy path (leadgen): insert → after() → processLeadAsync → processed=true/processing_error.
+  - ac: AC2
+    status: PASS
+    notes: |
+      createAdminClient() substituiu createClient() — sem filtro de org_id.
+      Todos os webhook_logs visíveis incluindo org_id IS NULL (pending events).
+      Auth admin mantida via getServerUser() + role check.
+      source filter, limit (max 200), offset, created_at DESC — todos corretos.
+      Retorna { data, total }.
+  - ac: AC3
+    status: PASS
+    notes: |
+      UI completa: badges corretos (verde=processed, vermelho=error, cinza=pending),
+      filtro por source, auto-refresh 30s, expandable rows com leadgen_id + error detail.
+      Trata 403 de admin graciosamente. Padrão visual consistente com /dashboard/sistema.
+  - ac: AC4
+    status: PASS
+    notes: |
+      isBusinessHoursBRT() correto (UTC 11–23 = BRT 08–20). Threshold 30min.
+      PGRST116 tratado (no rows = estado válido, não erro). Alerta Telegram com mensagem PT-BR.
+      Graceful degradation se TELEGRAM_ADMIN_CHAT_ID ausente (console.warn, sem throw).
+      CRON_SECRET protection. Retorna 200 sempre. vercel.json: */30 * * * *.
+  - ac: AC5
+    status: PASS
+    notes: "npm run type-check: 8/8 ✅. npm run lint: 0 erros ✅."
+
+issues:
+  - id: C-001
+    severity: medium
+    status: FIXED
+    category: requirements
+    ac: AC1
+    fix_description: |
+      Insert síncrono movido para antes dos early returns.
+      Assinatura inválida → processing_error="invalid_signature" + retorna 403.
+      Ping (sem leadgen_id) → processed=true + retorna 200.
+
+  - id: C-002
+    severity: medium
+    status: FIXED
+    category: requirements
+    ac: AC2
+    fix_description: |
+      createAdminClient() substituiu createClient(). Filtro .eq("org_id") removido.
+      Todos os eventos visíveis incluindo pending (org_id NULL).
+
+  - id: C-003
+    severity: low
+    status: DEBT
+    category: requirements
+    ac: AC2
+    description: |
+      getServerUser() retorna redirect 302 ao invés de 401 para unauthenticated requests.
+      Padrão existente no projeto — afeta apenas clientes API programáticos, não a UI.
+    recommendation: "Criar helper de auth que retorna 401 para rotas API puras — candidato a story de tech debt."
+    blocking: false
+
+non_functional:
+  security:
+    - check: CRON_SECRET validation no health check
+      status: PASS
+    - check: Admin role verification via getServerUser()
+      status: PASS
+    - check: createAdminClient() usado no webhook e admin endpoint (service role bypassa RLS)
+      status: PASS
+    - check: Nenhum token/secret hardcoded
+      status: PASS
+    - check: AbortSignal.timeout(10000) no Telegram fetch
+      status: PASS
+
+  reliability:
+    - check: Insert não bloqueia retorno 200 ao Meta (< 200ms, dentro do SLA de 20s)
+      status: PASS
+    - check: Falha no insert não impede processamento do lead (after() ainda executa)
+      status: PASS
+    - check: Health check retorna 200 sempre (não gera 5xx falsos)
+      status: PASS
+    - check: PGRST116 tratado corretamente (no rows = estado válido)
+      status: PASS
+
+  observability:
+    - check: Todos os eventos logados (sig inválida, ping, leadgen)
+      status: PASS
+    - check: processed=true atualizado após sucesso no async
+      status: PASS
+    - check: processing_error preenchido em caso de exceção no async
+      status: PASS
+    - check: org_id atualizado no log após resolução (processLeadAsync)
+      status: PASS
+
+  graceful_degradation:
+    - check: Telegram silencioso se TELEGRAM_ADMIN_CHAT_ID ausente
+      status: PASS
+    - check: try/catch em sendTelegramAdminAlert
+      status: PASS
+
+merge_decision:
+  can_merge: true
+  rationale: |
+    Todos os ACs implementados e verificados. Issues C-001 e C-002 corrigidos.
+    C-003 registrado como debt de baixa prioridade, não bloqueia.
+    Story pronta para @devops push.

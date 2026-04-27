@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server"
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import crypto from "crypto"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 const META_API_BASE = "https://graph.facebook.com/v21.0"
 
@@ -40,10 +41,6 @@ export async function POST(request: NextRequest) {
     "sha256=" + crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex")
   const signatureValid = signature === expectedSignature
 
-  if (!signatureValid) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 403 })
-  }
-
   let body: Record<string, unknown>
   try {
     body = JSON.parse(rawBody)
@@ -55,21 +52,51 @@ export async function POST(request: NextRequest) {
   const firstEntry = entry?.[0] as Record<string, unknown> | undefined
   const changes = firstEntry?.changes as Array<Record<string, unknown>> | undefined
   const value = changes?.[0]?.value as Record<string, unknown> | undefined
+  const leadgenId = value?.leadgen_id as string | undefined
 
-  if (!value?.leadgen_id) {
-    return NextResponse.json({ status: "ok" })
+  // Persistir todos os eventos em webhook_logs antes de qualquer early return
+  const adminSupabase = createAdminClient()
+  const { data: logEntry } = await adminSupabase
+    .from("webhook_logs")
+    .insert({
+      source: "meta_ads",
+      event_type: leadgenId ? (value?.form_id ? "leadgen" : "unknown") : "ping",
+      payload: body,
+      leadgen_id: leadgenId ?? null,
+      signature_valid: signatureValid,
+      processed: false,
+    })
+    .select("id")
+    .single()
+
+  if (!signatureValid) {
+    if (logEntry?.id) {
+      await adminSupabase
+        .from("webhook_logs")
+        .update({ processing_error: "invalid_signature" })
+        .eq("id", logEntry.id)
+    }
+    return NextResponse.json({ error: "Invalid signature" }, { status: 403 })
   }
 
-  const leadgenId = value.leadgen_id as string
+  if (!leadgenId) {
+    if (logEntry?.id) {
+      await adminSupabase
+        .from("webhook_logs")
+        .update({ processed: true })
+        .eq("id", logEntry.id)
+    }
+    return NextResponse.json({ status: "ok" })
+  }
 
   // AC6: Log estruturado com resultado real da validação
   console.log(
     JSON.stringify({
       type: "meta_webhook_received",
       leadgen_id: leadgenId,
-      form_id: value.form_id ?? null,
-      ad_id: value.ad_id ?? null,
-      campaign_id: value.campaign_id ?? null,
+      form_id: value?.form_id ?? null,
+      ad_id: value?.ad_id ?? null,
+      campaign_id: value?.campaign_id ?? null,
       page_id: firstEntry?.id ?? null,
       timestamp: new Date().toISOString(),
       signature_valid: signatureValid,
@@ -79,7 +106,7 @@ export async function POST(request: NextRequest) {
 
   // AC3: Retornar 200 imediatamente; processamento é async via after()
   after(async () => {
-    await processLeadAsync(leadgenId, value, firstEntry ?? {})
+    await processLeadAsync(leadgenId, value ?? {}, firstEntry ?? {}, logEntry?.id)
   })
 
   return NextResponse.json({ status: "ok" })
@@ -92,9 +119,11 @@ export async function POST(request: NextRequest) {
 async function processLeadAsync(
   leadgenId: string,
   webhookValue: Record<string, unknown>,
-  entry: Record<string, unknown>
+  entry: Record<string, unknown>,
+  logId?: string,
 ) {
   const supabase = getSupabaseAdmin()
+  const adminSupabase = createAdminClient()
 
   try {
     // AC1 + AC2: Buscar dados do lead via Graph API (ou usar field_data do payload se disponível)
@@ -219,8 +248,22 @@ async function processLeadAsync(
         incomplete: metaMetadata.incomplete,
       },
     })
+
+    if (logId) {
+      await adminSupabase
+        .from("webhook_logs")
+        .update({ processed: true, org_id: orgId })
+        .eq("id", logId)
+    }
   } catch (error) {
     console.error("[META-WEBHOOK] processLeadAsync error:", error)
+    if (logId) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      await adminSupabase
+        .from("webhook_logs")
+        .update({ processing_error: errorMessage })
+        .eq("id", logId)
+    }
   }
 }
 
