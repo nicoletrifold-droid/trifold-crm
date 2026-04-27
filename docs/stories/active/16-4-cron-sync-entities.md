@@ -2,7 +2,7 @@
 epic: 16
 story: 16.4
 title: Cron Sync — Hierarquia Campanhas/AdSets/Ads
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-24
 created_by: River (@sm)
@@ -371,6 +371,7 @@ Story pronta para @devops push.
 | 2026-04-27 | @po (Pax) | Validação 10-point: 9/10 — GO. Correções: AC5 'partial'→'error' (constraint DB); Dev Notes account_id removido do insert (campo inexistente). Status: Draft → Ready |
 | 2026-04-27 | @dev (Dex) | Implementação completa — route.ts criado + vercel.json atualizado. type-check ✅ lint ✅. Status: Ready → Ready for Review |
 | 2026-04-27 | @qa (Quinn) | Review PASS — AC1-AC8 ✅, M-001 não-bloqueante documentado. Gate: docs/qa/gates/16.4-cron-sync-entities.yml |
+| 2026-04-27 | @devops (Gage) | Push realizado — 676e6fa..582d7fe. Status: Ready for Review → Done |
 
 ## Definition of Done
 
@@ -381,4 +382,4 @@ Story pronta para @devops push.
 - [x] Log em `meta_sync_log` funcionando
 - [x] `MetaOAuthException` tratado sem crash
 - [x] @qa PASS
-- [ ] @devops push realizado
+- [x] @devops push realizado
