@@ -6,11 +6,11 @@ O supervisor precisa visualizar a tendencia de entrada de leads ao longo do temp
 ## Acceptance Criteria
 - [x] AC1: Pagina `/dashboard/analytics` com tab "Leads" exibe grafico de leads por periodo
 - [x] AC2: Grafico de barras com eixo X = periodo (dias/semanas/meses) e eixo Y = contagem de leads
-- [ ] AC3: Toggle de granularidade: Dia | Semana | Mes
-- [ ] AC4: Filtro por periodo: seletor de date range (ultimos 7 dias, 30 dias, 90 dias, customizado)
-- [ ] AC5: Filtro por empreendimento (Todos, Vind, Yarden)
-- [ ] AC6: Filtro por origem (Todos, WhatsApp, Meta Ads, CTWA, Manual)
-- [ ] AC7: Tooltip ao hover em barra: data, contagem, breakdown por empreendimento
+- [x] AC3: Toggle de granularidade: Dia | Semana | Mes
+- [x] AC4: Filtro por periodo: seletor de date range (ultimos 7 dias, 30 dias, 90 dias, customizado)
+- [x] AC5: Filtro por empreendimento (Todos, Vind, Yarden)
+- [x] AC6: Filtro por origem (Todos, WhatsApp, Meta Ads, CTWA, Manual)
+- [x] AC7: Tooltip ao hover em barra: data, contagem, breakdown por empreendimento
 - [x] AC8: Card de resumo abaixo do grafico: Total de leads no periodo, Media diaria, Dia com mais leads
 - [x] AC9: API route `GET /api/analytics/leads-by-period?from=...&to=...&granularity=day&property=...&source=...`
 - [x] AC10: Dados carregados via server-side (nao expor dados brutos no client)
@@ -100,5 +100,9 @@ M (Media) — 2-3 horas
 ## File List
 
 ### Created/Modified
-- `packages/web/src/app/dashboard/analytics/page.tsx` — Pagina de analytics com cards de leads hoje/semana/mes
+- `packages/web/src/app/dashboard/analytics/page.tsx` — Pagina de analytics (server component) — importa LeadsChart
 - `packages/web/src/app/api/analytics/route.ts` — API de analytics com dados agregados de leads por periodo
+- `packages/web/src/app/api/analytics/leads-by-period/route.ts` — API de leads por periodo com filtros (NEW)
+- `packages/web/src/components/analytics/leads-chart.tsx` — Client component: grafico de barras + filtros AC3-AC7 (NEW)
+
+## Status: Ready for Review

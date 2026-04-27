@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
+import { LeadsChart } from "@web/components/analytics/leads-chart"
 
 export default async function AnalyticsPage() {
   await getServerUser()
@@ -53,6 +54,9 @@ export default async function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+
+      {/* Leads por Período — gráfico interativo com filtros (AC3-AC7) */}
+      <LeadsChart properties={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))} />
 
       {/* Period Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
