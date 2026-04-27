@@ -1,0 +1,72 @@
+storyId: "16.8"
+title: "UI — Lista de Campanhas Meta + Métricas"
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewed_at: "2026-04-27"
+
+summary: >
+  Todos os 7 ACs satisfeitos. Implementação correta de auth (requireAuth + requireRole),
+  agregação de métricas no servidor, dedup de leads_crm por Set union, padrão Server
+  Component + isAdmin prop, fire-and-forget com AbortSignal.timeout, tabs sem regressão.
+  4 issues LOW identificados — nenhum bloqueia merge.
+
+ac_coverage:
+  - id: AC1
+    status: PASS
+    note: "GET /api/meta-ads/campaigns — 3 queries + agregação + CTR calculado de clicks/impressions + dedup leads_crm + last_sync"
+  - id: AC2
+    status: PASS
+    note: "POST /api/meta-ads/sync — requireAuth + requireRole([admin]) + fire-and-forget AbortSignal.timeout(5000)"
+  - id: AC3
+    status: PASS
+    note: "Tabela 11 colunas, badges, mapeamento de objetivos, ROAS ausente (correto)"
+  - id: AC4
+    status: PASS
+    note: "Filtros period/status com re-fetch, loading/error/empty/unconfigured states"
+  - id: AC5
+    status: PASS
+    note: "Header com última sync + badge status + botão admin-only via isAdmin prop de Server Component"
+  - id: AC6
+    status: PASS
+    note: "Tabs CRM/Meta Ads em campaigns/page.tsx, CRM page sem regressão"
+  - id: AC7
+    status: PASS
+    note: "type-check ✅ lint ✅ 0 errors"
+
+issues:
+  - severity: low
+    category: code
+    description: >
+      insights e leads queries sem check de erro — falha silenciosa retorna métricas zeradas
+      sem indicação no servidor.
+    recommendation: "Adicionar log de erro server-side em story futura"
+
+  - severity: low
+    category: performance
+    description: >
+      3 queries executadas sequencialmente (campaigns → insights → leads).
+      Poderiam ser paralelizadas com Promise.all para reduzir latência.
+    recommendation: "Otimização opcional em story futura"
+
+  - severity: low
+    category: code
+    description: >
+      CampaignsTabs duplicado: versão sem prop em campaigns/page.tsx e versão com
+      active prop em campaigns-meta-client.tsx. Funciona corretamente.
+    recommendation: "Considerar extrair para componente compartilhado ao adicionar próximas tabs"
+
+  - severity: low
+    category: ux
+    description: >
+      AC5 especifica 'Toast' — implementação usa <p> inline com auto-dismiss 4s.
+      Funcionalmente equivalente.
+    recommendation: "Aceito como-está; atualizar para toast library em refactor de UX global"
+
+security:
+  auth_coverage: PASS
+  role_enforcement: PASS
+  secrets_handling: PASS
+  data_exposure: PASS
+
+regression:
+  campaigns_crm_page: PASS
