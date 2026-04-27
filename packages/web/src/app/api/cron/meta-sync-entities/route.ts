@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { metaFetch, MetaOAuthException } from "@trifold/shared"
 import type { MetaCampaign, MetaAdSet, MetaAd, MetaPagedResponse } from "@trifold/shared"
+import { sendTelegramAdminAlert } from "@web/lib/telegram"
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -232,6 +233,9 @@ export async function GET(request: NextRequest) {
         }
 
         console.error(`[META_SYNC] Token invalid for account ${account.id}`)
+        await sendTelegramAdminAlert(
+          `🔴 *[Meta Sync] Token inválido*\n\nConta: \`${account.meta_account_id}\`\n\nO sync de entidades foi interrompido. Acesse as configurações para renovar o token.`
+        )
         results.push({ account_id: account.id, status: "token_invalid" })
         continue
       }

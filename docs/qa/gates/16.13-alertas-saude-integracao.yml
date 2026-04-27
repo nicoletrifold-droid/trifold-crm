@@ -1,0 +1,97 @@
+storyId: "16.13"
+title: "Alertas e Saúde da Integração Meta Ads"
+verdict: PASS
+reviewedAt: "2026-04-27"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Story implementada completamente. Todos os 5 ACs entregues e funcionais.
+  DRY aplicado com sucesso: helper centralizado elimina duplicata.
+  Um concern LOW documentado (ALERT-REPEAT-001) — não bloqueia funcionalidade.
+  Aprovada para push sem ressalvas operacionais.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "Cron meta-sync-health verifica entities (6h) e insights (26h) via meta_sync_log. Guard isBusinessHoursBRT() correto. Alertas Telegram enviados sequencialmente para cada falha. maybeSingle() usado corretamente (evita PGRST116)."
+
+  - ac: "AC2"
+    status: PASS
+    note: "Cron consulta meta_ad_accounts.status = 'error'. Mensagem inclui meta_account_id da(s) conta(s) afetada(s). Alerta enviado via sendTelegramAdminAlert centralizado."
+
+  - ac: "AC3"
+    status: PASS
+    note: "meta-sync-entities e meta-sync-insights: import de @web/lib/telegram, await sendTelegramAdminAlert no catch de MetaOAuthException. Comportamento existente preservado (update status, syncLog, continue)."
+
+  - ac: "AC4"
+    status: PASS
+    note: "GET /api/health/meta-sync sem auth. Retorna {status, checks, timestamp}. HTTP 200 se healthy, 503 se degraded/error. Tipos SyncCheck e TokenCheck definidos explicitamente. hours_since_sync calculado via hoursSince()."
+
+  - ac: "AC5"
+    status: PASS
+    note: "packages/web/src/lib/telegram.ts criado com sendTelegramAdminAlert. webhook-health/route.ts atualizado para importar de @web/lib/telegram (função local removida). meta-sync-entities e meta-sync-insights também importam da lib. Zero duplicação."
+
+issues:
+  - id: ALERT-REPEAT-001
+    severity: low
+    category: behavior
+    description: >
+      O cron meta-sync-health roda a cada 4h e envia alerta Telegram a cada execução
+      enquanto a condição de falha persistir (sync stale ou token inválido). Em cenários
+      de falha prolongada, o admin recebe até 3-4 alertas iguais por dia. Não há
+      deduplicação ou cooldown entre alertas. AC1 não exige cooldown — comportamento
+      é tecnicamente correto conforme spec.
+    recommendation: >
+      Implementar cooldown de 12h por tipo de alerta em story futura (ex: flag
+      last_alerted_at em meta_sync_log ou meta_ad_accounts). Baixo impacto no fluxo atual
+      — poucas falhas esperadas em operação normal.
+    blocking: false
+
+security:
+  - check: "CRON_SECRET obrigatório em meta-sync-health"
+    result: PASS
+    note: "Guard falha com 500 se CRON_SECRET não configurado, 401 se Bearer inválido."
+  - check: "Health endpoint sem dados sensíveis"
+    result: PASS
+    note: "GET /api/health/meta-sync expõe apenas timestamps e contadores — sem tokens, IDs de conta, ou dados de leads."
+  - check: "sendTelegramAdminAlert: token nunca exposto em logs"
+    result: PASS
+    note: "Função lê token de env var, não o loga. Suprime alerta silenciosamente se não configurado."
+  - check: "meta_account_id em mensagem Telegram"
+    result: PASS
+    note: "meta_account_id é identificador de conta (act_xxxxx) — não é secret. Aceitável em mensagem administrativa interna."
+  - check: "Supabase queries filtram corretamente"
+    result: PASS
+    note: "createAdminClient() usa service role — RLS bypass controlado. Queries sem org_id correto para cron cross-org, mas tabelas meta_* são de escopo interno (não multi-tenant neste estágio)."
+
+performance:
+  - check: "3 queries Supabase sequenciais no meta-sync-health"
+    result: PASS
+    note: "Aceitável: cron roda a cada 4h, não é hot path. Queries simples com índices em (sync_type, status, finished_at)."
+  - check: "AbortSignal.timeout(10000) em fetch Telegram"
+    result: PASS
+    note: "Timeout de 10s previne hang no cron se Telegram estiver indisponível."
+  - check: "sendTelegramAdminAlert: fire-and-forget com catch"
+    result: PASS
+    note: "Erros de envio são logados mas não propagados — cron retorna 200 independente do Telegram."
+
+regression:
+  - check: "webhook-health comportamento preservado"
+    result: PASS
+    note: "Apenas import substituído. Lógica de silêncio de webhooks intocada."
+  - check: "meta-sync-entities comportamento de erro preservado"
+    result: PASS
+    note: "update de status, syncLog e continue intocados. sendTelegramAdminAlert adicionado APÓS console.error existente."
+  - check: "meta-sync-insights comportamento de erro preservado"
+    result: PASS
+    note: "Mesmo padrão de meta-sync-entities. Comportamento original preservado."
+  - check: "Typecheck global"
+    result: PASS
+  - check: "Lint — 0 errors"
+    result: PASS
+    note: "2 warnings pré-existentes em arquivos não modificados por esta story."
+
+typecheck: PASS
+lint: PASS
+notes: "ALERT-REPEAT-001 é concern LOW não-bloqueante. Story encerra Epic 16 — todas as 14 stories Done."
