@@ -83,3 +83,78 @@ export interface MetaBatchResponse {
   headers: Array<{ name: string; value: string }>
   body: string
 }
+
+// ─── Story 16.9 — Campaign Detail (drill-down) ─────────────────────────────
+
+export interface MetaCampaignDetail {
+  id: string
+  meta_campaign_id: string
+  name: string
+  objective: string | null
+  status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DELETED'
+  daily_budget: number | null
+  lifetime_budget: number | null
+  start_time: string | null
+  stop_time: string | null
+}
+
+export interface MetaInsightTimeSeries {
+  date: string
+  spend: number
+  leads_meta: number
+  impressions: number
+  clicks: number
+  ctr: number
+}
+
+export interface MetaAdSetWithMetrics {
+  id: string
+  meta_adset_id: string
+  name: string
+  status: string
+  optimization_goal: string | null
+  daily_budget: number | null
+  spend: number
+  impressions: number
+  clicks: number
+  ctr: number
+  leads_meta: number
+  cpl: number | null
+}
+
+export interface ConversionFunnel {
+  leads_meta: number
+  leads_crm: number
+  leads_qualified: number
+  visits_scheduled: number
+  sales: number
+}
+
+export interface RoasSummary {
+  total_spend: number
+  leads_in_crm: number
+  sales_count: number
+  total_revenue: number
+  roas: number | null
+  cpl_real: number | null
+}
+
+export interface AssociatedLead {
+  id: string
+  name: string | null
+  phone: string | null
+  email: string | null
+  status: string
+  source: string
+  utm_campaign: string | null
+  created_at: string
+}
+
+export interface CampaignDetailApiResponse {
+  campaign: MetaCampaignDetail
+  timeseries: MetaInsightTimeSeries[]
+  adsets: MetaAdSetWithMetrics[]
+  funnel: ConversionFunnel
+  leads: AssociatedLead[]
+  roas_summary: RoasSummary | null
+}

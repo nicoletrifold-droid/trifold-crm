@@ -1,0 +1,189 @@
+schema: 1
+storyId: "16.9"
+title: "UI — Detalhe de Campanha + Drill-down"
+gate: PASS
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewed_at: "2026-04-27"
+updated: "2026-04-27T00:00:00Z"
+
+status_reason: >
+  Todos os 15 ACs satisfeitos. Auth correta (401/404 sem vazamento de existência cross-org),
+  graceful fallback do ROAS, divisão por zero protegida no funil, tipos sem any explícito,
+  helpers extraídos em meta-format.ts/meta-constants.ts seguindo IDS REUSE > ADAPT > CREATE
+  sem quebrar 16.8. Dois desvios documentados (Recharts→SVG nativo; metadata->>campaign_id
+  removido por inexistência no schema) tecnicamente sólidos e justificados.
+
+ac_coverage:
+  - id: AC1
+    status: PASS
+    note: "GET /api/meta-ads/campaigns/[campaign_id] — requireAuth() (401), maybeSingle() + .eq(org_id) (404 cross-org), parseDays com cap em 365"
+  - id: AC2
+    status: PASS
+    note: "Bloco campaign tipado MetaCampaignDetail; parsing string→number defensivo de daily/lifetime_budget"
+  - id: AC3
+    status: PASS
+    note: "buildTimeseries com gaps preenchidos via Map lookup + cursor UTC inclusivo (date ASC, zeros para dias sem dados)"
+  - id: AC4
+    status: PASS
+    note: "buildAdsetMetrics agrega por entity_id, sort spend DESC, CTR derivado de totais (clicks/impressions, mais correto que média)"
+  - id: AC5
+    status: PASS
+    note: "buildFunnel adaptado para schema real (kanban_stages.type + qualification_status + visit_scheduled_at) — desvio documentado e correto"
+  - id: AC6
+    status: PASS
+    note: "Query leads com utm_campaign=campaign.name, ORDER created_at DESC LIMIT 50; campos tipados AssociatedLead"
+  - id: AC7
+    status: PASS
+    note: "ROAS try/catch + check result.error → null se view não existe; nunca propaga 500"
+  - id: AC8
+    status: PASS
+    note: "page.tsx Server Component (getServerUser + isAdmin prop) → campaign-detail-client.tsx; loading skeleton, 404 com botão voltar, generic com retry"
+  - id: AC9
+    status: PASS
+    note: "Breadcrumb funcional, status badge com STATUS_BADGES, OBJECTIVE_LABELS PT-BR, formatPeriod com 'Em andamento', seletor 7d/30d/90d"
+  - id: AC10
+    status: PASS
+    note: "Recharts não instalado → SVG nativo customizado (decisão conservadora, sem nova dep). Dois eixos Y, tooltip hover, legenda, estado vazio. Funcionalmente equivalente."
+  - id: AC11
+    status: PASS
+    note: "Tabela com 10 colunas conforme spec; estado vazio implementado; CPL='—' se leads=0"
+  - id: AC12
+    status: PASS
+    note: "5 etapas em grid responsivo, setas entre cards (md+), formatRate retorna '—' se prev=0 (divisão por zero protegida)"
+  - id: AC13
+    status: PASS
+    note: "RoasCard só renderiza se roas !== null (na verdade sempre renderiza com fallback informativo cinza); cores por threshold (>=3 verde, >=1 amarelo, <1 vermelho)"
+  - id: AC14
+    status: PASS
+    note: "LeadsTable com link Nome → /dashboard/leads/{id}, badges via LEAD_STATUS_BADGES, formatDateTime, estado vazio"
+  - id: AC15
+    status: PASS
+    note: "tsc --noEmit passa em packages/web e packages/shared; eslint sem erros nos arquivos novos; sem 'any' explícito (apenas 'any' em comentário)"
+
+security:
+  auth_coverage: PASS
+  description: "requireAuth() na rota; .eq(org_id, appUser.org_id) em todas as 7 queries (campaign, campaign-insights, adsets, adset-insights, leads, allLeads, ROAS). 404 (não 403) para cross-org evita info leak."
+  role_enforcement: NOT_REQUIRED
+  description_role: "Story é read-only de dashboards — sem requireRole específico (qualquer usuário do org pode ver). isAdmin é prop futura para CTA admin-only mas não bloqueante aqui."
+  rls_coverage: PASS
+  description_rls: "Supabase client server-side respeita RLS — kanban_stages tem RLS por org (verificado em 004_rls_policies.sql)."
+  secrets_handling: PASS
+  description_secrets: "Nenhum segredo manipulado nesta story (read-only)."
+  data_exposure: PASS
+  description_exposure: "Resposta do endpoint não expõe campos sensíveis (sem tokens, sem org_id de outras orgs); join com kanban_stages limita a campo 'type'."
+  sql_injection: PASS
+  description_sqli: "Uso correto do query builder Supabase com parâmetros nomeados (.eq, .in, .gte, .lte). Nenhum string-concat de input."
+
+issues:
+  - id: "MNT-001"
+    severity: low
+    category: maintainability
+    description: >
+      Helpers extraídos em meta-format.ts/meta-constants.ts mas 16.8 (campaigns-meta-client.tsx)
+      AINDA mantém cópias locais de formatBRL, formatBudget, formatNumber, formatPercent,
+      STATUS_BADGES, OBJECTIVE_LABELS. Não é regressão (16.8 funciona), mas a oportunidade
+      IDS REUSE prometida nas notas do dev ficou pela metade.
+    finding: "Duplicação parcial: 16.9 importa de @web/lib/meta-format e @web/lib/meta-constants, 16.8 ainda tem cópias locais."
+    suggested_action: "Em story de housekeeping (não-bloqueante), refatorar 16.8 para importar dos novos arquivos compartilhados."
+
+  - id: "REL-001"
+    severity: low
+    category: reliability
+    description: >
+      Queries Supabase no endpoint não fazem check explícito de result.error (exceto ROAS).
+      Se uma query falhar (ex: timeout, erro de RLS), o handler segue com array vazio.
+      No melhor caso isso é graceful degradation; no pior, mascara bugs de schema/RLS.
+    finding: "campaign-insights, adsets, adset-insights, leads, allLeads queries usam apenas (rawX ?? []) — error silenciado."
+    suggested_action: "Em story futura, adicionar console.error/log estruturado quando result.error for truthy (similar ao gotcha de 16.8)."
+
+  - id: "REQ-001"
+    severity: low
+    category: requirements
+    description: >
+      AC5/AC6 originais especificavam associação lead↔campanha via 'utm_campaign OR metadata->>campaign_id'.
+      Schema atual não tem coluna metadata jsonb em leads — dev removeu o segundo predicado.
+      Consequência: leads sem utm_campaign preenchido (ex: vindos do webhook Meta com campaign_id
+      no campo do form) podem não aparecer no funil/lista.
+    finding: "Associação só via utm_campaign exact match — funciona mas pode subestimar cobertura do funil."
+    suggested_action: "Em Story 16.10 ou separada, avaliar adicionar coluna meta_campaign_id em leads (FK) ou pelo menos campos para metadata do form."
+
+  - id: "MNT-002"
+    severity: low
+    category: maintainability
+    description: >
+      parseDays aceita valores entre 1 e 365, mas AC1/AC9 só esperam 7/30/90. Não é bug
+      (cap em 365 é defensivo), mas API aceita ?days=42 silenciosamente, o que pode confundir
+      consumidores futuros.
+    finding: "parseDays não valida whitelist [7,30,90] — aceita qualquer inteiro 1-365."
+    suggested_action: "Documentar comportamento ou apertar validação para [7,30,90] em refactor."
+
+  - id: "MNT-003"
+    severity: low
+    category: code
+    description: >
+      buildTimeseries inclui um dia a mais que o solicitado (cursor inclusivo + range 'today - days' até 'today').
+      Resultado: ?days=7 retorna 8 dias. Documentado nos testes da story como '7+1'. Não é bug
+      crítico mas inconsistente com leitura literal de 'últimos 7 dias'.
+    finding: "Range from = today - days, to = today, cursor inclusivo → 8 elementos para days=7."
+    suggested_action: "Decisão consciente do dev; aceitável. Caso queira ajustar, mudar from = today - (days - 1)."
+
+  - id: "MNT-004"
+    severity: low
+    category: code
+    description: >
+      Prop isAdmin é passada de page.tsx → campaign-detail-client.tsx mas o client component
+      destructura apenas {campaignId} (linha 44), efetivamente ignorando isAdmin. Não é bug
+      (TypeScript permite props extras), mas é dead-prop indicando feature inacabada ou
+      preparação para CTA admin-only futuro.
+    finding: "isAdmin é prop declarada na interface Props mas não consumida no componente."
+    suggested_action: "Remover prop ou adicionar TODO comment indicando uso futuro."
+
+regression:
+  campaigns_meta_list_16_8: PASS
+  description_16_8: "16.8 retém cópias locais dos helpers e não importa dos novos arquivos compartilhados — sem imports quebrados."
+  shared_meta_types: PASS
+  description_types: "Tipos novos foram apenas adicionados em packages/shared/src/meta/types.ts; tipos pré-existentes (MetaCampaign, MetaAdSet, MetaInsight, etc.) preservados intactos."
+  typecheck: PASS
+  description_typecheck: "tsc --noEmit em packages/web e packages/shared sem erros."
+
+graceful_fallbacks:
+  roas_view_missing:
+    status: PASS
+    description: "try/catch externo + check result.error interno → roas_summary = null. Nunca propaga 500."
+  funnel_division_by_zero:
+    status: PASS
+    description: "formatRate retorna '—' se prev === 0; também trata prev === null para primeira etapa (sem taxa)."
+  empty_timeseries:
+    status: PASS
+    description: "Estado 'Sem dados de performance no período selecionado' renderizado se data.length===0 OU allZero===true."
+  empty_adsets:
+    status: PASS
+    description: "Estado 'Nenhum AdSet encontrado para esta campanha' implementado."
+  empty_leads:
+    status: PASS
+    description: "Estado 'Nenhum lead associado a esta campanha encontrado no CRM' implementado."
+
+waiver: { active: false }
+
+top_issues:
+  - id: "MNT-001"
+    severity: low
+    finding: "16.8 ainda tem cópias locais dos helpers extraídos em 16.9 (REUSE incompleto)"
+    suggested_action: "Refatoração de housekeeping em story futura"
+  - id: "REL-001"
+    severity: low
+    finding: "Queries Supabase não logam result.error (silent failure)"
+    suggested_action: "Adicionar logging server-side em story futura"
+  - id: "REQ-001"
+    severity: low
+    finding: "Associação lead↔campanha só via utm_campaign (metadata->>campaign_id ausente do schema)"
+    suggested_action: "Avaliar adicionar meta_campaign_id em leads em 16.10 ou story separada"
+
+decision_rationale: >
+  Verdict PASS porque (a) todos os 15 ACs estão satisfeitos com evidência verificada no código,
+  (b) os dois desvios documentados pelo dev (SVG nativo e schema de leads) são tecnicamente
+  sólidos e mantêm a função/UX intactas, (c) os 6 issues identificados são todos low e não
+  bloqueiam release (manutenibilidade, observabilidade, refinamentos), (d) segurança forte
+  (auth + 404-not-403 + RLS + sem SQL injection + sem exposição de dados sensíveis), (e) sem
+  regressão em 16.8 nem nos tipos pré-existentes de packages/shared.
