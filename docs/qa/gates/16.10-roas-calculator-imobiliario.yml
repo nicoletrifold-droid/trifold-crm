@@ -1,0 +1,343 @@
+schema: 1
+storyId: "16.10"
+title: "ROAS Calculator Imobiliário"
+gate: PASS
+verdict: PASS
+reviewer: "@qa (Quinn)"
+reviewed_at: "2026-04-27"
+updated: "2026-04-27T00:00:00Z"
+review_iteration: 2
+
+status_reason: >
+  Re-review da v1.1 da migration. Bug crítico CORR-001 RESOLVIDO. O refactor
+  para CTEs por dimensão eliminou completamente o fan-out multiplicativo. Cada
+  CTE agora produz no máximo 1 linha por campanha; o SELECT final apenas combina
+  totais já sumarizados via LEFT JOIN em chave única. Worked example
+  (30 dias × 5 leads × 2 vendas) confirma valores corretos algebricamente:
+  total_spend=R$3.000, total_revenue=R$1.000.000, roas=333.33, cpl_real=R$600.
+  AC2, AC4, AC6 e AC7 passam de FAIL/CONCERNS para PASS. Issues remanescentes
+  (PERF-001 e OBS-001) são LOW e não bloqueantes. Comentários da migration
+  atualizados (resolve DOC-001). Aprovada para deploy em staging e produção.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CORR-001 RESOLUTION
+# ─────────────────────────────────────────────────────────────────────────────
+corr_001_resolution:
+  status: RESOLVED
+  fix_version: "v1.1 (2026-04-27)"
+  fix_strategy: "Refactor para 3 CTEs por dimensão (cada CTE produz 1 linha por campanha; JOIN final 1:1)"
+
+  cte_structure:
+    spend_per_campaign:
+      lines: "63-72"
+      tables: ["meta_insights_daily"]
+      joins: "NENHUM — agregação sobre 1 única tabela"
+      output: "1 linha por (org_id, entity_id) — fan-out matematicamente impossível"
+      sums_isolated: true
+
+    leads_per_campaign:
+      lines: "91-103"
+      tables: ["meta_campaigns", "leads"]
+      joins: "LEFT JOIN simples 1:N"
+      output: "1 linha por mc.id via GROUP BY"
+      dedup: "COUNT(DISTINCT l.id) — semanticamente correto para deduplicação 1:N"
+
+    sales_per_campaign:
+      lines: "126-143"
+      tables: ["meta_campaigns", "leads", "kanban_stages", "unit_sales"]
+      joins: "INNER JOINs em pipeline; cada unit_sale tem exatamente 1 lead → sem duplicação de unit_sales"
+      output: "1 linha por mc.id via GROUP BY"
+      sums_isolated: "SUM(us.sale_price) — meta_insights_daily NÃO está nesta CTE, então dias não multiplicam revenue"
+
+  final_select:
+    lines: "160-201"
+    join_topology: "1:1 — mc LEFT JOIN spc (chave: org_id+meta_campaign_id) + LEFT JOIN lpc (chave: mc.id) + LEFT JOIN salc (chave: mc.id)"
+    fan_out_possible: false
+    cardinality_proof: "Cada CTE garante <=1 linha por mc.id ou (org_id, meta_campaign_id) via GROUP BY. JOIN com cardinalidade 1:<=1 não pode produzir fan-out."
+
+  worked_example_verification:
+    scenario: "Campanha X: 30 dias × R$100/dia = R$3.000 spend, 5 leads (utm=X.name), 2 vendas × R$500.000 = R$1.000.000 revenue"
+    expected:
+      total_spend: 3000
+      total_revenue: 1000000
+      leads_in_crm: 5
+      sales_count: 2
+      roas: 333.33
+      cpl_real: 600
+    v1_0_buggy:
+      total_spend: 15000  # 5x inflado
+      total_revenue: 30000000  # 30x inflado
+      roas: 2000  # 6x errado
+      cpl_real: 3000  # 5x errado
+    v1_1_correct:
+      total_spend: 3000  # ✓
+      total_revenue: 1000000  # ✓
+      roas: 333.33  # ✓
+      cpl_real: 600  # ✓
+    verification_method: "Análise algébrica estática + worked example documentado in-line na migration (linhas 152-158)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AC COVERAGE (Re-evaluated)
+# ─────────────────────────────────────────────────────────────────────────────
+ac_coverage:
+  - id: AC1
+    status: PASS
+    note: "Migration sintática válida. DROP VIEW IF EXISTS + CREATE OR REPLACE VIEW (linhas 44-46). Idempotente."
+    delta: "unchanged from v1.0 review"
+
+  - id: AC2
+    status: PASS
+    note: |
+      Colunas presentes e tipadas corretamente: org_id, meta_campaign_id,
+      campaign_name, total_spend (numeric(12,2)), total_leads_meta (bigint),
+      leads_in_crm (bigint), sales_count (bigint), total_revenue (numeric(12,2)),
+      roas (numeric(10,4)), cpl_real (numeric(12,2)).
+      Valores numéricos AGORA SÃO CORRETOS — fan-out resolvido pelo refactor em CTEs.
+      total_spend reflete soma única de meta_insights_daily.spend; total_revenue
+      reflete soma única de unit_sales.sale_price (apenas leads em stage 'fechado').
+      Branch `metadata->>'campaign_id'` removido conforme decisão da v1.0 (coluna
+      não existe; documentado nos comentários da migration).
+    delta: "FAIL → PASS"
+
+  - id: AC3
+    status: PASS
+    note: "View NÃO usa SECURITY DEFINER. RLS herdada das tabelas base. Cross-org isolation via org_id filter em joins + .eq(org_id) no endpoint."
+    delta: "unchanged from v1.0 review"
+
+  - id: AC4
+    status: PASS
+    note: |
+      Null-safety formal correta E semanticamente correta:
+        • roas: CASE WHEN COALESCE(spc.total_spend, 0) > 0 THEN ... ELSE NULL (linhas 181-185)
+        • cpl_real: CASE WHEN COALESCE(lpc.leads_in_crm, 0) > 0 THEN ... ELSE NULL (linhas 188-192)
+        • total_spend: COALESCE(spc.total_spend, 0)::numeric(12,2) — nunca NULL (linha 166)
+        • total_revenue: COALESCE(salc.total_revenue, 0)::numeric(12,2) — nunca NULL (linha 178)
+      Agora que os valores subjacentes são corretos, a divisão por zero é o ÚNICO
+      caso possível para NULL — semântica preservada.
+    delta: "CONCERNS → PASS"
+
+  - id: AC5
+    status: CONCERNS
+    note: |
+      Índices existentes (idx_meta_campaigns_org_campaign_id, idx_meta_insights_org_level_date,
+      idx_leads_org_id, idx_leads_stage) cobrem o acesso primário. PERF-001 mantido:
+      unit_sales(lead_id) sem índice — não bloqueante para volumes atuais (<10k vendas).
+      Para a CTE sales_per_campaign, o planner provavelmente usará hash join em
+      unit_sales — aceitável até 100k vendas.
+    delta: "unchanged from v1.0 review"
+
+  - id: AC6
+    status: PASS
+    note: |
+      Endpoint 16.9 (route.ts:367-393) consome a view com SELECT explícito de
+      6 colunas (total_spend, leads_in_crm, sales_count, total_revenue, roas, cpl_real)
+      + .eq("meta_campaign_id", ...).eq("org_id", appUser.org_id).maybeSingle().
+      Após aplicar a v1.1, roas_summary deixa de ser null E os valores retornados
+      são CORRETOS. Sem regressão funcional.
+    delta: "FAIL → PASS"
+
+  - id: AC7
+    status: PASS
+    note: |
+      Edge cases verificados:
+        • Campanha sem spend → spc retorna NULL → COALESCE → 0 → roas = NULL ✓
+        • Campanha sem leads CRM → lpc.leads_in_crm = 0 → cpl_real = NULL ✓
+        • Campanha sem vendas → salc retorna NULL → COALESCE → 0 → total_revenue = 0 ✓
+        • Campanha com 1+ leads + 1+ vendas + 1+ dia → valores corretos (não mais bugados) ✓
+      Tolerância a edge cases mantida e expandida (casos com >=2 leads agora corretos).
+    delta: "CONCERNS → PASS"
+
+  - id: AC8
+    status: PASS
+    note: "DROP VIEW IF EXISTS public.meta_campaign_roas + CREATE OR REPLACE VIEW. Combo idempotente."
+    delta: "unchanged from v1.0 review"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECURITY (re-validated, unchanged from v1.0)
+# ─────────────────────────────────────────────────────────────────────────────
+security:
+  rls_coverage: PASS
+  cross_org_isolation: PASS
+  description_cross_org: |
+    v1.1 mantém os filtros explícitos de org_id em cada JOIN das CTEs:
+    • spend_per_campaign: GROUP BY org_id (não há JOIN, mas particiona por org)
+    • leads_per_campaign: l.org_id = mc.org_id no LEFT JOIN
+    • sales_per_campaign: l.org_id = mc.org_id e us.org_id = mc.org_id nos JOINs
+    Nenhum vetor de cross-org leak introduzido pelo refactor.
+  security_definer: PASS
+  sql_injection: PASS
+  privilege_escalation: PASS
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CORRECTNESS / SQL REVIEW (re-evaluated)
+# ─────────────────────────────────────────────────────────────────────────────
+sql_review:
+  syntax: PASS
+  table_columns_exist: PASS
+  joins_correct: PASS
+  description_joins: |
+    v1.1 elimina o fan-out via 3 CTEs:
+    • spend_per_campaign — sem JOIN (1 tabela), 1 linha por (org_id, entity_id)
+    • leads_per_campaign — LEFT JOIN 1:N + COUNT(DISTINCT) + GROUP BY → 1 linha por mc.id
+    • sales_per_campaign — pipeline INNER JOIN com SUM(sale_price) isolado de meta_insights_daily
+    SELECT final faz LEFT JOIN 1:1 das CTEs já sumarizadas. Topologia correta.
+  group_by_complete: PASS
+  null_safety: PASS
+  idempotency: PASS
+  fan_out_handling: PASS
+  description_fan_out: |
+    CORR-001 totalmente resolvido. Comentários por CTE (linhas 48-72, 74-103, 105-143)
+    documentam explicitamente porque cada CTE não pode produzir fan-out. Worked example
+    in-line (linhas 152-158) demonstra cálculo correto.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TYPESCRIPT INTEGRATION (unchanged)
+# ─────────────────────────────────────────────────────────────────────────────
+typescript:
+  shared_types_match: PASS
+  endpoint_consumption: PASS
+  typecheck: PASS
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RUNTIME TESTS — STILL WAIVED (Supabase local indisponível)
+# ─────────────────────────────────────────────────────────────────────────────
+waived_tests:
+  reason: |
+    Supabase local não disponível neste ambiente de QA. Cenários 1-6 da story
+    (Testing) requerem `supabase db push` + queries SQL contra dataset realista.
+    Bug CORR-001 detectado E validado via análise algébrica estática + worked
+    example. O refactor v1.1 também foi validado por análise algébrica:
+      • spend_per_campaign: agregação sobre 1 tabela → matematicamente impossível
+        produzir mais de 1 linha por (org_id, entity_id) ou somar duplicatas
+      • leads_per_campaign: COUNT(DISTINCT) já era correto na v1.0 → preservado
+      • sales_per_campaign: SUM(sale_price) isolado de meta_insights_daily → dias
+        não podem multiplicar revenue
+  waiver_active: true
+  waiver_authority: "@qa (Quinn)"
+  recommended_post_deploy_validation: |
+    Em staging, antes de aplicar em produção:
+      1. supabase db push (verificar idempotência — Cenário 5)
+      2. Inserir campanha sintética com 30 dias × 5 leads × 2 vendas
+      3. SELECT * FROM meta_campaign_roas WHERE meta_campaign_id = <X>
+         Esperado: total_spend=3000, total_revenue=1000000, roas≈333.33, cpl_real=600
+      4. Comparar SUM direto:
+           SELECT SUM(spend) FROM meta_insights_daily WHERE level='campaign' AND entity_id=<X>
+         Esperado: bate exatamente com total_spend da view
+      5. Comparar revenue direto:
+           SELECT SUM(us.sale_price) FROM unit_sales us
+            JOIN leads l ON l.id = us.lead_id
+            JOIN kanban_stages ks ON ks.id = l.stage_id AND ks.type='fechado'
+            WHERE l.utm_campaign = <X.name>
+         Esperado: bate exatamente com total_revenue da view
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REGRESSION (re-evaluated)
+# ─────────────────────────────────────────────────────────────────────────────
+regression:
+  endpoint_16_9_compatibility: PASS
+  description_endpoint: |
+    Endpoint 16.9 estruturalmente compatível com a view v1.1. Após aplicar a
+    migration: roas_summary deixa de ser null e retorna valores CORRETOS (não
+    inflados como na v1.0). Regressão funcional eliminada.
+  shared_types_no_change: PASS
+  no_other_view_consumers: PASS
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ISSUES SUMMARY (after fix)
+# ─────────────────────────────────────────────────────────────────────────────
+issues:
+  - id: "CORR-001"
+    severity: critical
+    category: correctness
+    status: RESOLVED
+    finding: "Fan-out multiplicativo nos SUM() (BLOCKER da v1.0)"
+    resolution: "Refactor para 3 CTEs por dimensão (v1.1). Cada CTE produz 1 linha por campanha; SELECT final é 1:1."
+    location: "supabase/migrations/016_meta_campaign_roas_view.sql:46-201"
+
+  - id: "DOC-001"
+    severity: low
+    category: docs
+    status: RESOLVED
+    finding: "Comentários da v1.0 sugeriam consciência parcial do fan-out (DISTINCT em COUNT mas não em SUM)"
+    resolution: "Comentários totalmente reescritos: histórico v1.0/v1.1 (linhas 14-29), header por CTE explicando topologia e ausência de fan-out (linhas 48-72, 74-103, 105-143), worked example in-line (linhas 152-158)."
+    location: "supabase/migrations/016_meta_campaign_roas_view.sql"
+
+  - id: "PERF-001"
+    severity: low
+    category: performance
+    status: OPEN
+    finding: "unit_sales.lead_id sem índice (FK não indexada em migration 007)"
+    suggested_action: "Story futura: CREATE INDEX idx_unit_sales_lead ON unit_sales(lead_id). Não bloqueante para volume atual (<10k vendas)."
+    location: "supabase/migrations/007_unit_sales.sql"
+
+  - id: "OBS-001"
+    severity: low
+    category: observability
+    status: OPEN
+    finding: "try/catch em route.ts:368-393 silencia QUALQUER erro da view"
+    suggested_action: "Story futura: logar console.error quando roasResult.error.code != 'PGRST116'. Não bloqueante (tech debt)."
+    location: "packages/web/src/app/api/meta-ads/campaigns/[campaign_id]/route.ts:368"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DECISION RATIONALE
+# ─────────────────────────────────────────────────────────────────────────────
+decision_rationale: |
+  Verdict PASS porque:
+
+  (a) CORR-001 está RESOLVIDO — refactor para 3 CTEs por dimensão elimina
+      completamente o fan-out multiplicativo. Cada CTE foi verificada
+      algebricamente: spend_per_campaign (1 tabela, sem JOIN, impossível inflar),
+      leads_per_campaign (COUNT DISTINCT + GROUP BY), sales_per_campaign
+      (SUM(sale_price) isolado de meta_insights_daily, então dias não multiplicam
+      revenue). Worked example confirma: total_spend=R$3.000, total_revenue=R$1M,
+      roas=333.33, cpl_real=R$600 — todos corretos.
+
+  (b) Todos os ACs que estavam FAIL ou CONCERNS por causa do CORR-001 agora
+      passam para PASS: AC2 (valores corretos), AC4 (semântica null-safety
+      preservada), AC6 (endpoint retorna valores corretos), AC7 (edge cases
+      com >=2 leads agora também corretos).
+
+  (c) Issues estruturais (RLS, idempotência, schema validation, null-safety
+      formal, plan doc, tipos TypeScript) já estavam corretos na v1.0 e
+      permanecem corretos na v1.1 — o fix foi cirúrgico no SQL.
+
+  (d) DOC-001 também foi resolvido — os comentários da v1.1 são exemplares,
+      documentando o histórico v1.0→v1.1, a topologia de cada CTE e o worked
+      example.
+
+  (e) Issues remanescentes (PERF-001 e OBS-001) são LOW e não bloqueantes,
+      ambos com suggested_action para stories futuras.
+
+  (f) Sem novos issues introduzidos pelo refactor — análise estática
+      verificou tipos das chaves de JOIN (text/uuid), filtros org_id em
+      todos os JOINs, ausência de regressão de cross-org isolation.
+
+  Recomendação: aplicar em staging, executar validação pós-deploy
+  (recommended_post_deploy_validation), depois aplicar em produção.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REVIEW HISTORY
+# ─────────────────────────────────────────────────────────────────────────────
+review_history:
+  - iteration: 1
+    date: "2026-04-27"
+    verdict: FAIL
+    blocker: "CORR-001 (fan-out multiplicativo)"
+    reviewer: "@qa (Quinn)"
+  - iteration: 2
+    date: "2026-04-27"
+    verdict: PASS
+    reviewer: "@qa (Quinn)"
+    notes: "CORR-001 resolvido via refactor para CTEs por dimensão (v1.1). DOC-001 também resolvido. PERF-001 e OBS-001 mantidos como LOW não bloqueante."
+
+waiver:
+  active: true
+  scope: runtime_tests_only
+  reason: "Supabase local não disponível para Cenários 1-6 da story. Análise algébrica estática suficiente para validar fix de CORR-001 — valores corretos demonstrados via worked example."
+
+next_steps:
+  - "Aplicar migration v1.1 em staging via @devops"
+  - "Executar recommended_post_deploy_validation em staging (Supabase local + dataset sintético)"
+  - "Aplicar em produção após validação em staging"
+  - "Story 16.10 pode avançar para Done após push em produção"
+  - "Criar story futura para PERF-001 (índice em unit_sales.lead_id) e OBS-001 (logging do try/catch em route.ts)"
