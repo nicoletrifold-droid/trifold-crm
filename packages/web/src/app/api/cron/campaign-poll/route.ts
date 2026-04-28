@@ -72,6 +72,10 @@ function normalizePhone(raw: string): string | null {
   if (digits.length === 10) return digits.slice(0, 2) + "9" + digits.slice(2)
   // 12-digit: 55 + DDD(2) + 8 digits → insere 9 após DDD
   if (digits.length === 12 && digits.startsWith("55")) return digits.slice(2, 4) + "9" + digits.slice(4)
+  // 9-digit: número sem DDD → assume DDD 44 (Maringá/PR)
+  if (digits.length === 9) return "44" + digits
+  // 8-digit: número sem DDD no formato antigo → assume DDD 44 + insere 9
+  if (digits.length === 8) return "449" + digits
   return null
 }
 
