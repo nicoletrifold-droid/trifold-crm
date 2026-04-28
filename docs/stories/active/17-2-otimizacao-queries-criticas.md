@@ -168,7 +168,30 @@ for (const conv of conversations ?? []) {
 
 ## QA Results
 
-> A ser preenchido pelo @qa
+**Gate Decision: PASS**
+**Reviewer:** @qa (Quinn)
+**Date:** 2026-04-28
+
+### AC Traceability
+
+| AC | Status | Evidência |
+|----|--------|-----------|
+| AC1: Dashboard COUNT/stage sem transferir IDs | ✅ PASS | `select("*", { count: "exact", head: true }).eq("stage_id", s.id).eq("is_active", true)` — query principal sem `leads(id)` |
+| AC2: Cron filtra cooldown no banco | ✅ PASS | Batch `.in("lead_id", leadIds).gte("created_at", cooldownDate)` → `cooldownSet = new Set(...)` → `eligibleLeads.filter(l => !cooldownSet.has(l.id))` |
+| AC3: Cron busca conversas em batch | ✅ PASS | `.in("lead_id", eligibleIds).order("last_message_at", { ascending: false })` → `Map` com first-occurrence por lead (correto pela ordem DESC) |
+| AC4: type-check | ✅ PASS | 0 erros confirmado |
+| AC5: lint | ✅ PASS | 0 erros, 2 warnings pré-existentes |
+
+### Análise de Qualidade
+
+- **Dashboard:** Contagem por stage via COUNT no banco. `stageCounts[s.id] = count ?? 0` protege contra NULL. `totalLeads` calculado como `Object.values(stageCounts).reduce(...)` — correto. Nota: filtro `is_active=true` agora aplicado, o que alinha a contagem com leads realmente ativos no pipeline.
+- **Cron cooldown:** Risco documentado na story (retornar conversa errada) está corretamente mitigado: `.order("last_message_at", { ascending: false })` garante que o `Map` captura a primeira ocorrência = mais recente por lead.
+- **Cron batch conversas:** Seção `post_visit` e `no_show` abaixo na mesma rota mantém padrão anterior — são OUT OF SCOPE desta story per exclusões documentadas. Sem regressão.
+- **Segurança:** CRON_SECRET validation mantida. Sem hardcoded credentials. Supabase service role usado corretamente.
+
+### Issues
+
+Nenhuma issue identificada.
 
 ## Change Log
 
@@ -177,3 +200,4 @@ for (const conv of conversations ?? []) {
 | 2026-04-28 | 1.0 | Story criada a partir de auditoria de performance | @sm (River) |
 | 2026-04-28 | 1.1 | Validação @po: GO 8/10 — complexidade M, riscos adicionados, dep clarificada, Status Draft → Ready | @po (Pax) |
 | 2026-04-28 | 1.2 | Implementação completa — dashboard COUNT/stage + followup cron batch cooldown + batch conversations — type-check PASS, lint PASS | @dev (Dex) |
+| 2026-04-28 | 1.3 | QA Gate PASS — todos os 5 ACs verificados, riscos mitigados corretamente, sem issues | @qa (Quinn) |

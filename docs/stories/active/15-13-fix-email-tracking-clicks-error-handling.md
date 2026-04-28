@@ -1,7 +1,7 @@
 # Story 15.13 — Fix Email Tracking: Clicks, Error Handling e Configuração Resend
 
 ## Status
-InReview
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -212,3 +212,4 @@ Status regression: handler não protege contra recebimento de `email.opened` ap�
 | 2026-04-28 | 1.2 | Implementação completa — 4 arquivos, type-check PASS, lint PASS | @dev (Dex) |
 | 2026-04-28 | 1.3 | QA Gate: PASS com CONCERNS — 2 fixes MEDIUM solicitados | @qa (Quinn) |
 | 2026-04-28 | 1.4 | QA fixes aplicados: API metrics + EMAIL_BADGE — type-check PASS, lint PASS | @dev (Dex) |
+| 2026-04-28 | 1.5 | Push main — commit ae44b5f — Story Done | @devops (Gage) |

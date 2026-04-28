@@ -155,7 +155,31 @@ const entryCounts = Object.fromEntries(
 
 ## QA Results
 
-> A ser preenchido pelo @qa
+**Gate Decision: PASS**
+**Reviewer:** @qa (Quinn)
+**Date:** 2026-04-28
+
+### AC Traceability
+
+| AC | Status | Evidência |
+|----|--------|-----------|
+| AC1: Paginação 50/pág com controles | ✅ PASS | `PAGE_SIZE=50`, `paginated=filtered.slice(...)`, botões "Anterior"/"Próxima", indicador "Página X de Y — Z participantes" |
+| AC2: Reset paginação ao trocar filtro | ✅ PASS | `handleFilterChange(f)` chama `setFilter(f)` + `setPage(1)` — todos os filtros roteiam por esta função |
+| AC3: CSV exporta todos os filtrados | ✅ PASS | `downloadCSV()` usa `filtered.map(...)`, não `paginated` |
+| AC4: COUNT queries na lista de campanhas | ✅ PASS | `Promise.all` com 2 COUNT queries por campanha (`head: true`), zero rows transferidos |
+| AC5: type-check | ✅ PASS | 0 erros confirmado |
+| AC6: lint | ✅ PASS | 0 erros, 2 warnings pré-existentes (não introduzidos por esta story) |
+
+### Análise de Qualidade
+
+- **Paginação:** Implementação correta. `totalPages = Math.max(1, ...)` evita divisão por zero. Controles ocultados quando `totalPages <= 1` (correto para conjuntos menores que 50). Contadores nos botões de filtro usam `entries` (conjunto completo) — comportamento esperado para labels.
+- **COUNT queries:** `Promise.all` paraleliza N × 2 queries. Vastamente superior à carga anterior de todos os rows. Risk de NULL tratado com `?? 0`.
+- **Sem regressões:** CSV export, lógica de validação e exibição de dados mantidos integralmente.
+- **Segurança:** Sem injection risks — Supabase client com queries parametrizadas.
+
+### Issues
+
+Nenhuma issue identificada.
 
 ## Change Log
 
@@ -164,3 +188,4 @@ const entryCounts = Object.fromEntries(
 | 2026-04-28 | 1.0 | Story criada a partir de auditoria de performance | @sm (River) |
 | 2026-04-28 | 1.1 | Validação @po: GO 8/10 — complexidade S, riscos adicionados, Status Draft → Ready | @po (Pax) |
 | 2026-04-28 | 1.2 | Implementação completa — paginação 50/pág + reset filtro + COUNT queries — type-check PASS, lint PASS | @dev (Dex) |
+| 2026-04-28 | 1.3 | QA Gate PASS — todos os 6 ACs verificados, sem issues | @qa (Quinn) |
