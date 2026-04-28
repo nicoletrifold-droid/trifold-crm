@@ -20,16 +20,27 @@ export default async function DashboardPage() {
       .gte("created_at", today.toISOString()),
     supabase
       .from("kanban_stages")
-      .select("id, name, slug, color, position, leads(id)")
+      .select("id, name, slug, color, position")
       .order("position"),
     supabase.from("properties").select("id, name, slug, status, total_units, city").eq("is_active", true),
   ])
 
   const stages = pipeline.data ?? []
-  const totalLeads = stages.reduce(
-    (acc, s) => acc + (Array.isArray(s.leads) ? s.leads.length : 0),
-    0
+
+  // Count leads per stage without transferring all IDs
+  const stageCounts: Record<string, number> = {}
+  await Promise.all(
+    stages.map(async (s) => {
+      const { count } = await supabase
+        .from("leads")
+        .select("*", { count: "exact", head: true })
+        .eq("stage_id", s.id)
+        .eq("is_active", true)
+      stageCounts[s.id] = count ?? 0
+    })
   )
+
+  const totalLeads = Object.values(stageCounts).reduce((a, b) => a + b, 0)
 
   return (
     <div className="space-y-6">
@@ -66,7 +77,7 @@ export default async function DashboardPage() {
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Pipeline</h2>
         <div className="flex gap-2">
           {stages.map((stage) => {
-            const count = Array.isArray(stage.leads) ? stage.leads.length : 0
+            const count = stageCounts[stage.id] ?? 0
             return (
               <div
                 key={stage.id}

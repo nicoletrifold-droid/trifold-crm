@@ -124,31 +124,42 @@ export async function GET(request: NextRequest) {
 
     if (!leads || leads.length === 0) continue
 
-    for (const lead of leads) {
+    const leadIds = leads.map((l) => l.id)
+    const cooldownDate = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+
+    // Batch: fetch all leads in cooldown with a single query
+    const { data: inCooldown } = await supabase
+      .from("follow_up_log")
+      .select("lead_id")
+      .in("lead_id", leadIds)
+      .gte("created_at", cooldownDate.toISOString())
+
+    const cooldownSet = new Set((inCooldown ?? []).map((r) => r.lead_id))
+    const eligibleLeads = leads.filter((l) => !cooldownSet.has(l.id))
+
+    if (eligibleLeads.length === 0) continue
+
+    // Batch: fetch latest conversation per eligible lead in one query
+    const eligibleIds = eligibleLeads.map((l) => l.id)
+    const { data: allConversations } = await supabase
+      .from("conversations")
+      .select("id, lead_id")
+      .in("lead_id", eligibleIds)
+      .order("last_message_at", { ascending: false })
+
+    const latestConvByLead = new Map<string, string>()
+    for (const conv of allConversations ?? []) {
+      if (!latestConvByLead.has(conv.lead_id)) {
+        latestConvByLead.set(conv.lead_id, conv.id)
+      }
+    }
+
+    for (const lead of eligibleLeads) {
       processed++
 
-      // Check 48h cooldown: no followup log for this lead in the last 48h
-      const cooldownDate = new Date(now.getTime() - 48 * 60 * 60 * 1000)
-      const { data: recentLogs } = await supabase
-        .from("follow_up_log")
-        .select("id")
-        .eq("lead_id", lead.id)
-        .gte("created_at", cooldownDate.toISOString())
-        .limit(1)
+      const conversationId = latestConvByLead.get(lead.id)
 
-      if (recentLogs && recentLogs.length > 0) continue
-
-      // Get the latest conversation for this lead
-      const { data: conversations } = await supabase
-        .from("conversations")
-        .select("id")
-        .eq("lead_id", lead.id)
-        .order("last_message_at", { ascending: false })
-        .limit(1)
-
-      if (!conversations || conversations.length === 0) continue
-
-      const conversationId = conversations[0].id
+      if (!conversationId) continue
 
       // Get the last message from the conversation
       const { data: lastMessages } = await supabase
