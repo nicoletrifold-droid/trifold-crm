@@ -26,12 +26,12 @@ const WA_BADGE: Record<string, string> = {
 
 const EMAIL_BADGE: Record<string, string> = {
   pending: "bg-gray-100 text-gray-500",
-  sent: "bg-blue-100 text-blue-700",
-  delivered: "bg-green-100 text-green-700",
-  opened: "bg-green-200 text-green-800",
-  clicked: "bg-blue-200 text-blue-800",
+  sent: "bg-gray-200 text-gray-600",
+  delivered: "bg-orange-100 text-orange-700",
+  opened: "bg-green-100 text-green-700",
+  clicked: "bg-blue-100 text-blue-700",
   bounced: "bg-red-100 text-red-700",
-  failed: "bg-red-100 text-red-700",
+  failed: "bg-red-200 text-red-800",
 }
 
 type Filter = "all" | "valid" | "invalid" | "responded" | "no_response"
