@@ -56,6 +56,7 @@ interface Campaign {
   slug: string
   google_form_id: string
   last_polled_at: string | null
+  last_response_at: string | null
   field_mapping: FieldMapping
   whatsapp_template_name: string | null
   email_enabled: boolean
@@ -67,6 +68,10 @@ function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "")
   if (digits.length === 11) return digits
   if (digits.length === 13 && digits.startsWith("55")) return digits.slice(2)
+  // 10-digit: DDD(2) + 8 digits (formato antigo sem o 9) → insere 9 após DDD
+  if (digits.length === 10) return digits.slice(0, 2) + "9" + digits.slice(2)
+  // 12-digit: 55 + DDD(2) + 8 digits → insere 9 após DDD
+  if (digits.length === 12 && digits.startsWith("55")) return digits.slice(2, 4) + "9" + digits.slice(4)
   return null
 }
 
@@ -132,7 +137,7 @@ export async function GET(request: NextRequest) {
   const { data: campaigns, error: campaignsError } = await supabase
     .from("campaigns")
     .select(
-      "id, org_id, name, slug, google_form_id, last_polled_at, field_mapping, whatsapp_template_name, email_enabled, email_subject, email_body_html"
+      "id, org_id, name, slug, google_form_id, last_polled_at, last_response_at, field_mapping, whatsapp_template_name, email_enabled, email_subject, email_body_html"
     )
     .eq("status", "active")
     .eq("type", "google_forms")
@@ -180,9 +185,13 @@ export async function GET(request: NextRequest) {
       }
 
       // Poll Google Forms API
+      // Usa last_response_at (timestamp da última resposta VISTA) em vez de last_polled_at
+      // para evitar race condition: respostas enviadas entre a consulta à API e o update
+      // do last_polled_at seriam perdidas se usarmos o horário do cron.
       const forms = getFormsClient(freshTokens)
-      const filter = campaign.last_polled_at
-        ? `timestamp > ${campaign.last_polled_at}`
+      const filterBase = campaign.last_response_at ?? campaign.last_polled_at
+      const filter = filterBase
+        ? `timestamp > ${filterBase}`
         : undefined
 
       const res = await forms.forms.responses.list({
