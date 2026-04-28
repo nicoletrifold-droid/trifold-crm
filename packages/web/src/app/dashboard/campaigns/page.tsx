@@ -40,26 +40,31 @@ export default async function CampaignsPage() {
     )
     .order("created_at", { ascending: false })
 
-  // Get entry counts
+  // Get entry counts via COUNT queries (avoids transferring all rows)
   const campaignIds = (campaigns ?? []).map((c) => c.id)
-  let entryCounts: Record<string, { total: number; valid: number }> = {}
+  const entryCounts: Record<string, { total: number; valid: number }> = {}
 
   if (campaignIds.length > 0) {
-    const { data: entries } = await supabase
-      .from("campaign_entries")
-      .select("campaign_id, is_valid_phone, is_valid_email")
-      .in("campaign_id", campaignIds)
-
-    entryCounts = (entries ?? []).reduce(
-      (acc, e) => {
-        const cid = e.campaign_id
-        if (!acc[cid]) acc[cid] = { total: 0, valid: 0 }
-        acc[cid].total++
-        if (e.is_valid_phone && e.is_valid_email) acc[cid].valid++
-        return acc
-      },
-      {} as Record<string, { total: number; valid: number }>
+    const countResults = await Promise.all(
+      campaignIds.map(async (id) => {
+        const [{ count: total }, { count: valid }] = await Promise.all([
+          supabase
+            .from("campaign_entries")
+            .select("*", { count: "exact", head: true })
+            .eq("campaign_id", id),
+          supabase
+            .from("campaign_entries")
+            .select("*", { count: "exact", head: true })
+            .eq("campaign_id", id)
+            .eq("is_valid_phone", true)
+            .eq("is_valid_email", true),
+        ])
+        return [id, { total: total ?? 0, valid: valid ?? 0 }] as const
+      })
     )
+    for (const [id, counts] of countResults) {
+      entryCounts[id] = counts
+    }
   }
 
   const formatDate = (d: string) =>

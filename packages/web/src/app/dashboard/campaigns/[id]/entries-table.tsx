@@ -54,8 +54,11 @@ const EMAIL_LABEL: Record<string, string> = {
 
 type Filter = "all" | "valid" | "invalid" | "responded" | "no_response"
 
+const PAGE_SIZE = 50
+
 export function EntriesTable({ entries }: { entries: Entry[] }) {
   const [filter, setFilter] = useState<Filter>("all")
+  const [page, setPage] = useState(1)
 
   const filtered = entries.filter((e) => {
     switch (filter) {
@@ -71,6 +74,14 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
         return true
     }
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  function handleFilterChange(f: Filter) {
+    setFilter(f)
+    setPage(1)
+  }
 
   function downloadCSV() {
     const headers = [
@@ -131,7 +142,7 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
           ).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setFilter(key)}
+              onClick={() => handleFilterChange(key)}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
                 filter === key
                   ? "bg-orange-100 text-orange-700"
@@ -171,7 +182,7 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.map((e) => (
+            {paginated.map((e) => (
               <tr key={e.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 text-sm font-medium text-gray-900">{e.name}</td>
                 <td className="px-3 py-2 text-sm text-gray-500 font-mono">{e.phone}</td>
@@ -220,6 +231,30 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+          <p className="text-xs text-gray-500">
+            Página {page} de {totalPages} — {filtered.length} participantes
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
