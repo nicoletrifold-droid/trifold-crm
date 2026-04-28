@@ -54,7 +54,7 @@ const EMAIL_LABEL: Record<string, string> = {
 
 type Filter = "all" | "valid" | "invalid" | "responded" | "no_response"
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 30
 
 export function EntriesTable({ entries }: { entries: Entry[] }) {
   const [filter, setFilter] = useState<Filter>("all")
@@ -187,10 +187,15 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
                 <td className="px-3 py-2 text-sm font-medium text-gray-900">{e.name}</td>
                 <td className="px-3 py-2 text-sm text-gray-500 font-mono">{e.phone}</td>
                 <td className="px-3 py-2 text-sm text-gray-500">{e.email}</td>
-                <td className="px-3 py-2 text-xs text-gray-400">
-                  {Object.entries(e.custom_data ?? {})
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join(", ") || "—"}
+                <td className="px-3 py-2 text-xs text-gray-400 max-w-[200px]">
+                  <div
+                    className="truncate"
+                    title={Object.entries(e.custom_data ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "—"}
+                  >
+                    {Object.entries(e.custom_data ?? {})
+                      .map(([k, v]) => `${k}: ${v}`)
+                      .join(", ") || "—"}
+                  </div>
                 </td>
                 <td className="px-3 py-2 text-center">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${WA_BADGE[e.whatsapp_status] ?? WA_BADGE.pending}`}>
