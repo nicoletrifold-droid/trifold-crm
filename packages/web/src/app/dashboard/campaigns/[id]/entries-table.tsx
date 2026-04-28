@@ -24,6 +24,14 @@ const WA_BADGE: Record<string, string> = {
   failed: "bg-red-100 text-red-700",
 }
 
+const WA_LABEL: Record<string, string> = {
+  pending: "Pendente",
+  sent: "Enviado",
+  delivered: "Entregue",
+  read: "Lido",
+  failed: "Falhou",
+}
+
 const EMAIL_BADGE: Record<string, string> = {
   pending: "bg-gray-100 text-gray-500",
   sent: "bg-gray-200 text-gray-600",
@@ -32,6 +40,16 @@ const EMAIL_BADGE: Record<string, string> = {
   clicked: "bg-blue-100 text-blue-700",
   bounced: "bg-red-100 text-red-700",
   failed: "bg-red-200 text-red-800",
+}
+
+const EMAIL_LABEL: Record<string, string> = {
+  pending: "Pendente",
+  sent: "Enviado",
+  delivered: "Entregue",
+  opened: "Aberto",
+  clicked: "Clicado",
+  bounced: "Rejeitado",
+  failed: "Falhou",
 }
 
 type Filter = "all" | "valid" | "invalid" | "responded" | "no_response"
@@ -165,12 +183,12 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
                 </td>
                 <td className="px-3 py-2 text-center">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${WA_BADGE[e.whatsapp_status] ?? WA_BADGE.pending}`}>
-                    {e.whatsapp_status}
+                    {WA_LABEL[e.whatsapp_status] ?? e.whatsapp_status}
                   </span>
                 </td>
                 <td className="px-3 py-2 text-center">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${EMAIL_BADGE[e.email_status] ?? EMAIL_BADGE.pending}`}>
-                    {e.email_status}
+                    {EMAIL_LABEL[e.email_status] ?? e.email_status}
                   </span>
                 </td>
                 <td className="px-3 py-2 text-center">
