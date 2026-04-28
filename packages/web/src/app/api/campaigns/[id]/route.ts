@@ -50,9 +50,10 @@ export async function GET(
     email: {
       sent: e.filter((x) => x.email_status !== "pending").length,
       delivered: e.filter((x) =>
-        ["delivered", "opened"].includes(x.email_status)
+        ["delivered", "opened", "clicked"].includes(x.email_status)
       ).length,
-      opened: e.filter((x) => x.email_status === "opened").length,
+      opened: e.filter((x) => ["opened", "clicked"].includes(x.email_status)).length,
+      clicked: e.filter((x) => x.email_status === "clicked").length,
       bounced: e.filter((x) => x.email_status === "bounced").length,
     },
     valid: e.filter((x) => x.is_valid_phone && x.is_valid_email).length,

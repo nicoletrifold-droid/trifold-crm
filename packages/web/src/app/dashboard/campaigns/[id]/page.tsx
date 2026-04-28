@@ -51,7 +51,8 @@ export default async function CampaignDetailPage({
   const e = entries ?? []
   const total = e.length
   const waDelivered = e.filter((x) => ["delivered", "read"].includes(x.whatsapp_status)).length
-  const emailOpened = e.filter((x) => x.email_status === "opened").length
+  const emailOpened = e.filter((x) => ["opened", "clicked"].includes(x.email_status)).length
+  const emailClicked = e.filter((x) => x.email_status === "clicked").length
   const valid = e.filter((x) => x.is_valid_phone && x.is_valid_email).length
   const responded = e.filter((x) => x.has_responded).length
 
@@ -117,10 +118,11 @@ export default async function CampaignDetailPage({
         </div>
         <div className="rounded-lg bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-gray-700">E-mail</h3>
-          <div className="grid grid-cols-4 gap-2 text-center text-xs">
+          <div className="grid grid-cols-5 gap-2 text-center text-xs">
             <div><p className="font-bold text-gray-900">{e.filter(x => x.email_status !== "pending").length}</p><p className="text-gray-400">Enviados</p></div>
-            <div><p className="font-bold text-gray-900">{e.filter(x => ["delivered","opened"].includes(x.email_status)).length}</p><p className="text-gray-400">Entregues</p></div>
+            <div><p className="font-bold text-gray-900">{e.filter(x => ["delivered","opened","clicked"].includes(x.email_status)).length}</p><p className="text-gray-400">Entregues</p></div>
             <div><p className="font-bold text-gray-900">{emailOpened}</p><p className="text-gray-400">Abertos</p></div>
+            <div><p className="font-bold text-blue-600">{emailClicked}</p><p className="text-gray-400">Cliques</p></div>
             <div><p className="font-bold text-red-600">{e.filter(x => x.email_status === "bounced").length}</p><p className="text-gray-400">Bounced</p></div>
           </div>
         </div>

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const eventType = body.type as string
   if (
     !eventType ||
-    !["email.delivered", "email.opened", "email.bounced"].includes(eventType)
+    !["email.delivered", "email.opened", "email.bounced", "email.clicked"].includes(eventType)
   ) {
     return NextResponse.json({ status: "ignored" })
   }
@@ -71,6 +71,10 @@ export async function POST(request: NextRequest) {
         emailStatus = "bounced"
         isValidEmail = false
         break
+      case "email.clicked":
+        emailStatus = "clicked"
+        isValidEmail = true
+        break
       default:
         return NextResponse.json({ status: "ignored" })
     }
@@ -93,6 +97,9 @@ export async function POST(request: NextRequest) {
 
     // Insert campaign event
     if (entry) {
+      const toRaw = body.data?.to
+      const toValue = Array.isArray(toRaw) ? toRaw[0] : toRaw
+
       await supabase.from("campaign_events").insert({
         org_id: entry.org_id,
         campaign_id: campaignId ?? "",
@@ -101,7 +108,10 @@ export async function POST(request: NextRequest) {
         event_type: eventType.replace("email.", ""),
         metadata: {
           email_id: body.data?.email_id,
-          to: body.data?.to,
+          to: toValue,
+          ...(eventType === "email.clicked" && body.data?.click
+            ? { click: body.data.click }
+            : {}),
         },
       })
     }
@@ -116,6 +126,6 @@ export async function POST(request: NextRequest) {
       metadata: { entryId, eventType },
       source: "api/webhook/resend",
     })
-    return NextResponse.json({ status: "ok" })
+    return NextResponse.json({ error: "internal_error" }, { status: 500 })
   }
 }
