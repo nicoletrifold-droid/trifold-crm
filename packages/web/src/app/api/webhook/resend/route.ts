@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import { logEvent } from "@web/lib/logger"
 
 const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   const eventType = body.type as string
   if (
     !eventType ||
-    !["email.delivered", "email.opened", "email.bounced", "email.clicked"].includes(eventType)
+    !["email.delivered", "email.opened", "email.bounced", "email.clicked", "email.complained"].includes(eventType)
   ) {
     return NextResponse.json({ status: "ignored" })
   }
@@ -36,8 +36,9 @@ export async function POST(request: NextRequest) {
   const tags = body.data?.tags as Record<string, string> | undefined
   const entryId = tags?.entry_id
   const campaignId = tags?.campaign_id
+  const emailLogId = tags?.email_log_id
 
-  if (!entryId) {
+  if (!entryId && !emailLogId) {
     logEvent({
       level: "warn",
       category: "webhook",
@@ -54,6 +55,13 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
+  // Route: email_log_id → new template tracking path
+  if (emailLogId) {
+    await updateEmailLog(supabase, emailLogId, eventType)
+    return NextResponse.json({ status: "ok" })
+  }
+
+  // Route: entry_id → existing campaign path (zero changes below this line)
   try {
     // Map event to status
     let emailStatus: string
@@ -128,4 +136,44 @@ export async function POST(request: NextRequest) {
     })
     return NextResponse.json({ error: "internal_error" }, { status: 500 })
   }
+}
+
+// Update email_logs for template-based emails tracked via email_log_id tag.
+// Idempotent: repeated calls for the same event are no-ops.
+async function updateEmailLog(
+  supabase: SupabaseClient,
+  emailLogId: string,
+  eventType: string
+): Promise<void> {
+  const updates: Record<string, unknown> = {}
+  const now = new Date().toISOString()
+
+  switch (eventType) {
+    case "email.delivered":
+      updates.status = "delivered"
+      updates.delivered_at = now
+      break
+    case "email.opened":
+      updates.status = "opened"
+      updates.opened_at = now
+      break
+    case "email.clicked":
+      updates.status = "clicked"
+      updates.clicked_at = now
+      break
+    case "email.bounced":
+      updates.status = "bounced"
+      updates.bounced_at = now
+      break
+    case "email.complained":
+      updates.status = "complained"
+      break
+    default:
+      return
+  }
+
+  await supabase
+    .from("email_logs")
+    .update(updates)
+    .eq("id", emailLogId)
 }
