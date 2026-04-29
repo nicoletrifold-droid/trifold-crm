@@ -1,7 +1,7 @@
 # Story 18.1 — Memory Writer: Popular `lead_memories` com Fragmentos Semânticos
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -220,3 +220,4 @@ _A ser preenchido pelo @qa após implementação._
 | 2026-04-29 | 1.0 | Story criada — Memory Writer para popular `lead_memories` | @sm (River) |
 | 2026-04-29 | 1.1 | Validação @po: GO (9/10, Alta confiança) — Draft → Ready. SF1: marcar 1.4 como pré-req de 1.5/1.7. SF2: adicionar test case null→general. SF3: incluir mock Anthropic no test. | @po (Pax) |
 | 2026-04-29 | 1.2 | Implementação completa — writer.ts + writer.test.ts + loader.ts export + pipeline.ts step 12.5c. type-check 0 erros, lint 0 erros, 215/215 testes passando (11 novos). | @dev (Dex) |
+| 2026-04-29 | 1.3 | Push para remote — commit baf4c12, branch main. Story Done. | @devops (Gage) |
