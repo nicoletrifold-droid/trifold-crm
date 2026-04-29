@@ -123,7 +123,7 @@ export async function loadL2TopicMemories(
 /**
  * Detect room (topic) from message keywords.
  */
-function detectRoom(message: string): string | null {
+export function detectRoom(message: string): string | null {
   const text = message.toLowerCase()
 
   if (/visit|agenda|hor[aá]rio|dia|quando/.test(text)) return "visit_scheduling"

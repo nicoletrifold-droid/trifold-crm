@@ -27,6 +27,7 @@ import {
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { loadMemoryContext } from "../memory/loader"
+import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
 import { STAGE_IDS } from "@trifold/shared"
@@ -675,6 +676,10 @@ export async function processMessageWithMetadata(
         }
       }).catch((err) => console.error("Lead memory update failed:", err))
     }
+
+    // 12.5c Memory fragments → lead_memories (async, non-blocking)
+    processConversationTurn(supabase, anthropic, leadId, message, assistantMessage)
+      .catch((err) => console.error("Memory writer failed (non-blocking):", err))
   }
 
   // 13. Return response with metadata
