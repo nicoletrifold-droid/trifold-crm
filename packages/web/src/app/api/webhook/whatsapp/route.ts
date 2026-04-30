@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
+import { triggerAutomations } from "@web/lib/email-automations"
 
 export const maxDuration = 60
 
@@ -275,6 +276,15 @@ export async function POST(request: NextRequest) {
         .single()
 
       lead = newLead as typeof lead
+      if (newLead) {
+        void triggerAutomations("lead.created", {
+          id: newLead.id,
+          email: null,
+          name: null,
+          phone: from,
+          org_id: orgId,
+        })
+      }
     }
 
     if (!lead) {

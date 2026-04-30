@@ -1,0 +1,90 @@
+import { NextRequest, NextResponse } from "next/server"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { sendTemplateEmail } from "@web/lib/email"
+
+const CRON_SECRET = process.env.CRON_SECRET
+
+function createServiceClient(): SupabaseClient {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+async function checkRecentSend(
+  supabase: SupabaseClient,
+  automationId: string,
+  toEmail: string
+): Promise<boolean> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count } = await supabase
+    .from("email_logs")
+    .select("*", { count: "exact", head: true })
+    .like("triggered_by", `automation:${automationId}%`)
+    .eq("to_email", toEmail)
+    .gte("created_at", since)
+  return (count ?? 0) > 0
+}
+
+export async function GET(request: NextRequest) {
+  if (!CRON_SECRET) return NextResponse.json({ error: "Cron not configured" }, { status: 503 })
+  const authHeader = request.headers.get("authorization")
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const supabase = createServiceClient()
+
+  const { data: automations } = await supabase
+    .from("email_automations")
+    .select("id, org_id, delay_minutes, email_templates(slug)")
+    .eq("trigger_event", "cron.daily")
+    .eq("is_active", true)
+
+  let fired = 0
+  let skipped = 0
+
+  for (const automation of automations ?? []) {
+    const templateSlug = (automation.email_templates as unknown as { slug: string } | null)?.slug
+    if (!templateSlug) continue
+
+    // Fetch active leads with email for this org
+    const { data: leads } = await supabase
+      .from("leads")
+      .select("id, email, name, phone")
+      .eq("org_id", automation.org_id)
+      .eq("is_active", true)
+      .not("email", "is", null)
+      .limit(50)
+
+    for (const lead of leads ?? []) {
+      if (!lead.email) continue
+
+      const alreadySent = await checkRecentSend(supabase, automation.id, lead.email)
+      if (alreadySent) { skipped++; continue }
+
+      const scheduledFor =
+        automation.delay_minutes > 0
+          ? new Date(Date.now() + automation.delay_minutes * 60000)
+          : undefined
+
+      await sendTemplateEmail({
+        templateSlug,
+        to: { email: lead.email, name: lead.name ?? undefined },
+        variables: {
+          nome: lead.name ?? "",
+          email: lead.email,
+          telefone: lead.phone ?? "",
+        },
+        triggeredBy: `automation:${automation.id}`,
+        orgId: automation.org_id as string,
+        scheduledFor,
+        priority: 5,
+      })
+      fired++
+    }
+  }
+
+  return NextResponse.json({ fired, skipped, automations: automations?.length ?? 0 })
+}

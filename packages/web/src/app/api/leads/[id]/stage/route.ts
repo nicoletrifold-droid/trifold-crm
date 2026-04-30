@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { triggerAutomations } from "@web/lib/email-automations"
 
 export async function POST(
   request: NextRequest,
@@ -86,6 +87,14 @@ export async function POST(
       to_stage: { id: newStage.id, name: newStage.name },
     },
   })
+
+  void triggerAutomations("lead.status_changed", {
+    id: updatedLead.id,
+    email: (updatedLead.email as string | null) ?? null,
+    name: (updatedLead.name as string | null) ?? null,
+    phone: (updatedLead.phone as string | null) ?? null,
+    org_id: appUser.org_id,
+  }, { status: newStage.name })
 
   return NextResponse.json({ data: updatedLead })
 }

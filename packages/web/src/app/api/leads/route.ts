@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { triggerAutomations } from "@web/lib/email-automations"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -107,6 +108,16 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (lead) {
+    void triggerAutomations("lead.created", {
+      id: lead.id,
+      email: lead.email ?? null,
+      name: lead.name ?? null,
+      phone: lead.phone ?? null,
+      org_id: lead.org_id as string,
+    })
   }
 
   return NextResponse.json({ data: lead }, { status: 201 })
