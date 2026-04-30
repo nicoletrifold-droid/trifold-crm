@@ -2,7 +2,7 @@
 epic: 18
 story: 18.2
 title: Email Design System — Layout Base
-status: Ready
+status: Ready for Review
 priority: P1-ALTO
 created_at: 2026-04-29
 created_by: River (@sm)

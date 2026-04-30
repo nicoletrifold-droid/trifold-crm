@@ -2,7 +2,7 @@
 epic: 18
 story: 18.5
 title: Webhook Resend Expandido — Tracking de Templates
-status: Ready
+status: Ready for Review
 priority: P1-ALTO
 created_at: 2026-04-29
 created_by: River (@sm)

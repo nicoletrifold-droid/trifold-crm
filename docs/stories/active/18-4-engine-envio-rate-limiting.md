@@ -2,7 +2,7 @@
 epic: 18
 story: 18.4
 title: Engine de Envio Evoluída + Rate Limiting
-status: Ready
+status: Ready for Review
 priority: P0-CRÍTICO
 created_at: 2026-04-29
 created_by: River (@sm)
