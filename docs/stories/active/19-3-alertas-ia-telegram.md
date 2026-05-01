@@ -1,7 +1,7 @@
 # Story 19.3 — Alertas e Recomendações de IA via Telegram
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
