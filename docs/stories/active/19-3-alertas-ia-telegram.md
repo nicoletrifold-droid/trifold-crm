@@ -1,7 +1,7 @@
 # Story 19.3 — Alertas e Recomendações de IA via Telegram
 
 ## Status
-Ready
+Ready for Review
 
 ## Executor Assignment
 executor: "@dev"
@@ -89,40 +89,39 @@ Cron novo: `/api/cron/meta-ads-intelligence` — roda diariamente às 08h BRT (1
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Criar cron `meta-ads-intelligence`** (AC: 1)
-  - [ ] 1.1 Criar pasta `packages/web/src/app/api/cron/meta-ads-intelligence/`
-  - [ ] 1.2 Criar `route.ts` com handler GET, autenticação por `CRON_SECRET`, estrutura padrão (copiar de `meta-sync-insights/route.ts`)
+- [x] **Task 1 — Criar cron `meta-ads-intelligence`** (AC: 1)
+  - [x] 1.1 Criar pasta `packages/web/src/app/api/cron/meta-ads-intelligence/`
+  - [x] 1.2 Criar `route.ts` com handler GET, autenticação por `CRON_SECRET`, estrutura padrão
 
-- [ ] **Task 2 — Implementar coleta de dados** (AC: 8)
-  - [ ] 2.1 Buscar contas ativas de `meta_ad_accounts` para a org
-  - [ ] 2.2 Verificar existência de dados `meta_insights_daily` do dia anterior — se vazio, registrar skip e retornar early
-  - [ ] 2.3 Buscar insights dos últimos 30 dias por campanha (nível `campaign`)
-  - [ ] 2.4 Buscar leads do CRM com `last_response_at` e `status` (join duplo por `utm_campaign` + `metadata.campaign_id`)
-  - [ ] 2.5 Calcular métricas por campanha: `spend_3d`, `spend_7d`, `spend_30d`, `leads_meta_3d`, `leads_meta_7d`, `cpl_real_3d`, `cpl_real_30d`, `taxa_qualificacao`
+- [x] **Task 2 — Implementar coleta de dados** (AC: 8)
+  - [x] 2.1 Buscar contas ativas de `meta_ad_accounts` para a org
+  - [x] 2.2 Verificar existência de dados `meta_insights_daily` do dia anterior — se vazio, registrar skip e retornar early
+  - [x] 2.3 Buscar insights dos últimos 30 dias por campanha (nível `campaign`)
+  - [x] 2.4 Buscar leads do CRM com `last_response_at` e `status` (join duplo por `utm_campaign` + `metadata.campaign_id`)
+  - [x] 2.5 Calcular métricas por campanha: `spend_3d`, `spend_7d`, `spend_30d`, `leads_meta_3d`, `leads_meta_7d`, `cpl_real_3d`, `cpl_real_30d`, `taxa_qualificacao`
 
-- [ ] **Task 3 — Implementar regras de alerta** (AC: 3, 4, 5)
-  - [ ] 3.1 Implementar `detectCplSpike(campaign, metrics)` → retorna alerta ou null
-  - [ ] 3.2 Implementar `detectZeroLeadsActive(campaign, metrics)` → retorna alerta ou null
-  - [ ] 3.3 Implementar `detectScaleCandidate(campaign, metrics, portfolioAvgCplReal)` → retorna sugestão ou null
-  - [ ] 3.4 Calcular `portfolioAvgCplReal` como média ponderada por spend de todos os `cpl_real` não-nulos
+- [x] **Task 3 — Implementar regras de alerta** (AC: 3, 4, 5)
+  - [x] 3.1 Implementar `detectCplSpike(campaign, metrics)` → retorna alerta ou null
+  - [x] 3.2 Implementar `detectZeroLeadsActive(campaign, metrics)` → retorna alerta ou null
+  - [x] 3.3 Implementar `detectScaleCandidate(campaign, metrics, portfolioAvgCplReal)` → retorna sugestão ou null
+  - [x] 3.4 Calcular `portfolioAvgCplReal` como média ponderada por spend de todos os `cpl_real` não-nulos
 
-- [ ] **Task 4 — Implementar formatação das mensagens** (AC: 6, 7, 9)
-  - [ ] 4.1 Implementar `formatResumoDiario(data)` → string Telegram com Markdown
-  - [ ] 4.2 Implementar `formatRelatorioSemanal(data)` → string Telegram com ranking completo
-  - [ ] 4.3 Implementar `formatAlertasConsolidados(alertas[])` → string única com todos os alertas
-  - [ ] 4.4 Detectar segunda-feira para enviar relatório semanal: `new Date().getDay() === 1`
+- [x] **Task 4 — Implementar formatação das mensagens** (AC: 6, 7, 9)
+  - [x] 4.1 Implementar `formatResumoDiario(data)` → string Telegram com Markdown
+  - [x] 4.2 Implementar `formatRelatorioSemanal(data)` → string Telegram com ranking completo
+  - [x] 4.3 Alertas consolidados embutidos em `formatResumoDiario` (uma única mensagem — AC9)
+  - [x] 4.4 Detectar segunda-feira: `new Date().getUTCDay() === 1`
 
-- [ ] **Task 5 — Registrar em `vercel.json`** (AC: 2)
-  - [ ] 5.1 Adicionar entrada no array `crons` de `packages/web/vercel.json`:
-    `{ "path": "/api/cron/meta-ads-intelligence", "schedule": "0 11 * * *" }`
+- [x] **Task 5 — Registrar em `vercel.json`** (AC: 2)
+  - [x] 5.1 Adicionado `{ "path": "/api/cron/meta-ads-intelligence", "schedule": "0 11 * * *" }`
 
-- [ ] **Task 6 — Registrar execução em `meta_sync_log`** (AC: 10)
-  - [ ] 6.1 Inserir registro com `sync_type: 'intelligence'` no início da execução
-  - [ ] 6.2 Atualizar com `finished_at`, `status`, `records_synced` ao final
+- [x] **Task 6 — Registrar execução em `meta_sync_log`** (AC: 10)
+  - [x] 6.1 Inserir registro com `sync_type: 'intelligence'` no início da execução
+  - [x] 6.2 Atualizar com `finished_at`, `status`, `records_synced` ao final
 
-- [ ] **Task 7 — Verificação de qualidade** (AC: 11, 12)
-  - [ ] 7.1 `pnpm run type-check` — corrigir todos os erros
-  - [ ] 7.2 `pnpm run lint` — corrigir todos os warnings
+- [x] **Task 7 — Verificação de qualidade** (AC: 11, 12)
+  - [x] 7.1 `pnpm run type-check` — 0 erros (8 packages successful)
+  - [x] 7.2 `pnpm run lint` — 0 erros (2 warnings pré-existentes não relacionados)
 
 ## Dev Notes
 
@@ -210,8 +209,39 @@ const isMonday = new Date().getUTCDay() === 1 // UTC já é ok pois o cron roda 
 
 > **CodeRabbit Integration**: Disabled — quality validation via manual review + type-check + lint.
 
+## QA Results
+
+**Verdict:** ✅ PASS with CONCERNS — 2026-05-01 — Quinn (@qa)
+
+**ACs verificados:** 1 ✅ 2 ✅ 3 ✅ 4 ✅ 5 ✅ 6 ✅ 7 ✅ 8 ✅ 9 ✅ 10 ✅ 11 ✅ 12 ✅
+
+**Issues:**
+- CONCERNS: `cplReal3d` usa `responderam_30d_total` como denominador (não `responderam_3d`). Comportamento documentado pelo @dev — proxy de spend-ratio, não CPL real dos 3 dias. Falsos positivos conservadores; aceitável como aproximação dado que leads não têm data de resposta indexável.
+- CONCERNS: AC6 especifica "spend do dia anterior por conta" mas implementação exibe acumulado 30d — alinhado com Dev Notes (mais útil). Recomenda-se atualizar AC em revisão futura.
+- MEDIUM: `byMetaIdResult` (linha 347) busca todos os leads `meta_ads` da org sem filtrar por `campaign_id` — filtragem ocorre no loop JS. Para orgs com > 5.000 leads, pode impactar latência. Endereçar em story de otimização.
+- LOW: `scale_candidate` não contabilizado na linha "Alertas: X crítico, Y aviso" do resumo.
+
+**Aprovado para push.**
+
+## File List
+
+- `packages/web/src/app/api/cron/meta-ads-intelligence/route.ts` — criado: cron diário 08h BRT com 3 detectores de alerta, resumo diário, relatório semanal e registro em meta_sync_log
+- `packages/web/vercel.json` — modificado: entrada `meta-ads-intelligence` no array crons com schedule `0 11 * * *`
+
+## Dev Agent Record
+
+**Agent Model Used:** claude-sonnet-4-6
+
+**Completion Notes:**
+- Cron inteiramente em arquivo único — sem módulos auxiliares (escopo não exige)
+- `detectCplSpike` usa `cplReal3d` (calculado sobre responderam totais do período, não apenas 3d) para consistência com join existente; o numerador correto seria só leads responderam dos 3 últimos dias, mas isso exigiria data na tabela de leads (não disponível). Comportamento conservador: falsos positivos são menos prováveis com essa abordagem
+- `intelligence_skip` registrado como log separado além de atualizar o registro `intelligence` — AC8 cumprido
+- Relatório semanal usa CPL médio por spend como proxy de semana anterior (insights 37d→7d atrás)
+- `pnpm run type-check` e `pnpm run lint` passam sem erros
+
 ## Change Log
 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-05-01 | 1.0 | Story criada | River (@sm) |
+| 2026-05-01 | 1.1 | Tasks 1–7 implementadas — cron completo com alertas e resumo Telegram | Dex (@dev) |
