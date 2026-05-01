@@ -25,6 +25,7 @@ import {
   OPTIMIZATION_GOAL_LABELS,
   STATUS_BADGES,
 } from "@web/lib/meta-constants"
+import CampaignFunnel from "./campaign-funnel"
 
 interface Props {
   campaignId: string
@@ -124,6 +125,7 @@ export default function CampaignDetailClient({ campaignId }: Props) {
 
   const { campaign, timeseries, adsets, funnel, leads, roas_summary } = data
   const statusBadge = STATUS_BADGES[campaign.status] ?? STATUS_BADGES.ARCHIVED
+  const period = days === 7 ? "7d" : days === 90 ? "90d" : "30d"
   const objectiveLabel = campaign.objective
     ? (OBJECTIVE_LABELS[campaign.objective] ?? campaign.objective)
     : null
@@ -212,6 +214,16 @@ export default function CampaignDetailClient({ campaignId }: Props) {
         </h2>
         <div className="mt-4">
           <TimeSeriesChart data={timeseries} />
+        </div>
+      </section>
+
+      {/* Funil de Conversão (Story 19.2) */}
+      <section className="rounded-lg bg-white p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-gray-900">
+          Funil de Conversão
+        </h2>
+        <div className="mt-4">
+          <CampaignFunnel campaignId={campaignId} period={period} />
         </div>
       </section>
 
