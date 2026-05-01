@@ -1,7 +1,7 @@
 # Story 19.2 — Funil de Conversão por Campanha
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
