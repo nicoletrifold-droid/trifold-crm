@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 
 interface CampaignMetrics {
@@ -10,6 +10,10 @@ interface CampaignMetrics {
   ctr: number
   cpl: number | null
   leads_meta: number
+  leads_responderam: number
+  leads_qualificados: number
+  cpl_real: number | null
+  taxa_qualificacao: number | null
 }
 
 interface CampaignWithMetrics {
@@ -58,6 +62,21 @@ const formatDate = (iso: string): string =>
     hour: "2-digit",
     minute: "2-digit",
   })
+
+function formatQualificacaoBadge(taxa: number | null): React.ReactElement {
+  if (taxa === null) return <span className="text-gray-400">—</span>
+  const color =
+    taxa >= 40
+      ? "bg-green-100 text-green-700"
+      : taxa >= 20
+        ? "bg-yellow-100 text-yellow-700"
+        : "bg-red-100 text-red-700"
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
+      {taxa.toFixed(1).replace(".", ",")}%
+    </span>
+  )
+}
 
 // ─── Constantes ────────────────────────────────────────────────────────────
 
@@ -314,6 +333,18 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                 <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
                   Leads CRM
                 </th>
+                <th
+                  title="Custo por lead que respondeu o bot (spend ÷ leads que interagiram)"
+                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help"
+                >
+                  CPL Real
+                </th>
+                <th
+                  title="% de leads Meta que foram qualificados pela Nicole"
+                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help"
+                >
+                  Qualificação
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
                   Ações
                 </th>
@@ -369,6 +400,18 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                       >
                         {c.leads_crm}
                       </Link>
+                    </td>
+                    <td
+                      title="Custo por lead que respondeu o bot (spend ÷ leads que interagiram)"
+                      className="px-4 py-3 text-right text-sm text-gray-700"
+                    >
+                      {c.metrics.cpl_real !== null ? formatBRL(c.metrics.cpl_real) : "—"}
+                    </td>
+                    <td
+                      title="% de leads Meta que foram qualificados pela Nicole"
+                      className="px-4 py-3 text-right text-sm"
+                    >
+                      {formatQualificacaoBadge(c.metrics.taxa_qualificacao)}
                     </td>
                     <td className="px-4 py-3 text-right text-sm">
                       <Link

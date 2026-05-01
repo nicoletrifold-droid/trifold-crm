@@ -8,6 +8,10 @@ interface CampaignMetrics {
   ctr: number
   cpl: number | null
   leads_meta: number
+  leads_responderam: number
+  leads_qualificados: number
+  cpl_real: number | null
+  taxa_qualificacao: number | null
 }
 
 interface CampaignWithMetrics {
@@ -83,7 +87,7 @@ export async function GET(request: NextRequest) {
   // 3. Leads no CRM (meta_ads ou ctwa)
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, utm_campaign, metadata")
+    .select("id, utm_campaign, metadata, last_response_at, status")
     .eq("org_id", appUser.org_id)
     .in("source", ["meta_ads", "whatsapp_click_to_ad"])
 
@@ -104,19 +108,45 @@ export async function GET(request: NextRequest) {
   }
 
   // 5. Índices de leads por campanha (dedup por id)
+  const QUALIFIED_STATUSES = new Set([
+    'contacted', 'qualified', 'visit_scheduled', 'visited', 'proposal', 'closed',
+  ])
+
   const leadIdsByName: Record<string, Set<string>> = {}
   const leadIdsByMetaId: Record<string, Set<string>> = {}
+  const responderamByName: Record<string, Set<string>> = {}
+  const responderamByMetaId: Record<string, Set<string>> = {}
+  const qualificadosByName: Record<string, Set<string>> = {}
+  const qualificadosByMetaId: Record<string, Set<string>> = {}
 
   for (const lead of leads ?? []) {
     const metaId = (lead.metadata as Record<string, unknown> | null)?.campaign_id as string | undefined
+    const respondeu = lead.last_response_at != null
+    const qualificado = respondeu && QUALIFIED_STATUSES.has(lead.status ?? '')
 
     if (lead.utm_campaign) {
       if (!leadIdsByName[lead.utm_campaign]) leadIdsByName[lead.utm_campaign] = new Set()
       leadIdsByName[lead.utm_campaign].add(lead.id)
+      if (respondeu) {
+        if (!responderamByName[lead.utm_campaign]) responderamByName[lead.utm_campaign] = new Set()
+        responderamByName[lead.utm_campaign].add(lead.id)
+      }
+      if (qualificado) {
+        if (!qualificadosByName[lead.utm_campaign]) qualificadosByName[lead.utm_campaign] = new Set()
+        qualificadosByName[lead.utm_campaign].add(lead.id)
+      }
     }
     if (metaId) {
       if (!leadIdsByMetaId[metaId]) leadIdsByMetaId[metaId] = new Set()
       leadIdsByMetaId[metaId].add(lead.id)
+      if (respondeu) {
+        if (!responderamByMetaId[metaId]) responderamByMetaId[metaId] = new Set()
+        responderamByMetaId[metaId].add(lead.id)
+      }
+      if (qualificado) {
+        if (!qualificadosByMetaId[metaId]) qualificadosByMetaId[metaId] = new Set()
+        qualificadosByMetaId[metaId].add(lead.id)
+      }
     }
   }
 
@@ -137,6 +167,21 @@ export async function GET(request: NextRequest) {
     const byMetaId = leadIdsByMetaId[c.meta_campaign_id] ?? new Set<string>()
     const leads_crm = new Set([...byName, ...byMetaId]).size
 
+    const respByName = responderamByName[c.name] ?? new Set<string>()
+    const respByMetaId = responderamByMetaId[c.meta_campaign_id] ?? new Set<string>()
+    const leads_responderam = new Set([...respByName, ...respByMetaId]).size
+
+    const qualByName = qualificadosByName[c.name] ?? new Set<string>()
+    const qualByMetaId = qualificadosByMetaId[c.meta_campaign_id] ?? new Set<string>()
+    const leads_qualificados = new Set([...qualByName, ...qualByMetaId]).size
+
+    const cpl_real = leads_responderam > 0
+      ? Math.round((agg.spend / leads_responderam) * 100) / 100
+      : null
+    const taxa_qualificacao = agg.leads_meta > 0
+      ? Math.round((leads_qualificados / agg.leads_meta) * 10000) / 100
+      : null
+
     return {
       id: c.id,
       meta_campaign_id: c.meta_campaign_id,
@@ -152,6 +197,10 @@ export async function GET(request: NextRequest) {
         ctr: Math.round(ctr * 100) / 100,
         cpl: cpl !== null ? Math.round(cpl * 100) / 100 : null,
         leads_meta: agg.leads_meta,
+        leads_responderam,
+        leads_qualificados,
+        cpl_real,
+        taxa_qualificacao,
       },
       leads_crm,
     }
