@@ -2,7 +2,7 @@
 epic: 20
 story: 20.2
 title: Portal do Cliente — Layout + Tela de Acompanhamento da Obra
-status: Ready for Review
+status: Done
 priority: P0-CRÍTICO
 created_at: 2026-05-04
 created_by: River (@sm)
@@ -392,3 +392,4 @@ Autorizar `@devops *push`.
 | 2026-05-04 | 1.1 | Validação @po: GO 9.5/10 — 4 correções técnicas aplicadas nos Dev Notes (C-001: import api-auth; C-002: requireAuth pattern; C-003: route group layout; C-004: nome da obra na page). Status: Draft → Ready | Pax (@po) |
 | 2026-05-04 | 1.2 | Implementação completa — 6 arquivos criados (API route, layout, page, 3 componentes). type-check ✅ (0 erros). lint ✅ (0 erros nos novos arquivos; 6 pré-existentes da Epic 18 não introduzidos aqui). Status: Ready → Ready for Review | Dex (@dev) |
 | 2026-05-04 | 1.3 | QA Gate: PASS — todos os 10 ACs verificados. 2 issues LOW documentados (logo size, API route unused). Autorizado push para @devops. | Quinn (@qa) |
+| 2026-05-04 | 1.4 | Push realizado — `aae4bc0` → origin/main. Status: Done. Story concluída. | Gage (@devops) |
