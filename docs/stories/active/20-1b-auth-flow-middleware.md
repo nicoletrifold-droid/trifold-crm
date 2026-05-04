@@ -302,6 +302,7 @@ Não há testes unitários para middleware neste projeto. Validação via:
 | 2026-05-04 | 1.1 | Status Draft → Ready após validação PO (10/10 — GO) | Pax (@po) |
 | 2026-05-04 | 1.2 | Implementação: 4 arquivos (1 modificado, 3 novos); status Ready → InReview | Dex (@dev) |
 | 2026-05-04 | 1.3 | QA gate: PASS — status InReview → Done. Push autorizado a @devops. | Aria (@architect) |
+| 2026-05-04 | 1.4 | Push bem-sucedido para `origin/main` (commit `b1719b8`). Rebase sobre Epic 18 + cleanup commits do Lucas; tsbuildinfo removidos do commit (agora gitignored conforme `edd31a5`/`042efbf`). | Gage (@devops) |
 
 ## Dev Agent Record
 

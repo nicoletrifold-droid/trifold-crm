@@ -307,6 +307,7 @@ SELECT * FROM obras WHERE id NOT IN (SELECT public.cliente_obra_ids()); -- deve 
 | 2026-05-04 | 1.1 | Adicionados: complexidade, estimativa, escopo IN/OUT, riscos, CHECK constraint em obras.status; status Draft → Ready | Pax (@po) |
 | 2026-05-04 | 1.2 | Implementação: migration 018 + plan doc; status Ready → InReview | Dara (@data-engineer) |
 | 2026-05-04 | 1.3 | QA gate PASS: split de migration em 019_enum + 020_main (limitação enum-in-tx do PG); committed 018_email_central recuperado da remota; 3 buckets Storage criados; status InReview → Done | Dex (@dev) |
+| 2026-05-04 | 1.4 | Push bem-sucedido para `origin/main` (commit `f0ee0ab`). Rebase necessário sobre Epic 18 já mergeado; conflito em 018_email_central resolvido aceitando versão remota (Epic 18 já trazia o arquivo com cabeçalho canônico); 019/020 aplicados sem conflito. | Gage (@devops) |
 
 ## Dev Agent Record
 
