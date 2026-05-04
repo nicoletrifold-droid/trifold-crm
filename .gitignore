@@ -28,6 +28,15 @@ Thumbs.db
 # AIOS Local (AIOS)
 .aios-core/local/
 .claude/settings.local.json
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Supabase temp
+supabase/.temp/
+
+# Lockfile (project uses pnpm)
+package-lock.json
 .aios/install-log.txt
 .vercel
 
