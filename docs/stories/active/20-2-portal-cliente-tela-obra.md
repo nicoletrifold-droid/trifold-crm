@@ -324,6 +324,66 @@ Seguir o padrão visual da `/cliente/sem-obra/page.tsx`:
 - [ ] @qa PASS
 - [ ] @devops push realizado
 
+## QA Results
+
+**Revisor:** Quinn (@qa)
+**Data:** 2026-05-04
+**Verdict:** ✅ PASS
+
+### Gate Decision
+
+```yaml
+storyId: "20.2"
+verdict: PASS
+reviewer: "@qa (Quinn)"
+date: "2026-05-04"
+```
+
+### Verificação dos Acceptance Criteria
+
+| AC | Status | Detalhe |
+|----|--------|---------|
+| AC1 — Layout portal | ✅ PASS | Header na page (PO-approved C-003/C-004); layout.tsx minimal e correto; Server Component sem "use client" |
+| AC2 — Página Server Component | ✅ PASS | Usa Supabase direto (padrão do projeto, documentado em Dev Notes); redirect para /sem-obra funcionando |
+| AC3 — Seção Visão Geral | ✅ PASS | STATUS_LABEL map correto (em_andamento/concluida/pausada); formatDeliveryDate com fallback "A definir"; barra de progresso com progress_pct |
+| AC4 — Fases da Obra | ✅ PASS | order_index ✓; STATUS_CONFIG com cores corretas (cinza/amber/verde); current_phase destacado com border laranja + dot |
+| AC5 — Fotos Recentes | ✅ PASS | URL Storage correta; limit 6; order created_at DESC; next/image unoptimized; empty state com câmera |
+| AC6 — Atualizações da Equipe | ✅ PASS | pt-BR formatado; truncate 200 chars; limit 5; sender_type='equipe'; empty state |
+| AC7 — API GET route | ✅ PASS | requireAuth() import correto (@web/lib/api-auth); RLS via Supabase; 404 opaco; response shape completo; Promise.all paralelo |
+| AC8 — Isolamento RLS | ✅ PASS | Retorna 404 (não 403) — não vaza existência da obra |
+| AC9 — type-check | ✅ PASS | 0 erros — 8/8 tasks turbo successful |
+| AC10 — lint | ✅ PASS | 0 erros nos 6 arquivos novos; 6 erros pré-existentes da Epic 18 (dashboard/sistema/) confirmados fora do escopo |
+
+### Issues Documentados
+
+| Severidade | Categoria | Descrição | Recomendação |
+|------------|-----------|-----------|--------------|
+| LOW | visual | Logo 36×36 em vez de 40×40 especificado em AC1 | Ajustar em Story 20.x ou acumular com próximas iterações visuais |
+| LOW | arquitetura | API route `/api/cliente/obras/[obra_id]` criada mas não consumida pela page (page usa Supabase direto). Desvio de AC2 documentado e PO-approved. | Manter para uso futuro (mobile/integrações externas) ou remover se não houver plano |
+
+### Segurança
+
+- ✅ Auth: `requireAuth()` bloqueia 401 sem sessão
+- ✅ RLS: cliente só acessa obras vinculadas via `cliente_obra_ids()` (Supabase filtra automaticamente)
+- ✅ Opacidade: 404 (não 403) para obras inacessíveis
+- ✅ Storage URL: bucket `obra-fotos` público — correto (fotos de obras são conteúdo cliente-acessível)
+- ✅ Sem dados sensíveis expostos no client-side
+
+### Qualidade de Código
+
+- ✅ Componentes bem separados e com responsabilidade única
+- ✅ Empty states em todos os componentes
+- ✅ Tipos TypeScript corretos (sem `any`)
+- ✅ Sem comentários desnecessários
+- ✅ Server Components onde possível; `"use client"` apenas em FotosGrid (necessário para `onError`)
+
+### Autorização para Merge
+
+Story 20.2 está **APROVADA** para push. Issues LOW não bloqueiam o merge.
+Autorizar `@devops *push`.
+
+---
+
 ## Change Log
 
 | Date | Version | Description | Author |
@@ -331,3 +391,4 @@ Seguir o padrão visual da `/cliente/sem-obra/page.tsx`:
 | 2026-05-04 | 1.0 | Story criada — Portal do Cliente: Layout + Tela de Obra | River (@sm) |
 | 2026-05-04 | 1.1 | Validação @po: GO 9.5/10 — 4 correções técnicas aplicadas nos Dev Notes (C-001: import api-auth; C-002: requireAuth pattern; C-003: route group layout; C-004: nome da obra na page). Status: Draft → Ready | Pax (@po) |
 | 2026-05-04 | 1.2 | Implementação completa — 6 arquivos criados (API route, layout, page, 3 componentes). type-check ✅ (0 erros). lint ✅ (0 erros nos novos arquivos; 6 pré-existentes da Epic 18 não introduzidos aqui). Status: Ready → Ready for Review | Dex (@dev) |
+| 2026-05-04 | 1.3 | QA Gate: PASS — todos os 10 ACs verificados. 2 issues LOW documentados (logo size, API route unused). Autorizado push para @devops. | Quinn (@qa) |
