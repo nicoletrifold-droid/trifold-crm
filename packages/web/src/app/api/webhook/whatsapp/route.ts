@@ -327,7 +327,13 @@ export async function POST(request: NextRequest) {
         baseTime + 72 * 60 * 60 * 1000
       ).toISOString()
 
-      const existingMeta = (leadRef.metadata ?? {}) as Record<string, unknown>
+      // Hot-fix Story 21.1 deploy: leads.metadata column does NOT exist (see
+      // migration 016 doc). Preserve UTMs (real columns) but skip metadata
+      // enrichment until follow-up story adds the column. CTWA referral context
+      // (referralData, ctwaWindowExpiresAt) is lost on this code path until
+      // then — non-blocking for P0 dedup fix.
+      void referralData
+      void ctwaWindowExpiresAt
 
       await supabase
         .from("leads")
@@ -336,11 +342,6 @@ export async function POST(request: NextRequest) {
           utm_source: "meta_ads",
           utm_medium: "whatsapp_ctwa",
           utm_campaign: campaignName,
-          metadata: {
-            ...existingMeta,
-            referral: referralData,
-            ctwa_window_expires_at: ctwaWindowExpiresAt,
-          },
         })
         .eq("id", lead.id)
     } catch (refErr) {
@@ -636,7 +637,9 @@ export async function POST(request: NextRequest) {
 interface LeadResult {
   id: string
   created_at: string
-  metadata: Record<string, unknown> | null
+  // metadata column does NOT exist on leads table (see migration 016 doc).
+  // Kept optional for CTWA referral compat — always undefined in practice.
+  metadata?: Record<string, unknown> | null
   // marker that signals "this lead was just created" — used by the async path
   _brand_new?: boolean
 }
@@ -666,9 +669,13 @@ async function findOrUpsertLead(
   const { orgId, phoneRaw, phoneNormalized } = args
 
   // 1) find existing lead — ordered, maybeSingle
+  // NOTE: leads.metadata column does NOT exist (see migration 016 doc).
+  // Hot-fix Story 21.1 deploy: remove metadata from select to unblock webhook.
+  // CTWA referral path (lines 322-345) gracefully degrades via `?? {}` fallback.
+  // TODO follow-up: design metadata column migration if CTWA enrichment needed.
   const { data: existing } = await supabase
     .from("leads")
-    .select("id, created_at, metadata")
+    .select("id, created_at")
     .eq("phone_normalized", phoneNormalized)
     .eq("org_id", orgId)
     .order("created_at", { ascending: true })
@@ -705,7 +712,7 @@ async function findOrUpsertLead(
         ignoreDuplicates: false,
       }
     )
-    .select("id, created_at, metadata")
+    .select("id, created_at")
     .maybeSingle()
 
   if (insertErr) {
@@ -726,7 +733,7 @@ async function findOrUpsertLead(
 
     const { data: recovered } = await supabase
       .from("leads")
-      .select("id, created_at, metadata")
+      .select("id, created_at")
       .eq("phone_normalized", phoneNormalized)
       .eq("org_id", orgId)
       .order("created_at", { ascending: true })
