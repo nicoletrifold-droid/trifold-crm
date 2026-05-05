@@ -1,0 +1,49 @@
+import { NextResponse } from "next/server"
+import { requireAuth } from "@web/lib/api-auth"
+
+const ALLOWED_ROLES = ["admin", "supervisor"]
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ obra_id: string; foto_id: string }> }
+) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  if (!ALLOWED_ROLES.includes(appUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { obra_id, foto_id } = await params
+
+  // Busca a foto restringindo por obra_id e org_id (isolamento explícito)
+  const { data: foto } = await supabase
+    .from("obra_fotos")
+    .select("id, storage_path")
+    .eq("id", foto_id)
+    .eq("obra_id", obra_id)
+    .eq("org_id", appUser.org_id)
+    .single()
+
+  if (!foto) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  // Remove do Storage — idempotente; se o arquivo não existe, ignora
+  await supabase.storage.from("obra-fotos").remove([foto.storage_path])
+
+  const { error: deleteError } = await supabase
+    .from("obra_fotos")
+    .delete()
+    .eq("id", foto_id)
+
+  if (deleteError) {
+    return NextResponse.json(
+      { error: `Falha ao remover foto: ${deleteError.message}` },
+      { status: 500 }
+    )
+  }
+
+  return new NextResponse(null, { status: 204 })
+}

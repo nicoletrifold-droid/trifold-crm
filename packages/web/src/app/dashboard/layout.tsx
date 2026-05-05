@@ -16,6 +16,7 @@ import {
   GraduationCap,
   Settings,
   Shield,
+  HardHat,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -36,6 +37,7 @@ const NAV_ITEMS_BASE = [
   { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> },
 ]
 
+const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 
 export default async function DashboardLayout({
@@ -53,10 +55,14 @@ export default async function DashboardLayout({
     .eq("org_id", user.orgId)
     .eq("status", "pending")
 
-  // AC23: Show "Sistema" link only for admins
-  const navItems = user.role === "admin"
-    ? [...NAV_ITEMS_BASE, NAV_ITEM_SISTEMA]
-    : NAV_ITEMS_BASE
+  // Obras: visível para admin e supervisor
+  // Sistema: visível apenas para admin
+  const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
+  const navItems = [
+    ...NAV_ITEMS_BASE,
+    ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS] : []),
+    ...(user.role === "admin" ? [NAV_ITEM_SISTEMA] : []),
+  ]
 
   return (
     <div className="min-h-screen bg-stone-50">
