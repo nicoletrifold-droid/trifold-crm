@@ -404,7 +404,9 @@ export async function GET(request: NextRequest) {
         : null
 
       const cplReal3d = (() => {
-        const responderam3d = campaignLeads.filter((l) => l.last_response_at != null).length
+        const responderam3d = campaignLeads.filter(
+          (l) => l.last_response_at != null && l.last_response_at >= date3dAgo,
+        ).length
         return responderam3d > 0 && ins.spend3d > 0
           ? Math.round((ins.spend3d / responderam3d) * 100) / 100
           : null

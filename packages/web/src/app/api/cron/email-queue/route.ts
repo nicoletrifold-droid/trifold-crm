@@ -18,6 +18,7 @@ interface QueueItem {
     subject: string
     template_id: string | null
     variables_used: Record<string, string> | null
+    triggered_by: string | null
     email_templates: { slug: string; html_body: string } | null
   }
 }
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id, attempts, max_attempts,
         email_logs!inner(
-          id, to_email, subject, template_id, variables_used,
+          id, to_email, subject, template_id, variables_used, triggered_by,
           email_templates(slug, html_body)
         )
       `)
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
           subject: log?.subject as string,
           template_id: (log?.template_id as string) ?? null,
           variables_used: (log?.variables_used as Record<string, string>) ?? null,
+          triggered_by: (log?.triggered_by as string) ?? null,
           email_templates: tmpl
             ? { slug: tmpl.slug as string, html_body: tmpl.html_body as string }
             : null,
@@ -152,6 +154,12 @@ export async function GET(request: NextRequest) {
         .update({ status: "sent", resend_email_id: resendId, sent_at: now.toISOString() })
         .eq("id", log.id)
 
+      // Update blast progress if this email belongs to a blast
+      const blastId = log.triggered_by?.match(/^blast:([^:]+)/)?.[1]
+      if (blastId) {
+        await reconcileBlastProgress(supabase, blastId, now)
+      }
+
       processed++
     }
   }
@@ -186,6 +194,33 @@ async function markFailed(
       .update({ status: "failed", error_message: errorMessage })
       .eq("id", logId)
   }
+}
+
+async function reconcileBlastProgress(supabase: ServiceClient, blastId: string, now: Date) {
+  const { data: blast } = await supabase
+    .from("email_blasts")
+    .select("id, total_recipients, status")
+    .eq("id", blastId)
+    .single()
+
+  if (!blast || blast.status === "completed" || blast.status === "cancelled") return
+
+  const { count } = await supabase
+    .from("email_logs")
+    .select("id", { count: "exact", head: true })
+    .like("triggered_by", `blast:${blastId}%`)
+    .in("status", ["sent", "delivered", "opened", "clicked"])
+
+  const sentCount = count ?? 0
+  const isComplete = sentCount >= blast.total_recipients
+
+  await supabase
+    .from("email_blasts")
+    .update({
+      sent_count: sentCount,
+      ...(isComplete ? { status: "completed", completed_at: now.toISOString() } : {}),
+    })
+    .eq("id", blastId)
 }
 
 function resolveTemplate(template: string, variables: Record<string, string>): string {

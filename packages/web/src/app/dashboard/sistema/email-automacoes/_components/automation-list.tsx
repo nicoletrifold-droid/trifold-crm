@@ -80,7 +80,7 @@ export function AutomationList() {
         <div>
           <h1 className="text-xl font-semibold text-stone-900">Automações de Email</h1>
           <p className="mt-0.5 text-sm text-stone-500">
-            {automations.length} automação{automations.length !== 1 ? "ões" : ""}
+            {automations.length} automaç{automations.length !== 1 ? "ões" : "ão"}
           </p>
         </div>
         <Link

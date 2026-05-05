@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendTemplateEmail, getEmailsSentToday } from "@web/lib/email"
@@ -136,12 +136,17 @@ export async function POST(request: NextRequest) {
 
   const distributed = distributeOverDays(recipients, effectiveStart)
 
-  // Enqueue all emails (fire-and-forget after response)
+  // Enqueue all emails after response is sent (guaranteed by after())
   const blastId = blast.id
   const templateSlug = body.template_slug
+  const subjectOverride = body.subject_override
 
-  // Schedule async enqueue — don't block response
-  void (async () => {
+  after(async () => {
+    await supabase
+      .from("email_blasts")
+      .update({ status: "in_progress", started_at: new Date().toISOString() })
+      .eq("id", blastId)
+
     for (const { lead, scheduledFor } of distributed) {
       await sendTemplateEmail({
         templateSlug,
@@ -155,14 +160,10 @@ export async function POST(request: NextRequest) {
         orgId: user.orgId,
         scheduledFor,
         priority: 10,
+        subjectOverride,
       })
     }
-
-    await supabase
-      .from("email_blasts")
-      .update({ status: "in_progress", started_at: new Date().toISOString() })
-      .eq("id", blastId)
-  })()
+  })
 
   return NextResponse.json({ data: { id: blastId, total_recipients: recipients.length } }, { status: 201 })
 }

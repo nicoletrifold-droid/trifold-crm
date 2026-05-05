@@ -45,8 +45,9 @@ export async function sendTemplateEmail(params: {
   orgId: string
   scheduledFor?: Date
   priority?: 1 | 5 | 10
+  subjectOverride?: string
 }): Promise<{ logId: string; queued: boolean; error?: string }> {
-  const { templateSlug, to, variables, triggeredBy, orgId, scheduledFor, priority = 5 } = params
+  const { templateSlug, to, variables, triggeredBy, orgId, scheduledFor, priority = 5, subjectOverride } = params
 
   const supabase = createServiceClient()
 
@@ -65,8 +66,8 @@ export async function sendTemplateEmail(params: {
     return { logId: "", queued: false, error: "Template is not active" }
   }
 
-  // 2. Resolve variables in subject + body
-  const subject = resolveTemplate(template.subject, variables)
+  // 2. Resolve variables in subject + body (subject_override takes precedence)
+  const subject = resolveTemplate(subjectOverride ?? template.subject, variables)
   const htmlBody = resolveTemplate(template.html_body, variables)
 
   // 3. Create email_log with status='pending'
