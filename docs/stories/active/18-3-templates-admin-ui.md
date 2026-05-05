@@ -2,7 +2,7 @@
 epic: 18
 story: 18.3
 title: Gerenciamento de Templates — Admin UI
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-29
 created_by: River (@sm)
@@ -264,3 +264,4 @@ function slugify(name: string): string {
 |------|---------|-------------|--------|
 | 2026-04-29 | 1.0 | Story criada | River (@sm) |
 | 2026-04-30 | 1.1 | API routes + UI completa: listagem, criação, edição, preview. RBAC admin em routes e pages. type-check OK, 217 testes passando. | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

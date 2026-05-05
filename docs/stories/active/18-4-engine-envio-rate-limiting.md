@@ -2,7 +2,7 @@
 epic: 18
 story: 18.4
 title: Engine de Envio Evoluída + Rate Limiting
-status: Ready for Review
+status: Done
 priority: P0-CRÍTICO
 created_at: 2026-04-29
 created_by: River (@sm)
@@ -262,3 +262,4 @@ export async function GET(request: NextRequest) {
 |------|---------|-------------|--------|
 | 2026-04-29 | 1.0 | Story criada | River (@sm) |
 | 2026-04-29 | 1.1 | sendTemplateEmail() + getEmailsSentToday() + cron email-queue. sendEmail() sem alteração para retrocompat. type-check OK, 217 testes. | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

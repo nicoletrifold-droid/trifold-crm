@@ -2,7 +2,7 @@
 epic: 18
 story: 18.8
 title: Campanhas Manuais — Email Blast
-status: Ready for Review
+status: Done
 priority: P2-MÉDIO
 created_at: 2026-04-29
 created_by: River (@sm)
@@ -281,3 +281,4 @@ packages/web/src/
 |------|---------|-------------|--------|
 | 2026-04-29 | 1.0 | Story criada | River (@sm) |
 | 2026-04-30 | 1.1 | Implementação completa — wizard 3 passos, 5 API routes, distribuição automática, cancelamento, double-click protection, type-check OK | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

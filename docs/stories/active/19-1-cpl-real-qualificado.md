@@ -1,7 +1,7 @@
 # Story 19.1 — CPL Real Qualificado no Painel de Campanhas
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -204,3 +204,4 @@ function formatQualificacaoBadge(taxa: number | null): JSX.Element {
 |------|---------|-------------|--------|
 | 2026-05-01 | 1.0 | Story criada | River (@sm) |
 | 2026-04-30 | 1.1 | Task 1+2+3 implementadas — API e UI com CPL Real e Qualificação | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

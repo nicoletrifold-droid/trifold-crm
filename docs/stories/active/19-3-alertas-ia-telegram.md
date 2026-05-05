@@ -245,3 +245,4 @@ const isMonday = new Date().getUTCDay() === 1 // UTC já é ok pois o cron roda 
 |------|---------|-------------|--------|
 | 2026-05-01 | 1.0 | Story criada | River (@sm) |
 | 2026-05-01 | 1.1 | Tasks 1–7 implementadas — cron completo com alertas e resumo Telegram | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

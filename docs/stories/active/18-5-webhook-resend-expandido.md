@@ -2,7 +2,7 @@
 epic: 18
 story: 18.5
 title: Webhook Resend Expandido — Tracking de Templates
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-29
 created_by: River (@sm)
@@ -246,3 +246,4 @@ Documentar esse passo em `docs/architecture/resend-webhook-config.md`.
 |------|---------|-------------|--------|
 | 2026-04-29 | 1.0 | Story criada | River (@sm) |
 | 2026-04-29 | 1.1 | Webhook expandido: roteamento entry_id/email_log_id, email.complained, updateEmailLog(). Zero regressão no path de campanha. type-check OK. | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

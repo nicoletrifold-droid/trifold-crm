@@ -2,7 +2,7 @@
 epic: 18
 story: 18.2
 title: Email Design System — Layout Base
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-29
 created_by: River (@sm)
@@ -246,3 +246,4 @@ export const emailTokens = {
 |------|---------|-------------|--------|
 | 2026-04-29 | 1.0 | Story criada | River (@sm) |
 | 2026-04-29 | 1.1 | Módulo email-layout implementado. footer usa text.secondary (#6b7280) para WCAG AA (fix UX report). 12 testes unitários. 217 testes passando. type-check OK. | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |

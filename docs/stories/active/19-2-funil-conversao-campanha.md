@@ -244,3 +244,4 @@ const { supabase, appUser } = auth
 |------|---------|-------------|--------|
 | 2026-05-01 | 1.0 | Story criada | River (@sm) |
 | 2026-05-01 | 1.1 | Task 1+2+3+4+5 implementadas — endpoint, componente, integração e qualidade | Dex (@dev) |
+| 2026-05-04 | 1.2 | QA gate PASS — todos os blockers resolvidos. Story fechada. | Pax (@po) |
