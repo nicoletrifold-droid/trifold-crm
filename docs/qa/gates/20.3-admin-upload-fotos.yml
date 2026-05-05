@@ -1,0 +1,21 @@
+schema: 1
+story: '20.3'
+gate: PASS
+status_reason: >
+  Todos os 13 ACs verificados. Segurança de org isolation e role check implementados
+  corretamente em todas as rotas e páginas. Type-check e lint passam sem erros nos
+  arquivos da story. Rollback de Storage em caso de falha de DB implementado além do escopo
+  requerido. Issue SEC-001 (SVG XSS) é de baixa severidade e aceitável para MVP.
+reviewer: Quinn
+updated: '2026-05-05T00:00:00Z'
+top_issues:
+  - id: SEC-001
+    severity: low
+    finding: >
+      Upload aceita image/svg+xml. SVGs podem conter scripts inline se renderizados
+      fora de um <img>. Risco atual é mínimo pois apenas admins fazem upload e
+      imagens são exibidas via <img> (sem renderização inline).
+    suggested_action: >
+      Em story futura, adicionar blocklist de MIME types (svg+xml) ou
+      converter imagens para JPEG/WebP no servidor antes do armazenamento.
+waiver: { active: false }

@@ -2,7 +2,7 @@
 epic: 20
 story: 20.3
 title: Admin — Painel de Obras + Upload de Fotos
-status: Ready for Review
+status: Done
 priority: P0-CRÍTICO
 created_at: 2026-05-05
 created_by: River (@sm)
@@ -441,3 +441,20 @@ const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/pub
 | 2026-05-05 | River (@sm) | Story criada — Draft |
 | 2026-05-05 | Pax (@po) | Validação GO — C-001 (nav link) e C-002 (role check em pages) corrigidos; status → Ready |
 | 2026-05-05 | Dex (@dev) | Implementação completa: migration 021, 4 API routes, 2 páginas, 3 client components, nav link. Type-check e lint clean. Status → Ready for Review |
+| 2026-05-05 | Quinn (@qa) | QA gate PASS — 13/13 ACs verificados. SEC-001 (low, SVG) documentado. Status → Done |
+
+## QA Results
+
+### Review Date: 2026-05-05
+
+### Reviewed By: Quinn (Test Architect)
+
+**AC Coverage:** 13/13 ✅
+**Security checks:** org isolation, role check, Storage rollback — todos corretos.
+**Type-check:** 0 erros. **Lint:** 0 erros nos arquivos da story.
+
+**Observação:** @dev adicionou rollback de Storage em caso de falha do INSERT (não estava no escopo, boa prática).
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/20.3-admin-upload-fotos.yml
