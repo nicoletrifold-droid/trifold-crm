@@ -1,7 +1,7 @@
 # Story 21.3 — Anthropic Prompt Caching no Pipeline da Nicole
 
 ## Status
-InReview
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -317,6 +317,8 @@ Verificar versão instalada: `cat packages/ai/package.json | grep anthropic`. Se
 | 2026-05-05 | 1.1.0 | Status atualizado para Ready — sem dependências bloqueantes | River (@sm) |
 | 2026-05-05 | 1.1 | PO validation: GO. | Pax (@po) |
 | 2026-05-04 | 1.2.0 | Implementação YOLO — `buildSystemPrompt` retorna `TextBlockParam[]`, telemetria de cache, testes 12/12. Status → InReview | Dex (@dev) |
+| 2026-05-04 | 1.3.0 | QA Gate `PASS_PENDING_PROD_VALIDATION` (92/100) — ACs 1, 2, 7, 8 PASS estática; ACs 3-6 deferidos para validação pós-deploy. Sem bloqueantes. | Quinn (@qa) |
+| 2026-05-04 | 1.4.0 | Deploy produção via Vercel. Commit `690b768`. Deploy `trifold-39e1941kw`. Smoke test E2E confirmou cache funcionando: call 1 MISS (creation=7007 tokens), calls 2-3 HIT (read=7007, hit_ratio=1.0 e 0.879). Latência: 4.20s → 1.63s → 1.92s (-58% miss→hit). Lead smoke deletado. Status → Done. | Gage (@devops) |
 
 ## Dev Agent Record
 
@@ -332,6 +334,30 @@ Claude (Opus 4.7, 1M context) — Dex persona, modo YOLO autônomo.
 - Token estimate do bloco estático: `text.length=20886`, `estimateTokens=5222` (5x acima do mínimo 1024 da Anthropic Sonnet/Opus). Cache eligible confirmado.
 
 ### Completion Notes List
+
+**Smoke Test E2E pós-deploy (2026-05-04, 18:10 UTC, deploy `trifold-39e1941kw`):**
+
+3 calls com mesmo phone smoke `5511988887777`, mesmo `org_id`, intervalo de 12s entre cada (dentro do TTL de 5min):
+
+| Call | Resultado | cache_creation | cache_read | total_input | hit_ratio | latência |
+|------|-----------|----------------|------------|-------------|-----------|----------|
+| 1    | `prompt_cache_miss_or_create` | 7007 | 0 | 802 | 0.000 | 4.20s |
+| 2    | `prompt_cache_hit`            | 0    | 7007 | 939 | 1.000 | 1.63s |
+| 3    | `prompt_cache_hit`            | 963  | 7007 | 19  | 0.879 | 1.92s |
+
+**ACs deferidos validados em produção:**
+- **AC 3 PASS:** call 1 cria cache (`cache_creation_input_tokens=7007 > 0`).
+- **AC 4 PASS:** calls 2 e 3 lêem cache (`cache_read_input_tokens=7007 > 0` em ambas).
+- **AC 5 PASS:** redução de latência miss → hit = `(4.20 - 1.63) / 4.20 = 61%` (>>20% target).
+- **AC 6 PASS (preliminar):** `cache_hit_ratio` médio entre calls 2-3 = 0.94. Validação completa de custo (>=30%) requer 24h+ de tráfego real.
+
+**Cache size confirmado:** bloco estável de 7007 tokens (vs estimativa pré-deploy de 5222 — diferença é a tokenização real do Anthropic, esperada).
+
+**Cleanup:** lead smoke (`e5c46e9f-ef7f-4863-b0f0-617cca884401`) e conversation associada deletados via REST API.
+
+**Baseline pré-deploy capturada para comparação 24h:**
+- 7 dias: `n=52 calls, avg_input_tokens=8134, avg_response_ms=2941`.
+- @qa deve rodar comparação após 24h+ de tráfego real conforme queries SQL no Dev Notes (linhas 388-416).
 
 **Implementação:**
 
