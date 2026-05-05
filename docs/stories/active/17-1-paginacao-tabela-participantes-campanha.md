@@ -189,3 +189,4 @@ Nenhuma issue identificada.
 | 2026-04-28 | 1.1 | Validação @po: GO 8/10 — complexidade S, riscos adicionados, Status Draft → Ready | @po (Pax) |
 | 2026-04-28 | 1.2 | Implementação completa — paginação 50/pág + reset filtro + COUNT queries — type-check PASS, lint PASS | @dev (Dex) |
 | 2026-04-28 | 1.3 | QA Gate PASS — todos os 6 ACs verificados, sem issues | @qa (Quinn) |
+| 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |

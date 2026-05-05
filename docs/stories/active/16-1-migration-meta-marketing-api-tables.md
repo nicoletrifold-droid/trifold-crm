@@ -2,7 +2,7 @@
 epic: 16
 story: 16.1
 title: Migration — Tabelas Meta Marketing API
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-04-24
 created_by: River (@sm)
@@ -230,3 +230,4 @@ Nenhuma env var nova nesta story — migration é pura DDL.
 - [x] Índices criados conforme especificado
 - [x] @qa PASS
 - [ ] @devops push realizado
+| 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |

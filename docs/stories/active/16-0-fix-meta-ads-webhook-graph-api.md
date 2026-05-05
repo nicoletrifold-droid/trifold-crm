@@ -2,7 +2,7 @@
 epic: 16
 story: 16.0
 title: Fix Meta Ads Webhook — Graph API Fetch
-status: Ready for Review
+status: Done
 priority: P0-CRITICO
 created_at: 2026-04-24
 created_by: River (@sm)
@@ -362,3 +362,4 @@ Story aprovada para `@devops` push.
 - [x] Lint e typecheck passando
 - [ ] @qa PASS
 - [ ] @devops push realizado
+| 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |

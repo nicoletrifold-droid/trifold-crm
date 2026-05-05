@@ -2,7 +2,7 @@
 epic: 16
 story: 16.8
 title: UI — Lista de Campanhas Meta + Métricas
-status: Ready for Review
+status: Done
 priority: P2-MÉDIO
 created_at: 2026-04-27
 created_by: River (@sm)
@@ -434,3 +434,4 @@ const STATUS_BADGES: Record<string, { label: string; className: string }> = {
 - [ ] `npm run lint` passa sem erros
 - [ ] @qa PASS
 - [ ] @devops push realizado
+| 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |

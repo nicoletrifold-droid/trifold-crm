@@ -2,7 +2,7 @@
 epic: 18
 story: 18.1
 title: Schema — Infraestrutura de Email Central
-status: Ready
+status: Done
 priority: P0-CRÍTICO
 created_at: 2026-04-29
 created_by: River (@sm)
@@ -297,3 +297,4 @@ JSONB com as tags enviadas para o Resend. No mínimo deve conter `email_log_id` 
 |------|---------|-------------|--------|
 | 2026-04-29 | 1.0 | Story criada | River (@sm) |
 | 2026-04-29 | 1.1 | Migration 018_email_central.sql criada (Tasks 1-7 completas). Task 8 pendente de Supabase CLI para `db push`. RLS usa `public.user_org_id()` + `auth.role() = 'service_role'` conforme padrão do projeto. | Dex (@dev) |
+| 2026-05-05 | Migration 018_email_central.sql aplicada em produção. Epic 18 concluído. Story fechada. | Pax (@po) |

@@ -201,3 +201,4 @@ Nenhuma issue identificada.
 | 2026-04-28 | 1.1 | Validação @po: GO 8/10 — complexidade M, riscos adicionados, dep clarificada, Status Draft → Ready | @po (Pax) |
 | 2026-04-28 | 1.2 | Implementação completa — dashboard COUNT/stage + followup cron batch cooldown + batch conversations — type-check PASS, lint PASS | @dev (Dex) |
 | 2026-04-28 | 1.3 | QA Gate PASS — todos os 5 ACs verificados, riscos mitigados corretamente, sem issues | @qa (Quinn) |
+| 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |

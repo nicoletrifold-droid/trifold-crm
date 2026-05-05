@@ -2,7 +2,7 @@
 epic: 16
 story: 16.7
 title: Backfill — Leads Históricos via Lead Forms API
-status: Ready for Review
+status: Done
 priority: P2-MÉDIO
 created_at: 2026-04-27
 created_by: River (@sm)
@@ -305,3 +305,4 @@ npx tsx scripts/meta-backfill-leads.ts --form-id=1234567890 --from=2026-01-01 --
 - [ ] `npm run lint` passa sem erros
 - [ ] @qa PASS
 - [ ] @devops push realizado
+| 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |
