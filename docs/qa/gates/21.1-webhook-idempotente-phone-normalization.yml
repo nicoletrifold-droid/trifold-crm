@@ -1,0 +1,494 @@
+schema: 1
+story: '21.1'
+story_title: 'Webhook WhatsApp Idempotente, Phone Normalization & Lead Deduplication'
+gate: PASS_PENDING_PROD_VALIDATION
+status_reason: >-
+  REL-001 (HIGH) MITIGADO em v1.4: índice promovido para FULL UNIQUE (não-parcial),
+  ON CONFLICT inference agora determinística. Re-validação @qa: 27/27 testes passing,
+  typecheck 0 errors, COMMENT ON INDEX consistente, RAISE EXCEPTION e auditoria SQL
+  intactos. Deploy LIBERADO — gate permanece PASS_PENDING para fechar AC1 (p95<2s)
+  e AC9 (smoke E2E) pós-deploy real.
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-05-04T11:30:00Z'
+score: 94
+score_breakdown:
+  requirements_traceability: 18  # /20 — 9/9 ACs implementados, 2 ACs (AC1 p95, AC9 E2E) só verificáveis pós-deploy
+  test_architecture: 18          # /20 — pirâmide adequada (21 unit + 6 integration), gap em race condition real
+  nfr_validation: 19             # /20 — REL-001 mitigado; PASS_PENDING_PROD em performance (AC1 deploy-only)
+  code_quality: 19               # /20 — código limpo, bem comentado, observabilidade excelente; comentários SQL exemplares pós-fix
+  risk_management: 20            # /20 — risco crítico do ON CONFLICT eliminado por design (UNIQUE FULL)
+
+# ----------------------------------------------------------------------------
+# Anti-hallucination verification
+# ----------------------------------------------------------------------------
+anti_hallucination:
+  files_verified:
+    - path: packages/shared/src/utils/phone.ts
+      exists: true
+      lines: 47
+      matches_story: true
+    - path: packages/shared/src/utils/__tests__/phone.test.ts
+      exists: true
+      lines: 127
+      test_count: 21
+    - path: supabase/migrations/021_phone_normalization_part1.sql
+      exists: true
+      lines: 100
+      function_present: true
+      generated_column_present: true
+      non_unique_index_present: true
+    - path: supabase/migrations/021_phone_normalization_part2.sql
+      exists: true
+      lines: 79
+      defensive_do_block: true       # RAISE EXCEPTION on duplicates — verified line 42-47 (intacto pós-v1.4)
+      partial_unique_index: false    # v1.4 fix: WHERE removido — agora FULL UNIQUE (line 54-55)
+      full_unique_index: true        # CREATE UNIQUE INDEX idx_leads_org_phone_normalized_unique ON leads (org_id, phone_normalized) — sem WHERE
+      comment_on_index_consistent: true  # line 66-70 reflete "FULL UNIQUE constraint" sem menção a partial
+    - path: scripts/cleanup-duplicate-leads.ts
+      exists: true
+      lines: 411
+      safeguards_verified:
+        dry_run_default: true        # line 61
+        apply_flag_required: true    # line 310-315
+        i_understand_delete: true    # line 207-211
+        tty_check: true              # line 192-198
+        audit_log: true              # line 282-301
+    - path: packages/web/src/app/api/webhook/whatsapp/route.ts
+      exists: true
+      lines: 838
+      after_pattern: true
+      wamid_check_before_side_effects: true   # lines 154-205, BEFORE line 264 lead upsert
+      maybesingle_used: true                  # 9 occurrences
+      hmac_validation_sync: true              # lines 56-63
+      campaign_status_isolated_after: true    # line 84
+    - path: packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts
+      exists: true
+      lines: 623
+      test_count: 6
+      ac84_test_present: true                 # "AC8.4 — 3 calls" line 498
+
+  test_execution_verified:
+    command: 'npx vitest run packages/shared/src/utils/__tests__/phone.test.ts packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts'
+    result: '2 files passed, 27/27 tests passing (219ms)'
+    independently_verified_by_qa: true
+    re_verified_post_fix_v1_4: true
+
+  typecheck_verified:
+    command: 'npx tsc --noEmit -p packages/web/tsconfig.json'
+    result: '0 errors'
+    independently_verified_by_qa: true
+    re_verified_post_fix_v1_4: true
+
+  lint_verified:
+    command: 'npx eslint src/app/api/webhook/whatsapp/'
+    result: '0 problems'
+    independently_verified_by_qa: true
+
+# ----------------------------------------------------------------------------
+# Requirements Traceability — AC × Implementation × Test
+# ----------------------------------------------------------------------------
+requirements_traceability:
+  - ac: 'AC1 — Resposta < 2s p95'
+    implementation: 'route.ts: HMAC + parse + wamid check + phone normalize + lead upsert + conv find-or-create + INSERT msg sync; tudo pesado em after()'
+    test_coverage: 'PARTIAL — código está pronto e mensurável via campos ms_sync/ms_async em event=whatsapp_async_done'
+    verifiable: 'POST-DEPLOY only — Vercel logs'
+    status: implemented_pending_post_deploy_verification
+
+  - ac: 'AC2 — Idempotência por wamid'
+    implementation: 'route.ts:154-205 — query messages.metadata->>whatsapp_message_id ANTES de qualquer side-effect'
+    test_coverage: 'route.test.ts:468 — same wamid 2x → 1 message, 1 lead, 1 conv + log'
+    status: VERIFIED
+
+  - ac: 'AC3 — Conversa contínua por lead'
+    implementation: 'route.ts:362-365 + findOrCreateConversation com .maybeSingle() + status=active filter'
+    test_coverage: 'route.test.ts:498 — AC8.4 reproduz cenário real do bug'
+    status: VERIFIED
+
+  - ac: 'AC4 — Normalização de phone'
+    implementation: 'packages/shared/src/utils/phone.ts — todos os 11 casos da tabela cobertos'
+    test_coverage: '21 testes em phone.test.ts cobrindo edge cases + valid + bug regression'
+    status: VERIFIED
+
+  - ac: 'AC5a — Migration parte 1 (não-unique)'
+    implementation: '021_phone_normalization_part1.sql — função, GENERATED COLUMN, índice não-unique'
+    test_coverage: 'N/A — DDL; smoke verification em DB real DEFER @devops'
+    status: ARTIFACT_READY
+
+  - ac: 'AC5b — Migration parte 2 (UNIQUE)'
+    implementation: '021_phone_normalization_part2.sql — DROP + CREATE UNIQUE com DO block defensivo (RAISE EXCEPTION se duplicatas)'
+    test_coverage: 'N/A — DDL; defensive guard testável via auditoria @devops'
+    status: ARTIFACT_READY
+
+  - ac: 'AC6 — Cleanup script com salvaguardas'
+    implementation: 'scripts/cleanup-duplicate-leads.ts — todas as 5 salvaguardas presentes'
+    test_coverage: 'Smoke dry-run em DB de prod já executado: msgs_migrated=22, conv_migrated=11'
+    status: VERIFIED
+
+  - ac: 'AC7 — Observabilidade'
+    implementation: '7 event_types: duplicate_wamid_skipped, lead_created, lead_upsert_conflict, conversation_found, conversation_created, phone_normalize_failed, whatsapp_async_done + WEBHOOK_ASYNC_ERROR'
+    test_coverage: 'route.test.ts mocks logEvent e valida disparos'
+    status: VERIFIED
+
+  - ac: 'AC8 — Testes Vitest'
+    implementation: '27 testes (21 phone + 6 webhook), incluindo AC8.4 (3 formatos × 3 wamids → 1 lead)'
+    test_coverage: 'self-contained'
+    status: VERIFIED
+
+  - ac: 'AC9 — E2E pós-deploy'
+    implementation: 'N/A — verificação manual'
+    test_coverage: 'DEFER @qa pós-deploy, requer 3 mensagens reais via Meta'
+    status: deferred_post_deploy
+
+# ----------------------------------------------------------------------------
+# Top issues — actionable findings
+# ----------------------------------------------------------------------------
+top_issues:
+  - id: REL-001
+    severity: high
+    category: reliability
+    status: mitigated
+    title: 'ON CONFLICT contra índice UNIQUE PARCIAL pode falhar inferência em Postgres'
+    location: 'route.ts:704 (onConflict) × migrations/021_part2.sql:54-55 (UNIQUE INDEX FULL — pós v1.4)'
+    finding: >-
+      [HISTÓRICO] Versão original do part2.sql usava CREATE UNIQUE INDEX ... WHERE
+      phone_normalized IS NOT NULL (partial), o que torna a inferência de ON CONFLICT
+      do Postgres frágil — risco de fallback silencioso para INSERT direto e
+      recriação do bug original.
+    mitigation: >-
+      v1.4 (2026-05-05): @dev removeu o WHERE clause do CREATE UNIQUE INDEX.
+      Agora é UNIQUE FULL (não-parcial). ON CONFLICT (org_id, phone_normalized)
+      no upsert do route.ts:704 infere o índice de forma 100% determinística.
+      Comportamento NULL preservado: Postgres permite múltiplos NULLs em UNIQUE
+      não-parcial por padrão (NULL != NULL em unique constraints), então phones
+      inválidos (phone_normalized=NULL) não são bloqueados — sem regressão
+      funcional. Comentários inline (line 57-64) e COMMENT ON INDEX (line 66-70)
+      atualizados consistentemente. Verificado @qa em re-review pós-fix.
+    suggested_action: 'COMPLETED — fix aplicado. Sem ação adicional.'
+    blocking_for_devops: false
+    risk_reduction: 'risco eliminado por design (índice UNIQUE FULL é determinístico)'
+
+  - id: REL-002
+    severity: medium
+    category: reliability
+    title: 'Race condition possível em findOrCreateConversation (sem UNIQUE constraint)'
+    location: 'route.ts:767-838 (findOrCreateConversation)'
+    finding: >-
+      A tabela `conversations` não tem UNIQUE em (lead_id, status='active').
+      Se 2 webhooks chegam quase-simultaneamente para o mesmo lead pela
+      primeira vez, ambos podem retornar 0 rows no SELECT e ambos criarem
+      conversation (status=active). A primeira mensagem cai numa, a segunda
+      em outra → AC3 (histórico contínuo) parcialmente quebrado.
+    suggested_action: >-
+      Não é blocker para esta story (a story está focada em phone dedup), mas
+      criar story follow-up (Epic 21 escopo) para adicionar UNIQUE PARTIAL
+      INDEX ON conversations (lead_id) WHERE status = 'active' OU usar advisory
+      lock no upsert. Documento como dívida técnica.
+    blocking_for_devops: false
+    risk_reduction: 'documentar como tech-debt para Story 21.x posterior'
+
+  - id: REL-003
+    severity: medium
+    category: reliability
+    title: 'after() pode ser killed pelo Vercel antes de terminar — outbound da Nicole pode não chegar'
+    location: 'route.ts:391-626 (after() block)'
+    finding: >-
+      Vercel mata o lambda alguns segundos após o response. O `after()` do
+      Next.js estende o lifetime, mas tem limite (em Hobby ~10s, em Pro
+      configurável até maxDuration). maxDuration=60 está setado. Na prática,
+      processMessage da Nicole + fetch outbound podem ultrapassar 60s em
+      cenários de pipeline lento. Não há retry — falha silenciosa.
+    suggested_action: >-
+      Pós-deploy, monitorar logs `whatsapp_async_done` vs `WEBHOOK_ASYNC_ERROR`:
+      se ratio >5% ou tempo p95 do `ms_async` >50s, considerar mover Nicole
+      para um job queue (Inngest, Trigger.dev) em story futura. Para esta
+      story, aceitável — era assim antes também.
+    blocking_for_devops: false
+    risk_reduction: 'monitorar pós-deploy'
+
+  - id: TEST-001
+    severity: medium
+    category: tests
+    title: 'Mock de Supabase não valida comportamento real do índice UNIQUE'
+    location: 'packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts:148-394'
+    finding: >-
+      Os 6 testes do webhook usam um mock in-memory que NÃO modela o
+      comportamento de UNIQUE INDEX + ON CONFLICT do Postgres real. O teste
+      AC8.4 (1 lead via 3 chamadas) passa porque o mock implementa upsert
+      simulando o conflict, mas não há teste contra Postgres real (ou contra
+      pglite/local). Se o REL-001 acima vier a falhar, não temos teste que
+      pegue.
+    suggested_action: >-
+      Em story follow-up, adicionar teste de integração contra Postgres local
+      (pgmem ou supabase local stack) para o cenário ON CONFLICT. Para esta
+      story, smoke E2E pós-deploy (AC9) supre essa lacuna.
+    blocking_for_devops: false
+    risk_reduction: 'AC9 smoke E2E manual cobre o gap'
+
+  - id: TEST-002
+    severity: medium
+    category: tests
+    title: 'Falta teste do branch lead_upsert_conflict (race fallback)'
+    location: 'route.ts:711-737'
+    finding: >-
+      O bloco `if (insertErr)` que faz re-query em caso de race do upsert não
+      tem cobertura de teste. Se a UNIQUE constraint disparar e a re-query
+      retornar null (improvável mas possível), o fluxo continua com lead=null
+      e retorna 200 silencioso — perdemos a mensagem. Não é exercitado por
+      nenhum teste.
+    suggested_action: >-
+      Adicionar teste em route.test.ts simulando insertErr forçado (mock que
+      retorna error na primeira chamada) e verificando que (a) log
+      lead_upsert_conflict é emitido e (b) re-query encontra o lead. Não-blocker.
+    blocking_for_devops: false
+    risk_reduction: 'baixo — branch raro'
+
+  - id: REL-004
+    severity: medium
+    category: reliability
+    title: 'DRY-RUN do cleanup conta msgs_migrated/conv_migrated mas APPLY pode divergir se grupos mudarem entre runs'
+    location: 'scripts/cleanup-duplicate-leads.ts:354-405'
+    finding: >-
+      O DRY_RUN computa o que "seria" feito agora. Entre o dry-run e o
+      --apply, novos leads podem chegar (webhook ainda ativo!). O apply então
+      pode processar grupos diferentes. Isso é mitigado pelo audit log e por
+      o cleanup ser idempotente (re-rodar não causa data loss), mas merece
+      documentação no runbook.
+    suggested_action: >-
+      Runbook @devops: deploy migration 021_part1 → pause webhook traffic
+      (ou aceitar que novos webhooks criarão leads "limpos" desde o início)
+      → executar cleanup --apply → migration 021_part2. Idealmente parar
+      webhook traffic durante cleanup minimiza divergência mas não é
+      estritamente necessário (cleanup é idempotente).
+    blocking_for_devops: false
+    risk_reduction: 'documentar no runbook de deploy'
+
+  - id: SEC-001
+    severity: low
+    category: security
+    title: 'SECURITY DEFINER em normalize_phone_br aumenta superfície de ataque'
+    location: 'migrations/021_part1.sql:30'
+    finding: >-
+      A função usa SECURITY DEFINER com search_path explicit (boa prática
+      aplicada). Não há risco de SQL injection porque a função apenas usa
+      regexp_replace sem dynamic SQL. Mas em geral SECURITY DEFINER deve ser
+      o último recurso.
+    suggested_action: >-
+      Validar que de fato é necessário SECURITY DEFINER para a GENERATED
+      COLUMN funcionar para todos os roles que fazem INSERT em leads. Se a
+      RLS não bloquear, considerar SECURITY INVOKER. Não-blocker.
+    blocking_for_devops: false
+    risk_reduction: 'baixo — função é determinística e sem dynamic SQL'
+
+  - id: PERF-001
+    severity: low
+    category: performance
+    title: 'Build groups carrega TODOS os leads em memória'
+    location: 'scripts/cleanup-duplicate-leads.ts:105-128'
+    finding: >-
+      `loadAllLeads` paginates com PAGE=1000 mas acumula tudo em memória.
+      Para 100k leads, ~50MB+ heap. Para o estado atual de prod (verified
+      11 grupos), trivial. Mas escala mal.
+    suggested_action: >-
+      Streaming ou processar groups em chunks. Não-blocker. Documentar como
+      limite para o atual estado da DB.
+    blocking_for_devops: false
+    risk_reduction: 'aceitável para volume atual de prod'
+
+  - id: MNT-001
+    severity: low
+    category: maintainability
+    title: 'Marker `_brand_new` no objeto LeadResult é frágil'
+    location: 'route.ts:641, 535, 753-755'
+    finding: >-
+      Anexar `_brand_new` ao objeto retornado por findOrUpsertLead acopla o
+      contrato. Se outro código pegar esse objeto e serializar para JSON,
+      _brand_new vaza. Aceitável aqui (objeto fica no escopo local), mas
+      eu preferiria um tuple `[lead, isNew]` ou retornar { lead, isNew }.
+    suggested_action: >-
+      Refatorar em story de cleanup futura para retornar
+      `{ lead, isBrandNew: boolean }`. Não-blocker.
+    blocking_for_devops: false
+    risk_reduction: 'baixo — escopo local'
+
+  - id: DOC-001
+    severity: low
+    category: documentation
+    title: 'Runbook de deploy não está formalizado'
+    location: 'story file'
+    finding: >-
+      A sequência ordem-dependente é: (1) deploy code, (2) migration 021_part1,
+      (3) cleanup script dry-run e revisão manual, (4) cleanup script --apply
+      com I-UNDERSTAND-DELETE, (5) migration 021_part2 (que tem guard
+      defensivo), (6) smoke E2E. Está implícita na story mas merece um
+      runbook explícito em docs/runbooks/.
+    suggested_action: >-
+      @devops: criar docs/runbooks/21.1-deploy-runbook.md antes do deploy
+      com checklist passo-a-passo + rollback. Não-blocker (defensive guard
+      no part2.sql é a salvaguarda final).
+    blocking_for_devops: false
+    risk_reduction: 'guard defensivo no part2.sql cobre o pior caso'
+
+# ----------------------------------------------------------------------------
+# NFR validation
+# ----------------------------------------------------------------------------
+nfr_validation:
+  security:
+    score: 'PASS'
+    findings:
+      - 'HMAC validation mantida sync ANTES de qualquer processamento (route.ts:56-63)'
+      - 'Service role key acessada via env, nunca exposta'
+      - 'Sem SQL injection: function PL/pgSQL usa regexp_replace, sem dynamic SQL'
+      - 'Cleanup script: salvaguardas multi-camada antes de DELETE (DRY_RUN + --apply + I-UNDERSTAND-DELETE + TTY check)'
+      - 'logEvent não vaza secrets (apenas wamid, IDs, phone_normalized)'
+
+  performance:
+    score: 'PASS_PENDING_PROD_VERIFICATION'
+    findings:
+      - 'Sync path mínimo: HMAC+parse+wamid+normalize+upsert+conv+INSERT msg'
+      - 'after() para Nicole, outbound, automations, last_message_at'
+      - 'AC1 p95 < 2s mensurável via campos ms_sync/ms_async em log whatsapp_async_done'
+      - 'Verificação real só pós-deploy (DEFER @qa)'
+
+  reliability:
+    score: 'CONCERNS'
+    findings:
+      - 'Idempotência por wamid: PASS (verificado por teste)'
+      - 'Lead dedup por (org_id, phone_normalized): VERIFIED em mock; depende de UNIQUE INDEX no Postgres real (REL-001)'
+      - 'after() no Vercel pode ser killed antes do outbound (REL-003)'
+      - 'Conversation race condition possível (REL-002) — não-blocker para esta story'
+      - 'Cleanup script idempotente — re-rodar não causa data loss'
+
+  maintainability:
+    score: 'PASS'
+    findings:
+      - 'Código bem comentado, JSDoc nas funções helper'
+      - 'Observabilidade excelente (7 event_types)'
+      - 'Migrations com comentários explicativos e rollback documentado'
+      - 'Cleanup script com docstrings detalhadas'
+      - 'Marker _brand_new é frágil mas aceitável (MNT-001)'
+
+# ----------------------------------------------------------------------------
+# Risk assessment matrix (probability × impact)
+# ----------------------------------------------------------------------------
+risk_assessment:
+  - risk: 'ON CONFLICT inference falha contra partial UNIQUE INDEX'
+    probability: low
+    impact: high
+    score: 6
+    mitigation: 'Teste explícito em staging antes do part2 OU mudar índice para não-parcial'
+    issue_id: REL-001
+  - risk: 'after() killed pelo Vercel → Nicole não responde'
+    probability: low
+    impact: medium
+    score: 4
+    mitigation: 'Monitorar logs whatsapp_async_done pós-deploy'
+    issue_id: REL-003
+  - risk: 'Race em findOrCreateConversation cria 2 conversations'
+    probability: very_low
+    impact: medium
+    score: 2
+    mitigation: 'Documentar tech-debt; story follow-up com UNIQUE PARTIAL INDEX'
+    issue_id: REL-002
+  - risk: 'Cleanup script roda contra DB errado'
+    probability: very_low
+    impact: critical
+    score: 4
+    mitigation: 'Salvaguardas multi-camada já implementadas; --apply + I-UNDERSTAND-DELETE + TTY'
+    issue_id: 'AC6 implementation'
+  - risk: 'Migration 021_part2 aplica antes do cleanup → falha em produção'
+    probability: very_low
+    impact: high
+    score: 3
+    mitigation: 'DO block defensivo no part2.sql aborta com RAISE EXCEPTION se duplicatas restantes'
+    issue_id: 'AC5b implementation'
+  - risk: 'Phone normalization PL/pgSQL diverge da TS'
+    probability: low
+    impact: high
+    score: 6
+    mitigation: 'Inspeção lado-a-lado da função TS vs PL/pgSQL realizada — lógica idêntica. Mas teste cross-engine não existe.'
+    issue_id: 'TEST-002 follow-up'
+
+# ----------------------------------------------------------------------------
+# Test gaps
+# ----------------------------------------------------------------------------
+test_gaps:
+  - 'Teste do branch lead_upsert_conflict (race fallback) — TEST-002'
+  - 'Teste de integração contra Postgres real (pglite/supabase local) para validar ON CONFLICT — TEST-001'
+  - 'Teste cross-engine: rodar normalize_phone_br no Postgres com mesmos inputs do phone.test.ts e diff'
+  - 'Teste de auditoria DO block do part2.sql: criar duplicatas → tentar aplicar → confirmar RAISE EXCEPTION'
+  - 'Teste do cenário "phone normalize retorna null mas há lead pré-existente com mesmo raw" (não cobre regressão)'
+  - 'AC9 smoke E2E — DEFER @qa pós-deploy'
+
+# ----------------------------------------------------------------------------
+# Decision Matrix — what blocks deploy vs what is monitoring follow-up
+# ----------------------------------------------------------------------------
+decision_matrix:
+  blocking_for_deploy: []  # REL-001 mitigado em v1.4 — sem bloqueadores remanescentes
+
+  resolved_pre_deploy:
+    - id: REL-001
+      resolution: 'v1.4 — WHERE removido do CREATE UNIQUE INDEX, agora FULL UNIQUE. ON CONFLICT inference determinística. Verificado @qa em re-review.'
+      verified_at: '2026-05-04T11:30:00Z'
+
+  required_runbook_steps:
+    - 'Deploy code (Vercel)'
+    - 'Aplicar 021_phone_normalization_part1.sql em produção'
+    - 'Executar query de auditoria pré-cleanup (validar leads duplicados existentes)'
+    - 'Executar cleanup script DRY-RUN — revisar relatório'
+    - 'Executar cleanup script com --apply + I-UNDERSTAND-DELETE'
+    - 'Executar query de auditoria pós-cleanup (deve retornar 0 rows)'
+    - 'Aplicar 021_phone_normalization_part2.sql (DO block aborta se duplicatas restantes)'
+    - 'Smoke E2E AC9: 3 mensagens do mesmo número via WhatsApp → 1 lead, 1 conv, 6 messages'
+    - 'Validar logs whatsapp_async_done: ms_sync < 2000ms p95'
+
+  post_deploy_monitoring:
+    - 'Ratio WEBHOOK_ASYNC_ERROR / whatsapp_async_done por 48h — alerta se > 5%'
+    - 'p95 de ms_sync via query agregada em system_events — alerta se > 2000ms'
+    - 'Contagem de duplicate_wamid_skipped — sanity (>0 confirma que retries da Meta acontecem)'
+    - 'Verificação manual no Supabase de phone_normalized vs phone para amostragem de leads'
+
+  follow_up_stories:
+    - 'Epic 21.x — UNIQUE PARTIAL INDEX em conversations(lead_id) WHERE status=active (REL-002)'
+    - 'Epic 21.x — Migrar Nicole/outbound para job queue se ms_async p95 > 50s (REL-003)'
+    - 'Epic 21.x — Teste de integração contra Postgres real para ON CONFLICT (TEST-001)'
+    - 'Epic 21.x — Refatorar findOrUpsertLead para retornar { lead, isBrandNew } (MNT-001)'
+
+# ----------------------------------------------------------------------------
+# Recommendation
+# ----------------------------------------------------------------------------
+recommendation:
+  next_step: 'DEPLOY'
+  to_agent: '@devops'
+  conditions:
+    - 'Runbook @devops seguido na ordem documentada (021_part1 → cleanup dry-run → cleanup --apply → 021_part2 → smoke E2E)'
+    - 'Smoke E2E AC9 executado pós-deploy por @qa para fechar AC9 e AC1 (p95) — NÃO bloqueia deploy, apenas fecha gate'
+  qa_followup_on_post_deploy:
+    - '@qa re-review após smoke E2E para promover gate de PASS_PENDING_PROD_VALIDATION → PASS'
+    - 'Verificar p95 ms_sync nas primeiras 10 invocações reais (AC1)'
+    - 'Verificar 0 leads duplicados criados em 24h pós-deploy (AC9)'
+
+# ----------------------------------------------------------------------------
+# Gate History
+# ----------------------------------------------------------------------------
+gate_history:
+  - timestamp: '2026-05-04T11:20:00Z'
+    gate: CONCERNS
+    score: 88
+    reviewer: 'Quinn (Test Architect)'
+    note: 'Gate inicial. REL-001 (HIGH) bloqueador pré-deploy: ON CONFLICT contra UNIQUE PARCIAL frágil.'
+  - timestamp: '2026-05-04T11:30:00Z'
+    gate: PASS_PENDING_PROD_VALIDATION
+    score: 94
+    reviewer: 'Quinn (Test Architect)'
+    note: 'Re-review pós v1.4. REL-001 mitigado (WHERE removido, FULL UNIQUE). Re-validação independente: 27/27 testes, typecheck 0 errors, comentários SQL consistentes. Deploy LIBERADO. Gate fechará para PASS após smoke E2E pós-deploy (AC1 p95 + AC9).'
+
+waiver: { active: false }
+
+# ----------------------------------------------------------------------------
+# Standards compliance (Constitution)
+# ----------------------------------------------------------------------------
+standards_compliance:
+  article_iii_story_driven: 'PASS — todos os 9 ACs rastreáveis a tasks com checkboxes'
+  article_iv_no_invention: 'PASS — toda lógica baseada nos ACs/Dev Notes, padrão after() ref ao meta-ads/route.ts existente'
+  article_v_quality_first: 'PASS condicional — testes passing, typecheck/lint clean, CONCERNS apenas em riscos não-cobríveis em código (deploy real)'
+  article_vi_absolute_imports: 'PASS — usa @web/, @trifold/shared, @trifold/ai consistentemente'

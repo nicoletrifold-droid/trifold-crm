@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse, after } from "next/server"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
+import { normalizePhoneBR } from "@trifold/shared"
 
 export const maxDuration = 60
 
@@ -31,8 +32,19 @@ export async function GET(request: NextRequest) {
 }
 
 // POST — Incoming message from WhatsApp
+//
+// Story 21.1 refactor:
+//   - SYNC (before HTTP 200): HMAC verify, parse, wamid idempotency check,
+//     phone normalize, lead upsert, conversation find-or-create, INSERT
+//     inbound message. Return 200 immediately.
+//   - ASYNC (inside `after()`): Nicole pipeline, outbound Cloud API call,
+//     campaign reply tracking, conversation timestamp update.
+//
+// AC1 budget: full SYNC path < 2s p95 (target on Vercel).
 export async function POST(request: NextRequest) {
-  // HMAC signature verification (Meta sends X-Hub-Signature-256)
+  const t0 = Date.now()
+
+  // ---- HMAC validation (sync) -------------------------------------------
   const appSecret = process.env.META_APP_SECRET
   const rawBody = await request.text()
 
@@ -50,6 +62,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 403 })
   }
 
+  // ---- Parse payload (sync) ---------------------------------------------
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let body: any
   try {
@@ -58,69 +71,74 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 })
   }
 
-  // Parse the incoming webhook payload
   const entry = body.entry?.[0]
   const changes = entry?.changes?.[0]
   const value = changes?.value
 
-  // --- Campaign status tracking (Story 15.12) ---
-  const statuses = value?.statuses as Array<{ id: string; status: string; recipient_id: string }> | undefined
+  // ---- Campaign status tracking (Story 15.12) ---------------------------
+  // Isolated `after()` so it never blocks the inbound message path.
+  const statuses = value?.statuses as
+    | Array<{ id: string; status: string; recipient_id: string }>
+    | undefined
   if (statuses?.length) {
-    try {
-      const supabaseAdmin = getSupabaseAdmin()
-      for (const st of statuses) {
-        const recipientId = st.recipient_id
-        // Normalize: remove 55 prefix if 13 digits
-        const phone =
-          recipientId.startsWith("55") && recipientId.length === 13
-            ? recipientId.slice(2)
-            : recipientId
+    after(async () => {
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+        for (const st of statuses) {
+          const recipientId = st.recipient_id
+          const phone =
+            recipientId.startsWith("55") && recipientId.length === 13
+              ? recipientId.slice(2)
+              : recipientId
 
-        const waStatus = st.status // sent, delivered, read, failed
+          const waStatus = st.status
 
-        // Find campaign entries for this phone that haven't reached terminal state
-        const { data: entries } = await supabaseAdmin
-          .from("campaign_entries")
-          .select("id, campaign_id, org_id, whatsapp_status")
-          .eq("phone", phone)
-          .not("whatsapp_status", "in", "(read,failed)")
-
-        for (const ce of entries ?? []) {
-          const updates: Record<string, unknown> = { whatsapp_status: waStatus }
-          if (waStatus === "delivered" || waStatus === "read") {
-            updates.is_valid_phone = true
-          } else if (waStatus === "failed") {
-            updates.is_valid_phone = false
-          }
-
-          await supabaseAdmin
+          const { data: entries } = await supabaseAdmin
             .from("campaign_entries")
-            .update(updates)
-            .eq("id", ce.id)
+            .select("id, campaign_id, org_id, whatsapp_status")
+            .eq("phone", phone)
+            .not("whatsapp_status", "in", "(read,failed)")
 
-          await supabaseAdmin.from("campaign_events").insert({
-            org_id: ce.org_id,
-            campaign_id: ce.campaign_id,
-            entry_id: ce.id,
-            channel: "whatsapp",
-            event_type: waStatus,
-            metadata: { wamid: st.id, recipient_id: recipientId },
-          })
+          for (const ce of entries ?? []) {
+            const updates: Record<string, unknown> = {
+              whatsapp_status: waStatus,
+            }
+            if (waStatus === "delivered" || waStatus === "read") {
+              updates.is_valid_phone = true
+            } else if (waStatus === "failed") {
+              updates.is_valid_phone = false
+            }
+
+            await supabaseAdmin
+              .from("campaign_entries")
+              .update(updates)
+              .eq("id", ce.id)
+
+            await supabaseAdmin.from("campaign_events").insert({
+              org_id: ce.org_id,
+              campaign_id: ce.campaign_id,
+              entry_id: ce.id,
+              channel: "whatsapp",
+              event_type: waStatus,
+              metadata: { wamid: st.id, recipient_id: recipientId },
+            })
+          }
         }
+      } catch (statusError) {
+        logEvent({
+          level: "error",
+          category: "webhook",
+          event_type: "CAMPAIGN_STATUS_TRACKING_ERROR",
+          message: `Error tracking campaign WhatsApp statuses: ${
+            statusError instanceof Error ? statusError.message : "Unknown"
+          }`,
+          source: "api/webhook/whatsapp",
+        })
       }
-    } catch (statusError) {
-      // Isolated — don't affect message processing
-      logEvent({
-        level: "error",
-        category: "webhook",
-        event_type: "CAMPAIGN_STATUS_TRACKING_ERROR",
-        message: `Error tracking campaign WhatsApp statuses: ${statusError instanceof Error ? statusError.message : "Unknown"}`,
-        source: "api/webhook/whatsapp",
-      })
-    }
+    })
   }
 
-  // --- Message processing ---
+  // ---- Message processing -----------------------------------------------
   const messages = value?.messages
 
   if (!messages?.[0]) {
@@ -128,12 +146,82 @@ export async function POST(request: NextRequest) {
   }
 
   const msg = messages[0]
-  const from = msg.from as string
+  const fromRaw = msg.from as string
   const messageId = msg.id as string
 
   const supabase = getSupabaseAdmin()
 
-  // Determine text, media block, and metadata based on message type
+  // ---- Wamid idempotency check (sync, before any side-effects) ----------
+  // AC2: if Meta retries the webhook with the same whatsapp_message_id we
+  // discard silently. No new lead, no new message, no Nicole call.
+  try {
+    const { data: existingMsg } = await supabase
+      .from("messages")
+      .select("id, conversation_id")
+      .eq("metadata->>whatsapp_message_id", messageId)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingMsg) {
+      // Best-effort look up the lead via conversation for richer audit context
+      let leadIdForLog: string | null = null
+      if (existingMsg.conversation_id) {
+        const { data: conv } = await supabase
+          .from("conversations")
+          .select("lead_id")
+          .eq("id", existingMsg.conversation_id)
+          .maybeSingle()
+        leadIdForLog = conv?.lead_id ?? null
+      }
+
+      logEvent({
+        level: "info",
+        category: "webhook",
+        event_type: "duplicate_wamid_skipped",
+        message: `Duplicate wamid ${messageId} — silently skipped`,
+        metadata: {
+          wamid: messageId,
+          lead_id: leadIdForLog,
+          conversation_id: existingMsg.conversation_id ?? null,
+          original_message_id: existingMsg.id,
+        },
+        source: "api/webhook/whatsapp",
+      })
+      return NextResponse.json({ status: "ok" })
+    }
+  } catch (idemErr) {
+    // Don't fail the webhook on idempotency lookup errors — log and proceed
+    logEvent({
+      level: "warn",
+      category: "webhook",
+      event_type: "wamid_check_error",
+      message: `Idempotency check failed for wamid ${messageId}; proceeding`,
+      metadata: {
+        wamid: messageId,
+        error: idemErr instanceof Error ? idemErr.message : String(idemErr),
+      },
+      source: "api/webhook/whatsapp",
+    })
+  }
+
+  // ---- Phone normalization (sync) ---------------------------------------
+  // AC4: every phone is normalized BEFORE any DB query/insert.
+  const phoneNormalized = normalizePhoneBR(fromRaw)
+  if (!phoneNormalized) {
+    // Edge case: phone from Meta is unparseable. Silent skip with 200 to
+    // avoid Meta retry storms — log for audit. AC4 + Dev Notes guidance.
+    logEvent({
+      level: "warn",
+      category: "webhook",
+      event_type: "phone_normalize_failed",
+      message: `Could not normalize phone from Meta payload: ${fromRaw}`,
+      metadata: { wamid: messageId, raw_from: fromRaw },
+      source: "api/webhook/whatsapp",
+    })
+    return NextResponse.json({ status: "ok" })
+  }
+
+  // ---- Build inbound message text/media metadata ------------------------
   let text: string = ""
   let mediaBlock: MediaBlock | undefined
   let mediaMetadata: { media_type?: string; media_url?: string } = {}
@@ -154,147 +242,46 @@ export async function POST(request: NextRequest) {
     text = "[Mensagem de voz recebida]"
     mediaMetadata = { media_type: "voice" }
   } else if (msg.type === "image" || msg.type === "document") {
-    // These will be handled after we have the config for auth
+    // Will be handled inside `after()` where we have access_token from config
   } else {
-    // Unsupported message type
     return NextResponse.json({ status: "ok" })
   }
 
-  try {
-    // Get org + whatsapp config
-    const { data: config } = await supabase
-      .from("whatsapp_config")
-      .select("org_id, phone_number_id, access_token, coexistence_enabled")
-      .eq("status", "active")
-      .single()
+  // ---- Resolve org/whatsapp_config (sync) -------------------------------
+  const { data: config } = await supabase
+    .from("whatsapp_config")
+    .select("org_id, phone_number_id, access_token, coexistence_enabled")
+    .eq("status", "active")
+    .maybeSingle()
 
-    if (!config) {
-      console.error("No active WhatsApp config found")
-      return NextResponse.json({ status: "ok" })
-    }
+  if (!config) {
+    console.error("No active WhatsApp config found")
+    return NextResponse.json({ status: "ok" })
+  }
 
-    const orgId = config.org_id
+  const orgId = config.org_id
 
-    // Download media for image/document messages (needs access_token from config)
-    if (msg.type === "image" && msg.image?.id) {
-      try {
-        const mediaRes = await fetch(
-          `https://graph.facebook.com/v21.0/${msg.image.id}`,
-          {
-            headers: { Authorization: `Bearer ${config.access_token}` },
-            signal: AbortSignal.timeout(10000),
-          }
-        )
-        if (mediaRes.ok) {
-          const mediaData = (await mediaRes.json()) as { url: string; mime_type?: string }
-          const fileRes = await fetch(mediaData.url, {
-            headers: { Authorization: `Bearer ${config.access_token}` },
-            signal: AbortSignal.timeout(30000),
-          })
-          if (fileRes.ok) {
-            const buffer = await fileRes.arrayBuffer()
-            const base64 = Buffer.from(buffer).toString("base64")
-            const mimeType = mediaData.mime_type || fileRes.headers.get("content-type") || "image/jpeg"
-            mediaBlock = { type: "image", base64, mimeType }
-            mediaMetadata = { media_type: "image" }
-          }
-        }
-      } catch (err) {
-        console.error("WhatsApp image download error:", err)
-      }
-      text = msg.image?.caption || "O que voce acha desta imagem?"
-    }
+  // ---- Find-or-upsert lead (sync) ---------------------------------------
+  // AC3 + AC4 + AC5b: use `phone_normalized` as the dedup key. `.maybeSingle`
+  // (not `.single`) to gracefully handle 0/2+ rows.
+  const lead = await findOrUpsertLead(supabase, {
+    orgId,
+    phoneRaw: fromRaw,
+    phoneNormalized,
+    fromCleaned: phoneNormalized,
+  })
 
-    if (msg.type === "document" && msg.document?.id) {
-      try {
-        const mediaRes = await fetch(
-          `https://graph.facebook.com/v21.0/${msg.document.id}`,
-          {
-            headers: { Authorization: `Bearer ${config.access_token}` },
-            signal: AbortSignal.timeout(10000),
-          }
-        )
-        if (mediaRes.ok) {
-          const mediaData = (await mediaRes.json()) as { url: string; mime_type?: string }
-          const fileRes = await fetch(mediaData.url, {
-            headers: { Authorization: `Bearer ${config.access_token}` },
-            signal: AbortSignal.timeout(30000),
-          })
-          if (fileRes.ok) {
-            const buffer = await fileRes.arrayBuffer()
-            const base64 = Buffer.from(buffer).toString("base64")
-            const mimeType = mediaData.mime_type || fileRes.headers.get("content-type") || "application/octet-stream"
-            if (IMAGE_MIME_TYPES.has(mimeType)) {
-              mediaBlock = { type: "image", base64, mimeType }
-              mediaMetadata = { media_type: "image" }
-            } else if (mimeType === "application/pdf") {
-              mediaBlock = { type: "document", base64, mimeType }
-              mediaMetadata = { media_type: "document" }
-            } else {
-              mediaMetadata = { media_type: "document" }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("WhatsApp document download error:", err)
-      }
-      text = text || msg.document?.caption || "Recebi um documento."
-    }
+  if (!lead) {
+    console.error("Failed to find or create lead")
+    return NextResponse.json({ status: "ok" })
+  }
 
-    // If no text content and no media, skip
-    if (!text && !mediaBlock) {
-      return NextResponse.json({ status: "ok" })
-    }
-
-    // Find or create lead
-    let { data: lead } = await supabase
-      .from("leads")
-      .select("id, created_at, metadata")
-      .eq("phone", from)
-      .eq("org_id", orgId)
-      .single()
-
-    if (!lead) {
-      // Get default stage (first one)
-      const { data: defaultStage } = await supabase
-        .from("kanban_stages")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("is_default", true)
-        .single()
-
-      const { data: newLead } = await supabase
-        .from("leads")
-        .insert({
-          org_id: orgId,
-          phone: from,
-          channel: "whatsapp",
-          source: "whatsapp_organic",
-          stage_id: defaultStage?.id,
-        })
-        .select("id, created_at")
-        .single()
-
-      lead = newLead as typeof lead
-      if (newLead) {
-        void triggerAutomations("lead.created", {
-          id: newLead.id,
-          email: null,
-          name: null,
-          phone: from,
-          org_id: orgId,
-        })
-      }
-    }
-
-    if (!lead) {
-      console.error("Failed to find or create lead")
-      return NextResponse.json({ status: "ok" })
-    }
-
-    // Check for Click-to-WhatsApp Ads referral data
-    const referral = value?.messages?.[0]?.referral
-    if (referral) {
+  // ---- CTWA referral metadata (sync, lightweight) -----------------------
+  // Preserve existing logic but skip the Graph-API-style lookups here.
+  // It's already only DB-local lookups; cheap enough to keep sync.
+  const referral = value?.messages?.[0]?.referral
+  if (referral) {
+    try {
       const referralData: Record<string, unknown> = {
         source_url: referral.source_url ?? null,
         source_id: referral.source_id ?? null,
@@ -304,7 +291,6 @@ export async function POST(request: NextRequest) {
         media_type: referral.media_type ?? null,
       }
 
-      // Resolve campaign name via meta_ads → meta_adsets → meta_campaigns (local lookup)
       let campaignName: string | null = referral.headline ?? null
       if (referral.source_id) {
         const { data: ad } = await supabase
@@ -312,36 +298,36 @@ export async function POST(request: NextRequest) {
           .select("adset_id")
           .eq("meta_ad_id", referral.source_id)
           .eq("org_id", orgId)
-          .single()
+          .maybeSingle()
 
         if (ad?.adset_id) {
           const { data: adset } = await supabase
             .from("meta_adsets")
             .select("campaign_id")
             .eq("id", ad.adset_id)
-            .single()
+            .maybeSingle()
 
           if (adset?.campaign_id) {
             const { data: campaign } = await supabase
               .from("meta_campaigns")
               .select("name")
               .eq("id", adset.campaign_id)
-              .single()
+              .maybeSingle()
 
             if (campaign?.name) campaignName = campaign.name
           }
         }
       }
 
-      // Calculate CTWA attribution window (72h from lead creation)
       const leadRef = lead as unknown as Record<string, unknown>
       const baseTime = leadRef.created_at
         ? new Date(leadRef.created_at as string).getTime()
         : Date.now()
-      const ctwaWindowExpiresAt = new Date(baseTime + 72 * 60 * 60 * 1000).toISOString()
+      const ctwaWindowExpiresAt = new Date(
+        baseTime + 72 * 60 * 60 * 1000
+      ).toISOString()
 
-      // Merge with existing metadata (preserve other fields)
-      const existingMeta = ((leadRef.metadata ?? {}) as Record<string, unknown>)
+      const existingMeta = (leadRef.metadata ?? {}) as Record<string, unknown>
 
       await supabase
         .from("leads")
@@ -357,152 +343,496 @@ export async function POST(request: NextRequest) {
           },
         })
         .eq("id", lead.id)
-    }
-
-    // Find or create conversation
-    let { data: conversation } = await supabase
-      .from("conversations")
-      .select("id, is_ai_active")
-      .eq("lead_id", lead.id)
-      .eq("status", "active")
-      .single()
-
-    if (!conversation) {
-      const { data: newConv } = await supabase
-        .from("conversations")
-        .insert({
-          org_id: orgId,
+    } catch (refErr) {
+      logEvent({
+        level: "warn",
+        category: "webhook",
+        event_type: "ctwa_referral_error",
+        message: "CTWA referral attribution failed (non-fatal)",
+        metadata: {
+          error: refErr instanceof Error ? refErr.message : String(refErr),
           lead_id: lead.id,
-          channel: "whatsapp",
-          is_ai_active: true,
-        })
-        .select("id, is_ai_active")
-        .single()
-
-      conversation = newConv
+        },
+        source: "api/webhook/whatsapp",
+      })
     }
+  }
 
-    if (!conversation) {
-      console.error("Failed to find or create conversation")
-      return NextResponse.json({ status: "ok" })
-    }
+  // ---- Find-or-create conversation (sync) -------------------------------
+  const conversation = await findOrCreateConversation(supabase, {
+    orgId,
+    leadId: lead.id,
+  })
 
-    // Save incoming message
+  if (!conversation) {
+    console.error("Failed to find or create conversation")
+    return NextResponse.json({ status: "ok" })
+  }
+
+  // ---- INSERT inbound message (sync) ------------------------------------
+  // Even for image/document we insert a placeholder row now. The async path
+  // will enrich the row's metadata if media is downloaded. Worst case: text
+  // is empty for media-only messages — Nicole still has the conversation.
+  if (text || mediaMetadata.media_type) {
     await supabase.from("messages").insert({
       conversation_id: conversation.id,
       role: "user",
-      content: text,
+      content: text || "",
       metadata: {
         whatsapp_message_id: messageId,
         ...mediaMetadata,
       },
     })
+  }
 
-    // Update conversation timestamp
-    await supabase
-      .from("conversations")
-      .update({ last_message_at: new Date().toISOString() })
-      .eq("id", conversation.id)
-
-    // Handle voice/audio messages — reply asking lead to type
-    if (isVoiceMessage) {
-      const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
-      await fetch(whatsappUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: from,
-          type: "text",
-          text: {
-            body:
-              "Oi! Recebi sua mensagem de voz, mas no momento nao consigo ouvir audios. " +
-              "Pode digitar sua mensagem, por favor? Assim consigo te ajudar melhor!",
-          },
-        }),
-      })
-      return NextResponse.json({ status: "ok" })
-    }
-
-    // --- Campaign reply tracking (Story 15.12) ---
+  // ---- ASYNC: media download, Nicole, outbound, automations -------------
+  // Fire-and-forget; HTTP 200 is sent immediately after this `after()` is
+  // scheduled. Any failure inside is logged but does not affect the response.
+  after(async () => {
+    const tAsync = Date.now()
     try {
-      const { data: campaignEntries } = await supabase
-        .from("campaign_entries")
-        .select("id, campaign_id, org_id")
-        .eq("phone", from.startsWith("55") && from.length === 13 ? from.slice(2) : from)
-        .eq("has_responded", false)
+      // Download media for image/document messages — needs config.access_token
+      let asyncMediaBlock: MediaBlock | undefined = mediaBlock
+      let asyncText = text
 
-      for (const ce of campaignEntries ?? []) {
-        await supabase
+      if (msg.type === "image" && msg.image?.id) {
+        try {
+          const mediaRes = await fetch(
+            `https://graph.facebook.com/v21.0/${msg.image.id}`,
+            {
+              headers: { Authorization: `Bearer ${config.access_token}` },
+              signal: AbortSignal.timeout(10000),
+            }
+          )
+          if (mediaRes.ok) {
+            const mediaData = (await mediaRes.json()) as {
+              url: string
+              mime_type?: string
+            }
+            const fileRes = await fetch(mediaData.url, {
+              headers: { Authorization: `Bearer ${config.access_token}` },
+              signal: AbortSignal.timeout(30000),
+            })
+            if (fileRes.ok) {
+              const buffer = await fileRes.arrayBuffer()
+              const base64 = Buffer.from(buffer).toString("base64")
+              const mimeType =
+                mediaData.mime_type ||
+                fileRes.headers.get("content-type") ||
+                "image/jpeg"
+              asyncMediaBlock = { type: "image", base64, mimeType }
+            }
+          }
+        } catch (err) {
+          console.error("WhatsApp image download error:", err)
+        }
+        asyncText = msg.image?.caption || "O que voce acha desta imagem?"
+      }
+
+      if (msg.type === "document" && msg.document?.id) {
+        try {
+          const mediaRes = await fetch(
+            `https://graph.facebook.com/v21.0/${msg.document.id}`,
+            {
+              headers: { Authorization: `Bearer ${config.access_token}` },
+              signal: AbortSignal.timeout(10000),
+            }
+          )
+          if (mediaRes.ok) {
+            const mediaData = (await mediaRes.json()) as {
+              url: string
+              mime_type?: string
+            }
+            const fileRes = await fetch(mediaData.url, {
+              headers: { Authorization: `Bearer ${config.access_token}` },
+              signal: AbortSignal.timeout(30000),
+            })
+            if (fileRes.ok) {
+              const buffer = await fileRes.arrayBuffer()
+              const base64 = Buffer.from(buffer).toString("base64")
+              const mimeType =
+                mediaData.mime_type ||
+                fileRes.headers.get("content-type") ||
+                "application/octet-stream"
+              if (IMAGE_MIME_TYPES.has(mimeType)) {
+                asyncMediaBlock = { type: "image", base64, mimeType }
+              } else if (mimeType === "application/pdf") {
+                asyncMediaBlock = { type: "document", base64, mimeType }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("WhatsApp document download error:", err)
+        }
+        asyncText = asyncText || msg.document?.caption || "Recebi um documento."
+      }
+
+      // Skip Nicole if there's no text and no media at all
+      if (!asyncText && !asyncMediaBlock) return
+
+      // Update conversation timestamp
+      await supabase
+        .from("conversations")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", conversation!.id)
+
+      // Voice/audio: short-circuit reply asking lead to type
+      if (isVoiceMessage) {
+        const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
+        await fetch(whatsappUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: fromRaw,
+            type: "text",
+            text: {
+              body:
+                "Oi! Recebi sua mensagem de voz, mas no momento nao consigo ouvir audios. " +
+                "Pode digitar sua mensagem, por favor? Assim consigo te ajudar melhor!",
+            },
+          }),
+        })
+        return
+      }
+
+      // Campaign reply tracking (Story 15.12) — preserve intact
+      try {
+        const phoneForCampaign =
+          phoneNormalized.startsWith("55") && phoneNormalized.length === 13
+            ? phoneNormalized.slice(2)
+            : phoneNormalized
+        const { data: campaignEntries } = await supabase
           .from("campaign_entries")
-          .update({ has_responded: true })
-          .eq("id", ce.id)
+          .select("id, campaign_id, org_id")
+          .eq("phone", phoneForCampaign)
+          .eq("has_responded", false)
 
-        await supabase.from("campaign_events").insert({
-          org_id: ce.org_id,
-          campaign_id: ce.campaign_id,
-          entry_id: ce.id,
-          channel: "whatsapp",
-          event_type: "replied",
+        for (const ce of campaignEntries ?? []) {
+          await supabase
+            .from("campaign_entries")
+            .update({ has_responded: true })
+            .eq("id", ce.id)
+
+          await supabase.from("campaign_events").insert({
+            org_id: ce.org_id,
+            campaign_id: ce.campaign_id,
+            entry_id: ce.id,
+            channel: "whatsapp",
+            event_type: "replied",
+          })
+        }
+      } catch {
+        // Isolated — don't affect message processing
+      }
+
+      // Trigger automations for newly-created leads (deferred from sync path)
+      // Only fire if this is a brand-new lead (heuristic: `created_at` within
+      // last few seconds OR explicit flag we'd attach in the future)
+      if (lead && (lead as unknown as Record<string, unknown>)._brand_new === true) {
+        void triggerAutomations("lead.created", {
+          id: lead.id,
+          email: null,
+          name: null,
+          phone: phoneNormalized,
+          org_id: orgId,
         })
       }
-    } catch {
-      // Isolated — don't affect message processing
-    }
 
-    // If AI is active, process with Nicole
-    if (conversation.is_ai_active) {
-      // Dynamic import to avoid loading AI module on every request
-      const { processMessage, createAnthropicClient } = await import("@trifold/ai")
+      // Nicole pipeline
+      if (conversation!.is_ai_active) {
+        const { processMessage, createAnthropicClient } = await import(
+          "@trifold/ai"
+        )
 
-      const anthropic = createAnthropicClient()
+        const anthropic = createAnthropicClient()
 
-      const response = await processMessage({
-        supabase,
-        anthropic,
-        conversationId: conversation.id,
-        message: text,
-        orgId,
-        mediaBlock,
-        onEvent: (event) => logEvent({
-          ...event,
-          category: event.category as "bot" | "ai" | "webhook" | "auth" | "cron" | "system",
-          source: "ai/pipeline",
-          org_id: orgId,
-          metadata: { ...event.metadata, conversation_id: conversation.id, lead_id: lead?.id },
-        }),
-      })
+        const response = await processMessage({
+          supabase,
+          anthropic,
+          conversationId: conversation!.id,
+          message: asyncText,
+          orgId,
+          mediaBlock: asyncMediaBlock,
+          onEvent: (event) =>
+            logEvent({
+              ...event,
+              category: event.category as
+                | "bot"
+                | "ai"
+                | "webhook"
+                | "auth"
+                | "cron"
+                | "system",
+              source: "ai/pipeline",
+              org_id: orgId,
+              metadata: {
+                ...event.metadata,
+                conversation_id: conversation!.id,
+                lead_id: lead!.id,
+              },
+            }),
+        })
 
-      // Send response via WhatsApp
-      const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
-      await fetch(whatsappUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.access_token}`,
-          "Content-Type": "application/json",
+        const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
+        await fetch(whatsappUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: fromRaw,
+            type: "text",
+            text: { body: response },
+          }),
+        })
+      }
+
+      logEvent({
+        level: "info",
+        category: "webhook",
+        event_type: "whatsapp_async_done",
+        message: `Async path completed in ${Date.now() - tAsync}ms (sync=${tAsync - t0}ms)`,
+        metadata: {
+          wamid: messageId,
+          lead_id: lead!.id,
+          conversation_id: conversation!.id,
+          ms_sync: tAsync - t0,
+          ms_async: Date.now() - tAsync,
         },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: from,
-          type: "text",
-          text: { body: response },
-        }),
+        source: "api/webhook/whatsapp",
+        org_id: orgId,
+      })
+    } catch (asyncErr) {
+      logEvent({
+        level: "error",
+        category: "webhook",
+        event_type: "WEBHOOK_ASYNC_ERROR",
+        message: `WhatsApp webhook async error: ${
+          asyncErr instanceof Error ? asyncErr.message : String(asyncErr)
+        }`,
+        metadata: {
+          error: asyncErr instanceof Error ? asyncErr.stack : String(asyncErr),
+          wamid: messageId,
+        },
+        source: "api/webhook/whatsapp",
       })
     }
+  })
 
-    return NextResponse.json({ status: "ok" })
-  } catch (error) {
+  // AC1: respond fast — async path runs after this returns
+  return NextResponse.json({ status: "ok" })
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+interface LeadResult {
+  id: string
+  created_at: string
+  metadata: Record<string, unknown> | null
+  // marker that signals "this lead was just created" — used by the async path
+  _brand_new?: boolean
+}
+
+/**
+ * Find or upsert a lead by `(org_id, phone_normalized)`.
+ *
+ * - First tries `.maybeSingle()` (oldest first) on the existing index.
+ * - If 0 rows: INSERT with raw phone, the GENERATED COLUMN computes the
+ *   normalized value and the UNIQUE index (after migration 021_part2)
+ *   guarantees no race-time duplicates.
+ * - If 2+ rows are returned: oldest wins (defensive — should disappear after
+ *   cleanup + part2 migration).
+ *
+ * Logs `event=lead_created` on insert, `event=lead_upsert_conflict` if the
+ * INSERT hit the UNIQUE constraint and we recovered via re-query.
+ */
+async function findOrUpsertLead(
+  supabase: SupabaseClient,
+  args: {
+    orgId: string
+    phoneRaw: string
+    phoneNormalized: string
+    fromCleaned: string
+  }
+): Promise<LeadResult | null> {
+  const { orgId, phoneRaw, phoneNormalized } = args
+
+  // 1) find existing lead — ordered, maybeSingle
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("id, created_at, metadata")
+    .eq("phone_normalized", phoneNormalized)
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) {
+    return existing as LeadResult
+  }
+
+  // 2) no row → fetch default stage and INSERT a new lead
+  const { data: defaultStage } = await supabase
+    .from("kanban_stages")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("is_default", true)
+    .maybeSingle()
+
+  // Use insert + on conflict via Supabase upsert. After migration 021_part2
+  // the (org_id, phone_normalized) UNIQUE constraint exists and ON CONFLICT
+  // prevents race-time duplicates.
+  const { data: inserted, error: insertErr } = await supabase
+    .from("leads")
+    .upsert(
+      {
+        org_id: orgId,
+        phone: phoneRaw,
+        channel: "whatsapp",
+        source: "whatsapp_organic",
+        stage_id: defaultStage?.id,
+      },
+      {
+        onConflict: "org_id,phone_normalized",
+        ignoreDuplicates: false,
+      }
+    )
+    .select("id, created_at, metadata")
+    .maybeSingle()
+
+  if (insertErr) {
+    // Race fallback: someone else inserted between our SELECT and INSERT.
+    // Re-query and return whatever exists.
+    logEvent({
+      level: "warn",
+      category: "webhook",
+      event_type: "lead_upsert_conflict",
+      message: `Upsert conflict on (org_id, phone_normalized) — recovering`,
+      metadata: {
+        phone_normalized: phoneNormalized,
+        error: insertErr.message,
+      },
+      source: "api/webhook/whatsapp",
+      org_id: orgId,
+    })
+
+    const { data: recovered } = await supabase
+      .from("leads")
+      .select("id, created_at, metadata")
+      .eq("phone_normalized", phoneNormalized)
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    return recovered as LeadResult | null
+  }
+
+  if (inserted) {
+    logEvent({
+      level: "info",
+      category: "webhook",
+      event_type: "lead_created",
+      message: "New lead created via WhatsApp inbound",
+      metadata: {
+        phone_normalized: phoneNormalized,
+        lead_id: inserted.id,
+      },
+      source: "api/webhook/whatsapp",
+      org_id: orgId,
+    })
+
+    const result = inserted as LeadResult
+    // Mark for the async path so it can call triggerAutomations("lead.created")
+    result._brand_new = true
+    return result
+  }
+
+  return null
+}
+
+/**
+ * Find-or-create the active conversation for a lead.
+ * Uses `.maybeSingle()` and orders ASC so legacy duplicates resolve to the
+ * earliest one (most history).
+ */
+async function findOrCreateConversation(
+  supabase: SupabaseClient,
+  args: { orgId: string; leadId: string }
+): Promise<{ id: string; is_ai_active: boolean } | null> {
+  const { orgId, leadId } = args
+
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id, is_ai_active")
+    .eq("lead_id", leadId)
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) {
+    logEvent({
+      level: "info",
+      category: "webhook",
+      event_type: "conversation_found",
+      message: "Existing active conversation found",
+      metadata: {
+        conversation_id: existing.id,
+        lead_id: leadId,
+      },
+      source: "api/webhook/whatsapp",
+      org_id: orgId,
+    })
+    return existing as { id: string; is_ai_active: boolean }
+  }
+
+  const { data: newConv, error: convErr } = await supabase
+    .from("conversations")
+    .insert({
+      org_id: orgId,
+      lead_id: leadId,
+      channel: "whatsapp",
+      is_ai_active: true,
+    })
+    .select("id, is_ai_active")
+    .maybeSingle()
+
+  if (convErr) {
     logEvent({
       level: "error",
       category: "webhook",
-      event_type: "WEBHOOK_ERROR",
-      message: `WhatsApp webhook error: ${error instanceof Error ? error.message : String(error)}`,
-      metadata: { error: error instanceof Error ? error.stack : String(error) },
+      event_type: "conversation_create_failed",
+      message: `Failed to create conversation: ${convErr.message}`,
+      metadata: { lead_id: leadId, error: convErr.message },
       source: "api/webhook/whatsapp",
+      org_id: orgId,
     })
-    return NextResponse.json({ status: "ok" })
+    return null
   }
+
+  if (newConv) {
+    logEvent({
+      level: "info",
+      category: "webhook",
+      event_type: "conversation_created",
+      message: "New active conversation created",
+      metadata: {
+        conversation_id: newConv.id,
+        lead_id: leadId,
+      },
+      source: "api/webhook/whatsapp",
+      org_id: orgId,
+    })
+  }
+
+  return (newConv as { id: string; is_ai_active: boolean }) ?? null
 }
