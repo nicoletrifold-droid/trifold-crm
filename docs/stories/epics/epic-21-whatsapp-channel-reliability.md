@@ -13,7 +13,7 @@ objetivo_negocio:
 depends_on:
   - Story 3.7 (WhatsApp Cloud API adapter — base do webhook)
   - Story 15.12 (campaign status tracking no mesmo webhook)
-stories_planned: [21.1]
+stories_planned: [21.1, 21.2, 21.3]
 ---
 
 # Epic 21 — WhatsApp Channel Reliability
@@ -50,6 +50,27 @@ Inclui:
 - Script de cleanup dos leads duplicados em produção
 - Utility function `normalizePhoneBR()` em `packages/shared`
 - Testes unitários: idempotência, normalização phone, find-or-create
+
+### Story 21.2 — Nicole: Lead Context Injection no System Prompt
+
+Descoberta via smoke E2E pós-deploy da 21.1. Nicole ignorava campos estruturados do lead (`name`, `source`, `qualification_status`, etc.) ao construir o system prompt — tratava cada conversa como cold start para dados de perfil. Leads vindos de campanhas (Google Forms, Meta Ads) chegavam ao WhatsApp com nome preenchido e eram recebidos com "Qual é o seu nome?".
+
+Fix: injetar bloco `<lead_context>` no pipeline antes do `memoryContext` MemPalace; adicionar `<personalization_rules>` a `buildSystemPrompt()` para guardrails de reconhecimento.
+
+Severidade: P2 (UX, não funcional crítico).
+
+### Story 21.3 — Anthropic Prompt Caching no Pipeline da Nicole
+
+Auditoria 2026-05-05 revelou zero ocorrências de `cache_control` no codebase. O system prompt da Nicole tem ~1.200–3.500 tokens por call, com ~1.000–1.500 tokens estáticos idênticos em cada invocação da mesma org (idioma, endereço sede, personality, guardrails, qualification, property presentation, visit scheduling, lembrete final).
+
+Ao habilitar prompt caching via `cache_control: { type: "ephemeral" }` no bloco estático:
+- Cache hit cobra 10% do preço dos input tokens (90% desconto)
+- TTL: 5 minutos (perfeito para conversas ativas)
+- Estimativa: -50% custo por mensagem, -40% latência em hits
+
+Implementação: `buildSystemPrompt()` passa a retornar `TextBlockParam[]` em vez de string; `anthropic.messages.create()` passa `system: array`. Blocos dinâmicos (memoryContext, propertyDataContext, dateTimeContext, flowContext, yardenGateContext) continuam sem cache.
+
+Severidade: P1 (alto ROI, zero risco funcional).
 
 ## Decisões Técnicas
 

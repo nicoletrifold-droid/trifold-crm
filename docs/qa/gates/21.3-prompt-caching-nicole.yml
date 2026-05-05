@@ -1,0 +1,233 @@
+schema: 1
+story: '21.3'
+gate: PASS_PENDING_PROD_VALIDATION
+status_reason: 'Implementation correct, type-safe, fully tested (267/267); ACs 1, 2, 7, 8 PASS via static evidence. ACs 3-6 require staging telemetry post-deploy.'
+reviewer: 'Quinn'
+updated: '2026-05-04T15:00:00Z'
+score: 92
+
+# ----------------------------------------------------------------
+# Anti-hallucination evidence — files and APIs verified to exist
+# ----------------------------------------------------------------
+verified:
+  files:
+    - path: packages/ai/src/prompts/index.ts
+      lines_checked: '1-156'
+      evidence: |
+        - buildSystemPrompt() returns Anthropic.Messages.TextBlockParam[] (line 105-142)
+        - Static block at index 0 has cache_control: { type: 'ephemeral' } (line 128)
+        - Dynamic propertyContext block (line 137-138) has NO cache_control
+        - PROMPT_CACHE_MIN_TOKENS = 1024 exported (line 29)
+        - isPromptCacheEnabled() reads ANTHROPIC_PROMPT_CACHE_ENABLED env var (line 35-39)
+        - estimateTokens() = ceil(length/4) (line 46-48)
+        - Fallback path (line 130-133): single uncached block when cacheEligible=false
+        - onWarning callback fires with code prompt_cache_skipped_too_small (line 114-120)
+        - buildSystemPromptText() helper preserves string API for non-API consumers (line 152-155)
+
+    - path: packages/ai/src/chat/pipeline.ts
+      lines_checked: '305-454, 873-932'
+      evidence: |
+        - system: systemBlocks (array) passed to anthropic.messages.create (line 403)
+        - cache_creation_input_tokens + cache_read_input_tokens extracted with ?? 0 coercion (line 414-415)
+        - CLAUDE_RESPONSE event metadata includes both cache fields (line 429-430)
+        - prompt_cache_stats event emitted with cache_hit_ratio computed (line 436-454)
+        - cache_hit_ratio formula: cacheReadTokens / cacheTotalTokens (line 417-418, divide-by-zero guarded)
+        - Dynamic suffix concatenated separately, never reaches static cacheable block (line 313-324)
+        - Internal buildSystemPrompt(config, ragContext, state, emit) returns TextBlockParam[] (line 873-932)
+        - Warning propagation: prompt_cache_skipped_too_small emitted as PipelineEvent (line 881-889)
+
+    - path: packages/ai/src/prompts/index.test.ts
+      lines_checked: '1-125'
+      evidence: |
+        - 12 tests covering: array shape, cache_control on block 0, segment presence,
+          single vs 2-block cases, token threshold, env disable, default enabled,
+          onWarning behavior, regression parity via buildSystemPromptText, estimateTokens
+
+    - path: scripts/seed-prompts.ts
+      lines_checked: '10, 84'
+      evidence: |
+        - Imports buildSystemPromptText (string variant), not buildSystemPrompt (array)
+        - Preserves agent_config.personality_prompt column type contract
+
+  sdk_contract:
+    package: '@anthropic-ai/sdk'
+    version: '0.52.0'
+    types_verified:
+      - path: 'node_modules/.pnpm/@anthropic-ai+sdk@0.52.0/.../resources/messages/messages.d.ts'
+      - 'TextBlockParam (line 424) — official type, supports cache_control'
+      - 'CacheControlEphemeral exported as named type (line 1261)'
+      - 'system?: string | Array<TextBlockParam> (line 917) — array form accepted'
+      - 'Usage.cache_creation_input_tokens: number | null (line 276)'
+      - 'Usage.cache_read_input_tokens: number | null (line 280)'
+    constitution_article_iv: 'PASS — no invented APIs'
+
+  test_run:
+    command: 'pnpm vitest run packages/ai/src/prompts/index.test.ts'
+    result: '12/12 PASS, 133ms'
+  full_suite:
+    command: 'pnpm test'
+    result: '267/267 PASS across 16 files, 446ms'
+  typecheck:
+    command: 'pnpm type-check'
+    result: '8/8 packages success, 0 errors (FULL TURBO cache hit)'
+
+# ----------------------------------------------------------------
+# AC status
+# ----------------------------------------------------------------
+acceptance_criteria:
+  - ac: 1
+    description: 'buildSystemPrompt() returns TextBlockParam[] with cacheable static block'
+    status: PASS
+    evidence: 'index.ts:105-142; tests 1-5 in index.test.ts'
+  - ac: 2
+    description: 'anthropic.messages.create accepts array system without TS error'
+    status: PASS
+    evidence: 'pipeline.ts:403; pnpm type-check 8/8 success'
+  - ac: 3
+    description: 'Staging: cache_creation_input_tokens > 0 on first call'
+    status: DEFER_PROD
+    evidence: 'Telemetry plumbing verified in pipeline.ts:414, 429, 447. Requires post-deploy validation.'
+  - ac: 4
+    description: 'Staging: cache_read_input_tokens > 0 on subsequent calls within 5min'
+    status: DEFER_PROD
+    evidence: 'Telemetry plumbing verified. Requires post-deploy validation.'
+  - ac: 5
+    description: 'Latency reduction >= 20% between miss and hit'
+    status: DEFER_PROD
+    evidence: 'response_time_ms already logged. Requires comparative measurement post-deploy.'
+  - ac: 6
+    description: 'Cost reduction >= 30% in conversations with >= 3 turns within 5min'
+    status: DEFER_PROD
+    evidence: 'Baseline SQL queries documented in story Dev Notes. Requires 24h+ traffic post-deploy.'
+  - ac: 7
+    description: 'Zero functional regression'
+    status: PASS
+    evidence: '267/267 tests pass; buildSystemPromptText parity confirmed via tests 10-11'
+  - ac: 8
+    description: 'New prompt_cache_stats event emitted'
+    status: PASS
+    evidence: 'pipeline.ts:436-454 — emits with cache_creation_input_tokens, cache_read_input_tokens, total_input_tokens, cache_hit_ratio'
+
+# ----------------------------------------------------------------
+# Issues by severity
+# ----------------------------------------------------------------
+top_issues:
+  - id: 'PERF-001'
+    severity: medium
+    finding: |
+      Historical ragContext duplication preserved (pipeline.ts:879-890 + 916-922).
+      The original code appended ragContext twice — once formatted by
+      buildPromptFromCode as "CONTEXTO DA BASE DE CONHECIMENTO", and once raw at
+      the end. Dev intentionally preserved this for AC 7 (zero regression).
+      Result: when ragContext is non-empty, those tokens are sent ~2x → extra
+      input cost, partially offsetting cache savings.
+    suggested_action: |
+      Open follow-up tech-debt story to deduplicate ragContext after Story 21.3
+      cache validation in production. Recommended: emit single dynamic block
+      containing only the formatted version, drop the raw append. Would require
+      its own regression suite to confirm Nicole behavior parity.
+    blocks_release: false
+
+  - id: 'TEST-001'
+    severity: low
+    finding: |
+      No integration test mocks anthropic.messages.create to assert that
+      `system` payload is actually an array with cache_control on block[0]
+      (Dev Notes Testing section explicitly recommended this in story line 307).
+      Unit tests verify buildSystemPrompt output, but the wire-level contract
+      between pipeline and SDK is only covered by typecheck.
+    suggested_action: |
+      Add a minimal vi.fn() spy on anthropic.messages.create in a pipeline
+      integration test asserting the call argument shape. Low priority because
+      typecheck + production telemetry will catch deviations.
+    blocks_release: false
+
+  - id: 'MNT-001'
+    severity: low
+    finding: |
+      The internal buildSystemPrompt() in pipeline.ts (line 873) shadows the
+      same name imported as buildPromptFromCode from ../prompts. While the
+      alias on import (line 31) avoids collision at the call site, the parallel
+      function names increase cognitive load when grepping.
+    suggested_action: |
+      Consider renaming the pipeline internal function to e.g.
+      `assembleSystemBlocks()` to make the layering explicit. Cosmetic.
+    blocks_release: false
+
+  - id: 'DOC-001'
+    severity: low
+    finding: |
+      Pre-existing global lint failures (6 errors in @trifold/web/dashboard
+      sistema/emails/*) flagged by Dev as not introduced by this story.
+      Confirmed: errors are react-hooks/set-state-in-effect rule violations
+      in unrelated files (Story 21.3 only touches packages/ai + scripts).
+    suggested_action: |
+      Track in separate tech-debt story for the web team. Non-blocking for 21.3.
+    blocks_release: false
+
+# ----------------------------------------------------------------
+# NFR scoring
+# ----------------------------------------------------------------
+nfr:
+  security:
+    score: 100
+    notes: 'No new user input surfaces; mutation is on outbound API call shape only. No PII implications.'
+  performance:
+    score: 90
+    notes: |
+      Primary subject of the story. Cache eligibility confirmed (5222 tokens,
+      5x above 1024 minimum). Expected -90% cost on cached tokens, -25% latency
+      on hits. Final score deferred to post-deploy telemetry. -10 for
+      ragContext duplication mitigating savings on RAG-heavy turns.
+  reliability:
+    score: 100
+    notes: |
+      Rollback via env var ANTHROPIC_PROMPT_CACHE_ENABLED=false (no redeploy).
+      Fallback path for blocks below 1024 tokens (unlikely but defensive).
+      ?? 0 coercion on nullable cache fields — robust against older models.
+  maintainability:
+    score: 90
+    notes: |
+      Helpers separated cleanly (buildSystemPromptText, estimateTokens,
+      isPromptCacheEnabled, PROMPT_CACHE_MIN_TOKENS exported). JSDoc on every
+      exported symbol. Coordination note for Story 21.2 inline at index.ts:99-101
+      and pipeline.ts:308-311. -10 for function name shadowing (MNT-001).
+  observability:
+    score: 100
+    notes: |
+      New prompt_cache_stats event with cache_hit_ratio. CLAUDE_RESPONSE
+      extended without breaking existing consumers. Three-state message
+      (prompt_cache_hit / prompt_cache_miss_or_create / prompt_cache_unused)
+      enables clean alarm rules downstream.
+
+overall_score: 92
+
+# ----------------------------------------------------------------
+# Constitution check
+# ----------------------------------------------------------------
+constitution:
+  article_iii_story_driven: PASS
+  article_iv_no_invention: PASS
+  article_v_quality_first: PASS
+
+# ----------------------------------------------------------------
+# Decision
+# ----------------------------------------------------------------
+recommendation: |
+  Approved for staging deploy via @devops. Post-deploy validation required:
+
+  Within 24h of deploy, @qa to run baseline SQL queries (documented in story
+  Dev Notes line 388-416) and confirm:
+    1. cache_creation_input_tokens > 0 on first calls per agent_config
+    2. cache_read_input_tokens > 0 on subsequent calls within 5min TTL
+    3. avg_cache_hit_ratio >= 0.5 across CLAUDE_RESPONSE events
+    4. avg_response_time_ms reduction >= 20% between miss and hit calls
+    5. avg_cost_per_call (computed via cache pricing formula) reduction >= 30%
+
+  If any post-deploy assertion fails, revert via env flag
+  ANTHROPIC_PROMPT_CACHE_ENABLED=false (no redeploy needed) and reopen story.
+
+next_agent: '@devops'
+next_action: '@devops *push'
+
+waiver: { active: false }

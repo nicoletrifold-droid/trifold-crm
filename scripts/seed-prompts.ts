@@ -7,7 +7,7 @@ import {
   VISIT_SCHEDULING_PROMPT,
   HANDOFF_SUMMARY_PROMPT,
   OFF_HOURS_PROMPT,
-  buildSystemPrompt,
+  buildSystemPromptText,
 } from "../packages/ai/src/prompts"
 
 const supabase = createClient(
@@ -79,7 +79,9 @@ async function seedPrompts() {
   }
 
   // Also update the personality_prompt in agent_config with the full built prompt
-  const fullSystemPrompt = buildSystemPrompt()
+  // Use the text helper (concatenated string) for DB persistence —
+  // the array form (with cache_control) is only used at API call time.
+  const fullSystemPrompt = buildSystemPromptText()
   const { error: configError } = await supabase
     .from("agent_config")
     .update({ personality_prompt: fullSystemPrompt })

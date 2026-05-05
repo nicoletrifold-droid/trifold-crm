@@ -302,14 +302,26 @@ export async function processMessageWithMetadata(
     ? "\n=== NO-SHOW CONTEXT ===\nEste lead faltou a uma visita agendada anteriormente. Seja empatica, NAO culpe e NAO mencione \"falta\" ou \"nao compareceu\". Pergunte naturalmente se quer remarcar: algo como \"Vi que nao conseguimos nos encontrar, quer marcar outro dia?\". Se o lead mencionar um dia, agende normalmente.\n=== END NO-SHOW CONTEXT ===\n"
     : ""
 
-  const systemPrompt =
-    buildSystemPrompt(agentConfig, ragContext, state) +
+  // Build the system prompt as Anthropic block array.
+  //
+  // - `staticBlocks` = blocos cacheáveis (8 segmentos estáticos com cache_control: ephemeral)
+  //                    + bloco RAG opcional sem cache (vindo de buildPromptFromCode).
+  // - `dynamicSuffix` = todos os contextos por-conversa (data/hora, property data,
+  //   memória do lead, no-show, flow, yarden gate). Concatenados em UM bloco
+  //   sem cache_control. Story 21.2 (lead context) deve ser incluída aqui.
+  const staticBlocks = buildSystemPrompt(agentConfig, ragContext, state, emit)
+  const dynamicSuffix =
     dateTimeContext +
     propertyDataContext +
     memoryContext +
     noShowContext +
     buildFlowContext(qualificationStep, qualificationScore, identifiedPropertyId) +
     yardenGateContext
+
+  const systemBlocks: Anthropic.Messages.TextBlockParam[] =
+    dynamicSuffix.trim().length > 0
+      ? [...staticBlocks, { type: "text", text: dynamicSuffix }]
+      : staticBlocks
 
   // 8. Build messages array and call Claude API
   const userContent: Anthropic.ContentBlockParam[] = []
@@ -388,14 +400,58 @@ export async function processMessageWithMetadata(
       model: agentConfig.model_primary,
       max_tokens: agentConfig.max_tokens,
       temperature: agentConfig.temperature,
-      system: systemPrompt,
+      system: systemBlocks,
       messages,
     },
     { timeout: 60000 }
   )
   const claudeDuration = Date.now() - claudeStart
 
-  emit({ level: "info", category: "ai", event_type: "CLAUDE_RESPONSE", message: `Claude responded in ${claudeDuration}ms`, metadata: { response_time_ms: claudeDuration, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens, model: agentConfig.model_primary } })
+  // Prompt caching telemetry (Story 21.3) — Anthropic Usage exposes:
+  //   - cache_creation_input_tokens: tokens written to cache (first call)
+  //   - cache_read_input_tokens:     tokens read from cache (subsequent calls in TTL)
+  // Both are nullable in older models / unsupported configs → coerce to 0.
+  const cacheCreationTokens = response.usage.cache_creation_input_tokens ?? 0
+  const cacheReadTokens = response.usage.cache_read_input_tokens ?? 0
+  const cacheTotalTokens = cacheCreationTokens + cacheReadTokens
+  const cacheHitRatio =
+    cacheTotalTokens > 0 ? cacheReadTokens / cacheTotalTokens : 0
+
+  emit({
+    level: "info",
+    category: "ai",
+    event_type: "CLAUDE_RESPONSE",
+    message: `Claude responded in ${claudeDuration}ms`,
+    metadata: {
+      response_time_ms: claudeDuration,
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+      cache_creation_input_tokens: cacheCreationTokens,
+      cache_read_input_tokens: cacheReadTokens,
+      model: agentConfig.model_primary,
+    },
+  })
+
+  // Dedicated cache stats event for cost / hit-ratio dashboards.
+  emit({
+    level: "info",
+    category: "ai",
+    event_type: "prompt_cache_stats",
+    message:
+      cacheReadTokens > 0
+        ? "prompt_cache_hit"
+        : cacheCreationTokens > 0
+          ? "prompt_cache_miss_or_create"
+          : "prompt_cache_unused",
+    metadata: {
+      cache_creation_input_tokens: cacheCreationTokens,
+      cache_read_input_tokens: cacheReadTokens,
+      total_input_tokens: response.usage.input_tokens,
+      cache_hit_ratio: cacheHitRatio,
+      output_tokens: response.usage.output_tokens,
+      model: agentConfig.model_primary,
+    },
+  })
 
   const assistantMessage =
     response.content[0].type === "text" ? response.content[0].text : ""
@@ -801,48 +857,78 @@ async function loadProperties(
   })
 }
 
+/**
+ * Builds the system prompt for Anthropic API as an array of TextBlockParam.
+ *
+ * Returns:
+ *  - Block 1 (cacheable, cache_control: ephemeral): the 8 static segments from
+ *    `buildPromptFromCode()` — IDIOMA + SEDE + PERSONALITY + GUARDRAILS +
+ *    QUALIFICATION + PROPERTY_PRESENTATION + VISIT_SCHEDULING + LEMBRETE FINAL.
+ *  - Block 2 (dynamic, no cache): RAG context block (if ragContext present) +
+ *    CONVERSATION CONTEXT (qualification step, collected data, visit_proposed).
+ *
+ * The caller then appends an extra dynamic block for per-conversation contexts
+ * (date/time, property data, memory, no-show, flow, yarden gate).
+ */
 function buildSystemPrompt(
-  config: AgentConfig,
+  _config: AgentConfig,
   ragContext: string,
-  state: ConversationState | null
-): string {
-  const parts: string[] = []
+  state: ConversationState | null,
+  emit: (event: PipelineEvent) => void
+): Anthropic.Messages.TextBlockParam[] {
+  // Static blocks (cacheable) + optional RAG block (uncached) come from buildPromptFromCode.
+  const promptBlocks = buildPromptFromCode(ragContext, {
+    onWarning: (warning) => {
+      emit({
+        level: "warn",
+        category: "ai",
+        event_type: warning.code,
+        message: warning.message,
+        metadata: warning.metadata,
+      })
+    },
+  })
 
-  // Personality + guardrails + qualification + property presentation + visit scheduling
-  // ALWAYS from code (not database) to ensure latest rules are applied
-  parts.push(buildPromptFromCode(ragContext))
-
-  // Qualification context
+  // Build CONVERSATION CONTEXT (dynamic — varies per turn).
+  const convoLines: string[] = []
   if (state) {
-    parts.push("")
-    parts.push("=== CONVERSATION CONTEXT ===")
+    convoLines.push("=== CONVERSATION CONTEXT ===")
     if (state.qualification_step) {
-      parts.push(`Current qualification step: ${state.qualification_step}`)
+      convoLines.push(`Current qualification step: ${state.qualification_step}`)
     }
-    if (
-      state.collected_data &&
-      Object.keys(state.collected_data).length > 0
-    ) {
-      parts.push(
+    if (state.collected_data && Object.keys(state.collected_data).length > 0) {
+      convoLines.push(
         `Data collected so far: ${JSON.stringify(state.collected_data)}`
       )
     }
     if (state.visit_proposed) {
-      parts.push("VISITA JA AGENDADA! O lead JA confirmou dia e horario. NAO pergunte novamente quando ele quer ir. NAO pergunte dia, NAO pergunte horario. A visita esta marcada. Se ele perguntar algo, responda normalmente sem mencionar agendamento.")
-      if (state.collected_data && (state.collected_data as Record<string, unknown>).visit_availability) {
-        parts.push(`Visita confirmada: ${(state.collected_data as Record<string, unknown>).visit_availability}`)
+      convoLines.push(
+        "VISITA JA AGENDADA! O lead JA confirmou dia e horario. NAO pergunte novamente quando ele quer ir. NAO pergunte dia, NAO pergunte horario. A visita esta marcada. Se ele perguntar algo, responda normalmente sem mencionar agendamento."
+      )
+      const collected = state.collected_data as Record<string, unknown> | undefined
+      if (collected && collected.visit_availability) {
+        convoLines.push(`Visita confirmada: ${collected.visit_availability}`)
       }
     }
-    parts.push("=== END CONVERSATION CONTEXT ===")
+    convoLines.push("=== END CONVERSATION CONTEXT ===")
   }
 
-  // RAG context
-  if (ragContext) {
-    parts.push("")
-    parts.push(ragContext)
+  // Preserve legacy behavior: original code appended raw ragContext at the end
+  // in addition to the formatted CONTEXTO DA BASE DE CONHECIMENTO block already
+  // added by buildPromptFromCode. We keep this duplication to avoid functional
+  // regression (AC 7), but emit it as a dynamic block (no cache).
+  const dynamicLines: string[] = []
+  if (convoLines.length > 0) dynamicLines.push(convoLines.join("\n"))
+  if (ragContext) dynamicLines.push(ragContext)
+
+  if (dynamicLines.length === 0) return promptBlocks
+
+  const dynamicBlock: Anthropic.Messages.TextBlockParam = {
+    type: "text",
+    text: dynamicLines.join("\n\n"),
   }
 
-  return parts.join("\n")
+  return [...promptBlocks, dynamicBlock]
 }
 
 function buildFlowContext(
