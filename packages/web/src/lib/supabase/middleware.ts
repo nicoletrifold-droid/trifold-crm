@@ -66,6 +66,7 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/cliente" ||
+    pathname === "/cliente/offline" ||
     pathname.startsWith("/api/")
 
   if (isPublicRoute) {

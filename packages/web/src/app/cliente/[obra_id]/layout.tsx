@@ -1,4 +1,17 @@
+import type { Metadata } from "next"
 import { ObraTabNav } from "./_components/obra-tab-nav"
+
+export const metadata: Metadata = {
+  manifest: "/cliente-manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Minha Obra",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
+}
 
 export default async function ObraLayout({
   children,
