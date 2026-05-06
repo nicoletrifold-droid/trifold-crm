@@ -213,13 +213,28 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // Get WhatsApp config for sending templates
+      // Get WhatsApp config for sending templates.
+      // Use maybeSingle() so orgs without (or with multiple) whatsapp_config rows
+      // do not crash the entire campaign — WhatsApp is simply skipped while
+      // email/entry persistence proceed normally.
       const { data: waConfig } = await supabase
         .from("whatsapp_config")
         .select("phone_number_id, access_token")
         .eq("org_id", campaign.org_id)
         .eq("status", "active")
-        .single()
+        .maybeSingle()
+
+      if (!waConfig) {
+        logEvent({
+          level: "info",
+          category: "cron",
+          event_type: "CAMPAIGN_POLL_WHATSAPP_NOT_CONFIGURED",
+          message: `WhatsApp não configurado para org ${campaign.org_id}`,
+          org_id: campaign.org_id,
+          metadata: { campaignId: campaign.id },
+          source: "api/cron/campaign-poll",
+        })
+      }
 
       let lastResponseTime: string | null = null
 
