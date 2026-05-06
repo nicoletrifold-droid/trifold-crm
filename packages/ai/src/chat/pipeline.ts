@@ -257,14 +257,24 @@ export async function processMessageWithMetadata(
   // 6.5 Get current lead summary + stage for context
   let currentSummary: string | null = null
   let leadStageId: string | null = null
+  let leadName: string | null = null
+  let leadSource: string | null = null
+  let leadQualStatus: string | null = null
+  let leadUtmCampaign: string | null = null
+  let leadUtmSource: string | null = null
   if (conversation?.lead_id) {
     const { data: leadData } = await supabase
       .from("leads")
-      .select("ai_summary, stage_id")
+      .select("ai_summary, stage_id, name, source, qualification_status, utm_source, utm_campaign")
       .eq("id", conversation.lead_id)
       .single()
     currentSummary = leadData?.ai_summary ?? null
     leadStageId = leadData?.stage_id ?? null
+    leadName = leadData?.name ?? null
+    leadSource = leadData?.source ?? null
+    leadQualStatus = leadData?.qualification_status ?? null
+    leadUtmCampaign = leadData?.utm_campaign ?? null
+    leadUtmSource = leadData?.utm_source ?? null
   }
 
   // 7. Build system prompt with flow context + datetime + memory
@@ -297,6 +307,17 @@ export async function processMessageWithMetadata(
     }
   }
 
+  // Lead context — inject known fields so Nicole never re-asks them (Story 21.2)
+  const leadContext = conversation?.lead_id
+    ? buildLeadContext({
+        name: leadName,
+        source: leadSource,
+        qualificationStatus: leadQualStatus,
+        utmCampaign: leadUtmCampaign,
+        utmSource: leadUtmSource,
+      })
+    : ""
+
   // No-Show context — empathetic re-engagement
   const noShowContext = leadStageId === STAGE_IDS.no_show
     ? "\n=== NO-SHOW CONTEXT ===\nEste lead faltou a uma visita agendada anteriormente. Seja empatica, NAO culpe e NAO mencione \"falta\" ou \"nao compareceu\". Pergunte naturalmente se quer remarcar: algo como \"Vi que nao conseguimos nos encontrar, quer marcar outro dia?\". Se o lead mencionar um dia, agende normalmente.\n=== END NO-SHOW CONTEXT ===\n"
@@ -313,6 +334,7 @@ export async function processMessageWithMetadata(
   const dynamicSuffix =
     dateTimeContext +
     propertyDataContext +
+    leadContext +
     memoryContext +
     noShowContext +
     buildFlowContext(qualificationStep, qualificationScore, identifiedPropertyId) +
@@ -929,6 +951,36 @@ function buildSystemPrompt(
   }
 
   return [...promptBlocks, dynamicBlock]
+}
+
+function buildLeadContext(params: {
+  name: string | null
+  source: string | null
+  qualificationStatus: string | null
+  utmCampaign: string | null
+  utmSource: string | null
+}): string {
+  const lines: string[] = []
+  if (params.name) lines.push(`Nome: ${params.name}`)
+  if (params.source) lines.push(`Fonte: ${params.source}`)
+  if (params.utmCampaign) lines.push(`Campanha: ${params.utmCampaign}`)
+  if (params.utmSource) lines.push(`Origem UTM: ${params.utmSource}`)
+  if (params.qualificationStatus && params.qualificationStatus !== "not_started") {
+    lines.push(`Status de qualificação: ${params.qualificationStatus}`)
+  }
+
+  if (lines.length === 0) return ""
+
+  return (
+    "\n<lead_context>\n" +
+    lines.join("\n") +
+    "\n</lead_context>\n\n" +
+    "=== PERSONALIZATION RULES ===\n" +
+    "1. Se o NOME do lead está preenchido acima, use-o e NÃO pergunte o nome novamente.\n" +
+    "2. Se a FONTE indica campanha (meta_ads, google_ads), o lead já demonstrou interesse — pule apresentações genéricas.\n" +
+    "3. NÃO repita informações que já constam no lead_context.\n" +
+    "=== END PERSONALIZATION RULES ===\n"
+  )
 }
 
 function buildFlowContext(
