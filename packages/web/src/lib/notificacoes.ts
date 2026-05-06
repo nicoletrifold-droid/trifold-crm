@@ -1,5 +1,6 @@
 import { sendEmail } from "@web/lib/email"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { sendPushToUser } from "@web/lib/server/push-service"
 
 export type EventoNotificacao =
   | "nova_foto"
@@ -21,10 +22,18 @@ const EVENTO_PREF_KEY: Record<EventoNotificacao, string> = {
   progresso: "notify_progresso",
 }
 
+const EVENTO_URL_PATH: Record<EventoNotificacao, string> = {
+  nova_foto: "/fotos",
+  novo_documento: "/documentos",
+  nova_mensagem: "/mensagens",
+  progresso: "",
+}
+
 interface ObraNotificacaoPrefs {
   user_id: string
   email_enabled: boolean
   whatsapp_enabled: boolean
+  push_enabled: boolean
   notify_nova_foto: boolean
   notify_novo_documento: boolean
   notify_nova_mensagem: boolean
@@ -59,7 +68,7 @@ export async function notifyClientes(
     const { data: prefs } = await admin
       .from("obra_notificacao_prefs")
       .select(
-        "user_id, email_enabled, whatsapp_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso, users(name, email, phone)"
+        "user_id, email_enabled, whatsapp_enabled, push_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso, users(name, email, phone)"
       )
       .in("user_id", userIds)
 
@@ -94,6 +103,14 @@ export async function notifyClientes(
         sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao, link).catch(
           (err) => console.error("[notificacoes] WhatsApp skip:", err)
         )
+      }
+
+      if (pref.push_enabled) {
+        sendPushToUser(admin, pref.user_id, {
+          title: descricao,
+          body: `Atualização em ${obraName}`,
+          url: `${appUrl}/cliente/${obraId}${EVENTO_URL_PATH[evento]}`,
+        }).catch((err) => console.error("[notificacoes] push error:", err))
       }
     }
   } catch (err) {

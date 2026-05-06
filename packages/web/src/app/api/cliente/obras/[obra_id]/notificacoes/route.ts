@@ -4,6 +4,7 @@ import { requireAuth } from "@web/lib/api-auth"
 const DEFAULT_PREFS = {
   email_enabled: true,
   whatsapp_enabled: false,
+  push_enabled: false,
   notify_nova_foto: true,
   notify_novo_documento: true,
   notify_nova_mensagem: true,
@@ -13,6 +14,7 @@ const DEFAULT_PREFS = {
 const PREF_BOOL_FIELDS = [
   "email_enabled",
   "whatsapp_enabled",
+  "push_enabled",
   "notify_nova_foto",
   "notify_novo_documento",
   "notify_nova_mensagem",
@@ -43,7 +45,7 @@ export async function GET(
   const { data: prefs } = await supabase
     .from("obra_notificacao_prefs")
     .select(
-      "email_enabled, whatsapp_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso"
+      "email_enabled, whatsapp_enabled, push_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso"
     )
     .eq("user_id", appUser.id)
     .single()
@@ -99,7 +101,7 @@ export async function PATCH(
       { onConflict: "user_id" }
     )
     .select(
-      "email_enabled, whatsapp_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso"
+      "email_enabled, whatsapp_enabled, push_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso"
     )
     .single()
 

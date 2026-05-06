@@ -6,6 +6,7 @@ import { useParams } from "next/navigation"
 interface NotifPrefs {
   email_enabled: boolean
   whatsapp_enabled: boolean
+  push_enabled: boolean
   notify_nova_foto: boolean
   notify_novo_documento: boolean
   notify_nova_mensagem: boolean
@@ -15,6 +16,7 @@ interface NotifPrefs {
 const DEFAULT_PREFS: NotifPrefs = {
   email_enabled: true,
   whatsapp_enabled: false,
+  push_enabled: false,
   notify_nova_foto: true,
   notify_novo_documento: true,
   notify_nova_mensagem: true,
@@ -162,6 +164,30 @@ export default function NotificacoesPage() {
                 </p>
               </div>
             )}
+
+            <label className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-stone-200">Notificações push</p>
+                <p className="text-xs text-stone-500">
+                  No celular, via app instalado
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={prefs.push_enabled}
+                onClick={() => toggle("push_enabled")}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors focus:outline-none ${
+                  prefs.push_enabled ? "bg-[#E8856A]" : "bg-stone-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 translate-y-0.5 transform rounded-full bg-white shadow transition-transform ${
+                    prefs.push_enabled ? "translate-x-5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </label>
           </div>
         </section>
 
