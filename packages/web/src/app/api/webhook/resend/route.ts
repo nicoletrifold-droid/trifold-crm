@@ -75,42 +75,39 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
 
   if (!RESEND_WEBHOOK_SECRET) {
-    // No secret configured: log a warning and accept (backwards-compat during deploy).
-    // Once RESEND_WEBHOOK_SECRET is set in all environments, missing-secret should be
-    // treated as a hard failure.
     logEvent({
-      level: "warn",
+      level: "error",
       category: "webhook",
       event_type: "RESEND_WEBHOOK_SECRET_MISSING",
-      message:
-        "RESEND_WEBHOOK_SECRET is not configured; accepting webhook without signature verification",
+      message: "RESEND_WEBHOOK_SECRET is not configured — rejecting webhook request",
       source: "api/webhook/resend",
     })
-  } else {
-    if (!svixId || !svixTimestamp || !svixSignature) {
-      return NextResponse.json({ error: "Missing signature headers" }, { status: 401 })
-    }
+    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 })
+  }
 
-    // Replay protection: reject timestamps older than the tolerance window.
-    const timestampSeconds = parseInt(svixTimestamp, 10)
-    if (!Number.isFinite(timestampSeconds)) {
-      return NextResponse.json({ error: "Invalid timestamp" }, { status: 401 })
-    }
-    const nowSeconds = Math.floor(Date.now() / 1000)
-    if (Math.abs(nowSeconds - timestampSeconds) > SVIX_TOLERANCE_SECONDS) {
-      return NextResponse.json({ error: "Timestamp out of tolerance" }, { status: 401 })
-    }
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return NextResponse.json({ error: "Missing signature headers" }, { status: 401 })
+  }
 
-    const valid = verifySvixSignature(
-      RESEND_WEBHOOK_SECRET,
-      svixId,
-      svixTimestamp,
-      svixSignature,
-      rawBody
-    )
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
-    }
+  // Replay protection: reject timestamps older than the tolerance window.
+  const timestampSeconds = parseInt(svixTimestamp, 10)
+  if (!Number.isFinite(timestampSeconds)) {
+    return NextResponse.json({ error: "Invalid timestamp" }, { status: 401 })
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  if (Math.abs(nowSeconds - timestampSeconds) > SVIX_TOLERANCE_SECONDS) {
+    return NextResponse.json({ error: "Timestamp out of tolerance" }, { status: 401 })
+  }
+
+  const valid = verifySvixSignature(
+    RESEND_WEBHOOK_SECRET,
+    svixId,
+    svixTimestamp,
+    svixSignature,
+    rawBody
+  )
+  if (!valid) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -2,7 +2,7 @@
 epic: 15
 story: 15.14
 title: "Hardening: RESEND_WEBHOOK_SECRET obrigatório"
-status: Ready
+status: Ready for Review
 priority: P1-ALTO
 created_at: 2026-05-05
 created_by: River (@sm)
@@ -45,13 +45,13 @@ O deploy gradual foi concluido. Esta story remove o fallback permissivo e torna 
 
 ## Acceptance Criteria
 
-- [ ] **AC1:** Quando `RESEND_WEBHOOK_SECRET` nao estiver configurado (`undefined` ou string vazia), o endpoint retorna HTTP 503 com body `{ "error": "Webhook secret not configured" }` e loga `RESEND_WEBHOOK_SECRET_MISSING` em nivel `"error"`.
+- [x] **AC1:** Quando `RESEND_WEBHOOK_SECRET` nao estiver configurado (`undefined` ou string vazia), o endpoint retorna HTTP 503 com body `{ "error": "Webhook secret not configured" }` e loga `RESEND_WEBHOOK_SECRET_MISSING` em nivel `"error"`.
 
-- [ ] **AC2:** O comportamento atual de "warn + aceitar sem verificacao" e removido integralmente — nao existe mais nenhum caminho de codigo que aceite um request sem secret configurado.
+- [x] **AC2:** O comportamento atual de "warn + aceitar sem verificacao" e removido integralmente — nao existe mais nenhum caminho de codigo que aceite um request sem secret configurado.
 
-- [ ] **AC3:** Quando `RESEND_WEBHOOK_SECRET` esta corretamente configurado, o fluxo de verificacao HMAC-SHA256 (Svix) continua identico ao implementado em 15.11 — nenhuma regressao nos paths de campanha (`entry_id`) e template (`email_log_id`).
+- [x] **AC3:** Quando `RESEND_WEBHOOK_SECRET` esta corretamente configurado, o fluxo de verificacao HMAC-SHA256 (Svix) continua identico ao implementado em 15.11 — nenhuma regressao nos paths de campanha (`entry_id`) e template (`email_log_id`).
 
-- [ ] **AC4:** `pnpm --filter @trifold/web run type-check` passa sem erros apos a alteracao.
+- [x] **AC4:** `pnpm --filter @trifold/web run type-check` passa sem erros apos a alteracao.
 
 ## Scope
 
@@ -149,26 +149,33 @@ RESEND_WEBHOOK_SECRET=whsec_...
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Substituir bloco permissivo por hard-fail 503** (AC: 1, 2)
-  - [ ] 1.1: Editar `packages/web/src/app/api/webhook/resend/route.ts` — remover o `else` e converter o bloco `if (!RESEND_WEBHOOK_SECRET)` em return 503 com log level `"error"`
-  - [ ] 1.2: Garantir que o bloco de verificacao Svix (antes no `else`) permaneca inalterado como fluxo principal apos o guard clause
+- [x] **Task 1 — Substituir bloco permissivo por hard-fail 503** (AC: 1, 2)
+  - [x] 1.1: Editar `packages/web/src/app/api/webhook/resend/route.ts` — remover o `else` e converter o bloco `if (!RESEND_WEBHOOK_SECRET)` em return 503 com log level `"error"`
+  - [x] 1.2: Garantir que o bloco de verificacao Svix (antes no `else`) permaneca inalterado como fluxo principal apos o guard clause
 
-- [ ] **Task 2 — Verificar `.env.example`** (AC: 1)
-  - [ ] 2.1: Localizar `.env.example` na raiz ou em `packages/web/`
-  - [ ] 2.2: Confirmar presenca de `RESEND_WEBHOOK_SECRET` — adicionar se ausente
+- [x] **Task 2 — Verificar `.env.example`** (AC: 1)
+  - [x] 2.1: Localizar `.env.example` na raiz ou em `packages/web/`
+  - [x] 2.2: Confirmar presenca de `RESEND_WEBHOOK_SECRET` — adicionar se ausente
 
-- [ ] **Task 3 — Type-check** (AC: 4)
-  - [ ] 3.1: Executar `pnpm --filter @trifold/web run type-check` e confirmar saida limpa
+- [x] **Task 3 — Type-check** (AC: 4)
+  - [x] 3.1: Executar `pnpm --filter @trifold/web run type-check` e confirmar saida limpa
 
-- [ ] **Task 4 — Atualizar File List da story**
+- [x] **Task 4 — Atualizar File List da story**
 
 ## File List
-
-_A ser preenchido por @dev durante a implementacao._
 
 | File | Action |
 |------|--------|
 | `packages/web/src/app/api/webhook/resend/route.ts` | Modified |
+| `.env.example` | Modified (adicionada secao `Email / Webhooks` com `RESEND_WEBHOOK_SECRET`) |
+
+### Resumo da implementacao
+
+- Removido o bloco `if/else` permissivo (warn + accept) e substituido por guard clause hard-fail que retorna `HTTP 503 { error: "Webhook secret not configured" }` e loga `RESEND_WEBHOOK_SECRET_MISSING` com `level: "error"`.
+- Bloco de verificacao Svix (headers, replay protection, HMAC-SHA256) subiu um nivel de indentacao e passou a ser o fluxo principal apos o guard. Nenhuma alteracao de logica nos paths `entry_id` (campanha) ou `email_log_id` (template).
+- Como TypeScript narrowing aplica `string` (nao mais `string | undefined`) apos o `return` do guard, a chamada `verifySvixSignature(RESEND_WEBHOOK_SECRET, ...)` permanece type-safe sem assertion.
+- `.env.example` ganhou secao `Email / Webhooks` documentando `RESEND_WEBHOOK_SECRET=whsec_` com nota de obrigatoriedade.
+- Type-check (`pnpm --filter @trifold/web run type-check`) executado com saida limpa.
 
 ## Change Log
 
@@ -176,3 +183,4 @@ _A ser preenchido por @dev durante a implementacao._
 |------|---------|-------------|--------|
 | 2026-05-05 | 1.0 | Story criada | River (@sm) |
 | 2026-05-05 | 1.1 | Validacao PO 9.5/10 — GO. Status Draft → Ready. Anti-hallucination check: todas as alegacoes tecnicas (linhas 77-88, comentario do source, dependencia 15.11 Done) verificadas contra o codigo fonte. | Pax (@po) |
+| 2026-05-05 | 1.2 | Implementacao concluida. Bloco permissivo removido; hard-fail 503 com log error em `route.ts`. `RESEND_WEBHOOK_SECRET` adicionado ao `.env.example`. Type-check PASS. Status Ready → Ready for Review. | Dex (@dev) |
