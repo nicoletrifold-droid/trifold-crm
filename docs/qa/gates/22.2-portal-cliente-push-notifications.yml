@@ -1,0 +1,47 @@
+schema: 1
+story: '22.2'
+gate: PASS
+status_reason: >
+  Todos os 10 ACs verificados. VAPID_PRIVATE_KEY exclusivo de lib/server/ — sem
+  risco de vazamento para client bundle. POST/DELETE /api/push/subscribe protegidos
+  por requireAuth() com user_id pin server-side. RLS em push_subscriptions validado.
+  Integração push em notifyClientes aditiva — email/WhatsApp intocados. sw.js com
+  5 handlers únicos, sem regressão no offline fallback (22.1). type-check PASS,
+  lint zero erros nesta story.
+reviewer: Quinn
+updated: '2026-05-06T00:00:00Z'
+top_issues:
+  - id: MNT-001
+    severity: medium
+    finding: >
+      handleActivate em push-prompt.tsx não captura erros do POST /api/push/subscribe.
+      Se a chamada falhar, a subscription existe no browser (PushManager) mas não é
+      salva no banco — estado inconsistente silencioso.
+    suggested_action: >
+      Adicionar try/catch em handleActivate; exibir feedback de erro ou retry automático
+      na próxima visita do usuário.
+  - id: TEST-001
+    severity: medium
+    finding: >
+      Nenhum teste unitário para sendPushToUser, POST/DELETE /api/push/subscribe,
+      nem para os handlers push e notificationclick do sw.js.
+    suggested_action: >
+      Adicionar testes em próximo sprint usando jest-environment-service-worker para
+      sw.js e mocks do web-push para sendPushToUser.
+  - id: MNT-002
+    severity: low
+    finding: >
+      arrayBufferToBase64 em push-prompt.tsx usa String.fromCharCode(...new Uint8Array(buffer)).
+      Seguro para chaves push (máx ~43 bytes) mas não escalável para buffers grandes.
+    suggested_action: >
+      Considerar implementação via reduce para usos futuros de base64 encoding de
+      buffers de tamanho arbitrário.
+  - id: OPS-001
+    severity: low
+    finding: >
+      webpush.setVapidDetails() é chamado no topo de push-service.ts (nível de módulo).
+      Se VAPID_* env vars estiverem ausentes, o módulo lança na inicialização.
+    suggested_action: >
+      Documentar NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e VAPID_SUBJECT como
+      variáveis obrigatórias no .env.example com instruções de geração.
+waiver: { active: false }
