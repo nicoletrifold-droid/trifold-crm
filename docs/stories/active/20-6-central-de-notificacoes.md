@@ -2,7 +2,7 @@
 epic: 20
 story: 20.6
 title: Central de Notificações do Portal do Cliente
-status: Ready
+status: InReview
 priority: P3
 created_at: 2026-05-06
 created_by: River (@sm)
@@ -55,7 +55,7 @@ informado de forma proativa.
 
 ### Preferências de Notificação
 
-- [ ] **AC1:** `GET /api/cliente/obras/[obra_id]/notificacoes` retorna as preferências do
+- [x] **AC1:** `GET /api/cliente/obras/[obra_id]/notificacoes` retorna as preferências do
   usuário autenticado:
   - Busca em `obra_notificacao_prefs` onde `user_id = appUser.id`
   - Se não existir: retorna defaults `{ email_enabled: true, whatsapp_enabled: false,
@@ -63,7 +63,7 @@ informado de forma proativa.
     notify_progresso: true }`
   - Retorna `{ prefs: ObraNotificacaoPrefs }` com 200
 
-- [ ] **AC2:** `PATCH /api/cliente/obras/[obra_id]/notificacoes` salva preferências:
+- [x] **AC2:** `PATCH /api/cliente/obras/[obra_id]/notificacoes` salva preferências:
   - Body: subset de campos (`email_enabled`, `whatsapp_enabled`, `notify_nova_foto`,
     `notify_novo_documento`, `notify_nova_mensagem`, `notify_progresso`) mais campo opcional
     `phone` (string | null)
@@ -74,7 +74,7 @@ informado de forma proativa.
   - Apenas usuário autenticado pode editar suas próprias prefs (RLS já garante; adicionar
     check `user_id = appUser.id` no servidor)
 
-- [ ] **AC3:** Página `/cliente/[obra_id]/notificacoes/page.tsx` (Client Component):
+- [x] **AC3:** Página `/cliente/[obra_id]/notificacoes/page.tsx` (Client Component):
   - Carrega prefs via `GET` ao montar
   - Exibe:
     ```
@@ -94,30 +94,30 @@ informado de forma proativa.
 
 ### Disparo de Notificações — Email
 
-- [ ] **AC4:** Email disparado quando admin faz upload de foto (se `notify_nova_foto = true`
+- [x] **AC4:** Email disparado quando admin faz upload de foto (se `notify_nova_foto = true`
   e `email_enabled = true` para o cliente):
   - Modificar `POST /api/admin/obras/[obra_id]/fotos/route.ts`
   - Após INSERT bem-sucedido: chamar `notifyClientes(supabase, obraId, 'nova_foto', obraName)`
     de forma fire-and-forget (não aguardar; não propagar erros)
 
-- [ ] **AC5:** Email disparado quando admin faz upload de documento (se `notify_novo_documento
+- [x] **AC5:** Email disparado quando admin faz upload de documento (se `notify_novo_documento
   = true` e `email_enabled = true`):
   - Modificar `POST /api/admin/obras/[obra_id]/documentos/route.ts`
   - Após INSERT bem-sucedido: chamar `notifyClientes(supabase, obraId, 'novo_documento', obraName)`
 
-- [ ] **AC6:** Email disparado quando equipe envia mensagem (se `notify_nova_mensagem = true`
+- [x] **AC6:** Email disparado quando equipe envia mensagem (se `notify_nova_mensagem = true`
   e `email_enabled = true`):
   - Modificar `POST /api/admin/obras/[obra_id]/mensagens/route.ts`
   - Após INSERT bem-sucedido: chamar `notifyClientes(supabase, obraId, 'nova_mensagem', obraName)`
 
-- [ ] **AC7:** Email disparado quando admin atualiza o progresso da obra (se `notify_progresso
+- [x] **AC7:** Email disparado quando admin atualiza o progresso da obra (se `notify_progresso
   = true` e `email_enabled = true`):
   - Modificar `PATCH /api/admin/obras/[obra_id]/route.ts`
   - Apenas disparar se `progress_pct` estiver nos campos a atualizar (ignorar edições de
     name/description/status que não incluam progresso)
   - Chamar `notifyClientes(supabase, obraId, 'progresso', obraName)`
 
-- [ ] **AC8:** Template de email com estrutura visual mínima:
+- [x] **AC8:** Template de email com estrutura visual mínima:
   - Assunto: `"Atualização na sua obra — {obraName}"`
   - Corpo HTML: logo Trifold (texto "Trifold" estilizado) + descrição do evento + link CTA
     "Ver no Portal" apontando para `${NEXT_PUBLIC_APP_URL}/cliente/{obra_id}`
@@ -125,7 +125,7 @@ informado de forma proativa.
 
 ### Disparo de Notificações — WhatsApp
 
-- [ ] **AC9:** WhatsApp disparado para clientes com `whatsapp_enabled = true` e
+- [x] **AC9:** WhatsApp disparado para clientes com `whatsapp_enabled = true` e
   `users.phone` preenchido:
   - Mensagem: `"Olá {nome}! Há uma atualização na sua obra {obraName}: {descricaoEvento}.
     Acesse o portal: {link}"`
@@ -133,14 +133,14 @@ informado de forma proativa.
     `access_token`; enviar via Graph API `v21.0`
   - `org_id` obtido internamente em `notifyClientes` via query em `obras.org_id`
 
-- [ ] **AC10:** Se WhatsApp indisponível (config ausente, erro de rede, API retorna erro):
+- [x] **AC10:** Se WhatsApp indisponível (config ausente, erro de rede, API retorna erro):
   - Capturar exceção no bloco try/catch
   - Logar no console: `[notificacoes] WhatsApp skip: {motivo}`
   - Não retornar erro; não bloquear email nem a operação admin original
 
-- [ ] **AC11:** `pnpm run type-check` passa sem erros nos arquivos novos e modificados
+- [x] **AC11:** `pnpm run type-check` passa sem erros nos arquivos novos e modificados
 
-- [ ] **AC12:** `pnpm run lint` passa sem erros nos arquivos novos e modificados
+- [x] **AC12:** `pnpm run lint` passa sem erros nos arquivos novos e modificados
 
 ## Escopo
 
@@ -516,53 +516,53 @@ packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Utility de notificação** (AC: 4, 5, 6, 7, 8, 9, 10)
-  - [ ] Criar `packages/web/src/lib/notificacoes.ts`
-  - [ ] Implementar `notifyClientes(supabase, obraId, evento, obraName)` — busca vinculos, prefs, dispara email/WhatsApp
-  - [ ] Implementar `buildEmailHtml()` — template HTML com logo Trifold e CTA "Ver no Portal"
-  - [ ] Implementar `sendWhatsApp()` — fetch Graph API v21.0 com try/catch + log silencioso
-  - [ ] Garantir que toda a função `notifyClientes` é envolta em try/catch — nunca propaga erro
-  - [ ] Usar `createAdminClient()` internamente para leitura cross-RLS de prefs
+- [x] **Task 1 — Utility de notificação** (AC: 4, 5, 6, 7, 8, 9, 10)
+  - [x] Criar `packages/web/src/lib/notificacoes.ts`
+  - [x] Implementar `notifyClientes(supabase, obraId, evento, obraName)` — busca vinculos, prefs, dispara email/WhatsApp
+  - [x] Implementar `buildEmailHtml()` — template HTML com logo Trifold e CTA "Ver no Portal"
+  - [x] Implementar `sendWhatsApp()` — fetch Graph API v21.0 com try/catch + log silencioso
+  - [x] Garantir que toda a função `notifyClientes` é envolta em try/catch — nunca propaga erro
+  - [x] Usar `createAdminClient()` internamente para leitura cross-RLS de prefs
 
-- [ ] **Task 2 — API de preferências** (AC: 1, 2)
-  - [ ] Criar `packages/web/src/app/api/cliente/obras/[obra_id]/notificacoes/route.ts`
-  - [ ] `GET`: `requireAuth()` + verificar vínculo `cliente_obras` + buscar `obra_notificacao_prefs` (retornar defaults se não existir)
-  - [ ] `PATCH`: `requireAuth()` + verificar vínculo + sanitizar campos booleanos + upsert `obra_notificacao_prefs` + retornar prefs atualizadas
-  - [ ] Se `phone` presente no body: `supabase.from('users').update({ phone }).eq('id', appUser.id)` (salva número WhatsApp do cliente)
+- [x] **Task 2 — API de preferências** (AC: 1, 2)
+  - [x] Criar `packages/web/src/app/api/cliente/obras/[obra_id]/notificacoes/route.ts`
+  - [x] `GET`: `requireAuth()` + verificar vínculo `cliente_obras` + buscar `obra_notificacao_prefs` (retornar defaults se não existir)
+  - [x] `PATCH`: `requireAuth()` + verificar vínculo + sanitizar campos booleanos + upsert `obra_notificacao_prefs` + retornar prefs atualizadas
+  - [x] Se `phone` presente no body: `supabase.from('users').update({ phone }).eq('id', appUser.id)` (salva número WhatsApp do cliente)
 
-- [ ] **Task 3 — UI de preferências** (AC: 3)
-  - [ ] Criar `packages/web/src/app/cliente/[obra_id]/notificacoes/page.tsx` (Client Component `"use client"`)
-  - [ ] Carregar prefs via `fetch GET /api/cliente/obras/${obra_id}/notificacoes` no `useEffect`
-  - [ ] Checkboxes para todos os 6 campos boolean com estado local
-  - [ ] Campo de texto para phone (visível apenas se `whatsapp_enabled = true`)
-  - [ ] Botão "Salvar preferências" → `PATCH` → feedback inline ("Salvo!" / mensagem de erro)
-  - [ ] Estado de loading durante carregamento e salvamento
+- [x] **Task 3 — UI de preferências** (AC: 3)
+  - [x] Criar `packages/web/src/app/cliente/[obra_id]/notificacoes/page.tsx` (Client Component `"use client"`)
+  - [x] Carregar prefs via `fetch GET /api/cliente/obras/${obra_id}/notificacoes` no `useEffect`
+  - [x] Checkboxes para todos os 6 campos boolean com estado local
+  - [x] Campo de texto para phone (visível apenas se `whatsapp_enabled = true`)
+  - [x] Botão "Salvar preferências" → `PATCH` → feedback inline ("Salvo!" / mensagem de erro)
+  - [x] Estado de loading durante carregamento e salvamento
 
-- [ ] **Task 4 — Integrar notify: fotos admin** (AC: 4)
-  - [ ] Modificar `POST /api/admin/obras/[obra_id]/fotos/route.ts`
-  - [ ] Após INSERT bem-sucedido: buscar `obra.name`, chamar `notifyClientes(..., 'nova_foto', obraName).catch(() => {})`
+- [x] **Task 4 — Integrar notify: fotos admin** (AC: 4)
+  - [x] Modificar `POST /api/admin/obras/[obra_id]/fotos/route.ts`
+  - [x] Após INSERT bem-sucedido: buscar `obra.name`, chamar `notifyClientes(..., 'nova_foto', obraName).catch(() => {})`
 
-- [ ] **Task 5 — Integrar notify: documentos admin** (AC: 5)
-  - [ ] Modificar `POST /api/admin/obras/[obra_id]/documentos/route.ts`
-  - [ ] Após INSERT bem-sucedido: `notifyClientes(..., 'novo_documento', obraName).catch(() => {})`
+- [x] **Task 5 — Integrar notify: documentos admin** (AC: 5)
+  - [x] Modificar `POST /api/admin/obras/[obra_id]/documentos/route.ts`
+  - [x] Após INSERT bem-sucedido: `notifyClientes(..., 'novo_documento', obraName).catch(() => {})`
 
-- [ ] **Task 6 — Integrar notify: mensagens admin** (AC: 6)
-  - [ ] Modificar `POST /api/admin/obras/[obra_id]/mensagens/route.ts`
-  - [ ] Após INSERT bem-sucedido: `notifyClientes(..., 'nova_mensagem', obraName).catch(() => {})`
+- [x] **Task 6 — Integrar notify: mensagens admin** (AC: 6)
+  - [x] Modificar `POST /api/admin/obras/[obra_id]/mensagens/route.ts`
+  - [x] Após INSERT bem-sucedido: `notifyClientes(..., 'nova_mensagem', obraName).catch(() => {})`
 
-- [ ] **Task 7 — Integrar notify: progresso admin** (AC: 7)
-  - [ ] Modificar `PATCH /api/admin/obras/[obra_id]/route.ts`
-  - [ ] Verificar se `updates.progress_pct !== undefined` antes de chamar notify
-  - [ ] `notifyClientes(..., 'progresso', obraName).catch(() => {})`
+- [x] **Task 7 — Integrar notify: progresso admin** (AC: 7)
+  - [x] Modificar `PATCH /api/admin/obras/[obra_id]/route.ts`
+  - [x] Verificar se `updates.progress_pct !== undefined` antes de chamar notify
+  - [x] `notifyClientes(..., 'progresso', obraName).catch(() => {})`
 
-- [ ] **Task 8 — Bottom tab nav: aba Notificações** (AC: 3)
-  - [ ] Modificar `packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx`
-  - [ ] Adicionar tab com ícone de sino (Bell do lucide-react) e label "Notificações"
-  - [ ] Link: `/cliente/${obra_id}/notificacoes`
+- [x] **Task 8 — Bottom tab nav: aba Notificações** (AC: 3)
+  - [x] Modificar `packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx`
+  - [x] Adicionar tab com ícone de sino (Bell do lucide-react) e label "Notificações"
+  - [x] Link: `/cliente/${obra_id}/notificacoes`
 
-- [ ] **Task 9 — Type-check e lint** (AC: 11, 12)
-  - [ ] `pnpm run type-check` → 0 erros
-  - [ ] `pnpm run lint` → 0 erros/avisos nos arquivos novos e modificados
+- [x] **Task 9 — Type-check e lint** (AC: 11, 12)
+  - [x] `pnpm run type-check` → 0 erros
+  - [x] `pnpm run lint` → 0 erros/avisos nos arquivos novos e modificados
 
 ## 🤖 CodeRabbit Integration
 
@@ -573,18 +573,18 @@ packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx
 
 ## Definition of Done
 
-- [ ] `notifyClientes()` funciona: dado `obraId` com clientes e prefs configuradas, o email é disparado
-- [ ] API GET retorna prefs reais (ou defaults) para usuário autenticado
-- [ ] API PATCH persiste as prefs em `obra_notificacao_prefs` (upsert correto)
-- [ ] UI de preferências carrega, exibe e salva via API
-- [ ] Admin faz upload de foto → cliente com prefs padrão recebe email
-- [ ] Admin faz upload de documento → cliente recebe email (se habilitado)
-- [ ] Admin envia mensagem → cliente recebe email (se habilitado)
-- [ ] Admin atualiza `progress_pct` → cliente recebe email (se habilitado)
-- [ ] WhatsApp: se `whatsapp_config` ausente ou falhar → log + skip, operação admin não afetada
-- [ ] Tab "Notificações" aparece na bottom nav do portal do cliente
-- [ ] `pnpm run type-check` passa sem erros
-- [ ] `pnpm run lint` passa sem erros
+- [x] `notifyClientes()` funciona: dado `obraId` com clientes e prefs configuradas, o email é disparado
+- [x] API GET retorna prefs reais (ou defaults) para usuário autenticado
+- [x] API PATCH persiste as prefs em `obra_notificacao_prefs` (upsert correto)
+- [x] UI de preferências carrega, exibe e salva via API
+- [x] Admin faz upload de foto → cliente com prefs padrão recebe email
+- [x] Admin faz upload de documento → cliente recebe email (se habilitado)
+- [x] Admin envia mensagem → cliente recebe email (se habilitado)
+- [x] Admin atualiza `progress_pct` → cliente recebe email (se habilitado)
+- [x] WhatsApp: se `whatsapp_config` ausente ou falhar → log + skip, operação admin não afetada
+- [x] Tab "Notificações" aparece na bottom nav do portal do cliente
+- [x] `pnpm run type-check` passa sem erros
+- [x] `pnpm run lint` passa sem erros
 
 ## File List
 
@@ -606,3 +606,4 @@ packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx
 |------|-------|-----------|
 | 2026-05-06 | River (@sm) | Story criada — Draft |
 | 2026-05-06 | Pax (@po) | Validação GO — C-001 (phone sem persistência → PATCH salva users.phone), C-002 (whatsapp_config sem org filter → filtrar por org_id da obra), C-003 (useParams para Client Component documentado) corrigidos; status → Ready |
+| 2026-05-06 | Dex (@dev) | Implementação completa — 9 tasks concluídas, 9 arquivos criados/modificados, type-check e lint passando; status → InReview |
