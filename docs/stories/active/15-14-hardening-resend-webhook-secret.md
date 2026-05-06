@@ -2,7 +2,7 @@
 epic: 15
 story: 15.14
 title: "Hardening: RESEND_WEBHOOK_SECRET obrigatório"
-status: Ready for Review
+status: Done
 priority: P1-ALTO
 created_at: 2026-05-05
 created_by: River (@sm)
