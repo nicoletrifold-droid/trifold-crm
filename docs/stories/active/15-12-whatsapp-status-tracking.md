@@ -1,7 +1,7 @@
 # Story 15.12 — WhatsApp Status Tracking no Webhook Existente
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -42,23 +42,23 @@ A Meta envia status updates no mesmo webhook do WhatsApp (`/api/webhook/whatsapp
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Processar status updates (AC1-AC7, AC9)
-  - [ ] 1.1: Editar `packages/web/src/app/api/webhook/whatsapp/route.ts`
-  - [ ] 1.2: Adicionar bloco de deteccao de `statuses` no payload (separado do bloco de messages)
-  - [ ] 1.3: Para cada status: extrair recipient_id, normalizar phone (remover 55 prefix se 13 digitos)
-  - [ ] 1.4: Buscar campaign_entries pelo phone onde whatsapp_status nao e 'read'
-  - [ ] 1.5: Atualizar whatsapp_status + is_valid_phone
-  - [ ] 1.6: Inserir campaign_events
-  - [ ] 1.7: Try/catch isolado — erros nao afetam processamento de mensagens
+- [x] Task 1: Processar status updates (AC1-AC7, AC9)
+  - [x] 1.1: Editar `packages/web/src/app/api/webhook/whatsapp/route.ts`
+  - [x] 1.2: Adicionar bloco de deteccao de `statuses` no payload (separado do bloco de messages)
+  - [x] 1.3: Para cada status: extrair recipient_id, normalizar phone (remover 55 prefix se 13 digitos)
+  - [x] 1.4: Buscar campaign_entries pelo phone onde whatsapp_status nao e 'read'
+  - [x] 1.5: Atualizar whatsapp_status + is_valid_phone
+  - [x] 1.6: Inserir campaign_events
+  - [x] 1.7: Try/catch isolado — erros nao afetam processamento de mensagens
 
-- [ ] Task 2: Detectar respostas (AC8)
-  - [ ] 2.1: No bloco de mensagens incoming (ja existente), apos processar a mensagem
-  - [ ] 2.2: Buscar campaign_entries pelo phone do lead + has_responded=false
-  - [ ] 2.3: Se encontrou, atualizar has_responded=true
-  - [ ] 2.4: Inserir campaign_events com event_type='replied'
+- [x] Task 2: Detectar respostas (AC8)
+  - [x] 2.1: No bloco de mensagens incoming (ja existente), apos processar a mensagem
+  - [x] 2.2: Buscar campaign_entries pelo phone do lead + has_responded=false
+  - [x] 2.3: Se encontrou, atualizar has_responded=true
+  - [x] 2.4: Inserir campaign_events com event_type='replied'
 
-- [ ] Task 3: Validacao (AC10)
-  - [ ] 3.1: type-check
+- [x] Task 3: Validacao (AC10)
+  - [x] 3.1: type-check
 
 ## Dev Notes
 
@@ -116,3 +116,4 @@ Para nao regredir: buscar entries WHERE whatsapp_status NOT IN ('read', 'failed'
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — Webhook WhatsApp atualiza whatsapp_status em campaign_entries + has_responded em after(). Story fechada. | Pax (@po) |

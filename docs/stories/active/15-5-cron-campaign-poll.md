@@ -1,7 +1,7 @@
 # Story 15.5 — Cron: Campaign Poll (Google Forms API + Processamento + Confirmacoes)
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -77,41 +77,41 @@ Esta e a story central do epic. O cron roda a cada 2-3 minutos, consulta a Googl
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Criar cron route (AC1, AC2)
-  - [ ] 1.1: Criar `packages/web/src/app/api/cron/campaign-poll/route.ts`
-  - [ ] 1.2: Implementar GET handler com validacao CRON_SECRET
-  - [ ] 1.3: Usar service_role Supabase client (mesmo padrao de followup cron)
+- [x] Task 1: Criar cron route (AC1, AC2)
+  - [x] 1.1: Criar `packages/web/src/app/api/cron/campaign-poll/route.ts`
+  - [x] 1.2: Implementar GET handler com validacao CRON_SECRET
+  - [x] 1.3: Usar service_role Supabase client (mesmo padrao de followup cron)
 
-- [ ] Task 2: Buscar campanhas ativas (AC3)
-  - [ ] 2.1: Query: `campaigns WHERE status = 'active' AND type = 'google_forms' AND ends_at > now()`
+- [x] Task 2: Buscar campanhas ativas (AC3)
+  - [x] 2.1: Query: `campaigns WHERE status = 'active' AND type = 'google_forms' AND ends_at > now()`
 
-- [ ] Task 3: Google Forms API polling (AC4, AC5, AC6, AC7)
-  - [ ] 3.1: Para cada campanha, buscar tokens OAuth2 da org
-  - [ ] 3.2: Refresh token se expirado
-  - [ ] 3.3: Chamar `forms.responses.list` com filtro de timestamp
-  - [ ] 3.4: Se sem respostas novas, atualizar last_polled_at e skip
+- [x] Task 3: Google Forms API polling (AC4, AC5, AC6, AC7)
+  - [x] 3.1: Para cada campanha, buscar tokens OAuth2 da org
+  - [x] 3.2: Refresh token se expirado
+  - [x] 3.3: Chamar `forms.responses.list` com filtro de timestamp
+  - [x] 3.4: Se sem respostas novas, atualizar last_polled_at e skip
 
-- [ ] Task 4: Processar respostas (AC8, AC9, AC10, AC11, AC12, AC13)
-  - [ ] 4.1: Extrair campos via field_mapping
-  - [ ] 4.2: Normalizar telefone
-  - [ ] 4.3: Checar duplicidade (phone + campaign_id, google_response_id)
-  - [ ] 4.4: Criar/atualizar lead na tabela leads
-  - [ ] 4.5: Inserir em campaign_entries
+- [x] Task 4: Processar respostas (AC8, AC9, AC10, AC11, AC12, AC13)
+  - [x] 4.1: Extrair campos via field_mapping
+  - [x] 4.2: Normalizar telefone
+  - [x] 4.3: Checar duplicidade (phone + campaign_id, google_response_id)
+  - [x] 4.4: Criar/atualizar lead na tabela leads
+  - [x] 4.5: Inserir em campaign_entries
 
-- [ ] Task 5: Disparar confirmacoes (AC14, AC15, AC16)
-  - [ ] 5.1: Enviar WhatsApp template se configurado
-  - [ ] 5.2: Enviar e-mail se habilitado
-  - [ ] 5.3: Inserir eventos em campaign_events
-  - [ ] 5.4: Fire-and-forget com try/catch
+- [x] Task 5: Disparar confirmacoes (AC14, AC15, AC16)
+  - [x] 5.1: Enviar WhatsApp template se configurado
+  - [x] 5.2: Enviar e-mail se habilitado
+  - [x] 5.3: Inserir eventos em campaign_events
+  - [x] 5.4: Fire-and-forget com try/catch
 
-- [ ] Task 6: Finalizacao e validacao (AC17, AC18, AC19, AC20, AC21)
-  - [ ] 6.1: Atualizar last_polled_at e last_response_at
-  - [ ] 6.2: Retornar JSON de resultado
-  - [ ] 6.3: Logging de erros
-  - [ ] 6.4: type-check
+- [x] Task 6: Finalizacao e validacao (AC17, AC18, AC19, AC20, AC21)
+  - [x] 6.1: Atualizar last_polled_at e last_response_at
+  - [x] 6.2: Retornar JSON de resultado
+  - [x] 6.3: Logging de erros
+  - [x] 6.4: type-check
 
-- [ ] Task 7: Configurar Vercel Cron
-  - [ ] 7.1: Adicionar entry em `vercel.json` para `/api/cron/campaign-poll` a cada 3 minutos
+- [x] Task 7: Configurar Vercel Cron
+  - [x] 7.1: Adicionar entry em `vercel.json` para `/api/cron/campaign-poll` a cada 3 minutos
 
 ## Dev Notes
 
@@ -184,3 +184,4 @@ Adicionar ao `vercel.json`:
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — Cron 513 linhas — polling Google Forms, normalização, dedup, WhatsApp+email. Fix .maybeSingle() aplicado. Story fechada. | Pax (@po) |

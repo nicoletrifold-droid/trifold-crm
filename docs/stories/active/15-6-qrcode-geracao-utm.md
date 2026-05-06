@@ -1,7 +1,7 @@
 # Story 15.6 — QR Code: Geracao com UTM Tracking
 
 ## Status
-Draft
+Blocked
 
 ## Executor Assignment
 executor: "@dev"
@@ -83,3 +83,4 @@ Esta story e mais operacional que tecnica. Nao envolve codigo no CRM. O QR apont
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | Story bloqueada: requer URL do Google Forms criado manualmente + ferramenta externa (QR Tiger/Bitly). Não é tarefa de código. | Pax (@po) |

@@ -1,7 +1,7 @@
 # Story 15.9 — UI: Detalhe da Campanha + Metricas + Tabela Participantes
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -54,28 +54,28 @@ Tela de detalhe da campanha com cards de metricas e tabela de participantes. Inc
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Pagina detalhe (AC1-AC7)
-  - [ ] 1.1: Criar `packages/web/src/app/dashboard/campaigns/[id]/page.tsx`
-  - [ ] 1.2: Header com nome, status badge, botoes de acao
-  - [ ] 1.3: Cards de metricas (query campaign_entries com agregacoes)
-  - [ ] 1.4: Secoes detalhamento WhatsApp e E-mail
-  - [ ] 1.5: Tabela de participantes com dados de campaign_entries
-  - [ ] 1.6: Filtros client-side (Todos/Validos/Invalidos/Responderam)
-  - [ ] 1.7: Link "Ver no Pipeline"
+- [x] Task 1: Pagina detalhe (AC1-AC7)
+  - [x] 1.1: Criar `packages/web/src/app/dashboard/campaigns/[id]/page.tsx`
+  - [x] 1.2: Header com nome, status badge, botoes de acao
+  - [x] 1.3: Cards de metricas (query campaign_entries com agregacoes)
+  - [x] 1.4: Secoes detalhamento WhatsApp e E-mail
+  - [x] 1.5: Tabela de participantes com dados de campaign_entries
+  - [x] 1.6: Filtros client-side (Todos/Validos/Invalidos/Responderam)
+  - [x] 1.7: Link "Ver no Pipeline"
 
-- [ ] Task 2: Exportar CSV (AC8)
-  - [ ] 2.1: Botao que gera CSV client-side a partir dos dados carregados
-  - [ ] 2.2: Incluir todas as colunas relevantes: nome, phone, email, custom_data, whatsapp_status, email_status, is_valid_phone, is_valid_email, has_responded, created_at
+- [x] Task 2: Exportar CSV (AC8)
+  - [x] 2.1: Botao que gera CSV client-side a partir dos dados carregados
+  - [x] 2.2: Incluir todas as colunas relevantes: nome, phone, email, custom_data, whatsapp_status, email_status, is_valid_phone, is_valid_email, has_responded, created_at
 
-- [ ] Task 3: Pagina edicao (AC9-AC12)
-  - [ ] 3.1: Criar `packages/web/src/app/dashboard/campaigns/[id]/editar/page.tsx`
-  - [ ] 3.2: Formulario preenchido com dados atuais
-  - [ ] 3.3: Slug como campo readonly
-  - [ ] 3.4: Submit → PATCH /api/campaigns/[id] → redirect
+- [x] Task 3: Pagina edicao (AC9-AC12)
+  - [x] 3.1: Criar `packages/web/src/app/dashboard/campaigns/[id]/editar/page.tsx`
+  - [x] 3.2: Formulario preenchido com dados atuais
+  - [x] 3.3: Slug como campo readonly
+  - [x] 3.4: Submit → PATCH /api/campaigns/[id] → redirect
 
-- [ ] Task 4: Validacao (AC13, AC14)
-  - [ ] 4.1: type-check
-  - [ ] 4.2: Consistencia visual
+- [x] Task 4: Validacao (AC13, AC14)
+  - [x] 4.1: type-check
+  - [x] 4.2: Consistencia visual
 
 ## Dev Notes
 
@@ -132,3 +132,4 @@ function downloadCSV(entries, filename) {
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — 5 cards de métricas, tabela com filtros, CSV export UTF-8 BOM, edição inline. Story fechada. | Pax (@po) |

@@ -1,7 +1,7 @@
 # Story 15.11 — Webhook Resend: Email Open/Bounce Tracking
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -41,21 +41,21 @@ O Resend envia webhooks com status updates dos e-mails. Esta story cria o endpoi
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Criar webhook route (AC1, AC2)
-  - [ ] 1.1: Criar `packages/web/src/app/api/webhook/resend/route.ts`
-  - [ ] 1.2: Validar webhook signature (Resend usa Svix — verificar documentacao)
-  - [ ] 1.3: Usar service_role Supabase client
+- [x] Task 1: Criar webhook route (AC1, AC2)
+  - [x] 1.1: Criar `packages/web/src/app/api/webhook/resend/route.ts`
+  - [x] 1.2: Validar webhook signature (Resend usa Svix — verificar documentacao)
+  - [x] 1.3: Usar service_role Supabase client
 
-- [ ] Task 2: Processar eventos (AC3-AC7)
-  - [ ] 2.1: Extrair event type do payload: `email.delivered`, `email.opened`, `email.bounced`
-  - [ ] 2.2: Extrair entry_id das tags do payload
-  - [ ] 2.3: Buscar campaign_entry pelo entry_id
-  - [ ] 2.4: Atualizar email_status e is_valid_email conforme evento
-  - [ ] 2.5: Inserir evento em campaign_events
+- [x] Task 2: Processar eventos (AC3-AC7)
+  - [x] 2.1: Extrair event type do payload: `email.delivered`, `email.opened`, `email.bounced`
+  - [x] 2.2: Extrair entry_id das tags do payload
+  - [x] 2.3: Buscar campaign_entry pelo entry_id
+  - [x] 2.4: Atualizar email_status e is_valid_email conforme evento
+  - [x] 2.5: Inserir evento em campaign_events
 
-- [ ] Task 3: Env vars e validacao (AC8, AC9)
-  - [ ] 3.1: Adicionar RESEND_WEBHOOK_SECRET ao .env.local
-  - [ ] 3.2: type-check
+- [x] Task 3: Env vars e validacao (AC8, AC9)
+  - [x] 3.1: Adicionar RESEND_WEBHOOK_SECRET ao .env.local
+  - [x] 3.2: type-check
 
 ## Dev Notes
 
@@ -108,3 +108,4 @@ Email status so avanca (nao regride):
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — Webhook Resend: verificação HMAC-SHA256 Svix + replay protection. delivered/opened/bounced atualiza campaign_entries. Story fechada. | Pax (@po) |

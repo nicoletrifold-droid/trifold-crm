@@ -1,7 +1,7 @@
 # Story 15.2 — Google OAuth2: Setup + Tela de Conexao nas Configuracoes
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -42,31 +42,31 @@ Esta story implementa a conexao OAuth2 com o Google. Apos conectar, o sistema us
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Instalar dependencia (AC1)
-  - [ ] 1.1: `pnpm add googleapis` no `packages/web`
+- [x] Task 1: Instalar dependencia (AC1)
+  - [x] 1.1: `pnpm add googleapis` no `packages/web`
 
-- [ ] Task 2: Criar servico Google OAuth2 (AC2, AC6)
-  - [ ] 2.1: Criar `packages/web/src/lib/google.ts`
-  - [ ] 2.2: Implementar `getOAuth2Client()` com client_id, client_secret, redirect_uri do env
-  - [ ] 2.3: Implementar `getAuthUrl()` com scope `https://www.googleapis.com/auth/forms.responses.readonly`
-  - [ ] 2.4: Implementar `exchangeCodeForTokens(code)` — troca authorization code por tokens
-  - [ ] 2.5: Implementar `getFormsClient(tokens)` — retorna google.forms({ version: 'v1', auth })
-  - [ ] 2.6: Implementar `refreshTokenIfNeeded(tokens)` — checa expiry, faz refresh se necessario
+- [x] Task 2: Criar servico Google OAuth2 (AC2, AC6)
+  - [x] 2.1: Criar `packages/web/src/lib/google.ts`
+  - [x] 2.2: Implementar `getOAuth2Client()` com client_id, client_secret, redirect_uri do env
+  - [x] 2.3: Implementar `getAuthUrl()` com scope `https://www.googleapis.com/auth/forms.responses.readonly`
+  - [x] 2.4: Implementar `exchangeCodeForTokens(code)` — troca authorization code por tokens
+  - [x] 2.5: Implementar `getFormsClient(tokens)` — retorna google.forms({ version: 'v1', auth })
+  - [x] 2.6: Implementar `refreshTokenIfNeeded(tokens)` — checa expiry, faz refresh se necessario
 
-- [ ] Task 3: Criar rotas de autenticacao (AC3, AC4)
-  - [ ] 3.1: Criar `packages/web/src/app/api/auth/google/route.ts` (GET → redirect para consent screen)
-  - [ ] 3.2: Criar `packages/web/src/app/api/auth/google/callback/route.ts` (GET → exchange code, salvar tokens, redirect)
-  - [ ] 3.3: Usar `requireAuth()` + `requireRole(appUser, ["admin"])` para proteger as rotas
+- [x] Task 3: Criar rotas de autenticacao (AC3, AC4)
+  - [x] 3.1: Criar `packages/web/src/app/api/auth/google/route.ts` (GET → redirect para consent screen)
+  - [x] 3.2: Criar `packages/web/src/app/api/auth/google/callback/route.ts` (GET → exchange code, salvar tokens, redirect)
+  - [x] 3.3: Usar `requireAuth()` + `requireRole(appUser, ["admin"])` para proteger as rotas
 
-- [ ] Task 4: UI nas configuracoes (AC5, AC7)
-  - [ ] 4.1: Identificar a pagina de configuracoes existente (`/dashboard/configuracoes`)
-  - [ ] 4.2: Adicionar secao "Integracoes" com estado Google conectado/desconectado
-  - [ ] 4.3: Botao "Conectar Google" que redireciona para `/api/auth/google`
-  - [ ] 4.4: Badge "Google conectado" + botao "Desconectar" (limpa `google_oauth_tokens`)
+- [x] Task 4: UI nas configuracoes (AC5, AC7)
+  - [x] 4.1: Identificar a pagina de configuracoes existente (`/dashboard/configuracoes`)
+  - [x] 4.2: Adicionar secao "Integracoes" com estado Google conectado/desconectado
+  - [x] 4.3: Botao "Conectar Google" que redireciona para `/api/auth/google`
+  - [x] 4.4: Badge "Google conectado" + botao "Desconectar" (limpa `google_oauth_tokens`)
 
-- [ ] Task 5: Validacao (AC8, AC9, AC10)
-  - [ ] 5.1: Adicionar vars no .env.example
-  - [ ] 5.2: type-check
+- [x] Task 5: Validacao (AC8, AC9, AC10)
+  - [x] 5.1: Adicionar vars no .env.example
+  - [x] 5.2: type-check
 
 ## Dev Notes
 
@@ -114,3 +114,4 @@ Criar projeto no Google Cloud Console, habilitar Google Forms API, configurar OA
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — Google OAuth2 implementado. Tokens persistidos, refresh automático, UI de conexão/desconexão. Story fechada. | Pax (@po) |

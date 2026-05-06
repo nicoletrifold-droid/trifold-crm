@@ -1,7 +1,7 @@
 # Story 15.7 — CRUD Campanhas: API Routes + Auto-discovery de Campos
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -55,25 +55,25 @@ API REST para o CRUD de campanhas. Inclui endpoint de auto-discovery que consult
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Criar rotas CRUD basico (AC1-AC6)
-  - [ ] 1.1: `packages/web/src/app/api/campaigns/route.ts` — POST (create) + GET (list)
-  - [ ] 1.2: `packages/web/src/app/api/campaigns/[id]/route.ts` — GET (detail) + PATCH (update)
-  - [ ] 1.3: `packages/web/src/app/api/campaigns/[id]/activate/route.ts` — POST
-  - [ ] 1.4: `packages/web/src/app/api/campaigns/[id]/pause/route.ts` — POST
-  - [ ] 1.5: Helper `slugify()` para gerar slug a partir do nome
-  - [ ] 1.6: Helper `extractFormId(url)` para extrair google_form_id da URL do Forms
+- [x] Task 1: Criar rotas CRUD basico (AC1-AC6)
+  - [x] 1.1: `packages/web/src/app/api/campaigns/route.ts` — POST (create) + GET (list)
+  - [x] 1.2: `packages/web/src/app/api/campaigns/[id]/route.ts` — GET (detail) + PATCH (update)
+  - [x] 1.3: `packages/web/src/app/api/campaigns/[id]/activate/route.ts` — POST
+  - [x] 1.4: `packages/web/src/app/api/campaigns/[id]/pause/route.ts` — POST
+  - [x] 1.5: Helper `slugify()` para gerar slug a partir do nome
+  - [x] 1.6: Helper `extractFormId(url)` para extrair google_form_id da URL do Forms
 
-- [ ] Task 2: Auto-discovery de campos (AC7, AC8)
-  - [ ] 2.1: `packages/web/src/app/api/campaigns/discover-fields/route.ts` — POST
-  - [ ] 2.2: Consultar Forms API `forms.forms.get({ formId })` para listar perguntas
-  - [ ] 2.3: Algoritmo de sugestao por keywords: nome→name, whatsapp/telefone/celular→phone, email→email, demais→custom:slugified_title
+- [x] Task 2: Auto-discovery de campos (AC7, AC8)
+  - [x] 2.1: `packages/web/src/app/api/campaigns/discover-fields/route.ts` — POST
+  - [x] 2.2: Consultar Forms API `forms.forms.get({ formId })` para listar perguntas
+  - [x] 2.3: Algoritmo de sugestao por keywords: nome→name, whatsapp/telefone/celular→phone, email→email, demais→custom:slugified_title
 
-- [ ] Task 3: Endpoint de entries (AC9)
-  - [ ] 3.1: `packages/web/src/app/api/campaigns/[id]/entries/route.ts` — GET com paginacao e filtros
+- [x] Task 3: Endpoint de entries (AC9)
+  - [x] 3.1: `packages/web/src/app/api/campaigns/[id]/entries/route.ts` — GET com paginacao e filtros
 
-- [ ] Task 4: Validacao (AC10, AC11, AC12)
-  - [ ] 4.1: Auth + role check em todas as rotas
-  - [ ] 4.2: type-check
+- [x] Task 4: Validacao (AC10, AC11, AC12)
+  - [x] 4.1: Auth + role check em todas as rotas
+  - [x] 4.2: type-check
 
 ## Dev Notes
 
@@ -123,3 +123,4 @@ Usar subquery ou RPC para contar entries por campanha eficientemente. Alternativ
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — CRUD completo: POST/GET/PATCH + activate/pause + discover-fields. Multi-tenant seguro. Story fechada. | Pax (@po) |

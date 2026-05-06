@@ -1,7 +1,7 @@
 # Story 15.10 — Filtro de Campanha no Pipeline (Kanban)
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -41,15 +41,15 @@ O pipeline existente ja tem filtros por Empreendimento, Corretor e Score. Esta s
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Adicionar filtro de campanha (AC1-AC6)
-  - [ ] 1.1: Editar `packages/web/src/app/dashboard/pipeline/page.tsx`
-  - [ ] 1.2: Query `campaigns` para popular o select
-  - [ ] 1.3: Adicionar select "Campanha" no filter bar
-  - [ ] 1.4: Implementar filtragem: buscar lead_ids de campaign_entries WHERE campaign_id = X, filtrar leadsQuery com .in("id", leadIds)
-  - [ ] 1.5: Incluir campaign_id no botao "Limpar"
+- [x] Task 1: Adicionar filtro de campanha (AC1-AC6)
+  - [x] 1.1: Editar `packages/web/src/app/dashboard/pipeline/page.tsx`
+  - [x] 1.2: Query `campaigns` para popular o select
+  - [x] 1.3: Adicionar select "Campanha" no filter bar
+  - [x] 1.4: Implementar filtragem: buscar lead_ids de campaign_entries WHERE campaign_id = X, filtrar leadsQuery com .in("id", leadIds)
+  - [x] 1.5: Incluir campaign_id no botao "Limpar"
 
-- [ ] Task 2: Validacao (AC7)
-  - [ ] 2.1: type-check
+- [x] Task 2: Validacao (AC7)
+  - [x] 2.1: type-check
 
 ## Dev Notes
 
@@ -96,3 +96,4 @@ if (filters.campaign_id) {
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — Filtro campaign_id no pipeline Kanban com URL param + combinável com outros filtros. Story fechada. | Pax (@po) |

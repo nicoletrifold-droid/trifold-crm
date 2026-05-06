@@ -1,7 +1,7 @@
 # Story 15.8 — UI: Lista de Campanhas + Criacao com Auto-discovery
 
 ## Status
-Draft
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -58,28 +58,28 @@ UI para listar campanhas e criar novas. Ao criar, o admin cola o link do Google 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Adicionar item no sidebar (AC1)
-  - [ ] 1.1: Editar `packages/web/src/app/dashboard/layout.tsx` — adicionar nav item "Campanhas" com icone Megaphone
+- [x] Task 1: Adicionar item no sidebar (AC1)
+  - [x] 1.1: Editar `packages/web/src/app/dashboard/layout.tsx` — adicionar nav item "Campanhas" com icone Megaphone
 
-- [ ] Task 2: Pagina lista de campanhas (AC2-AC6)
-  - [ ] 2.1: Criar `packages/web/src/app/dashboard/campaigns/page.tsx`
-  - [ ] 2.2: Query Supabase para campanhas com contagem de entries
-  - [ ] 2.3: Tabela com colunas especificadas
-  - [ ] 2.4: Botao "+ Nova Campanha"
-  - [ ] 2.5: Empty state
+- [x] Task 2: Pagina lista de campanhas (AC2-AC6)
+  - [x] 2.1: Criar `packages/web/src/app/dashboard/campaigns/page.tsx`
+  - [x] 2.2: Query Supabase para campanhas com contagem de entries
+  - [x] 2.3: Tabela com colunas especificadas
+  - [x] 2.4: Botao "+ Nova Campanha"
+  - [x] 2.5: Empty state
 
-- [ ] Task 3: Pagina criacao de campanha (AC7-AC13)
-  - [ ] 3.1: Criar `packages/web/src/app/dashboard/campaigns/nova/page.tsx`
-  - [ ] 3.2: Formulario com campos basicos (nome, descricao, empreendimento, datas, URL)
-  - [ ] 3.3: Componente client de auto-discovery que chama API ao colar URL
-  - [ ] 3.4: Secao de mapeamento de campos com dropdowns editaveis
-  - [ ] 3.5: Secao de confirmacoes (WhatsApp template, email)
-  - [ ] 3.6: Submit → POST /api/campaigns → redirect para detalhe
-  - [ ] 3.7: Alerta se Google nao conectado
+- [x] Task 3: Pagina criacao de campanha (AC7-AC13)
+  - [x] 3.1: Criar `packages/web/src/app/dashboard/campaigns/nova/page.tsx`
+  - [x] 3.2: Formulario com campos basicos (nome, descricao, empreendimento, datas, URL)
+  - [x] 3.3: Componente client de auto-discovery que chama API ao colar URL
+  - [x] 3.4: Secao de mapeamento de campos com dropdowns editaveis
+  - [x] 3.5: Secao de confirmacoes (WhatsApp template, email)
+  - [x] 3.6: Submit → POST /api/campaigns → redirect para detalhe
+  - [x] 3.7: Alerta se Google nao conectado
 
-- [ ] Task 4: Validacao (AC14, AC15)
-  - [ ] 4.1: type-check
-  - [ ] 4.2: Verificar consistencia visual com dashboard existente
+- [x] Task 4: Validacao (AC14, AC15)
+  - [x] 4.1: type-check
+  - [x] 4.2: Verificar consistencia visual com dashboard existente
 
 ## Dev Notes
 
@@ -116,3 +116,4 @@ import { Megaphone } from "lucide-react"
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-06 | QA PASS — UI lista + nova campanha + auto-discovery de campos + seção de confirmações. Story fechada. | Pax (@po) |
