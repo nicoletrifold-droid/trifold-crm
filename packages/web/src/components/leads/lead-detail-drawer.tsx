@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useTransition } from "react"
+import { useEffect, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
 import { X } from "lucide-react"
@@ -15,18 +15,17 @@ interface LeadQuickData {
   source: string | null
   channel: string | null
   utm_campaign: string | null
-  metadata: Record<string, unknown> | null
   ai_summary: string | null
   created_at: string
   updated_at: string
   has_down_payment: boolean | null
-  preferred_bedrooms: string | null
+  preferred_bedrooms: number | null
   preferred_floor: string | null
   preferred_view: string | null
   preferred_garage_count: number | null
-  stage: Array<{ id: string; name: string; color: string | null }> | null
-  property_interest: Array<{ id: string; name: string }> | null
-  broker: Array<{ id: string; name: string; email: string }> | null
+  stage: { id: string; name: string; color: string | null } | null
+  property_interest: { id: string; name: string } | null
+  broker: { id: string; name: string; email: string } | null
 }
 
 type Message = { id: string; role: string; content: string; created_at: string }
@@ -39,30 +38,11 @@ interface LeadDetailDrawerProps {
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
 
-function getCTWAWindowLabel(ctwaExpiresAt: string | undefined): string | null {
-  if (!ctwaExpiresAt) return null
-  const diffMs = new Date(ctwaExpiresAt).getTime() - Date.now()
-  if (diffMs <= 0) return "Expirada"
-  return `Expira em ${Math.ceil(diffMs / (1000 * 60 * 60))}h`
-}
-
 async function fetchLeadData(id: string) {
   const supabase = createClient()
 
-  const [{ data }, { data: conversations }] = await Promise.all([
-    supabase
-      .from("leads")
-      .select(
-        `id, name, phone, email, qualification_score, interest_level,
-         source, channel, utm_campaign, metadata, ai_summary, created_at, updated_at,
-         has_down_payment, preferred_bedrooms, preferred_floor,
-         preferred_view, preferred_garage_count,
-         stage:kanban_stages(id, name, color),
-         property_interest:properties!property_interest_id(id, name),
-         broker:users!assigned_broker_id(id, name, email)`
-      )
-      .eq("id", id)
-      .single(),
+  const [leadRes, { data: conversations }] = await Promise.all([
+    fetch(`/api/leads/${id}`),
     supabase
       .from("conversations")
       .select(`id, messages:messages(id, role, content, created_at)`)
@@ -71,15 +51,42 @@ async function fetchLeadData(id: string) {
       .limit(1),
   ])
 
+  let lead: LeadQuickData | null = null
+  if (leadRes.ok) {
+    const json = await leadRes.json() as { data: Record<string, unknown> }
+    const raw = json.data
+    if (raw) {
+      lead = {
+        id: raw.id as string,
+        name: (raw.name as string | null) ?? null,
+        phone: raw.phone as string,
+        email: (raw.email as string | null) ?? null,
+        qualification_score: (raw.qualification_score as number | null) ?? null,
+        interest_level: (raw.interest_level as string | null) ?? null,
+        source: (raw.source as string | null) ?? null,
+        channel: (raw.channel as string | null) ?? null,
+        utm_campaign: (raw.utm_campaign as string | null) ?? null,
+        ai_summary: (raw.ai_summary as string | null) ?? null,
+        created_at: raw.created_at as string,
+        updated_at: raw.updated_at as string,
+        has_down_payment: (raw.has_down_payment as boolean | null) ?? null,
+        preferred_bedrooms: (raw.preferred_bedrooms as number | null) ?? null,
+        preferred_floor: (raw.preferred_floor as string | null) ?? null,
+        preferred_view: (raw.preferred_view as string | null) ?? null,
+        preferred_garage_count: (raw.preferred_garage_count as number | null) ?? null,
+        stage: (raw.stage as LeadQuickData["stage"]) ?? null,
+        property_interest: (raw.property_interest as LeadQuickData["property_interest"]) ?? null,
+        broker: (raw.broker as LeadQuickData["broker"]) ?? null,
+      }
+    }
+  }
+
   const msgs = (conversations?.[0]?.messages ?? []) as Message[]
   const sortedMsgs = [...msgs]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5)
 
-  return {
-    lead: data as unknown as LeadQuickData | null,
-    messages: sortedMsgs,
-  }
+  return { lead, messages: sortedMsgs }
 }
 
 export function LeadDetailDrawer({ leadId, onClose }: LeadDetailDrawerProps) {
@@ -115,34 +122,23 @@ export function LeadDetailDrawer({ leadId, onClose }: LeadDetailDrawerProps) {
 }
 
 function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () => void }) {
-  const [data, setData] = useState<{ lead: LeadQuickData | null; messages: Message[] } | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  const loadData = useCallback(() => {
-    startTransition(async () => {
-      const result = await fetchLeadData(leadId)
-      setData(result)
-    })
-  }, [leadId])
+  const [state, setState] = useState<{
+    loading: boolean
+    lead: LeadQuickData | null
+    messages: Message[]
+  }>({ loading: true, lead: null, messages: [] })
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    let cancelled = false
+    fetchLeadData(leadId).then((result) => {
+      if (!cancelled) setState({ loading: false, lead: result.lead, messages: result.messages })
+    })
+    return () => { cancelled = true }
+  }, [leadId])
 
-  const lead = data?.lead ?? null
-  const messages = data?.messages ?? []
-  const loading = isPending || !data
+  const { loading, lead, messages } = state
 
-  const stage = (lead?.stage as unknown as Array<{ id: string; name: string; color: string | null }>)?.[0] ?? null
-  const property = (lead?.property_interest as unknown as Array<{ id: string; name: string }>)?.[0] ?? null
-  const broker = (lead?.broker as unknown as Array<{ id: string; name: string; email: string }>)?.[0] ?? null
-
-  // CTWA attribution data (computed outside JSX to satisfy react-hooks/purity)
   const isCTWA = lead?.source === "whatsapp_click_to_ad"
-  const ctwaReferral = isCTWA ? ((lead?.metadata?.referral ?? {}) as Record<string, unknown>) : null
-  const ctwaClid = ctwaReferral ? (ctwaReferral.ctwa_clid as string | undefined) : undefined
-  const ctwaExpiresAt = isCTWA ? (lead?.metadata?.ctwa_window_expires_at as string | undefined) : undefined
-  const ctwaWindowLabel = getCTWAWindowLabel(ctwaExpiresAt)
 
   return (
     <>
@@ -183,15 +179,15 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         <div className="divide-y divide-stone-100">
           {/* Badges */}
           <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-            {stage && (
+            {lead.stage && (
               <span
                 className="rounded-full px-2.5 py-1 text-xs font-medium"
                 style={{
-                  backgroundColor: stage.color ? `${stage.color}20` : "#f3f4f6",
-                  color: stage.color || "#374151",
+                  backgroundColor: lead.stage.color ? `${lead.stage.color}20` : "#f3f4f6",
+                  color: lead.stage.color || "#374151",
                 }}
               >
-                {stage.name}
+                {lead.stage.name}
               </span>
             )}
             {lead.qualification_score != null && (
@@ -246,20 +242,6 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   <dd className="font-medium text-stone-900 text-right max-w-[60%] truncate">{lead.utm_campaign}</dd>
                 </div>
               )}
-              {isCTWA && ctwaClid && (
-                <div className="flex justify-between">
-                  <dt className="text-stone-500">CTWA ID</dt>
-                  <dd className="font-mono text-stone-500 text-[11px]">{ctwaClid.slice(0, 8)}…</dd>
-                </div>
-              )}
-              {isCTWA && ctwaWindowLabel && (
-                <div className="flex justify-between">
-                  <dt className="text-stone-500">Janela CTWA</dt>
-                  <dd className={`text-[11px] font-medium ${ctwaWindowLabel === "Expirada" ? "text-stone-400" : "text-green-600"}`}>
-                    {ctwaWindowLabel}
-                  </dd>
-                </div>
-              )}
               {lead.channel && (
                 <div className="flex justify-between">
                   <dt className="text-stone-500">Canal</dt>
@@ -278,10 +260,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               <div className="flex justify-between">
                 <dt className="text-stone-500">Empreendimento</dt>
                 <dd className="font-medium text-stone-900">
-                  {property?.name ?? "-"}
+                  {lead.property_interest?.name ?? "-"}
                 </dd>
               </div>
-              {lead.preferred_bedrooms && (
+              {lead.preferred_bedrooms != null && (
                 <div className="flex justify-between">
                   <dt className="text-stone-500">Quartos</dt>
                   <dd className="font-medium text-stone-900">{lead.preferred_bedrooms}</dd>
@@ -317,18 +299,18 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           </div>
 
           {/* Broker */}
-          {broker && (
+          {lead.broker && (
             <div className="px-5 py-4">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">
                 Corretor
               </h3>
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
-                  {broker.name.charAt(0).toUpperCase()}
+                  {lead.broker.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="text-sm">
-                  <div className="font-medium text-stone-900">{broker.name}</div>
-                  <div className="text-stone-400">{broker.email}</div>
+                  <div className="font-medium text-stone-900">{lead.broker.name}</div>
+                  <div className="text-stone-400">{lead.broker.email}</div>
                 </div>
               </div>
             </div>
