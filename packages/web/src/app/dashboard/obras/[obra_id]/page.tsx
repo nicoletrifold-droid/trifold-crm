@@ -4,6 +4,7 @@ import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { ObraDetailTabs } from "./_components/obra-detail-tabs"
+import { ObraEditButton } from "./_components/obra-edit-button"
 
 const STATUS_LABEL: Record<string, string> = {
   em_andamento: "Em andamento",
@@ -52,35 +53,61 @@ export default async function ObraDetailPage({
     notFound()
   }
 
-  const [fasesRes, fotosRes, documentosRes] = await Promise.all([
-    supabase
-      .from("obra_fases")
-      .select("id, name, status, order_index")
-      .eq("obra_id", obra_id)
-      .order("order_index"),
-    supabase
-      .from("obra_fotos")
-      .select("id, storage_path, caption, taken_at, fase_id, created_at")
-      .eq("obra_id", obra_id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("obra_documentos")
-      .select("id, name, filename, category, file_size_bytes, created_at")
-      .eq("obra_id", obra_id)
-      .order("created_at", { ascending: false }),
-  ])
+  const [fasesRes, fotosRes, documentosRes, mensagensRes, clientesRes] =
+    await Promise.all([
+      supabase
+        .from("obra_fases")
+        .select(
+          "id, name, description, status, progress_pct, order_index, start_date, end_date, expected_start_date, expected_end_date"
+        )
+        .eq("obra_id", obra_id)
+        .order("order_index"),
+      supabase
+        .from("obra_fotos")
+        .select("id, storage_path, caption, taken_at, fase_id, created_at")
+        .eq("obra_id", obra_id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("obra_documentos")
+        .select("id, name, filename, category, file_size_bytes, created_at")
+        .eq("obra_id", obra_id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("obra_mensagens")
+        .select(
+          "id, content, message_type, storage_path, sender_type, created_at"
+        )
+        .eq("obra_id", obra_id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("cliente_obras")
+        .select("is_primary, users(id, name, email)")
+        .eq("obra_id", obra_id),
+    ])
 
   const fases = fasesRes.data ?? []
   const fotos = fotosRes.data ?? []
   const documentos = documentosRes.data ?? []
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
+  const mensagens = mensagensRes.data ?? []
+  const clientesRaw = clientesRes.data ?? []
 
+  const clientes = clientesRaw.map((row) => {
+    const u = Array.isArray(row.users) ? row.users[0] : row.users
+    return {
+      id: u?.id ?? "",
+      name: u?.name ?? "",
+      email: u?.email ?? "",
+      is_primary: row.is_primary,
+    }
+  })
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
   const statusBadge = STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700"
   const statusLabel = STATUS_LABEL[obra.status] ?? obra.status
 
   return (
     <div className="space-y-6">
-      {/* Header com voltar */}
+      {/* Header */}
       <div>
         <Link
           href="/dashboard/obras"
@@ -96,11 +123,14 @@ export default async function ObraDetailPage({
               <p className="mt-1 text-sm text-gray-500">{obra.description}</p>
             )}
           </div>
-          <span
-            className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium ${statusBadge}`}
-          >
-            {statusLabel}
-          </span>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${statusBadge}`}
+            >
+              {statusLabel}
+            </span>
+            <ObraEditButton obra={obra} />
+          </div>
         </div>
       </div>
 
@@ -139,12 +169,15 @@ export default async function ObraDetailPage({
         </dl>
       </section>
 
-      {/* Tabs: Fotos / Documentos */}
+      {/* Tabs */}
       <ObraDetailTabs
         obraId={obra.id}
+        adminName={user.name ?? "Admin"}
         fases={fases}
         fotos={fotos}
         documentos={documentos}
+        mensagens={mensagens}
+        clientes={clientes}
         supabaseUrl={supabaseUrl}
       />
     </div>

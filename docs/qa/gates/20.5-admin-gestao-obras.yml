@@ -1,0 +1,105 @@
+storyId: "20.5"
+storyTitle: "Painel Admin — Gestão Completa de Obras"
+reviewedAt: "2026-05-05"
+reviewer: "Quinn (@qa)"
+verdict: PASS
+
+summary: >
+  Todos os 17 ACs implementados corretamente. 9 tasks concluídas com type-check e lint limpos.
+  Segurança verificada: org_id isolation, role checks, sender_id nunca vem do request body.
+  RLS equipe já coberta por obra_mensagens_manage_admin (FOR ALL) em migration 020 —
+  decisão de não criar migration 023 é correta e bem documentada.
+
+checks:
+  code_review: PASS
+  unit_tests: PASS          # type-check + lint passam; sem testes unitários (padrão do projeto)
+  acceptance_criteria: PASS  # AC1-AC17 todos verificados
+  no_regressions: PASS      # Fotos/Documentos tabs preservadas; API GET /obras/[obra_id] intacta
+  performance: PASS         # Promise.all para fetches paralelos; Realtime canal compartilhado correto
+  security: PASS
+  documentation: PASS       # File List atualizado; decisão migration documentada
+
+ac_verification:
+  - ac: AC1
+    status: PASS
+    note: "PATCH /api/admin/obras/[obra_id] com sanitização de campos, org_id check, validações de progress_pct e status"
+  - ac: AC2
+    status: PASS
+    note: "ObraEditButton (Client Component separado) no header; ObraEditModal pré-preenchido; router.refresh() ao sucesso"
+  - ac: AC3
+    status: PASS
+    note: "GET fases filtrado por org_id via obra; order_index ASC"
+  - ac: AC4
+    status: PASS
+    note: "POST fases com order_index = MAX+1 (ou 1); status='pendente'; progress_pct=0; retorna 201"
+  - ac: AC5
+    status: PASS
+    note: "PATCH fase com todos os campos aceitos; org_id verificado via obra_id"
+  - ac: AC6
+    status: PASS
+    note: "DELETE fase com org check; retorna 204"
+  - ac: AC7
+    status: PASS
+    note: "Tab Fases com FaseCreateForm, FaseItem com badges, FaseEditModal, delete com window.confirm, empty state"
+  - ac: AC8
+    status: PASS
+    note: "obra_mensagens_manage_admin (FOR ALL) em 020 já cobre INSERT equipe — migration 023 dispensada"
+  - ac: AC9
+    status: PASS
+    note: "POST /mensagens com role check, content validation (não-vazio, ≤2000), sender_type='equipe' hardcoded"
+  - ac: AC10
+    status: PASS
+    note: "AdminChatFeed com adminName prop, alinhamento equipe→direita/cliente→esquerda, SignedImage/SignedAudio, Realtime, Enter/Shift+Enter, auto-scroll"
+  - ac: AC11
+    status: PASS
+    note: "Canal obra-mensagens-{obra_id} compartilhado — admin envia, portal cliente recebe via Realtime"
+  - ac: AC12
+    status: PASS
+    note: "GET clientes com JOIN cliente_obras→users; org_id verified via obra"
+  - ac: AC13
+    status: PASS
+    note: "POST Modo A: createAdminClient + auth.admin.createUser + rollback se INSERT users falhar; Modo B: busca por email+org_id+role='cliente'"
+  - ac: AC14
+    status: PASS
+    note: "DELETE cliente_obras com org_id check; retorna 204"
+  - ac: AC15
+    status: PASS
+    note: "ClientesTab com lista, badge Principal, form criar (Modo A), form vincular (Modo B direto com email), erros inline"
+  - ac: AC16
+    status: PASS
+    note: "pnpm run type-check → 0 erros"
+  - ac: AC17
+    status: PASS
+    note: "pnpm run lint → 0 erros/avisos nos arquivos novos"
+
+security_review:
+  org_isolation: PASS
+  role_checks: PASS
+  sender_id_from_auth: PASS
+  admin_api_gating: PASS
+  sql_injection: PASS
+  notes: >
+    Todos os routes verificam org_id antes de qualquer operação de dados. ALLOWED_ROLES
+    aplicado consistentemente. createAdminClient() chamado apenas após role check.
+    Rollback implementado (deleteUser) caso INSERT em users falhe no Modo A.
+    sender_id = appUser.id em todos os casos — nunca do request body.
+
+issues:
+  - severity: low
+    category: code
+    description: "PATCH /obras/[obra_id] não valida se `updates` está vazio antes de chamar .update({})"
+    recommendation: "Opcional: retornar 400 se nenhum campo válido for enviado. Comportamento atual (update sem SET) é inócuo mas pode confundir."
+
+  - severity: info
+    category: code
+    description: "Modo B em /clientes usa string matching 'duplicate' para detectar conflito UNIQUE"
+    recommendation: >
+      Funciona corretamente — erro PostgreSQL UNIQUE violation contém 'duplicate key value'.
+      Alternativa mais robusta seria verificar error.code === '23505' no futuro.
+
+  - severity: info
+    category: code
+    description: "page.tsx busca mensagens sem filtro org_id explícito (apenas obra_id)"
+    recommendation: >
+      Seguro: obra já foi verificada como pertencente à org antes do notFound().
+      UUID globalmente único previne cross-org. RLS é segunda camada. Sem risco.

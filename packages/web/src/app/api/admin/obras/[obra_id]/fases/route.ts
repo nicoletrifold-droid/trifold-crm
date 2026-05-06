@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from "next/server"
+import { requireAuth } from "@web/lib/api-auth"
+
+const ALLOWED_ROLES = ["admin", "supervisor"]
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ obra_id: string }> }
+) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  if (!ALLOWED_ROLES.includes(appUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { obra_id } = await params
+
+  const { data: obra } = await supabase
+    .from("obras")
+    .select("id")
+    .eq("id", obra_id)
+    .eq("org_id", appUser.org_id)
+    .single()
+
+  if (!obra) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const { data: fases, error } = await supabase
+    .from("obra_fases")
+    .select("*")
+    .eq("obra_id", obra_id)
+    .order("order_index")
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ fases: fases ?? [] })
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ obra_id: string }> }
+) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  if (!ALLOWED_ROLES.includes(appUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { obra_id } = await params
+
+  const { data: obra } = await supabase
+    .from("obras")
+    .select("id, org_id")
+    .eq("id", obra_id)
+    .eq("org_id", appUser.org_id)
+    .single()
+
+  if (!obra) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const body = await req.json()
+  const name = typeof body.name === "string" ? body.name.trim() : ""
+  if (!name) {
+    return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
+  }
+
+  const { data: maxFase } = await supabase
+    .from("obra_fases")
+    .select("order_index")
+    .eq("obra_id", obra_id)
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single()
+
+  const order_index = maxFase ? maxFase.order_index + 1 : 1
+
+  const { data: fase, error } = await supabase
+    .from("obra_fases")
+    .insert({
+      obra_id,
+      org_id: obra.org_id,
+      name,
+      description: body.description ?? null,
+      order_index,
+      status: "pendente",
+      progress_pct: 0,
+    })
+    .select("id, name, description, order_index, status, progress_pct")
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ fase }, { status: 201 })
+}
