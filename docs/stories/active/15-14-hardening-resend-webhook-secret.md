@@ -2,10 +2,13 @@
 epic: 15
 story: 15.14
 title: "Hardening: RESEND_WEBHOOK_SECRET obrigatório"
-status: Draft
+status: Ready
 priority: P1-ALTO
 created_at: 2026-05-05
 created_by: River (@sm)
+validated_at: 2026-05-05
+validated_by: Pax (@po)
+validation_score: "9.5/10"
 executor: "@dev"
 quality_gate: "@qa"
 quality_gate_tools: [security-scan, code-review, test-validation]
@@ -172,3 +175,4 @@ _A ser preenchido por @dev durante a implementacao._
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-05-05 | 1.0 | Story criada | River (@sm) |
+| 2026-05-05 | 1.1 | Validacao PO 9.5/10 — GO. Status Draft → Ready. Anti-hallucination check: todas as alegacoes tecnicas (linhas 77-88, comentario do source, dependencia 15.11 Done) verificadas contra o codigo fonte. | Pax (@po) |
