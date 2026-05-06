@@ -2,7 +2,7 @@
 epic: 22
 story: 22.1
 title: Portal do Cliente PWA — Manifest, Offline e Instalação
-status: Ready for Review
+status: Done
 priority: P1
 created_at: 2026-05-06
 created_by: River (@sm)
@@ -309,7 +309,31 @@ _nenhum_
 
 ## QA Results
 
-_Aguardando implementação._
+### Review Date: 2026-05-06
+
+### Reviewed By: Quinn (@qa)
+
+**Checks executados:**
+
+| Check | Status |
+|-------|--------|
+| Code review | ✅ PASS |
+| Unit tests | ⚠️ MEDIUM — sw.js sem cobertura (fora do escopo S/2h) |
+| Acceptance criteria (AC1-AC7) | ✅ PASS |
+| Regressões | ✅ PASS — manifest.json CRM intocado; sw.js handlers existentes preservados |
+| Performance | ✅ PASS |
+| Segurança | ✅ PASS — /cliente/offline estático, sem dados sensíveis |
+| Documentação | ✅ PASS |
+
+**MNT-001 (low):** `self.skipWaiting()` fora da Promise chain — funcional, encadear em próxima passagem.
+
+**TEST-001 (medium):** sw.js sem testes unitários — deferred para próximo sprint.
+
+**MNT-002 (low):** Ícones placeholder monocromáticos — substituir por brand antes de produção.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/22.1-portal-cliente-pwa-manifest-offline.yml
 
 ## Change Log
 
@@ -318,3 +342,4 @@ _Aguardando implementação._
 | 2026-05-06 | River (@sm) | Story 22.1 criada — PWA manifest + offline fallback para o Portal do Cliente |
 | 2026-05-06 | Pax (@po) | Validação GO (9/10) — 1 critical fix aplicado inline: pre-caching de `/cliente/offline` no install event adicionado ao Dev Notes sw.js + middleware fix explícito. Status: Draft → Ready |
 | 2026-05-06 | Dex (@dev) | Implementação completa — 7 arquivos criados/modificados. type-check + lint PASS (erros email-* pré-existentes). Status: Ready → Ready for Review |
+| 2026-05-06 | Quinn (@qa) | QA Gate PASS — todos os 7 ACs verificados. 3 issues low/medium não-bloqueantes registrados. Status: Ready for Review → Done |

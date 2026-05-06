@@ -1,0 +1,20 @@
+schema: 1
+story: '22.1'
+gate: PASS
+status_reason: 'Todos os 7 ACs implementados corretamente. Pre-cache do offline fallback resolvido na validação @po; middleware e sw.js sem regressão no CRM.'
+reviewer: 'Quinn'
+updated: '2026-05-06T00:00:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: 'sw.js: self.skipWaiting() chamado fora da Promise chain de waitUntil — funcional, mas não é a forma canônica'
+    suggested_action: 'Encadear .then(() => self.skipWaiting()) após cache.add() em próxima passagem do sw.js'
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'Lógica do service worker sem cobertura de testes — install/fetch handlers testáveis via jest-environment-service-worker'
+    suggested_action: 'Adicionar testes unitários do sw.js em próximo sprint'
+  - id: 'MNT-002'
+    severity: low
+    finding: 'Ícones icon-192.png e icon-512.png são placeholders monocromáticos — não representam brand final'
+    suggested_action: 'Substituir por ícones reais da marca antes de lançamento em produção'
+waiver: { active: false }

@@ -1,0 +1,16 @@
+schema: 1
+story: '21.2'
+gate: PASS
+status_reason: 'Todos os 6 ACs implementados corretamente. Mudança aditiva no dynamicSuffix sem risco de regressão; campos sensíveis ausentes do bloco injetado.'
+reviewer: 'Quinn'
+updated: '2026-05-06T00:00:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'buildLeadContext() é função pura sem cobertura de testes unitários'
+    suggested_action: 'Adicionar testes unitários em próximo sprint para cobrir casos: todos null, alguns preenchidos, qualification_status=not_started omitido'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'pipeline.ts linha 332 contém comentário placeholder "Story 21.2 (lead context) deve ser incluída aqui" — agora obsoleto'
+    suggested_action: 'Remover a frase "Story 21.2 (lead context) deve ser incluída aqui" do comentário em próxima passagem de limpeza'
+waiver: { active: false }

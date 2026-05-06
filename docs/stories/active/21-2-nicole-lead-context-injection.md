@@ -283,7 +283,30 @@ _nenhum_
 - `packages/ai/src/chat/pipeline.ts` — modificado
 
 ## QA Results
-_a preencher pelo @qa_
+
+### Review Date: 2026-05-06
+
+### Reviewed By: Quinn (@qa)
+
+**Checks executados:**
+
+| Check | Status |
+|-------|--------|
+| Code review | ✅ PASS |
+| Unit tests | ⚠️ MEDIUM — fora do escopo da story |
+| Acceptance criteria (AC1-AC6) | ✅ PASS |
+| Regressões | ✅ PASS |
+| Performance | ✅ PASS |
+| Security (sem campos sensíveis) | ✅ PASS |
+| Documentação | ⚠️ LOW — 1 comentário placeholder obsoleto |
+
+**TEST-001 (medium):** `buildLeadContext()` sem testes unitários — função pura, trivialmente testável. Recomendado em próximo sprint.
+
+**MNT-001 (low):** `pipeline.ts:332` — comentário "deve ser incluída aqui" obsoleto após implementação.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/21.2-nicole-lead-context-injection.yml
 
 ## Change Log
 
