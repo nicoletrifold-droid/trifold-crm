@@ -1,0 +1,114 @@
+storyId: "20.6"
+storyTitle: "Central de Notificações do Portal do Cliente"
+reviewedAt: "2026-05-06"
+reviewer: "Quinn (@qa)"
+verdict: PASS
+
+summary: >
+  Todos os 12 ACs implementados corretamente. Fire-and-forget pattern aplicado de forma
+  consistente nas 4 rotas admin. Segurança verificada: adminClient usado apenas server-side,
+  tokens WhatsApp nunca expostos ao cliente, vinculo check em GET e PATCH.
+  Um concern médio identificado: phone number não é pré-preenchido no carregamento da página
+  (GET não retorna users.phone). UX gap documentado como melhoria futura — não bloqueia MVP.
+
+checks:
+  code_review: PASS
+  unit_tests: CONCERNS       # Sem testes unitários para notifyClientes — padrão do projeto; lógica verificada via type-check
+  acceptance_criteria: PASS  # AC1-AC12 todos verificados
+  no_regressions: PASS       # 4 rotas admin com mudanças mínimas (import + 1 linha); tab-nav aditivo
+  performance: PASS          # Promise.all para org_id + vinculos; fire-and-forget não bloqueia resposta admin
+  security: PASS
+  documentation: PASS        # File List completo; Dev Notes detalhados; Change Log atualizado
+
+ac_verification:
+  - ac: AC1
+    status: PASS
+    note: "GET retorna prefs reais ou DEFAULT_PREFS; vinculo check via cliente_obras antes de buscar prefs"
+  - ac: AC2
+    status: PASS
+    note: "PATCH com whitelist PREF_BOOL_FIELDS; upsert onConflict=user_id; phone salvo em users via update separado"
+  - ac: AC3
+    status: PASS
+    note: "Client Component com useParams(); toggles email/WhatsApp; campo phone condicional; feedback inline; aba na bottom nav"
+  - ac: AC4
+    status: PASS
+    note: "fotos/route.ts importa notifyClientes; select expandido para 'id, name'; fire-and-forget após INSERT"
+  - ac: AC5
+    status: PASS
+    note: "documentos/route.ts idem; evento 'novo_documento'"
+  - ac: AC6
+    status: PASS
+    note: "mensagens/route.ts idem; evento 'nova_mensagem'"
+  - ac: AC7
+    status: PASS
+    note: "route.ts PATCH: notify condicional em 'progress_pct' in updates; outros campos (name, description, status) não disparam"
+  - ac: AC8
+    status: PASS
+    note: "buildEmailHtml com header #0F0F0F, acento #E8856A, CTA 'Ver no Portal' linkando para /cliente/{obra_id}"
+  - ac: AC9
+    status: PASS
+    note: "sendWhatsApp filtra whatsapp_config por org_id (multi-org safe); Graph API v21.0; mensagem texto livre"
+  - ac: AC10
+    status: PASS
+    note: "sendWhatsApp lança erro; chamador captura via .catch(err => console.error('[notificacoes] WhatsApp skip:', err)); operação admin não afetada"
+  - ac: AC11
+    status: PASS
+    note: "pnpm run type-check → 0 erros nos arquivos Story 20.6"
+  - ac: AC12
+    status: PASS
+    note: "pnpm run lint → 0 erros/avisos nos arquivos novos e modificados"
+
+security_review:
+  org_isolation: PASS
+  token_exposure: PASS
+  admin_client_usage: PASS
+  vinculo_check: PASS
+  sql_injection: PASS
+  notes: >
+    createAdminClient() usado exclusivamente server-side dentro de notifyClientes;
+    access_token do WhatsApp nunca retornado ao browser.
+    Vinculo check (cliente_obras) em GET e PATCH antes de qualquer operação de dados.
+    Campos booleanos whitelisted — sem injeção possível via body.
+    org_id obtido internamente da obra (não do request) — multi-org isolamento correto.
+
+issues:
+  - severity: medium
+    category: code
+    description: >
+      Phone number não é pré-preenchido ao carregar a página de notificações.
+      GET /api/cliente/obras/[obra_id]/notificacoes não retorna users.phone — apenas os campos
+      de obra_notificacao_prefs. O cliente que habilitou WhatsApp e salvou o número verá
+      o campo phone vazio ao revisitar a página.
+    recommendation: >
+      Melhoria futura: expandir GET para fazer JOIN em users e retornar phone junto com prefs,
+      inicializando setPhone(data.phone ?? "") no useEffect. Não bloqueia MVP pois o número
+      salvo é utilizado corretamente server-side — apenas a UX de "pré-preenchimento" está ausente.
+
+  - severity: low
+    category: code
+    description: >
+      prefKey usa cast `as keyof ObraNotificacaoPrefs` após lookup em EVENTO_PREF_KEY (Record<EventoNotificacao, string>).
+      O cast mascara o tipo string — em teoria poderia resolver para campos não-boolean da interface.
+    recommendation: >
+      Tipar EVENTO_PREF_KEY como Record<EventoNotificacao, keyof ObraNotificacaoPrefs> e
+      remover o cast explícito. Sem risco de runtime pois os valores são sempre campos
+      notify_* corretos.
+
+  - severity: low
+    category: code
+    description: >
+      buildEmailHtml usa template literal com conteúdo de nome e obraName sem HTML escaping.
+      XSS teórico se esses campos contiverem tags HTML.
+    recommendation: >
+      Aceitável em contexto de MVP: valores vêm de campos editados por admins (não usuários
+      externos), e clientes de email modernos sanitizam HTML. Considerar escaping em iterações
+      futuras se o escopo de quem edita obras expandir.
+
+  - severity: low
+    category: code
+    description: >
+      useEffect na página de notificações silencia erros de carregamento (.catch(() => {})).
+      O usuário vê o estado default sem saber que as prefs reais falharam ao carregar.
+    recommendation: >
+      Adicionar setFeedback({ type: 'error', msg: 'Erro ao carregar preferências' }) no
+      catch do useEffect para transparência. Impacto cosmético; defaults são razoáveis.

@@ -600,6 +600,29 @@ packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx
 - `packages/web/src/app/api/admin/obras/[obra_id]/route.ts` — fire-and-forget notify progresso (quando progress_pct presente)
 - `packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx` — adicionar tab Notificações
 
+## QA Results
+
+**Reviewer:** Quinn (@qa) — 2026-05-06
+**Verdict:** PASS
+**Gate file:** `docs/qa/gates/20.6-central-de-notificacoes.yml`
+
+**Checks:**
+- Code Review: PASS — fire-and-forget pattern consistente, separação de responsabilidades clara
+- Unit Tests: CONCERNS — sem testes unitários para `notifyClientes` (padrão do projeto; lógica verificada via type-check)
+- Acceptance Criteria: PASS — AC1–AC12 todos verificados
+- No Regressions: PASS — 4 rotas admin com mudanças mínimas; tab-nav aditivo
+- Performance: PASS — Promise.all para queries paralelas; notificações não bloqueiam resposta admin
+- Security: PASS — adminClient server-side only; tokens WhatsApp nunca expostos; vinculo check em GET e PATCH
+- Documentation: PASS — Dev Notes completos, File List atualizado, Change Log correto
+
+**Concerns documentados (não bloqueantes):**
+1. `MEDIUM` — Phone não pré-preenchido ao revisitar página (GET não retorna `users.phone`); UX gap, notificações funcionam corretamente server-side
+2. `LOW` — Cast `as keyof ObraNotificacaoPrefs` em `prefKey` — refatorar para tipo explícito
+3. `LOW` — `buildEmailHtml` sem HTML escaping — aceitável em contexto admin-controlled
+4. `LOW` — `useEffect` fetch errors silenciosos — adicionar feedback de erro ao carregar
+
+**Aprovado para push.** @devops pode prosseguir.
+
 ## Change Log
 
 | Data | Autor | Descrição |
@@ -607,3 +630,4 @@ packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx
 | 2026-05-06 | River (@sm) | Story criada — Draft |
 | 2026-05-06 | Pax (@po) | Validação GO — C-001 (phone sem persistência → PATCH salva users.phone), C-002 (whatsapp_config sem org filter → filtrar por org_id da obra), C-003 (useParams para Client Component documentado) corrigidos; status → Ready |
 | 2026-05-06 | Dex (@dev) | Implementação completa — 9 tasks concluídas, 9 arquivos criados/modificados, type-check e lint passando; status → InReview |
+| 2026-05-06 | Quinn (@qa) | QA Gate PASS — 12 ACs verificados, 4 concerns low/medium documentados (não bloqueantes); gate file: docs/qa/gates/20.6-central-de-notificacoes.yml |
