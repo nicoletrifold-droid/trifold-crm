@@ -184,3 +184,47 @@ RESEND_WEBHOOK_SECRET=whsec_...
 | 2026-05-05 | 1.0 | Story criada | River (@sm) |
 | 2026-05-05 | 1.1 | Validacao PO 9.5/10 — GO. Status Draft → Ready. Anti-hallucination check: todas as alegacoes tecnicas (linhas 77-88, comentario do source, dependencia 15.11 Done) verificadas contra o codigo fonte. | Pax (@po) |
 | 2026-05-05 | 1.2 | Implementacao concluida. Bloco permissivo removido; hard-fail 503 com log error em `route.ts`. `RESEND_WEBHOOK_SECRET` adicionado ao `.env.example`. Type-check PASS. Status Ready → Ready for Review. | Dex (@dev) |
+| 2026-05-05 | 1.3 | QA Gate PASS. Todos os 4 ACs verificados contra o codigo. Type-check limpo. Pronta para @devops push. | Quinn (@qa) |
+
+## QA Results
+
+**Verdict:** PASS
+**Reviewer:** Quinn (@qa)
+**Date:** 2026-05-05
+**Gate Type:** Security hardening / Bug fix
+
+### Acceptance Criteria Verification
+
+| AC | Status | Evidence |
+|----|--------|----------|
+| **AC1** — 503 + body + log error quando secret ausente | PASS | `route.ts:77-86` — guard clause retorna `NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 })` com `logEvent({ level: "error", event_type: "RESEND_WEBHOOK_SECRET_MISSING", ... })`. Body, status code, e log level batem exatamente com o spec. |
+| **AC2** — Sem fallback permissivo remanescente | PASS | Bloco original `if/else` (warn + accept) substituido por guard clause com `return`. Nao existe mais nenhum caminho de codigo que aceite request sem secret. Comentario "backwards-compat" tambem removido. O unico `warn` remanescente em `route.ts:136` e do log `RESEND_NO_ENTRY_ID` — caminho diferente, executado APOS verificacao de assinatura, nao relacionado ao fallback de secret. |
+| **AC3** — Fluxo HMAC inalterado quando secret presente | PASS | Apos o guard, o bloco de verificacao Svix (linhas 88-111) e identico ao implementado em 15.11: validacao de headers, replay protection (`SVIX_TOLERANCE_SECONDS`), `verifySvixSignature(...)`. Paths `entry_id` (campanha — linhas 158-220) e `email_log_id` (template — linha 152-155) preservados sem regressao. TypeScript narrowing aplica `string` apos guard, mantendo type-safety na chamada `verifySvixSignature(RESEND_WEBHOOK_SECRET, ...)` sem assertion. |
+| **AC4** — Type-check passa | PASS | `pnpm --filter @trifold/web run type-check` executado — saida limpa (`tsc --noEmit` sem erros). |
+
+### Quality Checks (7 pontos)
+
+1. **Code review** — PASS. Mudanca cirurgica e idiomatica: guard clause early-return e o padrao mais legivel para preconditions. Nivel de log `error` correto (era `warn`). Status 503 (Service Unavailable) e semanticamente correto para "secret nao configurado" (vs 401 que e reservado para "assinatura invalida apresentada"). TypeScript narrowing remove a necessidade de non-null assertion na linha 103 — ganho colateral de type-safety.
+2. **Unit tests** — N/A. Story escopo OUT explicita "Testes automatizados (sem suite de integracao configurada para este endpoint)".
+3. **Acceptance criteria** — PASS (4/4 verificados acima).
+4. **No regressions** — PASS. Logica HMAC, replay protection, e ambos os paths de processamento (`entry_id` e `email_log_id`) preservados linha-por-linha. Apenas o nivel de indentacao do bloco Svix mudou (subiu um nivel apos remocao do `else`).
+5. **Performance** — PASS. Guard clause economiza um `request.text()` de payload nao-autenticado em ambientes mal-configurados. Sem impacto perceptivel quando secret presente.
+6. **Security** — PASS. Esta e a propria correcao de seguranca: elimina um caminho silencioso onde webhooks nao-autenticados eram aceitos. Hardening completo do escopo iniciado em 15.11. Log level elevado para `error` garante alertas em monitoramento.
+7. **Documentation** — PASS. `.env.example:108-113` com secao `Email / Webhooks`, comentario explicativo de obrigatoriedade e nota sobre o comportamento 503.
+
+### Constitution Compliance
+
+- Article IV (No Invention): PASS — todas as alteracoes correspondem exatamente ao spec da story.
+- Article V (Quality First): PASS — type-check limpo, sem testes pendentes (escopo OUT documentado).
+
+### Issues Encontrados
+
+Nenhum.
+
+### Recomendacao para @devops
+
+Story PRONTA para push. Acoes pos-deploy obrigatorias:
+
+1. **Configurar `RESEND_WEBHOOK_SECRET` em todos os ambientes (dev/staging/prod)** ANTES do deploy do codigo, ou o webhook comecara a retornar 503 imediatamente apos rollout. Esta e a contraparte operacional do hardening — listada como OUT da story (responsabilidade @devops conforme `Scope.OUT`).
+2. Validar via `curl` ou logs que webhooks reais do Resend continuam sendo processados (HMAC ok) apos deploy.
+3. Monitorar `RESEND_WEBHOOK_SECRET_MISSING` em logs por 24h pos-deploy — qualquer ocorrencia indica ambiente nao configurado.
