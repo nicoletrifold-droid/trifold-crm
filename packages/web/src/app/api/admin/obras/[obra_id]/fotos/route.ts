@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { notifyClientes } from "@web/lib/notificacoes"
 
 const ALLOWED_ROLES = ["admin", "supervisor"]
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
@@ -21,7 +22,7 @@ export async function POST(
   // Verifica que a obra pertence à org do admin (isolamento de org explícito)
   const { data: obra } = await supabase
     .from("obras")
-    .select("id")
+    .select("id, name")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -137,6 +138,9 @@ export async function POST(
       { status: 500 }
     )
   }
+
+  // Fire-and-forget: notificar clientes vinculados
+  notifyClientes(obra_id, "nova_foto", obra.name).catch(() => {})
 
   return NextResponse.json({ foto }, { status: 201 })
 }

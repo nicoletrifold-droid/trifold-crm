@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { notifyClientes } from "@web/lib/notificacoes"
 
 const ALLOWED_ROLES = ["admin", "supervisor"]
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -49,7 +50,7 @@ export async function POST(
 
   const { data: obra } = await supabase
     .from("obras")
-    .select("id")
+    .select("id, name")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -124,6 +125,9 @@ export async function POST(
     await supabase.storage.from("obra-docs").remove([storagePath])
     return NextResponse.json({ error: dbError.message }, { status: 500 })
   }
+
+  // Fire-and-forget: notificar clientes vinculados
+  notifyClientes(obra_id, "novo_documento", obra.name).catch(() => {})
 
   return NextResponse.json({ documento }, { status: 201 })
 }

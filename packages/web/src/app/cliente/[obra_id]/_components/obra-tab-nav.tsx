@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, MessageSquare } from "lucide-react"
+import { Home, FileText, MessageSquare, Bell } from "lucide-react"
 
 interface ObraTabNavProps {
   obraId: string
@@ -28,6 +28,12 @@ export function ObraTabNav({ obraId }: ObraTabNavProps) {
       label: "Mensagens",
       href: `/cliente/${obraId}/mensagens`,
       icon: MessageSquare,
+      exact: false,
+    },
+    {
+      label: "Notificações",
+      href: `/cliente/${obraId}/notificacoes`,
+      icon: Bell,
       exact: false,
     },
   ]
