@@ -1,10 +1,6 @@
 import { redirect } from "next/navigation"
-import Image from "next/image"
 import { createClient } from "@web/lib/supabase/server"
 import { logout } from "@web/app/login/actions"
-import { FasesList } from "./_components/fases-list"
-import { FotosGrid } from "./_components/fotos-grid"
-import { MensagensList } from "./_components/mensagens-list"
 
 const STATUS_LABEL: Record<string, string> = {
   em_andamento: "Em andamento",
@@ -12,18 +8,33 @@ const STATUS_LABEL: Record<string, string> = {
   pausada: "Pausada",
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  em_andamento: "bg-amber-900/40 text-amber-400",
-  concluida: "bg-green-900/40 text-green-400",
-  pausada: "bg-stone-800 text-stone-400",
+const FASE_STATUS_LABEL: Record<string, string> = {
+  pendente: "Pendente",
+  em_andamento: "Em andamento",
+  concluida: "Concluída",
 }
 
-function formatDeliveryDate(date: string | null): string {
-  if (!date) return "A definir"
-  return new Date(date).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-  })
+function formatShortDate(dateStr: string | null): string {
+  if (!dateStr) return "—"
+  const d = new Date(dateStr)
+  const day = d.getUTCDate().toString().padStart(2, "0")
+  const rawMonth = d.toLocaleDateString("pt-BR", { month: "short", timeZone: "UTC" })
+  const month =
+    rawMonth.replace(".", "").charAt(0).toUpperCase() +
+    rawMonth.replace(".", "").slice(1)
+  const year = d.getUTCFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatRelativeDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return "Hoje"
+  if (diffDays === 1) return "Ontem"
+  if (diffDays < 7) return `${diffDays} dias atrás`
+  return formatShortDate(dateStr)
 }
 
 export default async function ObraPage({
@@ -34,7 +45,6 @@ export default async function ObraPage({
   const { obra_id } = await params
   const supabase = await createClient()
 
-  // RLS ensures the cliente only sees their own obras
   const { data: obra } = await supabase
     .from("obras")
     .select(
@@ -43,56 +53,56 @@ export default async function ObraPage({
     .eq("id", obra_id)
     .single()
 
-  if (!obra) {
-    redirect("/cliente/sem-obra")
-  }
+  if (!obra) redirect("/cliente/sem-obra")
 
-  const [fasesRes, fotosRes, mensagensRes] = await Promise.all([
+  const [fasesRes, docsRes] = await Promise.all([
     supabase
       .from("obra_fases")
-      .select("id, name, status, progress_pct, order_index, start_date, end_date")
+      .select(
+        "id, name, status, progress_pct, order_index, start_date, end_date"
+      )
       .eq("obra_id", obra_id)
       .order("order_index"),
     supabase
-      .from("obra_fotos")
-      .select("id, storage_path, caption, taken_at, fase_id")
+      .from("obra_documentos")
+      .select("id, name, category, created_at")
       .eq("obra_id", obra_id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("obra_mensagens")
-      .select("id, content, created_at, sender_type")
-      .eq("obra_id", obra_id)
-      .eq("sender_type", "equipe")
       .order("created_at", { ascending: false })
       .limit(5),
   ])
 
   const fases = fasesRes.data ?? []
-  const fotos = fotosRes.data ?? []
-  const mensagens = mensagensRes.data ?? []
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
+  const docs = docsRes.data ?? []
 
-  const statusBadge = STATUS_BADGE[obra.status] ?? "bg-stone-800 text-stone-400"
+  const currentPhase = obra.current_phase_id
+    ? fases.find((f) => f.id === obra.current_phase_id)
+    : null
+
   const statusLabel = STATUS_LABEL[obra.status] ?? obra.status
+
+  const now = new Date()
+  const proximosMarcos = fases
+    .flatMap((f) => {
+      const items: { label: string; date: string }[] = []
+      if (f.start_date && new Date(f.start_date) > now) {
+        items.push({ label: `Início — ${f.name}`, date: f.start_date })
+      }
+      if (f.end_date && new Date(f.end_date) > now) {
+        items.push({ label: `Conclusão — ${f.name}`, date: f.end_date })
+      }
+      return items
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 4)
 
   return (
     <div className="min-h-screen bg-stone-950">
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-stone-800 bg-stone-950/90 backdrop-blur-sm">
+      {/* Mobile header */}
+      <header className="sticky top-0 z-10 border-b border-stone-800 bg-stone-950/90 backdrop-blur-sm lg:hidden">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/logo-trifold.webp"
-              alt="Trifold"
-              width={36}
-              height={36}
-              className="rounded-lg"
-            />
-            <div>
-              <p className="text-xs text-stone-500">Acompanhamento</p>
-              <p className="text-sm font-semibold text-white">{obra.name}</p>
-            </div>
+          <div>
+            <p className="text-xs text-stone-500">Acompanhamento</p>
+            <p className="text-sm font-semibold text-white">{obra.name}</p>
           </div>
           <form action={logout}>
             <button
@@ -105,73 +115,157 @@ export default async function ObraPage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-        {/* Visão Geral */}
-        <section className="rounded-2xl border border-stone-800 bg-stone-900 p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-white">{obra.name}</h2>
-              {obra.description && (
-                <p className="mt-1 text-sm text-stone-400">{obra.description}</p>
-              )}
-            </div>
-            <span
-              className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium ${statusBadge}`}
-            >
-              {statusLabel}
+      <main className="mx-auto max-w-4xl px-4 py-6 lg:py-8">
+        {/* Hero section */}
+        <div className="mb-5 rounded-2xl border border-stone-800 bg-stone-900 p-6">
+          <p className="mb-1 text-xs font-medium uppercase tracking-widest text-stone-500">
+            Sua Obra
+          </p>
+          <h1 className="mb-4 text-2xl font-bold text-white lg:text-3xl">
+            {obra.name}
+          </h1>
+          <div className="mb-1.5 flex items-center justify-between text-sm">
+            <span className="text-stone-400">
+              Progresso geral:{" "}
+              <span className="font-semibold text-[#E8856A]">
+                {obra.progress_pct}%
+              </span>
             </span>
-          </div>
-
-          <div className="mb-4">
-            <div className="mb-1.5 flex justify-between text-sm">
-              <span className="text-stone-400">Progresso geral</span>
-              <span className="font-medium text-white">{obra.progress_pct}%</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-stone-800">
-              <div
-                className="h-2 rounded-full bg-[#E8856A] transition-all"
-                style={{ width: `${obra.progress_pct}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-sm text-stone-400">
-            <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span>
-              Previsão de entrega:{" "}
+            <span className="text-stone-400">
+              Entrega prevista:{" "}
               <span className="text-white">
-                {formatDeliveryDate(obra.expected_delivery_date)}
+                {formatShortDate(obra.expected_delivery_date)}
               </span>
             </span>
           </div>
-        </section>
+          <div className="h-2 w-full rounded-full bg-stone-800">
+            <div
+              className="h-2 rounded-full bg-[#E8856A] transition-all"
+              style={{ width: `${obra.progress_pct}%` }}
+            />
+          </div>
+        </div>
 
-        {/* Fases */}
-        <section>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-500">
-            Fases da Obra
-          </h3>
-          <FasesList fases={fases} currentPhaseId={obra.current_phase_id} />
-        </section>
+        {/* Stats cards */}
+        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            label="Fase Atual"
+            value={currentPhase?.name ?? "—"}
+            sub={
+              currentPhase
+                ? (FASE_STATUS_LABEL[currentPhase.status] ?? currentPhase.status)
+                : ""
+            }
+          />
+          <StatCard
+            label="Progresso"
+            value={`${obra.progress_pct}%`}
+            sub={statusLabel}
+          />
+          <StatCard
+            label="Fases"
+            value={`${fases.filter((f) => f.status === "concluida").length}/${fases.length}`}
+            sub="Concluídas"
+          />
+          <StatCard
+            label="Entrega Prevista"
+            value={formatShortDate(obra.expected_delivery_date)}
+            sub="Previsão"
+            highlight
+          />
+        </div>
 
-        {/* Fotos Recentes */}
-        <section>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-500">
-            Fotos Recentes
-          </h3>
-          <FotosGrid fotos={fotos} supabaseUrl={supabaseUrl} />
-        </section>
+        {/* Activities + milestones */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* Atividades recentes */}
+          <div className="rounded-2xl border border-stone-800 bg-stone-900 p-5">
+            <h3 className="mb-4 text-sm font-semibold text-white">
+              Atividades recentes
+            </h3>
+            {docs.length === 0 ? (
+              <p className="text-sm text-stone-500">Nenhuma atividade ainda.</p>
+            ) : (
+              <ul className="space-y-3">
+                {docs.map((doc) => (
+                  <li key={doc.id} className="flex items-start gap-2.5">
+                    <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-stone-800">
+                      <span className="text-[8px] font-bold text-stone-400">
+                        PDF
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm text-stone-300">
+                        Documento{" "}
+                        <span className="font-medium text-white">
+                          &ldquo;{doc.name}&rdquo;
+                        </span>{" "}
+                        disponibilizado.
+                      </p>
+                      <p className="text-xs text-stone-500">
+                        {formatRelativeDate(doc.created_at)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        {/* Atualizações da Equipe */}
-        <section className="pb-8">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-500">
-            Atualizações da Equipe
-          </h3>
-          <MensagensList mensagens={mensagens} />
-        </section>
+          {/* Próximos marcos */}
+          <div className="rounded-2xl border border-stone-800 bg-stone-900 p-5">
+            <h3 className="mb-4 text-sm font-semibold text-white">
+              Próximos marcos
+            </h3>
+            {proximosMarcos.length === 0 ? (
+              <p className="text-sm text-stone-500">
+                Nenhum marco próximo cadastrado.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {proximosMarcos.map((marco, idx) => (
+                  <li
+                    key={idx}
+                    className="rounded-lg border border-stone-800 bg-stone-950/40 px-3 py-2.5"
+                  >
+                    <p className="text-sm font-medium text-white">
+                      {marco.label}
+                    </p>
+                    <p className="text-xs text-stone-500">
+                      {formatShortDate(marco.date)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </main>
+    </div>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  sub,
+  highlight = false,
+}: {
+  label: string
+  value: string
+  sub: string
+  highlight?: boolean
+}) {
+  return (
+    <div className="rounded-xl border border-stone-800 bg-stone-900 p-4">
+      <p className="mb-1.5 text-xs text-stone-500">{label}</p>
+      <p className="text-base font-semibold text-white">{value}</p>
+      {sub && (
+        <p
+          className={`mt-0.5 text-xs ${highlight ? "text-[#E8856A]" : "text-stone-400"}`}
+        >
+          {sub}
+        </p>
+      )}
     </div>
   )
 }

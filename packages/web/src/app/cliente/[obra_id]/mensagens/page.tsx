@@ -31,7 +31,7 @@ export default async function MensagensPage({
 
   return (
     <div className="flex h-screen flex-col bg-stone-950">
-      <header className="flex-shrink-0 border-b border-stone-800 bg-stone-950">
+      <header className="flex-shrink-0 border-b border-stone-800 bg-stone-950 lg:hidden">
         <div className="mx-auto max-w-2xl px-4 py-4">
           <p className="text-xs text-stone-500">Mensagens</p>
           <p className="text-sm font-semibold text-white">{obra.name}</p>
