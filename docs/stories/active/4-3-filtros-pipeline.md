@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.3 — Filtros do Pipeline
 
 ## Contexto
@@ -73,3 +75,9 @@ M (Media) — 2-3 horas
 
 ### Created/Modified
 - `packages/web/src/app/dashboard/pipeline/page.tsx` — Atualizado: adicionada barra de filtros (empreendimento, corretor, score) com submit via form e botao "Limpar" condicional; filtros aplicados server-side via searchParams com query Supabase; contagem total de leads reflete filtros
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.8 — Horario Comercial
 
 ## Contexto
@@ -77,3 +79,9 @@ P (Pequena) — 1 hora
 
 ## File List
 - `packages/ai/src/utils/business-hours.ts` — Funcao isBusinessHours() com suporte a timezone, dias da semana e modos de operacao
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

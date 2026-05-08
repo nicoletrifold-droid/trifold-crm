@@ -1,3 +1,5 @@
+status: Done
+
 # Story 10.3 — Tela de Agenda Mobile (PWA)
 
 ## Contexto
@@ -123,3 +125,9 @@ function AgendaMobile() {
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

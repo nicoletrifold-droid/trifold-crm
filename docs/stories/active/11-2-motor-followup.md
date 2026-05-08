@@ -1,3 +1,5 @@
+status: Done
+
 # Story 11.2 — Motor de Follow-up (Engine)
 
 ## Contexto
@@ -29,3 +31,9 @@ Engine que roda periodicamente, verifica leads que precisam de follow-up baseado
 
 ## Estimativa
 G — 3-4h
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 8.1 — Leads por Periodo (Grafico)
 
 ## Contexto
@@ -120,3 +122,9 @@ Todos os 10 ACs verificados. Typecheck 0 erros, Lint 0 erros.
 Gate file: `docs/qa/gates/8.1-leads-por-periodo.yml`
 
 **Aprovada para push via @devops.**
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

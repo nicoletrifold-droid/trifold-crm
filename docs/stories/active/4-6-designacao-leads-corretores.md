@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.6 — Designacao de Leads a Corretores
 
 ## Contexto
@@ -70,3 +72,9 @@ M (Media) — 2-3 horas
 ## File List
 
 - `packages/web/src/app/api/leads/[id]/assign/route.ts` — PATCH (designar corretor ao lead)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

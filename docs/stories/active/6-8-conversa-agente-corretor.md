@@ -1,3 +1,5 @@
+status: Done
+
 # Story 6.8 — Visualizar Conversa do Agente (Painel Corretor)
 
 ## Contexto
@@ -48,3 +50,9 @@ P (Pequena) — 1-2 horas (reusar 90% da Story 4.7)
 ## File List
 
 - `packages/web/src/app/broker/leads/[id]/page.tsx` — Secao de conversa integrada na pagina de detalhe do lead do corretor com chat bubbles, cores por sender type e scroll automatico para mensagem mais recente
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

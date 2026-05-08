@@ -1,3 +1,5 @@
+status: Done
+
 # Story 7.1 — Meta Ads Webhook Receiver (Lead Import Automatico)
 
 ## Contexto
@@ -92,3 +94,9 @@ META_VERIFY_TOKEN=       # Para verificacao do webhook (pode ser o mesmo do What
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

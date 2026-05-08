@@ -1,3 +1,5 @@
+status: Done
+
 # Story 10.2 — Push Notifications
 
 ## Contexto
@@ -183,3 +185,9 @@ npx web-push generate-vapid-keys
 
 ## Estimativa
 G (Grande) — 3-4 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 9.3 — Tela de Agenda do Corretor
 
 ## Contexto
@@ -96,3 +98,9 @@ function detectConflicts(appointments: Appointment[]): Set<string> {
 
 ## Estimativa
 G (Grande) — 3-4 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

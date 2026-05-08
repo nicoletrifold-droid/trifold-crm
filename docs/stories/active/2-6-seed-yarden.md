@@ -1,3 +1,5 @@
+status: Done
+
 # Story 2.6 — Seed Yarden (60 Unidades)
 
 ## Contexto
@@ -121,3 +123,9 @@ M (Media) — 1-2 horas
 
 ### Created/Modified
 - `supabase/seeds/seed-yarden.sql` — Seed do empreendimento Yarden: 2 tipologias e 60 unidades
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 2.5 — Seed Vind (48 Unidades)
 
 ## Contexto
@@ -105,3 +107,9 @@ P (Pequena) — 1 hora
 
 ### Created/Modified
 - `supabase/seeds/seed-vind.sql` — Seed do empreendimento Vind: 1 tipologia e 48 unidades
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.9 — Estado da Conversa (Persistencia)
 
 ## Contexto
@@ -86,3 +88,9 @@ M (Media) — 2 horas
 ## File List
 - `packages/ai/src/chat/pipeline.ts` — Pipeline principal: carrega e salva conversation_state a cada mensagem processada (loadConversationState, updateConversationState)
 - `supabase/migrations/001_base_schema.sql` — Tabela conversation_state criada nesta migration
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,6 +1,6 @@
 # Story 12.1 — Sistema de Observabilidade e Saude do Sistema
 
-## Status: Ready for Review
+## Status: Done
 
 ## Contexto
 O sistema nao tem observabilidade. Erros vao para console.error (stdout Vercel) e somem. Webhooks retornam 200 mesmo com erro, perdendo mensagens. O admin nao tem visibilidade sobre falhas do bot, da AI, do RAG, nem das integracoes. Precisamos de monitoramento proativo para saber com antecedencia quando algo esta dando errado.
@@ -73,3 +73,10 @@ XL — 6-8h
 
 ## QA Results
 <!-- QA agent will append results here -->
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente | — |

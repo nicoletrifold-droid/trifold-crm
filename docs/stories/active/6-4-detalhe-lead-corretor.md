@@ -1,3 +1,5 @@
+status: Done
+
 # Story 6.4 — Detalhe do Lead (Versao Corretor)
 
 ## Contexto
@@ -58,3 +60,9 @@ M (Media) — 2 horas (reusar ~70% da Story 4.5)
 ## File List
 
 - `packages/web/src/app/broker/leads/[id]/page.tsx` — Pagina de detalhe do lead para o corretor com header, resumo IA, conversa, dados e timeline; sem acoes de redesignacao/delecao
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

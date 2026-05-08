@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.4 — Qualificacao de Leads
 
 ## Contexto
@@ -97,3 +99,9 @@ G (Grande) — 3-4 horas
 
 ## File List
 - `packages/ai/src/flows/qualification.ts` — Logica do fluxo de qualificacao: calculateQualificationScore, getNextQualificationStep, extractCollectedData
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

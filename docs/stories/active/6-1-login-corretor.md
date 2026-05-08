@@ -1,3 +1,5 @@
+status: Done
+
 # Story 6.1 — Login Corretor (Auth com Role Broker)
 
 ## Contexto
@@ -69,3 +71,9 @@ M (Media) — 2 horas
 
 - `packages/web/src/app/login/page.tsx` — Pagina de login unica com redirect por role (admin/supervisor para /dashboard, broker para /broker)
 - `packages/web/src/app/broker/layout.tsx` — Layout do painel do corretor com header, nome, empreendimentos vinculados e botao sair; redireciona nao-corretores para /dashboard
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

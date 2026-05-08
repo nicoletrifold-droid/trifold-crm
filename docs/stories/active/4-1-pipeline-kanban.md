@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.1 — Pipeline Kanban
 
 ## Contexto
@@ -94,3 +96,9 @@ G (Grande) — 3-4 horas
 - `packages/web/src/components/pipeline/kanban-board.tsx` — Board completo com drag-and-drop
 - `packages/web/src/components/pipeline/kanban-column.tsx` — Coluna individual do kanban
 - `packages/web/src/components/pipeline/lead-card.tsx` — Card do lead com dados imobiliarios
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

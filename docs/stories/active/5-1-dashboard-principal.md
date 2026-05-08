@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.1 — Dashboard Principal (Metricas Chave)
 
 ## Contexto
@@ -68,3 +70,9 @@ M (Media) — 2-3 horas
 ## File List
 
 - `packages/web/src/app/dashboard/page.tsx` — Pagina principal do dashboard com cards de metricas, pipeline resumido e distribuicao por empreendimento
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

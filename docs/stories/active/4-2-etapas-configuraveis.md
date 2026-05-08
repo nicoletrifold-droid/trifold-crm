@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.2 — Etapas Configuraveis do Pipeline
 
 ## Contexto
@@ -48,3 +50,9 @@ O admin precisa poder personalizar as etapas do pipeline sem depender de desenvo
 
 ## Estimativa
 P (Pequena) — 1-2 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

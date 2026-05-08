@@ -1,3 +1,5 @@
+status: Done
+
 # Story 0.3 — Bot Telegram Staging (@NicoleTrifoldBot)
 
 ## Contexto
@@ -87,3 +89,9 @@ M (Media) — 2-3 horas
 ### Created/Modified
 - `packages/bot/src/adapters/telegram-adapter.ts` — Implementacao do TelegramAdapter seguindo interface MessagingAdapter
 - `packages/web/src/app/api/telegram/webhook/route.ts` — Webhook POST handler para mensagens do Telegram
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

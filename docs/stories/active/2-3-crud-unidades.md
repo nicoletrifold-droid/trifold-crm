@@ -1,3 +1,5 @@
+status: Done
+
 # Story 2.3 — CRUD Unidades Individuais
 
 ## Contexto
@@ -62,3 +64,9 @@ G (Grande) — 3-4 horas
 - `packages/web/src/app/api/properties/[propertyId]/units/route.ts` — GET (list), POST (create)
 - `packages/web/src/app/api/units/[id]/route.ts` — GET (detail), PATCH (update)
 - `packages/web/src/app/dashboard/properties/[id]/page.tsx` — Property detail page com tabela de unidades integrada
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

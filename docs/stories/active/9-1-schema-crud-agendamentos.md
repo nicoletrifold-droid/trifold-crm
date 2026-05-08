@@ -1,3 +1,5 @@
+status: Done
+
 # Story 9.1 — Schema e CRUD de Agendamentos
 
 ## Contexto
@@ -98,3 +100,9 @@ async function checkConflicts(brokerId: string, scheduledAt: Date, durationMinut
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

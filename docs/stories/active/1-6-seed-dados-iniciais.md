@@ -1,3 +1,5 @@
+status: Done
+
 # Story 1.6 — Seed de Dados Iniciais
 
 ## Contexto
@@ -70,3 +72,9 @@ P (Pequena) — 1-2 horas
 ### Created/Modified
 - `supabase/seed.sql` — Seed SQL principal com organizacao, usuarios, kanban stages, agent config e agent prompts
 - `supabase/run-seed.ts` — Script TypeScript para execucao do seed
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

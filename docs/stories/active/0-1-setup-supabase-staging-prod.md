@@ -1,3 +1,5 @@
+status: Done
+
 # Story 0.1 — Setup 2 Projetos Supabase (Staging + Producao)
 
 ## Contexto
@@ -71,3 +73,9 @@ M (Media) — 2-3 horas
 - `supabase/migrations/002_property_schema.sql` — Schema de propriedades aplicado no staging
 - `supabase/migrations/003_whatsapp_config.sql` — Config WhatsApp aplicado no staging
 - `supabase/migrations/004_rls_policies.sql` — RLS policies aplicadas no staging
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

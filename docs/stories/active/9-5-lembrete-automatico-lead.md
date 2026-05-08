@@ -1,3 +1,5 @@
+status: Done
+
 # Story 9.5 — Lembrete Automatico ao Lead
 
 ## Contexto
@@ -110,3 +112,9 @@ export async function sendReminder(appointment: AppointmentWithRelations) {
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

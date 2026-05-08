@@ -1,3 +1,5 @@
+status: Done
+
 # Story 7.4 — Click-to-WhatsApp Ads (Referral Data + Janela 72h)
 
 ## Contexto
@@ -83,3 +85,9 @@ async function resolveCampaignName(campaignId: string): Promise<string> {
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

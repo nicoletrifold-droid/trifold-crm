@@ -1,3 +1,5 @@
+status: Done
+
 # Story 9.4 — Tela de Agenda Consolidada (Admin)
 
 ## Contexto
@@ -95,3 +97,9 @@ const { data } = await supabase
 
 ## Estimativa
 G (Grande) — 4-5 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

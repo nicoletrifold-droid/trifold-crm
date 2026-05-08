@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.7 — WhatsApp Cloud API Adapter
 
 ## Contexto
@@ -107,3 +109,9 @@ G (Grande) — 3-4 horas
 - `packages/bot/src/adapters/whatsapp-adapter.ts` — Implementacao do WhatsApp Cloud API adapter
 - `packages/bot/src/adapters/messaging-adapter.ts` — Interface MessagingAdapter (sendText, sendMedia, parseIncoming)
 - `packages/web/src/app/api/webhook/whatsapp/route.ts` — Webhook GET (verification challenge) e POST (receive message)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

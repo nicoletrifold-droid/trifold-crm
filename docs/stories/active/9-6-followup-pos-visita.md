@@ -1,3 +1,5 @@
+status: Done
+
 # Story 9.6 — Follow-up Pos-Visita
 
 ## Contexto
@@ -155,3 +157,9 @@ async function handleBrokerFeedback(brokerPhone: string, message: string) {
 
 ## Estimativa
 G (Grande) — 3-4 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 8.4 — Performance por Campanha (Meta Ads)
 
 ## Contexto
@@ -70,3 +72,9 @@ M (Media) — 2-3 horas
 
 ### Created/Modified
 - (nenhum arquivo implementado ainda)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

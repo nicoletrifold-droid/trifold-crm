@@ -1,3 +1,5 @@
+status: Done
+
 # Story 2.2 — CRUD Tipologias
 
 ## Contexto
@@ -47,3 +49,9 @@ M (Media) — 2 horas
 ### Created/Modified
 - `packages/web/src/app/api/properties/[propertyId]/typologies/route.ts` — GET (list), POST (create)
 - `packages/web/src/app/api/typologies/[id]/route.ts` — GET (detail), PATCH (update), DELETE (soft delete)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 10.1 — Setup PWA (Manifest, Service Worker, Icons)
 
 ## Contexto
@@ -104,3 +106,9 @@ self.addEventListener('fetch', (event) => {
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

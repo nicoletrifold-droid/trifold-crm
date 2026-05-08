@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.2 — Treinamento da IA (Editar Base de Conhecimento)
 
 ## Contexto
@@ -66,3 +68,9 @@ M (Media) — 2-3 horas
 
 ### Created/Modified
 - `packages/web/src/app/dashboard/treinamento/page.tsx` — Criado: pagina de listagem da base de conhecimento com filtro por empreendimento (source_id), formulario inline de adicao (titulo, fonte, empreendimento, conteudo), links de editar/excluir por entrada, tabela com colunas titulo/conteudo/fonte/empreendimento/ativo; acesso restrito a admin/supervisor
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

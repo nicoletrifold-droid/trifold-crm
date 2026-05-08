@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.1 — Personalidade Nicole (System Prompts)
 
 ## Contexto
@@ -81,3 +83,9 @@ M (Media) — 2-3 horas (requer calibracao cuidadosa do tom)
 - `packages/ai/src/prompts/off-hours.ts` — Mensagem fora do horario comercial
 - `packages/ai/src/prompts/index.ts` — Export central + funcao buildSystemPrompt()
 - `scripts/seed-prompts.ts` — Script de seed dos prompts na tabela agent_prompts
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

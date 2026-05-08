@@ -1,3 +1,5 @@
+status: Done
+
 # Story 1.1 — Setup Repositorio GitHub
 
 ## Contexto
@@ -69,3 +71,9 @@ M (Media) — 2-3 horas
 - `packages/db/` — Supabase client (@supabase/supabase-js), types, migrations
 - `packages/bot/` — Estrutura para adapters de mensageria
 - `packages/shared/` — Types, utils e constants compartilhados
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

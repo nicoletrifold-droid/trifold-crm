@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.3 — Identificacao de Empreendimento
 
 ## Contexto
@@ -81,3 +83,9 @@ M (Media) — 2 horas
 
 ## File List
 - `packages/ai/src/flows/identify-property.ts` — Logica de identificacao de empreendimento por mensagem, UTM e keywords
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

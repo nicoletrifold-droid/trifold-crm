@@ -1,3 +1,5 @@
+status: Done
+
 # Story 2.1 — CRUD Empreendimentos
 
 ## Contexto
@@ -58,3 +60,9 @@ M (Media) — 2-3 horas
 - `packages/web/src/app/api/properties/[id]/route.ts` — GET (detail), PATCH (update), DELETE (soft delete)
 - `packages/web/src/app/dashboard/properties/page.tsx` — Listagem de empreendimentos
 - `packages/web/src/app/dashboard/properties/[id]/page.tsx` — Detalhe/edicao de empreendimento
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

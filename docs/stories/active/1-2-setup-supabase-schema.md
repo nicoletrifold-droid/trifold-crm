@@ -1,3 +1,5 @@
+status: Done
+
 # Story 1.2 — Setup Supabase e Schema Base
 
 ## Contexto
@@ -132,3 +134,9 @@ G (Grande) — 3-4 horas
 - `packages/db/src/index.ts` — Supabase client export
 - `packages/db/src/types.ts` — Types TypeScript gerados
 - `.env.example` — Template com todas as variaveis
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 1.4 — Environment Variables
 
 ## Contexto
@@ -65,3 +67,9 @@ P (Pequena) — 1 hora
 - `.env.example` — Template com todas as variaveis necessarias
 - `packages/db/src/client.ts` — Supabase client com env vars
 - `packages/ai/src/client.ts` — Anthropic client com env vars
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

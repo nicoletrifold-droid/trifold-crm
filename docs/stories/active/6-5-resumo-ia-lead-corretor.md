@@ -1,3 +1,5 @@
+status: Done
+
 # Story 6.5 — Resumo IA do Lead (Versao Corretor)
 
 ## Contexto
@@ -61,3 +63,9 @@ P (Pequena) — 1-2 horas
 ## File List
 
 - `packages/web/src/app/broker/leads/[id]/page.tsx` — Secao de resumo IA integrada na pagina de detalhe do lead do corretor (card destacado no topo com titulo "O que voce precisa saber", score badge, e fallback para resumo pendente)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

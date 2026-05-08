@@ -1,3 +1,5 @@
+status: Done
+
 # Story 10.4 — Tela de Leads Mobile (PWA)
 
 ## Contexto
@@ -175,3 +177,9 @@ export function useLeadsList(filters: LeadFilters) {
 
 ## Estimativa
 G (Grande) — 3-4 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

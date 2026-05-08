@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.4 — Lead Management (CRUD)
 
 ## Contexto
@@ -75,3 +77,9 @@ M (Media) — 2-3 horas
 - `packages/web/src/app/api/leads/route.ts` — GET (list paginado), POST (create)
 - `packages/web/src/app/api/leads/[id]/route.ts` — GET (detail), PATCH (update), DELETE (soft delete)
 - `packages/web/src/app/dashboard/leads/page.tsx` — Pagina de listagem com tabela, busca e ordenacao
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

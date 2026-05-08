@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.5 — Detalhe do Lead (Pagina Completa)
 
 ## Contexto
@@ -79,3 +81,9 @@ G (Grande) — 3-4 horas
 - `packages/web/src/app/dashboard/leads/[id]/page.tsx` — Pagina de detalhe do lead com header, dados, resumo IA, conversa e timeline
 - `packages/web/src/app/api/leads/[id]/notes/route.ts` — API routes GET e POST para notas do lead
 - `packages/web/src/app/api/leads/[id]/stage/route.ts` — API route PATCH para mudanca de etapa (acoes rapidas)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

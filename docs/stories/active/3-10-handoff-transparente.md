@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.10 — Handoff Transparente
 
 ## Contexto
@@ -138,3 +140,9 @@ G (Grande) — 3-4 horas
 
 ## File List
 - `packages/ai/src/flows/handoff.ts` — Logica de handoff: shouldHandoff (criterios) e generateHandoffSummary (resumo para corretor)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

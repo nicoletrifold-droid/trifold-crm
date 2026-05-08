@@ -1,3 +1,5 @@
+status: Done
+
 # Story 1.3 — Setup Vercel Deploy
 
 ## Contexto
@@ -41,3 +43,9 @@ P (Pequena) — 1 hora
 ### Created/Modified
 - `vercel.json` — Configuracao de monorepo para deploy Vercel
 - `packages/web/next.config.ts` — Configuracao base Next.js
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 12.3 — Haiku Batch Enrichment: Resumo IA + Extracao de Dados via LLM
 
 ## Contexto
@@ -136,3 +138,9 @@ G (Grande) — 3-4 horas
 - `packages/web/src/app/api/cron/enrich-leads/route.ts` — Cron endpoint (AC1-AC3, AC8, AC13-AC15)
 - `packages/web/vercel.json` — Cron schedule config (AC1)
 - `docs/stories/active/12-3-haiku-batch-enrichment.md` — Story file
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

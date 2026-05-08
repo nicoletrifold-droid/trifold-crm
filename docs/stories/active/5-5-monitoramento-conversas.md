@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.5 — Monitoramento de Conversas em Tempo Real
 
 ## Contexto
@@ -83,3 +85,9 @@ G (Grande) — 3-4 horas
 ## File List
 
 - `packages/web/src/app/dashboard/conversas/page.tsx` — Pagina de monitoramento de conversas com lista, filtros e indicadores de status
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

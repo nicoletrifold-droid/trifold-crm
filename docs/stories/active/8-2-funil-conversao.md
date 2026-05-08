@@ -1,3 +1,5 @@
+status: Done
+
 # Story 8.2 — Funil de Conversao
 
 ## Contexto
@@ -79,3 +81,9 @@ M (Media) — 2-3 horas
 ### Created/Modified
 - `packages/web/src/app/dashboard/analytics/page.tsx` — Funil de conversao integrado na pagina de analytics
 - `packages/web/src/app/api/analytics/route.ts` — Dados do funil incluidos na API de analytics
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

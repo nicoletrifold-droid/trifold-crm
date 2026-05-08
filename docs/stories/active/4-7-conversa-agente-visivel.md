@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.7 — Conversa do Agente Visivel no Lead
 
 ## Contexto
@@ -84,3 +86,9 @@ M (Media) — 2-3 horas
 
 - `packages/web/src/app/dashboard/conversas/[id]/page.tsx` — Pagina de detalhe da conversa com chat bubbles, sender badges e timestamps
 - `packages/web/src/app/dashboard/conversas/page.tsx` — Pagina de listagem de conversas atualizada
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

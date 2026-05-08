@@ -1,3 +1,5 @@
+status: Done
+
 # Story 0.6 — Documentacao do Deploy Flow
 
 ## Contexto
@@ -60,3 +62,9 @@ Com 2 ambientes (staging + prod), 2 projetos Supabase, 2 canais (Telegram + What
 
 ## Estimativa
 P (Pequena) — 1 hora
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

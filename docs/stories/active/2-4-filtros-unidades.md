@@ -1,3 +1,5 @@
+status: Done
+
 # Story 2.4 — Filtros de Unidades
 
 ## Contexto
@@ -66,3 +68,9 @@ M (Media) — 2 horas
 
 ### Created/Modified
 - `packages/web/src/app/dashboard/properties/[id]/units/page.tsx` — Criado: pagina de unidades com barra de filtros (status, andar min/max, tipologia, vista, vagas), tabela completa (unidade, andar, posicao, vista, area, vagas, status, tipologia), contadores de status e logica de filtros via searchParams
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

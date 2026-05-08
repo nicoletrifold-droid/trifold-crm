@@ -1,3 +1,5 @@
+status: Done
+
 # Story 0.5 — Script de Sync de Schema (Staging <-> Producao)
 
 ## Contexto
@@ -87,3 +89,9 @@ esac
 
 ## Estimativa
 P (Pequena) — 1-2 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

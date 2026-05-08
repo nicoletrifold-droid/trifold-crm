@@ -1,3 +1,5 @@
+status: Done
+
 # Story 8.5 — Motivos de Perda
 
 ## Contexto
@@ -83,3 +85,9 @@ M (Media) — 2-3 horas
 ### Created/Modified
 - `packages/web/src/app/dashboard/analytics/page.tsx` — Secao de motivos de perda integrada na pagina de analytics
 - `packages/web/src/app/api/analytics/route.ts` — Dados de motivos de perda incluidos na API de analytics
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

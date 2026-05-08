@@ -1,3 +1,5 @@
+status: Done
+
 # Story 6.3 — Lista de Leads Designados ao Corretor
 
 ## Contexto
@@ -53,3 +55,9 @@ P (Pequena) — 1 hora (reusar 90% da Story 4.4)
 ## File List
 
 - `packages/web/src/app/broker/page.tsx` — Pagina inicial do corretor com tabela de leads filtrados, busca, ordenacao e filtros por empreendimento e etapa
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

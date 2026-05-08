@@ -1,3 +1,5 @@
+status: Done
+
 # Story 11.1 — Regras de Follow-up por Etapa do Pipeline
 
 ## Contexto
@@ -26,3 +28,9 @@ Cada etapa do pipeline tem regras de follow-up configuraveis. Admin define: dias
 
 ## Estimativa
 M — 2-3h
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

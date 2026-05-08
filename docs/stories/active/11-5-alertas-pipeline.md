@@ -1,3 +1,5 @@
+status: Done
+
 # Story 11.5 — Alertas Integrados ao Pipeline
 
 ## Contexto
@@ -30,3 +32,9 @@ Leads com follow-up pendente ou sem contato sao destacados no pipeline kanban. B
 
 ## Estimativa
 G — 3-4h
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

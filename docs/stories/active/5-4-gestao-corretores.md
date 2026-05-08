@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.4 — Gestao de Corretores (CRUD)
 
 ## Contexto
@@ -78,3 +80,9 @@ M (Media) — 2-3 horas
 - `packages/web/src/app/dashboard/corretores/page.tsx` — Pagina de gestao de corretores com listagem, criacao e edicao
 - `packages/web/src/app/api/brokers/route.ts` — GET (list), POST (create)
 - `packages/web/src/app/api/brokers/[id]/route.ts` — GET (detail), PATCH (update), DELETE (deactivate)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

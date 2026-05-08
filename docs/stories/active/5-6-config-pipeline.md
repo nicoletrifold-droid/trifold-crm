@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.6 — Configuracao de Pipeline (Gerenciar Etapas)
 
 ## Contexto
@@ -56,3 +58,9 @@ P (Pequena) — 1-2 horas
 - `packages/web/src/app/dashboard/configuracoes/pipeline/page.tsx` — Pagina de configuracao das etapas do pipeline com modais de criacao/edicao
 - `packages/web/src/app/api/stages/route.ts` — API de gerenciamento de etapas (GET, POST)
 - `packages/web/src/app/api/stages/[id]/route.ts` — API de etapa individual (GET, PATCH, DELETE)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

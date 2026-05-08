@@ -1,3 +1,5 @@
+status: Done
+
 # Story 11.4 — Timeline Completa do Lead
 
 ## Contexto
@@ -30,3 +32,9 @@ Visualizacao cronologica de TUDO que aconteceu com o lead: mensagens (lead, Nico
 
 ## Estimativa
 G — 3-4h
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

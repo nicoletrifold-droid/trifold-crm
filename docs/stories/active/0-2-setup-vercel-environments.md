@@ -1,3 +1,5 @@
+status: Done
+
 # Story 0.2 — Configurar Vercel com 2 Environments (Staging + Producao)
 
 ## Contexto
@@ -73,3 +75,9 @@ staging:
 
 ## Estimativa
 M (Media) — 1-2 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

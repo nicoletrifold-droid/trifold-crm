@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.5 — Regra de Entrada Yarden
 
 ## Contexto
@@ -68,3 +70,9 @@ P (Pequena) — 1 hora
 
 ## File List
 - `packages/ai/src/flows/yarden-gate.ts` — Logica do gate de entrada: checkYardenGate, redirecionamento para Vind com empatia
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

@@ -1,3 +1,5 @@
+status: Done
+
 # Story 12.2 — Fix Pipeline Nicole → Lead Card Data Sync
 
 ## Contexto
@@ -120,3 +122,9 @@ G (Grande) — 3-4 horas
 - `packages/ai/src/flows/qualification.ts` — Expanded extraction: email, name patterns, floor, entry, PT numbers, source enum mapping (AC3, AC5-AC10)
 - `packages/ai/src/chat/pipeline.ts` — Batch update refactor, interest_level sync, source sync, email sync, visit_scheduled_at sync (AC2-AC4, AC5, AC11)
 - `docs/stories/active/12-2-fix-pipeline-nicole-lead-card.md` — Story file (this file)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

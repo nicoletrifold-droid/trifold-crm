@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.3 — Configuracao da Personalidade Nicole
 
 ## Contexto
@@ -70,3 +72,9 @@ M (Media) — 2-3 horas
 ### Created/Modified
 - `packages/web/src/app/dashboard/configuracoes/personalidade/page.tsx` — Criado: pagina de configuracao de personalidade da Nicole com exibicao read-only do personality_prompt, mensagens de saudacao e fora de horario, info do modelo (model_primary/temperatura/max_tokens), listagem de agent_prompts ativos com badges por tipo; acesso restrito a admin/supervisor
 - `packages/web/src/app/api/agent-config/route.ts` — Criado: endpoint GET para leitura do agent_config da organizacao
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

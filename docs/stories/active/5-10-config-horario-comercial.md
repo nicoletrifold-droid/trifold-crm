@@ -1,3 +1,5 @@
+status: Done
+
 # Story 5.10 — Configuracao de Horario Comercial
 
 ## Contexto
@@ -57,3 +59,9 @@ P (Pequena) — 1-2 horas
 ## File List
 
 - `packages/web/src/app/dashboard/configuracoes/horario/page.tsx` — Pagina de configuracao de horario comercial com toggles por dia, horarios, modo de atendimento e mensagem fora do horario
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

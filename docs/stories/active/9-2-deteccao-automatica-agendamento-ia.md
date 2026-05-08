@@ -1,3 +1,5 @@
+status: Done
+
 # Story 9.2 — Deteccao Automatica de Agendamento por IA
 
 ## Contexto
@@ -117,3 +119,9 @@ async function createOrUpdateAppointment(conversationId: string, data: Appointme
 
 ## Estimativa
 G (Grande) — 3-4 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

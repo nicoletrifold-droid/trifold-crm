@@ -1,3 +1,5 @@
+status: Done
+
 # Story 1.5 — Auth e Roles (Admin, Supervisor, Broker)
 
 ## Contexto
@@ -75,3 +77,9 @@ M (Media) — 2-3 horas
 - `packages/web/src/lib/auth.ts` — getServerUser() e helpers de auth
 - `packages/web/src/hooks/use-user.ts` — Hook client-side useUser()
 - `packages/db/src/server.ts` — Supabase server client (com cookies)
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

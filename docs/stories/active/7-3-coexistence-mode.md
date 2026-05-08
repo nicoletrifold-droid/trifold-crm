@@ -1,3 +1,5 @@
+status: Done
+
 # Story 7.3 — Cloud API Coexistence Mode (Messaging Echoes)
 
 ## Contexto
@@ -129,3 +131,9 @@ Coexistence Mode precisa ser habilitado via Meta Business Manager. Requisitos:
 
 ## Estimativa
 G (Grande) — 3-4 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

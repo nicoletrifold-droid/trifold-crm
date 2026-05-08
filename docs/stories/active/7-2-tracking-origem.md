@@ -1,3 +1,5 @@
+status: Done
+
 # Story 7.2 — Tracking de Origem (UTM Params e Source)
 
 ## Contexto
@@ -57,3 +59,9 @@ function detectSource(parsedMessage: ParsedMessage): LeadSource {
 
 ## Estimativa
 M (Media) — 2 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

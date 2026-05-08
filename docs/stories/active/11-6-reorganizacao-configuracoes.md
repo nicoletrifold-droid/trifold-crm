@@ -1,3 +1,5 @@
+status: Done
+
 # Story 11.6 — Reorganizacao Configuracoes
 
 ## Contexto
@@ -28,3 +30,9 @@ Separar "Configuracoes" (empresa, usuarios) de "Pipeline" (etapas, follow-up). C
 
 ## Estimativa
 M — 2-3h
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

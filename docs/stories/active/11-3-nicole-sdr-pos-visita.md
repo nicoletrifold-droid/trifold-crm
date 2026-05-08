@@ -1,3 +1,5 @@
+status: Done
+
 # Story 11.3 — Nicole SDR: Feedback Pos-Visita
 
 ## Contexto
@@ -27,3 +29,9 @@ Apos visita (appointment status=completed), Nicole pede feedback ao corretor e e
 
 ## Estimativa
 G — 3-4h
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

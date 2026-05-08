@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.2 — Base de Conhecimento RAG
 
 ## Contexto
@@ -92,3 +94,9 @@ G (Grande) — 3-4 horas
 - `supabase/migrations/005_rag_search_function.sql` — Funcao SQL match_knowledge para busca vetorial
 - `packages/web/src/app/api/knowledge-base/route.ts` — API routes GET (listar) e POST (criar) knowledge base entries
 - `packages/web/src/app/api/knowledge-base/[id]/route.ts` — API routes GET, PUT, DELETE para entry individual
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

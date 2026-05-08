@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.8 — Resumo IA da Conversa
 
 ## Contexto
@@ -81,3 +83,9 @@ if (newScore >= 50 && (!lead.ai_summary || previousScore < 50)) {
 
 ## Estimativa
 M (Media) — 2-3 horas
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

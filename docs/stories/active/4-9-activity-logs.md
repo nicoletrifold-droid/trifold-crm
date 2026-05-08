@@ -1,3 +1,5 @@
+status: Done
+
 # Story 4.9 — Activity Logs (Timeline de Atividades)
 
 ## Contexto
@@ -94,3 +96,9 @@ M (Media) — 2-3 horas
 ## File List
 
 - `packages/web/src/app/dashboard/atividades/page.tsx` — Pagina de listagem de atividades com type badges, timestamps e links para leads
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |

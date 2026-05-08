@@ -1,3 +1,5 @@
+status: Done
+
 # Story 3.6 — Guardrails da IA
 
 ## Contexto
@@ -61,3 +63,9 @@ M (Media) — 2 horas
 
 ## File List
 - `packages/ai/src/prompts/guardrails.ts` — Definicao dos 6 guardrails (RN1-RN6) com instrucoes de prompt e respostas padrao
+
+## Change Log
+
+| Data | Agente | Descrição |
+|------|--------|----------|
+| 2026-05-08 | @po | Story auditada — implementada em produção, fechada retroativamente |
