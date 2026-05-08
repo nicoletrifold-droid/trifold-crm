@@ -2,7 +2,7 @@
 epic: 21
 story: 21.2
 title: Nicole — Lead Context Injection no System Prompt
-status: Ready for Review
+status: Done
 priority: P2
 created_at: 2026-05-06
 created_by: River (@sm)
@@ -266,7 +266,7 @@ leadName = leadData?.name ?? null
 ## Dev Agent Record
 
 ### Status
-Ready for Review
+Done
 
 ### Agent Model Used
 claude-sonnet-4-6
@@ -315,3 +315,4 @@ Gate: PASS → docs/qa/gates/21.2-nicole-lead-context-injection.yml
 | 2026-05-06 | River (@sm) | Story 21.2 criada — lead context injection no pipeline da Nicole, descoberta via smoke E2E pós-Story 21.1 |
 | 2026-05-06 | Pax (@po) | Validação GO (10/10) — dependência 21.1 Done, 21.3 Done, Dev Notes auto-contidas com código exato. Status: Draft → Ready |
 | 2026-05-06 | Dex (@dev) | Implementação completa — query expandida, `buildLeadContext()` adicionada, `leadContext` injetado no `dynamicSuffix`. type-check + lint PASS. Status: Ready → Ready for Review |
+| 2026-05-08 | @po | Story fechada — QA Gate PASS (2026-05-06), implementação verificada em pipeline.ts | — |
