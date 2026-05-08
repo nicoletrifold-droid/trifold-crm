@@ -1,7 +1,7 @@
 # Story 14.1 — Correcoes Urgentes Nicole: Terminologia e Pontos de Referencia
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -194,8 +194,17 @@ N/A — mudanças cirúrgicas sem issues
 - `Base de Conhecimento - NLU.csv` — MODIFIED (referência errada corrigida)
 - `docs/stories/active/14-1-correcoes-nicole-terminologia-pontos-referencia.md` — MODIFIED (checkboxes, status, dev record)
 
+
+## QA Results
+
+**Veredicto:** PASS
+**Revisor:** Quinn (@qa) — 2026-05-08
+
+**Resumo:** 13/13 ACs, 161 testes passando, terminologia corrigida
+
 ## Change Log
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-09 | 1.0 | Story criada a partir de incidente: Nicole enviou ponto de referencia errado do Vind + terminologia incorreta | River (@sm) |
 | 2026-04-09 | 1.1 | Implementação completa — todas as 6 tasks concluídas, 13 ACs verificados | Dex (@dev) |
+| 2026-05-08 | @qa/@po | Story fechada — PASS | — |

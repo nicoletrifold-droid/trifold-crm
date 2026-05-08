@@ -1,7 +1,7 @@
 # Story 15.1 — Migration: Campaign Engine (campaigns + entries + events)
 
 ## Status
-InProgress
+Done
 
 ## Executor Assignment
 executor: "@data-engineer"
@@ -114,3 +114,4 @@ CREATE TABLE campaigns (
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-08 | @po | Story closed — implementada em produção, Campaign Engine verificado | — |

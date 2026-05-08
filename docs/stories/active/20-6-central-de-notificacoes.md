@@ -2,7 +2,7 @@
 epic: 20
 story: 20.6
 title: Central de Notificações do Portal do Cliente
-status: InReview
+status: Done
 priority: P3
 created_at: 2026-05-06
 created_by: River (@sm)
@@ -631,3 +631,4 @@ packages/web/src/app/cliente/[obra_id]/_components/obra-tab-nav.tsx
 | 2026-05-06 | Pax (@po) | Validação GO — C-001 (phone sem persistência → PATCH salva users.phone), C-002 (whatsapp_config sem org filter → filtrar por org_id da obra), C-003 (useParams para Client Component documentado) corrigidos; status → Ready |
 | 2026-05-06 | Dex (@dev) | Implementação completa — 9 tasks concluídas, 9 arquivos criados/modificados, type-check e lint passando; status → InReview |
 | 2026-05-06 | Quinn (@qa) | QA Gate PASS — 12 ACs verificados, 4 concerns low/medium documentados (não bloqueantes); gate file: docs/qa/gates/20.6-central-de-notificacoes.yml |
+| 2026-05-08 | @po | Story closed — QA PASS, moved to Done | — |

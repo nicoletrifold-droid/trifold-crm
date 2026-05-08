@@ -1,7 +1,7 @@
 # Story 17.1 — Paginação na Tabela de Participantes e Otimização de Contagens
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -190,3 +190,4 @@ Nenhuma issue identificada.
 | 2026-04-28 | 1.2 | Implementação completa — paginação 50/pág + reset filtro + COUNT queries — type-check PASS, lint PASS | @dev (Dex) |
 | 2026-04-28 | 1.3 | QA Gate PASS — todos os 6 ACs verificados, sem issues | @qa (Quinn) |
 | 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |
+| 2026-05-08 | @qa/@po | Story fechada — PASS | — |

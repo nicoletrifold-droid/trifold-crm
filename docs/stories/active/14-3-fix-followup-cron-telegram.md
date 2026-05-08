@@ -1,7 +1,7 @@
 # Story 14.3 — Fix: Follow-up Cron Nao Envia Mensagens + Nao Executa
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -171,8 +171,17 @@ N/A — fix cirúrgico sem issues
 - `packages/web/src/app/api/cron/followup/route.ts` — MODIFIED (POST→GET, +sendFollowUpMessage, +Telegram envio em nicole_sent e post_visit)
 - `docs/stories/active/14-3-fix-followup-cron-telegram.md` — MODIFIED (checkboxes, status, dev record)
 
+
+## QA Results
+
+**Veredicto:** PASS
+**Revisor:** Quinn (@qa) — 2026-05-08
+
+**Resumo:** bug P0 corrigido, 204 testes passando, sem hardcoded secrets
+
 ## Change Log
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-10 | 1.0 | Story criada a partir de auditoria: follow-up nao envia mensagens + cron nao executa | River (@sm) |
 | 2026-04-10 | 1.1 | Implementação completa — 3 bugs corrigidos, todas 4 tasks concluídas | Dex (@dev) |
+| 2026-05-08 | @qa/@po | Story fechada — PASS | — |

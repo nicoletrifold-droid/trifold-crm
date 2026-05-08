@@ -2,7 +2,7 @@
 epic: 20
 story: 20.5
 title: Painel Admin — Gestão Completa de Obras
-status: Ready for Review
+status: Done
 priority: P1
 created_at: 2026-05-05
 created_by: River (@sm)
@@ -555,3 +555,4 @@ packages/web/src/app/dashboard/obras/[obra_id]/page.tsx
 | 2026-05-05 | Pax (@po) | Validação GO 10/10 — C-001 (AC13 Modo B body `{ email }`), C-002 (AC15 UI simplificado), C-003 (AC10 adminName prop); Dev Notes Modo B atualizado; status Draft → Ready |
 | 2026-05-05 | Dex (@dev) | Implementação completa — 9 tasks ✅, type-check ✅, lint ✅; migration 023 dispensada (RLS já coberta por obra_mensagens_manage_admin FOR ALL em 020); status → Ready for Review |
 | 2026-05-05 | Quinn (@qa) | QA Gate PASS — AC1–AC17 verificados, segurança auditada, 3 issues LOW/INFO não bloqueantes |
+| 2026-05-08 | @po | Story closed — QA PASS, moved to Done | — |

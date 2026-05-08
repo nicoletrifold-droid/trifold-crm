@@ -1,7 +1,7 @@
 # Story 15.4 — Servico de E-mail: Setup Resend + lib/email.ts
 
 ## Status
-InProgress
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -113,3 +113,4 @@ export async function sendEmail(params: {
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-08 | @po | Story closed — implementada em produção, Campaign Engine verificado | — |

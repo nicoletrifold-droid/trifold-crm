@@ -1,7 +1,7 @@
 # Story 12.4 — Fix Race Condition ai_summary no Pipeline Real-Time
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -149,6 +149,14 @@ if (conversation?.lead_id && !handoffResult.trigger) {
 ## Estimativa
 P (Pequena) — 1-2 horas
 
+
+## QA Results
+
+**Veredicto:** PASS
+**Revisor:** Quinn (@qa) — 2026-05-08
+
+**Resumo:** implementação completa, 60+ testes passando, race condition corrigida
+
 ## Change Log
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
@@ -173,3 +181,4 @@ N/A — implementacao direta sem erros
 - `packages/ai/src/flows/lead-memory.ts` — max_tokens 400→600, prompt anti-truncation (AC4, AC5)
 - `packages/ai/src/flows/lead-memory.test.ts` — NEW: 6 testes unitarios (AC6, AC7)
 - `docs/stories/active/12-4-fix-ai-summary-race-condition.md` — Story file updates
+| 2026-05-08 | @qa/@po | Story fechada — PASS | — |

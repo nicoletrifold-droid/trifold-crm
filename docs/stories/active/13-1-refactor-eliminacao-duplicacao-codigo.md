@@ -1,7 +1,7 @@
 # Story 13.1 — Refactor: Eliminação de Código Duplicado (API Auth, Utils, Constantes)
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -268,6 +268,14 @@ export async function GET(req: NextRequest) {
 ## Estimativa
 M (Média) — 3-4 horas (alto volume de arquivos, mas mudanças mecânicas)
 
+
+## QA Results
+
+**Veredicto:** PASS
+**Revisor:** Quinn (@qa) — 2026-05-08
+
+**Resumo:** 35 rotas migradas, 138 testes passando, build OK
+
 ## Change Log
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
@@ -337,3 +345,4 @@ N/A — implementação direta sem erros
 - `packages/web/src/components/pipeline/lead-card.tsx` — Removed inline time utils, imports from time.ts
 - `packages/web/src/app/dashboard/leads/[id]/page.tsx` — Removed inline constants, imports from constants.ts
 - `packages/web/src/app/dashboard/analytics/page.tsx` — Uses SOURCE_LABELS_SHORT from constants.ts
+| 2026-05-08 | @qa/@po | Story fechada — PASS | — |

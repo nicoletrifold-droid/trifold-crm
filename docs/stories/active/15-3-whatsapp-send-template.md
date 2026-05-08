@@ -1,7 +1,7 @@
 # Story 15.3 — WhatsApp: Adicionar sendTemplate() ao Adapter
 
 ## Status
-InProgress
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -99,3 +99,4 @@ O metodo e `optional` na interface (`sendTemplate?`) porque o `TelegramAdapter` 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
+| 2026-05-08 | @po | Story closed — implementada em produção, Campaign Engine verificado | — |

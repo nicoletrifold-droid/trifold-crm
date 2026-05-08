@@ -1,7 +1,7 @@
 # Story 17.2 — Otimização de Queries Críticas: Dashboard e Followup Cron
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -202,3 +202,4 @@ Nenhuma issue identificada.
 | 2026-04-28 | 1.2 | Implementação completa — dashboard COUNT/stage + followup cron batch cooldown + batch conversations — type-check PASS, lint PASS | @dev (Dex) |
 | 2026-04-28 | 1.3 | QA Gate PASS — todos os 5 ACs verificados, riscos mitigados corretamente, sem issues | @qa (Quinn) |
 | 2026-05-05 | QA PASS — sem blockers. Story fechada. | Pax (@po) |
+| 2026-05-08 | @qa/@po | Story fechada — PASS | — |
