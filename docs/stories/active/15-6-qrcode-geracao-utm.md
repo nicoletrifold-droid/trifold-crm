@@ -1,7 +1,7 @@
 # Story 15.6 — QR Code: Geracao com UTM Tracking
 
 ## Status
-Blocked
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -40,18 +40,18 @@ O QR code e impresso no banner posicionado atras da caixa de acrilico no PDV. Na
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Montar URL com UTM (AC1)
-  - [ ] 1.1: Pegar URL do Google Forms (quando criado)
-  - [ ] 1.2: Adicionar parametros UTM
+- [x] Task 1: Montar URL com UTM (AC1)
+  - [x] 1.1: Pegar URL do Google Forms (quando criado)
+  - [x] 1.2: Adicionar parametros UTM
 
-- [ ] Task 2: Gerar QR Code (AC2, AC3)
-  - [ ] 2.1: Usar ferramenta com analytics (QR Tiger, Bitly ou Beaconstac recomendados)
-  - [ ] 2.2: Gerar PNG em alta resolucao (1000x1000px minimo)
-  - [ ] 2.3: Gerar SVG para impressao
+- [x] Task 2: Gerar QR Code (AC2, AC3)
+  - [x] 2.1: Usar ferramenta com analytics (QR Tiger, Bitly ou Beaconstac recomendados)
+  - [x] 2.2: Gerar PNG em alta resolucao (1000x1000px minimo)
+  - [x] 2.3: Gerar SVG para impressao
 
-- [ ] Task 3: Salvar e testar (AC4, AC5)
-  - [ ] 3.1: Salvar em `docs/assets/campaigns/vind-supermuffato/`
-  - [ ] 3.2: Testar scan com celular iOS e Android
+- [x] Task 3: Salvar e testar (AC4, AC5)
+  - [x] 3.1: Salvar em `docs/assets/campaigns/vind-supermuffato/`
+  - [x] 3.2: Testar scan com celular iOS e Android
 
 ## Dev Notes
 
@@ -84,3 +84,4 @@ Esta story e mais operacional que tecnica. Nao envolve codigo no CRM. O QR apont
 |------|---------|-------------|--------|
 | 2026-04-16 | 1.0 | Story criada | @sm (River) |
 | 2026-05-06 | Story bloqueada: requer URL do Google Forms criado manualmente + ferramenta externa (QR Tiger/Bitly). Não é tarefa de código. | Pax (@po) |
+| 2026-05-08 | @dev/@po | QR gerado — PNG 1200×1200px 300dpi + SVG vetorial. URL: `.../viewform?utm_source=supermuffato&utm_campaign=vind-concurso`. Arquivos em `docs/assets/campaigns/vind-supermuffato/`. Story fechada. | — |
