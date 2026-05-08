@@ -2,7 +2,7 @@
 epic: 22
 story: 22.2
 title: Portal do Cliente — Push Notifications
-status: Ready
+status: Done
 priority: P2
 created_at: 2026-05-06
 created_by: River (@sm)
@@ -556,7 +556,7 @@ O visual do toggle deve seguir o padrão dos outros toggles já presentes na pá
 ## Dev Agent Record
 
 ### Status
-Ready for Review
+Done
 
 ### Agent Model Used
 claude-sonnet-4-6
@@ -625,3 +625,4 @@ Gate: PASS → docs/qa/gates/22.2-portal-cliente-push-notifications.yml
 | 2026-05-06 | Pax (@po) | Validação GO (9/10) — 2 fixes aplicados inline: (1) SW registration adicionado ao PushPrompt useEffect — corrige AC2/AC3/AC7 e retroativamente Story 22.1 AC2/AC5; (2) dynamic import substituído por static import em notificacoes.ts. Status: Draft → Ready |
 | 2026-05-06 | Dex (@dev) | Implementação completa — 9 arquivos criados/modificados. type-check + lint PASS (12 erros email-* pré-existentes). VAPID_PRIVATE_KEY verificado server-only. Status: Ready → Ready for Review |
 | 2026-05-06 | Quinn (@qa) | QA Gate PASS — todos os 10 ACs verificados. 4 issues medium/low não-bloqueantes. Status: Ready for Review → Done |
+| 2026-05-08 | @po | Story fechada — QA Gate PASS (2026-05-06), todos os arquivos verificados | — |
