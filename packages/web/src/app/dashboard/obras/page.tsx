@@ -51,7 +51,17 @@ export default async function ObrasPage() {
             {list.length === 1 ? "obra cadastrada" : "obras cadastradas"}
           </p>
         </div>
-        <ObraCreateModal />
+        <div className="flex items-center gap-2">
+          {user.role === "admin" && (
+            <Link
+              href="/dashboard/obras/backfill"
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Vincular empreendimentos
+            </Link>
+          )}
+          <ObraCreateModal />
+        </div>
       </div>
 
       <div className="rounded-lg bg-white shadow-sm">

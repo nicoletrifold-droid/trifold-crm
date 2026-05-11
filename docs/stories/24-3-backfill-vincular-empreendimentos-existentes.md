@@ -1,6 +1,6 @@
 # Story 24.3 — Backfill: Vincular Empreendimentos Existentes a Obras
 
-## Status: Draft
+## Status: Ready for Review
 
 ## Story
 
@@ -47,13 +47,22 @@ Os empreendimentos existentes no CRM (tabela `properties`) e as obras existentes
 
 ## Tasks
 
-- [ ] 1. Criar `GET /api/admin/properties?sem_obra=true` para listar empreendimentos sem obra vinculada
-- [ ] 2. Criar `POST /api/admin/obras/backfill` para vincular em batch
-- [ ] 3. Criar página `/dashboard/obras/backfill/page.tsx`
-- [ ] 4. Implementar formulário de matching (empreendimento → dropdown de obras)
-- [ ] 5. Implementar submit com feedback visual
-- [ ] 6. Adicionar link para a página de backfill no `/dashboard/obras` (botão ou menu)
-- [ ] 7. Testar com dados reais: confirmar que vínculos são persistidos corretamente
+- [x] 1. Criar `GET /api/admin/properties?sem_obra=true` para listar empreendimentos sem obra vinculada
+- [x] 2. Criar `POST /api/admin/obras/backfill` para vincular em batch
+- [x] 3. Criar página `/dashboard/obras/backfill/page.tsx`
+- [x] 4. Implementar formulário de matching (empreendimento → dropdown de obras)
+- [x] 5. Implementar submit com feedback visual
+- [x] 6. Adicionar link para a página de backfill no `/dashboard/obras` (botão ou menu)
+- [x] 7. Testar com dados reais: confirmar que vínculos são persistidos corretamente
+
+## Riscos
+
+| Risco | Probabilidade | Mitigação |
+|-------|--------------|-----------|
+| Override acidental de obra já vinculada | Média | Dev Notes já prevê validação; API batch deve checar `property_id IS NULL` antes de atualizar |
+| Página temporária ficar esquecida no código | Baixa | Dev Notes já sinaliza remoção; adicionar TODO comment na página |
+| Performance com muitos empreendimentos/obras | Baixa | Batch é simples UPDATE em loop; paginação deferida para futuro se necessário |
+| Admin submete seleção parcial por engano | Baixa | AC6 garante feedback por empreendimento; admin pode reenviar o batch |
 
 ## Estimativa: 3h
 
@@ -62,8 +71,41 @@ Os empreendimentos existentes no CRM (tabela `properties`) e as obras existentes
 - Story 24.1 (coluna property_id) — MUST be Done
 - Story 24.2 (API de vínculo) — SHOULD be Done (pode reutilizar a lógica de vinculação)
 
+## Dev Agent Record
+
+### File List
+- `src/app/api/admin/properties/route.ts` — NEW: GET com `?sem_obra=true`
+- `src/app/api/admin/obras/backfill/route.ts` — NEW: POST batch backfill
+- `src/app/dashboard/obras/backfill/page.tsx` — NEW: página server-side
+- `src/app/dashboard/obras/backfill/_components/backfill-form.tsx` — NEW: formulário client
+- `src/app/dashboard/obras/page.tsx` — MODIFIED: link "Vincular empreendimentos" para admin
+
+### Completion Notes
+- API `GET /api/admin/properties?sem_obra=true` filtra propriedades sem obra via dois passos: busca IDs linkados, exclui com `.not("id","in",...)`
+- API `POST /api/admin/obras/backfill` valida `property_id IS NULL` com `.is("property_id", null)` no UPDATE para proteção contra override acidental
+- Página backfill é server component puro; apenas o formulário interativo é client component
+- TODO comments adicionados na página e no componente para sinalizar remoção pós-backfill
+
+## QA Results
+
+**Decisão: PASS (com CONCERNS LOW)**
+**Data:** 2026-05-11
+**Agente:** @qa (Quinn)
+
+**ACs verificados:** 8/8 ✅
+
+**Concerns (LOW — não bloqueantes):**
+1. `submitted` state bloqueia retry após erros parciais sem reload — aceitável para ferramenta operacional de uso único
+2. Obras vinculadas permanecem no dropdown de outros empreendimentos na mesma sessão — API protege contra double-link, UX aceitável dado escopo temporário
+3. Cast `as BackfillLink[]` sem schema validation extra — validação por campo no loop é suficiente
+
+**Build:** ✅ Compila sem erros | **TypeScript:** ✅ Zero erros | **ESLint:** ✅ Zero erros nos arquivos novos
+
 ## Change Log
 
 | Data | Agente | Mudança |
 |------|--------|---------|
 | 2026-05-11 | @pm (Morgan) | Story criada |
+| 2026-05-11 | @po (Pax) | Validação GO — score 9/10 — seção Riscos adicionada — Status: Draft → Ready |
+| 2026-05-11 | @dev (Dex) | Implementação completa — todas as tasks [x] — Status: Ready for Review |
+| 2026-05-11 | @qa (Quinn) | QA Gate PASS — 8/8 ACs verificados — 3 concerns LOW não bloqueantes |
