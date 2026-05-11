@@ -11,6 +11,7 @@ interface Obra {
   status: string
   progress_pct: number
   expected_delivery_date: string | null
+  property_id: string | null
 }
 
 interface ObraEditModalProps {

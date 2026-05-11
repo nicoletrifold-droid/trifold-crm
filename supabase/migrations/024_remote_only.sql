@@ -1,0 +1,1 @@
+-- Applied via Supabase Studio — kept as local stub to match remote migration history

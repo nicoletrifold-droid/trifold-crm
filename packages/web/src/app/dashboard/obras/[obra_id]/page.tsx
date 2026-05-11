@@ -43,7 +43,7 @@ export default async function ObraDetailPage({
   const { data: obra } = await supabase
     .from("obras")
     .select(
-      "id, name, description, progress_pct, status, expected_delivery_date"
+      "id, name, description, progress_pct, status, expected_delivery_date, property_id"
     )
     .eq("id", obra_id)
     .eq("org_id", user.orgId)
