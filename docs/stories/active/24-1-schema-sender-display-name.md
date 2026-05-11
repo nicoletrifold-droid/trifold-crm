@@ -304,4 +304,27 @@ claude-sonnet-4-6 (Dex @dev)
 | `packages/web/src/app/dashboard/obras/[obra_id]/_components/obra-detail-tabs.tsx` | EDITADO — `sender_display_name` na interface `Mensagem` |
 
 ## QA Results
-_Preencher após QA gate_
+
+**Gate Decision:** PASS WITH CONCERNS
+**Revisor:** Quinn (@qa) | **Data:** 2026-05-11
+
+### Checks
+
+| Check | Resultado |
+|-------|-----------|
+| Code Review | ✅ PASS |
+| Testes | ⚠️ CONCERN — sem arquivo de teste automatizado |
+| Acceptance Criteria (7/7) | ✅ PASS |
+| Regressões | ✅ PASS |
+| Performance | ✅ PASS |
+| Segurança | ⚠️ CONCERN — sender_display_name legível via Supabase client direto (MVP tradeoff aceito) |
+| Documentação | ✅ PASS |
+
+### Concerns (não bloqueantes)
+
+- **C1:** Cenário de teste do POST definido na story mas sem arquivo de teste implementado
+- **C2:** `sender_display_name` exposto via RLS SELECT do cliente — campo não é credencial, risco aceito; mitigação LGPD como work-item futuro
+
+### Aprovação
+
+Story aprovada para push via `@devops *push`.
