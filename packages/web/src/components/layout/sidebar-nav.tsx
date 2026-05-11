@@ -9,6 +9,7 @@ interface NavItem {
   href: string
   label: string
   icon: React.ReactNode
+  badge?: number
 }
 
 interface SidebarNavProps {
@@ -61,6 +62,11 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                     >
                       <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                       <span className="flex-1">{item.label}</span>
+                      {item.badge != null && item.badge > 0 && (
+                        <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                          {item.badge > 99 ? "99+" : item.badge}
+                        </span>
+                      )}
                       {item.label === "Alertas" && alertCount != null && alertCount > 0 && (
                         <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
                           {alertCount > 99 ? "99+" : alertCount}

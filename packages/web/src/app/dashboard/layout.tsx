@@ -18,6 +18,7 @@ import {
   Settings,
   Shield,
   HardHat,
+  Inbox,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -39,6 +40,7 @@ const NAV_ITEMS_BASE = [
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
+const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 
@@ -50,12 +52,20 @@ export default async function DashboardLayout({
   const user = await getServerUser()
   const supabase = await createClient()
 
-  // Count pending alerts for sidebar badge
-  const { count: alertCount } = await supabase
-    .from("follow_up_log")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .eq("status", "pending")
+  // Count pending alerts and unread messages for sidebar badges
+  const [{ count: alertCount }, { count: mensagensCount }] = await Promise.all([
+    supabase
+      .from("follow_up_log")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", user.orgId)
+      .eq("status", "pending"),
+    supabase
+      .from("obra_mensagens")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", user.orgId)
+      .eq("sender_type", "cliente")
+      .is("read_at", null),
+  ])
 
   // Obras: visível para admin e supervisor
   // Sistema: visível apenas para admin
@@ -63,6 +73,9 @@ export default async function DashboardLayout({
   const navItems = [
     ...NAV_ITEMS_BASE,
     ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS] : []),
+    ...(isAdminOrSupervisor
+      ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
+      : []),
     ...(user.role === "admin" ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
   ]
 
