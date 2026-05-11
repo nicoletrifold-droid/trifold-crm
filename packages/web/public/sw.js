@@ -1,5 +1,5 @@
 const OFFLINE_PAGE = '/cliente/offline'
-const OFFLINE_CACHE = 'trifold-offline-v1'
+const OFFLINE_CACHE = 'trifold-offline-v2'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -9,20 +9,32 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim())
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== OFFLINE_CACHE).map((k) => caches.delete(k)))
+    ).then(() => clients.claim())
+  )
 })
+
+const offlineFallback = () =>
+  caches.match(OFFLINE_PAGE).then(
+    (r) => r ?? new Response('Você está offline', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  )
 
 self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate' &&
       event.request.url.includes('/cliente')) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(OFFLINE_PAGE))
+      fetch(event.request).catch(() => offlineFallback())
     )
     return
   }
   event.respondWith(
     fetch(event.request)
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then((r) => r ?? fetch(event.request)))
   )
 })
 
