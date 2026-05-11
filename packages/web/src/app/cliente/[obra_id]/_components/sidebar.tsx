@@ -57,17 +57,14 @@ export function Sidebar({ obraId, userName, userEmail }: SidebarProps) {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-stone-800/40 bg-black lg:flex">
       {/* Logo */}
-      <div className="flex items-center gap-3 border-b border-stone-800/40 px-6 py-6">
+      <div className="flex items-center border-b border-stone-800/40 px-6 py-6">
         <Image
-          src="/logo-trifold.webp"
+          src="/logo-trifold.svg"
           alt="Trifold"
-          width={28}
-          height={28}
-          className="rounded-sm"
+          width={130}
+          height={14}
+          priority
         />
-        <span className="text-xl font-bold uppercase tracking-[0.18em] text-white">
-          Trifold
-        </span>
       </div>
 
       {/* Nav */}

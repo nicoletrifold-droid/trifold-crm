@@ -18,12 +18,13 @@ export default function ClienteLoginPage() {
       <div className="w-full max-w-sm">
         <div className="rounded-2xl border border-stone-800 bg-stone-900 p-8 shadow-xl">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-800">
+            <div className="mx-auto mb-6 flex items-center justify-center">
               <Image
-                src="/logo-trifold.webp"
+                src="/logo-trifold.svg"
                 alt="Trifold"
-                width={40}
-                height={40}
+                width={150}
+                height={16}
+                priority
               />
             </div>
             <h1 className="text-xl font-semibold tracking-tight text-stone-100">
