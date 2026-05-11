@@ -83,6 +83,7 @@ export default function UnitEditPage() {
   const [savingSale, setSavingSale] = useState(false)
   const [saleError, setSaleError] = useState<string | null>(null)
   const [saleSuccess, setSaleSuccess] = useState(false)
+  const [portalVinculado, setPortalVinculado] = useState(false)
 
   // Client / Lead
   const [clientMode, setClientMode] = useState<"search" | "new">("search")
@@ -265,6 +266,8 @@ export default function UnitEditPage() {
         return
       }
 
+      const resData = await res.json()
+      setPortalVinculado(resData.portal_vinculado === true)
       setSaleSuccess(true)
       setUnit((prev) => (prev ? { ...prev, status: "sold" } : prev))
       setTimeout(() => {
@@ -704,7 +707,14 @@ export default function UnitEditPage() {
             <p className="mt-4 text-sm text-red-600">{saleError}</p>
           )}
           {saleSuccess && (
-            <p className="mt-4 text-sm text-green-600">Venda registrada com sucesso! Redirecionando...</p>
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-green-600">Venda registrada com sucesso! Redirecionando...</p>
+              {portalVinculado && (
+                <p className="text-sm font-medium text-green-700">
+                  Cliente adicionado ao portal de obra ✓
+                </p>
+              )}
+            </div>
           )}
 
           {/* Sale Actions */}

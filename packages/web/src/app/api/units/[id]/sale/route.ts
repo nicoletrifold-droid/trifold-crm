@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { autoVincularClienteObra } from "@web/lib/auto-vincular-cliente-obra"
 
 export async function POST(
   request: NextRequest,
@@ -128,6 +129,14 @@ export async function POST(
     )
   }
 
+  // Auto-vincular comprador à obra do empreendimento (tolerante a falhas — não reverte a venda)
+  const portalVinculado = await autoVincularClienteObra({
+    unitId,
+    orgId: appUser.org_id,
+    clientEmail: body.client_email?.trim() || null,
+    clientName: body.client_name?.trim() || null,
+  }).then((r) => r.vinculado).catch(() => false)
+
   // Create activity log
   await supabase.from("activities").insert({
     org_id: appUser.org_id,
@@ -144,7 +153,7 @@ export async function POST(
     },
   })
 
-  return NextResponse.json({ data: sale }, { status: 201 })
+  return NextResponse.json({ data: sale, portal_vinculado: portalVinculado }, { status: 201 })
 }
 
 export async function GET(
