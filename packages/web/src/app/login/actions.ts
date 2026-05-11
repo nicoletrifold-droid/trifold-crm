@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { createClient } from "@web/lib/supabase/server"
 
 export async function login(formData: FormData) {
@@ -72,4 +73,25 @@ export async function logout() {
   await supabase.auth.signOut()
   revalidatePath("/", "layout")
   redirect("/login")
+}
+
+export async function requestPasswordReset(
+  formData: FormData
+): Promise<{ error: string } | { sent: true; email: string }> {
+  const email = formData.get('email') as string
+  if (!email) return { error: 'Email é obrigatório' }
+
+  const headersList = await headers()
+  const origin =
+    headersList.get('origin') ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    'http://localhost:3000'
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/reset-senha`,
+  })
+
+  if (error) return { error: 'Erro ao enviar email de recuperação. Tente novamente.' }
+  return { sent: true, email }
 }

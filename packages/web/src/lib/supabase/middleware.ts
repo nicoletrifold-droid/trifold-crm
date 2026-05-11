@@ -76,11 +76,15 @@ export async function updateSession(request: NextRequest) {
   // - `/login`        — admin/broker/supervisor login
   // - `/cliente`      — cliente portal login (Story 20.2 will provide the UI)
   // - `/api/*`        — webhooks/cron use service-role keys; auth handled per-route
+  // - `/auth/*`       — OAuth/OTP callbacks (token exchange, story 23.1)
+  // - `/reset-senha`  — password reset form after verifyOtp (story 23.1)
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/cliente" ||
     pathname === "/cliente/offline" ||
     pathname === "/politica-de-privacidade" ||
+    pathname === "/reset-senha" ||
+    pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/")
 
   if (isPublicRoute) {
