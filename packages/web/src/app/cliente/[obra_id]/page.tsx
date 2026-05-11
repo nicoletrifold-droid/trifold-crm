@@ -117,14 +117,20 @@ export default async function ObraPage({
 
       <main className="mx-auto max-w-4xl px-4 py-6 lg:py-8">
         {/* Hero section */}
-        <div className="mb-5 rounded-2xl border border-stone-800 bg-stone-900 p-6">
-          <p className="mb-1 text-xs font-medium uppercase tracking-widest text-stone-500">
+        <div className="mb-5 rounded-2xl border border-stone-800 border-l-4 border-l-[#E8856A] bg-stone-900 p-6 lg:p-8">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#E8856A]">
             Sua Obra
           </p>
-          <h1 className="mb-4 text-2xl font-bold text-white lg:text-3xl">
+          <h1 className="mb-6 text-3xl font-bold text-white lg:text-4xl">
             {obra.name}
           </h1>
-          <div className="mb-1.5 flex items-center justify-between text-sm">
+          <div className="mb-2.5 h-3 w-full rounded-full bg-stone-800">
+            <div
+              className="h-3 rounded-full bg-[#E8856A] transition-all"
+              style={{ width: `${obra.progress_pct}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-sm">
             <span className="text-stone-400">
               Progresso geral:{" "}
               <span className="font-semibold text-[#E8856A]">
@@ -133,16 +139,10 @@ export default async function ObraPage({
             </span>
             <span className="text-stone-400">
               Entrega prevista:{" "}
-              <span className="text-white">
+              <span className="font-medium text-white">
                 {formatShortDate(obra.expected_delivery_date)}
               </span>
             </span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-stone-800">
-            <div
-              className="h-2 rounded-full bg-[#E8856A] transition-all"
-              style={{ width: `${obra.progress_pct}%` }}
-            />
           </div>
         </div>
 
@@ -163,9 +163,9 @@ export default async function ObraPage({
             sub={statusLabel}
           />
           <StatCard
-            label="Fases"
-            value={`${fases.filter((f) => f.status === "concluida").length}/${fases.length}`}
-            sub="Concluídas"
+            label="Fase da Obra"
+            value={currentPhase?.name ?? "—"}
+            sub={currentPhase ? "Em execução" : "—"}
           />
           <StatCard
             label="Entrega Prevista"

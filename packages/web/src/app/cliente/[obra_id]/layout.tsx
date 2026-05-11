@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { ObraTabNav } from "./_components/obra-tab-nav"
 import { Sidebar } from "./_components/sidebar"
+import { PrivacyButton } from "./_components/privacy-button"
 import { PushPrompt } from "@web/components/portal/push-prompt"
 import { createClient } from "@web/lib/supabase/server"
 
@@ -51,10 +52,11 @@ export default async function ObraLayout({
     <div className="flex min-h-screen bg-stone-950">
       <PushPrompt />
       <Sidebar obraId={obra_id} userName={userName} userEmail={userEmail} />
-      <div className="flex flex-1 flex-col pb-16 lg:pl-[185px] lg:pb-0">
+      <div className="flex flex-1 flex-col pb-16 lg:pl-[260px] lg:pb-0">
         {children}
       </div>
       <ObraTabNav obraId={obra_id} />
+      <PrivacyButton />
     </div>
   )
 }

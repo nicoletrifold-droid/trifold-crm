@@ -67,6 +67,7 @@ export async function updateSession(request: NextRequest) {
     pathname === "/login" ||
     pathname === "/cliente" ||
     pathname === "/cliente/offline" ||
+    pathname === "/politica-de-privacidade" ||
     pathname.startsWith("/api/")
 
   if (isPublicRoute) {
