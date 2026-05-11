@@ -12,6 +12,7 @@ interface Mensagem {
   storage_path: string | null
   sender_type: string
   sender_display_name: string | null
+  cliente_id: string | null
   created_at: string
 }
 

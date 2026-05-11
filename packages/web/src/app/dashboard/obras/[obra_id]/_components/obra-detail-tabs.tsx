@@ -51,6 +51,7 @@ interface Mensagem {
   storage_path: string | null
   sender_type: string
   sender_display_name: string | null
+  cliente_id: string | null
   created_at: string
 }
 
@@ -201,7 +202,7 @@ export function ObraDetailTabs({
     { key: "fases", label: `Fases (${fases.length})` },
     { key: "fotos", label: `Fotos (${fotos.length})` },
     { key: "documentos", label: `Documentos (${documentos.length})` },
-    { key: "mensagens", label: `Mensagens (${mensagens.length})` },
+    { key: "mensagens", label: "Mensagens" },
     { key: "clientes", label: `Clientes (${clientes.length})` },
   ]
 
@@ -348,6 +349,7 @@ export function ObraDetailTabs({
           <AdminChatFeed
             obraId={obraId}
             adminName={adminName}
+            clientes={clientes.map((c) => ({ id: c.id, name: c.name }))}
             initialMensagens={mensagens}
           />
         </div>

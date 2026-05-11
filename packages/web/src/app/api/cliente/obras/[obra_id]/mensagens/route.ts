@@ -50,8 +50,9 @@ export async function POST(
       sender_type: "cliente",
       content,
       message_type: "text",
+      cliente_id: appUser.id,
     })
-    .select("id, content, created_at, sender_type, message_type")
+    .select("id, content, created_at, sender_type, message_type, cliente_id")
     .single()
 
   if (error) {

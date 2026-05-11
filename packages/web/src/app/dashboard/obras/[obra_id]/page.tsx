@@ -63,7 +63,7 @@ export default async function ObraDetailPage({
 
   const property = propertyRes?.data ?? null
 
-  const [fasesRes, fotosRes, documentosRes, mensagensRes, clientesRes] =
+  const [fasesRes, fotosRes, documentosRes, clientesRes] =
     await Promise.all([
       supabase
         .from("obra_fases")
@@ -83,13 +83,6 @@ export default async function ObraDetailPage({
         .eq("obra_id", obra_id)
         .order("created_at", { ascending: false }),
       supabase
-        .from("obra_mensagens")
-        .select(
-          "id, content, message_type, storage_path, sender_type, created_at, sender_display_name"
-        )
-        .eq("obra_id", obra_id)
-        .order("created_at", { ascending: true }),
-      supabase
         .from("cliente_obras")
         .select("is_primary, users(id, name, email)")
         .eq("obra_id", obra_id),
@@ -98,7 +91,8 @@ export default async function ObraDetailPage({
   const fases = fasesRes.data ?? []
   const fotos = fotosRes.data ?? []
   const documentos = documentosRes.data ?? []
-  const mensagens = mensagensRes.data ?? []
+  // Mensagens não são pré-carregadas no SSR — AdminChatFeed carrega client-side após seleção de cliente
+  const mensagens: never[] = []
   const clientesRaw = clientesRes.data ?? []
 
   const clientes = clientesRaw.map((row) => {
