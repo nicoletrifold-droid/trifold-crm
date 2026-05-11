@@ -5,7 +5,7 @@ import { notifyClientes } from "@web/lib/notificacoes"
 const ALLOWED_ROLES = ["admin", "supervisor", "broker"]
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ obra_id: string }> }
 ) {
   const auth = await requireAuth()
@@ -29,13 +29,22 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const { data: mensagens, error } = await supabase
+  const { searchParams } = new URL(req.url)
+  const clienteId = searchParams.get("cliente_id") ?? null
+
+  let query = supabase
     .from("obra_mensagens")
     .select(
-      "id, content, message_type, storage_path, sender_type, created_at, sender_display_name"
+      "id, content, message_type, storage_path, sender_type, created_at, sender_display_name, cliente_id"
     )
     .eq("obra_id", obra_id)
     .order("created_at", { ascending: true })
+
+  if (clienteId) {
+    query = query.eq("cliente_id", clienteId)
+  }
+
+  const { data: mensagens, error } = await query
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -77,6 +86,7 @@ export async function POST(
 
   const body = await req.json()
   const content = typeof body.content === "string" ? body.content.trim() : ""
+  const clienteId = typeof body.cliente_id === "string" ? body.cliente_id.trim() : null
 
   if (!content) {
     return NextResponse.json(
@@ -87,6 +97,27 @@ export async function POST(
   if (content.length > 2000) {
     return NextResponse.json(
       { error: "Mensagem excede 2000 caracteres" },
+      { status: 400 }
+    )
+  }
+  if (!clienteId) {
+    return NextResponse.json(
+      { error: "cliente_id é obrigatório" },
+      { status: 400 }
+    )
+  }
+
+  // Validar que cliente_id pertence à obra
+  const { data: vinculo } = await supabase
+    .from("cliente_obras")
+    .select("obra_id")
+    .eq("obra_id", obra_id)
+    .eq("user_id", clienteId)
+    .single()
+
+  if (!vinculo) {
+    return NextResponse.json(
+      { error: "Cliente não vinculado a esta obra" },
       { status: 400 }
     )
   }
@@ -101,8 +132,9 @@ export async function POST(
       message_type: "text",
       content,
       sender_display_name: appUser.name,
+      cliente_id: clienteId,
     })
-    .select("id, content, created_at, sender_type, message_type, sender_display_name")
+    .select("id, content, created_at, sender_type, message_type, sender_display_name, cliente_id")
     .single()
 
   if (error) {

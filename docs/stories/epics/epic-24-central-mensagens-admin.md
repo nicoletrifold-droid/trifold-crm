@@ -16,7 +16,7 @@ depends_on:
   - Epic 23 completo (UX mobile do chat do portal do cliente)
   - users table com campos name/full_name
   - Supabase Auth configurado com roles admin/supervisor/broker/cliente
-stories_planned: [24.1, 24.2, 24.3]
+stories_planned: [24.1, 24.2, 24.3, 24.4]
 ---
 
 # Epic 24 — Central de Mensagens: Admin ↔ Cliente

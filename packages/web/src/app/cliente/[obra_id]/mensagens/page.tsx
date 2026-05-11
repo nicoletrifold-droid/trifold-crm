@@ -21,11 +21,18 @@ export default async function MensagensPage({
     redirect("/cliente/sem-obra")
   }
 
-  const { data: mensagens } = await supabase
+  const { data: authData } = await supabase.auth.getUser()
+  const userId = authData.user?.id ?? null
+
+  const mensagensQuery = supabase
     .from("obra_mensagens")
     .select("id, content, message_type, storage_path, sender_type, created_at")
     .eq("obra_id", obra_id)
     .order("created_at", { ascending: true })
+
+  const { data: mensagens } = userId
+    ? await mensagensQuery.eq("cliente_id", userId)
+    : await mensagensQuery
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
@@ -41,6 +48,7 @@ export default async function MensagensPage({
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
         <ChatFeed
           obraId={obra_id}
+          userId={userId}
           initialMensagens={mensagens ?? []}
           supabaseUrl={supabaseUrl}
         />

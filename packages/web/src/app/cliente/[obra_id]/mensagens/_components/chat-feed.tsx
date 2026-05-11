@@ -15,6 +15,7 @@ interface Mensagem {
 
 interface ChatFeedProps {
   obraId: string
+  userId: string | null
   initialMensagens: Mensagem[]
   supabaseUrl?: string
 }
@@ -151,6 +152,7 @@ function MensagemBubble({ mensagem }: { mensagem: Mensagem }) {
 
 export function ChatFeed({
   obraId,
+  userId,
   initialMensagens,
 }: ChatFeedProps) {
   const [mensagens, setMensagens] = useState<Mensagem[]>(initialMensagens)
@@ -160,7 +162,7 @@ export function ChatFeed({
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Realtime subscription
+  // Realtime subscription — filtrar client-side por cliente_id do usuário logado
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -174,12 +176,14 @@ export function ChatFeed({
           filter: `obra_id=eq.${obraId}`,
         },
         (payload) => {
+          const nova = payload.new as Mensagem & { cliente_id?: string | null }
+          // Apenas mensagens desta conversa (cliente_id corresponde ou admin respondendo ao cliente)
+          if (userId && nova.cliente_id !== null && nova.cliente_id !== undefined && nova.cliente_id !== userId) {
+            return
+          }
           setMensagens((prev) => {
-            // Evita duplicata se o INSERT veio da própria sessão
-            if (prev.some((m) => m.id === (payload.new as Mensagem).id)) {
-              return prev
-            }
-            return [...prev, payload.new as Mensagem]
+            if (prev.some((m) => m.id === nova.id)) return prev
+            return [...prev, nova]
           })
           requestAnimationFrame(() =>
             bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -191,7 +195,7 @@ export function ChatFeed({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [obraId])
+  }, [obraId, userId])
 
   // Auto-scroll no mount
   useEffect(() => {

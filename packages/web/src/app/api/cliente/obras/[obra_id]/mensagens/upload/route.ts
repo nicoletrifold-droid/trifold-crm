@@ -76,6 +76,7 @@ export async function POST(
       org_id: appUser.org_id,
       sender_id: appUser.id,
       sender_type: "cliente",
+      cliente_id: appUser.id,
       content: null,
       message_type: messageType,
       storage_path: storagePath,
