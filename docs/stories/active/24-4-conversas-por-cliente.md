@@ -2,7 +2,7 @@
 epic: 24
 story: 24.4
 title: Conversas por Cliente — cliente_id em obra_mensagens
-status: InReview
+status: Done
 priority: P0
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -225,3 +225,4 @@ if (!vinculo) {
 | 2026-05-11 | @po (Pax) | Validação GO (8.5/10) — status Draft → Ready. Obs: usar Management API para migration 029; verificar nome RLS policy antes de DROP; AC3 deve retornar 400 se obra sem clientes vinculados. |
 | 2026-05-11 | @dev (Dex) | Implementação completa T1–T11. Migration 029 aplicada remotamente. TypeScript limpo, zero erros novos no lint. Status → Ready for Review. |
 | 2026-05-11 | @qa (Quinn) | Review completo — 8 ACs verificados. Gap identificado e corrigido: upload/route.ts omitia cliente_id (mensagens de mídia do cliente ficavam NULL). Fix aplicado direto pelo QA. Veredicto: CONCERNS → PASS após fix. Status → InReview. |
+| 2026-05-11 | @devops (Gage) | TypeScript PASS, lint pré-existente (email automation, fora de escopo). Commit f53e5ee + push para origin/main. Status → Done. |
