@@ -2,7 +2,7 @@
 epic: 23
 story: 23.1
 title: Redefinição de Senha e Toggle de Visibilidade
-status: InReview
+status: Done
 priority: P1
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -212,3 +212,4 @@ Usar `process.env.NEXT_PUBLIC_APP_URL` ou construir a partir do `origin` do requ
 | 2026-05-11 | @po (Pax) | Validação GO (9/10) — P1 middleware corrigido, P2 verifyOtp corrigido — status → Ready |
 | 2026-05-11 | @dev (Dex) | Implementação concluída — 8 arquivos, commit a9af578 — status → InReview |
 | 2026-05-11 | @qa (Quinn) | Gate PASS — 7/7 checks, 10/10 ACs, 1 observação LOW — pronto para push |
+| 2026-05-11 | @devops (Gage) | Push concluído — commits a9af578+96f706e → origin/main — status → Done |
