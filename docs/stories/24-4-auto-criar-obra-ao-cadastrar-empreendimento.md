@@ -1,6 +1,6 @@
 # Story 24.4 — Auto-criar Obra ao Cadastrar Empreendimento
 
-## Status: Ready for Review
+## Status: Done
 
 ## Story
 
@@ -107,3 +107,4 @@ Ao criar um empreendimento, o admin pode optar por já criar a obra vinculada no
 | 2026-05-11 | @po (Pax) | Validação GO 8.8/10 — seção Riscos adicionada — Status: Draft → Ready |
 | 2026-05-11 | @dev (Dex) | Implementação completa — todas as tasks [x] — Status: Ready for Review |
 | 2026-05-11 | @qa (Quinn) | QA Gate PASS — 6/6 ACs verificados — 3 concerns LOW não bloqueantes |
+| 2026-05-11 | @devops (Gage) | Push origin/main 8acc3cc — Status: Done |
