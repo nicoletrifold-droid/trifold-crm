@@ -1,6 +1,6 @@
 # Story 24.5 — Auto-vincular Cliente à Obra na Venda de Unidade
 
-## Status: Ready for Review
+## Status: Done
 
 ## Story
 
@@ -118,3 +118,4 @@ Depende de 24.1 e 24.2.
 | 2026-05-11 | @po (Pax) | Validação GO 9/10 — seção Riscos adicionada — Status: Draft → Ready |
 | 2026-05-11 | @dev (Dex) | Implementação completa — todas as tasks [x] — Status: Ready for Review |
 | 2026-05-11 | @qa (Quinn) | QA Gate PASS — 10/10 ACs verificados — 2 concerns LOW não bloqueantes |
+| 2026-05-11 | @devops (Gage) | Push origin/main 388cfd1 — Status: Done |
