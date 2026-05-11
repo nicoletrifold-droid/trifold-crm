@@ -13,6 +13,7 @@ import {
   Activity,
   BarChart3,
   Megaphone,
+  Mail,
   GraduationCap,
   Settings,
   Shield,
@@ -38,6 +39,7 @@ const NAV_ITEMS_BASE = [
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
+const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 
 export default async function DashboardLayout({
@@ -61,7 +63,7 @@ export default async function DashboardLayout({
   const navItems = [
     ...NAV_ITEMS_BASE,
     ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS] : []),
-    ...(user.role === "admin" ? [NAV_ITEM_SISTEMA] : []),
+    ...(user.role === "admin" ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
   ]
 
   return (
