@@ -5,21 +5,62 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
 
-// ─── Legacy send (backwards-compatible, unchanged signature) ─────────────────
+// ─── Org email settings ───────────────────────────────────────────────────────
+
+interface EmailSettings {
+  sender_name: string
+  sender_email: string
+  reply_to: string | null
+  daily_quota: number
+  quota_alert_pct: number
+  bounce_alert_pct: number
+  telegram_alerts_enabled: boolean
+  unsubscribe_base_url: string | null
+}
+
+const DEFAULT_SETTINGS: EmailSettings = {
+  sender_name: "Trifold",
+  sender_email: "contato@trifold.com.br",
+  reply_to: null,
+  daily_quota: 100,
+  quota_alert_pct: 95,
+  bounce_alert_pct: 5,
+  telegram_alerts_enabled: true,
+  unsubscribe_base_url: null,
+}
+
+export async function getEmailSettings(orgId: string): Promise<EmailSettings> {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from("email_settings")
+    .select("*")
+    .eq("org_id", orgId)
+    .maybeSingle()
+  return (data as EmailSettings | null) ?? DEFAULT_SETTINGS
+}
+
+// ─── Legacy send (backwards-compatible) ──────────────────────────────────────
 
 export async function sendEmail(params: {
   to: string
   subject: string
   html: string
   tags?: { name: string; value: string }[]
+  orgId?: string
 }): Promise<{ id: string | null; error?: string }> {
   if (!resend) {
     return { id: null, error: "RESEND_API_KEY not configured" }
   }
 
+  const from = params.orgId
+    ? await getEmailSettings(params.orgId).then(
+        (s) => `${s.sender_name} <${s.sender_email}>`
+      )
+    : "Trifold <contato@trifold.com.br>"
+
   try {
     const { data, error } = await resend.emails.send({
-      from: "Trifold <contato@trifold.com.br>",
+      from,
       to: params.to,
       subject: params.subject,
       html: params.html,
@@ -99,12 +140,13 @@ export async function sendTemplateEmail(params: {
     .update({ tags: { ...tags, email_log_id: logId } })
     .eq("id", logId)
 
-  // 4. Check quota
+  // 4. Check quota using org settings
+  const settings = await getEmailSettings(orgId)
   const sentToday = await getEmailsSentToday(orgId, supabase)
   const shouldQueue =
     scheduledFor != null ||
-    sentToday >= 100 ||
-    (sentToday >= 95 && priority > 1)
+    sentToday >= settings.daily_quota ||
+    (sentToday >= Math.floor(settings.daily_quota * settings.quota_alert_pct / 100) && priority > 1)
 
   if (shouldQueue) {
     const { error: queueError } = await supabase.from("email_sends_queue").insert({
@@ -138,6 +180,7 @@ export async function sendTemplateEmail(params: {
     subject,
     html: htmlBody,
     tags: resendTags,
+    orgId,
   })
 
   if (sendResult.error) {

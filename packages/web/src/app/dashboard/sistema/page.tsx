@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
-import { Mail, LayoutTemplate, Zap, Send } from "lucide-react"
+import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket } from "lucide-react"
 
 interface SystemEvent {
   id: string
@@ -118,12 +118,14 @@ export default function SistemaPage() {
           <Mail className="h-4 w-4 text-orange-600" />
           <h2 className="text-sm font-medium text-stone-700">Email Marketing</h2>
         </div>
-        <div className="grid grid-cols-2 gap-px bg-stone-100 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-px bg-stone-100 lg:grid-cols-3">
           {[
             { href: "/dashboard/sistema/emails", icon: Mail, label: "Monitoramento", desc: "Status e métricas" },
             { href: "/dashboard/sistema/email-templates", icon: LayoutTemplate, label: "Templates", desc: "Criar e editar" },
             { href: "/dashboard/sistema/email-automacoes", icon: Zap, label: "Automações", desc: "Triggers de envio" },
             { href: "/dashboard/sistema/email-blasts", icon: Send, label: "Disparos", desc: "Email em massa" },
+            { href: "/dashboard/sistema/email-envio-rapido", icon: Rocket, label: "Envio Rápido", desc: "Email avulso" },
+            { href: "/dashboard/sistema/email-configuracoes", icon: Settings, label: "Configurações", desc: "Remetente e quotas" },
           ].map(({ href, icon: Icon, label, desc }) => (
             <Link
               key={href}

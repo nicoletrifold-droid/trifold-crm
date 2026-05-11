@@ -9,6 +9,8 @@ const EMAIL_TABS = [
   { href: "/dashboard/sistema/email-templates", label: "Templates" },
   { href: "/dashboard/sistema/email-automacoes", label: "Automações" },
   { href: "/dashboard/sistema/email-blasts", label: "Disparos" },
+  { href: "/dashboard/sistema/email-envio-rapido", label: "Envio Rápido" },
+  { href: "/dashboard/sistema/email-configuracoes", label: "Configurações" },
 ]
 
 function EmailMarketingNav({ pathname }: { pathname: string }) {
