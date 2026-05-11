@@ -116,20 +116,8 @@ export default async function DocumentosPage({
                   <p className="truncate text-sm font-medium text-white">
                     {doc.name}
                   </p>
-                  {doc.filename && (
-                    <p className="truncate text-xs text-stone-500">
-                      {doc.filename}
-                    </p>
-                  )}
-                </div>
-
-                {/* Category + size (hidden on small screens) */}
-                <div className="hidden flex-shrink-0 text-right sm:block">
-                  {doc.category && (
-                    <p className="text-xs text-stone-400">{doc.category}</p>
-                  )}
-                  <p className="text-xs text-stone-500">
-                    {formatBytes(doc.file_size_bytes)}
+                  <p className="mt-0.5 truncate text-xs text-stone-500">
+                    {[doc.category, formatBytes(doc.file_size_bytes)].filter(Boolean).join(" · ")}
                   </p>
                 </div>
 
@@ -138,9 +126,9 @@ export default async function DocumentosPage({
                   href={`/api/cliente/obras/${obra_id}/documentos/${doc.id}/download-redirect`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-medium text-stone-300 transition-colors hover:bg-stone-700 hover:text-white"
+                  className="flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl bg-stone-800 px-3 text-xs font-medium text-stone-300 transition-colors hover:bg-stone-700 hover:text-white"
                 >
-                  <FileDown className="h-3.5 w-3.5" />
+                  <FileDown className="h-4 w-4" />
                   Baixar
                 </a>
               </div>

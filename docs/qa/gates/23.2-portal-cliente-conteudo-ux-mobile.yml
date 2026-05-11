@@ -1,0 +1,105 @@
+schema: 1
+story: "23.2"
+storyTitle: "Portal do Cliente — Conteúdo UX Mobile (Home, Fases, Fotos, Docs)"
+gate: PASS
+status_reason: "Todos os 13 ACs implementados conforme spec; lint+typecheck limpos; zero alteração de schema/API/lógica. 1 observação informativa sobre filename oculto em documentos."
+reviewer: "Quinn"
+reviewedAt: "2026-05-11"
+updated: "2026-05-11T00:00:00Z"
+
+summary: >
+  Refator de superfície (Tailwind + JSX estrutural + scrollbar-none em globals.css). Home
+  sem cards duplicados (3º card agora exibe 'Status'); StatCard com text-lg font-bold truncate;
+  hero usa ring-1 ring-inset em vez de border (sem conflito com border-l-4). Timeline com
+  bg-stone-700; badges unificados entre fases/page.tsx e _components/fases-list.tsx (filled
+  pattern); dot de check SVG branco sobre verde para fases concluídas. Galeria em grid-cols-2
+  gap-2 mobile com aspect-square; filtros com overflow-x-auto scrollbar-none + flex-shrink-0
+  nos pills. Documentos com metadados visíveis em todos breakpoints; botão download h-11.
+
+checks:
+  code_review: PASS
+  unit_tests: N/A           # Padrão do projeto: sem testes unitários para UI
+  acceptance_criteria: PASS  # AC1-AC13 todos verificados
+  no_regressions: PASS      # Queries Supabase, RLS, API routes, filtros faseFilter/categoriaAtiva intactos
+  performance: PASS         # Apenas classes utilitárias; nenhum overhead novo
+  security: PASS            # Zero nova superfície de ataque; rel="noopener noreferrer" preservado
+  documentation: PASS       # File List + Change Log atualizados
+
+ac_verification:
+  - ac: AC1
+    status: PASS
+    note: "page.tsx:162-187 — 4 StatCards distintos: Fase Atual, Progresso, Status, Entrega Prevista. Nenhum label/valor repetido."
+  - ac: AC2
+    status: PASS
+    note: "page.tsx:272 aplica truncate text-lg font-bold text-white no <p> do value"
+  - ac: AC3
+    status: PASS
+    note: "page.tsx:131 usa border-l-4 border-l-[#E8856A] bg-stone-900 p-6 ring-1 ring-inset ring-stone-800; border neutro removido"
+  - ac: AC4
+    status: PASS
+    note: "fases/page.tsx:96 usa bg-stone-700"
+  - ac: AC5
+    status: PASS
+    note: "fases/page.tsx:25 e fases-list.tsx:28-32 usam bg-green-900/40 text-green-400 para concluida"
+  - ac: AC6
+    status: PASS
+    note: "fases/page.tsx:24 e fases-list.tsx:23-26 usam bg-amber-900/40 text-amber-400 para em_andamento"
+  - ac: AC7
+    status: PASS
+    note: "fases/page.tsx:106-111 renderiza <svg> check branco (text-white) sobre bg-green-500 para concluida"
+  - ac: AC8
+    status: PASS
+    note: "fotos/page.tsx:174 usa grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+  - ac: AC9
+    status: PASS
+    note: "fotos/page.tsx:182 usa aspect-square w-full sm:aspect-video"
+  - ac: AC10
+    status: PASS
+    note: "fotos/page.tsx:102 usa flex gap-2 overflow-x-auto pb-1 scrollbar-none; :105 e :117 com flex-shrink-0 nos pills"
+  - ac: AC11
+    status: PASS
+    note: "documentos/page.tsx:115-122 — linha secundária via [category, formatBytes].filter(Boolean).join(' · ') sem hidden sm:block"
+  - ac: AC12
+    status: PASS
+    note: "documentos/page.tsx:125-133 aplica h-11 no botão; ícone FileDown em h-4 w-4"
+  - ac: AC13
+    status: PASS
+    note: "Queries Supabase, redirect, filtros faseFilter/categoriaAtiva, API route /api/cliente/obras/.../download-redirect intactos"
+
+css_review:
+  scrollbar_none_placement: PASS
+  scrollbar_none_specificity: PASS  # Seletor .scrollbar-none não colide com regras globais ::-webkit-scrollbar nas linhas 31-48
+  notes: >
+    .scrollbar-none adicionada nas linhas 79-80 de globals.css. Seletor específico de classe,
+    não afeta as regras globais existentes (thumb #d6d3d1, kanban-scroll). Pattern correto.
+
+verification_evidence:
+  lint: "npx eslint src/app/cliente/**/*.tsx → 0 erros"
+  typecheck: "npx tsc --noEmit → 0 erros"
+  files_modified: 5
+  loc_changes: "+74 / -54 (estimado)"
+
+top_issues: []
+
+observations:
+  - id: "DOC-001"
+    severity: info
+    category: code
+    description: >
+      Em documentos/page.tsx, o refator de metadados removeu a renderização de doc.filename
+      (que antes aparecia truncado em linha secundária quando presente). O spec prescreveu a
+      substituição completa do bloco, então o comportamento implementado está fiel, mas a
+      informação 'filename' deixou de ser exibida no UI.
+    recommendation: >
+      Avaliar com PO se isso é desejável. Em casos onde dois documentos compartilham o mesmo
+      'name' mas têm 'filename' distinto, o usuário perdeu o discriminador. Pode ser endereçado
+      em uma próxima iteração se relevante (ex: exibir filename como 3ª linha quando difere de name).
+  - id: "INFO-002"
+    severity: info
+    category: docs
+    description: >
+      Checkboxes da seção 'Acceptance Criteria' (- [ ]) permanecem desmarcados, embora os
+      Task checkboxes estejam marcados.
+    recommendation: "Cosmético — não bloqueia o gate."
+
+waiver: { active: false }

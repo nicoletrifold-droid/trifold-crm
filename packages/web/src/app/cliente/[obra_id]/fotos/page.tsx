@@ -99,10 +99,10 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
       <main className="mx-auto max-w-4xl px-4 py-6 lg:py-8">
         {/* Phase filter pills */}
         {fases.length > 0 && (
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-5 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             <Link
               href={`/cliente/${obra_id}/fotos`}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 !faseFilter
                   ? "bg-[#E8856A] text-white"
                   : "bg-stone-800 text-stone-400 hover:text-stone-200"
@@ -114,7 +114,7 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
               <Link
                 key={fase.id}
                 href={`/cliente/${obra_id}/fotos?fase=${fase.id}`}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   faseFilter === fase.id
                     ? "bg-[#E8856A] text-white"
                     : "bg-stone-800 text-stone-400 hover:text-stone-200"
@@ -171,7 +171,7 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
                 </div>
 
                 {/* Photos grid */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {group.fotos.map((foto) => {
                     const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
                     return (
@@ -179,7 +179,7 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
                         key={foto.id}
                         className="relative overflow-hidden rounded-xl bg-stone-900"
                       >
-                        <div className="relative aspect-video w-full">
+                        <div className="relative aspect-square w-full sm:aspect-video">
                           <Image
                             src={url}
                             alt={foto.caption ?? "Foto da obra"}

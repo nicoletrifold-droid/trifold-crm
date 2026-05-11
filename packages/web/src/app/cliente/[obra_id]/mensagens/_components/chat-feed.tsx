@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import { Paperclip, Send } from "lucide-react"
 
@@ -17,6 +17,27 @@ interface ChatFeedProps {
   obraId: string
   initialMensagens: Mensagem[]
   supabaseUrl?: string
+}
+
+function getDayKey(iso: string): string {
+  const date = new Date(iso)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) return "Hoje"
+  if (date.toDateString() === yesterday.toDateString()) return "Ontem"
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
+}
+
+function DateDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="h-px flex-1 bg-stone-800" />
+      <span className="text-xs text-stone-500">{label}</span>
+      <div className="h-px flex-1 bg-stone-800" />
+    </div>
+  )
 }
 
 function formatTimestamp(iso: string): string {
@@ -106,10 +127,10 @@ function MensagemBubble({ mensagem }: { mensagem: Mensagem }) {
   return (
     <div className={`flex ${isCliente ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+        className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
           isCliente
             ? "bg-[#E8856A] text-white"
-            : "border border-stone-700 bg-stone-800 text-stone-100"
+            : "border border-[#E8856A]/20 bg-stone-800 text-stone-100"
         }`}
       >
         {!isCliente && (
@@ -243,15 +264,22 @@ export function ChatFeed({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Feed de mensagens */}
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div className="flex-1 space-y-3 overflow-y-auto bg-stone-900/40 px-4 py-4">
         {mensagens.length === 0 && (
           <p className="py-10 text-center text-sm text-stone-500">
             Nenhuma mensagem ainda. Diga olá para a equipe!
           </p>
         )}
-        {mensagens.map((m) => (
-          <MensagemBubble key={m.id} mensagem={m} />
-        ))}
+        {mensagens.map((m, i) => {
+          const currentDay = getDayKey(m.created_at)
+          const prevDay = i > 0 ? getDayKey(mensagens[i - 1].created_at) : null
+          return (
+            <React.Fragment key={m.id}>
+              {currentDay !== prevDay && <DateDivider label={currentDay} />}
+              <MensagemBubble mensagem={m} />
+            </React.Fragment>
+          )
+        })}
         <div ref={bottomRef} />
       </div>
 
@@ -265,8 +293,8 @@ export function ChatFeed({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending}
-            className="flex-shrink-0 rounded-lg p-2 text-stone-500 hover:bg-stone-800 hover:text-stone-300 disabled:opacity-50"
-            title="Enviar arquivo"
+            aria-label="Enviar foto ou áudio"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-800 hover:text-stone-300 disabled:opacity-50"
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -300,8 +328,8 @@ export function ChatFeed({
             type="button"
             onClick={sendText}
             disabled={sending || !text.trim()}
-            className="flex-shrink-0 rounded-lg p-2 text-[#E8856A] hover:bg-stone-800 disabled:opacity-30"
-            title="Enviar mensagem"
+            aria-label="Enviar mensagem"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-[#E8856A] hover:bg-stone-800 disabled:opacity-30"
           >
             <Send className="h-5 w-5" />
           </button>

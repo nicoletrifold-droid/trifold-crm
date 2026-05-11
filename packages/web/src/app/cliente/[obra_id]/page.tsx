@@ -1,4 +1,6 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
+import { Bell } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
 import { logout } from "@web/app/login/actions"
 
@@ -104,20 +106,29 @@ export default async function ObraPage({
             <p className="text-xs text-stone-500">Acompanhamento</p>
             <p className="text-sm font-semibold text-white">{obra.name}</p>
           </div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-sm text-stone-500 transition-colors hover:text-[#E8856A]"
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/cliente/${obra_id}/notificacoes`}
+              aria-label="Notificações"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-500 hover:text-stone-300"
             >
-              Sair
-            </button>
-          </form>
+              <Bell className="h-5 w-5" />
+            </Link>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="text-sm text-stone-500 transition-colors hover:text-[#E8856A]"
+              >
+                Sair
+              </button>
+            </form>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-6 lg:py-8">
         {/* Hero section */}
-        <div className="mb-5 rounded-2xl border border-stone-800 border-l-4 border-l-[#E8856A] bg-stone-900 p-6 lg:p-8">
+        <div className="mb-5 rounded-2xl border-l-4 border-l-[#E8856A] bg-stone-900 p-6 ring-1 ring-inset ring-stone-800 lg:p-8">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#E8856A]">
             Sua Obra
           </p>
@@ -163,9 +174,9 @@ export default async function ObraPage({
             sub={statusLabel}
           />
           <StatCard
-            label="Fase da Obra"
-            value={currentPhase?.name ?? "—"}
-            sub={currentPhase ? "Em execução" : "—"}
+            label="Status"
+            value={statusLabel}
+            sub={obra.status === "em_andamento" ? "No prazo" : ""}
           />
           <StatCard
             label="Entrega Prevista"
@@ -258,7 +269,7 @@ function StatCard({
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900 p-4">
       <p className="mb-1.5 text-xs text-stone-500">{label}</p>
-      <p className="text-base font-semibold text-white">{value}</p>
+      <p className="truncate text-lg font-bold text-white">{value}</p>
       {sub && (
         <p
           className={`mt-0.5 text-xs ${highlight ? "text-[#E8856A]" : "text-stone-400"}`}

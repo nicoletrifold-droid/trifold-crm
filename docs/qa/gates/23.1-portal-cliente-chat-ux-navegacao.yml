@@ -1,0 +1,87 @@
+schema: 1
+story: "23.1"
+storyTitle: "Portal do Cliente — Chat UX + Navegação Mobile"
+gate: PASS
+status_reason: "Todos os 9 ACs implementados conforme spec; lint+typecheck limpos; nenhuma alteração de schema, API ou lógica de negócio. UI/CSS only."
+reviewer: "Quinn"
+reviewedAt: "2026-05-11"
+updated: "2026-05-11T00:00:00Z"
+
+summary: >
+  Implementação utilitária Tailwind fiel ao spec. Correção do problema de sobreposição do
+  chat (h-screen → h-[100dvh] + pb-16 lg:pb-0), contraste visual de mensagens, separadores
+  de data com React.Fragment, tap targets 44x44 com aria-label, active state da tab bar com
+  indicador visual + aria-current, e item "Notificações" adicionado em sidebar desktop +
+  header mobile. Realtime, upload e envio de mensagem preservados.
+
+checks:
+  code_review: PASS
+  unit_tests: N/A           # Padrão do projeto: sem testes unitários para UI
+  acceptance_criteria: PASS  # AC1-AC9 todos verificados no código
+  no_regressions: PASS      # Realtime, upload, sendText, 5 tabs preservadas
+  performance: PASS         # h-[100dvh] suporte adequado; render O(n) sem fetch extra
+  security: PASS            # Zero nova superfície de ataque (UI/CSS only)
+  documentation: PASS       # File List + Change Log atualizados
+
+ac_verification:
+  - ac: AC1
+    status: PASS
+    note: "mensagens/page.tsx:33 usa h-[100dvh]; :41 aplica pb-16 lg:pb-0 no container interno"
+  - ac: AC2
+    status: PASS
+    note: "chat-feed.tsx:267 aplica bg-stone-900/40 no feed; :130-133 aplica border-[#E8856A]/20 + shadow-sm no balão Equipe"
+  - ac: AC3
+    status: PASS
+    note: "getDayKey() (linhas 22-31) + DateDivider (33-41) + render com React.Fragment (276-281)"
+  - ac: AC4
+    status: PASS
+    note: "Paperclip (:296-300) e Send (:331-335) ambos com h-11 w-11 flex items-center justify-center + aria-label"
+  - ac: AC5
+    status: PASS
+    note: "obra-tab-nav.tsx:63-68 renderiza <span> indicadora h-0.5 no topo quando isActive; py-3.5 em :57"
+  - ac: AC6
+    status: PASS
+    note: "obra-tab-nav.tsx:56 aplica aria-current={isActive ? 'page' : undefined}"
+  - ac: AC7
+    status: PASS
+    note: "sidebar.tsx:6 importa Bell; :40-45 adiciona item Notificações ao NAV_ITEMS"
+  - ac: AC8
+    status: PASS
+    note: "page.tsx:3 importa Bell; :109-116 adiciona Link para /notificacoes no header mobile com aria-label"
+  - ac: AC9
+    status: PASS
+    note: "useEffect Realtime intacto (chat-feed.tsx:163-194); handleFileUpload/sendText preservados; 5 abas preservadas"
+
+accessibility_review:
+  wcag_1_4_1: PASS         # Informação não transmitida exclusivamente por cor (indicador h-0.5 no top da tab ativa)
+  wcag_2_4_4: PASS         # aria-label em botões icon-only (Paperclip, Send, Bell)
+  wcag_2_4_7: PASS         # aria-current="page" no item ativo da tab bar
+  tap_targets: PASS        # h-11 w-11 = 44x44px (WCAG 2.5.5 AAA / iOS HIG)
+
+verification_evidence:
+  lint: "npx eslint src/app/cliente/**/*.tsx → 0 erros"
+  typecheck: "npx tsc --noEmit → 0 erros"
+  files_modified: 5
+  loc_changes: "+72 / -28 (estimado)"
+
+top_issues: []
+
+observations:
+  - id: "INFO-001"
+    severity: info
+    category: testing
+    description: >
+      AC3 (separadores de data) verificada via inspeção lógica + checagem em Supabase Studio.
+      Confirmação visual completa requer mensagens em dias distintos no banco.
+    recommendation: >
+      Validar em staging com dados reais antes do release. Lógica (toDateString comparison)
+      é robusta para PT-BR sem timezone drift.
+  - id: "INFO-002"
+    severity: info
+    category: docs
+    description: >
+      Checkboxes da seção 'Acceptance Criteria' (- [ ]) permanecem desmarcados, embora os
+      Task checkboxes estejam marcados.
+    recommendation: "Cosmético — não bloqueia o gate."
+
+waiver: { active: false }

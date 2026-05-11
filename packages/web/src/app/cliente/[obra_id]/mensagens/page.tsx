@@ -30,7 +30,7 @@ export default async function MensagensPage({
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
   return (
-    <div className="flex h-screen flex-col bg-stone-950">
+    <div className="flex h-[100dvh] flex-col bg-stone-950">
       <header className="flex-shrink-0 border-b border-stone-800 bg-stone-950 lg:hidden">
         <div className="mx-auto max-w-2xl px-4 py-4">
           <p className="text-xs text-stone-500">Mensagens</p>
@@ -38,7 +38,7 @@ export default async function MensagensPage({
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
         <ChatFeed
           obraId={obra_id}
           initialMensagens={mensagens ?? []}

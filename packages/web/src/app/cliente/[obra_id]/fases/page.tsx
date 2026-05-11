@@ -20,9 +20,9 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  pendente: "border border-stone-700 text-stone-400",
-  em_andamento: "border border-amber-600/60 text-amber-400",
-  concluida: "border border-stone-600 text-stone-300",
+  pendente: "bg-stone-800 text-stone-400",
+  em_andamento: "bg-amber-900/40 text-amber-400",
+  concluida: "bg-green-900/40 text-green-400",
 }
 
 const DOT_COLOR: Record<string, string> = {
@@ -93,7 +93,7 @@ export default async function FasesPage({
         ) : (
           <div className="relative space-y-3 pl-6">
             {/* Vertical line */}
-            <div className="absolute left-[7px] top-2 bottom-2 w-px bg-stone-800" />
+            <div className="absolute left-[7px] top-2 bottom-2 w-px bg-stone-700" />
 
             {allFases.map((fase, idx) => {
               const dotColor = DOT_COLOR[fase.status] ?? DOT_COLOR.pendente
@@ -103,9 +103,17 @@ export default async function FasesPage({
               return (
                 <div key={fase.id} className="relative">
                   {/* Dot */}
-                  <span
-                    className={`absolute -left-6 top-[18px] z-10 block h-3.5 w-3.5 rounded-full ${dotColor}`}
-                  />
+                  {fase.status === "concluida" ? (
+                    <span className="absolute -left-6 top-[18px] z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-500">
+                      <svg className="h-2 w-2 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <span
+                      className={`absolute -left-6 top-[18px] z-10 block h-3.5 w-3.5 rounded-full ${dotColor}`}
+                    />
+                  )}
 
                   {/* Card */}
                   <div className="rounded-xl border border-stone-800 bg-stone-900 p-4">
