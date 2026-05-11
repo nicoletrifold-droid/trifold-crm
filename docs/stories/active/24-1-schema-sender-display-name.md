@@ -2,7 +2,7 @@
 epic: 24
 story: 24.1
 title: Schema — sender_display_name + View de Auditoria Admin
-status: InReview
+status: Done
 priority: P0
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -281,6 +281,7 @@ Verificar também que `GET /api/cliente/obras/{obra_id}/mensagens` **não** reto
 | 2026-05-11 | 1.0 | Draft inicial | River (@sm) |
 | 2026-05-11 | 1.1 | GO (8.5/10) — S1 e S2 corrigidos in-place | Pax (@po) |
 | 2026-05-11 | 1.2 | Implementação completa — InReview | Dex (@dev) |
+| 2026-05-11 | 1.3 | Done — push origin/main | Gage (@devops) |
 
 ## Dev Agent Record
 
