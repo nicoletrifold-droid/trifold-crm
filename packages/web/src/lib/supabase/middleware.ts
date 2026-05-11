@@ -32,10 +32,19 @@ async function getUserRole(
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  // Dynamic lookup prevents Turbopack from inlining these as undefined in the proxy bundle.
-  // At Lambda runtime, Vercel provides all env vars via process.env including NEXT_PUBLIC_ ones.
-  const supabaseUrl = (process.env["NEXT_PUBLIC_SUPABASE_URL"] ?? "").trim()
-  const supabaseAnonKey = (process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ?? "").trim()
+  // Use private vars (SUPABASE_URL, SUPABASE_ANON_KEY) that Turbopack does NOT inline,
+  // falling back to the NEXT_PUBLIC_ vars for local dev compatibility.
+  // NEXT_PUBLIC_ vars get inlined as undefined in the proxy bundle during Vercel builds.
+  const supabaseUrl = (
+    process.env.SUPABASE_URL ??
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    ""
+  ).trim()
+  const supabaseAnonKey = (
+    process.env.SUPABASE_ANON_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    ""
+  ).trim()
   const supabase = createServerClient(
     supabaseUrl,
     supabaseAnonKey,
