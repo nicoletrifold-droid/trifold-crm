@@ -176,6 +176,14 @@ function MensagemBubble({
   )
 }
 
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
+}
+
 function ClienteSelector({
   clientes,
   unreadCounts,
@@ -186,34 +194,46 @@ function ClienteSelector({
   onSelect: (id: string) => void
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center p-6">
-      <p className="mb-4 text-sm font-medium text-gray-700">
-        Selecione o cliente para ver a conversa:
-      </p>
-      <div className="w-full max-w-sm space-y-2">
-        {clientes.map((c) => {
-          const unread = unreadCounts[c.id] ?? 0
-          return (
-            <button
-              key={c.id}
-              onClick={() => onSelect(c.id)}
-              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-left hover:border-orange-300 hover:bg-orange-50 transition-colors"
-            >
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-orange-100">
-                <User className="h-4 w-4 text-orange-600" />
-              </div>
-              <span className="flex-1 text-sm font-medium text-gray-900">
-                {c.name}
-              </span>
-              {unread > 0 && (
-                <span className="flex-shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                  {unread > 99 ? "99+" : unread}
-                </span>
-              )}
-            </button>
-          )
-        })}
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="border-b border-gray-100 px-4 py-2.5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Conversas
+        </p>
       </div>
+      {clientes.map((c) => {
+        const unread = unreadCounts[c.id] ?? 0
+        const initials = getInitials(c.name)
+        return (
+          <button
+            key={c.id}
+            onClick={() => onSelect(c.id)}
+            className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-orange-50"
+          >
+            <div
+              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                unread > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {initials || <User className="h-4 w-4" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className={`truncate text-sm ${unread > 0 ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
+                {c.name}
+              </p>
+              <p className="text-xs text-gray-400">
+                {unread > 0
+                  ? `${unread} mensagem${unread !== 1 ? "s" : ""} não lida${unread !== 1 ? "s" : ""}`
+                  : "Sem mensagens não lidas"}
+              </p>
+            </div>
+            {unread > 0 && (
+              <span className="flex-shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
