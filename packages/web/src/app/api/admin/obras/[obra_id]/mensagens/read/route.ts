@@ -4,7 +4,7 @@ import { requireAuth } from "@web/lib/api-auth"
 const ALLOWED_ROLES = ["admin", "supervisor"]
 
 export async function PATCH(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ obra_id: string }> }
 ) {
   const auth = await requireAuth()
@@ -16,6 +16,7 @@ export async function PATCH(
   }
 
   const { obra_id } = await params
+  const clienteId = new URL(req.url).searchParams.get("cliente_id")
 
   const { data: obra } = await supabase
     .from("obras")
@@ -28,13 +29,16 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("obra_mensagens")
     .update({ read_at: new Date().toISOString() })
     .eq("obra_id", obra_id)
     .eq("sender_type", "cliente")
     .is("read_at", null)
-    .select("id")
+
+  if (clienteId) query = query.eq("cliente_id", clienteId)
+
+  const { data, error } = await query.select("id")
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

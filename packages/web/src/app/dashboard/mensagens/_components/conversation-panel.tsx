@@ -19,7 +19,8 @@ interface Mensagem {
 interface ConversationPanelProps {
   obraId: string | null
   obraName: string | undefined
-  clientes?: { id: string; name: string }[]
+  clienteId: string | null
+  clienteName: string | undefined
   adminName: string
   onBack?: () => void
 }
@@ -27,7 +28,8 @@ interface ConversationPanelProps {
 export function ConversationPanel({
   obraId,
   obraName,
-  clientes,
+  clienteId,
+  clienteName,
   adminName,
   onBack,
 }: ConversationPanelProps) {
@@ -35,7 +37,7 @@ export function ConversationPanel({
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!obraId) {
+    if (!obraId || !clienteId) {
       setMensagens([])
       return
     }
@@ -45,14 +47,16 @@ export function ConversationPanel({
     async function load() {
       setLoading(true)
       try {
-        const res = await fetch(`/api/admin/obras/${obraId}/mensagens`)
+        const res = await fetch(`/api/admin/obras/${obraId}/mensagens?cliente_id=${clienteId}`)
         if (cancelled) return
         if (res.ok) {
           const { mensagens: data } = await res.json()
           setMensagens(data ?? [])
         }
-        // mark as read — fire-and-forget
-        fetch(`/api/admin/obras/${obraId}/mensagens/read`, { method: "PATCH" })
+        // mark as read for this client — fire-and-forget
+        fetch(`/api/admin/obras/${obraId}/mensagens/read?cliente_id=${clienteId}`, {
+          method: "PATCH",
+        })
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -62,32 +66,26 @@ export function ConversationPanel({
     return () => {
       cancelled = true
     }
-  }, [obraId])
+  }, [obraId, clienteId])
 
-  if (!obraId) {
+  if (!obraId || !clienteId) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
         <MessageSquare className="h-12 w-12 text-gray-200" />
         <div>
           <p className="text-sm font-medium text-gray-500">Selecione uma conversa</p>
           <p className="text-xs text-gray-400">
-            Escolha uma obra na lista para ver as mensagens
+            Escolha um cliente na lista para ver as mensagens
           </p>
         </div>
       </div>
     )
   }
 
-  const obraInitials = (obraName ?? "O")
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("")
-
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-2.5 shadow-sm">
+      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
         {onBack && (
           <button
             onClick={onBack}
@@ -97,14 +95,11 @@ export function ConversationPanel({
             <ArrowLeft className="h-5 w-5" />
           </button>
         )}
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700 shadow-sm">
-          {obraInitials}
-        </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-gray-900">
-            {obraName ?? "Obra"}
+            {clienteName ?? "Cliente"}
           </p>
-          <p className="text-[11px] text-gray-400">Acompanhamento de obra</p>
+          <p className="truncate text-xs text-gray-400">{obraName}</p>
         </div>
         <Link
           href={`/dashboard/obras/${obraId}`}
@@ -115,17 +110,17 @@ export function ConversationPanel({
         </Link>
       </div>
 
-      {/* Chat body */}
+      {/* Chat */}
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
-          <div className="flex flex-1 items-center justify-center bg-[#f0ece3]">
+          <div className="flex flex-1 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
           </div>
         ) : (
           <AdminChatFeed
             obraId={obraId}
             adminName={adminName}
-            clientes={clientes}
+            clientes={[{ id: clienteId, name: clienteName ?? "Cliente" }]}
             initialMensagens={mensagens}
           />
         )}

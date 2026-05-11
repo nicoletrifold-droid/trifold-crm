@@ -2,89 +2,78 @@ import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { MensagensInbox } from "./_components/mensagens-inbox"
+import type { ClienteConversa } from "@web/app/api/admin/mensagens/route"
 
-interface ObraInbox {
-  obra_id: string
-  obra_name: string
-  last_message_at: string
-  unread_count: number
-  last_message: {
-    content: string | null
-    message_type: string
-    sender_type: string
-    created_at: string
-  } | null
-  clientes: { id: string; name: string }[]
-}
-
-const PAGE_LIMIT = 20
+const PAGE_LIMIT = 30
 
 async function getInboxPage(
   supabase: Awaited<ReturnType<typeof createClient>>,
   orgId: string
-): Promise<{ obras: ObraInbox[]; total: number }> {
+): Promise<{ conversas: ClienteConversa[]; total: number }> {
   try {
     const { data: msgs } = await supabase
       .from("obra_mensagens")
-      .select("obra_id, content, message_type, sender_type, read_at, created_at")
+      .select("obra_id, cliente_id, content, message_type, sender_type, read_at, created_at")
       .eq("org_id", orgId)
+      .not("cliente_id", "is", null)
       .order("created_at", { ascending: false })
 
-    if (!msgs?.length) return { obras: [], total: 0 }
+    if (!msgs?.length) return { conversas: [], total: 0 }
 
-    const obraMap = new Map<string, ObraInbox>()
+    const conversaMap = new Map<string, ClienteConversa>()
     for (const msg of msgs) {
-      if (!obraMap.has(msg.obra_id)) {
-        obraMap.set(msg.obra_id, {
+      const key = `${msg.obra_id}::${msg.cliente_id}`
+      if (!conversaMap.has(key)) {
+        conversaMap.set(key, {
+          conversa_id: key,
           obra_id: msg.obra_id,
-          obra_name: "Obra",
-          last_message_at: msg.created_at,
+          obra_name: "",
+          cliente_id: msg.cliente_id as string,
+          cliente_name: "",
           unread_count: 0,
+          last_message_at: msg.created_at,
           last_message: {
             content: msg.content,
             message_type: msg.message_type,
             sender_type: msg.sender_type,
             created_at: msg.created_at,
           },
-          clientes: [],
         })
       }
       if (msg.sender_type === "cliente" && !msg.read_at) {
-        obraMap.get(msg.obra_id)!.unread_count++
+        conversaMap.get(key)!.unread_count++
       }
     }
 
-    const obraIds = [...obraMap.keys()]
+    const obraIds = [...new Set([...conversaMap.values()].map((c) => c.obra_id))]
+    const clienteIds = [...new Set([...conversaMap.values()].map((c) => c.cliente_id))]
 
     const { data: obrasRaw } = await supabase
       .from("obras")
       .select("id, name")
       .in("id", obraIds)
 
-    for (const o of obrasRaw ?? []) {
-      const entry = obraMap.get(o.id)
-      if (entry) entry.obra_name = o.name
-    }
+    const obraNameMap = new Map<string, string>()
+    for (const o of obrasRaw ?? []) obraNameMap.set(o.id, o.name)
+    for (const c of conversaMap.values()) c.obra_name = obraNameMap.get(c.obra_id) ?? ""
 
-    const { data: clientesRaw } = await supabase
-      .from("cliente_obras")
-      .select("obra_id, users(id, name)")
-      .in("obra_id", obraIds)
+    const { data: usersRaw } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", clienteIds)
 
-    for (const row of clientesRaw ?? []) {
-      const u = Array.isArray(row.users) ? row.users[0] : row.users
-      if (u) obraMap.get(row.obra_id)?.clientes.push({ id: u.id as string, name: u.name as string })
-    }
+    const userNameMap = new Map<string, string>()
+    for (const u of usersRaw ?? []) userNameMap.set(u.id, u.name ?? "")
+    for (const c of conversaMap.values()) c.cliente_name = userNameMap.get(c.cliente_id) ?? ""
 
-    const all = [...obraMap.values()].sort(
+    const all = [...conversaMap.values()].sort(
       (a, b) =>
-        new Date(b.last_message_at).getTime() -
-        new Date(a.last_message_at).getTime()
+        new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
     )
 
-    return { obras: all.slice(0, PAGE_LIMIT), total: all.length }
+    return { conversas: all.slice(0, PAGE_LIMIT), total: all.length }
   } catch {
-    return { obras: [], total: 0 }
+    return { conversas: [], total: 0 }
   }
 }
 
@@ -96,7 +85,7 @@ export default async function MensagensPage() {
   }
 
   const supabase = await createClient()
-  const { obras, total } = await getInboxPage(supabase, user.orgId)
+  const { conversas, total } = await getInboxPage(supabase, user.orgId)
 
   return (
     <div className="space-y-4">
@@ -107,7 +96,7 @@ export default async function MensagensPage() {
         </p>
       </div>
       <MensagensInbox
-        initialObras={obras}
+        initialConversas={conversas}
         initialTotal={total}
         adminName={user.name ?? "Admin"}
       />

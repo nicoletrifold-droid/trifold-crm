@@ -1,31 +1,18 @@
 "use client"
 
-import { ChevronLeft, ChevronRight, Inbox, Loader2, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, Inbox, Loader2, Search, User } from "lucide-react"
 import type { MensagensFilters } from "./mensagens-inbox"
-
-interface ObraInbox {
-  obra_id: string
-  obra_name: string
-  last_message_at: string
-  unread_count: number
-  last_message: {
-    content: string | null
-    message_type: string
-    sender_type: string
-    created_at: string
-  } | null
-  clientes: { id: string; name: string }[]
-}
+import type { ClienteConversa } from "@web/app/api/admin/mensagens/route"
 
 interface InboxSidebarProps {
-  obras: ObraInbox[]
-  selectedObraId: string | null
+  conversas: ClienteConversa[]
+  selectedConversaId: string | null
   loading: boolean
   filters: MensagensFilters
   page: number
   totalPages: number
   total: number
-  onSelect: (obraId: string) => void
+  onSelect: (conversa: ClienteConversa) => void
   onFiltersChange: (f: MensagensFilters) => void
   onPageChange: (page: number) => void
 }
@@ -42,18 +29,26 @@ function formatRelative(iso: string): string {
   return `${days}d`
 }
 
-function formatPreview(msg: ObraInbox["last_message"]): string {
+function formatPreview(msg: ClienteConversa["last_message"]): string {
   if (!msg) return "Sem mensagens"
   if (msg.message_type === "image") return "📷 Foto"
   if (msg.message_type === "audio") return "🎵 Áudio"
   const prefix = msg.sender_type === "equipe" ? "Você: " : ""
   const text = msg.content ?? ""
-  return prefix + (text.length > 60 ? text.slice(0, 60) + "…" : text)
+  return prefix + (text.length > 55 ? text.slice(0, 55) + "…" : text)
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
 }
 
 export function InboxSidebar({
-  obras,
-  selectedObraId,
+  conversas,
+  selectedConversaId,
   loading,
   filters,
   page,
@@ -71,41 +66,17 @@ export function InboxSidebar({
     <div className="flex h-full flex-col">
       {/* Filtros */}
       <div className="space-y-2 border-b border-gray-100 p-3">
-        {/* Busca */}
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Obra ou cliente..."
+            placeholder="Cliente ou empreendimento..."
             value={filters.q}
             onChange={(e) => setFilter("q", e.target.value)}
             className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
           />
         </div>
 
-        {/* Date range */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="mb-0.5 block text-[10px] font-medium text-gray-500">De</label>
-            <input
-              type="date"
-              value={filters.from}
-              onChange={(e) => setFilter("from", e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="mb-0.5 block text-[10px] font-medium text-gray-500">Até</label>
-            <input
-              type="date"
-              value={filters.to}
-              onChange={(e) => setFilter("to", e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-        </div>
-
-        {/* Unread toggle */}
         <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
           <input
             type="checkbox"
@@ -117,7 +88,7 @@ export function InboxSidebar({
         </label>
       </div>
 
-      {/* Lista */}
+      {/* Lista de conversas */}
       <div className="relative flex-1 overflow-y-auto">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70">
@@ -125,76 +96,79 @@ export function InboxSidebar({
           </div>
         )}
 
-        {!loading && obras.length === 0 ? (
+        {!loading && conversas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Inbox className="mb-2 h-8 w-8 text-gray-300" />
             <p className="text-sm text-gray-500">
-              {filters.q || filters.unread_only || filters.from || filters.to
+              {filters.q || filters.unread_only
                 ? "Nenhuma conversa encontrada"
                 : "Nenhuma conversa ainda"}
             </p>
           </div>
         ) : (
-          obras.map((obra) => {
-            const isActive = obra.obra_id === selectedObraId
-            const initials = obra.obra_name
-              .split(" ")
-              .slice(0, 2)
-              .map((w) => w[0]?.toUpperCase() ?? "")
-              .join("")
-            const hasUnread = obra.unread_count > 0
+          conversas.map((conversa) => {
+            const isActive = conversa.conversa_id === selectedConversaId
+            const hasUnread = conversa.unread_count > 0
+            const initials = getInitials(conversa.cliente_name) || <User className="h-4 w-4" />
+
             return (
               <button
-                key={obra.obra_id}
-                onClick={() => onSelect(obra.obra_id)}
-                className={`w-full border-b border-gray-50 px-3 py-3 text-left transition-colors hover:bg-orange-50 ${
+                key={conversa.conversa_id}
+                onClick={() => onSelect(conversa)}
+                className={`w-full border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-orange-50 ${
                   isActive ? "bg-orange-50" : "bg-white"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  {/* Avatar */}
+                  {/* Avatar do cliente */}
                   <div
-                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm ${
+                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                       isActive
                         ? "bg-orange-500 text-white"
-                        : "bg-orange-100 text-orange-700"
+                        : hasUnread
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-gray-100 text-gray-500"
                     }`}
                   >
-                    {initials || "O"}
+                    {typeof initials === "string" ? initials : initials}
                   </div>
 
-                  {/* Texto */}
+                  {/* Conteúdo */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-1">
                       <p
-                        className={`truncate text-sm font-semibold ${
-                          isActive ? "text-orange-700" : hasUnread ? "text-gray-900" : "text-gray-700"
-                        }`}
+                        className={`truncate text-sm ${
+                          hasUnread ? "font-semibold text-gray-900" : "font-medium text-gray-700"
+                        } ${isActive ? "text-orange-700" : ""}`}
                       >
-                        {obra.obra_name}
+                        {conversa.cliente_name || "Cliente"}
                       </p>
-                      {obra.last_message && (
-                        <span className={`flex-shrink-0 text-[10px] ${hasUnread ? "font-semibold text-orange-500" : "text-gray-400"}`}>
-                          {formatRelative(obra.last_message.created_at)}
+                      {conversa.last_message && (
+                        <span
+                          className={`flex-shrink-0 text-[10px] ${
+                            hasUnread ? "font-semibold text-orange-500" : "text-gray-400"
+                          }`}
+                        >
+                          {formatRelative(conversa.last_message.created_at)}
                         </span>
                       )}
                     </div>
-                    {obra.clientes.length > 0 && (
-                      <p className="truncate text-xs text-gray-500">
-                        {obra.clientes.map((c) => c.name).join(", ")}
-                      </p>
-                    )}
+
+                    {/* Nome da obra (empreendimento) */}
+                    <p className="truncate text-xs text-gray-400">{conversa.obra_name}</p>
+
+                    {/* Preview + badge */}
                     <div className="mt-0.5 flex items-center justify-between gap-1">
-                      {obra.last_message ? (
-                        <p className={`truncate text-xs ${hasUnread ? "font-medium text-gray-700" : "text-gray-400"}`}>
-                          {formatPreview(obra.last_message)}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-gray-300">Sem mensagens</p>
-                      )}
+                      <p
+                        className={`truncate text-xs ${
+                          hasUnread ? "font-medium text-gray-700" : "text-gray-400"
+                        }`}
+                      >
+                        {formatPreview(conversa.last_message)}
+                      </p>
                       {hasUnread && (
-                        <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
-                          {obra.unread_count > 99 ? "99+" : obra.unread_count}
+                        <span className="flex-shrink-0 rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {conversa.unread_count > 99 ? "99+" : conversa.unread_count}
                         </span>
                       )}
                     </div>
@@ -217,7 +191,6 @@ export function InboxSidebar({
               onClick={() => onPageChange(page - 1)}
               disabled={page === 1 || loading}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-              title="Página anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -225,7 +198,6 @@ export function InboxSidebar({
               onClick={() => onPageChange(page + 1)}
               disabled={page === totalPages || loading}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-              title="Próxima página"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
