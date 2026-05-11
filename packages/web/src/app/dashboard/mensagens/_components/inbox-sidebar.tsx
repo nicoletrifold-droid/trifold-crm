@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Inbox } from "lucide-react"
+import { ChevronLeft, ChevronRight, Inbox, Loader2, Search } from "lucide-react"
+import type { MensagensFilters } from "./mensagens-inbox"
 
 interface ObraInbox {
   obra_id: string
   obra_name: string
+  last_message_at: string
   unread_count: number
   last_message: {
     content: string | null
@@ -19,7 +20,14 @@ interface ObraInbox {
 interface InboxSidebarProps {
   obras: ObraInbox[]
   selectedObraId: string | null
+  loading: boolean
+  filters: MensagensFilters
+  page: number
+  totalPages: number
+  total: number
   onSelect: (obraId: string) => void
+  onFiltersChange: (f: MensagensFilters) => void
+  onPageChange: (page: number) => void
 }
 
 function formatRelative(iso: string): string {
@@ -43,40 +51,91 @@ function formatPreview(msg: ObraInbox["last_message"]): string {
   return prefix + (text.length > 60 ? text.slice(0, 60) + "…" : text)
 }
 
-export function InboxSidebar({ obras, selectedObraId, onSelect }: InboxSidebarProps) {
-  const [query, setQuery] = useState("")
-
-  const filtered = obras.filter((o) =>
-    o.obra_name.toLowerCase().includes(query.toLowerCase())
-  )
+export function InboxSidebar({
+  obras,
+  selectedObraId,
+  loading,
+  filters,
+  page,
+  totalPages,
+  total,
+  onSelect,
+  onFiltersChange,
+  onPageChange,
+}: InboxSidebarProps) {
+  function setFilter<K extends keyof MensagensFilters>(key: K, value: MensagensFilters[K]) {
+    onFiltersChange({ ...filters, [key]: value })
+  }
 
   return (
     <div className="flex h-full flex-col">
-      {/* Search */}
-      <div className="border-b border-gray-100 p-3">
+      {/* Filtros */}
+      <div className="space-y-2 border-b border-gray-100 p-3">
+        {/* Busca */}
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar obra..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Obra ou cliente..."
+            value={filters.q}
+            onChange={(e) => setFilter("q", e.target.value)}
             className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
           />
         </div>
+
+        {/* Date range */}
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="mb-0.5 block text-[10px] font-medium text-gray-500">De</label>
+            <input
+              type="date"
+              value={filters.from}
+              onChange={(e) => setFilter("from", e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="mb-0.5 block text-[10px] font-medium text-gray-500">Até</label>
+            <input
+              type="date"
+              value={filters.to}
+              onChange={(e) => setFilter("to", e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+        </div>
+
+        {/* Unread toggle */}
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={filters.unread_only}
+            onChange={(e) => setFilter("unread_only", e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-gray-300 accent-orange-500"
+          />
+          Apenas não lidas
+        </label>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto">
-        {filtered.length === 0 ? (
+      {/* Lista */}
+      <div className="relative flex-1 overflow-y-auto">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+            <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
+          </div>
+        )}
+
+        {!loading && obras.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Inbox className="mb-2 h-8 w-8 text-gray-300" />
             <p className="text-sm text-gray-500">
-              {query ? "Nenhuma obra encontrada" : "Nenhuma conversa ainda"}
+              {filters.q || filters.unread_only || filters.from || filters.to
+                ? "Nenhuma conversa encontrada"
+                : "Nenhuma conversa ainda"}
             </p>
           </div>
         ) : (
-          filtered.map((obra) => {
+          obras.map((obra) => {
             const isActive = obra.obra_id === selectedObraId
             return (
               <button
@@ -124,6 +183,33 @@ export function InboxSidebar({ obras, selectedObraId, onSelect }: InboxSidebarPr
           })
         )}
       </div>
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
+          <span className="text-[10px] text-gray-400">
+            {total} conversa{total !== 1 ? "s" : ""} · p. {page}/{totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onPageChange(page - 1)}
+              disabled={page === 1 || loading}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+              title="Página anterior"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onPageChange(page + 1)}
+              disabled={page === totalPages || loading}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+              title="Próxima página"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

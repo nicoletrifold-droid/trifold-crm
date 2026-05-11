@@ -39,13 +39,17 @@ function SignedAudio({
   const [url, setUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.storage
-      .from(bucket)
-      .createSignedUrl(storagePath, 300)
-      .then(({ data }) => {
-        if (data) setUrl(data.signedUrl)
-      })
+    try {
+      const supabase = createClient()
+      supabase.storage
+        .from(bucket)
+        .createSignedUrl(storagePath, 300)
+        .then(({ data }) => {
+          if (data) setUrl(data.signedUrl)
+        })
+    } catch {
+      // Supabase browser client unavailable (env vars missing in this environment)
+    }
   }, [storagePath, bucket])
 
   if (!url)
@@ -63,13 +67,17 @@ function SignedImage({
   const [url, setUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.storage
-      .from(bucket)
-      .createSignedUrl(storagePath, 300)
-      .then(({ data }) => {
-        if (data) setUrl(data.signedUrl)
-      })
+    try {
+      const supabase = createClient()
+      supabase.storage
+        .from(bucket)
+        .createSignedUrl(storagePath, 300)
+        .then(({ data }) => {
+          if (data) setUrl(data.signedUrl)
+        })
+    } catch {
+      // Supabase browser client unavailable (env vars missing in this environment)
+    }
   }, [storagePath, bucket])
 
   if (!url)
@@ -158,33 +166,38 @@ export function AdminChatFeed({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-    const channel = supabase
-      .channel(`obra-mensagens-${obraId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "obra_mensagens",
-          filter: `obra_id=eq.${obraId}`,
-        },
-        (payload) => {
-          const nova = payload.new as Mensagem
-          setMensagens((prev) => {
-            if (prev.some((m) => m.id === nova.id)) return prev
-            return [...prev, nova]
-          })
-          requestAnimationFrame(() =>
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-          )
-        }
-      )
-      .subscribe()
+    let cleanup: (() => void) | undefined
 
-    return () => {
-      supabase.removeChannel(channel)
+    try {
+      const supabase = createClient()
+      const channel = supabase
+        .channel(`obra-mensagens-${obraId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "obra_mensagens",
+            filter: `obra_id=eq.${obraId}`,
+          },
+          (payload) => {
+            const nova = payload.new as Mensagem
+            setMensagens((prev) => {
+              if (prev.some((m) => m.id === nova.id)) return prev
+              return [...prev, nova]
+            })
+            requestAnimationFrame(() =>
+              bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+            )
+          }
+        )
+        .subscribe()
+      cleanup = () => supabase.removeChannel(channel)
+    } catch {
+      // Realtime subscription unavailable — client will still work via polling
     }
+
+    return () => cleanup?.()
   }, [obraId])
 
   useEffect(() => {

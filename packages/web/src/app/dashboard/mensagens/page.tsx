@@ -6,6 +6,7 @@ import { MensagensInbox } from "./_components/mensagens-inbox"
 interface ObraInbox {
   obra_id: string
   obra_name: string
+  last_message_at: string
   unread_count: number
   last_message: {
     content: string | null
@@ -16,10 +17,12 @@ interface ObraInbox {
   clientes: { name: string }[]
 }
 
-async function getInboxObras(
+const PAGE_LIMIT = 20
+
+async function getInboxPage(
   supabase: Awaited<ReturnType<typeof createClient>>,
   orgId: string
-): Promise<ObraInbox[]> {
+): Promise<{ obras: ObraInbox[]; total: number }> {
   try {
     const { data: msgs } = await supabase
       .from("obra_mensagens")
@@ -27,7 +30,7 @@ async function getInboxObras(
       .eq("org_id", orgId)
       .order("created_at", { ascending: false })
 
-    if (!msgs?.length) return []
+    if (!msgs?.length) return { obras: [], total: 0 }
 
     const obraMap = new Map<string, ObraInbox>()
     for (const msg of msgs) {
@@ -35,6 +38,7 @@ async function getInboxObras(
         obraMap.set(msg.obra_id, {
           obra_id: msg.obra_id,
           obra_name: "Obra",
+          last_message_at: msg.created_at,
           unread_count: 0,
           last_message: {
             content: msg.content,
@@ -52,7 +56,6 @@ async function getInboxObras(
 
     const obraIds = [...obraMap.keys()]
 
-    // Busca nomes das obras separadamente
     const { data: obrasRaw } = await supabase
       .from("obras")
       .select("id, name")
@@ -63,7 +66,6 @@ async function getInboxObras(
       if (entry) entry.obra_name = o.name
     }
 
-    // Busca clientes vinculados
     const { data: clientesRaw } = await supabase
       .from("cliente_obras")
       .select("obra_id, users(id, name)")
@@ -74,9 +76,15 @@ async function getInboxObras(
       if (u) obraMap.get(row.obra_id)?.clientes.push({ name: u.name as string })
     }
 
-    return [...obraMap.values()]
+    const all = [...obraMap.values()].sort(
+      (a, b) =>
+        new Date(b.last_message_at).getTime() -
+        new Date(a.last_message_at).getTime()
+    )
+
+    return { obras: all.slice(0, PAGE_LIMIT), total: all.length }
   } catch {
-    return []
+    return { obras: [], total: 0 }
   }
 }
 
@@ -88,7 +96,7 @@ export default async function MensagensPage() {
   }
 
   const supabase = await createClient()
-  const obras = await getInboxObras(supabase, user.orgId)
+  const { obras, total } = await getInboxPage(supabase, user.orgId)
 
   return (
     <div className="space-y-4">
@@ -98,7 +106,11 @@ export default async function MensagensPage() {
           Central de atendimento — conversas com clientes por obra
         </p>
       </div>
-      <MensagensInbox initialObras={obras} adminName={user.name ?? "Admin"} />
+      <MensagensInbox
+        initialObras={obras}
+        initialTotal={total}
+        adminName={user.name ?? "Admin"}
+      />
     </div>
   )
 }
