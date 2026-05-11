@@ -20,48 +20,64 @@ async function getInboxObras(
   supabase: Awaited<ReturnType<typeof createClient>>,
   orgId: string
 ): Promise<ObraInbox[]> {
-  const { data: msgs } = await supabase
-    .from("obra_mensagens")
-    .select("obra_id, content, message_type, sender_type, read_at, created_at, obras(name)")
-    .eq("org_id", orgId)
-    .order("created_at", { ascending: false })
+  try {
+    const { data: msgs } = await supabase
+      .from("obra_mensagens")
+      .select("obra_id, content, message_type, sender_type, read_at, created_at")
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
 
-  if (!msgs?.length) return []
+    if (!msgs?.length) return []
 
-  const obraMap = new Map<string, ObraInbox>()
-  for (const msg of msgs) {
-    const obraName = (msg.obras as { name: string }[] | null)?.[0]?.name ?? "Obra"
-    if (!obraMap.has(msg.obra_id)) {
-      obraMap.set(msg.obra_id, {
-        obra_id: msg.obra_id,
-        obra_name: obraName,
-        unread_count: 0,
-        last_message: {
-          content: msg.content,
-          message_type: msg.message_type,
-          sender_type: msg.sender_type,
-          created_at: msg.created_at,
-        },
-        clientes: [],
-      })
+    const obraMap = new Map<string, ObraInbox>()
+    for (const msg of msgs) {
+      if (!obraMap.has(msg.obra_id)) {
+        obraMap.set(msg.obra_id, {
+          obra_id: msg.obra_id,
+          obra_name: "Obra",
+          unread_count: 0,
+          last_message: {
+            content: msg.content,
+            message_type: msg.message_type,
+            sender_type: msg.sender_type,
+            created_at: msg.created_at,
+          },
+          clientes: [],
+        })
+      }
+      if (msg.sender_type === "cliente" && !msg.read_at) {
+        obraMap.get(msg.obra_id)!.unread_count++
+      }
     }
-    if (msg.sender_type === "cliente" && !msg.read_at) {
-      obraMap.get(msg.obra_id)!.unread_count++
+
+    const obraIds = [...obraMap.keys()]
+
+    // Busca nomes das obras separadamente
+    const { data: obrasRaw } = await supabase
+      .from("obras")
+      .select("id, name")
+      .in("id", obraIds)
+
+    for (const o of obrasRaw ?? []) {
+      const entry = obraMap.get(o.id)
+      if (entry) entry.obra_name = o.name
     }
+
+    // Busca clientes vinculados
+    const { data: clientesRaw } = await supabase
+      .from("cliente_obras")
+      .select("obra_id, users(id, name)")
+      .in("obra_id", obraIds)
+
+    for (const row of clientesRaw ?? []) {
+      const u = Array.isArray(row.users) ? row.users[0] : row.users
+      if (u) obraMap.get(row.obra_id)?.clientes.push({ name: u.name as string })
+    }
+
+    return [...obraMap.values()]
+  } catch {
+    return []
   }
-
-  const obraIds = [...obraMap.keys()]
-  const { data: clientesRaw } = await supabase
-    .from("cliente_obras")
-    .select("obra_id, users(id, name)")
-    .in("obra_id", obraIds)
-
-  for (const row of clientesRaw ?? []) {
-    const u = Array.isArray(row.users) ? row.users[0] : row.users
-    if (u) obraMap.get(row.obra_id)?.clientes.push({ name: u.name as string })
-  }
-
-  return [...obraMap.values()]
 }
 
 export default async function MensagensPage() {

@@ -27,7 +27,7 @@ export async function GET() {
 
   const { data: msgs, error } = await supabase
     .from("obra_mensagens")
-    .select("obra_id, content, message_type, sender_type, read_at, created_at, obras(name)")
+    .select("obra_id, content, message_type, sender_type, read_at, created_at")
     .eq("org_id", appUser.org_id)
     .order("created_at", { ascending: false })
 
@@ -37,11 +37,10 @@ export async function GET() {
 
   const obraMap = new Map<string, ObraInbox>()
   for (const msg of msgs ?? []) {
-    const obraName = (msg.obras as { name: string }[] | null)?.[0]?.name ?? "Obra"
     if (!obraMap.has(msg.obra_id)) {
       obraMap.set(msg.obra_id, {
         obra_id: msg.obra_id,
-        obra_name: obraName,
+        obra_name: "Obra",
         unread_count: 0,
         last_message: {
           content: msg.content,
@@ -58,7 +57,18 @@ export async function GET() {
   }
 
   const obraIds = [...obraMap.keys()]
+
   if (obraIds.length > 0) {
+    const { data: obrasRaw } = await supabase
+      .from("obras")
+      .select("id, name")
+      .in("id", obraIds)
+
+    for (const o of obrasRaw ?? []) {
+      const entry = obraMap.get(o.id)
+      if (entry) entry.obra_name = o.name
+    }
+
     const { data: clientesRaw } = await supabase
       .from("cliente_obras")
       .select("obra_id, users(id, name)")
