@@ -53,6 +53,16 @@ export default async function ObraDetailPage({
     notFound()
   }
 
+  const propertyRes = obra.property_id
+    ? await supabase
+        .from("properties")
+        .select("id, name")
+        .eq("id", obra.property_id)
+        .single()
+    : null
+
+  const property = propertyRes?.data ?? null
+
   const [fasesRes, fotosRes, documentosRes, mensagensRes, clientesRes] =
     await Promise.all([
       supabase
@@ -168,6 +178,21 @@ export default async function ObraDetailPage({
           </div>
         </dl>
       </section>
+
+      {/* Empreendimento vinculado */}
+      {property && (
+        <section className="rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Empreendimento
+          </h2>
+          <Link
+            href={`/dashboard/properties/${property.id}`}
+            className="font-medium text-orange-600 hover:underline"
+          >
+            {property.name}
+          </Link>
+        </section>
+      )}
 
       {/* Tabs */}
       <ObraDetailTabs

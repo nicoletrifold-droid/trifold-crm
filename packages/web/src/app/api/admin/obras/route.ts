@@ -3,7 +3,7 @@ import { requireAuth } from "@web/lib/api-auth"
 
 const ALLOWED_ROLES = ["admin", "supervisor"]
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
@@ -12,11 +12,20 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const { data: obras, error } = await supabase
+  const { searchParams } = new URL(request.url)
+  const semPropriedade = searchParams.get("sem_propriedade") === "true"
+
+  let query = supabase
     .from("obras")
     .select("id, name, status, progress_pct, expected_delivery_date")
     .eq("org_id", appUser.org_id)
     .order("created_at", { ascending: false })
+
+  if (semPropriedade) {
+    query = query.is("property_id", null)
+  }
+
+  const { data: obras, error } = await query
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

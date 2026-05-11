@@ -2,6 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { ObraVinculadaSection } from "./_components/obra-vinculada-section"
 
 export default async function PropertyDetailPage({
   params,
@@ -21,7 +22,7 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound()
 
-  const [{ data: typologies }, { data: units }, { data: sales }] = await Promise.all([
+  const [{ data: typologies }, { data: units }, { data: sales }, { data: obraVinculada }, { data: obrasDisponiveis }] = await Promise.all([
     supabase
       .from("typologies")
       .select("*")
@@ -41,6 +42,18 @@ export default async function PropertyDetailPage({
       .eq("units.property_id", id)
       .order("sold_at", { ascending: false })
       .limit(20),
+    supabase
+      .from("obras")
+      .select("id, name, status, progress_pct")
+      .eq("property_id", id)
+      .eq("org_id", appUser.orgId)
+      .maybeSingle(),
+    supabase
+      .from("obras")
+      .select("id, name, status, progress_pct")
+      .is("property_id", null)
+      .eq("org_id", appUser.orgId)
+      .order("created_at", { ascending: false }),
   ])
 
   const availableCount = units?.filter((u) => u.status === "available").length ?? 0
@@ -247,6 +260,15 @@ export default async function PropertyDetailPage({
           </table>
         </div>
       </div>
+
+      {/* Obra Vinculada */}
+      {isAdminOrSupervisor && (
+        <ObraVinculadaSection
+          propertyId={id}
+          obraVinculada={obraVinculada ?? null}
+          obrasDisponiveis={obrasDisponiveis ?? []}
+        />
+      )}
 
       {/* Sales History */}
       {sales && sales.length > 0 && (

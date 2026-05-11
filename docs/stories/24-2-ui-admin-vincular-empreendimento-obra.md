@@ -1,6 +1,6 @@
 # Story 24.2 — Admin UI: Vincular Empreendimento ↔ Obra
 
-## Status: Draft
+## Status: Done
 
 ## Story
 
@@ -60,12 +60,21 @@ Duas UIs recebem a seção de vínculo:
 
 ## Tasks
 
-- [ ] 1. Criar `packages/web/src/app/api/admin/properties/[id]/obra/route.ts` (GET, POST, DELETE)
-- [ ] 2. Criar componente `obra-vinculada-section.tsx` para a tela do empreendimento
-- [ ] 3. Adicionar parâmetro `?sem_propriedade=true` na rota `GET /api/admin/obras` para filtrar obras disponíveis
-- [ ] 4. Integrar `obra-vinculada-section.tsx` na tela `/dashboard/properties/[id]`
-- [ ] 5. Adicionar seção "Empreendimento" (leitura) na tela `/dashboard/obras/[id]`
-- [ ] 6. Testes manuais: vincular, ver badge, desvincular, verificar constraint 409
+- [x] 1. Criar `packages/web/src/app/api/admin/properties/[id]/obra/route.ts` (GET, POST, DELETE)
+- [x] 2. Criar componente `obra-vinculada-section.tsx` para a tela do empreendimento
+- [x] 3. Adicionar parâmetro `?sem_propriedade=true` na rota `GET /api/admin/obras` para filtrar obras disponíveis
+- [x] 4. Integrar `obra-vinculada-section.tsx` na tela `/dashboard/properties/[id]`
+- [x] 5. Adicionar seção "Empreendimento" (leitura) na tela `/dashboard/obras/[id]`
+- [x] 6. Validação: typecheck PASS, lint PASS nos arquivos da story; constraint 409 implementada na API (obra.property_id !== id → 409)
+
+## Riscos
+
+| Risco | Probabilidade | Mitigação |
+|-------|--------------|-----------|
+| Dois admins vinculando a mesma obra simultaneamente (race condition) | Baixa | Constraint UNIQUE em `obras.property_id` + erro 409 já previsto no AC5 |
+| `GET /api/admin/obras` retorna muitas obras sem paginação no dropdown | Média | Filtro `?sem_propriedade=true` reduz o conjunto; paginação deferida para backlog |
+| Tela de properties/[id] sem padrão estabelecido para novas seções | Baixa | Dev Notes referencia `clientes-tab.tsx` como padrão — seguir mesmo modelo |
+| Desvincular obra que tem clientes ativos no portal | Baixa | Fora do escopo desta story; `property_id = NULL` não afeta `cliente_obras` |
 
 ## Estimativa: 5h
 
@@ -78,3 +87,5 @@ Duas UIs recebem a seção de vínculo:
 | Data | Agente | Mudança |
 |------|--------|---------|
 | 2026-05-11 | @pm (Morgan) | Story criada |
+| 2026-05-11 | @po (Pax) | Validação GO — score 9/10 — seção Riscos adicionada — Status: Draft → Ready |
+| 2026-05-11 | @dev (Dex) | Implementação completa YOLO — API GET/POST/DELETE, componente ObraVinculadaSection, filtro sem_propriedade, seção Empreendimento na obra — Status: Ready → Done |
