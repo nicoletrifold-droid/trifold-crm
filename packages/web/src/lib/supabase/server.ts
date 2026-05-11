@@ -4,14 +4,17 @@ import { cookies } from "next/headers"
 export async function createClient() {
   const cookieStore = await cookies()
 
+  // Use || (not ??) so empty strings also fall through to the next source.
+  // Bracket notation prevents Turbopack from statically inlining these values.
+  const env = process.env
   const supabaseUrl = (
-    process.env.SUPABASE_URL ??
-    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    env["SUPABASE_URL"] ||
+    env["NEXT_PUBLIC_SUPABASE_URL"] ||
     ""
   ).trim()
   const supabaseAnonKey = (
-    process.env.SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    env["SUPABASE_ANON_KEY"] ||
+    env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ||
     ""
   ).trim()
 

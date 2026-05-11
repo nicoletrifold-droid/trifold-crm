@@ -32,17 +32,19 @@ async function getUserRole(
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  // Use private vars (SUPABASE_URL, SUPABASE_ANON_KEY) that Turbopack does NOT inline,
-  // falling back to the NEXT_PUBLIC_ vars for local dev compatibility.
-  // NEXT_PUBLIC_ vars get inlined as undefined in the proxy bundle during Vercel builds.
+  // Use || (not ??) so empty strings also fall through to the next source.
+  // Bracket notation prevents Turbopack from statically inlining these values.
+  // NEXT_PUBLIC_ vars get inlined as undefined in the proxy bundle during Vercel builds,
+  // so SUPABASE_URL (private) is the primary source.
+  const env = process.env
   const supabaseUrl = (
-    process.env.SUPABASE_URL ??
-    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    env["SUPABASE_URL"] ||
+    env["NEXT_PUBLIC_SUPABASE_URL"] ||
     ""
   ).trim()
   const supabaseAnonKey = (
-    process.env.SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    env["SUPABASE_ANON_KEY"] ||
+    env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ||
     ""
   ).trim()
   const supabase = createServerClient(
