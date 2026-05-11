@@ -1,6 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
+import { Mail, LayoutTemplate, Zap, Send } from "lucide-react"
 
 interface SystemEvent {
   id: string
@@ -109,6 +111,34 @@ export default function SistemaPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-stone-900">Sistema</h1>
+
+      {/* Email Marketing hub */}
+      <div className="rounded-lg border border-stone-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
+          <Mail className="h-4 w-4 text-orange-600" />
+          <h2 className="text-sm font-medium text-stone-700">Email Marketing</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-stone-100 lg:grid-cols-4">
+          {[
+            { href: "/dashboard/sistema/emails", icon: Mail, label: "Monitoramento", desc: "Status e métricas" },
+            { href: "/dashboard/sistema/email-templates", icon: LayoutTemplate, label: "Templates", desc: "Criar e editar" },
+            { href: "/dashboard/sistema/email-automacoes", icon: Zap, label: "Automações", desc: "Triggers de envio" },
+            { href: "/dashboard/sistema/email-blasts", icon: Send, label: "Disparos", desc: "Email em massa" },
+          ].map(({ href, icon: Icon, label, desc }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex flex-col gap-1 bg-white px-4 py-3 transition-colors hover:bg-orange-50"
+            >
+              <div className="flex items-center gap-2">
+                <Icon className="h-3.5 w-3.5 text-orange-600" />
+                <span className="text-sm font-medium text-stone-800">{label}</span>
+              </div>
+              <span className="text-xs text-stone-400">{desc}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
 
       {/* AC19: Health Status Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
