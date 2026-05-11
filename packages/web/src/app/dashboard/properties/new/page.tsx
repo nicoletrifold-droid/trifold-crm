@@ -38,6 +38,7 @@ export default function NewPropertyPage() {
   const [totalUnits, setTotalUnits] = useState("")
   const [totalFloors, setTotalFloors] = useState("")
   const [unitsPerFloor, setUnitsPerFloor] = useState("")
+  const [createObra, setCreateObra] = useState(true)
 
   const handleNameChange = useCallback((value: string) => {
     setName(value)
@@ -67,6 +68,7 @@ export default function NewPropertyPage() {
           total_units: totalUnits ? Number(totalUnits) : null,
           total_floors: totalFloors ? Number(totalFloors) : null,
           units_per_floor: unitsPerFloor ? Number(unitsPerFloor) : null,
+          create_obra: createObra,
         }),
       })
 
@@ -75,7 +77,21 @@ export default function NewPropertyPage() {
         throw new Error(body.error || "Erro ao salvar empreendimento")
       }
 
-      router.push("/dashboard/properties")
+      const responseData = await res.json()
+      const propertyId = responseData.data?.id
+
+      if (createObra && propertyId) {
+        const obraCreated = responseData.obra_created as boolean
+        const obraError = responseData.obra_error as string | undefined
+        const params = new URLSearchParams()
+        if (obraCreated) params.set("obra_created", "true")
+        if (!obraCreated && obraError) params.set("obra_error", "true")
+        router.push(`/dashboard/properties/${propertyId}?${params.toString()}`)
+      } else if (propertyId) {
+        router.push(`/dashboard/properties/${propertyId}`)
+      } else {
+        router.push("/dashboard/properties")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido")
     } finally {
@@ -274,6 +290,26 @@ export default function NewPropertyPage() {
               className={inputClass}
             />
           </div>
+        </div>
+
+        {/* Obra toggle */}
+        <div className="rounded-lg border border-orange-100 bg-orange-50 p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={createObra}
+              onChange={(e) => setCreateObra(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-900">
+                Criar obra de acompanhamento
+              </span>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Uma obra será criada e vinculada automaticamente a este empreendimento para o portal do cliente.
+              </p>
+            </div>
+          </label>
         </div>
 
         {/* Actions */}

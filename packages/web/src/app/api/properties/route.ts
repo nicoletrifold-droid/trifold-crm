@@ -72,5 +72,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ data: property }, { status: 201 })
+  let obraCreated = false
+  let obraError: string | undefined
+
+  if (body.create_obra === true && property) {
+    const { error: obraInsertError } = await supabase
+      .from("obras")
+      .insert({
+        org_id: appUser.org_id,
+        name: property.name,
+        property_id: property.id,
+        status: "em_andamento",
+        progress_pct: 0,
+        expected_delivery_date: body.delivery_date ?? null,
+      })
+
+    if (obraInsertError) {
+      obraError = obraInsertError.message
+    } else {
+      obraCreated = true
+    }
+  }
+
+  return NextResponse.json(
+    { data: property, obra_created: obraCreated, obra_error: obraError },
+    { status: 201 }
+  )
 }

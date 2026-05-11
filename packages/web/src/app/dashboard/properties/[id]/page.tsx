@@ -6,10 +6,13 @@ import { ObraVinculadaSection } from "./_components/obra-vinculada-section"
 
 export default async function PropertyDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ obra_created?: string; obra_error?: string }>
 }) {
   const { id } = await params
+  const { obra_created, obra_error } = await searchParams
   const appUser = await getServerUser()
   const supabase = await createClient()
 
@@ -71,6 +74,16 @@ export default async function PropertyDetailPage({
 
   return (
     <div className="space-y-6">
+      {obra_created === "true" && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
+          Obra criada ✓ — a obra de acompanhamento foi vinculada a este empreendimento.
+        </div>
+      )}
+      {obra_error === "true" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Empreendimento criado, mas houve um erro ao criar a obra. Você pode vinculá-la manualmente na seção abaixo.
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <Link
