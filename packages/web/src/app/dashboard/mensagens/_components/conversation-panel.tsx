@@ -19,6 +19,7 @@ interface Mensagem {
 interface ConversationPanelProps {
   obraId: string | null
   obraName: string | undefined
+  clientes?: { id: string; name: string }[]
   adminName: string
   onBack?: () => void
 }
@@ -26,6 +27,7 @@ interface ConversationPanelProps {
 export function ConversationPanel({
   obraId,
   obraName,
+  clientes,
   adminName,
   onBack,
 }: ConversationPanelProps) {
@@ -123,6 +125,7 @@ export function ConversationPanel({
           <AdminChatFeed
             obraId={obraId}
             adminName={adminName}
+            clientes={clientes}
             initialMensagens={mensagens}
           />
         )}

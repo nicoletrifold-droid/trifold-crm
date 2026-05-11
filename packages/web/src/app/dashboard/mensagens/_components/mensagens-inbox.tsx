@@ -15,7 +15,7 @@ interface ObraInbox {
     sender_type: string
     created_at: string
   } | null
-  clientes: { name: string }[]
+  clientes: { id: string; name: string }[]
 }
 
 export interface MensagensFilters {
@@ -142,6 +142,7 @@ export function MensagensInbox({
         <ConversationPanel
           obraId={selectedObraId}
           obraName={selectedObra?.obra_name}
+          clientes={selectedObra?.clientes ?? []}
           adminName={adminName}
           onBack={handleBack}
         />

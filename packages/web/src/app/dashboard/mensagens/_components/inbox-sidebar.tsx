@@ -14,7 +14,7 @@ interface ObraInbox {
     sender_type: string
     created_at: string
   } | null
-  clientes: { name: string }[]
+  clientes: { id: string; name: string }[]
 }
 
 interface InboxSidebarProps {

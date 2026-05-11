@@ -14,7 +14,7 @@ interface ObraInbox {
     sender_type: string
     created_at: string
   } | null
-  clientes: { name: string }[]
+  clientes: { id: string; name: string }[]
 }
 
 const PAGE_LIMIT = 20
@@ -73,7 +73,7 @@ async function getInboxPage(
 
     for (const row of clientesRaw ?? []) {
       const u = Array.isArray(row.users) ? row.users[0] : row.users
-      if (u) obraMap.get(row.obra_id)?.clientes.push({ name: u.name as string })
+      if (u) obraMap.get(row.obra_id)?.clientes.push({ id: u.id as string, name: u.name as string })
     }
 
     const all = [...obraMap.values()].sort(
