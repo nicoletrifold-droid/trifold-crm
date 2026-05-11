@@ -2,7 +2,7 @@
 epic: 24
 story: 24.3
 title: Admin Chat — Identidade Real do Remetente e Acesso Broker
-status: Ready for Review
+status: Done
 priority: P2
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -290,3 +290,4 @@ Story aprovada para push via `@devops *push`.
 | 2026-05-11 | 1.1 | GO (9.5/10) — S1 aplicado in-place (OUT of scope broker/inbox) | Pax (@po) |
 | 2026-05-11 | 1.2 | Implementação completa — Ready for Review | Dex (@dev) |
 | 2026-05-11 | 1.3 | QA Gate PASS WITH CONCERNS — C1/C2/C3 documentados | Quinn (@qa) |
+| 2026-05-11 | 1.4 | Push origin/main commit c0ba858 — status: Done | Gage (@devops) |
