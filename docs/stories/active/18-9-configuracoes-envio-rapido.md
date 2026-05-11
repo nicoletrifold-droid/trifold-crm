@@ -2,7 +2,7 @@
 epic: 18
 story: 18.9
 title: Configurações de Email + Envio Rápido
-status: Draft
+status: Ready
 priority: P1-ALTO
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -138,7 +138,29 @@ Esta story adiciona:
 
 - [ ] **AC9:** `npm run type-check` passa sem erros
 
+## Riscos
+
+| Risco | Severidade | Mitigação |
+|-------|-----------|-----------|
+| `sendEmail()` não recebe `orgId` hoje — adicionar o parâmetro pode quebrar callers existentes | Alta | Tornar `orgId` opcional com fallback para settings padrão; callers antigos (sem orgId) continuam funcionando |
+| `getEmailSettings()` adiciona 1 round-trip ao banco em cada envio | Média | Volume atual (≤100/dia no Free) não justifica cache; aceito. Documentar como tech-debt para escalar |
+| Admin salvar email remetente não verificado no Resend → bounces | Média | Informação de aviso na UI (AC3) é suficiente; validação de domínio é responsabilidade do Resend |
+| Migration 026 com FK `orgs(id)` — verificar que tabela `orgs` existe | Baixa | Todas as migrations anteriores (018, 020) usam o mesmo padrão `org_id` com FK em `orgs` — já validado |
+
 ## Dev Notes
+
+### sendEmail() — compatibilidade retroativa (CRÍTICO)
+AC4 exige que `sendEmail()` leia settings da org. A assinatura atual **não tem `orgId`**. Solução:
+```typescript
+// ANTES (não quebrar):
+export async function sendEmail(params: { to, subject, html, ... })
+
+// DEPOIS (adicionar orgId opcional):
+export async function sendEmail(params: { to, subject, html, ..., orgId?: string })
+// Se orgId não informado → usa defaults hardcoded (comportamento atual preservado)
+// Se orgId informado → lê email_settings da org
+```
+Callers existentes (automações, follow-up, campanhas) **não precisam ser alterados** — recebem o comportamento atual por omissão.
 
 ### Stack e padrões
 - **Migration:** seguir padrão de `018_email_central.sql`, numeração `026_email_settings.sql`
@@ -243,4 +265,7 @@ _A ser preenchido_
 _A ser preenchido_
 
 ### Change Log
-_A ser preenchido_
+
+| Data | Agente | Mudança |
+|------|--------|---------|
+| 2026-05-11 | @po (Pax) | Validação 8/10 — GO. Status Draft → Ready. Adicionado: seção Riscos, Dev Note sobre sendEmail() retrocompatibilidade |
