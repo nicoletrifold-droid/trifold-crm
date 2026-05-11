@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { ObraTabNav } from "./_components/obra-tab-nav"
 import { Sidebar } from "./_components/sidebar"
 import { PrivacyButton } from "./_components/privacy-button"
+import { PrivacyConsentModal } from "./_components/privacy-consent-modal"
 import { PushPrompt } from "@web/components/portal/push-prompt"
 import { createClient } from "@web/lib/supabase/server"
 
@@ -29,6 +30,7 @@ export default async function ObraLayout({
 
   let userName = "Usuário"
   let userEmail = ""
+  let privacyAccepted = false
 
   const {
     data: { user },
@@ -37,12 +39,13 @@ export default async function ObraLayout({
   if (user) {
     const { data: userData } = await supabase
       .from("users")
-      .select("name, email")
+      .select("name, email, privacy_accepted_at")
       .eq("auth_id", user.id)
       .single()
     if (userData) {
       userName = userData.name ?? "Usuário"
       userEmail = userData.email ?? user.email ?? ""
+      privacyAccepted = !!userData.privacy_accepted_at
     } else {
       userEmail = user.email ?? ""
     }
@@ -58,6 +61,7 @@ export default async function ObraLayout({
         <ObraTabNav obraId={obra_id} />
         <PrivacyButton />
       </div>
+      <PrivacyConsentModal privacyAccepted={privacyAccepted} />
       <PushPrompt />
     </>
   )

@@ -137,27 +137,45 @@ export function InboxSidebar({
         ) : (
           obras.map((obra) => {
             const isActive = obra.obra_id === selectedObraId
+            const initials = obra.obra_name
+              .split(" ")
+              .slice(0, 2)
+              .map((w) => w[0]?.toUpperCase() ?? "")
+              .join("")
+            const hasUnread = obra.unread_count > 0
             return (
               <button
                 key={obra.obra_id}
                 onClick={() => onSelect(obra.obra_id)}
-                className={`w-full border-b border-gray-50 px-4 py-3 text-left transition-colors hover:bg-orange-50 ${
-                  isActive ? "bg-orange-50" : ""
+                className={`w-full border-b border-gray-50 px-3 py-3 text-left transition-colors hover:bg-orange-50 ${
+                  isActive ? "bg-orange-50" : "bg-white"
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  {/* Avatar */}
+                  <div
+                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm ${
+                      isActive
+                        ? "bg-orange-500 text-white"
+                        : "bg-orange-100 text-orange-700"
+                    }`}
+                  >
+                    {initials || "O"}
+                  </div>
+
+                  {/* Texto */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-baseline justify-between gap-1">
                       <p
                         className={`truncate text-sm font-semibold ${
-                          isActive ? "text-orange-700" : "text-gray-900"
+                          isActive ? "text-orange-700" : hasUnread ? "text-gray-900" : "text-gray-700"
                         }`}
                       >
                         {obra.obra_name}
                       </p>
-                      {obra.unread_count > 0 && (
-                        <span className="flex-shrink-0 rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                          {obra.unread_count > 99 ? "99+" : obra.unread_count}
+                      {obra.last_message && (
+                        <span className={`flex-shrink-0 text-[10px] ${hasUnread ? "font-semibold text-orange-500" : "text-gray-400"}`}>
+                          {formatRelative(obra.last_message.created_at)}
                         </span>
                       )}
                     </div>
@@ -166,17 +184,21 @@ export function InboxSidebar({
                         {obra.clientes.map((c) => c.name).join(", ")}
                       </p>
                     )}
-                    {obra.last_message && (
-                      <p className="mt-0.5 truncate text-xs text-gray-400">
-                        {formatPreview(obra.last_message)}
-                      </p>
-                    )}
+                    <div className="mt-0.5 flex items-center justify-between gap-1">
+                      {obra.last_message ? (
+                        <p className={`truncate text-xs ${hasUnread ? "font-medium text-gray-700" : "text-gray-400"}`}>
+                          {formatPreview(obra.last_message)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-300">Sem mensagens</p>
+                      )}
+                      {hasUnread && (
+                        <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                          {obra.unread_count > 99 ? "99+" : obra.unread_count}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {obra.last_message && (
-                    <span className="flex-shrink-0 text-[10px] text-gray-400">
-                      {formatRelative(obra.last_message.created_at)}
-                    </span>
-                  )}
                 </div>
               </button>
             )

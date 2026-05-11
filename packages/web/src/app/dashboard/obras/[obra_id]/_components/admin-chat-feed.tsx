@@ -94,6 +94,21 @@ function SignedImage({
   )
 }
 
+function AvatarCircle({ name, className }: { name: string; className?: string }) {
+  const initials = name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
+  return (
+    <div
+      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold ${className ?? "bg-teal-100 text-teal-700"}`}
+    >
+      {initials || "?"}
+    </div>
+  )
+}
+
 function MensagemBubble({
   mensagem,
   adminName,
@@ -102,8 +117,9 @@ function MensagemBubble({
   adminName: string
 }) {
   const isEquipe = mensagem.sender_type === "equipe"
+  const senderName = mensagem.sender_display_name ?? (isEquipe ? adminName : "Cliente")
 
-  const content = () => {
+  const bubbleContent = () => {
     if (mensagem.message_type === "text") {
       return (
         <p className="whitespace-pre-wrap text-sm leading-relaxed">
@@ -124,28 +140,28 @@ function MensagemBubble({
     return null
   }
 
-  return (
-    <div className={`flex ${isEquipe ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
-          isEquipe
-            ? "bg-orange-500 text-white"
-            : "border border-gray-200 bg-gray-50 text-gray-900"
-        }`}
-      >
-        {isEquipe ? (
-          <p className="mb-1 text-xs font-medium text-orange-100">
-            {`${mensagem.sender_display_name ?? adminName} (como Trifold)`}
+  if (isEquipe) {
+    return (
+      <div className="flex items-end justify-end gap-2">
+        <div className="max-w-[72%] rounded-2xl rounded-br-none bg-orange-500 px-4 py-2.5 text-white shadow-sm">
+          <p className="mb-1 text-[11px] font-semibold text-orange-100">{senderName}</p>
+          {bubbleContent()}
+          <p className="mt-1 text-right text-[10px] text-orange-200">
+            {formatTimestamp(mensagem.created_at)}
           </p>
-        ) : (
-          <p className="mb-1 text-xs font-medium text-orange-500">Cliente</p>
-        )}
-        {content()}
-        <p
-          className={`mt-1 text-right text-[10px] ${
-            isEquipe ? "text-orange-100" : "text-gray-400"
-          }`}
-        >
+        </div>
+        <AvatarCircle name={senderName} className="mb-0.5 bg-orange-100 text-orange-700" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-end justify-start gap-2">
+      <AvatarCircle name={senderName} className="mb-0.5 bg-teal-100 text-teal-700" />
+      <div className="max-w-[72%] rounded-2xl rounded-bl-none bg-white px-4 py-2.5 text-gray-800 shadow-sm">
+        <p className="mb-1 text-[11px] font-semibold text-teal-600">{senderName}</p>
+        {bubbleContent()}
+        <p className="mt-1 text-right text-[10px] text-gray-400">
           {formatTimestamp(mensagem.created_at)}
         </p>
       </div>
@@ -244,12 +260,16 @@ export function AdminChatFeed({
   }
 
   return (
-    <div className="flex h-[500px] flex-col rounded-lg border border-gray-200 bg-white">
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+    <div className="flex h-full min-h-[400px] flex-col overflow-hidden">
+      <div className="flex-1 space-y-2 overflow-y-auto bg-[#f0ece3] px-4 py-4">
         {mensagens.length === 0 && (
-          <p className="py-10 text-center text-sm text-gray-500">
-            Nenhuma mensagem ainda.
-          </p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/70 shadow-sm">
+              <Send className="h-6 w-6 text-gray-300" />
+            </div>
+            <p className="text-sm text-gray-500">Nenhuma mensagem ainda.</p>
+            <p className="mt-1 text-xs text-gray-400">Seja o primeiro a enviar uma mensagem.</p>
+          </div>
         )}
         {mensagens.map((m) => (
           <MensagemBubble key={m.id} mensagem={m} adminName={adminName} />
@@ -257,7 +277,7 @@ export function AdminChatFeed({
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
+      <div className="border-t border-gray-200 bg-white px-4 py-3">
         {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
         <div className="flex items-end gap-2">
           <textarea
@@ -269,19 +289,19 @@ export function AdminChatFeed({
               e.target.style.height = `${Math.min(e.target.scrollHeight, 96)}px`
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Responder ao cliente... (Enter envia, Shift+Enter nova linha)"
+            placeholder="Responder ao cliente… (Enter envia, Shift+Enter nova linha)"
             rows={1}
             disabled={sending}
-            className="flex-1 resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-500 focus:outline-none disabled:opacity-50"
+            className="flex-1 resize-none rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-300 disabled:opacity-50"
           />
           <button
             type="button"
             onClick={sendText}
             disabled={sending || !text.trim()}
-            className="flex-shrink-0 rounded-lg p-2 text-orange-500 hover:bg-orange-50 disabled:opacity-30"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm transition-colors hover:bg-orange-600 disabled:opacity-30"
             title="Enviar mensagem"
           >
-            <Send className="h-5 w-5" />
+            <Send className="h-4 w-4" />
           </button>
         </div>
       </div>

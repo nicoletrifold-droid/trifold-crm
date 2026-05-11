@@ -75,10 +75,16 @@ export function ConversationPanel({
     )
   }
 
+  const obraInitials = (obraName ?? "O")
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-2.5 shadow-sm">
         {onBack && (
           <button
             onClick={onBack}
@@ -88,10 +94,14 @@ export function ConversationPanel({
             <ArrowLeft className="h-5 w-5" />
           </button>
         )}
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700 shadow-sm">
+          {obraInitials}
+        </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-gray-900">
             {obraName ?? "Obra"}
           </p>
+          <p className="text-[11px] text-gray-400">Acompanhamento de obra</p>
         </div>
         <Link
           href={`/dashboard/obras/${obraId}`}
@@ -105,7 +115,7 @@ export function ConversationPanel({
       {/* Chat body */}
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
-          <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-1 items-center justify-center bg-[#f0ece3]">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
           </div>
         ) : (

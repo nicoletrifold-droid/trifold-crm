@@ -344,7 +344,7 @@ export function ObraDetailTabs({
 
       {/* Mensagens tab */}
       {tab === "mensagens" && (
-        <div className="space-y-4">
+        <div className="h-[560px] overflow-hidden rounded-lg border border-gray-200">
           <AdminChatFeed
             obraId={obraId}
             adminName={adminName}
