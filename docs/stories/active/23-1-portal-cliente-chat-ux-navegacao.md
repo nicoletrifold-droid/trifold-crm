@@ -2,7 +2,7 @@
 epic: 23
 story: 23.1
 title: Portal do Cliente — Chat UX + Navegação Mobile
-status: Ready for Review
+status: Done
 priority: P1
 created_at: 2026-05-11
 created_by: River (@sm)

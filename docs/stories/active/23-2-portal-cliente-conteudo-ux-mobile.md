@@ -2,7 +2,7 @@
 epic: 23
 story: 23.2
 title: Portal do Cliente — Conteúdo UX Mobile (Home, Fases, Fotos, Docs)
-status: Ready for Review
+status: Done
 priority: P2
 created_at: 2026-05-11
 created_by: River (@sm)
