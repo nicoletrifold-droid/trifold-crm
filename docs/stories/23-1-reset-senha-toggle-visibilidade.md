@@ -2,7 +2,7 @@
 epic: 23
 story: 23.1
 title: Redefinição de Senha e Toggle de Visibilidade
-status: InProgress
+status: InReview
 priority: P1
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -168,7 +168,7 @@ Usar `process.env.NEXT_PUBLIC_APP_URL` ou construir a partir do `origin` do requ
 - [x] 6. Criar `reset-senha/page.tsx` com formulário de nova senha + toggles de visibilidade
 - [x] 7. Criar `reset-senha/actions.ts` com `resetPassword()` Server Action
 - [x] 8. Verificar banner `?reset=success` na tela de login
-- [ ] 9. Testar fluxo completo end-to-end (login normal + reset + toggle)
+- [x] 9. Testar fluxo completo end-to-end (login normal + reset + toggle)
 
 ## Riscos
 
@@ -185,9 +185,30 @@ Usar `process.env.NEXT_PUBLIC_APP_URL` ou construir a partir do `origin` do requ
 - [ ] `npm run lint` passa sem warnings
 - [ ] Story status atualizado para Done pelo @devops após push
 
+## QA Results
+
+**Gate Decision:** PASS
+**Revisado por:** @qa (Quinn) — 2026-05-11
+
+| Check | Status |
+|-------|--------|
+| Code Review | ✅ PASS |
+| Testes (typecheck + lint) | ✅ PASS |
+| Acceptance Criteria (10/10) | ✅ PASS |
+| Sem Regressões | ✅ PASS |
+| Performance | ✅ PASS |
+| Segurança | ✅ PASS |
+| Documentação | ✅ PASS |
+
+**Observação LOW:** `auth/callback/route.ts` — validar `next.startsWith('/')` como boa prática defensiva. Não bloqueia.
+
+---
+
 ## Change Log
 
 | Data | Agente | Ação |
 |------|--------|------|
 | 2026-05-11 | @sm (River) | Story criada — Draft |
 | 2026-05-11 | @po (Pax) | Validação GO (9/10) — P1 middleware corrigido, P2 verifyOtp corrigido — status → Ready |
+| 2026-05-11 | @dev (Dex) | Implementação concluída — 8 arquivos, commit a9af578 — status → InReview |
+| 2026-05-11 | @qa (Quinn) | Gate PASS — 7/7 checks, 10/10 ACs, 1 observação LOW — pronto para push |
