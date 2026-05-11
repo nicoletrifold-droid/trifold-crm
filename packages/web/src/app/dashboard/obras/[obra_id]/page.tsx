@@ -75,7 +75,7 @@ export default async function ObraDetailPage({
       supabase
         .from("obra_mensagens")
         .select(
-          "id, content, message_type, storage_path, sender_type, created_at"
+          "id, content, message_type, storage_path, sender_type, created_at, sender_display_name"
         )
         .eq("obra_id", obra_id)
         .order("created_at", { ascending: true }),

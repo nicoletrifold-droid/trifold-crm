@@ -10,6 +10,7 @@ interface Mensagem {
   message_type: string
   storage_path: string | null
   sender_type: string
+  sender_display_name: string | null
   created_at: string
 }
 
@@ -125,7 +126,9 @@ function MensagemBubble({
         }`}
       >
         {isEquipe ? (
-          <p className="mb-1 text-xs font-medium text-orange-100">{adminName}</p>
+          <p className="mb-1 text-xs font-medium text-orange-100">
+            {mensagem.sender_display_name ?? adminName}
+          </p>
         ) : (
           <p className="mb-1 text-xs font-medium text-orange-500">Cliente</p>
         )}
@@ -167,11 +170,10 @@ export function AdminChatFeed({
           filter: `obra_id=eq.${obraId}`,
         },
         (payload) => {
+          const nova = payload.new as Mensagem
           setMensagens((prev) => {
-            if (prev.some((m) => m.id === (payload.new as Mensagem).id)) {
-              return prev
-            }
-            return [...prev, payload.new as Mensagem]
+            if (prev.some((m) => m.id === nova.id)) return prev
+            return [...prev, nova]
           })
           requestAnimationFrame(() =>
             bottomRef.current?.scrollIntoView({ behavior: "smooth" })

@@ -50,6 +50,7 @@ interface Mensagem {
   message_type: string
   storage_path: string | null
   sender_type: string
+  sender_display_name: string | null
   created_at: string
 }
 

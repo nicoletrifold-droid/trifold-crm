@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface AppUser {
   id: string;
+  name: string;
   role: string;
   org_id: string;
 }
@@ -36,7 +37,7 @@ export async function requireAuth(): Promise<AuthResult> {
 
   const { data: appUser } = await supabase
     .from('users')
-    .select('id, role, org_id')
+    .select('id, name, role, org_id')
     .eq('auth_id', user.id)
     .single();
 
