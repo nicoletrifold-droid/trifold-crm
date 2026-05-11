@@ -18,6 +18,9 @@ export default function MensagensError({
       <p className="text-sm font-medium text-stone-300">
         Não foi possível carregar as mensagens.
       </p>
+      {error.message && (
+        <p className="max-w-xs text-xs text-stone-500">{error.message}</p>
+      )}
       {error.digest && (
         <p className="font-mono text-xs text-stone-600">{error.digest}</p>
       )}
