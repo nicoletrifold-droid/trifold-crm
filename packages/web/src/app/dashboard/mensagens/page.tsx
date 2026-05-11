@@ -21,10 +21,8 @@ async function getInboxObras(
   orgId: string
 ): Promise<ObraInbox[]> {
   const { data: msgs } = await supabase
-    .from("v_mensagens_admin")
-    .select(
-      "obra_id, obra_name, content, message_type, sender_type, read_at, created_at"
-    )
+    .from("obra_mensagens")
+    .select("obra_id, content, message_type, sender_type, read_at, created_at, obras(name)")
     .eq("org_id", orgId)
     .order("created_at", { ascending: false })
 
@@ -32,10 +30,11 @@ async function getInboxObras(
 
   const obraMap = new Map<string, ObraInbox>()
   for (const msg of msgs) {
+    const obraName = (msg.obras as { name: string }[] | null)?.[0]?.name ?? "Obra"
     if (!obraMap.has(msg.obra_id)) {
       obraMap.set(msg.obra_id, {
         obra_id: msg.obra_id,
-        obra_name: msg.obra_name,
+        obra_name: obraName,
         unread_count: 0,
         last_message: {
           content: msg.content,
