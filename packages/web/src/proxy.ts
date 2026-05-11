@@ -6,8 +6,9 @@ export async function proxy(request: NextRequest) {
     return await updateSession(request)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error("[proxy] updateSession threw:", msg, err instanceof Error ? err.stack : "")
-    throw err
+    const stack = err instanceof Error ? (err.stack ?? "") : ""
+    console.error("[proxy] updateSession threw:", msg, stack)
+    return new Response(`Proxy error: ${msg}\n${stack}`, { status: 500 })
   }
 }
 
