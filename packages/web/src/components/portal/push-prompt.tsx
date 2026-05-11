@@ -65,7 +65,7 @@ export function PushPrompt() {
   if (!visible) return null
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-stone-900 px-4 py-3 text-sm">
+    <div className="fixed bottom-16 left-0 right-0 z-50 flex items-center justify-between gap-3 border-t border-stone-800 bg-stone-900 px-4 py-3 text-sm lg:bottom-0">
       <span className="text-stone-300">
         🔔 Receba notificações quando sua obra for atualizada.
       </span>

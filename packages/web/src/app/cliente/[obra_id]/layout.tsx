@@ -49,14 +49,16 @@ export default async function ObraLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-stone-950">
-      <PushPrompt />
-      <Sidebar obraId={obra_id} userName={userName} userEmail={userEmail} />
-      <div className="flex flex-1 flex-col pb-16 lg:pl-[260px] lg:pb-0">
-        {children}
+    <>
+      <div className="flex min-h-screen bg-stone-950">
+        <Sidebar obraId={obra_id} userName={userName} userEmail={userEmail} />
+        <div className="flex flex-1 flex-col pb-16 lg:pl-[260px] lg:pb-0">
+          {children}
+        </div>
+        <ObraTabNav obraId={obra_id} />
+        <PrivacyButton />
       </div>
-      <ObraTabNav obraId={obra_id} />
-      <PrivacyButton />
-    </div>
+      <PushPrompt />
+    </>
   )
 }
