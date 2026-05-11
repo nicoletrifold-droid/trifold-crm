@@ -22,7 +22,13 @@ export default async function MensagensPage({
   }
 
   const { data: authData } = await supabase.auth.getUser()
-  const userId = authData.user?.id ?? null
+  const authUid = authData.user?.id ?? null
+
+  // public.users.id ≠ auth.uid() — precisamos do ID interno para filtrar cliente_id
+  const { data: userRow } = authUid
+    ? await supabase.from("users").select("id").eq("auth_id", authUid).single()
+    : { data: null }
+  const userId = userRow?.id ?? null
 
   const mensagensQuery = supabase
     .from("obra_mensagens")
