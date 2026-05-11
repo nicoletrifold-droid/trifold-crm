@@ -1,6 +1,6 @@
 # Story 24.3 — Backfill: Vincular Empreendimentos Existentes a Obras
 
-## Status: Ready for Review
+## Status: Done
 
 ## Story
 
@@ -109,3 +109,4 @@ Os empreendimentos existentes no CRM (tabela `properties`) e as obras existentes
 | 2026-05-11 | @po (Pax) | Validação GO — score 9/10 — seção Riscos adicionada — Status: Draft → Ready |
 | 2026-05-11 | @dev (Dex) | Implementação completa — todas as tasks [x] — Status: Ready for Review |
 | 2026-05-11 | @qa (Quinn) | QA Gate PASS — 8/8 ACs verificados — 3 concerns LOW não bloqueantes |
+| 2026-05-11 | @devops (Gage) | Push origin/main ce18a17 — Status: Done |
