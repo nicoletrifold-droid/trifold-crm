@@ -25,17 +25,14 @@ ALTER TABLE email_settings ENABLE ROW LEVEL SECURITY;
 -- Org members can read their own settings
 CREATE POLICY "email_settings_select" ON email_settings
   FOR SELECT USING (
-    org_id IN (
-      SELECT org_id FROM profiles WHERE id = auth.uid()
-    )
+    org_id = public.user_org_id()
   );
 
 -- Only admins can insert/update
 CREATE POLICY "email_settings_upsert" ON email_settings
   FOR ALL USING (
-    org_id IN (
-      SELECT org_id FROM profiles WHERE id = auth.uid() AND role = 'admin'
-    )
+    org_id = public.user_org_id()
+    AND public.user_role() = 'admin'
   );
 
 -- updated_at trigger
