@@ -2,7 +2,7 @@
 epic: 24
 story: 24.2
 title: Inbox Unificado — Central de Mensagens Admin
-status: Ready for Review
+status: Done
 priority: P1
 created_at: 2026-05-11
 created_by: River (@sm)
@@ -509,3 +509,13 @@ claude-sonnet-4-6 (Dex @dev)
 ### Aprovação
 
 Story aprovada para push via `@devops *push`.
+
+## Change Log
+
+| Data | Agente | Ação |
+|------|--------|------|
+| 2026-05-11 | @sm (River) | Story criada — status: Draft |
+| 2026-05-11 | @po (Pax) | Validação GO — status: Ready |
+| 2026-05-11 | @dev (Dex) | Implementação completa — status: Ready for Review |
+| 2026-05-11 | @qa (Quinn) | QA Gate PASS WITH CONCERNS — aprovada para push |
+| 2026-05-11 | @devops (Gage) | Push origin/main commit bece582 — status: Done |
