@@ -127,7 +127,7 @@ function MensagemBubble({
       >
         {isEquipe ? (
           <p className="mb-1 text-xs font-medium text-orange-100">
-            {mensagem.sender_display_name ?? adminName}
+            {`${mensagem.sender_display_name ?? adminName} (como Trifold)`}
           </p>
         ) : (
           <p className="mb-1 text-xs font-medium text-orange-500">Cliente</p>
