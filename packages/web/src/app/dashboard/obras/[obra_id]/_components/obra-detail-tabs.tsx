@@ -98,6 +98,17 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const GROUP_COLORS = [
+  { bubble: "bg-orange-500 text-white", header: "bg-orange-50", headerText: "text-orange-700", border: "border-orange-200", bars: ["bg-orange-500", "bg-orange-400", "bg-orange-600", "bg-orange-300"] },
+  { bubble: "bg-blue-500 text-white", header: "bg-blue-50", headerText: "text-blue-700", border: "border-blue-200", bars: ["bg-blue-500", "bg-blue-400", "bg-blue-600", "bg-blue-300"] },
+  { bubble: "bg-emerald-600 text-white", header: "bg-emerald-50", headerText: "text-emerald-700", border: "border-emerald-200", bars: ["bg-emerald-500", "bg-emerald-400", "bg-emerald-600", "bg-emerald-300"] },
+  { bubble: "bg-purple-500 text-white", header: "bg-purple-50", headerText: "text-purple-700", border: "border-purple-200", bars: ["bg-purple-500", "bg-purple-400", "bg-purple-600", "bg-purple-300"] },
+  { bubble: "bg-teal-500 text-white", header: "bg-teal-50", headerText: "text-teal-700", border: "border-teal-200", bars: ["bg-teal-500", "bg-teal-400", "bg-teal-600", "bg-teal-300"] },
+  { bubble: "bg-rose-500 text-white", header: "bg-rose-50", headerText: "text-rose-700", border: "border-rose-200", bars: ["bg-rose-500", "bg-rose-400", "bg-rose-600", "bg-rose-300"] },
+  { bubble: "bg-indigo-500 text-white", header: "bg-indigo-50", headerText: "text-indigo-700", border: "border-indigo-200", bars: ["bg-indigo-500", "bg-indigo-400", "bg-indigo-600", "bg-indigo-300"] },
+  { bubble: "bg-amber-500 text-white", header: "bg-amber-50", headerText: "text-amber-700", border: "border-amber-200", bars: ["bg-amber-500", "bg-amber-400", "bg-amber-600", "bg-amber-300"] },
+] as const
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -106,12 +117,33 @@ function formatDate(iso: string): string {
   })
 }
 
+function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
+  const sorted = [...fases].sort((a, b) => {
+    if (!a.start_date && !b.start_date) return a.order_index - b.order_index
+    if (!a.start_date) return 1
+    if (!b.start_date) return -1
+    return new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+  })
+  const groups: [string, Fase[]][] = []
+  const idx = new Map<string, number>()
+  for (const fase of sorted) {
+    if (!idx.has(fase.name)) {
+      idx.set(fase.name, groups.length)
+      groups.push([fase.name, []])
+    }
+    groups[idx.get(fase.name)!][1].push(fase)
+  }
+  return groups
+}
+
 function FaseItem({
   fase,
   obraId,
+  barColor = "bg-orange-500",
 }: {
   fase: Fase
   obraId: string
+  barColor?: string
 }) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
@@ -135,15 +167,14 @@ function FaseItem({
 
   return (
     <>
-      <div className="flex items-center gap-3 py-3">
-        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
-          {fase.order_index}
-        </div>
+      <div className="flex items-center gap-3 px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium text-gray-900">
-              {fase.name}
-            </p>
+            {fase.description && (
+              <p className="truncate text-sm font-medium text-gray-800">
+                {fase.description}
+              </p>
+            )}
             <span
               className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                 FASE_STATUS_BADGE[fase.status] ?? "bg-gray-100 text-gray-600"
@@ -152,13 +183,10 @@ function FaseItem({
               {FASE_STATUS_LABEL[fase.status] ?? fase.status.toUpperCase()}
             </span>
           </div>
-          {fase.description && (
-            <p className="text-xs text-gray-500">{fase.description}</p>
-          )}
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1.5 flex items-center gap-2">
             <div className="h-1.5 flex-1 rounded-full bg-gray-200">
               <div
-                className="h-1.5 rounded-full bg-orange-500 transition-all"
+                className={`h-1.5 rounded-full transition-all ${barColor}`}
                 style={{ width: `${fase.progress_pct ?? 0}%` }}
               />
             </div>
@@ -249,7 +277,7 @@ export function ObraDetailTabs({
           <FaseCreateForm obraId={obraId} />
 
           <section className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
               Fases ({fases.length})
             </h2>
             {fases.length === 0 ? (
@@ -257,10 +285,37 @@ export function ObraDetailTabs({
                 Nenhuma fase criada.
               </p>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {fases.map((fase) => (
-                  <FaseItem key={fase.id} fase={fase} obraId={obraId} />
-                ))}
+              <div className="space-y-3">
+                {buildFaseGroups(fases).map(([groupName, groupFases], groupIdx) => {
+                  const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length]
+                  return (
+                    <div
+                      key={groupName}
+                      className={`overflow-hidden rounded-lg border ${color.border}`}
+                    >
+                      <div className={`flex items-center justify-between px-4 py-2.5 ${color.header}`}>
+                        <span className={`text-sm font-semibold ${color.headerText}`}>
+                          {groupName}
+                        </span>
+                        {groupFases.length > 1 && (
+                          <span className="text-xs text-gray-400">
+                            {groupFases.length} etapas
+                          </span>
+                        )}
+                      </div>
+                      <div className="divide-y divide-gray-100 bg-white">
+                        {groupFases.map((fase, subIdx) => (
+                          <FaseItem
+                            key={fase.id}
+                            fase={fase}
+                            obraId={obraId}
+                            barColor={color.bars[subIdx % color.bars.length]}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </section>
