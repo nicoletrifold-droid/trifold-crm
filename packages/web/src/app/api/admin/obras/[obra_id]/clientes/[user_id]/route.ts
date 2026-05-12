@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 export async function DELETE(
   _req: Request,

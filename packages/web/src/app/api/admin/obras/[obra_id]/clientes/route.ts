@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 export async function GET(
   _req: Request,
@@ -136,9 +136,14 @@ export async function POST(
       return NextResponse.json({ error: userError.message }, { status: 500 })
     }
 
-    await supabaseAdmin
+    const { error: linkError } = await supabaseAdmin
       .from("cliente_obras")
       .insert({ user_id: newUser.id, obra_id, is_primary: true })
+
+    if (linkError) {
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json({ error: linkError.message }, { status: 500 })
+    }
 
     return NextResponse.json({ cliente: newUser }, { status: 201 })
   }
@@ -146,7 +151,9 @@ export async function POST(
   // Modo B — vincular por email
   const { email } = body as { email: string }
 
-  const { data: existingUser } = await supabase
+  const supabaseAdmin = createAdminClient()
+
+  const { data: existingUser } = await supabaseAdmin
     .from("users")
     .select("id, name, email")
     .eq("email", email.trim())
@@ -161,7 +168,7 @@ export async function POST(
     )
   }
 
-  const { error: linkError } = await supabase
+  const { error: linkError } = await supabaseAdmin
     .from("cliente_obras")
     .insert({ user_id: existingUser.id, obra_id, is_primary: false })
 
