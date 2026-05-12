@@ -80,8 +80,8 @@ export default async function DocumentosPage({
                   }
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                     categoriaAtiva === cat
-                      ? "bg-[#E8856A] text-white"
-                      : "bg-stone-800 text-stone-400 hover:text-stone-200"
+                      ? "bg-[#F27A5E] text-white"
+                      : "bg-stone-800 text-white/70 hover:text-white"
                   }`}
                 >
                   {cat}
@@ -102,11 +102,11 @@ export default async function DocumentosPage({
             {docsFiltrados.map((doc) => (
               <div
                 key={doc.id}
-                className="flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-900 px-4 py-3"
+                className="flex items-center gap-4 rounded-xl border border-stone-800 bg-stone-900 px-4 py-3.5 transition-colors hover:bg-stone-800/60"
               >
                 {/* PDF icon */}
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-red-900/30">
-                  <span className="text-[9px] font-bold text-red-400 tracking-wide">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#F27A5E]/15">
+                  <span className="text-[9px] font-bold text-[#F27A5E] tracking-wide">
                     PDF
                   </span>
                 </div>
@@ -116,19 +116,28 @@ export default async function DocumentosPage({
                   <p className="truncate text-sm font-medium text-white">
                     {doc.name}
                   </p>
-                  <p className="mt-0.5 truncate text-xs text-stone-500">
-                    {[doc.category, formatBytes(doc.file_size_bytes)].filter(Boolean).join(" · ")}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    {doc.category && (
+                      <span className="rounded-full bg-stone-800 px-2 py-0.5 text-[10px] font-medium text-white/70">
+                        {doc.category}
+                      </span>
+                    )}
+                    {doc.file_size_bytes && (
+                      <span className="text-[11px] text-white/40">
+                        {formatBytes(doc.file_size_bytes)}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Download button — opens file in new tab */}
+                {/* Download button */}
                 <a
                   href={`/api/cliente/obras/${obra_id}/documentos/${doc.id}/download-redirect`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl bg-stone-800 px-3 text-xs font-medium text-stone-300 transition-colors hover:bg-stone-700 hover:text-white"
+                  className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-lg bg-[#F27A5E] px-3.5 text-xs font-semibold text-white transition-colors hover:bg-[#d4705a] active:scale-95"
                 >
-                  <FileDown className="h-4 w-4" />
+                  <FileDown className="h-3.5 w-3.5" />
                   Baixar
                 </a>
               </div>

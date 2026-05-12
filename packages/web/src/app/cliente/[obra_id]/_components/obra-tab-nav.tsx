@@ -56,14 +56,14 @@ export function ObraTabNav({ obraId }: ObraTabNavProps) {
               aria-current={isActive ? "page" : undefined}
               className={`relative flex flex-1 flex-col items-center gap-1 py-3.5 text-xs font-medium transition-colors ${
                 isActive
-                  ? "text-[#E8856A]"
-                  : "text-stone-500 hover:text-stone-300"
+                  ? "text-[#F27A5E]"
+                  : "text-stone-500 hover:text-white"
               }`}
             >
               {isActive && (
                 <span
                   aria-hidden="true"
-                  className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-[#E8856A]"
+                  className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-[#F27A5E]"
                 />
               )}
               <Icon className="h-5 w-5" />

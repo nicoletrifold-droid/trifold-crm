@@ -15,7 +15,7 @@ export default function ObraError({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-stone-950 px-6 text-center">
-      <p className="text-sm font-medium text-stone-300">
+      <p className="text-sm font-medium text-white">
         Erro ao carregar a página.
       </p>
       <p className="max-w-xs text-xs text-stone-500">{error.message}</p>
@@ -24,7 +24,7 @@ export default function ObraError({
       )}
       <button
         onClick={reset}
-        className="rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-medium text-white"
+        className="rounded-lg bg-[#F27A5E] px-4 py-2 text-sm font-medium text-white"
       >
         Tentar novamente
       </button>

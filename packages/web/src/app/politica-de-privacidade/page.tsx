@@ -27,7 +27,7 @@ export default function PoliticaDePrivacidadePage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-6 py-12">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#E8856A]">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#F27A5E]">
           Trifold Engenharia
         </p>
         <h1 className="mb-2 text-4xl font-bold text-white">
@@ -200,7 +200,7 @@ export default function PoliticaDePrivacidadePage() {
                   href="https://www.gov.br/anpd"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#E8856A] underline underline-offset-2"
+                  className="text-[#F27A5E] underline underline-offset-2"
                 >
                   anpd.gov.br
                 </a>
@@ -210,7 +210,7 @@ export default function PoliticaDePrivacidadePage() {
               Para exercer qualquer desses direitos, envie e-mail para{" "}
               <a
                 href="mailto:contato@trifold.eng.br"
-                className="text-[#E8856A] underline underline-offset-2"
+                className="text-[#F27A5E] underline underline-offset-2"
               >
                 contato@trifold.eng.br
               </a>
@@ -276,7 +276,7 @@ export default function PoliticaDePrivacidadePage() {
                 E-mail:{" "}
                 <a
                   href="mailto:contato@trifold.eng.br"
-                  className="text-[#E8856A] underline underline-offset-2"
+                  className="text-[#F27A5E] underline underline-offset-2"
                 >
                   contato@trifold.eng.br
                 </a>

@@ -39,8 +39,8 @@ export function PrivacyConsentModal({ privacyAccepted }: PrivacyConsentModalProp
     >
       <div className="bg-stone-900 border border-stone-700 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
         <div className="flex justify-center mb-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E8856A]/10">
-            <ShieldCheck className="h-7 w-7 text-[#E8856A]" aria-hidden="true" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F27A5E]/10">
+            <ShieldCheck className="h-7 w-7 text-[#F27A5E]" aria-hidden="true" />
           </div>
         </div>
 
@@ -51,7 +51,7 @@ export function PrivacyConsentModal({ privacyAccepted }: PrivacyConsentModalProp
           Privacidade & Dados
         </h2>
 
-        <p className="mt-3 text-sm leading-relaxed text-stone-300 text-center">
+        <p className="mt-3 text-sm leading-relaxed text-white text-center">
           Antes de continuar, precisamos da sua confirmação de que você leu e aceita
           nossa Política de Privacidade, conforme a LGPD.
         </p>
@@ -61,7 +61,7 @@ export function PrivacyConsentModal({ privacyAccepted }: PrivacyConsentModalProp
             href="/politica-de-privacidade"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-[#E8856A] hover:underline"
+            className="text-sm text-[#F27A5E] hover:underline"
           >
             Ler a Política de Privacidade →
           </Link>
@@ -80,7 +80,7 @@ export function PrivacyConsentModal({ privacyAccepted }: PrivacyConsentModalProp
           type="button"
           onClick={handleAccept}
           disabled={isPending}
-          className="mt-6 bg-[#E8856A] text-white rounded-xl py-3 w-full font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2"
+          className="mt-6 bg-[#F27A5E] text-white rounded-xl py-3 w-full font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2"
         >
           {isPending ? (
             <>

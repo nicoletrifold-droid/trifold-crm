@@ -130,12 +130,12 @@ function MensagemBubble({ mensagem }: { mensagem: Mensagem }) {
       <div
         className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
           isCliente
-            ? "bg-[#E8856A] text-white"
-            : "border border-[#E8856A]/20 bg-stone-800 text-stone-100"
+            ? "bg-[#F27A5E] text-white"
+            : "border border-[#F27A5E]/20 bg-stone-800 text-stone-100"
         }`}
       >
         {!isCliente && (
-          <p className="mb-1 text-xs font-medium text-[#E8856A]">Equipe Trifold</p>
+          <p className="mb-1 text-xs font-medium text-[#F27A5E]">Equipe Trifold</p>
         )}
         {content()}
         <p
@@ -267,6 +267,20 @@ export function ChatFeed({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header contato */}
+      <div className="flex flex-shrink-0 items-center gap-3 border-b border-stone-800 bg-stone-900/50 px-4 py-3">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#F27A5E] text-sm font-bold text-white">
+          T
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-white">Equipe Trifold</p>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-green-400" />
+            <span className="text-xs text-stone-400">Online</span>
+          </div>
+        </div>
+      </div>
+
       {/* Feed de mensagens */}
       <div className="flex-1 space-y-3 overflow-y-auto bg-stone-900/40 px-4 py-4">
         {mensagens.length === 0 && (
@@ -298,7 +312,7 @@ export function ChatFeed({
             onClick={() => fileInputRef.current?.click()}
             disabled={sending}
             aria-label="Enviar foto ou áudio"
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-800 hover:text-stone-300 disabled:opacity-50"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-800 hover:text-white disabled:opacity-50"
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -326,14 +340,14 @@ export function ChatFeed({
             placeholder="Escreva uma mensagem..."
             rows={1}
             disabled={sending}
-            className="flex-1 resize-none rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white placeholder-stone-500 focus:border-[#E8856A] focus:outline-none disabled:opacity-50"
+            className="flex-1 resize-none rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white placeholder-stone-500 focus:border-[#F27A5E] focus:outline-none disabled:opacity-50"
           />
           <button
             type="button"
             onClick={sendText}
             disabled={sending || !text.trim()}
             aria-label="Enviar mensagem"
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-[#E8856A] hover:bg-stone-800 disabled:opacity-30"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-[#F27A5E] hover:bg-stone-800 disabled:opacity-30"
           >
             <Send className="h-5 w-5" />
           </button>

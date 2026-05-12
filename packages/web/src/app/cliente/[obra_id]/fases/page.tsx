@@ -21,13 +21,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_BADGE: Record<string, string> = {
   pendente: "bg-stone-800 text-stone-400",
-  em_andamento: "bg-amber-900/40 text-amber-400",
+  em_andamento: "bg-[#F27A5E]/20 text-[#F27A5E]",
   concluida: "bg-green-900/40 text-green-400",
 }
 
 const DOT_COLOR: Record<string, string> = {
   pendente: "bg-stone-600",
-  em_andamento: "bg-amber-500",
+  em_andamento: "bg-[#F27A5E]",
   concluida: "bg-green-500",
 }
 
@@ -74,14 +74,14 @@ export default async function FasesPage({
             Cronograma da obra
           </h2>
           <div className="mb-1.5 flex items-center justify-between text-sm">
-            <span className="text-stone-400">Progresso geral</span>
-            <span className="font-semibold text-[#E8856A]">
+            <span className="text-white/60">Progresso geral</span>
+            <span className="font-semibold text-[#F27A5E]">
               {obra.progress_pct}%
             </span>
           </div>
           <div className="h-2 w-full rounded-full bg-stone-800">
             <div
-              className="h-2 rounded-full bg-[#E8856A] transition-all"
+              className="h-2 rounded-full bg-[#F27A5E] transition-all"
               style={{ width: `${obra.progress_pct}%` }}
             />
           </div>
@@ -116,7 +116,11 @@ export default async function FasesPage({
                   )}
 
                   {/* Card */}
-                  <div className="rounded-xl border border-stone-800 bg-stone-900 p-4">
+                  <div className={`rounded-xl border bg-stone-900 p-4 ${
+                    fase.status === "em_andamento"
+                      ? "border-[#F27A5E] ring-1 ring-[#F27A5E]/25"
+                      : "border-stone-800"
+                  }`}>
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <h3 className="text-sm font-semibold text-white">
                         {idx + 1}. {fase.name}
@@ -128,24 +132,42 @@ export default async function FasesPage({
                       </span>
                     </div>
                     {fase.description && (
-                      <p className="mb-3 text-[13px] leading-relaxed text-stone-400">
+                      <p className="mb-3 text-[13px] leading-relaxed text-white/70">
                         {fase.description}
                       </p>
                     )}
-                    <div className="flex gap-6 text-xs text-stone-500">
+                    <div className="flex gap-6 text-xs text-white/40">
                       <div>
-                        <p className="font-medium text-stone-300">
+                        <p className="font-medium text-white">
                           {formatDate(fase.start_date)}
                         </p>
                         <p>Início</p>
                       </div>
                       <div>
-                        <p className="font-medium text-stone-300">
+                        <p className="font-medium text-white">
                           {formatDate(fase.end_date)}
                         </p>
-                        <p>Conclusão</p>
+                        <p>{fase.status === "concluida" ? "Conclusão" : "Previsão"}</p>
                       </div>
                     </div>
+
+                    {/* Barra de progresso — apenas fase em andamento */}
+                    {fase.status === "em_andamento" && (
+                      <div className="mt-4 border-t border-stone-800/60 pt-3">
+                        <div className="mb-1.5 flex items-center justify-between text-xs">
+                          <span className="text-white/50">Progresso da etapa</span>
+                          <span className="font-semibold text-[#F27A5E]">
+                            {fase.progress_pct ?? 0}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-stone-800">
+                          <div
+                            className="h-1.5 rounded-full bg-[#F27A5E] transition-all duration-700"
+                            style={{ width: `${fase.progress_pct ?? 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )

@@ -61,20 +61,21 @@ export function Sidebar({ obraId, userName, userEmail }: SidebarProps) {
     .toUpperCase() || "U"
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-stone-800/40 bg-black lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-stone-800/30 bg-black lg:flex">
       {/* Logo */}
-      <div className="flex items-center border-b border-stone-800/40 px-6 py-6">
+      <div className="flex items-center border-b border-stone-800/30 px-6 py-7">
         <Image
           src="/logo-trifold.svg"
           alt="Trifold"
-          width={130}
-          height={14}
+          width={192}
+          height={20}
           priority
+          className="brightness-0 invert"
         />
       </div>
 
       {/* Nav */}
-      <nav className="mt-2 flex-1 space-y-0.5 px-3">
+      <nav className="mt-3 flex-1 space-y-0.5 px-3">
         {NAV_ITEMS.map(({ label, href, icon: Icon, exact }) => {
           const to = href(obraId)
           const isActive = exact ? pathname === to : pathname.startsWith(to)
@@ -84,11 +85,11 @@ export function Sidebar({ obraId, userName, userEmail }: SidebarProps) {
               href={to}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-[14px] font-medium transition-colors ${
                 isActive
-                  ? "bg-[#E8856A] text-white"
-                  : "text-stone-400 hover:bg-stone-800/60 hover:text-stone-200"
+                  ? "bg-[#F27A5E] text-white"
+                  : "text-white hover:bg-stone-800/60 hover:text-white"
               }`}
             >
-              <Icon className="h-[17px] w-[17px] flex-shrink-0" />
+              <Icon className={`h-[17px] w-[17px] flex-shrink-0 ${isActive ? "opacity-100" : "opacity-80"}`} />
               {label}
             </Link>
           )

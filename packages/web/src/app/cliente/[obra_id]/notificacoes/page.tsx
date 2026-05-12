@@ -113,7 +113,7 @@ export default function NotificacoesPage() {
                 aria-checked={prefs.email_enabled}
                 onClick={() => toggle("email_enabled")}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors focus:outline-none ${
-                  prefs.email_enabled ? "bg-[#E8856A]" : "bg-stone-700"
+                  prefs.email_enabled ? "bg-[#F27A5E]" : "bg-stone-700"
                 }`}
               >
                 <span
@@ -137,7 +137,7 @@ export default function NotificacoesPage() {
                 aria-checked={prefs.whatsapp_enabled}
                 onClick={() => toggle("whatsapp_enabled")}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors focus:outline-none ${
-                  prefs.whatsapp_enabled ? "bg-[#E8856A]" : "bg-stone-700"
+                  prefs.whatsapp_enabled ? "bg-[#F27A5E]" : "bg-stone-700"
                 }`}
               >
                 <span
@@ -157,7 +157,7 @@ export default function NotificacoesPage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+55 11 99999-9999"
-                  className="w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-200 placeholder-stone-500 focus:border-[#E8856A] focus:outline-none"
+                  className="w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-200 placeholder-stone-500 focus:border-[#F27A5E] focus:outline-none"
                 />
                 <p className="mt-1 text-xs text-stone-500">
                   Formato internacional, ex: +55 11 99999-9999
@@ -178,7 +178,7 @@ export default function NotificacoesPage() {
                 aria-checked={prefs.push_enabled}
                 onClick={() => toggle("push_enabled")}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors focus:outline-none ${
-                  prefs.push_enabled ? "bg-[#E8856A]" : "bg-stone-700"
+                  prefs.push_enabled ? "bg-[#F27A5E]" : "bg-stone-700"
                 }`}
               >
                 <span
@@ -226,7 +226,7 @@ export default function NotificacoesPage() {
                 <div
                   className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border ${
                     prefs[field]
-                      ? "border-[#E8856A] bg-[#E8856A]"
+                      ? "border-[#F27A5E] bg-[#F27A5E]"
                       : "border-stone-600 bg-stone-800"
                   }`}
                 >
@@ -266,7 +266,7 @@ export default function NotificacoesPage() {
         <button
           type="submit"
           disabled={saving}
-          className="w-full rounded-lg bg-[#E8856A] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-lg bg-[#F27A5E] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Salvando…" : "Salvar preferências"}
         </button>

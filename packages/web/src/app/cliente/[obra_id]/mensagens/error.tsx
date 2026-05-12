@@ -15,7 +15,7 @@ export default function MensagensError({
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-stone-950 px-6 text-center">
-      <p className="text-sm font-medium text-stone-300">
+      <p className="text-sm font-medium text-white">
         Não foi possível carregar as mensagens.
       </p>
       {error.message && (
@@ -26,7 +26,7 @@ export default function MensagensError({
       )}
       <button
         onClick={reset}
-        className="rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-medium text-white"
+        className="rounded-lg bg-[#F27A5E] px-4 py-2 text-sm font-medium text-white"
       >
         Tentar novamente
       </button>

@@ -49,7 +49,7 @@ export default function ClienteLoginPage() {
                 type="email"
                 required
                 autoComplete="email"
-                className="block w-full rounded-xl border border-stone-700 bg-stone-800 px-4 py-2.5 text-sm text-stone-100 outline-none transition-all placeholder:text-stone-600 focus:border-[#E8856A] focus:ring-2 focus:ring-[#E8856A]/20"
+                className="block w-full rounded-xl border border-stone-700 bg-stone-800 px-4 py-2.5 text-sm text-stone-100 outline-none transition-all placeholder:text-stone-600 focus:border-[#F27A5E] focus:ring-2 focus:ring-[#F27A5E]/20"
                 placeholder="seu@email.com"
               />
             </div>
@@ -67,7 +67,7 @@ export default function ClienteLoginPage() {
                 type="password"
                 required
                 autoComplete="current-password"
-                className="block w-full rounded-xl border border-stone-700 bg-stone-800 px-4 py-2.5 text-sm text-stone-100 outline-none transition-all placeholder:text-stone-600 focus:border-[#E8856A] focus:ring-2 focus:ring-[#E8856A]/20"
+                className="block w-full rounded-xl border border-stone-700 bg-stone-800 px-4 py-2.5 text-sm text-stone-100 outline-none transition-all placeholder:text-stone-600 focus:border-[#F27A5E] focus:ring-2 focus:ring-[#F27A5E]/20"
                 placeholder="••••••••"
               />
             </div>
@@ -81,7 +81,7 @@ export default function ClienteLoginPage() {
             <button
               type="submit"
               disabled={pending}
-              className="mt-2 flex w-full items-center justify-center rounded-xl bg-[#E8856A] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#d4745a] focus:outline-none focus:ring-2 focus:ring-[#E8856A] focus:ring-offset-2 focus:ring-offset-stone-900 active:scale-[0.98] disabled:opacity-50"
+              className="mt-2 flex w-full items-center justify-center rounded-xl bg-[#F27A5E] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#d4745a] focus:outline-none focus:ring-2 focus:ring-[#F27A5E] focus:ring-offset-2 focus:ring-offset-stone-900 active:scale-[0.98] disabled:opacity-50"
             >
               {pending ? (
                 <span className="flex items-center gap-2">

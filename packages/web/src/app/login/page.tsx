@@ -35,42 +35,39 @@ function LoginContent() {
   const recoverySent = recoveryState && "sent" in recoveryState && recoveryState.sent
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-[0.015]" style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-      }} />
+    <div className="flex min-h-screen items-center justify-center bg-black px-4">
 
       <div className="relative w-full max-w-sm">
-        <div className="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border border-stone-800/60 bg-stone-950 p-8 shadow-2xl">
           {/* Logo & Title */}
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-900 ring-1 ring-stone-800">
               <Image
-                src="/logo-trifold.webp"
+                src="/logo-trifold.svg"
                 alt="Trifold"
-                width={40}
-                height={40}
+                width={36}
+                height={36}
+                className="brightness-0 invert"
               />
             </div>
-            <h1 className="text-xl font-semibold tracking-tight text-stone-900">
+            <h1 className="text-xl font-semibold tracking-tight text-white">
               Trifold CRM
             </h1>
-            <p className="mt-1 text-sm text-stone-400">
+            <p className="mt-1 text-sm text-stone-500">
               {view === "recovery" ? "Recuperação de senha" : "Entre com suas credenciais"}
             </p>
           </div>
 
           {/* Success banner */}
           {resetSuccess && view === "login" && (
-            <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-[13px] text-green-700">
+            <div className="mb-4 rounded-lg bg-green-900/30 border border-green-800/40 px-3 py-2 text-[13px] text-green-400">
               Senha redefinida com sucesso. Faça login com a nova senha.
             </div>
           )}
 
           {/* Invalid token banner */}
           {tokenError && view === "login" && (
-            <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">
+            <div className="mb-4 rounded-lg bg-red-900/30 border border-red-800/40 px-3 py-2 text-[13px] text-red-400">
               Link de recuperação inválido ou expirado. Solicite um novo.
             </div>
           )}
@@ -81,7 +78,7 @@ function LoginContent() {
               <div>
                 <label
                   htmlFor="email"
-                  className="mb-1.5 block text-[13px] font-medium text-stone-600"
+                  className="mb-1.5 block text-[13px] font-medium text-stone-300"
                 >
                   Email
                 </label>
@@ -91,7 +88,7 @@ function LoginContent() {
                   type="email"
                   required
                   autoComplete="email"
-                  className="block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition-all placeholder:text-stone-300 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+                  className="block w-full rounded-xl border border-stone-700 bg-stone-900 px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-stone-600 focus:border-[#F27A5E] focus:ring-2 focus:ring-[#F27A5E]/20"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -99,7 +96,7 @@ function LoginContent() {
               <div>
                 <label
                   htmlFor="password"
-                  className="mb-1.5 block text-[13px] font-medium text-stone-600"
+                  className="mb-1.5 block text-[13px] font-medium text-stone-300"
                 >
                   Senha
                 </label>
@@ -110,13 +107,13 @@ function LoginContent() {
                     type={showPassword ? "text" : "password"}
                     required
                     autoComplete="current-password"
-                    className="block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 pr-10 text-sm text-stone-900 outline-none transition-all placeholder:text-stone-300 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+                    className="block w-full rounded-xl border border-stone-700 bg-stone-900 px-4 py-2.5 pr-10 text-sm text-white outline-none transition-all placeholder:text-stone-600 focus:border-[#F27A5E] focus:ring-2 focus:ring-[#F27A5E]/20"
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300"
                     aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -125,7 +122,7 @@ function LoginContent() {
               </div>
 
               {loginState?.error && (
-                <div className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">
+                <div className="rounded-lg bg-red-900/30 border border-red-800/40 px-3 py-2 text-[13px] text-red-400">
                   {loginState.error}
                 </div>
               )}
@@ -133,7 +130,7 @@ function LoginContent() {
               <button
                 type="submit"
                 disabled={loginPending}
-                className="mt-2 flex w-full items-center justify-center rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50"
+                className="mt-2 flex w-full items-center justify-center rounded-xl bg-[#F27A5E] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#d4705a] focus:outline-none focus:ring-2 focus:ring-[#F27A5E] focus:ring-offset-2 focus:ring-offset-stone-950 active:scale-[0.98] disabled:opacity-50"
               >
                 {loginPending ? (
                   <span className="flex items-center gap-2">
@@ -149,7 +146,7 @@ function LoginContent() {
                 <button
                   type="button"
                   onClick={() => setView("recovery")}
-                  className="text-[13px] text-stone-400 underline-offset-2 hover:text-stone-600 hover:underline"
+                  className="text-[13px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
                 >
                   Esqueceu a senha?
                 </button>
@@ -158,7 +155,7 @@ function LoginContent() {
           ) : recoverySent ? (
             /* ===== Sent confirmation ===== */
             <div className="space-y-4 text-center">
-              <div className="rounded-lg bg-green-50 px-4 py-3 text-[13px] text-green-700">
+              <div className="rounded-lg bg-green-900/30 border border-green-800/40 px-4 py-3 text-[13px] text-green-400">
                 Enviamos um link de recuperação para{" "}
                 <span className="font-medium">
                   {"email" in recoveryState! ? recoveryState.email : ""}
@@ -168,7 +165,7 @@ function LoginContent() {
               <button
                 type="button"
                 onClick={() => setView("login")}
-                className="text-[13px] text-stone-400 underline-offset-2 hover:text-stone-600 hover:underline"
+                className="text-[13px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
               >
                 Voltar ao login
               </button>
@@ -179,7 +176,7 @@ function LoginContent() {
               <div>
                 <label
                   htmlFor="recovery-email"
-                  className="mb-1.5 block text-[13px] font-medium text-stone-600"
+                  className="mb-1.5 block text-[13px] font-medium text-stone-300"
                 >
                   Email cadastrado
                 </label>
@@ -189,13 +186,13 @@ function LoginContent() {
                   type="email"
                   required
                   autoComplete="email"
-                  className="block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition-all placeholder:text-stone-300 focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+                  className="block w-full rounded-xl border border-stone-700 bg-stone-900 px-4 py-2.5 text-sm text-white outline-none transition-all placeholder:text-stone-600 focus:border-[#F27A5E] focus:ring-2 focus:ring-[#F27A5E]/20"
                   placeholder="seu@email.com"
                 />
               </div>
 
               {recoveryState && "error" in recoveryState && recoveryState.error && (
-                <div className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600">
+                <div className="rounded-lg bg-red-900/30 border border-red-800/40 px-3 py-2 text-[13px] text-red-400">
                   {recoveryState.error}
                 </div>
               )}
@@ -203,7 +200,7 @@ function LoginContent() {
               <button
                 type="submit"
                 disabled={recoveryPending}
-                className="mt-2 flex w-full items-center justify-center rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50"
+                className="mt-2 flex w-full items-center justify-center rounded-xl bg-[#F27A5E] px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#d4705a] focus:outline-none focus:ring-2 focus:ring-[#F27A5E] focus:ring-offset-2 focus:ring-offset-stone-950 active:scale-[0.98] disabled:opacity-50"
               >
                 {recoveryPending ? (
                   <span className="flex items-center gap-2">
@@ -219,7 +216,7 @@ function LoginContent() {
                 <button
                   type="button"
                   onClick={() => setView("login")}
-                  className="text-[13px] text-stone-400 underline-offset-2 hover:text-stone-600 hover:underline"
+                  className="text-[13px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
                 >
                   Voltar ao login
                 </button>
@@ -229,7 +226,7 @@ function LoginContent() {
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-[11px] text-stone-300">
+        <p className="mt-6 text-center text-[11px] text-stone-600">
           Trifold Engenharia — Maringá, PR
         </p>
       </div>

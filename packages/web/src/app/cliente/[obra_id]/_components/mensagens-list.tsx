@@ -36,7 +36,7 @@ export function MensagensList({ mensagens }: MensagensListProps) {
             className="rounded-xl border border-stone-800 bg-stone-900/60 p-4"
           >
             <p className="mb-1 text-xs text-stone-500">{formatDate(msg.created_at)}</p>
-            <p className="text-sm leading-relaxed text-stone-300">{truncated}</p>
+            <p className="text-sm leading-relaxed text-white">{truncated}</p>
           </li>
         )
       })}

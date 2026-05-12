@@ -49,14 +49,14 @@ export function FasesList({ fases, currentPhaseId }: FasesListProps) {
             key={fase.id}
             className={`rounded-xl border p-4 ${
               isCurrent
-                ? "border-[#E8856A]/50 bg-stone-900"
+                ? "border-[#F27A5E]/50 bg-stone-900"
                 : "border-stone-800 bg-stone-900/60"
             }`}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 {isCurrent && (
-                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#E8856A]" />
+                  <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#F27A5E]" />
                 )}
                 <span className="text-sm font-medium text-white">{fase.name}</span>
               </div>

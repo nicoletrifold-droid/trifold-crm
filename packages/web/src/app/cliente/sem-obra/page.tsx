@@ -19,7 +19,7 @@ export default function SemObraPage() {
         <form action={logout}>
           <button
             type="submit"
-            className="text-sm text-stone-500 underline transition-colors hover:text-[#E8856A]"
+            className="text-sm text-stone-500 underline transition-colors hover:text-[#F27A5E]"
           >
             Sair
           </button>

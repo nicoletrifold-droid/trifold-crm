@@ -104,8 +104,8 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
               href={`/cliente/${obra_id}/fotos`}
               className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 !faseFilter
-                  ? "bg-[#E8856A] text-white"
-                  : "bg-stone-800 text-stone-400 hover:text-stone-200"
+                  ? "bg-[#F27A5E] text-white"
+                  : "bg-stone-800 text-white/70 hover:text-white"
               }`}
             >
               Todas as fases
@@ -116,8 +116,8 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
                 href={`/cliente/${obra_id}/fotos?fase=${fase.id}`}
                 className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   faseFilter === fase.id
-                    ? "bg-[#E8856A] text-white"
-                    : "bg-stone-800 text-stone-400 hover:text-stone-200"
+                    ? "bg-[#F27A5E] text-white"
+                    : "bg-stone-800 text-white/70 hover:text-white"
                 }`}
               >
                 {fase.name}
@@ -159,12 +159,12 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
                   <h2 className="text-base font-semibold text-white">
                     {group.faseName}
                   </h2>
-                  <span className="rounded-full bg-[#E8856A] px-2 py-0.5 text-xs font-medium text-white">
+                  <span className="rounded-full bg-[#F27A5E] px-2 py-0.5 text-xs font-medium text-white">
                     {group.fotos.length}{" "}
                     {group.fotos.length === 1 ? "foto" : "fotos"}
                   </span>
                   {group.latestDate && (
-                    <span className="text-sm text-stone-500">
+                    <span className="text-sm text-white/40">
                       — {formatPhaseDate(group.latestDate)}
                     </span>
                   )}
