@@ -37,12 +37,6 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
   const [progressPct, setProgressPct] = useState(fase.progress_pct)
   const [startDate, setStartDate] = useState(fase.start_date ?? "")
   const [endDate, setEndDate] = useState(fase.end_date ?? "")
-  const [expectedStartDate, setExpectedStartDate] = useState(
-    fase.expected_start_date ?? ""
-  )
-  const [expectedEndDate, setExpectedEndDate] = useState(
-    fase.expected_end_date ?? ""
-  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,8 +56,6 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
           progress_pct: progressPct,
           start_date: startDate || null,
           end_date: endDate || null,
-          expected_start_date: expectedStartDate || null,
-          expected_end_date: expectedEndDate || null,
         }),
       })
       if (!res.ok) {
@@ -153,32 +145,7 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">
-                Início previsto
-              </label>
-              <input
-                type="date"
-                value={expectedStartDate}
-                onChange={(e) => setExpectedStartDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Fim previsto
-              </label>
-              <input
-                type="date"
-                value={expectedEndDate}
-                onChange={(e) => setExpectedEndDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Início real
+                Data de início
               </label>
               <input
                 type="date"
@@ -189,7 +156,7 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">
-                Fim real
+                Data de término
               </label>
               <input
                 type="date"

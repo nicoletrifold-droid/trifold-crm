@@ -99,10 +99,10 @@ export async function POST(
       order_index,
       status,
       progress_pct,
-      expected_start_date: body.expected_start_date ?? null,
-      expected_end_date: body.expected_end_date ?? null,
+      start_date: body.start_date ?? null,
+      end_date: body.end_date ?? null,
     })
-    .select("id, name, description, order_index, status, progress_pct, expected_start_date, expected_end_date")
+    .select("id, name, description, order_index, status, progress_pct, start_date, end_date")
     .single()
 
   if (error) {
