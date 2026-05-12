@@ -163,22 +163,45 @@ Sprint 7+ (cont.) →  EPIC 34: Hardening & Long-term (testes, partitioning, rat
 
 ### Stories propostas
 
+> **Ordem reflete bloqueante B2 do PO review:** Story 29.1 (reconciliar migrations duplicadas) DEVE rodar antes de qualquer nova migration nesta epic, caso contrário 030–035 herdam a bagunça de numeração.
+
 | # | Story | Agentes | Esforço | Story points |
 |---|-------|---------|---------|--------------|
-| 29.1 | Migration `030_fk_indexes_critical.sql` com ~20 índices em FKs ausentes: `conversation_state(lead_id)`, `conversation_state(current_property_id)`, `leads(property_interest_id)`, `appointments(property_id)`, `unit_sales(lead_id, broker_id)`, `units(reserved_by_lead_id)`, `lead_property_interest(lead_id, property_id)`, `visit_feedback(*)` (5 FKs), `broker_assignments(property_id)`, `obra_mensagens(sender_id, cliente_id)`, `obra_fotos(fase_id, uploaded_by)`, `obra_documentos(uploaded_by)`, `follow_up_log(org_id, rule_id, lead_id+type+created_at)`, `email_logs(template_id, org_id+status+sent_at)`, `email_blasts(template_id)`, `email_automations(template_id)`, `system_events(resolved_by)` | @sm → @data-engineer → @qa → @devops | 2h | 5 |
-| 29.2 | Migration `031_composite_indexes_hot.sql`: `idx_messages_conv_created (conversation_id, created_at DESC)`, `idx_conversations_org_last_msg`, `idx_conversations_lead_last_msg`, `idx_conversations_active_last_msg WHERE is_ai_active`, `idx_leads_org_active_updated WHERE is_active`, `idx_leads_org_stage_active`, `idx_appointments_completed_org WHERE status='completed'`, `idx_system_events_org_level_created`, `idx_system_events_org_category_created`, `idx_leads_utm_campaign` (composto org_id + utm_campaign) | @sm → @data-engineer → @qa → @devops | 2h | 5 |
-| 29.3 | Migration `032_vector_index_knowledge_base.sql`: `CREATE INDEX … USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)` + reindex `lead_memories.embedding` se necessário; ajustar `lists` proporcional ao volume (sqrt(N rows)) | @sm → @data-engineer → @qa → @devops | 1h | 3 |
-| 29.4 | Migration `033_partial_indexes_queues.sql`: `idx_email_sends_queue_pending_scheduled WHERE status='pending'`, `idx_followup_log_pending WHERE status='pending'`, `idx_webhook_logs_unprocessed WHERE processed=false`, `idx_webhook_logs_leadgen WHERE leadgen_id IS NOT NULL` | @sm → @data-engineer → @qa → @devops | 30 min | 2 |
-| 29.5 | Migration `034_materialize_meta_campaign_roas.sql`: `DROP VIEW meta_campaign_roas; CREATE MATERIALIZED VIEW … WITH NO DATA; CREATE UNIQUE INDEX (org_id, meta_campaign_id); REFRESH MATERIALIZED VIEW CONCURRENTLY` + atualizar rotas que consomem se necessário | @sm → @data-engineer → @qa → @devops | 3h | 5 |
-| 29.6 | Migration `035_pg_cron_cleanup_jobs.sql`: ativar `pg_cron` extension; agendar jobs diários/semanais para `system_events` (30d retention), `webhook_logs` (90d processed), `follow_up_log` (180d), `email_logs` (365d), `REFRESH MATERIALIZED VIEW meta_campaign_roas` a cada 30 min | @sm → @data-engineer → @qa → @devops | 2h | 3 |
-| 29.7 | Auditar e fixar `SUPABASE_URL` no Vercel para apontar para pooler porta `6543` (transaction mode); manter `DATABASE_URL` direct (5432) só para migrations | @sm → @devops | 1h | 2 |
-| 29.8 | Reconciliar migrations conflitantes (021×3, 028×2, 029×2) e stubs `024_remote_only` / `025_remote_only`: rodar `supabase db diff` contra remote, recuperar SQL real aplicado via Studio, commitar. Padronizar nomeação futura com 4 dígitos `0030_*` | @sm → @data-engineer → @qa → @devops | 2h | 3 |
+| 29.1 | **[BLOQUEANTE]** Reconciliar migrations conflitantes (021×3, 028×2, 029×2) e stubs `024_remote_only` / `025_remote_only`: rodar `supabase db diff` contra remote, recuperar SQL real aplicado via Studio, commitar. Padronizar nomeação futura com 4 dígitos `0030_*`. **Sem isto, todas as Stories 29.2–29.7 ficam bloqueadas.** | @sm → @data-engineer → @qa → @devops | 2h | 3 |
+| 29.2 | Migration `0030_fk_indexes_critical.sql` com ~20 índices em FKs ausentes: `conversation_state(lead_id)`, `conversation_state(current_property_id)`, `leads(property_interest_id)`, `appointments(property_id)`, `unit_sales(lead_id, broker_id)`, `units(reserved_by_lead_id)`, `lead_property_interest(lead_id, property_id)`, `visit_feedback(*)` (5 FKs), `broker_assignments(property_id)`, `obra_mensagens(sender_id, cliente_id)`, `obra_fotos(fase_id, uploaded_by)`, `obra_documentos(uploaded_by)`, `follow_up_log(org_id, rule_id, lead_id+type+created_at)`, `email_logs(template_id, org_id+status+sent_at)`, `email_blasts(template_id)`, `email_automations(template_id)`, `system_events(resolved_by)` | @sm → @data-engineer → @qa → @devops | 2h | 5 |
+| 29.3 | Migration `0031_composite_indexes_hot.sql`: `idx_messages_conv_created (conversation_id, created_at DESC)`, `idx_conversations_org_last_msg`, `idx_conversations_lead_last_msg`, `idx_conversations_active_last_msg WHERE is_ai_active`, `idx_leads_org_active_updated WHERE is_active`, `idx_leads_org_stage_active`, `idx_appointments_completed_org WHERE status='completed'`, `idx_system_events_org_level_created`, `idx_system_events_org_category_created`, `idx_leads_utm_campaign` (composto org_id + utm_campaign) | @sm → @data-engineer → @qa → @devops | 2h | 5 |
+| 29.4 | Migration `0032_vector_index_knowledge_base.sql`: `CREATE INDEX … USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)` + reindex `lead_memories.embedding` se necessário; ajustar `lists` proporcional ao volume (sqrt(N rows)) | @sm → @data-engineer → @qa → @devops | 1h | 3 |
+| 29.5 | Migration `0033_partial_indexes_queues.sql`: `idx_email_sends_queue_pending_scheduled WHERE status='pending'`, `idx_followup_log_pending WHERE status='pending'`, `idx_webhook_logs_unprocessed WHERE processed=false`, `idx_webhook_logs_leadgen WHERE leadgen_id IS NOT NULL` | @sm → @data-engineer → @qa → @devops | 30 min | 2 |
+| 29.6 | Migration `0034_materialize_meta_campaign_roas.sql`: `DROP VIEW meta_campaign_roas; CREATE MATERIALIZED VIEW … WITH NO DATA; CREATE UNIQUE INDEX (org_id, meta_campaign_id); REFRESH MATERIALIZED VIEW CONCURRENTLY` + atualizar rotas que consomem se necessário | @sm → @data-engineer → @qa → @devops | 3h | 5 |
+| 29.7 | Migration `0035_pg_cron_cleanup_jobs.sql`: ativar `pg_cron` extension; agendar jobs diários/semanais para `system_events` (30d retention), `webhook_logs` (90d processed), `follow_up_log` (180d), `email_logs` (365d), `REFRESH MATERIALIZED VIEW meta_campaign_roas` a cada 30 min | @sm → @data-engineer → @qa → @devops | 2h | 3 |
+| 29.8 | Auditar e fixar `SUPABASE_URL` no Vercel para apontar para pooler porta `6543` (transaction mode); manter `DATABASE_URL` direct (5432) só para migrations | @sm → @devops | 1h | 2 |
 
-**Critério de aceitação do Epic:**
+**Dependências internas:**
+- 29.1 → bloqueia 29.2, 29.3, 29.4, 29.5, 29.6, 29.7 (paridade migration tree é pré-requisito)
+- 29.6 → bloqueia agendamento de `REFRESH MATERIALIZED VIEW` na 29.7
+- 29.2/29.3/29.4/29.5 podem rodar em paralelo após 29.1
+- 29.8 é independente (config Vercel) — pode rodar em paralelo com qualquer outra
+
+**Critério de aceitação do Epic (todas as Stories 29.2–29.7):**
+
+> **[BLOQUEANTE B3 do PO review — AC global obrigatório para QA gate]**
+>
+> 1. **Toda `CREATE INDEX` em Stories 29.2, 29.3, 29.4, 29.5 DEVE usar `CONCURRENTLY`** — caso contrário lock exclusivo na tabela durante a criação derruba produção (`messages`, `conversations`, `leads` são hot). Exemplo obrigatório:
+>    ```sql
+>    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_conv_created
+>      ON messages (conversation_id, created_at DESC);
+>    ```
+> 2. **Toda migration DEVE ser idempotente:** usar `IF NOT EXISTS` em índices/colunas/extensões, `IF EXISTS` em DROPs, `ON CONFLICT DO NOTHING` em INSERTs de seed se houver.
+> 3. **Toda migration DEVE ter bloco de rollback SQL comentado no fim do arquivo** (`-- ROLLBACK: DROP INDEX … / DROP MATERIALIZED VIEW …`) — facilita reverter sem `supabase db reset`.
+> 4. **Story 29.6 (DROP VIEW + CREATE MATERIALIZED VIEW)** exige downtime curto da feature de ROAS — coordenar janela de baixo tráfego com o PO antes do `@devops *push`.
+> 5. **Atenção CONCURRENTLY:** não pode rodar dentro de uma transação. O Supabase CLI faz cada arquivo em uma transação por default — splitar migrations grandes ou usar `-- supabase: split-statements` se a CLI suportar; alternativamente aplicar índices via SQL Editor do Studio com ordem documentada.
+
+**Critério de aceitação funcional:**
 - `EXPLAIN ANALYZE` em queries hot mostra index scan em vez de seq scan.
 - Dashboard ROAS (`/dashboard/campaigns/meta`) abre em <500ms (vs 2–5s baseline).
-- `system_events` para de crescer indefinidamente (validar tamanho 7 dias após Story 29.6).
-- `supabase migration list` mostra paridade local vs remote.
+- `system_events` para de crescer indefinidamente (validar tamanho 7 dias após Story 29.7).
+- `supabase migration list` mostra paridade local vs remote pós-Story 29.1.
+- Zero downtime observado durante criação dos índices (validar via Speed Insights p99 do período de deploy).
 
 **Total estimado:** 28 story points / ~5 dias úteis (com QA gate cuidadoso porque DB mudanças exigem rollback plan).
 
