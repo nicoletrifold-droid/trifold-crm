@@ -3,6 +3,7 @@ import { getServerUser } from "@web/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { RoleDropdown, ToggleActiveButton } from "@web/components/admin/role-dropdown"
+import { UserEditModal } from "@web/components/admin/user-edit-modal"
 
 export default async function UsuariosPage() {
   const user = await getServerUser()
@@ -16,7 +17,7 @@ export default async function UsuariosPage() {
 
   const { data: users } = await supabase
     .from("users")
-    .select("id, name, email, role, is_active, created_at")
+    .select("id, name, email, role, is_active, created_at, auth_id")
     .eq("org_id", user.orgId)
     .order("name")
 
@@ -103,9 +104,17 @@ export default async function UsuariosPage() {
                 </td>
                 {isAdmin && (
                   <td className="px-6 py-4">
-                    {u.id !== user.id && (
-                      <ToggleActiveButton userId={u.id} isActive={u.is_active} />
-                    )}
+                    <div className="flex items-center gap-1">
+                      <UserEditModal
+                        userId={u.id}
+                        userName={u.name ?? ""}
+                        userEmail={u.email}
+                        isOwnAccount={u.id === user.id}
+                      />
+                      {u.id !== user.id && (
+                        <ToggleActiveButton userId={u.id} isActive={u.is_active} />
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
