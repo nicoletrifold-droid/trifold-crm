@@ -136,7 +136,10 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
                 min={0}
                 max={100}
                 value={progressPct}
-                onChange={(e) => setProgressPct(Number(e.target.value))}
+                onChange={(e) => {
+                const v = parseInt(e.target.value, 10)
+                setProgressPct(Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0)
+              }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
               />
             </div>

@@ -166,6 +166,13 @@ function FaseItem({
               {fase.progress_pct ?? 0}%
             </span>
           </div>
+          {(fase.start_date || fase.end_date) && (
+            <p className="mt-1 text-xs text-gray-400">
+              {fase.start_date ? formatDate(fase.start_date) : "—"}
+              {" → "}
+              {fase.end_date ? formatDate(fase.end_date) : "—"}
+            </p>
+          )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-1">
           <button
