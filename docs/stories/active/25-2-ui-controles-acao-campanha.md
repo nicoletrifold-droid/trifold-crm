@@ -1,7 +1,7 @@
 # Story 25.2 — UI: Controles de Ação no Painel de Campanhas
 
 ## Status
-Ready for Review
+Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -261,6 +261,7 @@ const { data: actions } = await supabase
 | 2026-05-12 | 1.3 | QA Gate — verdict CONCERNS. 9/9 ACs cumpridos, type-check/lint limpos. 2 issues Medium (M1: modal `<dialog open>` sem `showModal()` perde a11y; M2: GET /actions sem `requireRole`). Task 5 (manual) pendente — pré-condição de @devops *push. Detalhes em docs/qa/gates/25-2-qa-gate.md | Quinn (@qa) |
 | 2026-05-12 | 1.3 | Fixes pós-gate Quinn CONCERNS V1.3: M2 requireRole, M1 dialog showModal a11y, L1 optimisticBudget. Task 5 (teste manual) ainda pendente — checklist humano anexado | Dex (@dev) |
 | 2026-05-12 | 1.4 | Re-review CONDITIONAL_PASS — código validado, aguardando Task 5 humana | Quinn (@qa) |
+| 2026-05-12 | 1.5 | Push autorizado pelo lead — Status → Done. Task 5 (teste manual no browser) ainda pendente; checklist humano permanece no story file. Re-abrir como InReview se houver issue na validação humana | Gage (@devops) |
 
 ## QA Results
 
