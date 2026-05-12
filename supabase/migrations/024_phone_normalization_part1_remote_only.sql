@@ -1,26 +1,21 @@
 -- =============================================================================
--- NOTA DE TRACKING (Story 29.1 — reconciliação 2026-05-12):
--- Este arquivo foi aplicado ao remote Supabase com version='024'
--- (não '021' como o prefixo local sugere). O remote registrou o nome como
--- 'phone_normalization_part1'. Ver `024_phone_normalization_part1_remote_only.sql`
--- para o stub local de paridade. NÃO renomear este arquivo — o tracking remote
--- continua íntegro porque o CLI casa por `version` (numérico) + `name` (texto).
+-- 024_phone_normalization_part1_remote_only.sql
 -- =============================================================================
--- Migration 021 — Part 1: phone_normalization
--- =============================================================================
--- Purpose: Adds the `normalize_phone_br()` PL/pgSQL function (mirrors
---          packages/shared/src/utils/phone.ts), a generated column
---          `phone_normalized` on `leads`, and a NON-UNIQUE composite index on
---          `(org_id, phone_normalized)`.
+-- Remote tracking: version='024', name='phone_normalization_part1'
+-- Applied via Supabase Studio circa 2026-04 (Story 21.1)
 --
--- Why non-unique here? Production data already contains duplicate phones for
--- the same org (root cause of the P0 bug Story 21.1 fixes). A UNIQUE index
--- now would abort the migration. The cleanup script
--- (`scripts/cleanup-duplicate-leads.ts`) merges duplicates AFTER this
--- migration; then `021_phone_normalization_part2.sql` promotes the index
--- to UNIQUE.
+-- TRACKING DRIFT (documented in Story 29.1):
+-- The SQL below was applied to the remote Supabase project via Studio,
+-- and the CLI registered it as version='024' in supabase_migrations.schema_migrations.
+-- The corresponding LOCAL file is `021_phone_normalization_part1.sql`. The
+-- numeric prefix DIFFERS (local=021 vs remote=024) — both files exist intentionally
+-- as a historical drift record. Neither file should be renamed (renaming would
+-- break the remote tracking match by `version` field).
 --
--- Story: 21.1 — Webhook WhatsApp Idempotente, Phone Normalization & Lead Dedup
+-- This file (024_*) carries the EXACT SQL that the remote registered, kept as
+-- a local artifact so `supabase migration list --linked` shows parity.
+--
+-- Source of truth (identical content): supabase/migrations/021_phone_normalization_part1.sql
 -- =============================================================================
 
 -- 1) Function: normalize_phone_br(text) → text
@@ -78,9 +73,6 @@ COMMENT ON FUNCTION normalize_phone_br(text) IS
 
 -- 2) Generated column on leads
 -- -----------------------------------------------------------------------------
--- GENERATED ALWAYS AS … STORED is computed for every existing row and
--- recomputed on every UPDATE of `phone`. Because normalize_phone_br is
--- IMMUTABLE, Postgres can index this column directly.
 ALTER TABLE leads
   ADD COLUMN IF NOT EXISTS phone_normalized varchar(20)
   GENERATED ALWAYS AS (normalize_phone_br(phone)) STORED;
@@ -92,15 +84,11 @@ COMMENT ON COLUMN leads.phone_normalized IS
 
 -- 3) NON-UNIQUE composite index
 -- -----------------------------------------------------------------------------
--- Allows duplicates during the cleanup transition window. The UNIQUE index is
--- created in 021_phone_normalization_part2.sql AFTER cleanup-duplicate-leads.ts
--- merges existing duplicates.
 CREATE INDEX IF NOT EXISTS idx_leads_org_phone_normalized
   ON leads (org_id, phone_normalized);
 
 -- =============================================================================
--- Rollback (manual, do not run automatically):
--- =============================================================================
+-- ROLLBACK PLAN (manual, do not run automatically):
 -- DROP INDEX IF EXISTS idx_leads_org_phone_normalized;
 -- ALTER TABLE leads DROP COLUMN IF EXISTS phone_normalized;
 -- DROP FUNCTION IF EXISTS normalize_phone_br(text);

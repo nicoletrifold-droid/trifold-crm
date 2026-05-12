@@ -1,4 +1,4 @@
--- 029_cliente_id_obra_mensagens.sql
+-- 029a_cliente_id_obra_mensagens.sql (renomeado em Story 29.1 — antes: 029_cliente_id_obra_mensagens.sql)
 -- Adiciona cliente_id em obra_mensagens para isolar conversas por cliente
 
 ALTER TABLE obra_mensagens

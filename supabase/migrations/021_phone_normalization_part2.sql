@@ -1,4 +1,10 @@
 -- =============================================================================
+-- NOTA DE TRACKING (Story 29.1 — reconciliação 2026-05-12):
+-- Este arquivo foi aplicado ao remote Supabase com version='025'
+-- (não '021' como o prefixo local sugere). O remote registrou o nome como
+-- 'phone_normalization_part2'. Ver `025_phone_normalization_part2_remote_only.sql`
+-- para o stub local de paridade. NÃO renomear este arquivo.
+-- =============================================================================
 -- Migration 021 — Part 2: promote phone_normalized index to UNIQUE
 -- =============================================================================
 -- Purpose: After running scripts/cleanup-duplicate-leads.ts to merge duplicate
