@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nome, email, senha e perfil sao obrigatorios" }, { status: 400 })
   }
 
-  if (!["admin", "supervisor", "broker"].includes(role)) {
+  if (!["admin", "supervisor", "broker", "obras"].includes(role)) {
     return NextResponse.json({ error: "Perfil invalido" }, { status: 400 })
   }
 

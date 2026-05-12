@@ -7,7 +7,7 @@ export interface AppUser {
   orgId: string
   name: string
   email: string
-  role: "admin" | "supervisor" | "broker"
+  role: "admin" | "supervisor" | "broker" | "obras"
   avatarUrl: string | null
 }
 
@@ -47,6 +47,8 @@ export function getRoleRedirect(role: string): string {
   switch (role) {
     case "broker":
       return "/broker"
+    case "obras":
+      return "/dashboard/obras"
     case "admin":
     case "supervisor":
     default:

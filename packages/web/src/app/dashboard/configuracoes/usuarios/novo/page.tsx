@@ -118,6 +118,7 @@ export default function NovoUsuarioPage() {
               <option value="admin">Administrador — acesso total ao sistema</option>
               <option value="supervisor">Supervisor — monitora conversas, treina IA, vê métricas</option>
               <option value="broker">Corretor — pipeline próprio, leads designados, agenda</option>
+              <option value="obras">Obras — acesso exclusivo ao módulo de obras</option>
             </select>
             <p className="mt-1 text-xs text-stone-400">
               Corretores só veem seus próprios leads e agenda. Supervisores veem tudo mas não configuram. Admins têm acesso total.

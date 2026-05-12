@@ -24,12 +24,14 @@ export default async function UsuariosPage() {
     admin: "bg-purple-100 text-purple-700",
     supervisor: "bg-blue-100 text-blue-700",
     broker: "bg-green-100 text-green-700",
+    obras: "bg-yellow-100 text-yellow-700",
   }
 
   const roleLabels: Record<string, string> = {
     admin: "Admin",
     supervisor: "Supervisor",
     broker: "Corretor",
+    obras: "Obras",
   }
 
   return (

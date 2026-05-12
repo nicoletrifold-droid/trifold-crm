@@ -52,32 +52,39 @@ export default async function DashboardLayout({
   const user = await getServerUser()
   const supabase = await createClient()
 
-  // Count pending alerts and unread messages for sidebar badges
-  const [{ count: alertCount }, { count: mensagensCount }] = await Promise.all([
-    supabase
-      .from("follow_up_log")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", user.orgId)
-      .eq("status", "pending"),
-    supabase
-      .from("obra_mensagens")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", user.orgId)
-      .eq("sender_type", "cliente")
-      .is("read_at", null),
-  ])
-
-  // Obras: visível para admin e supervisor
-  // Sistema: visível apenas para admin
+  const isObras = user.role === "obras"
   const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
-  const navItems = [
-    ...NAV_ITEMS_BASE,
-    ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS] : []),
-    ...(isAdminOrSupervisor
-      ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
-      : []),
-    ...(user.role === "admin" ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
-  ]
+
+  // Count pending alerts and unread messages — skip for obras role (not needed)
+  const [{ count: alertCount }, { count: mensagensCount }] = isObras
+    ? [{ count: 0 }, { count: 0 }]
+    : await Promise.all([
+        supabase
+          .from("follow_up_log")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", user.orgId)
+          .eq("status", "pending"),
+        supabase
+          .from("obra_mensagens")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", user.orgId)
+          .eq("sender_type", "cliente")
+          .is("read_at", null),
+      ])
+
+  // obras role: only the Obras item, no other nav
+  // admin/supervisor: full nav + Obras + Mensagens
+  // Sistema: admin only
+  const navItems = isObras
+    ? [NAV_ITEM_OBRAS]
+    : [
+        ...NAV_ITEMS_BASE,
+        ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS] : []),
+        ...(isAdminOrSupervisor
+          ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
+          : []),
+        ...(user.role === "admin" ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
+      ]
 
   return (
     <div className="min-h-screen bg-stone-50">

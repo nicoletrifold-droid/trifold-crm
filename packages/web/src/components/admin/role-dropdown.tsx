@@ -13,7 +13,7 @@ export function RoleDropdown({
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const newRole = e.target.value
-    if (!["admin", "supervisor", "broker"].includes(newRole)) return
+    if (!["admin", "supervisor", "broker", "obras"].includes(newRole)) return
 
     await fetch(`/api/users/${userId}`, {
       method: "PATCH",
@@ -33,6 +33,7 @@ export function RoleDropdown({
       <option value="admin">Admin</option>
       <option value="supervisor">Supervisor</option>
       <option value="broker">Corretor</option>
+      <option value="obras">Obras</option>
     </select>
   )
 }

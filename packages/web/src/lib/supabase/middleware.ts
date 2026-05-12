@@ -127,6 +127,17 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Obras role: restricted to /dashboard/obras only — redirect any other dashboard route
+  if (
+    role === "obras" &&
+    pathname.startsWith("/dashboard") &&
+    !pathname.startsWith("/dashboard/obras")
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/dashboard/obras"
+    return NextResponse.redirect(url)
+  }
+
   // Admin/broker/supervisor (or any non-cliente, non-empty role) trying to
   // access cliente portal pages → bounce to /login. We require `role` to be
   // defined here: if it's undefined (no app_metadata + no users row) we don't

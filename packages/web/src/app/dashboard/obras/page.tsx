@@ -27,7 +27,7 @@ function formatDeliveryDate(date: string | null): string {
 export default async function ObrasPage() {
   const user = await getServerUser()
 
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!["admin", "supervisor", "obras"].includes(user.role)) {
     redirect("/dashboard")
   }
 

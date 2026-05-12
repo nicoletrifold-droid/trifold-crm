@@ -59,6 +59,8 @@ export async function login(formData: FormData) {
     destination = vinculo?.obra_id
       ? `/cliente/${vinculo.obra_id}`
       : "/cliente/sem-obra"
+  } else if (appUser?.role === "obras") {
+    destination = "/dashboard/obras"
   } else {
     // admin, supervisor, or anything else: dashboard.
     destination = "/dashboard"

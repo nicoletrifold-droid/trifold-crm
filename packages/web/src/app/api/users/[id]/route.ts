@@ -17,7 +17,7 @@ export async function PATCH(
   const body = await request.json()
   const updates: Record<string, unknown> = {}
 
-  if (body.role && ["admin", "supervisor", "broker"].includes(body.role)) {
+  if (body.role && ["admin", "supervisor", "broker", "obras"].includes(body.role)) {
     updates.role = body.role
   }
   if (body.is_active !== undefined) {

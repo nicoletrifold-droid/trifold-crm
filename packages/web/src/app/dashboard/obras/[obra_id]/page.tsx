@@ -33,7 +33,7 @@ export default async function ObraDetailPage({
 }) {
   const user = await getServerUser()
 
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!["admin", "supervisor", "obras"].includes(user.role)) {
     redirect("/dashboard")
   }
 
