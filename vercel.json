@@ -4,6 +4,26 @@
   "buildCommand": "pnpm turbo build --filter=@trifold/web",
   "outputDirectory": "packages/web/.next",
   "framework": "nextjs",
+  "headers": [
+    {
+      "source": "/api/dashboard/metrics",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, s-maxage=30, stale-while-revalidate=120" }
+      ]
+    },
+    {
+      "source": "/api/analytics",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, s-maxage=60, stale-while-revalidate=300" }
+      ]
+    },
+    {
+      "source": "/api/analytics/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, s-maxage=60, stale-while-revalidate=300" }
+      ]
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/enrich-leads",
