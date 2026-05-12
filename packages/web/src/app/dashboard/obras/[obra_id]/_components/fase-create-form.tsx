@@ -76,7 +76,7 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
         />
         <input
           type="text"
-          placeholder="Descrição (opcional)"
+          placeholder="Etapa (opcional)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"

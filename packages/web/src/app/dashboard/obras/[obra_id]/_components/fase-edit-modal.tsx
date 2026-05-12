@@ -100,7 +100,7 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
 
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
-              Descrição
+              Etapa
             </label>
             <textarea
               value={description}

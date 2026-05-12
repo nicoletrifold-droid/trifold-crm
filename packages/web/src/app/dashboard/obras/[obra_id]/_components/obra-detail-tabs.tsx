@@ -119,6 +119,11 @@ function formatDate(iso: string): string {
 
 function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
   const sorted = [...fases].sort((a, b) => {
+    // Concluídas sempre ao final
+    const aConc = a.status === "concluida"
+    const bConc = b.status === "concluida"
+    if (aConc !== bConc) return aConc ? 1 : -1
+    // Dentro do mesmo grupo de status: mais antiga primeiro (mais recente por último)
     if (!a.start_date && !b.start_date) return a.order_index - b.order_index
     if (!a.start_date) return 1
     if (!b.start_date) return -1
