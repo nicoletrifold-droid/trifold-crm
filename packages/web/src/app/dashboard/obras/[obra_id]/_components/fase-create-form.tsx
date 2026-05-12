@@ -4,6 +4,13 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 
+const STATUS_OPTIONS = [
+  { value: "a_iniciar", label: "A iniciar" },
+  { value: "em_andamento", label: "Em execução" },
+  { value: "pausada", label: "Pausada" },
+  { value: "concluida", label: "Concluída" },
+]
+
 interface FaseCreateFormProps {
   obraId: string
 }
@@ -12,6 +19,10 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
   const router = useRouter()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [status, setStatus] = useState("a_iniciar")
+  const [progressPct, setProgressPct] = useState(0)
+  const [expectedStartDate, setExpectedStartDate] = useState("")
+  const [expectedEndDate, setExpectedEndDate] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,14 +35,25 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
       const res = await fetch(`/api/admin/obras/${obraId}/fases`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          status,
+          progress_pct: progressPct,
+          expected_start_date: expectedStartDate || null,
+          expected_end_date: expectedEndDate || null,
+        }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error ?? "Erro ao criar fase")
+        throw new Error((d as { error?: string }).error ?? "Erro ao criar fase")
       }
       setName("")
       setDescription("")
+      setStatus("a_iniciar")
+      setProgressPct(0)
+      setExpectedStartDate("")
+      setExpectedEndDate("")
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao criar fase")
@@ -43,7 +65,7 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
   return (
     <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="mb-3 text-sm font-semibold text-gray-700">Adicionar Fase</h3>
-      <div className="space-y-2">
+      <div className="space-y-3">
         <input
           type="text"
           placeholder="Nome da fase *"
@@ -59,8 +81,65 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
           onChange={(e) => setDescription(e.target.value)}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
         />
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Progresso (%)
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={progressPct}
+              onChange={(e) => setProgressPct(Number(e.target.value))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Início previsto
+            </label>
+            <input
+              type="date"
+              value={expectedStartDate}
+              onChange={(e) => setExpectedStartDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Fim previsto
+            </label>
+            <input
+              type="date"
+              value={expectedEndDate}
+              onChange={(e) => setExpectedEndDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+        </div>
       </div>
+
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+
       <button
         type="submit"
         disabled={saving || !name.trim()}

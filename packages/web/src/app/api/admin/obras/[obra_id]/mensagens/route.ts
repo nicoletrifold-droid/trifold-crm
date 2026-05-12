@@ -50,7 +50,7 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const canSeeSenderName = ["admin", "supervisor"].includes(appUser.role)
+  const canSeeSenderName = ["admin", "supervisor", "obras"].includes(appUser.role)
   const result = (mensagens ?? []).map((m) => ({
     ...m,
     sender_display_name: canSeeSenderName ? m.sender_display_name : null,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 export async function GET(
   _req: Request,
@@ -72,6 +72,13 @@ export async function POST(
     return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
   }
 
+  const VALID_STATUS = ["a_iniciar", "em_andamento", "pausada", "concluida", "pendente"]
+  const status = VALID_STATUS.includes(body.status) ? body.status : "a_iniciar"
+  const progress_pct =
+    typeof body.progress_pct === "number"
+      ? Math.min(100, Math.max(0, body.progress_pct))
+      : 0
+
   const { data: maxFase } = await supabase
     .from("obra_fases")
     .select("order_index")
@@ -90,10 +97,12 @@ export async function POST(
       name,
       description: body.description ?? null,
       order_index,
-      status: "pendente",
-      progress_pct: 0,
+      status,
+      progress_pct,
+      expected_start_date: body.expected_start_date ?? null,
+      expected_end_date: body.expected_end_date ?? null,
     })
-    .select("id, name, description, order_index, status, progress_pct")
+    .select("id, name, description, order_index, status, progress_pct, expected_start_date, expected_end_date")
     .single()
 
   if (error) {

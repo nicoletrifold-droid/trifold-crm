@@ -23,8 +23,9 @@ interface FaseEditModalProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: "pendente", label: "Pendente" },
-  { value: "em_andamento", label: "Em andamento" },
+  { value: "a_iniciar", label: "A iniciar" },
+  { value: "em_andamento", label: "Em execução" },
+  { value: "pausada", label: "Pausada" },
   { value: "concluida", label: "Concluída" },
 ]
 
