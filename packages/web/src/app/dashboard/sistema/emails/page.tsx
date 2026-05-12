@@ -36,6 +36,7 @@ export default function EmailMonitoringPage() {
   }, [router])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStats()
     const interval = setInterval(fetchStats, 30000)
     return () => clearInterval(interval)

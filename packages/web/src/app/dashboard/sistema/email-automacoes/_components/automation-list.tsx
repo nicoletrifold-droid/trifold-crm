@@ -45,6 +45,7 @@ export function AutomationList() {
     setLoading(false)
   }, [router])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData() }, [fetchData])
 
   const toggle = async (automation: Automation) => {

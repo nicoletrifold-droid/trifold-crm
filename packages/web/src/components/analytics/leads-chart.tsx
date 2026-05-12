@@ -101,7 +101,9 @@ interface TooltipProps {
 
 function CustomTooltip({ active, payload, label, granularity }: TooltipProps) {
   if (!active || !payload?.length || !label) return null
-  const d = payload[0].payload
+  const first = payload[0]
+  if (!first) return null
+  const d = first.payload
   const hasBreakdown = Object.keys(d.byProperty).length > 0
 
   return (

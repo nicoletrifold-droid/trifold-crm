@@ -54,9 +54,11 @@ export function QuickSendForm() {
     setQuota(data)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchTemplates() }, [fetchTemplates])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (step === 3) fetchQuota()
   }, [step, fetchQuota])
 

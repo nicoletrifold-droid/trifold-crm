@@ -26,11 +26,15 @@ interface LeadCardProps {
   onSelect?: (leadId: string) => void
 }
 
-const PROPERTY_BADGE: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+type PropertyBadge = { label: string; bg: string; text: string; dot: string }
+const PROPERTY_BADGE_UNKNOWN: PropertyBadge = {
+  label: "—", bg: "bg-stone-50", text: "text-stone-400", dot: "bg-stone-300",
+}
+const PROPERTY_BADGE: Record<string, PropertyBadge> = {
   vind: { label: "Vind", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-400" },
   yarden: { label: "Yarden", bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-400" },
   both: { label: "Ambos", bg: "bg-violet-50", text: "text-violet-700", dot: "bg-violet-400" },
-  unknown: { label: "—", bg: "bg-stone-50", text: "text-stone-400", dot: "bg-stone-300" },
+  unknown: PROPERTY_BADGE_UNKNOWN,
 }
 
 function getMandatoryFieldsFilled(lead: LeadCardProps["lead"]): number {
@@ -81,7 +85,7 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
 
   const interestKey = propertyName?.toLowerCase().includes("vind") ? "vind" :
     propertyName?.toLowerCase().includes("yarden") ? "yarden" : "unknown"
-  const badge = PROPERTY_BADGE[interestKey]
+  const badge = PROPERTY_BADGE[interestKey] ?? PROPERTY_BADGE_UNKNOWN
 
   const summaryPreview = lead.ai_summary
     ? lead.ai_summary.length > 80 ? lead.ai_summary.slice(0, 80) + "..." : lead.ai_summary

@@ -127,7 +127,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
               </Link>
             )
           })}
-          {items.length > 5 && (
+          {items[5] && (
             <Link
               href={items[5].href}
               className="flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-stone-400"

@@ -10,8 +10,9 @@ export interface OAuthTokens {
   scope: string
 }
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/forms.body.readonly",
+const DEFAULT_SCOPE = "https://www.googleapis.com/auth/forms.body.readonly"
+const SCOPES: string[] = [
+  DEFAULT_SCOPE,
   "https://www.googleapis.com/auth/forms.responses.readonly",
   "https://www.googleapis.com/auth/drive.metadata.readonly",
 ]
@@ -43,7 +44,7 @@ export async function exchangeCodeForTokens(
     refresh_token: tokens.refresh_token ?? "",
     expiry_date: tokens.expiry_date ?? 0,
     token_type: tokens.token_type ?? "Bearer",
-    scope: tokens.scope ?? SCOPES[0],
+    scope: tokens.scope ?? DEFAULT_SCOPE,
   }
 }
 
@@ -106,5 +107,6 @@ export async function findFormIdByTitle(
     pageSize: 5,
   })
   const files = res.data.files ?? []
-  return files.length > 0 ? files[0].id! : null
+  const [firstFile] = files
+  return firstFile?.id ?? null
 }

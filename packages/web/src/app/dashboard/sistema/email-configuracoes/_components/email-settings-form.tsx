@@ -44,6 +44,7 @@ export function EmailSettingsForm() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchSettings() }, [fetchSettings])
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>

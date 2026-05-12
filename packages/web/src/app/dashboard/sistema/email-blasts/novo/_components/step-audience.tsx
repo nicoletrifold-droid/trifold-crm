@@ -57,6 +57,7 @@ export function StepAudience({ initial, onNext }: Props) {
     setCounting(false)
   }, [segmentType, stageIds, sources, propertyId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void fetchCount() }, [fetchCount])
 
   const toggleStage = (id: string) =>

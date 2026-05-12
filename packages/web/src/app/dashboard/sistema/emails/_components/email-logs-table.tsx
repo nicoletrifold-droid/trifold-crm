@@ -63,6 +63,7 @@ export function EmailLogsTable() {
   }, [offset, period, status, templateId, search])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLogs()
   }, [fetchLogs])
 
