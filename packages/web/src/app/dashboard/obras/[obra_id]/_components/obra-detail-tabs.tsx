@@ -77,13 +77,17 @@ type Tab = "fases" | "fotos" | "documentos" | "mensagens" | "clientes"
 
 const FASE_STATUS_BADGE: Record<string, string> = {
   pendente: "bg-gray-100 text-gray-600",
+  a_iniciar: "bg-gray-100 text-gray-600",
   em_andamento: "bg-amber-100 text-amber-700",
+  pausada: "bg-orange-100 text-orange-600",
   concluida: "bg-green-100 text-green-700",
 }
 
 const FASE_STATUS_LABEL: Record<string, string> = {
   pendente: "PENDENTE",
-  em_andamento: "EM ANDAMENTO",
+  a_iniciar: "A INICIAR",
+  em_andamento: "EM EXECUÇÃO",
+  pausada: "PAUSADA",
   concluida: "CONCLUÍDA",
 }
 
@@ -151,11 +155,16 @@ function FaseItem({
           {fase.description && (
             <p className="text-xs text-gray-500">{fase.description}</p>
           )}
-          <div className="mt-1 h-1.5 w-full rounded-full bg-gray-200">
-            <div
-              className="h-1.5 rounded-full bg-orange-500"
-              style={{ width: `${fase.progress_pct}%` }}
-            />
+          <div className="mt-1 flex items-center gap-2">
+            <div className="h-1.5 flex-1 rounded-full bg-gray-200">
+              <div
+                className="h-1.5 rounded-full bg-orange-500 transition-all"
+                style={{ width: `${fase.progress_pct ?? 0}%` }}
+              />
+            </div>
+            <span className="w-8 flex-shrink-0 text-right text-xs text-gray-500">
+              {fase.progress_pct ?? 0}%
+            </span>
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1">

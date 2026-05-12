@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
-const ALLOWED_STATUS = ["pendente", "em_andamento", "concluida"]
+const ALLOWED_STATUS = ["pendente", "a_iniciar", "em_andamento", "pausada", "concluida"]
 
 export async function PATCH(
   req: NextRequest,
