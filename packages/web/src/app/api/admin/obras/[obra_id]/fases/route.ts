@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -78,7 +79,6 @@ export async function POST(
     typeof body.progress_pct === "number"
       ? Math.min(100, Math.max(0, body.progress_pct))
       : 0
-
   const { data: maxFase } = await supabase
     .from("obra_fases")
     .select("order_index")
@@ -89,7 +89,8 @@ export async function POST(
 
   const order_index = maxFase ? maxFase.order_index + 1 : 1
 
-  const { data: fase, error } = await supabase
+  const adminSupabase = createAdminClient()
+  const { data: fase, error } = await adminSupabase
     .from("obra_fases")
     .insert({
       obra_id,
