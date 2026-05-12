@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { Pencil, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { FotoUploadForm } from "./foto-upload-form"
 import { FotoDeleteButton } from "./foto-delete-button"
@@ -98,6 +98,13 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const STATUS_OPTIONS = [
+  { value: "a_iniciar", label: "A iniciar" },
+  { value: "em_andamento", label: "Em execução" },
+  { value: "pausada", label: "Pausada" },
+  { value: "concluida", label: "Concluída" },
+]
+
 const GROUP_COLORS = [
   { bubble: "bg-orange-500 text-white", header: "bg-orange-50", headerText: "text-orange-700", border: "border-orange-200", bars: ["bg-orange-500", "bg-orange-400", "bg-orange-600", "bg-orange-300"] },
   { bubble: "bg-blue-500 text-white", header: "bg-blue-50", headerText: "text-blue-700", border: "border-blue-200", bars: ["bg-blue-500", "bg-blue-400", "bg-blue-600", "bg-blue-300"] },
@@ -139,6 +146,126 @@ function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
     groups[idx.get(fase.name)!][1].push(fase)
   }
   return groups
+}
+
+function AddEtapaInlineForm({
+  obraId,
+  faseName,
+  onDone,
+}: {
+  obraId: string
+  faseName: string
+  onDone: () => void
+}) {
+  const router = useRouter()
+  const [description, setDescription] = useState("")
+  const [status, setStatus] = useState("a_iniciar")
+  const [progressPct, setProgressPct] = useState(0)
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/admin/obras/${obraId}/fases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: faseName,
+          description: description.trim() || null,
+          status,
+          progress_pct: progressPct,
+          start_date: startDate || null,
+          end_date: endDate || null,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error((d as { error?: string }).error ?? "Erro ao criar etapa")
+      }
+      router.refresh()
+      onDone()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao criar etapa")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="border-t border-gray-100 bg-gray-50 p-4">
+      <div className="space-y-2">
+        <input
+          type="text"
+          placeholder="Etapa"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          autoFocus
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={progressPct}
+            placeholder="% progresso"
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              setProgressPct(Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0)
+            }}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+          />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+      </div>
+      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={onDone}
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {saving ? "Salvando..." : "Adicionar"}
+        </button>
+      </div>
+    </form>
+  )
 }
 
 function FaseItem({
@@ -246,6 +373,7 @@ export function ObraDetailTabs({
   supabaseUrl,
 }: ObraDetailTabsProps) {
   const [tab, setTab] = useState<Tab>("fases")
+  const [addingEtapaToGroup, setAddingEtapaToGroup] = useState<string | null>(null)
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "fases", label: `Fases (${fases.length})` },
@@ -282,9 +410,6 @@ export function ObraDetailTabs({
           <FaseCreateForm obraId={obraId} />
 
           <section className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
-              Fases ({fases.length})
-            </h2>
             {fases.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-500">
                 Nenhuma fase criada.
@@ -293,6 +418,7 @@ export function ObraDetailTabs({
               <div className="space-y-3">
                 {buildFaseGroups(fases).map(([groupName, groupFases], groupIdx) => {
                   const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length]
+                  const isAdding = addingEtapaToGroup === groupName
                   return (
                     <div
                       key={groupName}
@@ -302,11 +428,22 @@ export function ObraDetailTabs({
                         <span className={`text-sm font-semibold ${color.headerText}`}>
                           {groupName}
                         </span>
-                        {groupFases.length > 1 && (
-                          <span className="text-xs text-gray-400">
-                            {groupFases.length} etapas
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {groupFases.length > 1 && (
+                            <span className="text-xs text-gray-400">
+                              {groupFases.length} etapas
+                            </span>
+                          )}
+                          <button
+                            onClick={() =>
+                              setAddingEtapaToGroup(isAdding ? null : groupName)
+                            }
+                            className={`rounded-full p-1 ${color.headerText} hover:bg-black/10`}
+                            title="Adicionar etapa"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="divide-y divide-gray-100 bg-white">
                         {groupFases.map((fase, subIdx) => (
@@ -317,6 +454,13 @@ export function ObraDetailTabs({
                             barColor={color.bars[subIdx % color.bars.length]}
                           />
                         ))}
+                        {isAdding && (
+                          <AddEtapaInlineForm
+                            obraId={obraId}
+                            faseName={groupName}
+                            onDone={() => setAddingEtapaToGroup(null)}
+                          />
+                        )}
                       </div>
                     </div>
                   )
