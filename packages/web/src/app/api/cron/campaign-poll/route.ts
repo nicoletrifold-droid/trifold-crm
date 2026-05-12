@@ -162,6 +162,26 @@ export async function GET(request: NextRequest) {
         .eq("id", campaign.org_id)
         .single()
 
+      // Stale poll detection: cron runs every 3 min, >15 min gap = something is wrong
+      if (campaign.last_polled_at) {
+        const staleMs = Date.now() - new Date(campaign.last_polled_at).getTime()
+        if (staleMs > 15 * 60 * 1000) {
+          logEvent({
+            level: "warn",
+            category: "cron",
+            event_type: "CAMPAIGN_POLL_STALE",
+            message: `Campaign "${campaign.name}" last polled ${Math.round(staleMs / 60000)} min ago — possible cron gap or repeated failures`,
+            metadata: {
+              campaignId: campaign.id,
+              lastPolledAt: campaign.last_polled_at,
+              staleMinutes: Math.round(staleMs / 60000),
+            },
+            org_id: campaign.org_id,
+            source: "api/cron/campaign-poll",
+          })
+        }
+      }
+
       const tokens = org?.google_oauth_tokens as OAuthTokens | null
       if (!tokens?.refresh_token) {
         logEvent({
@@ -174,14 +194,32 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // Refresh token if needed
-      const { tokens: freshTokens, refreshed } =
-        await refreshTokenIfNeeded(tokens)
-      if (refreshed) {
-        await supabase
-          .from("organizations")
-          .update({ google_oauth_tokens: freshTokens })
-          .eq("id", campaign.org_id)
+      // Refresh token if needed — catch separately to surface OAuth errors clearly
+      let freshTokens: OAuthTokens = tokens
+      try {
+        const result = await refreshTokenIfNeeded(tokens)
+        freshTokens = result.tokens
+        if (result.refreshed) {
+          await supabase
+            .from("organizations")
+            .update({ google_oauth_tokens: result.tokens })
+            .eq("id", campaign.org_id)
+        }
+      } catch (tokenError) {
+        logEvent({
+          level: "error",
+          category: "cron",
+          event_type: "CAMPAIGN_POLL_TOKEN_REFRESH_FAILED",
+          message: `Google OAuth refresh failed for org ${campaign.org_id} — campaign "${campaign.name}" skipped. Re-authorize in /dashboard/configuracoes/integracoes`,
+          metadata: {
+            error: tokenError instanceof Error ? tokenError.message : "Unknown",
+            campaignId: campaign.id,
+          },
+          org_id: campaign.org_id,
+          source: "api/cron/campaign-poll",
+        })
+        errors++
+        continue
       }
 
       // Poll Google Forms API
