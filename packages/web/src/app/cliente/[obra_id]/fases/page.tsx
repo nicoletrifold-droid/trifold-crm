@@ -13,22 +13,104 @@ function formatDate(dateStr: string | null): string {
   return `${day}/${month}/${year}`
 }
 
+interface Fase {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  progress_pct: number
+  order_index: number
+  start_date: string | null
+  end_date: string | null
+}
+
+const GROUP_COLORS = [
+  {
+    border: "border-orange-500/40",
+    header: "bg-orange-900/20",
+    headerText: "text-orange-400",
+    bars: ["bg-orange-500", "bg-orange-400", "bg-orange-600", "bg-orange-300"],
+  },
+  {
+    border: "border-blue-500/40",
+    header: "bg-blue-900/20",
+    headerText: "text-blue-400",
+    bars: ["bg-blue-500", "bg-blue-400", "bg-blue-600", "bg-blue-300"],
+  },
+  {
+    border: "border-emerald-500/40",
+    header: "bg-emerald-900/20",
+    headerText: "text-emerald-400",
+    bars: ["bg-emerald-500", "bg-emerald-400", "bg-emerald-600", "bg-emerald-300"],
+  },
+  {
+    border: "border-purple-500/40",
+    header: "bg-purple-900/20",
+    headerText: "text-purple-400",
+    bars: ["bg-purple-500", "bg-purple-400", "bg-purple-600", "bg-purple-300"],
+  },
+  {
+    border: "border-teal-500/40",
+    header: "bg-teal-900/20",
+    headerText: "text-teal-400",
+    bars: ["bg-teal-500", "bg-teal-400", "bg-teal-600", "bg-teal-300"],
+  },
+  {
+    border: "border-rose-500/40",
+    header: "bg-rose-900/20",
+    headerText: "text-rose-400",
+    bars: ["bg-rose-500", "bg-rose-400", "bg-rose-600", "bg-rose-300"],
+  },
+  {
+    border: "border-indigo-500/40",
+    header: "bg-indigo-900/20",
+    headerText: "text-indigo-400",
+    bars: ["bg-indigo-500", "bg-indigo-400", "bg-indigo-600", "bg-indigo-300"],
+  },
+  {
+    border: "border-amber-500/40",
+    header: "bg-amber-900/20",
+    headerText: "text-amber-400",
+    bars: ["bg-amber-500", "bg-amber-400", "bg-amber-600", "bg-amber-300"],
+  },
+] as const
+
+function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
+  const sorted = [...fases].sort((a, b) => {
+    const aConc = a.status === "concluida"
+    const bConc = b.status === "concluida"
+    if (aConc !== bConc) return aConc ? 1 : -1
+    if (!a.start_date && !b.start_date) return a.order_index - b.order_index
+    if (!a.start_date) return 1
+    if (!b.start_date) return -1
+    return new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+  })
+  const groups: [string, Fase[]][] = []
+  const idx = new Map<string, number>()
+  for (const fase of sorted) {
+    if (!idx.has(fase.name)) {
+      idx.set(fase.name, groups.length)
+      groups.push([fase.name, []])
+    }
+    groups[idx.get(fase.name)!][1].push(fase)
+  }
+  return groups
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pendente: "Pendente",
+  a_iniciar: "A iniciar",
   em_andamento: "Em andamento",
+  pausada: "Pausada",
   concluida: "Concluída",
 }
 
 const STATUS_BADGE: Record<string, string> = {
   pendente: "bg-stone-800 text-stone-400",
+  a_iniciar: "bg-stone-800 text-stone-400",
   em_andamento: "bg-[#F27A5E]/20 text-[#F27A5E]",
+  pausada: "bg-yellow-900/30 text-yellow-400",
   concluida: "bg-green-900/40 text-green-400",
-}
-
-const DOT_COLOR: Record<string, string> = {
-  pendente: "bg-stone-600",
-  em_andamento: "bg-[#F27A5E]",
-  concluida: "bg-green-500",
 }
 
 export default async function FasesPage({
@@ -53,9 +135,9 @@ export default async function FasesPage({
       "id, name, description, status, progress_pct, order_index, start_date, end_date"
     )
     .eq("obra_id", obra_id)
-    .order("order_index")
 
   const allFases = fases ?? []
+  const groups = buildFaseGroups(allFases)
 
   return (
     <div className="min-h-screen bg-stone-950">
@@ -91,83 +173,93 @@ export default async function FasesPage({
         {allFases.length === 0 ? (
           <p className="text-sm text-stone-500">Nenhuma fase cadastrada ainda.</p>
         ) : (
-          <div className="relative space-y-3 pl-6">
-            {/* Vertical line */}
-            <div className="absolute left-[7px] top-2 bottom-2 w-px bg-stone-700" />
-
-            {allFases.map((fase, idx) => {
-              const dotColor = DOT_COLOR[fase.status] ?? DOT_COLOR.pendente
-              const badgeClass = STATUS_BADGE[fase.status] ?? STATUS_BADGE.pendente
-              const label = STATUS_LABEL[fase.status] ?? fase.status
-
+          <div className="space-y-3">
+            {groups.map(([groupName, groupFases], groupIdx) => {
+              const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length]
               return (
-                <div key={fase.id} className="relative">
-                  {/* Dot */}
-                  {fase.status === "concluida" ? (
-                    <span className="absolute -left-6 top-[18px] z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-500">
-                      <svg className="h-2 w-2 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-                      </svg>
+                <div
+                  key={groupName}
+                  className={`overflow-hidden rounded-xl border ${color.border}`}
+                >
+                  <div
+                    className={`flex items-center justify-between px-4 py-2.5 ${color.header}`}
+                  >
+                    <span className={`text-sm font-semibold ${color.headerText}`}>
+                      {groupName}
                     </span>
-                  ) : (
-                    <span
-                      className={`absolute -left-6 top-[18px] z-10 block h-3.5 w-3.5 rounded-full ${dotColor}`}
-                    />
-                  )}
-
-                  {/* Card */}
-                  <div className={`rounded-xl border bg-stone-900 p-4 ${
-                    fase.status === "em_andamento"
-                      ? "border-[#F27A5E] ring-1 ring-[#F27A5E]/25"
-                      : "border-stone-800"
-                  }`}>
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-white">
-                        {idx + 1}. {fase.name}
-                      </h3>
-                      <span
-                        className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide ${badgeClass}`}
-                      >
-                        {label}
+                    {groupFases.length > 1 && (
+                      <span className="text-xs text-stone-500">
+                        {groupFases.length} etapas
                       </span>
-                    </div>
-                    {fase.description && (
-                      <p className="mb-3 text-[13px] leading-relaxed text-white/70">
-                        {fase.description}
-                      </p>
                     )}
-                    <div className="flex gap-6 text-xs text-white/40">
-                      <div>
-                        <p className="font-medium text-white">
-                          {formatDate(fase.start_date)}
-                        </p>
-                        <p>Início</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-white">
-                          {formatDate(fase.end_date)}
-                        </p>
-                        <p>{fase.status === "concluida" ? "Conclusão" : "Previsão"}</p>
-                      </div>
-                    </div>
+                  </div>
 
-                    {/* Barra de progresso — apenas fase em andamento */}
-                    {fase.status === "em_andamento" && (
-                      <div className="mt-4 border-t border-stone-800/60 pt-3">
-                        <div className="mb-1.5 flex items-center justify-between text-xs">
-                          <span className="text-white/50">Progresso da etapa</span>
-                          <span className="font-semibold text-[#F27A5E]">
-                            {fase.progress_pct ?? 0}%
-                          </span>
+                  <div className="divide-y divide-stone-800 bg-stone-900">
+                    {groupFases.map((fase, subIdx) => {
+                      const barColor = color.bars[subIdx % color.bars.length]
+                      const badgeClass =
+                        STATUS_BADGE[fase.status] ?? STATUS_BADGE.pendente
+                      const label = STATUS_LABEL[fase.status] ?? fase.status
+
+                      return (
+                        <div key={fase.id} className="p-4">
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            {fase.description ? (
+                              <p className="text-sm text-white/80">
+                                {fase.description}
+                              </p>
+                            ) : (
+                              <p className="text-sm italic text-stone-600">
+                                Sem etapa
+                              </p>
+                            )}
+                            <span
+                              className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide ${badgeClass}`}
+                            >
+                              {label}
+                            </span>
+                          </div>
+
+                          {/* Progress bar */}
+                          <div className="mb-3">
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="text-stone-500">Progresso</span>
+                              <span
+                                className={`font-semibold ${color.headerText}`}
+                              >
+                                {fase.progress_pct ?? 0}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-stone-800">
+                              <div
+                                className={`h-1.5 rounded-full ${barColor} transition-all duration-700`}
+                                style={{ width: `${fase.progress_pct ?? 0}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Dates */}
+                          <div className="flex gap-6 text-xs text-stone-500">
+                            <div>
+                              <p className="font-medium text-white/60">
+                                {formatDate(fase.start_date)}
+                              </p>
+                              <p>Início</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-white/60">
+                                {formatDate(fase.end_date)}
+                              </p>
+                              <p>
+                                {fase.status === "concluida"
+                                  ? "Conclusão"
+                                  : "Previsão"}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="h-1.5 w-full rounded-full bg-stone-800">
-                          <div
-                            className="h-1.5 rounded-full bg-[#F27A5E] transition-all duration-700"
-                            style={{ width: `${fase.progress_pct ?? 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
+                      )
+                    })}
                   </div>
                 </div>
               )
