@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { SupabaseClient } from "@supabase/supabase-js"
 import { sendTemplateEmail } from "@web/lib/email"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 const CRON_SECRET = process.env.CRON_SECRET
 
 function createServiceClient(): SupabaseClient {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  return createAdminClient()
 }
 
 async function checkRecentSend(

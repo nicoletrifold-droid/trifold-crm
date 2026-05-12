@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 export async function POST() {
   const auth = await requireAuth()
@@ -10,10 +10,7 @@ export async function POST() {
   const forbidden = requireRole(appUser, ["admin"])
   if (forbidden) return forbidden
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = createAdminClient()
 
   await supabase
     .from("organizations")

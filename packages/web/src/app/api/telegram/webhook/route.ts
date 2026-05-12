@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import type { MediaBlock } from "@trifold/ai"
 import { getTelegramFileUrl, downloadFileAsBase64 } from "@trifold/bot"
 import { logEvent } from "@web/lib/logger"
@@ -344,10 +344,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = createAdminClient()
 
   try {
     // Get org (use first org for staging)

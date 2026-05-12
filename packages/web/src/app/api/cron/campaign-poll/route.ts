@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { logEvent } from "@web/lib/logger"
 import {
   refreshTokenIfNeeded,
@@ -127,11 +127,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const supabase = createAdminClient()
 
   let processed = 0
   let skipped = 0

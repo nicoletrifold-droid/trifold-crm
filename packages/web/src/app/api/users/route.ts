@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
-import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
@@ -26,10 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Create auth user with admin client
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const adminSupabase = createAdminClient()
 
   const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
     email: email.trim(),

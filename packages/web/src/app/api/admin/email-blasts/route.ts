@@ -2,7 +2,6 @@ import { NextRequest, NextResponse, after } from "next/server"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendTemplateEmail, getEmailsSentToday } from "@web/lib/email"
-import { createClient } from "@supabase/supabase-js"
 
 type SegmentFilter = {
   type: "all" | "by_stage" | "by_source" | "by_property"
@@ -18,13 +17,6 @@ interface Lead {
   phone: string | null
 }
 
-function createServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 function distributeOverDays(
   recipients: Lead[],
@@ -80,7 +72,6 @@ export async function POST(request: NextRequest) {
   if (!body.segment_filter?.type) return NextResponse.json({ error: "segment_filter é obrigatório" }, { status: 400 })
 
   const supabase = createAdminClient()
-  const serviceClient = createServiceClient()
 
   // Fetch audience
   let query = supabase
@@ -126,7 +117,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Check current quota and determine daily capacity
-  const sentToday = await getEmailsSentToday(user.orgId, serviceClient)
+  const sentToday = await getEmailsSentToday(user.orgId, supabase)
   const remainingToday = Math.max(0, 95 - sentToday)
   const effectiveStart = remainingToday === 0 ? (() => {
     const d = new Date(startDate)

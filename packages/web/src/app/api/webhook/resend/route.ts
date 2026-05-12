@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { SupabaseClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { createHmac, timingSafeEqual } from "crypto"
 import { logEvent } from "@web/lib/logger"
 
@@ -143,10 +144,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "skipped" })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = createAdminClient()
 
   // Route: email_log_id → new template tracking path
   if (emailLogId) {

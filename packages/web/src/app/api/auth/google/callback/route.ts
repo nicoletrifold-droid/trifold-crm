@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { exchangeCodeForTokens } from "@web/lib/google"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -24,10 +24,7 @@ export async function GET(request: NextRequest) {
   try {
     const tokens = await exchangeCodeForTokens(code)
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = createAdminClient()
 
     await supabase
       .from("organizations")

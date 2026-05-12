@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server"
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { SupabaseClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
@@ -9,10 +10,7 @@ import { normalizePhoneBR } from "@trifold/shared"
 export const maxDuration = 60
 
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  return createAdminClient()
 }
 
 // GET — Webhook verification (Meta sends this to verify the endpoint)

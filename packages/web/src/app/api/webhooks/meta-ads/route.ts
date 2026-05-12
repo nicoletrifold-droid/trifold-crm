@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server"
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { SupabaseClient } from "@supabase/supabase-js"
 import crypto from "crypto"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
@@ -7,10 +7,7 @@ import { triggerAutomations } from "@web/lib/email-automations"
 const META_API_BASE = "https://graph.facebook.com/v21.0"
 
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  return createAdminClient()
 }
 
 // GET — Webhook verification (Meta sends this to verify the endpoint)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { SupabaseClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail, getEmailsSentToday } from "@web/lib/email"
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -32,11 +33,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const supabase = createAdminClient()
 
   const now = new Date()
   let processed = 0

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const MAX_CONVERSATIONS_PER_RUN = 20
@@ -24,15 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("[ENRICH_CRON] Missing environment variables")
-    return NextResponse.json({ error: "Missing config" }, { status: 503 })
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey)
+  const supabase = createAdminClient()
   const { createAnthropicClient } = await import("@trifold/ai")
   const { enrichLeadFromConversation, mapExtractedDataToLeadFields } = await import("@trifold/ai")
   const anthropic = createAnthropicClient()
