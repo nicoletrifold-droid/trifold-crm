@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import type {
   AssociatedLead,
@@ -34,6 +34,13 @@ interface Props {
 
 type ErrorKind = "not_found" | "generic" | null
 
+interface ActionLogEntry {
+  executed_at: string
+  action: string
+  campaign_name: string | null
+  executed_by_name: string | null
+}
+
 const PERIOD_OPTIONS: { value: number; label: string }[] = [
   { value: 7, label: "7 dias" },
   { value: 30, label: "30 dias" },
@@ -42,11 +49,44 @@ const PERIOD_OPTIONS: { value: number; label: string }[] = [
 
 // ─── Componente principal ──────────────────────────────────────────────────
 
-export default function CampaignDetailClient({ campaignId }: Props) {
+export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
   const [data, setData] = useState<CampaignDetailApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ErrorKind>(null)
   const [days, setDays] = useState<number>(30)
+
+  // Ações admin
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null)
+  const [optimisticBudget, setOptimisticBudget] = useState<number | null>(null)
+  const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [isActioning, setIsActioning] = useState(false)
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
+  const [budgetInput, setBudgetInput] = useState("")
+  const [budgetModalError, setBudgetModalError] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const budgetInputRef = useRef<HTMLInputElement>(null)
+
+  // Histórico de ações
+  const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
+  const [actionLogLoading, setActionLogLoading] = useState(false)
+
+  const fetchActionLog = useCallback(async () => {
+    setActionLogLoading(true)
+    try {
+      const res = await fetch(
+        `/api/meta-ads/campaigns/${encodeURIComponent(campaignId)}/actions`,
+        { cache: "no-store" },
+      )
+      if (res.ok) {
+        const json = (await res.json()) as { actions: ActionLogEntry[] }
+        setActionLog(json.actions)
+      }
+    } catch {
+      // silently ignore — history is non-critical
+    } finally {
+      setActionLogLoading(false)
+    }
+  }, [campaignId])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -66,6 +106,10 @@ export default function CampaignDetailClient({ campaignId }: Props) {
       }
       const json = (await res.json()) as CampaignDetailApiResponse
       setData(json)
+      setOptimisticStatus((prev) => prev ?? json.campaign.status)
+      setOptimisticBudget((prev) =>
+        prev ?? (json.campaign.daily_budget !== null ? Number(json.campaign.daily_budget) : null),
+      )
     } catch {
       setError("generic")
       setData(null)
@@ -77,6 +121,81 @@ export default function CampaignDetailClient({ campaignId }: Props) {
   useEffect(() => {
     void fetchData()
   }, [fetchData])
+
+  useEffect(() => {
+    if (isAdmin) void fetchActionLog()
+  }, [isAdmin, fetchActionLog])
+
+  // Sync native <dialog> open state with React state (Fix M1: a11y)
+  // showModal() ativa focus trap, ESC handling, e backdrop nativos.
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (isBudgetModalOpen) {
+      if (!dialog.open) {
+        dialog.showModal()
+      }
+      // Foco inicial no input para a11y
+      budgetInputRef.current?.focus()
+    } else {
+      if (dialog.open) {
+        dialog.close()
+      }
+    }
+  }, [isBudgetModalOpen])
+
+  async function handleAction(action: "pause" | "resume" | "set_budget", value?: number) {
+    setIsActioning(true)
+    setActionMessage(null)
+    setBudgetModalError(null)
+    try {
+      const res = await fetch(
+        `/api/meta-ads/campaigns/${encodeURIComponent(campaignId)}/action`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, value }),
+        },
+      )
+      const resData = (await res.json()) as { error?: string; message?: string }
+      if (!res.ok) {
+        const errText = resData.message ?? resData.error ?? "Erro ao executar ação"
+        if (action === "set_budget") {
+          setBudgetModalError(errText)
+        } else {
+          setActionMessage({ type: "error", text: errText })
+        }
+        return
+      }
+      if (action === "pause") {
+        setOptimisticStatus("PAUSED")
+        setActionMessage({ type: "success", text: "Campanha pausada com sucesso" })
+      } else if (action === "resume") {
+        setOptimisticStatus("ACTIVE")
+        setActionMessage({ type: "success", text: "Campanha retomada com sucesso" })
+      } else {
+        if (value !== undefined) {
+          setOptimisticBudget(value)
+        }
+        setActionMessage({
+          type: "success",
+          text: `Budget atualizado para R$ ${((value ?? 0) / 100).toFixed(2)}`,
+        })
+        setIsBudgetModalOpen(false)
+        setBudgetInput("")
+      }
+      void fetchActionLog()
+    } catch {
+      const errText = "Erro de rede — tente novamente"
+      if (action === "set_budget") {
+        setBudgetModalError(errText)
+      } else {
+        setActionMessage({ type: "error", text: errText })
+      }
+    } finally {
+      setIsActioning(false)
+    }
+  }
 
   // ─── Loading state ───────────────────────────────────────────────────────
   if (loading && !data) {
@@ -124,7 +243,8 @@ export default function CampaignDetailClient({ campaignId }: Props) {
   }
 
   const { campaign, timeseries, adsets, funnel, leads, roas_summary } = data
-  const statusBadge = STATUS_BADGES[campaign.status] ?? STATUS_BADGES.ARCHIVED
+  const displayStatus = optimisticStatus ?? campaign.status
+  const statusBadge = STATUS_BADGES[displayStatus] ?? STATUS_BADGES.ARCHIVED
   const period = days === 7 ? "7d" : days === 90 ? "90d" : "30d"
   const objectiveLabel = campaign.objective
     ? (OBJECTIVE_LABELS[campaign.objective] ?? campaign.objective)
@@ -169,7 +289,7 @@ export default function CampaignDetailClient({ campaignId }: Props) {
                 <dt className="inline text-gray-500">Orçamento: </dt>
                 <dd className="inline text-gray-900">
                   {formatBudget(
-                    campaign.daily_budget,
+                    optimisticBudget ?? campaign.daily_budget,
                     campaign.lifetime_budget,
                   )}
                 </dd>
@@ -206,6 +326,172 @@ export default function CampaignDetailClient({ campaignId }: Props) {
           </div>
         </div>
       </header>
+
+      {/* Seção de Ações (admin only) */}
+      {isAdmin && displayStatus !== "ARCHIVED" && (
+        <section
+          aria-label="Ações da campanha"
+          className="rounded-lg bg-white p-6 shadow-sm"
+        >
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Ações</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            {displayStatus === "ACTIVE" && (
+              <button
+                type="button"
+                disabled={isActioning}
+                onClick={() => void handleAction("pause")}
+                className="inline-flex items-center rounded-md bg-yellow-50 px-4 py-2 text-sm font-medium text-yellow-800 border border-yellow-300 hover:bg-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isActioning ? "Pausando..." : "Pausar campanha"}
+              </button>
+            )}
+            {displayStatus === "PAUSED" && (
+              <button
+                type="button"
+                disabled={isActioning}
+                onClick={() => void handleAction("resume")}
+                className="inline-flex items-center rounded-md bg-green-50 px-4 py-2 text-sm font-medium text-green-800 border border-green-300 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isActioning ? "Retomando..." : "Retomar campanha"}
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={isActioning}
+              onClick={() => {
+                setBudgetInput("")
+                setBudgetModalError(null)
+                setIsBudgetModalOpen(true)
+              }}
+              className="inline-flex items-center rounded-md bg-orange-50 px-4 py-2 text-sm font-medium text-orange-800 border border-orange-300 hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Ajustar budget...
+            </button>
+          </div>
+
+          {actionMessage && (
+            <p
+              className={`mt-3 text-sm font-medium ${
+                actionMessage.type === "success" ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {actionMessage.text}
+            </p>
+          )}
+
+          {/* Histórico de ações */}
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              Histórico de ações
+            </h3>
+            {actionLogLoading ? (
+              <p className="text-sm text-gray-400">Carregando...</p>
+            ) : actionLog.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                Nenhuma ação registrada ainda.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                        Data/Hora
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                        Ação
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                        Executado por
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {actionLog.map((entry, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-gray-700">
+                          {formatDateTime(entry.executed_at)}
+                        </td>
+                        <td className="px-4 py-2 text-gray-900 font-medium">
+                          {entry.action}
+                        </td>
+                        <td className="px-4 py-2 text-gray-700">
+                          {entry.executed_by_name ?? "Sistema"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Modal de budget (Fix M1: showModal() nativo + focus trap + ESC) */}
+      <dialog
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="budget-modal-title"
+        onClose={() => setIsBudgetModalOpen(false)}
+        className="backdrop:bg-black/50 rounded-lg p-0 shadow-xl"
+      >
+        <div className="bg-white rounded-lg p-6 w-80">
+          <h3 id="budget-modal-title" className="font-semibold text-gray-900 mb-2">
+            Ajustar Budget Diário
+          </h3>
+          {optimisticBudget !== null && optimisticBudget > 0 ? (
+            <p className="text-sm text-gray-500 mb-3">
+              Budget atual: R${" "}
+              {(optimisticBudget / 100).toFixed(2)}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500 mb-3">
+              Budget atual: Não definido
+            </p>
+          )}
+          <input
+            ref={budgetInputRef}
+            type="number"
+            min="1"
+            step="0.01"
+            placeholder="Ex: 50.00"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            value={budgetInput}
+            onChange={(e) => setBudgetInput(e.target.value)}
+          />
+          {budgetModalError && (
+            <p className="mt-2 text-sm text-red-600">{budgetModalError}</p>
+          )}
+          <div className="mt-4 flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setIsBudgetModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={
+                !budgetInput ||
+                Number(budgetInput) < 1 ||
+                isActioning
+              }
+              onClick={() =>
+                void handleAction(
+                  "set_budget",
+                  Math.round(Number(budgetInput) * 100),
+                )
+              }
+              className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isActioning ? "Salvando..." : "Confirmar"}
+            </button>
+          </div>
+        </div>
+      </dialog>
 
       {/* Time series chart */}
       <section className="rounded-lg bg-white p-6 shadow-sm">
