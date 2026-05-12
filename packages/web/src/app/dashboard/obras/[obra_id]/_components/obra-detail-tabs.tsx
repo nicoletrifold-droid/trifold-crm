@@ -199,14 +199,20 @@ function AddEtapaInlineForm({
   return (
     <form onSubmit={handleSubmit} className="border-t border-gray-100 bg-gray-50 p-4">
       <div className="space-y-2">
-        <input
-          type="text"
-          placeholder="Etapa"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          autoFocus
-          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
-        />
+        <div>
+          <label className="mb-1 flex items-center gap-0.5 text-[11px] font-medium text-gray-500">
+            Etapa <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="text"
+            placeholder="Etapa"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            autoFocus
+            required
+            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+          />
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <select
             value={status}
@@ -258,7 +264,7 @@ function AddEtapaInlineForm({
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || !description.trim()}
           className="flex-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
         >
           {saving ? "Salvando..." : "Adicionar"}

@@ -66,21 +66,32 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
     <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="mb-3 text-sm font-semibold text-gray-700">Adicionar Fase</h3>
       <div className="space-y-3">
-        <input
-          type="text"
-          placeholder="Nome da fase *"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-        />
-        <input
-          type="text"
-          placeholder="Etapa"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
-        />
+        <div>
+          <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600">
+            Nome da fase <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="text"
+            placeholder="Nome da fase"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600">
+            Etapa <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="text"
+            placeholder="Etapa"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+          />
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -141,11 +152,15 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
         </div>
       </div>
 
+      <p className="mt-1 text-[11px] text-gray-400">
+        <span className="text-red-400">*</span> Campos obrigatórios
+      </p>
+
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
       <button
         type="submit"
-        disabled={saving || !name.trim()}
+        disabled={saving || !name.trim() || !description.trim()}
         className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
       >
         <Plus className="h-4 w-4" />
