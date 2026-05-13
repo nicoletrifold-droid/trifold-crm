@@ -1,6 +1,6 @@
 # Story 29.2 — API Routes: Controle de Brindes + Parser de Endereço
 
-## Status: Ready
+## Status: Ready for Review
 
 ## Executor Assignment
 executor: "@dev"
@@ -20,33 +20,33 @@ Depende da Story 29.1 (tabelas criadas). Esta story cria todas as rotas em `/api
 ## Acceptance Criteria
 
 ### API Routes — Destinatários
-- [ ] AC1: `GET /api/brindes/destinatarios` retorna lista paginada com suporte a query params: `obra_nome`, `tipo`, `cidade`, `estado`, `nome` (busca parcial), `page`, `limit` (default 50)
-- [ ] AC2: `POST /api/brindes/destinatarios` cria novo destinatário; body: `{ obra_nome, tipo, nome, observacao?, endereco_logradouro?, ..., endereco_referencia? }`; retorna 201 com objeto criado
-- [ ] AC3: `PATCH /api/brindes/destinatarios/[id]` atualiza campos parcialmente; retorna 200 com objeto atualizado
-- [ ] AC4: `DELETE /api/brindes/destinatarios/[id]` remove destinatário (CASCADE apaga entregas vinculadas); retorna 204
-- [ ] AC5: `POST /api/brindes/import` aceita array de registros no formato `{ obra_nome, tipo, nome, observacao?, endereco_raw? }` e insere em lote; `endereco_raw` passa pelo parser automaticamente; retorna `{ inserted: N, errors: [...] }`
+- [x] AC1: `GET /api/brindes/destinatarios` retorna lista paginada com suporte a query params: `obra_nome`, `tipo`, `cidade`, `estado`, `nome` (busca parcial), `page`, `limit` (default 50)
+- [x] AC2: `POST /api/brindes/destinatarios` cria novo destinatário; body: `{ obra_nome, tipo, nome, observacao?, endereco_logradouro?, ..., endereco_referencia? }`; retorna 201 com objeto criado
+- [x] AC3: `PATCH /api/brindes/destinatarios/[id]` atualiza campos parcialmente; retorna 200 com objeto atualizado
+- [x] AC4: `DELETE /api/brindes/destinatarios/[id]` remove destinatário (CASCADE apaga entregas vinculadas); retorna 204
+- [x] AC5: `POST /api/brindes/import` aceita array de registros no formato `{ obra_nome, tipo, nome, observacao?, endereco_raw? }` e insere em lote; `endereco_raw` passa pelo parser automaticamente; retorna `{ inserted: N, errors: [...] }`
 
 ### API Routes — Datas Comemorativas
-- [ ] AC6: `GET /api/brindes/datas` retorna todas as datas da org ordenadas por `data ASC`; aceita `?ativa=true/false`
-- [ ] AC7: `POST /api/brindes/datas` cria nova data; body `{ nome, data, ativa? }`; retorna 201
-- [ ] AC8: `PATCH /api/brindes/datas/[id]` edita nome/data/ativa; retorna 200
+- [x] AC6: `GET /api/brindes/datas` retorna todas as datas da org ordenadas por `data ASC`; aceita `?ativa=true/false`
+- [x] AC7: `POST /api/brindes/datas` cria nova data; body `{ nome, data, ativa? }`; retorna 201
+- [x] AC8: `PATCH /api/brindes/datas/[id]` edita nome/data/ativa; retorna 200
 
 ### API Routes — Entregas (Status)
-- [ ] AC9: `POST /api/brindes/entregas` cria ou atualiza (upsert) status de entrega; body: `{ destinatario_id, data_comemorativa_id, status, observacao_entrega? }`; usa `ON CONFLICT (destinatario_id, data_comemorativa_id) DO UPDATE`; retorna 200
+- [x] AC9: `POST /api/brindes/entregas` cria ou atualiza (upsert) status de entrega; body: `{ destinatario_id, data_comemorativa_id, status, observacao_entrega? }`; usa `ON CONFLICT (destinatario_id, data_comemorativa_id) DO UPDATE`; retorna 200
 
 ### Parser de Endereço
-- [ ] AC10: Função `parseEndereco(raw: string)` exportada em `packages/web/src/lib/brindes/parse-endereco.ts`
-- [ ] AC11: Parser detecta endereços especiais ("OBRA X", "SEDE X") e retorna `{ endereco_referencia: raw, outros_campos: null }`
-- [ ] AC12: Parser extrai de endereços residenciais: logradouro, número, complemento, bairro, cidade, estado (2 letras maiúsculas), CEP (8 dígitos)
-- [ ] AC13: Exemplos que o parser deve tratar:
+- [x] AC10: Função `parseEndereco(raw: string)` exportada em `packages/web/src/lib/brindes/parse-endereco.ts`
+- [x] AC11: Parser detecta endereços especiais ("OBRA X", "SEDE X") e retorna `{ endereco_referencia: raw, outros_campos: null }`
+- [x] AC12: Parser extrai de endereços residenciais: logradouro, número, complemento, bairro, cidade, estado (2 letras maiúsculas), CEP (8 dígitos)
+- [x] AC13: Exemplos que o parser deve tratar:
   - `"Rua Itapura Nº 566, Apto 502, 87050-190, Maringá - PR"` → `{ logradouro: "Rua Itapura", numero: "566", complemento: "Apto 502", cep: "87050-190", cidade: "Maringá", estado: "PR" }`
   - `"OBRA COMUNIDADE"` → `{ referencia: "OBRA COMUNIDADE" }`
   - `"Av. João Marangoni, 1668 - 87114-630 - Sarandi"` → `{ logradouro: "Av. João Marangoni", numero: "1668", cep: "87114-630", cidade: "Sarandi" }`
 
 ### Segurança e validação
-- [ ] AC14: Todas as rotas verificam autenticação via `getServerUser()` e retornam 401 se não autenticado
-- [ ] AC15: Operações de escrita (POST, PATCH, DELETE) verificam `role IN ('admin','supervisor')` e retornam 403 se não autorizado
-- [ ] AC16: `org_id` é sempre obtido do usuário autenticado (nunca do body da requisição)
+- [x] AC14: Todas as rotas verificam autenticação via `getServerUser()` e retornam 401 se não autenticado
+- [x] AC15: Operações de escrita (POST, PATCH, DELETE) verificam `role IN ('admin','supervisor')` e retornam 403 se não autorizado
+- [x] AC16: `org_id` é sempre obtido do usuário autenticado (nunca do body da requisição)
 
 ## Escopo
 
@@ -202,15 +202,15 @@ const { data, error } = await supabase
 
 ## Tasks
 
-- [ ] 1. Criar `packages/web/src/lib/brindes/parse-endereco.ts` com `parseEndereco()` (AC10-13)
-- [ ] 2. Criar `api/brindes/destinatarios/route.ts` — GET (list+filter) e POST (create) (AC1, AC2)
-- [ ] 3. Criar `api/brindes/destinatarios/[id]/route.ts` — PATCH e DELETE (AC3, AC4)
-- [ ] 4. Criar `api/brindes/datas/route.ts` — GET e POST (AC6, AC7)
-- [ ] 5. Criar `api/brindes/datas/[id]/route.ts` — PATCH (AC8)
-- [ ] 6. Criar `api/brindes/entregas/route.ts` — POST upsert (AC9)
-- [ ] 7. Criar `api/brindes/import/route.ts` — POST bulk import com parser (AC5)
-- [ ] 8. Verificar auth em todas as rotas (AC14, AC15, AC16)
-- [ ] 9. `npm run typecheck && npm run lint` sem erros
+- [x] 1. Criar `packages/web/src/lib/brindes/parse-endereco.ts` com `parseEndereco()` (AC10-13)
+- [x] 2. Criar `api/brindes/destinatarios/route.ts` — GET (list+filter) e POST (create) (AC1, AC2)
+- [x] 3. Criar `api/brindes/destinatarios/[id]/route.ts` — PATCH e DELETE (AC3, AC4)
+- [x] 4. Criar `api/brindes/datas/route.ts` — GET e POST (AC6, AC7)
+- [x] 5. Criar `api/brindes/datas/[id]/route.ts` — PATCH (AC8)
+- [x] 6. Criar `api/brindes/entregas/route.ts` — POST upsert (AC9)
+- [x] 7. Criar `api/brindes/import/route.ts` — POST bulk import com parser (AC5)
+- [x] 8. Verificar auth em todas as rotas (AC14, AC15, AC16)
+- [x] 9. `npm run typecheck && npm run lint` sem erros
 
 ## Estimativa: 4h
 
@@ -218,9 +218,32 @@ const { data, error } = await supabase
 
 - Story 29.1 concluída (tabelas existentes no banco)
 
+## Dev Agent Record
+
+### Agent Model Used
+claude-sonnet-4-6
+
+### Files Modified
+- `packages/web/src/lib/brindes/parse-endereco.ts` — CRIADO (parseEndereco utility)
+- `packages/web/src/app/api/brindes/destinatarios/route.ts` — CRIADO (GET + POST)
+- `packages/web/src/app/api/brindes/destinatarios/[id]/route.ts` — CRIADO (PATCH + DELETE)
+- `packages/web/src/app/api/brindes/datas/route.ts` — CRIADO (GET + POST)
+- `packages/web/src/app/api/brindes/datas/[id]/route.ts` — CRIADO (PATCH)
+- `packages/web/src/app/api/brindes/entregas/route.ts` — CRIADO (POST upsert)
+- `packages/web/src/app/api/brindes/import/route.ts` — CRIADO (POST bulk import)
+
+### Completion Notes
+- Todas as 9 rotas criadas com `requireAuth()` pattern correto
+- `org_id` sempre de `appUser.org_id` (snake_case) — nunca do body
+- GET destinatarios: 5 filtros + paginação com `count: "exact"` 
+- Import: batch insert (max 500), fallback de parser para `endereco_referencia`
+- `npm run type-check` → 0 errors ✅
+- `npm run lint` → 0 errors novos (7 warnings pré-existentes em outros arquivos) ✅
+
 ## Change Log
 
 | Data | Versão | Descrição | Agente |
 |------|--------|-----------|--------|
 | 2026-05-13 | 1.0 | Story criada — Epic 29 Controle de Brindes | @sm (River) |
 | 2026-05-13 | 1.1 | Should-Fixes: auth pattern corrigido para `requireAuth()`, filtro `estado` adicionado ao snippet GET, `org_id` snake_case | @po (Pax) |
+| 2026-05-13 | 1.2 | Implementação completa: 7 arquivos criados, typecheck/lint limpos | @dev (Dex) |
