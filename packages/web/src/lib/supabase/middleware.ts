@@ -127,11 +127,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Obras role: restricted to /dashboard/obras only — redirect any other dashboard route
+  // Obras role: restricted to /dashboard/obras and /dashboard/brindes only
   if (
     role === "obras" &&
     pathname.startsWith("/dashboard") &&
-    !pathname.startsWith("/dashboard/obras")
+    !pathname.startsWith("/dashboard/obras") &&
+    !pathname.startsWith("/dashboard/brindes")
   ) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard/obras"
