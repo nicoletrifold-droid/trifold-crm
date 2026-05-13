@@ -7,7 +7,7 @@ import type { DataComemorativa } from "./_components/types"
 export default async function BrindesPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor"].includes(user.role)) {
+  if (!["admin", "supervisor", "obras"].includes(user.role)) {
     redirect("/dashboard")
   }
 

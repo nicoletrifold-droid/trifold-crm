@@ -74,14 +74,14 @@ export default async function DashboardLayout({
           .is("read_at", null),
       ])
 
-  // obras role: only the Obras item, no other nav
-  // admin/supervisor: full nav + Obras + Mensagens
+  // obras role: Obras + Brindes only
+  // admin/supervisor: full nav + Obras + Brindes + Mensagens
   // Sistema: admin only
   const navItems = isObras
-    ? [NAV_ITEM_OBRAS]
+    ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES]
     : [
         ...NAV_ITEMS_BASE,
-        ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES] : []),
+        ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES] : [NAV_ITEM_BRINDES]),
         ...(isAdminOrSupervisor
           ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
           : []),

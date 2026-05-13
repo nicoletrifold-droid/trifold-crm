@@ -9,7 +9,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = requireRole(appUser, ["admin", "supervisor", "obras"])
   if (roleError) return roleError
 
   const { id } = await params
@@ -75,7 +75,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = requireRole(appUser, ["admin", "supervisor", "obras"])
   if (roleError) return roleError
 
   const { id } = await params
