@@ -39,14 +39,14 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
     <>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-56 lg:flex-col">
-        <div className="flex grow flex-col border-r border-stone-200 bg-white">
+        <div className="flex h-full flex-col border-r border-stone-200 bg-white">
           {/* Logo */}
-          <div className="flex h-20 items-center border-b border-stone-100 px-5">
-            <Image src="/logo-trifold.webp" alt="Trifold" width={130} height={130} />
+          <div className="flex h-20 shrink-0 items-center border-b border-stone-100 px-5">
+            <Image src="/logo-trifold.webp" alt="Trifold" width={143} height={143} className="brightness-0" />
           </div>
 
-          {/* Nav Items */}
-          <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
+          {/* Nav Items — scrollable */}
+          <nav className="flex-1 overflow-y-auto px-3 py-4">
             <ul className="flex flex-col gap-0.5">
               {items.map((item) => {
                 const active = isActive(item.href)
@@ -80,7 +80,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
           </nav>
 
           {/* User */}
-          <div className="border-t border-stone-100 p-3">
+          <div className="shrink-0 border-t border-stone-100 p-3">
             <div className="flex items-center gap-2.5 rounded-lg px-3 py-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 text-xs font-semibold text-orange-700">
                 {initials}
