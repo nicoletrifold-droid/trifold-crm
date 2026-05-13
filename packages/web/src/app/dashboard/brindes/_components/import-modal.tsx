@@ -71,51 +71,51 @@ export function ImportModal({ onClose }: ImportModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <h2 className="text-base font-semibold text-gray-900">Importar Destinatários</h2>
-          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Fechar">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 dark:bg-black/70">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-stone-800">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Importar Destinatários</h2>
+          <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300" aria-label="Fechar">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
           <div>
-            <p className="mb-1 text-sm font-medium text-gray-700">Cole os dados no formato CSV (separador <code className="bg-gray-100 px-1 rounded">;</code>):</p>
-            <p className="mb-2 text-xs text-gray-500">
-              <code className="bg-gray-100 px-1 rounded text-xs">obra_nome;tipo;nome;observacao;endereco_raw</code><br />
-              tipo: <code className="bg-gray-100 px-1 rounded text-xs">mae</code>, <code className="bg-gray-100 px-1 rounded text-xs">pai</code> ou <code className="bg-gray-100 px-1 rounded text-xs">outro</code>
+            <p className="mb-1 text-sm font-medium text-gray-700 dark:text-stone-300">Cole os dados no formato CSV (separador <code className="bg-gray-100 px-1 rounded dark:bg-stone-800 dark:text-stone-300">;</code>):</p>
+            <p className="mb-2 text-xs text-gray-500 dark:text-stone-400">
+              <code className="bg-gray-100 px-1 rounded text-xs dark:bg-stone-800 dark:text-stone-300">obra_nome;tipo;nome;observacao;endereco_raw</code><br />
+              tipo: <code className="bg-gray-100 px-1 rounded text-xs dark:bg-stone-800 dark:text-stone-300">mae</code>, <code className="bg-gray-100 px-1 rounded text-xs dark:bg-stone-800 dark:text-stone-300">pai</code> ou <code className="bg-gray-100 px-1 rounded text-xs dark:bg-stone-800 dark:text-stone-300">outro</code>
             </p>
             <textarea
               value={text}
               onChange={(e) => { setText(e.target.value); setResult(null); setError(null) }}
               rows={8}
               placeholder={"COMUNIDADE EVANGELICA;mae;Maria Silva;Retirar na portaria;Rua das Flores 123, Maringá - PR\nFORTEGREEN;pai;João Souza;;OBRA FORTEGREEN"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs font-mono text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs font-mono text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
 
           {preview.length > 0 && (
             <div>
-              <p className="mb-1 text-xs font-medium text-gray-500">Preview (primeiras {preview.length} linhas):</p>
-              <div className="overflow-x-auto rounded-md border border-gray-200">
+              <p className="mb-1 text-xs font-medium text-gray-500 dark:text-stone-400">Preview (primeiras {preview.length} linhas):</p>
+              <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-stone-800">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 dark:bg-stone-800/50">
                     <tr>
                       {["Obra", "Tipo", "Nome", "Observação", "Endereço"].map((h) => (
-                        <th key={h} className="px-2 py-1.5 text-left font-medium text-gray-500">{h}</th>
+                        <th key={h} className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-stone-400">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
                     {preview.map((r, i) => (
                       <tr key={i}>
-                        <td className="px-2 py-1 text-gray-900">{r.obra_nome || <span className="text-red-500">—</span>}</td>
-                        <td className="px-2 py-1 text-gray-600">{r.tipo}</td>
-                        <td className="px-2 py-1 text-gray-900">{r.nome || <span className="text-red-500">—</span>}</td>
-                        <td className="px-2 py-1 text-gray-500">{r.observacao}</td>
-                        <td className="px-2 py-1 text-gray-500 max-w-32 truncate">{r.endereco_raw}</td>
+                        <td className="px-2 py-1 text-gray-900 dark:text-stone-100">{r.obra_nome || <span className="text-red-500">—</span>}</td>
+                        <td className="px-2 py-1 text-gray-600 dark:text-stone-300">{r.tipo}</td>
+                        <td className="px-2 py-1 text-gray-900 dark:text-stone-100">{r.nome || <span className="text-red-500">—</span>}</td>
+                        <td className="px-2 py-1 text-gray-500 dark:text-stone-400">{r.observacao}</td>
+                        <td className="px-2 py-1 text-gray-500 max-w-32 truncate dark:text-stone-400">{r.endereco_raw}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -125,7 +125,7 @@ export function ImportModal({ onClose }: ImportModalProps) {
           )}
 
           {result && (
-            <div className={`rounded-md px-3 py-2 text-sm ${result.errors.length > 0 ? "bg-amber-50 text-amber-800" : "bg-green-50 text-green-800"}`}>
+            <div className={`rounded-md px-3 py-2 text-sm ${result.errors.length > 0 ? "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200" : "bg-green-50 text-green-800 dark:bg-green-500/15 dark:text-green-200"}`}>
               <p className="font-medium">{result.inserted} registro(s) importado(s)</p>
               {result.errors.length > 0 && (
                 <ul className="mt-1 text-xs space-y-0.5">
@@ -137,11 +137,11 @@ export function ImportModal({ onClose }: ImportModalProps) {
             </div>
           )}
 
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-5 py-3">
-          <button type="button" onClick={onClose} className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-5 py-3 dark:border-stone-800">
+          <button type="button" onClick={onClose} className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-stone-300 dark:hover:bg-stone-800">
             Fechar
           </button>
           <button type="button" onClick={handleImport} disabled={loading || !text.trim()}

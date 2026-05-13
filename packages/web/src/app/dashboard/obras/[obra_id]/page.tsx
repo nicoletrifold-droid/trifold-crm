@@ -13,9 +13,9 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  em_andamento: "bg-amber-100 text-amber-700",
-  concluida: "bg-green-100 text-green-700",
-  pausada: "bg-gray-100 text-gray-700",
+  em_andamento: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  concluida: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  pausada: "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200",
 }
 
 function formatDeliveryDate(date: string | null): string {
@@ -106,7 +106,7 @@ export default async function ObraDetailPage({
   })
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
-  const statusBadge = STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700"
+  const statusBadge = STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
   const statusLabel = STATUS_LABEL[obra.status] ?? obra.status
 
   return (
@@ -115,16 +115,16 @@ export default async function ObraDetailPage({
       <div>
         <Link
           href="/dashboard/obras"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar para Obras
         </Link>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{obra.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">{obra.name}</h1>
             {obra.description && (
-              <p className="mt-1 text-sm text-gray-500">{obra.description}</p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">{obra.description}</p>
             )}
           </div>
           <div className="flex flex-shrink-0 items-center gap-2">
@@ -139,19 +139,19 @@ export default async function ObraDetailPage({
       </div>
 
       {/* Informações */}
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
           Informações
         </h2>
 
         <div className="mb-4">
           <div className="mb-1.5 flex justify-between text-sm">
-            <span className="text-gray-500">Progresso geral</span>
-            <span className="font-medium text-gray-900">
+            <span className="text-gray-500 dark:text-stone-400">Progresso geral</span>
+            <span className="font-medium text-gray-900 dark:text-stone-100">
               {obra.progress_pct}%
             </span>
           </div>
-          <div className="h-2 w-full rounded-full bg-gray-200">
+          <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-stone-700">
             <div
               className="h-2 rounded-full bg-orange-500 transition-all"
               style={{ width: `${obra.progress_pct}%` }}
@@ -161,12 +161,12 @@ export default async function ObraDetailPage({
 
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-gray-500">Status</dt>
-            <dd className="font-medium text-gray-900">{statusLabel}</dd>
+            <dt className="text-gray-500 dark:text-stone-400">Status</dt>
+            <dd className="font-medium text-gray-900 dark:text-stone-100">{statusLabel}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Previsão de entrega</dt>
-            <dd className="font-medium text-gray-900">
+            <dt className="text-gray-500 dark:text-stone-400">Previsão de entrega</dt>
+            <dd className="font-medium text-gray-900 dark:text-stone-100">
               {formatDeliveryDate(obra.expected_delivery_date)}
             </dd>
           </div>
@@ -175,13 +175,13 @@ export default async function ObraDetailPage({
 
       {/* Empreendimento vinculado */}
       {property && (
-        <section className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+        <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
             Empreendimento
           </h2>
           <Link
             href={`/dashboard/properties/${property.id}`}
-            className="font-medium text-orange-600 hover:underline"
+            className="font-medium text-orange-600 hover:underline dark:text-orange-300 dark:hover:text-orange-200"
           >
             {property.name}
           </Link>

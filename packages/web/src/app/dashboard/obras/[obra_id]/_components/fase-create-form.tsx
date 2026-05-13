@@ -63,11 +63,11 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-700">Adicionar Fase</h3>
+    <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+      <h3 className="mb-3 text-sm font-semibold text-gray-700 dark:text-stone-200">Adicionar Fase</h3>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600">
+          <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600 dark:text-stone-400">
             Nome da fase <span className="text-red-400">*</span>
           </label>
           <input
@@ -76,11 +76,11 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
         </div>
         <div>
-          <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600">
+          <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600 dark:text-stone-400">
             Etapa <span className="text-red-400">*</span>
           </label>
           <input
@@ -89,17 +89,17 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">Status</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             >
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -109,7 +109,7 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
               Progresso (%)
             </label>
             <input
@@ -121,42 +121,42 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
                 const v = parseInt(e.target.value, 10)
                 setProgressPct(Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0)
               }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
               Data de início
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
               Data de término
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
         </div>
       </div>
 
-      <p className="mt-1 text-[11px] text-gray-400">
+      <p className="mt-1 text-[11px] text-gray-400 dark:text-stone-500">
         <span className="text-red-400">*</span> Campos obrigatórios
       </p>
 
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-xs text-red-600 dark:text-red-300">{error}</p>}
 
       <button
         type="submit"

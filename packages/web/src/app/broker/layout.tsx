@@ -36,7 +36,7 @@ export default async function BrokerLayout({
     .eq("lead.assigned_broker_id", user.id)
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <SidebarNav
         items={NAV_ITEMS}
         userName={user.name}

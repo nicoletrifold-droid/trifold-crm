@@ -118,8 +118,8 @@ export default function FeedbackPage({
         <Link href="/broker/agenda" className="text-sm text-orange-600 hover:underline">
           &larr; Voltar para agenda
         </Link>
-        <div className="rounded-lg bg-red-50 p-6 text-center">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="rounded-lg bg-red-50 p-6 text-center dark:bg-red-500/15">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       </div>
     )
@@ -129,31 +129,31 @@ export default function FeedbackPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href="/broker/agenda" className="text-sm text-orange-600 hover:underline">
+      <Link href="/broker/agenda" className="text-sm text-orange-600 hover:underline dark:text-orange-300 dark:hover:text-orange-200">
         &larr; Voltar para agenda
       </Link>
 
-      <h1 className="text-2xl font-bold text-gray-900">Feedback da visita</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Feedback da visita</h1>
 
       {/* Appointment info */}
       {appointment && aptDate && (
-        <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+        <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-800/50">
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] font-medium uppercase text-stone-400">Lead</p>
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-[10px] font-medium uppercase text-stone-400 dark:text-stone-500">Lead</p>
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 {appointment.lead?.name ?? "-"}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-medium uppercase text-stone-400">Empreendimento</p>
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-[10px] font-medium uppercase text-stone-400 dark:text-stone-500">Empreendimento</p>
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 {appointment.property?.name ?? "-"}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-medium uppercase text-stone-400">Data / Hora</p>
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-[10px] font-medium uppercase text-stone-400 dark:text-stone-500">Data / Hora</p>
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 {aptDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}{" "}
                 {aptDate.toLocaleTimeString("pt-BR", {
                   hour: "2-digit",
@@ -167,10 +167,10 @@ export default function FeedbackPage({
       )}
 
       {/* Feedback form */}
-      <form onSubmit={handleSubmit} className="space-y-5 rounded-xl bg-white p-6 shadow-sm">
+      <form onSubmit={handleSubmit} className="space-y-5 rounded-xl bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         {/* Visit feedback */}
         <div>
-          <label htmlFor="feedback" className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label htmlFor="feedback" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-stone-300">
             Como foi a visita? *
           </label>
           <textarea
@@ -180,7 +180,7 @@ export default function FeedbackPage({
             required
             rows={4}
             placeholder="Descreva como foi a visita, pontos relevantes, impressoes do lead..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
         </div>
 
@@ -194,7 +194,7 @@ export default function FeedbackPage({
             value={interestAfter}
             onChange={(e) => setInterestAfter(e.target.value)}
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           >
             <option value="">Selecione...</option>
             <option value="cold">Frio</option>
@@ -214,7 +214,7 @@ export default function FeedbackPage({
             onChange={(e) => setNextSteps(e.target.value)}
             rows={3}
             placeholder="Quais os proximos passos com este lead?"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
         </div>
 
@@ -225,9 +225,9 @@ export default function FeedbackPage({
             type="checkbox"
             checked={wantsProposal}
             onChange={(e) => setWantsProposal(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
           />
-          <label htmlFor="wantsProposal" className="text-sm font-medium text-gray-700">
+          <label htmlFor="wantsProposal" className="text-sm font-medium text-gray-700 dark:text-stone-300">
             O lead quer receber proposta?
           </label>
         </div>
@@ -243,12 +243,12 @@ export default function FeedbackPage({
             onChange={(e) => setAdditionalNotes(e.target.value)}
             rows={3}
             placeholder="Informacoes extras relevantes..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">
             {error}
           </div>
         )}
@@ -263,7 +263,7 @@ export default function FeedbackPage({
           </button>
           <Link
             href="/broker/agenda"
-            className="rounded-md border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar
           </Link>

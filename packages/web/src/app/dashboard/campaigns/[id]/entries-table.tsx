@@ -17,11 +17,11 @@ interface Entry {
 }
 
 const WA_BADGE: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-500",
-  sent: "bg-blue-100 text-blue-700",
-  delivered: "bg-green-100 text-green-700",
-  read: "bg-green-200 text-green-800",
-  failed: "bg-red-100 text-red-700",
+  pending: "bg-gray-100 text-gray-500 dark:bg-stone-700/50 dark:text-stone-400",
+  sent: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+  delivered: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  read: "bg-green-200 text-green-800 dark:bg-green-500/25 dark:text-green-200",
+  failed: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
 }
 
 const WA_LABEL: Record<string, string> = {
@@ -33,13 +33,13 @@ const WA_LABEL: Record<string, string> = {
 }
 
 const EMAIL_BADGE: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-500",
-  sent: "bg-gray-200 text-gray-600",
-  delivered: "bg-orange-100 text-orange-700",
-  opened: "bg-green-100 text-green-700",
-  clicked: "bg-blue-100 text-blue-700",
-  bounced: "bg-red-100 text-red-700",
-  failed: "bg-red-200 text-red-800",
+  pending: "bg-gray-100 text-gray-500 dark:bg-stone-700/50 dark:text-stone-400",
+  sent: "bg-gray-200 text-gray-600 dark:bg-stone-700 dark:text-stone-300",
+  delivered: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
+  opened: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  clicked: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+  bounced: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+  failed: "bg-red-200 text-red-800 dark:bg-red-500/25 dark:text-red-200",
 }
 
 const EMAIL_LABEL: Record<string, string> = {
@@ -128,8 +128,8 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
     })
 
   return (
-    <div className="rounded-lg bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+    <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-stone-800">
         <div className="flex gap-2">
           {(
             [
@@ -145,8 +145,8 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
               onClick={() => handleFilterChange(key)}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
                 filter === key
-                  ? "bg-orange-100 text-orange-700"
-                  : "text-gray-500 hover:bg-gray-100"
+                  ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                  : "text-gray-500 hover:bg-gray-100 dark:text-stone-400 dark:hover:bg-stone-800"
               }`}
             >
               {label} ({key === "all" ? entries.length : entries.filter((e) => {
@@ -160,34 +160,34 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
         </div>
         <button
           onClick={downloadCSV}
-          className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
         >
           Exportar CSV
         </button>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
+          <thead className="bg-gray-50 dark:bg-stone-800/50">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Nome</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">WhatsApp</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">E-mail</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Dados</th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">WA</th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">Email</th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">Valido</th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">Resp.</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Data</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">Nome</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">WhatsApp</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">E-mail</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">Dados</th>
+              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-stone-400">WA</th>
+              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-stone-400">Email</th>
+              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-stone-400">Valido</th>
+              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-stone-400">Resp.</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">Data</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {paginated.map((e) => (
-              <tr key={e.id} className="hover:bg-gray-50">
-                <td className="px-3 py-2 text-sm font-medium text-gray-900">{e.name}</td>
-                <td className="px-3 py-2 text-sm text-gray-500 font-mono">{e.phone}</td>
-                <td className="px-3 py-2 text-sm text-gray-500">{e.email}</td>
-                <td className="px-3 py-2 text-xs text-gray-400 max-w-[200px]">
+              <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-stone-100">{e.name}</td>
+                <td className="px-3 py-2 text-sm text-gray-500 font-mono dark:text-stone-400">{e.phone}</td>
+                <td className="px-3 py-2 text-sm text-gray-500 dark:text-stone-400">{e.email}</td>
+                <td className="px-3 py-2 text-xs text-gray-400 max-w-[200px] dark:text-stone-500">
                   <div
                     className="truncate"
                     title={Object.entries(e.custom_data ?? {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "—"}
@@ -209,26 +209,26 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
                 </td>
                 <td className="px-3 py-2 text-center">
                   {e.is_valid_phone && e.is_valid_email ? (
-                    <span className="text-green-600">&#10003;</span>
+                    <span className="text-green-600 dark:text-green-300">&#10003;</span>
                   ) : e.is_valid_phone === false || e.is_valid_email === false ? (
-                    <span className="text-red-500">&#10007;</span>
+                    <span className="text-red-500 dark:text-red-300">&#10007;</span>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-gray-300 dark:text-stone-600">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2 text-center">
                   {e.has_responded ? (
-                    <span className="text-green-600">&#10003;</span>
+                    <span className="text-green-600 dark:text-green-300">&#10003;</span>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-gray-300 dark:text-stone-600">—</span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-xs text-gray-400">{formatDate(e.created_at)}</td>
+                <td className="px-3 py-2 text-xs text-gray-400 dark:text-stone-500">{formatDate(e.created_at)}</td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-400">
+                <td colSpan={9} className="px-3 py-8 text-center text-sm text-gray-400 dark:text-stone-500">
                   Nenhum participante encontrado
                 </td>
               </tr>
@@ -238,8 +238,8 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
-          <p className="text-xs text-gray-500">
+        <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-stone-800">
+          <p className="text-xs text-gray-500 dark:text-stone-400">
             Página {page} de {totalPages} — {filtered.length} participantes
           </p>
           <div className="flex gap-2">

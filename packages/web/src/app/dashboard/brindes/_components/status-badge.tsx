@@ -54,7 +54,7 @@ export function StatusBadge({
   }
 
   if (disabled) {
-    return <span className="text-xs text-gray-400">—</span>
+    return <span className="text-xs text-gray-400 dark:text-stone-500">—</span>
   }
 
   return (
@@ -63,19 +63,19 @@ export function StatusBadge({
         type="button"
         onClick={() => !loading && setOpen((o) => !o)}
         disabled={loading}
-        className={`rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer ${STATUS_BADGE_CLASS[status]} ${loading ? "opacity-50" : "hover:ring-1 hover:ring-offset-1 hover:ring-gray-400"}`}
+        className={`rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer ${STATUS_BADGE_CLASS[status]} ${loading ? "opacity-50" : "hover:ring-1 hover:ring-offset-1 hover:ring-gray-400 dark:hover:ring-stone-500 dark:hover:ring-offset-stone-900"}`}
       >
         {loading ? "..." : STATUS_LABEL[status]}
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+        <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white shadow-lg dark:border-stone-800 dark:bg-stone-900">
           {ALL_STATUSES.map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => selectStatus(s)}
-              className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 ${s === status ? "font-semibold" : ""}`}
+              className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 dark:hover:bg-stone-800 ${s === status ? "font-semibold" : ""}`}
             >
               <span className={`rounded-full px-2 py-0.5 ${STATUS_BADGE_CLASS[s]}`}>
                 {STATUS_LABEL[s]}

@@ -71,10 +71,10 @@ export function ConversationPanel({
   if (!obraId || !clienteId) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <MessageSquare className="h-12 w-12 text-gray-200" />
+        <MessageSquare className="h-12 w-12 text-gray-200 dark:text-stone-700" />
         <div>
-          <p className="text-sm font-medium text-gray-500">Selecione uma conversa</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-sm font-medium text-gray-500 dark:text-stone-400">Selecione uma conversa</p>
+          <p className="text-xs text-gray-400 dark:text-stone-500">
             Escolha um cliente na lista para ver as mensagens
           </p>
         </div>
@@ -85,25 +85,25 @@ export function ConversationPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-stone-800">
         {onBack && (
           <button
             onClick={onBack}
-            className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
+            className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             title="Voltar"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-gray-900">
+          <p className="truncate text-sm font-semibold text-gray-900 dark:text-stone-100">
             {clienteName ?? "Cliente"}
           </p>
-          <p className="truncate text-xs text-gray-400">{obraName}</p>
+          <p className="truncate text-xs text-gray-400 dark:text-stone-500">{obraName}</p>
         </div>
         <Link
           href={`/dashboard/obras/${obraId}`}
-          className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
           title="Ver detalhes da obra"
         >
           <ExternalLink className="h-4 w-4" />

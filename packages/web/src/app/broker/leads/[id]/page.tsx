@@ -54,7 +54,7 @@ export default async function BrokerLeadDetailPage({
     <div className="space-y-6">
       <Link
         href="/broker"
-        className="text-sm text-gray-500 hover:text-gray-700"
+        className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
       >
         &larr; Meus Leads
       </Link>
@@ -62,10 +62,10 @@ export default async function BrokerLeadDetailPage({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
             {lead.name || lead.phone}
           </h1>
-          <div className="mt-1 flex items-center gap-3 text-sm text-gray-500">
+          <div className="mt-1 flex items-center gap-3 text-sm text-gray-500 dark:text-stone-400">
             <span>{lead.phone}</span>
             {lead.email && <span>{lead.email}</span>}
           </div>
@@ -86,10 +86,10 @@ export default async function BrokerLeadDetailPage({
             <span
               className={`rounded-full px-3 py-1 text-sm font-medium ${
                 lead.qualification_score >= 70
-                  ? "bg-green-100 text-green-700"
+                  ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                   : lead.qualification_score >= 40
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-gray-100 text-gray-500"
+                  ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
+                  : "bg-gray-100 text-gray-500 dark:bg-stone-700/50 dark:text-stone-400"
               }`}
             >
               Score: {lead.qualification_score}
@@ -100,41 +100,41 @@ export default async function BrokerLeadDetailPage({
 
       {/* Info Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-lg bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold">Dados do Lead</h2>
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">Dados do Lead</h2>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <dt className="text-gray-500">Empreendimento</dt>
+              <dt className="text-gray-500 dark:text-stone-400">Empreendimento</dt>
               <dd className="font-medium">{property?.name ?? "Não definido"}</dd>
             </div>
             {lead.preferred_bedrooms && (
               <div className="flex justify-between">
-                <dt className="text-gray-500">Quartos</dt>
-                <dd className="font-medium">{lead.preferred_bedrooms}</dd>
+                <dt className="text-gray-500 dark:text-stone-400">Quartos</dt>
+                <dd className="font-medium dark:text-stone-100">{lead.preferred_bedrooms}</dd>
               </div>
             )}
             {lead.preferred_floor && (
               <div className="flex justify-between">
-                <dt className="text-gray-500">Andar</dt>
-                <dd className="font-medium">{lead.preferred_floor}</dd>
+                <dt className="text-gray-500 dark:text-stone-400">Andar</dt>
+                <dd className="font-medium dark:text-stone-100">{lead.preferred_floor}</dd>
               </div>
             )}
             {lead.preferred_view && (
               <div className="flex justify-between">
-                <dt className="text-gray-500">Vista</dt>
-                <dd className="font-medium">{lead.preferred_view}</dd>
+                <dt className="text-gray-500 dark:text-stone-400">Vista</dt>
+                <dd className="font-medium dark:text-stone-100">{lead.preferred_view}</dd>
               </div>
             )}
             {lead.preferred_garage_count != null && (
               <div className="flex justify-between">
-                <dt className="text-gray-500">Vagas</dt>
-                <dd className="font-medium">{lead.preferred_garage_count}</dd>
+                <dt className="text-gray-500 dark:text-stone-400">Vagas</dt>
+                <dd className="font-medium dark:text-stone-100">{lead.preferred_garage_count}</dd>
               </div>
             )}
             {lead.has_down_payment != null && (
               <div className="flex justify-between">
-                <dt className="text-gray-500">Tem entrada</dt>
-                <dd className="font-medium">
+                <dt className="text-gray-500 dark:text-stone-400">Tem entrada</dt>
+                <dd className="font-medium dark:text-stone-100">
                   {lead.has_down_payment ? "Sim" : "Não"}
                 </dd>
               </div>
@@ -143,14 +143,14 @@ export default async function BrokerLeadDetailPage({
         </div>
 
         {/* AI Summary */}
-        <div className="rounded-lg bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold">Resumo IA</h2>
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">Resumo IA</h2>
           {lead.ai_summary ? (
-            <p className="text-sm text-gray-600 whitespace-pre-line">
+            <p className="text-sm text-gray-600 whitespace-pre-line dark:text-stone-300">
               {lead.ai_summary}
             </p>
           ) : (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 dark:text-stone-500">
               O resumo será gerado automaticamente após a conversa com a Nicole.
             </p>
           )}
@@ -158,8 +158,8 @@ export default async function BrokerLeadDetailPage({
       </div>
 
       {/* Conversation */}
-      <div className="rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">Conversa com o Agente</h2>
+      <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
         {messages && messages.length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {messages.map((msg) => (
@@ -172,10 +172,10 @@ export default async function BrokerLeadDetailPage({
                 <div
                   className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${
                     msg.role === "user"
-                      ? "bg-gray-100 text-gray-800"
+                      ? "bg-gray-100 text-gray-800 dark:bg-stone-800 dark:text-stone-200"
                       : msg.role === "assistant"
-                      ? "bg-purple-100 text-purple-900"
-                      : "bg-blue-100 text-blue-900"
+                      ? "bg-purple-100 text-purple-900 dark:bg-purple-500/15 dark:text-purple-200"
+                      : "bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-200"
                   }`}
                 >
                   <p className="whitespace-pre-line">{msg.content}</p>
@@ -190,7 +190,7 @@ export default async function BrokerLeadDetailPage({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-400">Nenhuma mensagem ainda.</p>
+          <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem ainda.</p>
         )}
       </div>
     </div>

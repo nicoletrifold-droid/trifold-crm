@@ -28,7 +28,7 @@ export function RoleDropdown({
     <select
       defaultValue={currentRole}
       onChange={handleChange}
-      className="rounded-md border border-stone-200 px-2 py-1 text-xs focus:border-orange-500 focus:outline-none"
+      className="rounded-md border border-stone-200 px-2 py-1 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
     >
       <option value="admin">Admin</option>
       <option value="supervisor">Supervisor</option>
@@ -62,8 +62,8 @@ export function ToggleActiveButton({
       onClick={handleToggle}
       className={`rounded-md px-2.5 py-1 text-xs font-medium ${
         isActive
-          ? "bg-red-50 text-red-600 hover:bg-red-100"
-          : "bg-green-50 text-green-600 hover:bg-green-100"
+          ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/15 dark:text-red-300 dark:hover:bg-red-500/20"
+          : "bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-500/15 dark:text-green-300 dark:hover:bg-green-500/20"
       }`}
     >
       {isActive ? "Desativar" : "Ativar"}

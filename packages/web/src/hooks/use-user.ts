@@ -24,7 +24,7 @@ export function useUser() {
 
       const { data: appUser } = await supabase
         .from("users")
-        .select("id, auth_id, org_id, name, email, role, avatar_url")
+        .select("id, auth_id, org_id, name, email, role, avatar_url, theme")
         .eq("auth_id", authUser.id)
         .single()
 
@@ -37,6 +37,7 @@ export function useUser() {
           email: appUser.email,
           role: appUser.role,
           avatarUrl: appUser.avatar_url,
+          theme: (appUser.theme as "light" | "dark" | "system") ?? "system",
         })
       }
 

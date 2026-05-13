@@ -6,17 +6,17 @@ export default function Loading() {
       aria-label="Carregando conversas..."
       className="space-y-4"
     >
-      <div className="h-8 w-40 animate-pulse rounded bg-gray-200" />
+      <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-stone-800" />
       <div className="space-y-2">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 rounded-lg bg-white p-4 shadow-sm"
+            className="flex items-center gap-3 rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
           >
-            <div className="h-10 w-10 flex-shrink-0 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-10 w-10 flex-shrink-0 animate-pulse rounded-full bg-gray-200 dark:bg-stone-800" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 animate-pulse rounded bg-gray-200" />
-              <div className="h-3 w-full max-w-xs animate-pulse rounded bg-gray-100" />
+              <div className="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-stone-800" />
+              <div className="h-3 w-full max-w-xs animate-pulse rounded bg-gray-100 dark:bg-stone-800/50" />
             </div>
           </div>
         ))}

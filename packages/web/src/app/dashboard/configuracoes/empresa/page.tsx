@@ -21,49 +21,49 @@ export default async function EmpresaPage() {
       <div>
         <Link
           href="/dashboard/configuracoes"
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Configurações
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">Empresa</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">Empresa</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           Dados da organização
         </p>
       </div>
 
       {!org ? (
-        <div className="rounded-lg bg-white p-8 text-center shadow-sm">
-          <p className="text-gray-500">
+        <div className="rounded-lg bg-white p-8 text-center shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-gray-500 dark:text-stone-400">
             Organização não encontrada.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {/* Org Info (read-only view) */}
-          <div className="rounded-lg bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Informações</h2>
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-stone-100">Informações</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium text-gray-400">Nome</p>
-                <p className="mt-0.5 text-sm text-gray-900">{org.name}</p>
+                <p className="text-xs font-medium text-gray-400 dark:text-stone-500">Nome</p>
+                <p className="mt-0.5 text-sm text-gray-900 dark:text-stone-100">{org.name}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400">Slug</p>
-                <p className="mt-0.5 rounded bg-gray-50 px-2 py-1 font-mono text-sm text-gray-700">
+                <p className="text-xs font-medium text-gray-400 dark:text-stone-500">Slug</p>
+                <p className="mt-0.5 rounded bg-gray-50 px-2 py-1 font-mono text-sm text-gray-700 dark:bg-stone-800 dark:text-stone-300">
                   {org.slug}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400">Cidade</p>
-                <p className="mt-0.5 text-sm text-gray-900">{settings.city || "-"}</p>
+                <p className="text-xs font-medium text-gray-400 dark:text-stone-500">Cidade</p>
+                <p className="mt-0.5 text-sm text-gray-900 dark:text-stone-100">{settings.city || "-"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400">Estado</p>
-                <p className="mt-0.5 text-sm text-gray-900">{settings.state || "-"}</p>
+                <p className="text-xs font-medium text-gray-400 dark:text-stone-500">Estado</p>
+                <p className="mt-0.5 text-sm text-gray-900 dark:text-stone-100">{settings.state || "-"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400">Criado em</p>
-                <p className="mt-0.5 text-sm text-gray-900">
+                <p className="text-xs font-medium text-gray-400 dark:text-stone-500">Criado em</p>
+                <p className="mt-0.5 text-sm text-gray-900 dark:text-stone-100">
                   {new Date(org.created_at).toLocaleDateString("pt-BR")}
                 </p>
               </div>
@@ -72,8 +72,8 @@ export default async function EmpresaPage() {
 
           {/* Edit Form (admin only) */}
           {isAdmin && (
-            <div className="rounded-lg bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-gray-900">Editar</h2>
+            <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+              <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-stone-100">Editar</h2>
               <EditOrgForm
                 orgId={org.id}
                 currentName={org.name}
@@ -131,7 +131,7 @@ function EditOrgForm({
       className="space-y-4"
     >
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-stone-300">
           Nome da empresa
         </label>
         <input
@@ -139,12 +139,12 @@ function EditOrgForm({
           id="name"
           name="name"
           defaultValue={currentName}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
         />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-stone-300">
             Cidade
           </label>
           <input
@@ -152,11 +152,11 @@ function EditOrgForm({
             id="city"
             name="city"
             defaultValue={currentCity}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
         </div>
         <div>
-          <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="state" className="block text-sm font-medium text-gray-700 dark:text-stone-300">
             Estado
           </label>
           <input
@@ -164,7 +164,7 @@ function EditOrgForm({
             id="state"
             name="state"
             defaultValue={currentState}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
         </div>
       </div>

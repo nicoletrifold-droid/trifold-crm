@@ -100,18 +100,18 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
     }
   }
 
-  const inp = "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-  const lbl = "mb-1 block text-sm font-medium text-gray-700"
+  const inp = "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+  const lbl = "mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300"
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-10">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-          <h2 className="text-base font-semibold text-gray-900">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-10 dark:bg-black/70">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-stone-800">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
             {mode === "create" ? "Novo Destinatário" : "Editar Destinatário"}
           </h2>
           <button type="button" onClick={onClose} disabled={loading}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="Fechar">
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300" aria-label="Fechar">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -151,7 +151,7 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Endereço</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">Endereço</p>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <label className={lbl}>Logradouro</label>
@@ -199,12 +199,12 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
           </div>
 
           {error && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">{error}</p>
           )}
 
-          <div className="flex items-center justify-end gap-2 border-t border-gray-200 pt-3">
+          <div className="flex items-center justify-end gap-2 border-t border-gray-200 pt-3 dark:border-stone-800">
             <button type="button" onClick={onClose} disabled={loading}
-              className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50">
+              className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800">
               Cancelar
             </button>
             <button type="submit" disabled={loading}

@@ -119,14 +119,14 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
 
   if (properties.length === 0) {
     return (
-      <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center">
+      <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center dark:border-green-500/30 dark:bg-green-500/10">
         <CheckCircle className="mx-auto mb-3 h-8 w-8 text-green-500" />
-        <p className="font-medium text-green-800">
+        <p className="font-medium text-green-800 dark:text-green-200">
           Todos os empreendimentos já estão vinculados a uma obra.
         </p>
         <Link
           href="/dashboard/obras"
-          className="mt-4 inline-block text-sm text-orange-600 hover:underline"
+          className="mt-4 inline-block text-sm text-orange-600 hover:underline dark:text-orange-300"
         >
           &larr; Voltar para Obras
         </Link>
@@ -136,17 +136,17 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+        <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-stone-800">
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-5 py-3">Empreendimento</th>
               <th className="px-5 py-3">Cidade</th>
               <th className="px-5 py-3">Obra</th>
               <th className="px-5 py-3 w-32">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {properties.map((property) => {
               const result = results[property.id]
               return (
@@ -154,21 +154,21 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
                   key={property.id}
                   className={
                     result?.status === "success"
-                      ? "bg-green-50"
+                      ? "bg-green-50 dark:bg-green-500/10"
                       : result?.status === "error"
-                        ? "bg-red-50"
-                        : "hover:bg-gray-50"
+                        ? "bg-red-50 dark:bg-red-500/10"
+                        : "hover:bg-gray-50 dark:hover:bg-stone-800/30"
                   }
                 >
-                  <td className="px-5 py-3 font-medium text-gray-900">
+                  <td className="px-5 py-3 font-medium text-gray-900 dark:text-stone-100">
                     {property.name}
                   </td>
-                  <td className="px-5 py-3 text-gray-500">
+                  <td className="px-5 py-3 text-gray-500 dark:text-stone-400">
                     {property.city}/{property.state}
                   </td>
                   <td className="px-5 py-3">
                     {result?.status === "success" ? (
-                      <span className="text-green-700">
+                      <span className="text-green-700 dark:text-green-300">
                         {obras.find(
                           (o) => o.id === selections[property.id]
                         )?.name ?? "—"}
@@ -180,7 +180,7 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
                           handleSelect(property.id, e.target.value)
                         }
                         disabled={loading || submitted}
-                        className="w-full max-w-xs rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none disabled:opacity-60"
+                        className="w-full max-w-xs rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                       >
                         <option value="">— Sem vínculo —</option>
                         {obras.map((obra) => (
@@ -193,14 +193,14 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
                   </td>
                   <td className="px-5 py-3 w-32">
                     {result?.status === "success" && (
-                      <span className="flex items-center gap-1 text-xs text-green-700">
+                      <span className="flex items-center gap-1 text-xs text-green-700 dark:text-green-300">
                         <CheckCircle className="h-3.5 w-3.5" />
                         Vinculado
                       </span>
                     )}
                     {result?.status === "error" && (
                       <span
-                        className="flex items-center gap-1 text-xs text-red-600"
+                        className="flex items-center gap-1 text-xs text-red-600 dark:text-red-300"
                         title={result.message}
                       >
                         <XCircle className="h-3.5 w-3.5" />
@@ -216,14 +216,14 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-stone-400">
           {selectedCount} vínculo{selectedCount !== 1 ? "s" : ""} selecionado
           {selectedCount !== 1 ? "s" : ""}
         </p>
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard/obras"
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar
           </Link>
@@ -243,12 +243,12 @@ export function BackfillForm({ properties, obras }: BackfillFormProps) {
       </div>
 
       {submitted && Object.keys(results).length > 0 && (
-        <div className="rounded-md bg-gray-50 p-4 text-sm text-gray-600">
+        <div className="rounded-md bg-gray-50 p-4 text-sm text-gray-600 dark:bg-stone-800/50 dark:text-stone-300">
           {Object.values(results).filter((r) => r.status === "success").length}{" "}
           vínculos criados com sucesso.
           {Object.values(results).filter((r) => r.status === "error").length >
             0 && (
-            <span className="ml-1 text-red-600">
+            <span className="ml-1 text-red-600 dark:text-red-300">
               {
                 Object.values(results).filter((r) => r.status === "error")
                   .length

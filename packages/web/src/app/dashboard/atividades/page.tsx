@@ -3,10 +3,10 @@ import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 
 const typeBadgeStyles: Record<string, string> = {
-  stage_change: "bg-blue-100 text-blue-700",
-  handoff: "bg-purple-100 text-purple-700",
-  lead_created: "bg-green-100 text-green-700",
-  note_added: "bg-gray-100 text-gray-700",
+  stage_change: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+  handoff: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
+  lead_created: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  note_added: "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200",
 }
 
 const typeLabels: Record<string, string> = {
@@ -37,13 +37,13 @@ export default async function AtividadesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Atividades</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Atividades</h1>
       </div>
 
-      <div className="rounded-lg bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-6 py-3">Data/Hora</th>
               <th className="px-6 py-3">Tipo</th>
               <th className="px-6 py-3">Descrição</th>
@@ -51,7 +51,7 @@ export default async function AtividadesPage() {
               <th className="px-6 py-3">Usuário</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {activities?.map((activity) => {
               const leadArr = activity.leads as unknown as Array<{
                 name: string | null
@@ -65,13 +65,13 @@ export default async function AtividadesPage() {
               const activityUser = userArr?.[0] ?? null
 
               const badgeStyle =
-                typeBadgeStyles[activity.type] ?? "bg-gray-100 text-gray-700"
+                typeBadgeStyles[activity.type] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
               const typeLabel =
                 typeLabels[activity.type] ?? activity.type
 
               return (
-                <tr key={activity.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {activity.created_at
                       ? new Date(activity.created_at).toLocaleDateString(
                           "pt-BR",
@@ -91,22 +91,22 @@ export default async function AtividadesPage() {
                       {typeLabel}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">
+                  <td className="px-6 py-4 text-sm text-gray-700 dark:text-stone-300">
                     {activity.description ?? "-"}
                   </td>
                   <td className="px-6 py-4 text-sm">
                     {activity.lead_id && lead?.name ? (
                       <Link
                         href={`/dashboard/leads/${activity.lead_id}`}
-                        className="text-orange-600 hover:text-orange-700"
+                        className="text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                       >
                         {lead.name}
                       </Link>
                     ) : (
-                      <span className="text-gray-400">-</span>
+                      <span className="text-gray-400 dark:text-stone-500">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {activityUser?.name ?? "-"}
                   </td>
                 </tr>
@@ -116,7 +116,7 @@ export default async function AtividadesPage() {
               <tr>
                 <td
                   colSpan={5}
-                  className="px-6 py-8 text-center text-sm text-gray-500"
+                  className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                 >
                   Nenhuma atividade encontrada.
                 </td>

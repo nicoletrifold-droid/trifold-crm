@@ -99,64 +99,64 @@ export default function NovaCampanhaPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Nova Campanha</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Nova Campanha</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           Configure uma nova acao de marketing
         </p>
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Info */}
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase">Informacoes basicas</h2>
+        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Informacoes basicas</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Nome da acao *</label>
-            <input name="name" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Ex: Concurso Vind — Supermuffato" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Nome da acao *</label>
+            <input name="name" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="Ex: Concurso Vind — Supermuffato" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Descricao / Contexto *</label>
-            <textarea name="description" required rows={3} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Descreva o objetivo e contexto da acao..." />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Descricao / Contexto *</label>
+            <textarea name="description" required rows={3} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="Descreva o objetivo e contexto da acao..." />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Data inicio *</label>
-              <input name="starts_at" type="date" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Data inicio *</label>
+              <input name="starts_at" type="date" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Data encerramento *</label>
-              <input name="ends_at" type="date" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Data encerramento *</label>
+              <input name="ends_at" type="date" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
             </div>
           </div>
         </div>
 
         {/* Google Forms */}
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase">Google Forms</h2>
+        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Google Forms</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">URL do Google Forms</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">URL do Google Forms</label>
             <div className="mt-1 flex gap-2">
               <input
                 type="url"
                 value={formUrl}
                 onChange={(e) => setFormUrl(e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                 placeholder="https://docs.google.com/forms/d/..."
               />
               <button
                 type="button"
                 onClick={handleDiscoverFields}
                 disabled={discovering || !formUrl}
-                className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 dark:bg-stone-700 dark:hover:bg-stone-600"
               >
                 {discovering ? "Detectando..." : "Detectar campos"}
               </button>
@@ -165,24 +165,24 @@ export default function NovaCampanhaPage() {
 
           {fields.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-medium text-gray-700">Mapeamento de campos</h3>
-              <div className="rounded-md border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+              <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-stone-300">Mapeamento de campos</h3>
+              <div className="rounded-md border border-gray-200 dark:border-stone-800">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
+                  <thead className="bg-gray-50 dark:bg-stone-800/50">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Pergunta do Forms</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Mapear para</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">Pergunta do Forms</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-stone-400">Mapear para</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
                     {fields.map((f) => (
                       <tr key={f.questionId}>
-                        <td className="px-3 py-2 text-sm text-gray-900">{f.title}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900 dark:text-stone-100">{f.title}</td>
                         <td className="px-3 py-2">
                           <select
                             value={fieldMapping[f.questionId]?.target ?? f.suggestedTarget}
                             onChange={(e) => updateFieldTarget(f.questionId, e.target.value)}
-                            className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                            className="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                           >
                             <option value="name">Nome (obrigatorio)</option>
                             <option value="phone">WhatsApp (obrigatorio)</option>
@@ -201,27 +201,27 @@ export default function NovaCampanhaPage() {
         </div>
 
         {/* Confirmations */}
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase">Confirmacoes automaticas</h2>
+        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Confirmacoes automaticas</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Template WhatsApp (nome do template Meta)</label>
-            <input name="whatsapp_template_name" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Ex: concurso_vind_confirmacao" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Template WhatsApp (nome do template Meta)</label>
+            <input name="whatsapp_template_name" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="Ex: concurso_vind_confirmacao" />
           </div>
 
           <div className="flex items-center gap-2">
-            <input name="email_enabled" type="checkbox" defaultChecked className="rounded border-gray-300" />
-            <label className="text-sm font-medium text-gray-700">Enviar e-mail de confirmacao</label>
+            <input name="email_enabled" type="checkbox" defaultChecked className="rounded border-gray-300 dark:border-stone-600" />
+            <label className="text-sm font-medium text-gray-700 dark:text-stone-300">Enviar e-mail de confirmacao</label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Assunto do e-mail</label>
-            <input name="email_subject" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Ex: Cadastro confirmado — Concurso Vind Residence" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Assunto do e-mail</label>
+            <input name="email_subject" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="Ex: Cadastro confirmado — Concurso Vind Residence" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Corpo do e-mail (HTML)</label>
-            <textarea name="email_body_html" rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono" placeholder="<p>Ola, {{nome}}! Seu cadastro foi confirmado...</p>" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo do e-mail (HTML)</label>
+            <textarea name="email_body_html" rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="<p>Ola, {{nome}}! Seu cadastro foi confirmado...</p>" />
           </div>
         </div>
 
@@ -236,7 +236,7 @@ export default function NovaCampanhaPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded-md border border-gray-300 px-6 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-6 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar
           </button>

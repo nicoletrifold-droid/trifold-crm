@@ -45,7 +45,7 @@ export const STATUS_LABEL: Record<EntregaStatus, string> = {
 }
 
 export const STATUS_BADGE_CLASS: Record<EntregaStatus, string> = {
-  pendente: "bg-gray-100 text-gray-600",
-  entregue: "bg-green-100 text-green-700",
-  nao_encontrado: "bg-red-100 text-red-700",
+  pendente: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300",
+  entregue: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  nao_encontrado: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
 }

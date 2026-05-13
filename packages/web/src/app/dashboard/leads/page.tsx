@@ -42,7 +42,7 @@ export default async function LeadsPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Leads</h1>
         {isAdmin && (
           <Link
             href="/dashboard/leads/new"
@@ -60,21 +60,21 @@ export default async function LeadsPage({
             name="search"
             placeholder="Buscar por nome ou telefone..."
             defaultValue={params.search ?? ""}
-            className="w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="w-full max-w-md rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:border-orange-400"
           />
           <button
             type="submit"
-            className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+            className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
           >
             Buscar
           </button>
         </form>
       </div>
 
-      <div className="rounded-lg bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-6 py-3">Nome</th>
               <th className="px-6 py-3">Telefone</th>
               <th className="px-6 py-3">Empreendimento</th>
@@ -86,7 +86,7 @@ export default async function LeadsPage({
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {leads?.map((lead) => {
               const stageArr = lead.stage as unknown as Array<{
                 id: string
@@ -106,14 +106,14 @@ export default async function LeadsPage({
               const broker = brokerArr?.[0] ?? null
 
               return (
-                <tr key={lead.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-900">
+                <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
                     {lead.name || "Sem nome"}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {lead.phone}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {property?.name ?? "-"}
                   </td>
                   <td className="px-6 py-4">
@@ -130,13 +130,13 @@ export default async function LeadsPage({
                         {stage.name}
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">-</span>
+                      <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     <SourceBadge source={(lead as unknown as Record<string, unknown>).source as string | null} />
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {broker?.name ?? "-"}
                   </td>
                   <td className="px-6 py-4">
@@ -144,19 +144,19 @@ export default async function LeadsPage({
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           lead.qualification_score >= 70
-                            ? "bg-green-100 text-green-700"
+                            ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                             : lead.qualification_score >= 40
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-gray-100 text-gray-700"
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
+                              : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
                         }`}
                       >
                         {lead.qualification_score}
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">-</span>
+                      <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {lead.updated_at
                       ? new Date(lead.updated_at).toLocaleDateString("pt-BR", {
                           day: "2-digit",
@@ -169,7 +169,7 @@ export default async function LeadsPage({
                   <td className="px-6 py-4 text-right">
                     <Link
                       href={`/dashboard/leads/${lead.id}`}
-                      className="text-sm text-orange-600 hover:text-orange-700"
+                      className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                     >
                       Ver
                     </Link>
@@ -181,7 +181,7 @@ export default async function LeadsPage({
               <tr>
                 <td
                   colSpan={9}
-                  className="px-6 py-8 text-center text-sm text-gray-500"
+                  className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                 >
                   Nenhum lead encontrado.
                 </td>

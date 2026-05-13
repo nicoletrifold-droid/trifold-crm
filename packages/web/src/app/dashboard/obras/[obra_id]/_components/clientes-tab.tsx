@@ -105,16 +105,16 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   return (
     <div className="space-y-5">
       {/* Lista de clientes vinculados */}
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
           Clientes Vinculados ({clientes.length})
         </h2>
         {clientes.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-500">
+          <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
             Nenhum cliente vinculado a esta obra.
           </p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-stone-800">
             {clientes.map((c) => (
               <div
                 key={c.id}
@@ -122,21 +122,21 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-gray-900">
+                    <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
                       {c.name}
                     </p>
                     {c.is_primary && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
                         <Star className="h-3 w-3" />
                         Principal
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500">{c.email}</p>
+                  <p className="text-xs text-gray-500 dark:text-stone-400">{c.email}</p>
                 </div>
                 <button
                   onClick={() => handleDesvincular(c.id)}
-                  className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/15 dark:hover:text-red-300"
                   title="Desvincular"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -148,8 +148,8 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       </section>
 
       {/* Formulário A: Criar novo cliente */}
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
           Criar novo cliente
         </h2>
         <form onSubmit={handleCreateCliente} className="space-y-3">
@@ -159,7 +159,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={nomeA}
             onChange={(e) => setNomeA(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
           <input
             type="email"
@@ -167,7 +167,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={emailA}
             onChange={(e) => setEmailA(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
           <input
             type="password"
@@ -175,9 +175,9 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={senhaA}
             onChange={(e) => setSenhaA(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
-          {errorA && <p className="text-xs text-red-600">{errorA}</p>}
+          {errorA && <p className="text-xs text-red-600 dark:text-red-300">{errorA}</p>}
           <button
             type="submit"
             disabled={savingA || !nomeA.trim() || !emailA.trim() || !senhaA}
@@ -190,8 +190,8 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       </section>
 
       {/* Formulário B: Vincular existente por email */}
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
           Vincular cliente existente
         </h2>
         <form onSubmit={handleVincularCliente} className="space-y-3">
@@ -201,13 +201,13 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={emailB}
             onChange={(e) => setEmailB(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
-          {errorB && <p className="text-xs text-red-600">{errorB}</p>}
+          {errorB && <p className="text-xs text-red-600 dark:text-red-300">{errorB}</p>}
           <button
             type="submit"
             disabled={savingB || !emailB.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50 dark:border-orange-400 dark:text-orange-300 dark:hover:bg-orange-500/15"
           >
             {savingB ? "Vinculando..." : "Vincular"}
           </button>

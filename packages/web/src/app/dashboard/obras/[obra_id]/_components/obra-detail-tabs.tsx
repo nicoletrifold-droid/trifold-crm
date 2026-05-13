@@ -76,11 +76,11 @@ interface ObraDetailTabsProps {
 type Tab = "fases" | "fotos" | "documentos" | "mensagens" | "clientes"
 
 const FASE_STATUS_BADGE: Record<string, string> = {
-  pendente: "bg-gray-100 text-gray-600",
-  a_iniciar: "bg-gray-100 text-gray-600",
-  em_andamento: "bg-amber-100 text-amber-700",
-  pausada: "bg-orange-100 text-orange-600",
-  concluida: "bg-green-100 text-green-700",
+  pendente: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300",
+  a_iniciar: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300",
+  em_andamento: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  pausada: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300",
+  concluida: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
 }
 
 const FASE_STATUS_LABEL: Record<string, string> = {
@@ -197,10 +197,10 @@ function AddEtapaInlineForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-100 bg-gray-50 p-4">
+    <form onSubmit={handleSubmit} className="border-t border-gray-100 bg-gray-50 p-4 dark:border-stone-800 dark:bg-stone-800/30">
       <div className="space-y-2">
         <div>
-          <label className="mb-1 flex items-center gap-0.5 text-[11px] font-medium text-gray-500">
+          <label className="mb-1 flex items-center gap-0.5 text-[11px] font-medium text-gray-500 dark:text-stone-400">
             Etapa <span className="text-red-400">*</span>
           </label>
           <input
@@ -210,14 +210,14 @@ function AddEtapaInlineForm({
             onChange={(e) => setDescription(e.target.value)}
             autoFocus
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -235,7 +235,7 @@ function AddEtapaInlineForm({
               const v = parseInt(e.target.value, 10)
               setProgressPct(Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0)
             }}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -243,22 +243,22 @@ function AddEtapaInlineForm({
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
         </div>
       </div>
-      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-red-600 dark:text-red-300">{error}</p>}
       <div className="mt-2 flex gap-2">
         <button
           type="button"
           onClick={onDone}
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
         >
           Cancelar
         </button>
@@ -309,31 +309,31 @@ function FaseItem({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {fase.description && (
-              <p className="truncate text-sm font-medium text-gray-800">
+              <p className="truncate text-sm font-medium text-gray-800 dark:text-stone-200">
                 {fase.description}
               </p>
             )}
             <span
               className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                FASE_STATUS_BADGE[fase.status] ?? "bg-gray-100 text-gray-600"
+                FASE_STATUS_BADGE[fase.status] ?? "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300"
               }`}
             >
               {FASE_STATUS_LABEL[fase.status] ?? fase.status.toUpperCase()}
             </span>
           </div>
           <div className="mt-1.5 flex items-center gap-2">
-            <div className="h-1.5 flex-1 rounded-full bg-gray-200">
+            <div className="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-stone-700">
               <div
                 className={`h-1.5 rounded-full transition-all ${barColor}`}
                 style={{ width: `${fase.progress_pct ?? 0}%` }}
               />
             </div>
-            <span className="w-8 flex-shrink-0 text-right text-xs text-gray-500">
+            <span className="w-8 flex-shrink-0 text-right text-xs text-gray-500 dark:text-stone-400">
               {fase.progress_pct ?? 0}%
             </span>
           </div>
           {(fase.start_date || fase.end_date) && (
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
               {fase.start_date ? formatDate(fase.start_date) : "—"}
               {" → "}
               {fase.end_date ? formatDate(fase.end_date) : "—"}
@@ -343,14 +343,14 @@ function FaseItem({
         <div className="flex flex-shrink-0 items-center gap-1">
           <button
             onClick={() => setEditOpen(true)}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             title="Editar"
           >
             <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={handleDelete}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/15 dark:hover:text-red-300"
             title="Excluir"
           >
             <Trash2 className="h-4 w-4" />
@@ -393,15 +393,15 @@ export function ObraDetailTabs({
     <div className="space-y-6">
       {/* Tab switcher */}
       <div className="overflow-x-auto">
-        <div className="flex min-w-max gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+        <div className="flex min-w-max gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-stone-800 dark:bg-stone-800/50">
           {tabs.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 tab === key
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white text-gray-900 shadow-sm dark:bg-stone-900 dark:text-stone-100"
+                  : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
               {label}
@@ -415,9 +415,9 @@ export function ObraDetailTabs({
         <div className="space-y-4">
           <FaseCreateForm obraId={obraId} />
 
-          <section className="rounded-lg border border-gray-200 bg-white p-5">
+          <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             {fases.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-500">
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
                 Nenhuma fase criada.
               </p>
             ) : (
@@ -436,7 +436,7 @@ export function ObraDetailTabs({
                         </span>
                         <div className="flex items-center gap-2">
                           {groupFases.length > 1 && (
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-gray-400 dark:text-stone-500">
                               {groupFases.length} etapas
                             </span>
                           )}
@@ -451,7 +451,7 @@ export function ObraDetailTabs({
                           </button>
                         </div>
                       </div>
-                      <div className="divide-y divide-gray-100 bg-white">
+                      <div className="divide-y divide-gray-100 bg-white dark:divide-stone-800 dark:bg-stone-900">
                         {groupFases.map((fase, subIdx) => (
                           <FaseItem
                             key={fase.id}
@@ -482,14 +482,14 @@ export function ObraDetailTabs({
         <div className="space-y-6">
           <FotoUploadForm obraId={obraId} fases={fases} />
 
-          <section className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+          <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
               Fotos ({fotos.length})
             </h2>
             {fotos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
-                <p className="text-sm text-gray-500">Nenhuma foto ainda.</p>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-stone-400">Nenhuma foto ainda.</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
                   Use o formulário acima para adicionar fotos.
                 </p>
               </div>
@@ -500,9 +500,9 @@ export function ObraDetailTabs({
                   return (
                     <div
                       key={foto.id}
-                      className="group relative overflow-hidden rounded-lg border border-gray-200"
+                      className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800"
                     >
-                      <div className="relative aspect-square w-full bg-gray-100">
+                      <div className="relative aspect-square w-full bg-gray-100 dark:bg-stone-800">
                         <Image
                           src={url}
                           alt={foto.caption ?? "Foto da obra"}
@@ -513,7 +513,7 @@ export function ObraDetailTabs({
                         <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
                       </div>
                       {foto.caption && (
-                        <p className="truncate px-2 py-1.5 text-xs text-gray-700">
+                        <p className="truncate px-2 py-1.5 text-xs text-gray-700 dark:text-stone-300">
                           {foto.caption}
                         </p>
                       )}
@@ -529,33 +529,33 @@ export function ObraDetailTabs({
       {/* Documentos tab */}
       {tab === "documentos" && (
         <div className="space-y-6">
-          <section className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+          <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
               Adicionar documento
             </h2>
             <DocUploadForm obraId={obraId} />
           </section>
 
-          <section className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+          <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
               Documentos ({documentos.length})
             </h2>
             {documentos.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-500">
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
                 Nenhum documento enviado ainda.
               </p>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-100 dark:divide-stone-800">
                 {documentos.map((doc) => (
                   <div
                     key={doc.id}
                     className="flex items-center justify-between gap-3 py-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">
+                      <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
                         {doc.name}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-stone-400">
                         {doc.category} · {formatBytes(doc.file_size_bytes)} ·{" "}
                         {formatDate(doc.created_at)}
                       </p>
@@ -571,7 +571,7 @@ export function ObraDetailTabs({
 
       {/* Mensagens tab */}
       {tab === "mensagens" && (
-        <div className="h-[560px] overflow-hidden rounded-lg border border-gray-200">
+        <div className="h-[560px] overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800">
           <AdminChatFeed
             obraId={obraId}
             adminName={adminName}

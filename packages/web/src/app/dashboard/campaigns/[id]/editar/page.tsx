@@ -63,7 +63,7 @@ export default function EditarCampanhaPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-gray-400">Carregando...</p>
+        <p className="text-sm text-gray-400 dark:text-stone-500">Carregando...</p>
       </div>
     )
   }
@@ -71,7 +71,7 @@ export default function EditarCampanhaPage() {
   if (!campaign) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-red-500">Campanha nao encontrada</p>
+        <p className="text-sm text-red-500 dark:text-red-300">Campanha nao encontrada</p>
       </div>
     )
   }
@@ -81,59 +81,59 @@ export default function EditarCampanhaPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Editar Campanha</h1>
-        <p className="mt-1 text-sm text-gray-500">Slug: {campaign.slug} (nao editavel)</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Editar Campanha</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">Slug: {campaign.slug} (nao editavel)</p>
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4">
+        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Nome *</label>
-            <input name="name" defaultValue={campaign.name} required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Nome *</label>
+            <input name="name" defaultValue={campaign.name} required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Descricao</label>
-            <textarea name="description" defaultValue={campaign.description ?? ""} rows={3} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Descricao</label>
+            <textarea name="description" defaultValue={campaign.description ?? ""} rows={3} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Inicio</label>
-              <input name="starts_at" type="date" defaultValue={toDateInput(campaign.starts_at)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Inicio</label>
+              <input name="starts_at" type="date" defaultValue={toDateInput(campaign.starts_at)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Encerramento</label>
-              <input name="ends_at" type="date" defaultValue={toDateInput(campaign.ends_at)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Encerramento</label>
+              <input name="ends_at" type="date" defaultValue={toDateInput(campaign.ends_at)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase">Confirmacoes</h2>
+        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Confirmacoes</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Template WhatsApp</label>
-            <input name="whatsapp_template_name" defaultValue={campaign.whatsapp_template_name ?? ""} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Template WhatsApp</label>
+            <input name="whatsapp_template_name" defaultValue={campaign.whatsapp_template_name ?? ""} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
           </div>
 
           <div className="flex items-center gap-2">
-            <input name="email_enabled" type="checkbox" defaultChecked={campaign.email_enabled} className="rounded border-gray-300" />
-            <label className="text-sm text-gray-700">E-mail habilitado</label>
+            <input name="email_enabled" type="checkbox" defaultChecked={campaign.email_enabled} className="rounded border-gray-300 dark:border-stone-600" />
+            <label className="text-sm text-gray-700 dark:text-stone-300">E-mail habilitado</label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Assunto</label>
-            <input name="email_subject" defaultValue={campaign.email_subject ?? ""} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Assunto</label>
+            <input name="email_subject" defaultValue={campaign.email_subject ?? ""} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Corpo HTML</label>
-            <textarea name="email_body_html" defaultValue={campaign.email_body_html ?? ""} rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono" />
+            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo HTML</label>
+            <textarea name="email_body_html" defaultValue={campaign.email_body_html ?? ""} rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
           </div>
         </div>
 
@@ -141,7 +141,7 @@ export default function EditarCampanhaPage() {
           <button type="submit" disabled={saving} className="rounded-md bg-orange-600 px-6 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50">
             {saving ? "Salvando..." : "Salvar alteracoes"}
           </button>
-          <button type="button" onClick={() => router.back()} className="rounded-md border border-gray-300 px-6 py-2 text-sm text-gray-600 hover:bg-gray-50">
+          <button type="button" onClick={() => router.back()} className="rounded-md border border-gray-300 px-6 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
             Cancelar
           </button>
         </div>

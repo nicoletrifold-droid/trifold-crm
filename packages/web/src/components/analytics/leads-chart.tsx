@@ -107,18 +107,18 @@ function CustomTooltip({ active, payload, label, granularity }: TooltipProps) {
   const hasBreakdown = Object.keys(d.byProperty).length > 0
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-sm">
-      <p className="font-semibold text-gray-800 mb-1">{formatPeriodFull(label, granularity)}</p>
-      <p className="text-gray-700">
-        Total: <span className="font-bold text-orange-600">{d.count}</span>
+    <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-sm dark:border-stone-800 dark:bg-stone-900">
+      <p className="font-semibold text-gray-800 mb-1 dark:text-stone-100">{formatPeriodFull(label, granularity)}</p>
+      <p className="text-gray-700 dark:text-stone-300">
+        Total: <span className="font-bold text-orange-600 dark:text-orange-300">{d.count}</span>
       </p>
       {hasBreakdown && (
-        <div className="mt-1 border-t border-gray-100 pt-1 space-y-0.5">
+        <div className="mt-1 border-t border-gray-100 pt-1 space-y-0.5 dark:border-stone-800">
           {Object.entries(d.byProperty)
             .sort(([, a], [, b]) => b - a)
             .map(([name, count]) => (
-              <p key={name} className="text-gray-500">
-                {name}: <span className="font-medium text-gray-700">{count}</span>
+              <p key={name} className="text-gray-500 dark:text-stone-400">
+                {name}: <span className="font-medium text-gray-700 dark:text-stone-300">{count}</span>
               </p>
             ))}
         </div>
@@ -185,13 +185,13 @@ export function LeadsChart({ properties }: Props) {
   const ticks = data.length <= 31 ? undefined : data.filter((_, i) => i % Math.ceil(data.length / 20) === 0).map((d) => d.period)
 
   return (
-    <div className="rounded-lg bg-white p-5 shadow-sm space-y-4">
+    <div className="rounded-lg bg-white p-5 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       {/* Header + filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-lg font-semibold text-gray-900 mr-auto">Leads por Período</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mr-auto dark:text-stone-100">Leads por Período</h2>
 
         {/* Granularity toggle — AC3 */}
-        <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm">
+        <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm dark:border-stone-800">
           {GRANULARITY_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -199,7 +199,7 @@ export function LeadsChart({ properties }: Props) {
               className={`px-3 py-1.5 transition-colors ${
                 granularity === opt.value
                   ? "bg-orange-500 text-white font-medium"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  : "bg-white text-gray-600 hover:bg-gray-50 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
               }`}
             >
               {opt.label}
@@ -208,7 +208,7 @@ export function LeadsChart({ properties }: Props) {
         </div>
 
         {/* Preset selector — AC4 */}
-        <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm">
+        <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm dark:border-stone-800">
           {PRESET_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -216,7 +216,7 @@ export function LeadsChart({ properties }: Props) {
               className={`px-3 py-1.5 transition-colors ${
                 preset === opt.value
                   ? "bg-orange-500 text-white font-medium"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  : "bg-white text-gray-600 hover:bg-gray-50 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
               }`}
             >
               {opt.label}
@@ -228,19 +228,19 @@ export function LeadsChart({ properties }: Props) {
       {/* Custom date range inputs — AC4 */}
       {preset === "custom" && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <label className="text-gray-600">De:</label>
+          <label className="text-gray-600 dark:text-stone-400">De:</label>
           <input
             type="date"
             value={customFrom}
             onChange={(e) => setCustomFrom(e.target.value)}
-            className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
-          <label className="text-gray-600">Até:</label>
+          <label className="text-gray-600 dark:text-stone-400">Até:</label>
           <input
             type="date"
             value={customTo}
             onChange={(e) => setCustomTo(e.target.value)}
-            className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500"
+            className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
         </div>
       )}
@@ -251,7 +251,7 @@ export function LeadsChart({ properties }: Props) {
         <select
           value={property}
           onChange={(e) => setProperty(e.target.value)}
-          className="rounded border border-gray-200 px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded border border-gray-200 px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
         >
           {propertyOptions.map((p) => (
             <option key={p.id} value={p.id}>
@@ -264,7 +264,7 @@ export function LeadsChart({ properties }: Props) {
         <select
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          className="rounded border border-gray-200 px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded border border-gray-200 px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
         >
           {SOURCE_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
@@ -277,12 +277,12 @@ export function LeadsChart({ properties }: Props) {
       {/* Chart — AC2 + AC7 */}
       <div className="relative">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded z-10 dark:bg-stone-900/70">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
           </div>
         )}
         {error ? (
-          <div className="flex h-64 items-center justify-center text-sm text-gray-400">
+          <div className="flex h-64 items-center justify-center text-sm text-gray-400 dark:text-stone-500">
             Erro ao carregar dados.
           </div>
         ) : (
@@ -321,18 +321,18 @@ export function LeadsChart({ properties }: Props) {
 
       {/* Summary cards — AC8 */}
       {summary && (
-        <div className="grid grid-cols-3 gap-3 border-t border-gray-100 pt-4">
+        <div className="grid grid-cols-3 gap-3 border-t border-gray-100 pt-4 dark:border-stone-800">
           <div className="text-center">
-            <p className="text-xs text-gray-500">Total no período</p>
-            <p className="mt-0.5 text-2xl font-bold text-gray-900">{summary.total}</p>
+            <p className="text-xs text-gray-500 dark:text-stone-400">Total no período</p>
+            <p className="mt-0.5 text-2xl font-bold text-gray-900 dark:text-stone-100">{summary.total}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-gray-500">Média diária</p>
-            <p className="mt-0.5 text-2xl font-bold text-blue-600">{summary.dailyAvg}</p>
+            <p className="text-xs text-gray-500 dark:text-stone-400">Média diária</p>
+            <p className="mt-0.5 text-2xl font-bold text-blue-600 dark:text-blue-300">{summary.dailyAvg}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-gray-500">Pico ({formatPeriodLabel(summary.peakPeriod, granularity)})</p>
-            <p className="mt-0.5 text-2xl font-bold text-orange-600">{summary.peakCount}</p>
+            <p className="text-xs text-gray-500 dark:text-stone-400">Pico ({formatPeriodLabel(summary.peakPeriod, granularity)})</p>
+            <p className="mt-0.5 text-2xl font-bold text-orange-600 dark:text-orange-300">{summary.peakCount}</p>
           </div>
         </div>
       )}

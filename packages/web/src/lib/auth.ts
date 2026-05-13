@@ -9,6 +9,7 @@ export interface AppUser {
   email: string
   role: "admin" | "supervisor" | "broker" | "obras"
   avatarUrl: string | null
+  theme: "light" | "dark" | "system"
 }
 
 export async function getServerUser(): Promise<AppUser> {
@@ -24,7 +25,7 @@ export async function getServerUser(): Promise<AppUser> {
 
   const { data: appUser } = await supabase
     .from("users")
-    .select("id, auth_id, org_id, name, email, role, avatar_url")
+    .select("id, auth_id, org_id, name, email, role, avatar_url, theme")
     .eq("auth_id", user.id)
     .single()
 
@@ -40,6 +41,7 @@ export async function getServerUser(): Promise<AppUser> {
     email: appUser.email,
     role: appUser.role,
     avatarUrl: appUser.avatar_url,
+    theme: (appUser.theme as AppUser["theme"]) ?? "system",
   }
 }
 

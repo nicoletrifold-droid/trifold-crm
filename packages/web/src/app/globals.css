@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Habilita dark: variants pelo .dark class (Tailwind v4) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -18,6 +21,17 @@
 :root {
   --background: #fafaf9;
   --foreground: #1c1917;
+}
+
+/* Tema escuro */
+.dark {
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --color-surface: #1c1917;
+  --color-surface-alt: #292524;
+  --color-border: #44403c;
+  --color-border-light: #292524;
+  --color-muted: #a8a29e;
 }
 
 body {
@@ -47,10 +61,22 @@ body {
   background: #a8a29e;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #44403c;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #57534e;
+}
+
 /* Kanban horizontal scroll */
 .kanban-scroll {
   scrollbar-width: thin;
   scrollbar-color: #d6d3d1 transparent;
+}
+
+.dark .kanban-scroll {
+  scrollbar-color: #44403c transparent;
 }
 
 /* Smooth page transitions */

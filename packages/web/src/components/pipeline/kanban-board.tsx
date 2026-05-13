@@ -143,7 +143,7 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
         <div className="mb-3 flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowSourceFilter((v) => !v)}
-            className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors"
+            className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Origem {selectedSources.length > 0 && `(${selectedSources.length})`}
           </button>
@@ -153,7 +153,7 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
               {selectedSources.length > 0 && (
                 <button
                   onClick={() => setSelectedSources([])}
-                  className="rounded-md bg-stone-100 px-2 py-1 text-xs text-stone-500 hover:bg-stone-200 transition-colors"
+                  className="rounded-md bg-stone-100 px-2 py-1 text-xs text-stone-500 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                 >
                   Todos
                 </button>
@@ -166,12 +166,12 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
                     onClick={() => toggleSource(source)}
                     className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
                       active
-                        ? "border-orange-300 bg-orange-50"
-                        : "border-stone-200 bg-white hover:bg-stone-50"
+                        ? "border-orange-300 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/15"
+                        : "border-stone-200 bg-white hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800"
                     }`}
                   >
                     <SourceBadge source={source === "other" ? null : source} size="xs" />
-                    <span className="text-stone-400">({count})</span>
+                    <span className="text-stone-400 dark:text-stone-500">({count})</span>
                   </button>
                 )
               })}

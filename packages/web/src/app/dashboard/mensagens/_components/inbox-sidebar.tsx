@@ -65,24 +65,24 @@ export function InboxSidebar({
   return (
     <div className="flex h-full flex-col">
       {/* Filtros */}
-      <div className="space-y-2 border-b border-gray-100 p-3">
+      <div className="space-y-2 border-b border-gray-100 p-3 dark:border-stone-800">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-stone-500" />
           <input
             type="text"
             placeholder="Cliente ou empreendimento..."
             value={filters.q}
             onChange={(e) => setFilter("q", e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600 dark:text-stone-400">
           <input
             type="checkbox"
             checked={filters.unread_only}
             onChange={(e) => setFilter("unread_only", e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-gray-300 accent-orange-500"
+            className="h-3.5 w-3.5 rounded border-gray-300 accent-orange-500 dark:border-stone-600"
           />
           Apenas não lidas
         </label>
@@ -91,15 +91,15 @@ export function InboxSidebar({
       {/* Lista de conversas */}
       <div className="relative flex-1 overflow-y-auto">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-stone-900/70">
             <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
           </div>
         )}
 
         {!loading && conversas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Inbox className="mb-2 h-8 w-8 text-gray-300" />
-            <p className="text-sm text-gray-500">
+            <Inbox className="mb-2 h-8 w-8 text-gray-300 dark:text-stone-600" />
+            <p className="text-sm text-gray-500 dark:text-stone-400">
               {filters.q || filters.unread_only
                 ? "Nenhuma conversa encontrada"
                 : "Nenhuma conversa ainda"}
@@ -115,8 +115,8 @@ export function InboxSidebar({
               <button
                 key={conversa.conversa_id}
                 onClick={() => onSelect(conversa)}
-                className={`w-full border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-orange-50 ${
-                  isActive ? "bg-orange-50" : "bg-white"
+                className={`w-full border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-orange-50 dark:border-stone-800 dark:hover:bg-stone-800/60 ${
+                  isActive ? "bg-orange-50 dark:bg-orange-500/10" : "bg-white dark:bg-stone-900"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -126,8 +126,8 @@ export function InboxSidebar({
                       isActive
                         ? "bg-orange-500 text-white"
                         : hasUnread
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-gray-100 text-gray-500"
+                          ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                          : "bg-gray-100 text-gray-500 dark:bg-stone-800 dark:text-stone-400"
                     }`}
                   >
                     {typeof initials === "string" ? initials : initials}
@@ -138,15 +138,15 @@ export function InboxSidebar({
                     <div className="flex items-baseline justify-between gap-1">
                       <p
                         className={`truncate text-sm ${
-                          hasUnread ? "font-semibold text-gray-900" : "font-medium text-gray-700"
-                        } ${isActive ? "text-orange-700" : ""}`}
+                          hasUnread ? "font-semibold text-gray-900 dark:text-stone-100" : "font-medium text-gray-700 dark:text-stone-300"
+                        } ${isActive ? "text-orange-700 dark:text-orange-300" : ""}`}
                       >
                         {conversa.cliente_name || "Cliente"}
                       </p>
                       {conversa.last_message && (
                         <span
                           className={`flex-shrink-0 text-[10px] ${
-                            hasUnread ? "font-semibold text-orange-500" : "text-gray-400"
+                            hasUnread ? "font-semibold text-orange-500 dark:text-orange-300" : "text-gray-400 dark:text-stone-500"
                           }`}
                         >
                           {formatRelative(conversa.last_message.created_at)}
@@ -155,13 +155,13 @@ export function InboxSidebar({
                     </div>
 
                     {/* Nome da obra (empreendimento) */}
-                    <p className="truncate text-xs text-gray-400">{conversa.obra_name}</p>
+                    <p className="truncate text-xs text-gray-400 dark:text-stone-500">{conversa.obra_name}</p>
 
                     {/* Preview + badge */}
                     <div className="mt-0.5 flex items-center justify-between gap-1">
                       <p
                         className={`truncate text-xs ${
-                          hasUnread ? "font-medium text-gray-700" : "text-gray-400"
+                          hasUnread ? "font-medium text-gray-700 dark:text-stone-300" : "text-gray-400 dark:text-stone-500"
                         }`}
                       >
                         {formatPreview(conversa.last_message)}
@@ -182,22 +182,22 @@ export function InboxSidebar({
 
       {/* Paginação */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
-          <span className="text-[10px] text-gray-400">
+        <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2 dark:border-stone-800">
+          <span className="text-[10px] text-gray-400 dark:text-stone-500">
             {total} conversa{total !== 1 ? "s" : ""} · p. {page}/{totalPages}
           </span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => onPageChange(page - 1)}
               disabled={page === 1 || loading}
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               onClick={() => onPageChange(page + 1)}
               disabled={page === totalPages || loading}
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

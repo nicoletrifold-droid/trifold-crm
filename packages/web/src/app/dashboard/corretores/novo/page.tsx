@@ -79,22 +79,22 @@ export default function NovoCorretorPage() {
       <div>
         <Link
           href="/dashboard/corretores"
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Corretores
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">
+        <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
           Novo Corretor
         </h1>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-lg bg-white p-6 shadow-sm"
+        className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
       >
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Nome *
             </label>
             <input
@@ -103,12 +103,12 @@ export default function NovoCorretorPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nome completo"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Email *
             </label>
             <input
@@ -117,12 +117,12 @@ export default function NovoCorretorPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="corretor@email.com"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Senha *
             </label>
             <input
@@ -132,12 +132,12 @@ export default function NovoCorretorPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Mínimo 6 caracteres"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               CRECI
             </label>
             <input
@@ -145,12 +145,12 @@ export default function NovoCorretorPage() {
               value={creci}
               onChange={(e) => setCreci(e.target.value)}
               placeholder="Ex: 12345-F"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Tipo *
             </label>
             <select
@@ -158,7 +158,7 @@ export default function NovoCorretorPage() {
               onChange={(e) =>
                 setType(e.target.value as "internal" | "external")
               }
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             >
               <option value="internal">Interno</option>
               <option value="external">Externo</option>
@@ -169,7 +169,7 @@ export default function NovoCorretorPage() {
         {/* Empreendimentos */}
         {properties.length > 0 && (
           <div className="mt-4">
-            <label className="mb-2 block text-sm font-medium text-stone-700">
+            <label className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
               Empreendimentos que este corretor atende
             </label>
             <div className="flex flex-wrap gap-3">
@@ -185,16 +185,16 @@ export default function NovoCorretorPage() {
                         setSelectedProperties(selectedProperties.filter(id => id !== p.id))
                       }
                     }}
-                    className="h-4 w-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500"
+                    className="h-4 w-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
                   />
-                  <span className="text-sm text-stone-700">{p.name}</span>
+                  <span className="text-sm text-stone-700 dark:text-stone-300">{p.name}</span>
                 </label>
               ))}
             </div>
           </div>
         )}
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-4 text-sm text-red-600 dark:text-red-300">{error}</p>}
 
         <div className="mt-6 flex items-center gap-3">
           <button
@@ -206,7 +206,7 @@ export default function NovoCorretorPage() {
           </button>
           <Link
             href="/dashboard/corretores"
-            className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar
           </Link>

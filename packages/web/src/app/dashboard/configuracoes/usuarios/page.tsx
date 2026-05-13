@@ -22,10 +22,10 @@ export default async function UsuariosPage() {
     .order("name")
 
   const roleColors: Record<string, string> = {
-    admin: "bg-purple-100 text-purple-700",
-    supervisor: "bg-blue-100 text-blue-700",
-    broker: "bg-green-100 text-green-700",
-    obras: "bg-yellow-100 text-yellow-700",
+    admin: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
+    supervisor: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+    broker: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+    obras: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300",
   }
 
   const roleLabels: Record<string, string> = {
@@ -41,12 +41,12 @@ export default async function UsuariosPage() {
         <div>
           <Link
             href="/dashboard/configuracoes"
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
           >
             &larr; Configurações
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-gray-900">Usuários</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">Usuários</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
             Gerenciar usuários e permissões
           </p>
         </div>
@@ -60,10 +60,10 @@ export default async function UsuariosPage() {
         )}
       </div>
 
-      <div className="rounded-lg bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-6 py-3">Nome</th>
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">Perfil</th>
@@ -71,20 +71,20 @@ export default async function UsuariosPage() {
               {isAdmin && <th className="px-6 py-3">Ações</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {users?.map((u) => (
-              <tr key={u.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 font-medium text-gray-900">
+              <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                <td className="px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
                   {u.name || "Sem nome"}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500">{u.email}</td>
+                <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">{u.email}</td>
                 <td className="px-6 py-4">
                   {isAdmin && u.id !== user.id ? (
                     <RoleDropdown userId={u.id} currentRole={u.role} />
                   ) : (
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        roleColors[u.role] ?? "bg-gray-100 text-gray-700"
+                        roleColors[u.role] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
                       }`}
                     >
                       {roleLabels[u.role] ?? u.role}
@@ -95,8 +95,8 @@ export default async function UsuariosPage() {
                   <span
                     className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                       u.is_active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
+                        ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                        : "bg-gray-100 text-gray-500 dark:bg-stone-700/50 dark:text-stone-400"
                     }`}
                   >
                     {u.is_active ? "Ativo" : "Inativo"}
@@ -123,7 +123,7 @@ export default async function UsuariosPage() {
               <tr>
                 <td
                   colSpan={isAdmin ? 5 : 4}
-                  className="px-6 py-8 text-center text-sm text-gray-500"
+                  className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                 >
                   Nenhum usuário encontrado.
                 </td>

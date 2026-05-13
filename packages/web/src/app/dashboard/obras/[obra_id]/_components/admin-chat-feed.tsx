@@ -60,7 +60,7 @@ function SignedAudio({
   }, [storagePath, bucket])
 
   if (!url)
-    return <span className="text-xs text-gray-500">Carregando áudio...</span>
+    return <span className="text-xs text-gray-500 dark:text-stone-400">Carregando áudio...</span>
   return <audio controls src={url} className="max-w-[240px]" />
 }
 
@@ -109,7 +109,7 @@ function AvatarCircle({ name, className }: { name: string; className?: string })
     .join("")
   return (
     <div
-      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold ${className ?? "bg-teal-100 text-teal-700"}`}
+      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold ${className ?? "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300"}`}
     >
       {initials || "?"}
     </div>
@@ -157,18 +157,18 @@ function MensagemBubble({
             {formatTimestamp(mensagem.created_at)}
           </p>
         </div>
-        <AvatarCircle name={senderName} className="mb-0.5 bg-orange-100 text-orange-700" />
+        <AvatarCircle name={senderName} className="mb-0.5 bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" />
       </div>
     )
   }
 
   return (
     <div className="flex items-end justify-start gap-2">
-      <AvatarCircle name={senderName} className="mb-0.5 bg-teal-100 text-teal-700" />
-      <div className="max-w-[72%] rounded-2xl rounded-bl-none bg-white px-4 py-2.5 text-gray-800 shadow-sm">
-        <p className="mb-1 text-[11px] font-semibold text-teal-600">{senderName}</p>
+      <AvatarCircle name={senderName} className="mb-0.5 bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300" />
+      <div className="max-w-[72%] rounded-2xl rounded-bl-none bg-white px-4 py-2.5 text-gray-800 shadow-sm dark:bg-stone-800 dark:text-stone-100">
+        <p className="mb-1 text-[11px] font-semibold text-teal-600 dark:text-teal-300">{senderName}</p>
         {bubbleContent()}
-        <p className="mt-1 text-right text-[10px] text-gray-400">
+        <p className="mt-1 text-right text-[10px] text-gray-400 dark:text-stone-500">
           {formatTimestamp(mensagem.created_at)}
         </p>
       </div>
@@ -195,8 +195,8 @@ function ClienteSelector({
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="border-b border-gray-100 px-4 py-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+      <div className="border-b border-gray-100 px-4 py-2.5 dark:border-stone-800">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
           Conversas
         </p>
       </div>
@@ -207,20 +207,20 @@ function ClienteSelector({
           <button
             key={c.id}
             onClick={() => onSelect(c.id)}
-            className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-orange-50"
+            className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors hover:bg-orange-50 dark:border-stone-800 dark:hover:bg-stone-800/60"
           >
             <div
               className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                unread > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-500"
+                unread > 0 ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" : "bg-gray-100 text-gray-500 dark:bg-stone-800 dark:text-stone-400"
               }`}
             >
               {initials || <User className="h-4 w-4" />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className={`truncate text-sm ${unread > 0 ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
+              <p className={`truncate text-sm ${unread > 0 ? "font-semibold text-gray-900 dark:text-stone-100" : "font-medium text-gray-700 dark:text-stone-300"}`}>
                 {c.name}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 dark:text-stone-500">
                 {unread > 0
                   ? `${unread} mensagem${unread !== 1 ? "s" : ""} não lida${unread !== 1 ? "s" : ""}`
                   : "Sem mensagens não lidas"}
@@ -392,8 +392,8 @@ export function AdminChatFeed({
 
   if (!legacyMode && clientes.length === 0) {
     return (
-      <div className="flex h-[500px] items-center justify-center rounded-lg border border-gray-200 bg-white">
-        <p className="text-sm text-gray-500">
+      <div className="flex h-[500px] items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+        <p className="text-sm text-gray-500 dark:text-stone-400">
           Nenhum cliente vinculado a esta obra.
         </p>
       </div>
@@ -404,18 +404,18 @@ export function AdminChatFeed({
     <div className="flex h-full min-h-[400px] flex-col overflow-hidden">
       {/* Header: botão voltar quando multi-cliente */}
       {selectedClienteId && clientes.length > 1 && (
-        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2 dark:border-stone-800 dark:bg-stone-900">
           <button
             onClick={() => {
               setSelectedClienteId(null)
               setMensagens([])
             }}
-            className="text-xs text-orange-600 hover:underline"
+            className="text-xs text-orange-600 hover:underline dark:text-orange-300"
           >
             ← Clientes
           </button>
-          <span className="text-xs text-gray-400">/</span>
-          <span className="text-xs font-medium text-gray-700">
+          <span className="text-xs text-gray-400 dark:text-stone-500">/</span>
+          <span className="text-xs font-medium text-gray-700 dark:text-stone-300">
             {selectedCliente?.name}
           </span>
         </div>
@@ -433,19 +433,19 @@ export function AdminChatFeed({
       {/* Feed de mensagens */}
       {selectedClienteId && (
         <>
-          <div className="flex-1 space-y-2 overflow-y-auto bg-[#f0ece3] px-4 py-4">
+          <div className="flex-1 space-y-2 overflow-y-auto bg-[#f0ece3] px-4 py-4 dark:bg-stone-950">
             {loadingMsgs && (
-              <p className="py-10 text-center text-sm text-gray-400">
+              <p className="py-10 text-center text-sm text-gray-400 dark:text-stone-500">
                 Carregando mensagens...
               </p>
             )}
             {!loadingMsgs && mensagens.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/70 shadow-sm">
-                  <Send className="h-6 w-6 text-gray-300" />
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/70 shadow-sm dark:bg-stone-800/60">
+                  <Send className="h-6 w-6 text-gray-300 dark:text-stone-600" />
                 </div>
-                <p className="text-sm text-gray-500">Nenhuma mensagem ainda.</p>
-                <p className="mt-1 text-xs text-gray-400">Seja o primeiro a enviar uma mensagem.</p>
+                <p className="text-sm text-gray-500 dark:text-stone-400">Nenhuma mensagem ainda.</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">Seja o primeiro a enviar uma mensagem.</p>
               </div>
             )}
             {!loadingMsgs &&
@@ -455,8 +455,8 @@ export function AdminChatFeed({
             <div ref={bottomRef} />
           </div>
 
-          <div className="border-t border-gray-200 bg-white px-4 py-3">
-            {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+          <div className="border-t border-gray-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
+            {error && <p className="mb-2 text-xs text-red-600 dark:text-red-300">{error}</p>}
             <div className="flex items-end gap-2">
               <textarea
                 ref={textareaRef}
@@ -470,7 +470,7 @@ export function AdminChatFeed({
                 placeholder="Responder ao cliente… (Enter envia, Shift+Enter nova linha)"
                 rows={1}
                 disabled={sending}
-                className="flex-1 resize-none rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-300 disabled:opacity-50"
+                className="flex-1 resize-none rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-300 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
               />
               <button
                 type="button"

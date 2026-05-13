@@ -65,7 +65,7 @@ export function DocUploadForm({ obraId }: DocUploadFormProps) {
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
             Nome do documento *
           </label>
           <input
@@ -73,18 +73,18 @@ export function DocUploadForm({ obraId }: DocUploadFormProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="ex: ART - Fundação"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             disabled={loading}
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
             Categoria
           </label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             disabled={loading}
           >
             {CATEGORIES.map((c) => (
@@ -104,16 +104,16 @@ export function DocUploadForm({ obraId }: DocUploadFormProps) {
           ref={fileRef}
           type="file"
           onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-          className="w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-orange-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-orange-700 hover:file:bg-orange-100"
+          className="w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-orange-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-orange-700 hover:file:bg-orange-100 dark:text-stone-400 dark:file:bg-orange-500/15 dark:file:text-orange-300 dark:hover:file:bg-orange-500/20"
           disabled={loading}
         />
         {fileName && (
-          <p className="mt-1 text-xs text-gray-500">{fileName}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-stone-400">{fileName}</p>
         )}
       </div>
 
       {error && (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-red-600 dark:text-red-300">{error}</p>
       )}
 
       <button

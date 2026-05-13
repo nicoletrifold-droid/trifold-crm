@@ -53,11 +53,11 @@ export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: Filt
   return (
     <div className="flex flex-wrap items-end gap-2">
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Obra</label>
+        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">Obra</label>
         <select
           value={filters.obra_nome}
           onChange={(e) => onFiltersChange({ ...filters, obra_nome: e.target.value })}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
         >
           <option value="">Todas</option>
           {obraOptions.map((o) => (
@@ -67,11 +67,11 @@ export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: Filt
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Tipo</label>
+        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">Tipo</label>
         <select
           value={filters.tipo}
           onChange={(e) => onFiltersChange({ ...filters, tipo: e.target.value })}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
         >
           <option value="">Todos</option>
           <option value="mae">Mãe</option>
@@ -81,33 +81,33 @@ export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: Filt
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Nome</label>
+        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">Nome</label>
         <input
           type="text"
           value={localNome}
           onChange={(e) => setLocalNome(e.target.value)}
           placeholder="Buscar nome..."
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Cidade</label>
+        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">Cidade</label>
         <input
           type="text"
           value={localCidade}
           onChange={(e) => setLocalCidade(e.target.value)}
           placeholder="Cidade..."
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-500">Estado</label>
+        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">Estado</label>
         <select
           value={filters.estado}
           onChange={(e) => onFiltersChange({ ...filters, estado: e.target.value })}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
         >
           <option value="">UF</option>
           {UF_OPTIONS.map((uf) => (
@@ -120,7 +120,7 @@ export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: Filt
         <button
           type="button"
           onClick={clear}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
         >
           Limpar
         </button>

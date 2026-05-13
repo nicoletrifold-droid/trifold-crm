@@ -64,13 +64,13 @@ const formatDate = (iso: string): string =>
   })
 
 function formatQualificacaoBadge(taxa: number | null): React.ReactElement {
-  if (taxa === null) return <span className="text-gray-400">—</span>
+  if (taxa === null) return <span className="text-gray-400 dark:text-stone-500">—</span>
   const color =
     taxa >= 40
-      ? "bg-green-100 text-green-700"
+      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
       : taxa >= 20
-        ? "bg-yellow-100 text-yellow-700"
-        : "bg-red-100 text-red-700"
+        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
+        : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
   return (
     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
       {taxa.toFixed(1).replace(".", ",")}%
@@ -81,16 +81,16 @@ function formatQualificacaoBadge(taxa: number | null): React.ReactElement {
 // ─── Constantes ────────────────────────────────────────────────────────────
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
-  ACTIVE:   { label: "Ativa",     className: "bg-green-100 text-green-700" },
-  PAUSED:   { label: "Pausada",   className: "bg-yellow-100 text-yellow-700" },
-  ARCHIVED: { label: "Arquivada", className: "bg-gray-100 text-gray-600" },
-  DELETED:  { label: "Deletada",  className: "bg-red-100 text-red-700" },
+  ACTIVE:   { label: "Ativa",     className: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" },
+  PAUSED:   { label: "Pausada",   className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300" },
+  ARCHIVED: { label: "Arquivada", className: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300" },
+  DELETED:  { label: "Deletada",  className: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300" },
 }
 
 const SYNC_BADGES: Record<string, { label: string; className: string }> = {
-  success: { label: "Concluída", className: "bg-green-100 text-green-700" },
-  error:   { label: "Erro",      className: "bg-red-100 text-red-700" },
-  running: { label: "Em andamento", className: "bg-yellow-100 text-yellow-700" },
+  success: { label: "Concluída", className: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" },
+  error:   { label: "Erro",      className: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300" },
+  running: { label: "Em andamento", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300" },
 }
 
 const OBJECTIVE_LABELS: Record<string, string> = {
@@ -106,13 +106,13 @@ const OBJECTIVE_LABELS: Record<string, string> = {
 
 function CampaignsTabs({ active }: { active: "crm" | "meta" }) {
   return (
-    <div className="flex border-b border-gray-200 mb-4">
+    <div className="flex border-b border-gray-200 mb-4 dark:border-stone-800">
       <Link
         href="/dashboard/campaigns"
         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
           active === "crm"
-            ? "border-orange-600 text-orange-600"
-            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            ? "border-orange-600 text-orange-600 dark:text-orange-300"
+            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-stone-400 dark:hover:text-stone-200 dark:hover:border-stone-700"
         }`}
       >
         CRM
@@ -121,8 +121,8 @@ function CampaignsTabs({ active }: { active: "crm" | "meta" }) {
         href="/dashboard/campaigns/meta"
         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
           active === "meta"
-            ? "border-orange-600 text-orange-600"
-            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            ? "border-orange-600 text-orange-600 dark:text-orange-300"
+            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-stone-400 dark:hover:text-stone-200 dark:hover:border-stone-700"
         }`}
       >
         Meta Ads
@@ -187,15 +187,15 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
       {/* Cabeçalho */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Campanhas</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Campanhas</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
             Performance de campanhas Meta Ads sincronizadas
           </p>
         </div>
 
         <div className="flex flex-col items-end gap-2">
           {/* Última sincronização */}
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-stone-400">
             {lastSync ? (
               <>
                 <span>Última sync: {formatDate(lastSync.started_at)}</span>
@@ -229,7 +229,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
 
           {/* Feedback de sync */}
           {syncMessage && (
-            <p className={`text-xs font-medium ${syncMessage.type === "success" ? "text-green-600" : "text-red-600"}`}>
+            <p className={`text-xs font-medium ${syncMessage.type === "success" ? "text-green-600 dark:text-green-300" : "text-red-600 dark:text-red-300"}`}>
               {syncMessage.text}
             </p>
           )}
@@ -244,7 +244,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
         <select
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-orange-500 focus:outline-none"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
         >
           <option value="7d">Últimos 7 dias</option>
           <option value="30d">Últimos 30 dias</option>
@@ -254,7 +254,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-orange-500 focus:outline-none"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
         >
           <option value="ALL">Todos os status</option>
           <option value="ACTIVE">Ativa</option>
@@ -264,8 +264,8 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Estados */}
       {loading && (
-        <div className="flex items-center justify-center rounded-lg bg-white p-12 shadow-sm">
-          <svg className="h-6 w-6 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+        <div className="flex items-center justify-center rounded-lg bg-white p-12 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <svg className="h-6 w-6 animate-spin text-gray-400 dark:text-stone-500" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
@@ -273,15 +273,15 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {!loading && error && (
-        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">{error}</div>
       )}
 
       {!loading && !error && data?.campaigns.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-lg bg-white p-12 shadow-sm text-center">
+        <div className="flex flex-col items-center justify-center rounded-lg bg-white p-12 shadow-sm text-center dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           {!lastSync ? (
             <>
-              <p className="text-lg font-medium text-gray-600">Integração Meta Ads não configurada</p>
-              <p className="mt-1 text-sm text-gray-400">Configure a integração para começar a sincronizar campanhas</p>
+              <p className="text-lg font-medium text-gray-600 dark:text-stone-300">Integração Meta Ads não configurada</p>
+              <p className="mt-1 text-sm text-gray-400 dark:text-stone-500">Configure a integração para começar a sincronizar campanhas</p>
               <Link
                 href="/dashboard/configuracoes/integracoes/meta-ads"
                 className="mt-4 rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
@@ -290,7 +290,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
               </Link>
             </>
           ) : (
-            <p className="text-lg font-medium text-gray-600">
+            <p className="text-lg font-medium text-gray-600 dark:text-stone-300">
               Nenhuma campanha encontrada para o período selecionado
             </p>
           )}
@@ -299,58 +299,58 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Tabela */}
       {!loading && !error && (data?.campaigns.length ?? 0) > 0 && (
-        <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
+            <thead className="bg-gray-50 dark:bg-stone-800/50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Campanha
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Status
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Orçamento
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Spend
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Impressões
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Cliques
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   CTR
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   CPL
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Leads Meta
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Leads CRM
                 </th>
                 <th
                   title="Custo por lead que respondeu o bot (spend ÷ leads que interagiram)"
-                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help"
+                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help dark:text-stone-400"
                 >
                   CPL Real
                 </th>
                 <th
                   title="% de leads Meta que foram qualificados pela Nicole"
-                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help"
+                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help dark:text-stone-400"
                 >
                   Qualificação
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Ações
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
               {data?.campaigns.map((c) => {
                 const badge = STATUS_BADGES[c.status] ?? STATUS_BADGES.ARCHIVED
                 const objective = c.objective
@@ -358,11 +358,11 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                   : null
 
                 return (
-                  <tr key={c.id} className="hover:bg-gray-50">
+                  <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{c.name}</p>
+                      <p className="font-medium text-gray-900 dark:text-stone-100">{c.name}</p>
                       {objective && (
-                        <p className="text-xs text-gray-500">{objective}</p>
+                        <p className="text-xs text-gray-500 dark:text-stone-400">{objective}</p>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -372,38 +372,38 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                         {badge.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                    <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                       {formatBudget(c.daily_budget, c.lifetime_budget)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-stone-100">
                       {formatBRL(c.metrics.spend)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                    <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                       {formatNumber(c.metrics.impressions)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                    <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                       {formatNumber(c.metrics.clicks)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                    <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                       {formatPercent(c.metrics.ctr)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                    <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                       {c.metrics.cpl !== null ? formatBRL(c.metrics.cpl) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-stone-100">
                       {c.metrics.leads_meta}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-stone-100">
                       <Link
                         href={`/dashboard/leads?utm_campaign=${encodeURIComponent(c.name)}`}
-                        className="text-orange-600 hover:text-orange-800"
+                        className="text-orange-600 hover:text-orange-800 dark:text-orange-300 dark:hover:text-orange-200"
                       >
                         {c.leads_crm}
                       </Link>
                     </td>
                     <td
                       title="Custo por lead que respondeu o bot (spend ÷ leads que interagiram)"
-                      className="px-4 py-3 text-right text-sm text-gray-700"
+                      className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300"
                     >
                       {c.metrics.cpl_real !== null ? formatBRL(c.metrics.cpl_real) : "—"}
                     </td>
@@ -416,7 +416,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-4 py-3 text-right text-sm">
                       <Link
                         href={`/dashboard/campaigns/meta/${c.meta_campaign_id}`}
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                       >
                         Ver detalhes
                       </Link>

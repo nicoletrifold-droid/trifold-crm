@@ -103,34 +103,34 @@ export function UserEditModal({
     <>
       <button
         onClick={openModal}
-        className="mr-2 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
+        className="mr-2 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-500/15 dark:text-blue-300 dark:hover:bg-blue-500/20"
       >
         Editar
       </button>
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70"
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Editar usuário</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Editar usuário</h2>
               <button
                 onClick={() => setOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
               >
                 ✕
               </button>
             </div>
 
-            <div className="mb-5 flex gap-4 border-b border-gray-200">
+            <div className="mb-5 flex gap-4 border-b border-gray-200 dark:border-stone-800">
               <button
                 onClick={() => switchTab("edit")}
                 className={`pb-2 text-sm font-medium transition-colors ${
                   tab === "edit"
-                    ? "border-b-2 border-orange-500 text-orange-600"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "border-b-2 border-orange-500 text-orange-600 dark:text-orange-300"
+                    : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
                 }`}
               >
                 Dados
@@ -139,8 +139,8 @@ export function UserEditModal({
                 onClick={() => switchTab("password")}
                 className={`pb-2 text-sm font-medium transition-colors ${
                   tab === "password"
-                    ? "border-b-2 border-orange-500 text-orange-600"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "border-b-2 border-orange-500 text-orange-600 dark:text-orange-300"
+                    : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
                 }`}
               >
                 Redefinir senha
@@ -150,25 +150,25 @@ export function UserEditModal({
             {tab === "edit" && (
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
                     Nome
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
                     Email
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>
               </div>
@@ -177,7 +177,7 @@ export function UserEditModal({
             {tab === "password" && (
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
                     Nova senha
                   </label>
                   <input
@@ -185,34 +185,34 @@ export function UserEditModal({
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Mínimo 8 caracteres"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
                     Confirmar senha
                   </label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>
               </div>
             )}
 
             {error && (
-              <p className="mt-3 text-sm text-red-600">{error}</p>
+              <p className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p>
             )}
             {success && (
-              <p className="mt-3 text-sm text-green-600">{success}</p>
+              <p className="mt-3 text-sm text-green-600 dark:text-green-300">{success}</p>
             )}
 
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Fechar
               </button>

@@ -180,31 +180,31 @@ export function PrintModal({ filters, datas, selectedDateId, entregasMap, onClos
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Exportar / Imprimir lista</h2>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 dark:bg-black/70">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-stone-800">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Exportar / Imprimir lista</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="space-y-4 px-5 py-4">
           {selectedData && (
-            <div className="rounded-md bg-orange-50 px-3 py-2 text-sm text-orange-700">
+            <div className="rounded-md bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
               Data selecionada: <strong>{selectedData.nome}</strong> — o status de entrega será incluído na lista.
             </div>
           )}
           {!selectedData && (
-            <div className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-500">
+            <div className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               Nenhuma data comemorativa selecionada — a lista terá coluna de assinatura para conferência manual.
             </div>
           )}
 
           <div>
-            <p className="mb-2 text-sm font-medium text-gray-700">Escopo da exportação</p>
+            <p className="mb-2 text-sm font-medium text-gray-700 dark:text-stone-300">Escopo da exportação</p>
             <div className="space-y-2">
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 px-3 py-2.5 hover:bg-gray-50">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 px-3 py-2.5 hover:bg-gray-50 dark:border-stone-800 dark:hover:bg-stone-800/60">
                 <input
                   type="radio"
                   name="scope"
@@ -214,15 +214,15 @@ export function PrintModal({ filters, datas, selectedDateId, entregasMap, onClos
                   className="mt-0.5"
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Filtros aplicados</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-stone-100">Filtros aplicados</p>
                   {hasFilters
-                    ? <p className="text-xs text-gray-500">{describeFilters().join(" · ")}</p>
-                    : <p className="text-xs text-gray-400">Nenhum filtro ativo — equivale a todos os registros</p>
+                    ? <p className="text-xs text-gray-500 dark:text-stone-400">{describeFilters().join(" · ")}</p>
+                    : <p className="text-xs text-gray-400 dark:text-stone-500">Nenhum filtro ativo — equivale a todos os registros</p>
                   }
                 </div>
               </label>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 px-3 py-2.5 hover:bg-gray-50">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 px-3 py-2.5 hover:bg-gray-50 dark:border-stone-800 dark:hover:bg-stone-800/60">
                 <input
                   type="radio"
                   name="scope"
@@ -232,25 +232,25 @@ export function PrintModal({ filters, datas, selectedDateId, entregasMap, onClos
                   className="mt-0.5"
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Todos os registros</p>
-                  <p className="text-xs text-gray-500">Ignora qualquer filtro ativo</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-stone-100">Todos os registros</p>
+                  <p className="text-xs text-gray-500 dark:text-stone-400">Ignora qualquer filtro ativo</p>
                 </div>
               </label>
             </div>
           </div>
 
           {count !== null && !loading && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-stone-400">
               {count} registro(s) serão incluídos na lista.
             </p>
           )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-300">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-stone-800">
           <button type="button" onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+            className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-stone-300 dark:hover:bg-stone-800">
             Cancelar
           </button>
           <button

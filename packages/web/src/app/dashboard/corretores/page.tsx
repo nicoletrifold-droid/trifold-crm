@@ -75,9 +75,9 @@ export default async function CorretoresPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Corretores</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Corretores</h1>
         <div className="flex items-center gap-3">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-stone-400">
             {brokers?.length ?? 0} corretores cadastrados
           </p>
           {isAdmin && (
@@ -91,10 +91,10 @@ export default async function CorretoresPage() {
         </div>
       </div>
 
-      <div className="rounded-lg bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-6 py-3">Nome</th>
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">CRECI</th>
@@ -105,7 +105,7 @@ export default async function CorretoresPage() {
               {isAdmin && <th className="px-6 py-3"></th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {brokers?.map((broker) => {
               const brokerUser = broker.user as unknown as {
                 id: string
@@ -126,28 +126,28 @@ export default async function CorretoresPage() {
               }
 
               return (
-                <tr key={broker.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-900">
+                <tr key={broker.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
                     {brokerUser?.name ?? "Sem nome"}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {brokerUser?.email ?? "-"}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {broker.creci || "-"}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-stone-700/50 dark:text-stone-200">
                       {typeLabels[broker.type] ?? broker.type}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     {broker.is_available ? (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
                         Disponível
                       </span>
                     ) : (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
                         Indisponível
                       </span>
                     )}
@@ -162,17 +162,17 @@ export default async function CorretoresPage() {
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {(assignmentsByBroker[broker.id] ?? []).map((a) => (
-                          <span key={a.property_id} className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">
+                          <span key={a.property_id} className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
                             {a.property_name}
                           </span>
                         ))}
                         {!(assignmentsByBroker[broker.id]?.length) && (
-                          <span className="text-xs text-stone-400">Nenhum</span>
+                          <span className="text-xs text-stone-400 dark:text-stone-500">Nenhum</span>
                         )}
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {activeLeads} / {broker.max_leads ?? 50}
                   </td>
                   {isAdmin && (
@@ -180,7 +180,7 @@ export default async function CorretoresPage() {
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           href={`/dashboard/corretores/${broker.id}`}
-                          className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200"
+                          className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
                         >
                           Editar
                         </Link>
@@ -198,7 +198,7 @@ export default async function CorretoresPage() {
               <tr>
                 <td
                   colSpan={isAdmin ? 7 : 6}
-                  className="px-6 py-8 text-center text-sm text-gray-500"
+                  className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                 >
                   Nenhum corretor cadastrado.
                 </td>
@@ -235,8 +235,8 @@ function ToggleAvailability({
         type="submit"
         className={`rounded-md px-3 py-1 text-xs font-medium ${
           isAvailable
-            ? "bg-red-50 text-red-600 hover:bg-red-100"
-            : "bg-green-50 text-green-600 hover:bg-green-100"
+            ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/15 dark:text-red-300 dark:hover:bg-red-500/20"
+            : "bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-500/15 dark:text-green-300 dark:hover:bg-green-500/20"
         }`}
       >
         {isAvailable ? "Desativar" : "Ativar"}

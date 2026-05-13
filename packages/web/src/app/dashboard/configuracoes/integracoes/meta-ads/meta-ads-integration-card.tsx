@@ -22,9 +22,9 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-100 text-green-800',
-  disconnected: 'bg-yellow-100 text-yellow-800',
-  error: 'bg-red-100 text-red-800',
+  active: 'bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300',
+  disconnected: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+  error: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
 }
 
 export function MetaAdsIntegrationCard({ initialData }: Props) {
@@ -95,14 +95,14 @@ export function MetaAdsIntegrationCard({ initialData }: Props) {
   return (
     <div className="space-y-6">
       {initialData.has_token && (
-        <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-          <div className="text-sm text-gray-600">
+        <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-stone-800 dark:bg-stone-800/50">
+          <div className="text-sm text-gray-600 dark:text-stone-300">
             <span className="font-medium">Token salvo</span>
             {initialData.last_4 && (
-              <span className="ml-2 font-mono text-gray-400">····{initialData.last_4}</span>
+              <span className="ml-2 font-mono text-gray-400 dark:text-stone-500">····{initialData.last_4}</span>
             )}
             {initialData.ad_account_id && (
-              <span className="ml-3 text-gray-500">Conta: {initialData.ad_account_id}</span>
+              <span className="ml-3 text-gray-500 dark:text-stone-400">Conta: {initialData.ad_account_id}</span>
             )}
           </div>
           {statusLabel && (
@@ -115,7 +115,7 @@ export function MetaAdsIntegrationCard({ initialData }: Props) {
 
       <form onSubmit={handleSave} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
             Ad Account ID
           </label>
           <input
@@ -123,15 +123,15 @@ export function MetaAdsIntegrationCard({ initialData }: Props) {
             value={adAccountId}
             onChange={(e) => setAdAccountId(e.target.value)}
             placeholder="act_1234567890"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-stone-400">
             Encontre em: Meta Business Suite → Configurações → Contas de anúncios
           </p>
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
             System User Token
           </label>
           <input
@@ -139,15 +139,15 @@ export function MetaAdsIntegrationCard({ initialData }: Props) {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder={initialData.has_token ? 'Novo token (deixe vazio para manter atual)' : 'EAABwzLixnjY…'}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-stone-400">
             System User Token com permissões ads_read, ads_management
           </p>
         </div>
 
         {saveError && (
-          <p className="text-sm text-red-600">{saveError}</p>
+          <p className="text-sm text-red-600 dark:text-red-300">{saveError}</p>
         )}
 
         <div className="flex items-center gap-3">
@@ -164,7 +164,7 @@ export function MetaAdsIntegrationCard({ initialData }: Props) {
               type="button"
               onClick={handleTest}
               disabled={testing}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               {testing ? 'Testando…' : 'Testar conexão'}
             </button>
@@ -176,8 +176,8 @@ export function MetaAdsIntegrationCard({ initialData }: Props) {
         <div
           className={`rounded-lg border px-4 py-3 text-sm ${
             testResult.ok
-              ? 'border-green-200 bg-green-50 text-green-800'
-              : 'border-red-200 bg-red-50 text-red-800'
+              ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-200'
+              : 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200'
           }`}
         >
           {testResult.ok ? (

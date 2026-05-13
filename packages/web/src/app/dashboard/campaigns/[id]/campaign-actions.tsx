@@ -34,7 +34,7 @@ export function CampaignActions({
       <button
         onClick={() => handleAction("pause")}
         disabled={loading}
-        className="rounded-md border border-yellow-300 px-3 py-1.5 text-sm font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-50"
+        className="rounded-md border border-yellow-300 px-3 py-1.5 text-sm font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-50 dark:border-yellow-500/40 dark:text-yellow-300 dark:hover:bg-yellow-500/10"
       >
         {loading ? "..." : "Pausar"}
       </button>

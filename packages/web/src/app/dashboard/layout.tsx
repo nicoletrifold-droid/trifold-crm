@@ -89,7 +89,7 @@ export default async function DashboardLayout({
       ]
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <SidebarNav
         items={navItems}
         userName={user.name}

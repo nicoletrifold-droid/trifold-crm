@@ -50,7 +50,7 @@ export default async function ObraBackfillPage() {
       <div>
         <Link
           href="/dashboard/obras"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar para Obras
@@ -58,16 +58,16 @@ export default async function ObraBackfillPage() {
         <div className="flex items-center gap-3">
           <GitMerge className="h-6 w-6 text-orange-500" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
               Backfill: Vincular Empreendimentos
             </h1>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-stone-400">
               Empreendimentos sem obra vinculada:{" "}
-              <span className="font-medium text-gray-800">
+              <span className="font-medium text-gray-800 dark:text-stone-200">
                 {propertiesSemObra.length}
               </span>{" "}
               · Obras disponíveis:{" "}
-              <span className="font-medium text-gray-800">
+              <span className="font-medium text-gray-800 dark:text-stone-200">
                 {obrasDisponiveis.length}
               </span>
             </p>
@@ -76,7 +76,7 @@ export default async function ObraBackfillPage() {
       </div>
 
       {obrasDisponiveis.length === 0 && propertiesSemObra.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           Não há obras disponíveis (todas já vinculadas a empreendimentos).
           Crie uma nova obra em{" "}
           <Link

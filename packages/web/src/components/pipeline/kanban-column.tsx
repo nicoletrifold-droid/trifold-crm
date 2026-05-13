@@ -35,7 +35,7 @@ export function KanbanColumn({ stage, leads, onSelectLead }: KanbanColumnProps) 
 
   return (
     <div
-      className={`flex w-72 flex-shrink-0 flex-col rounded-lg bg-gray-100 ${
+      className={`flex w-72 flex-shrink-0 flex-col rounded-lg bg-gray-100 dark:bg-stone-800/50 ${
         isOver ? "ring-2 ring-orange-400" : ""
       }`}
     >
@@ -43,7 +43,7 @@ export function KanbanColumn({ stage, leads, onSelectLead }: KanbanColumnProps) 
         className="flex items-center justify-between rounded-t-lg px-3 py-2"
         style={{ borderTop: `3px solid ${stage.color}` }}
       >
-        <h3 className="text-sm font-semibold text-gray-700">{stage.name}</h3>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-stone-200">{stage.name}</h3>
         <span
           className="rounded-full px-2 py-0.5 text-xs font-medium"
           style={{
@@ -76,7 +76,7 @@ export function KanbanColumn({ stage, leads, onSelectLead }: KanbanColumnProps) 
         </SortableContext>
 
         {leads.length === 0 && (
-          <p className="py-8 text-center text-xs text-gray-400">
+          <p className="py-8 text-center text-xs text-gray-400 dark:text-stone-500">
             Nenhum lead nesta etapa
           </p>
         )}

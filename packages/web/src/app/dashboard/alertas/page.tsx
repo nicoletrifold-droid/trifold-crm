@@ -123,21 +123,21 @@ export default async function AlertasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Alertas</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Alertas</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           Leads que precisam de atenção - sem contato recente
         </p>
       </div>
 
       {alerts.length === 0 ? (
-        <div className="rounded-lg bg-white p-8 text-center shadow-sm">
-          <p className="text-gray-500">Nenhum alerta pendente. Tudo em dia.</p>
+        <div className="rounded-lg bg-white p-8 text-center shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-gray-500 dark:text-stone-400">Nenhum alerta pendente. Tudo em dia.</p>
         </div>
       ) : (
-        <div className="rounded-lg bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
             <thead>
-              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
                 <th className="px-6 py-3">Lead</th>
                 <th className="px-6 py-3">Etapa</th>
                 <th className="px-6 py-3">Dias sem contato</th>
@@ -146,21 +146,21 @@ export default async function AlertasPage() {
                 <th className="px-6 py-3">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
               {alerts.map((alert) => {
                 const urgencyClass =
                   alert.daysSinceContact > 4
-                    ? "text-red-600 bg-red-50"
+                    ? "text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-500/15"
                     : alert.daysSinceContact > 2
-                    ? "text-orange-600 bg-orange-50"
-                    : "text-gray-600 bg-gray-50"
+                    ? "text-orange-600 bg-orange-50 dark:text-orange-300 dark:bg-orange-500/15"
+                    : "text-gray-600 bg-gray-50 dark:text-stone-300 dark:bg-stone-800/50"
 
                 return (
-                  <tr key={alert.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-900">
+                  <tr key={alert.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
                       {alert.leadName}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                       {alert.stageName}
                     </td>
                     <td className="px-6 py-4">
@@ -170,10 +170,10 @@ export default async function AlertasPage() {
                         {alert.daysSinceContact}d
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                       {alert.propertyName}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                       {alert.brokerName}
                     </td>
                     <td className="px-6 py-4">
@@ -184,7 +184,7 @@ export default async function AlertasPage() {
                         )}
                         <Link
                           href={`/dashboard/leads/${alert.leadId}`}
-                          className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                          className="rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/15"
                         >
                           Ver lead
                         </Link>
@@ -219,7 +219,7 @@ function NicoleEnviarButton({ alertId, leadId }: { alertId: string; leadId: stri
       <input type="hidden" name="leadId" value={leadId} />
       <button
         type="submit"
-        className="rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100"
+        className="rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100 dark:bg-orange-500/15 dark:text-orange-300 dark:hover:bg-orange-500/20"
       >
         Nicole enviar agora
       </button>
@@ -243,7 +243,7 @@ function MarcarFeitoButton({ alertId }: { alertId: string }) {
     >
       <button
         type="submit"
-        className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+        className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 dark:bg-green-500/15 dark:text-green-300 dark:hover:bg-green-500/20"
       >
         Marcar como feito
       </button>

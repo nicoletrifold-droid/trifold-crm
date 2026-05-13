@@ -8,8 +8,8 @@ function StatusBadge({ active }: { active: boolean }) {
     <span
       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
         active
-          ? "bg-green-100 text-green-700"
-          : "bg-gray-100 text-gray-500"
+          ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+          : "bg-gray-100 text-gray-500 dark:bg-stone-700/50 dark:text-stone-400"
       }`}
     >
       {active ? "Ativo" : "Inativo"}
@@ -28,12 +28,12 @@ function ConfigField({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium text-gray-400">{label}</p>
+      <p className="text-xs font-medium text-gray-400 dark:text-stone-500">{label}</p>
       <p
         className={`mt-0.5 text-sm ${
           mono
-            ? "rounded bg-gray-50 px-2 py-1 font-mono text-gray-700"
-            : "text-gray-900"
+            ? "rounded bg-gray-50 px-2 py-1 font-mono text-gray-700 dark:bg-stone-800 dark:text-stone-300"
+            : "text-gray-900 dark:text-stone-100"
         }`}
       >
         {value}
@@ -76,34 +76,34 @@ export default async function IntegracoesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Integrações</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Integrações</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           Gerencie as integracoes externas do sistema
         </p>
       </div>
 
       {/* Meta Ads */}
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Meta Ads</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Meta Ads</h2>
+            <p className="text-sm text-gray-500 dark:text-stone-400">
               Receba leads de campanhas do Facebook e Instagram
             </p>
           </div>
           <div className="flex items-center gap-3">
             {metaAdsStatus === "active" && (
-              <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
                 Conectado
               </span>
             )}
             {metaAdsStatus === "error" && (
-              <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+              <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
                 Erro
               </span>
             )}
             {metaAdsStatus === "disconnected" && (
-              <span className="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+              <span className="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300">
                 Não testado
               </span>
             )}
@@ -124,7 +124,7 @@ export default async function IntegracoesPage() {
         <div className="mt-4">
           <Link
             href="/dashboard/configuracoes/integracoes/meta-ads"
-            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
           >
             {metaAdsStatus ? "Gerenciar conexão →" : "Configurar conexão →"}
           </Link>
@@ -132,11 +132,11 @@ export default async function IntegracoesPage() {
       </div>
 
       {/* WhatsApp */}
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">WhatsApp</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">WhatsApp</h2>
+            <p className="text-sm text-gray-500 dark:text-stone-400">
               Integre mensagens via WhatsApp Business API
             </p>
           </div>
@@ -160,11 +160,11 @@ export default async function IntegracoesPage() {
       </div>
 
       {/* Telegram */}
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Telegram</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Telegram</h2>
+            <p className="text-sm text-gray-500 dark:text-stone-400">
               Receba mensagens via bot do Telegram
             </p>
           </div>
@@ -191,19 +191,19 @@ export default async function IntegracoesPage() {
       <GoogleIntegrationCard connected={googleConnected} />
 
       {/* Google Ads */}
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Google Ads</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Google Ads</h2>
+            <p className="text-sm text-gray-500 dark:text-stone-400">
               Receba leads de campanhas do Google Ads
             </p>
           </div>
-          <span className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+          <span className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
             Em breve
           </span>
         </div>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-gray-400 dark:text-stone-500">
           A integração com Google Ads estará disponível em breve.
         </p>
       </div>

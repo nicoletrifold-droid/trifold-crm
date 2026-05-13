@@ -23,10 +23,10 @@ interface TimelineData {
 }
 
 const actorColors: Record<string, { dot: string; bg: string; text: string; label: string }> = {
-  lead: { dot: "bg-gray-400", bg: "bg-gray-50", text: "text-gray-700", label: "Lead" },
-  nicole: { dot: "bg-orange-500", bg: "bg-orange-50", text: "text-orange-700", label: "Nicole" },
-  broker: { dot: "bg-blue-500", bg: "bg-blue-50", text: "text-blue-700", label: "Corretor" },
-  system: { dot: "bg-green-500", bg: "bg-green-50", text: "text-green-700", label: "Sistema" },
+  lead: { dot: "bg-gray-400 dark:bg-stone-500", bg: "bg-gray-50 dark:bg-stone-800/50", text: "text-gray-700 dark:text-stone-300", label: "Lead" },
+  nicole: { dot: "bg-orange-500", bg: "bg-orange-50 dark:bg-orange-500/10", text: "text-orange-700 dark:text-orange-300", label: "Nicole" },
+  broker: { dot: "bg-blue-500", bg: "bg-blue-50 dark:bg-blue-500/10", text: "text-blue-700 dark:text-blue-300", label: "Corretor" },
+  system: { dot: "bg-green-500", bg: "bg-green-50 dark:bg-green-500/10", text: "text-green-700 dark:text-green-300", label: "Sistema" },
 }
 
 const typeIcons: Record<string, string> = {
@@ -84,19 +84,19 @@ export default async function TimelinePage({
       {/* Back link */}
       <Link
         href={`/dashboard/leads/${id}`}
-        className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+        className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
       >
         &larr; Voltar para lead
       </Link>
 
       {/* Summary Card */}
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
               Timeline - {lead.name || "Sem nome"}
             </h1>
-            <p className="mt-1 text-sm text-gray-500">{lead.phone}</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">{lead.phone}</p>
           </div>
           {stage && (
             <span
@@ -111,23 +111,23 @@ export default async function TimelinePage({
           )}
         </div>
         <div className="mt-4 grid grid-cols-3 gap-4">
-          <div className="rounded-lg bg-gray-50 p-3 text-center">
-            <div className="text-2xl font-bold text-gray-900">
+          <div className="rounded-lg bg-gray-50 p-3 text-center dark:bg-stone-800/50">
+            <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">
               {timelineData.summary.total_days}
             </div>
-            <div className="text-xs text-gray-500">dias de jornada</div>
+            <div className="text-xs text-gray-500 dark:text-stone-400">dias de jornada</div>
           </div>
-          <div className="rounded-lg bg-gray-50 p-3 text-center">
-            <div className="text-2xl font-bold text-gray-900">
+          <div className="rounded-lg bg-gray-50 p-3 text-center dark:bg-stone-800/50">
+            <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">
               {timelineData.summary.total_messages}
             </div>
-            <div className="text-xs text-gray-500">mensagens</div>
+            <div className="text-xs text-gray-500 dark:text-stone-400">mensagens</div>
           </div>
-          <div className="rounded-lg bg-gray-50 p-3 text-center">
-            <div className="text-2xl font-bold text-gray-900">
+          <div className="rounded-lg bg-gray-50 p-3 text-center dark:bg-stone-800/50">
+            <div className="text-2xl font-bold text-gray-900 dark:text-stone-100">
               {lead.qualification_score ?? "-"}
             </div>
-            <div className="text-xs text-gray-500">score</div>
+            <div className="text-xs text-gray-500 dark:text-stone-400">score</div>
           </div>
         </div>
       </div>
@@ -147,7 +147,7 @@ export default async function TimelinePage({
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
               activeFilter === f.key
                 ? "bg-orange-600 text-white"
-                : "bg-white text-gray-600 shadow-sm hover:bg-gray-50"
+                : "bg-white text-gray-600 shadow-sm hover:bg-gray-50 dark:bg-stone-900 dark:text-stone-300 dark:ring-1 dark:ring-stone-800 dark:hover:bg-stone-800"
             }`}
           >
             {f.label}
@@ -156,11 +156,11 @@ export default async function TimelinePage({
       </div>
 
       {/* Timeline */}
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         {filteredEvents.length > 0 ? (
           <div className="relative">
             {/* Vertical line */}
-            <div className="absolute left-4 top-0 h-full w-0.5 bg-gray-200" />
+            <div className="absolute left-4 top-0 h-full w-0.5 bg-gray-200 dark:bg-stone-800" />
 
             <div className="space-y-6">
               {filteredEvents.map((event, index) => {
@@ -180,7 +180,7 @@ export default async function TimelinePage({
                     {/* Duration separator */}
                     {daysBetween > 0 && (
                       <div className="relative mb-4 flex items-center justify-center py-2">
-                        <div className="rounded-full bg-gray-100 px-3 py-0.5 text-xs text-gray-400">
+                        <div className="rounded-full bg-gray-100 px-3 py-0.5 text-xs text-gray-400 dark:bg-stone-800 dark:text-stone-500">
                           {daysBetween} dia{daysBetween > 1 ? "s" : ""} depois
                         </div>
                       </div>
@@ -205,11 +205,11 @@ export default async function TimelinePage({
                             >
                               {colors.label}
                             </span>
-                            <span className="text-xs font-medium text-gray-700">
+                            <span className="text-xs font-medium text-gray-700 dark:text-stone-300">
                               {event.title}
                             </span>
                           </div>
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-gray-400 dark:text-stone-500">
                             {new Date(event.timestamp).toLocaleString("pt-BR", {
                               day: "2-digit",
                               month: "short",
@@ -218,7 +218,7 @@ export default async function TimelinePage({
                             })}
                           </span>
                         </div>
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-stone-300">
                           {event.description}
                         </p>
                       </div>
@@ -229,7 +229,7 @@ export default async function TimelinePage({
             </div>
           </div>
         ) : (
-          <p className="text-center text-sm text-gray-400">
+          <p className="text-center text-sm text-gray-400 dark:text-stone-500">
             Nenhum evento encontrado.
           </p>
         )}

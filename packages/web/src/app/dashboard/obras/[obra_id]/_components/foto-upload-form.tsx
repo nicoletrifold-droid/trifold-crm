@@ -181,9 +181,9 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
   const hasIdle = entries.some((e) => e.status === "idle")
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
+    <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-stone-100">
           Adicionar Fotos
         </h3>
         {entries.length > 0 && (
@@ -191,7 +191,7 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
             type="button"
             onClick={clearAll}
             disabled={uploading}
-            className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+            className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-200"
           >
             Limpar tudo
           </button>
@@ -204,7 +204,7 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
           <div>
             <label
               htmlFor="upload-caption"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300"
             >
               Legenda (opcional)
             </label>
@@ -216,13 +216,13 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
               disabled={uploading}
               maxLength={255}
               placeholder="Aplicada a todas as fotos do lote"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
           <div>
             <label
               htmlFor="upload-fase"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300"
             >
               Vincular a uma fase (opcional)
             </label>
@@ -231,7 +231,7 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
               value={faseId}
               onChange={(e) => setFaseId(e.target.value)}
               disabled={uploading || fases.length === 0}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             >
               <option value="">— Nenhuma fase —</option>
               {fases.map((f) => (
@@ -246,13 +246,13 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
         {/* Drop area / file input */}
         <label
           htmlFor="foto-input"
-          className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center hover:border-orange-400 hover:bg-orange-50"
+          className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center hover:border-orange-400 hover:bg-orange-50 dark:border-stone-700 dark:bg-stone-800/50 dark:hover:border-orange-400 dark:hover:bg-orange-500/10"
         >
-          <Upload className="mb-2 h-8 w-8 text-gray-400" />
-          <p className="text-sm font-medium text-gray-700">
+          <Upload className="mb-2 h-8 w-8 text-gray-400 dark:text-stone-500" />
+          <p className="text-sm font-medium text-gray-700 dark:text-stone-300">
             Clique para selecionar imagens
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-stone-400">
             JPG, PNG, WebP — até 10 MB cada
           </p>
           <input
@@ -273,9 +273,9 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
             {entries.map((entry) => (
               <div
                 key={entry.id}
-                className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
+                className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-stone-800 dark:bg-stone-800/50"
               >
-                <div className="relative aspect-square w-full bg-gray-100">
+                <div className="relative aspect-square w-full bg-gray-100 dark:bg-stone-800">
                   {entry.previewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -284,7 +284,7 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                    <div className="flex h-full w-full items-center justify-center text-xs text-gray-400 dark:text-stone-500">
                       Sem preview
                     </div>
                   )}
@@ -320,11 +320,11 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
                 </div>
 
                 <div className="px-2 py-1.5">
-                  <p className="truncate text-xs text-gray-700">
+                  <p className="truncate text-xs text-gray-700 dark:text-stone-300">
                     {entry.file.name}
                   </p>
                   {entry.errorMessage && (
-                    <p className="text-[11px] text-red-600">
+                    <p className="text-[11px] text-red-600 dark:text-red-300">
                       {entry.errorMessage}
                     </p>
                   )}
@@ -335,7 +335,7 @@ export function FotoUploadForm({ obraId, fases }: FotoUploadFormProps) {
         )}
 
         {globalError && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">
             {globalError}
           </p>
         )}

@@ -89,10 +89,10 @@ export function MensagensInbox({
   }
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-gray-200 bg-white">
+    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
       {/* Sidebar */}
       <div
-        className={`w-80 flex-shrink-0 border-r border-gray-200 ${
+        className={`w-80 flex-shrink-0 border-r border-gray-200 dark:border-stone-800 ${
           selectedConversa ? "hidden lg:flex" : "flex"
         } flex-col`}
       >

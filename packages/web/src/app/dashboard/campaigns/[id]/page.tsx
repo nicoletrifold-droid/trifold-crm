@@ -6,18 +6,18 @@ import { CampaignActions } from "./campaign-actions"
 import { EntriesTable } from "./entries-table"
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
-  draft: { label: "Rascunho", className: "bg-gray-100 text-gray-600" },
-  active: { label: "Ativa", className: "bg-green-100 text-green-700" },
-  paused: { label: "Pausada", className: "bg-yellow-100 text-yellow-700" },
-  ended: { label: "Encerrada", className: "bg-red-100 text-red-700" },
+  draft: { label: "Rascunho", className: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300" },
+  active: { label: "Ativa", className: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" },
+  paused: { label: "Pausada", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300" },
+  ended: { label: "Encerrada", className: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300" },
 }
 
 function MetricCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium uppercase text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="text-xs text-gray-400">{sub}</p>}
+    <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+      <p className="text-xs font-medium uppercase text-gray-500 dark:text-stone-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">{value}</p>
+      {sub && <p className="text-xs text-gray-400 dark:text-stone-500">{sub}</p>}
     </div>
   )
 }
@@ -67,29 +67,29 @@ export default async function CampaignDetailPage({
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{campaign.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">{campaign.name}</h1>
             <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}>
               {badge.label}
             </span>
           </div>
           {(prop as { name: string } | null)?.name && (
-            <p className="mt-1 text-sm text-gray-500">{(prop as { name: string }).name}</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">{(prop as { name: string }).name}</p>
           )}
           {campaign.description && (
-            <p className="mt-1 text-sm text-gray-400">{campaign.description}</p>
+            <p className="mt-1 text-sm text-gray-400 dark:text-stone-500">{campaign.description}</p>
           )}
         </div>
         <div className="flex gap-2">
           <CampaignActions campaignId={id} status={campaign.status} />
           <Link
             href={`/dashboard/pipeline?campaign_id=${id}`}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Ver no Pipeline
           </Link>
           <Link
             href={`/dashboard/campaigns/${id}/editar`}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Editar
           </Link>
@@ -107,23 +107,23 @@ export default async function CampaignDetailPage({
 
       {/* Detail breakdown */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">WhatsApp</h3>
+        <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-stone-300">WhatsApp</h3>
           <div className="grid grid-cols-4 gap-2 text-center text-xs">
-            <div><p className="font-bold text-gray-900">{e.filter(x => x.whatsapp_status !== "pending").length}</p><p className="text-gray-400">Enviados</p></div>
-            <div><p className="font-bold text-gray-900">{waDelivered}</p><p className="text-gray-400">Entregues</p></div>
-            <div><p className="font-bold text-gray-900">{e.filter(x => x.whatsapp_status === "read").length}</p><p className="text-gray-400">Lidos</p></div>
-            <div><p className="font-bold text-red-600">{e.filter(x => x.whatsapp_status === "failed").length}</p><p className="text-gray-400">Falharam</p></div>
+            <div><p className="font-bold text-gray-900 dark:text-stone-100">{e.filter(x => x.whatsapp_status !== "pending").length}</p><p className="text-gray-400 dark:text-stone-500">Enviados</p></div>
+            <div><p className="font-bold text-gray-900 dark:text-stone-100">{waDelivered}</p><p className="text-gray-400 dark:text-stone-500">Entregues</p></div>
+            <div><p className="font-bold text-gray-900 dark:text-stone-100">{e.filter(x => x.whatsapp_status === "read").length}</p><p className="text-gray-400 dark:text-stone-500">Lidos</p></div>
+            <div><p className="font-bold text-red-600">{e.filter(x => x.whatsapp_status === "failed").length}</p><p className="text-gray-400 dark:text-stone-500">Falharam</p></div>
           </div>
         </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">E-mail</h3>
+        <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-stone-300">E-mail</h3>
           <div className="grid grid-cols-5 gap-2 text-center text-xs">
-            <div><p className="font-bold text-gray-900">{e.filter(x => x.email_status !== "pending").length}</p><p className="text-gray-400">Enviados</p></div>
-            <div><p className="font-bold text-orange-600">{e.filter(x => ["delivered","opened","clicked"].includes(x.email_status)).length}</p><p className="text-gray-400">Entregues</p></div>
-            <div><p className="font-bold text-green-600">{emailOpened}</p><p className="text-gray-400">Abertos</p></div>
-            <div><p className="font-bold text-blue-600">{emailClicked}</p><p className="text-gray-400">Cliques</p></div>
-            <div><p className="font-bold text-red-600">{e.filter(x => x.email_status === "bounced").length}</p><p className="text-gray-400">Bounced</p></div>
+            <div><p className="font-bold text-gray-900 dark:text-stone-100">{e.filter(x => x.email_status !== "pending").length}</p><p className="text-gray-400 dark:text-stone-500">Enviados</p></div>
+            <div><p className="font-bold text-orange-600">{e.filter(x => ["delivered","opened","clicked"].includes(x.email_status)).length}</p><p className="text-gray-400 dark:text-stone-500">Entregues</p></div>
+            <div><p className="font-bold text-green-600">{emailOpened}</p><p className="text-gray-400 dark:text-stone-500">Abertos</p></div>
+            <div><p className="font-bold text-blue-600">{emailClicked}</p><p className="text-gray-400 dark:text-stone-500">Cliques</p></div>
+            <div><p className="font-bold text-red-600">{e.filter(x => x.email_status === "bounced").length}</p><p className="text-gray-400 dark:text-stone-500">Bounced</p></div>
           </div>
         </div>
       </div>

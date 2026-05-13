@@ -53,46 +53,46 @@ export default function NovoUsuarioPage() {
       <div>
         <Link
           href="/dashboard/configuracoes/usuarios"
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Usuários
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-stone-900">Novo Usuário</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="mt-1 text-2xl font-bold text-stone-900 dark:text-stone-100">Novo Usuário</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Criar acesso ao sistema. Usuários com perfil &quot;Corretor&quot; também aparecem como corretores no pipeline.
         </p>
       </div>
 
-      <div className="rounded-xl bg-white p-6 shadow-sm">
+      <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <form onSubmit={handleSubmit} className="max-w-md space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-700">
+            <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">
               Nome completo
             </label>
             <input
               name="name"
               type="text"
               required
-              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
               placeholder="Nome do usuário"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-700">
+            <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">
               Email
             </label>
             <input
               name="email"
               type="email"
               required
-              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
               placeholder="email@empresa.com"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-700">
+            <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">
               Senha
             </label>
             <input
@@ -100,19 +100,19 @@ export default function NovoUsuarioPage() {
               type="password"
               required
               minLength={6}
-              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
               placeholder="Mínimo 6 caracteres"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-stone-700">
+            <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">
               Perfil de acesso
             </label>
             <select
               name="role"
               required
-              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
             >
               <option value="">Selecione...</option>
               <option value="admin">Administrador — acesso total ao sistema</option>
@@ -120,13 +120,13 @@ export default function NovoUsuarioPage() {
               <option value="broker">Corretor — pipeline próprio, leads designados, agenda</option>
               <option value="obras">Obras — acesso exclusivo ao módulo de obras</option>
             </select>
-            <p className="mt-1 text-xs text-stone-400">
+            <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
               Corretores só veem seus próprios leads e agenda. Supervisores veem tudo mas não configuram. Admins têm acesso total.
             </p>
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-300">
               {error}
             </div>
           )}
@@ -141,7 +141,7 @@ export default function NovoUsuarioPage() {
             </button>
             <Link
               href="/dashboard/configuracoes/usuarios"
-              className="text-sm text-stone-500 hover:text-stone-700"
+              className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
             >
               Cancelar
             </Link>

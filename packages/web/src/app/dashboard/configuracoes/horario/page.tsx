@@ -59,19 +59,19 @@ export default async function HorarioConfigPage() {
       <div>
         <Link
           href="/dashboard/configuracoes"
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Configurações
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-stone-900">
+        <h1 className="mt-1 text-2xl font-bold text-stone-900 dark:text-stone-100">
           Horário de Atendimento
         </h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Defina quando a Nicole atende automaticamente
         </p>
       </div>
 
-      <div className="rounded-xl bg-white p-6 shadow-sm">
+      <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <form
           action={async (formData: FormData) => {
             "use server"
@@ -122,28 +122,28 @@ export default async function HorarioConfigPage() {
           }}
         >
           {/* 24h Toggle */}
-          <div className="mb-6 rounded-lg border border-stone-200 p-4">
+          <div className="mb-6 rounded-lg border border-stone-200 p-4 dark:border-stone-800">
             <label className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-stone-900">Atendimento 24 horas</p>
-                <p className="text-xs text-stone-500">A Nicole responde a qualquer hora do dia, todos os dias</p>
+                <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">Atendimento 24 horas</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">A Nicole responde a qualquer hora do dia, todos os dias</p>
               </div>
               <input
                 type="checkbox"
                 name="always_on"
                 defaultChecked={alwaysOn}
                 disabled={!isAdmin}
-                className="h-5 w-5 rounded border-stone-300 text-orange-600 focus:ring-orange-500"
+                className="h-5 w-5 rounded border-stone-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
               />
             </label>
           </div>
 
           {/* Custom hours — only shown when not 24h */}
           <div className={alwaysOn ? "pointer-events-none opacity-40" : ""}>
-            <p className="mb-3 text-sm font-medium text-stone-700">
+            <p className="mb-3 text-sm font-medium text-stone-700 dark:text-stone-300">
               Horários por dia da semana
             </p>
-            <p className="mb-4 text-xs text-stone-400">
+            <p className="mb-4 text-xs text-stone-400 dark:text-stone-500">
               Fora desses horários, a Nicole envia mensagem de fora do expediente e retoma no próximo dia útil
             </p>
             <div className="space-y-3">
@@ -152,7 +152,7 @@ export default async function HorarioConfigPage() {
                 return (
                   <div
                     key={key}
-                    className="flex items-center gap-4 rounded-lg border border-stone-200 px-4 py-3"
+                    className="flex items-center gap-4 rounded-lg border border-stone-200 px-4 py-3 dark:border-stone-800"
                   >
                     <label className="flex w-40 items-center gap-2.5">
                       <input
@@ -160,9 +160,9 @@ export default async function HorarioConfigPage() {
                         name={`${key}_enabled`}
                         defaultChecked={day.enabled}
                         disabled={!isAdmin}
-                        className="h-4 w-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500"
+                        className="h-4 w-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
                       />
-                      <span className="text-sm text-stone-700">{label}</span>
+                      <span className="text-sm text-stone-700 dark:text-stone-300">{label}</span>
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -170,15 +170,15 @@ export default async function HorarioConfigPage() {
                         name={`${key}_start`}
                         defaultValue={day.start}
                         disabled={!isAdmin}
-                        className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:bg-stone-50"
+                        className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:disabled:bg-stone-800/60"
                       />
-                      <span className="text-xs text-stone-400">até</span>
+                      <span className="text-xs text-stone-400 dark:text-stone-500">até</span>
                       <input
                         type="time"
                         name={`${key}_end`}
                         defaultValue={day.end}
                         disabled={!isAdmin}
-                        className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:bg-stone-50"
+                        className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:disabled:bg-stone-800/60"
                       />
                     </div>
                   </div>

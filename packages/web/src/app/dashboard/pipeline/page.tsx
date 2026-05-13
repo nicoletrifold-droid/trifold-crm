@@ -96,23 +96,23 @@ export default async function PipelinePage({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Pipeline</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Pipeline</h1>
+        <p className="text-sm text-gray-500 dark:text-stone-400">
           {filteredLeads.length} leads no pipeline
         </p>
       </div>
 
       {/* Filter Bar */}
-      <div className="rounded-lg bg-white p-4 shadow-sm">
+      <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <form className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500">
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Empreendimento
             </label>
             <select
               name="property_id"
               defaultValue={filters.property_id ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todos</option>
               {properties?.map((p) => (
@@ -124,13 +124,13 @@ export default async function PipelinePage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Corretor
             </label>
             <select
               name="broker_id"
               defaultValue={filters.broker_id ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todos</option>
               {brokers?.map((b) => (
@@ -142,13 +142,13 @@ export default async function PipelinePage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Campanha
             </label>
             <select
               name="campaign_id"
               defaultValue={filters.campaign_id ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todas</option>
               {campaigns?.map((c) => (
@@ -160,13 +160,13 @@ export default async function PipelinePage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Score
             </label>
             <select
               name="score"
               defaultValue={filters.score ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todos</option>
               <option value="high">Alto (&ge;70)</option>
@@ -185,7 +185,7 @@ export default async function PipelinePage({
           {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id) && (
             <Link
               href="/dashboard/pipeline"
-              className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+              className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               Limpar
             </Link>
@@ -193,7 +193,7 @@ export default async function PipelinePage({
 
           <Link
             href="/dashboard/pipeline/config"
-            className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Config follow-up
           </Link>

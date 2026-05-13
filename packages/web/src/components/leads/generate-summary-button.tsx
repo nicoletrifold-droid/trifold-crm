@@ -37,7 +37,7 @@ export function GenerateSummaryButton({ leadId }: { leadId: string }) {
         {loading ? "Gerando..." : "Gerar resumo"}
       </button>
       {error && (
-        <p className="mt-2 text-sm text-red-600">{error}</p>
+        <p className="mt-2 text-sm text-red-600 dark:text-red-300">{error}</p>
       )}
     </div>
   )

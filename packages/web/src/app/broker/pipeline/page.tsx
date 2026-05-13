@@ -33,15 +33,15 @@ export default async function BrokerPipelinePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Meu Pipeline</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meu Pipeline</h1>
+        <p className="text-sm text-gray-500 dark:text-stone-400">
           {leads?.length ?? 0} leads
         </p>
       </div>
 
       {leads?.length === 0 ? (
-        <div className="rounded-lg bg-white p-12 text-center shadow-sm">
-          <p className="text-gray-500">
+        <div className="rounded-lg bg-white p-12 text-center shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-gray-500 dark:text-stone-400">
             Você não tem leads designados. Novos leads serão atribuídos pelo
             supervisor.
           </p>
