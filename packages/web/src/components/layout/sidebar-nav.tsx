@@ -41,13 +41,13 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
       <aside className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-56 lg:flex-col">
         <div className="flex grow flex-col border-r border-stone-200 bg-white">
           {/* Logo */}
-          <div className="flex h-16 items-center border-b border-stone-100 px-5">
-            <Image src="/logo-trifold.webp" alt="Trifold" width={108} height={108} />
+          <div className="flex h-20 items-center border-b border-stone-100 px-5">
+            <Image src="/logo-trifold.webp" alt="Trifold" width={130} height={130} />
           </div>
 
           {/* Nav Items */}
-          <nav className="flex flex-1 flex-col px-3 py-4">
-            <ul className="flex flex-1 flex-col gap-0.5">
+          <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
+            <ul className="flex flex-col gap-0.5">
               {items.map((item) => {
                 const active = isActive(item.href)
                 return (
