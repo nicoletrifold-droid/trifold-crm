@@ -1,6 +1,6 @@
 # Story 29.3 — UI: Painel de Controle de Brindes
 
-## Status: Ready
+## Status: Ready for Review
 
 ## Executor Assignment
 executor: "@dev"
@@ -22,46 +22,46 @@ Depende da Story 29.1 (tabelas) e Story 29.2 (API routes). Esta story é a entre
 ## Acceptance Criteria
 
 ### Acesso e Navegação
-- [ ] AC1: Rota `/dashboard/brindes` acessível para roles `admin` e `supervisor`; outros roles recebem redirect para `/dashboard`
-- [ ] AC2: Item "Brindes" aparece na sidebar para admin e supervisor (após "Obras" no menu)
-- [ ] AC3: Rota protegida via guard no `dashboard/layout.tsx` ou `page.tsx`
+- [x] AC1: Rota `/dashboard/brindes` acessível para roles `admin` e `supervisor`; outros roles recebem redirect para `/dashboard`
+- [x] AC2: Item "Brindes" aparece na sidebar para admin e supervisor (após "Obras" no menu)
+- [x] AC3: Rota protegida via guard no `dashboard/layout.tsx` ou `page.tsx`
 
 ### Painel Principal — Tabela
-- [ ] AC4: Tabela exibe colunas: Nome da Obra, Tipo (ícone Mãe/Pai), Nome, Cidade/Estado, Status (badge colorido), Ações
-- [ ] AC5: Tabela paginada (50 por página) com controles de navegação anterior/próximo
-- [ ] AC6: Contagem total de registros exibida acima da tabela ("X destinatários")
-- [ ] AC7: Status de entrega exibido como badge colorido: Pendente (cinza), Entregue (verde), Não encontrado (vermelho)
-- [ ] AC8: Status depende da data comemorativa selecionada no seletor (AC12)
+- [x] AC4: Tabela exibe colunas: Nome da Obra, Tipo (ícone Mãe/Pai), Nome, Cidade/Estado, Status (badge colorido), Ações
+- [x] AC5: Tabela paginada (50 por página) com controles de navegação anterior/próximo
+- [x] AC6: Contagem total de registros exibida acima da tabela ("X destinatários")
+- [x] AC7: Status de entrega exibido como badge colorido: Pendente (cinza), Entregue (verde), Não encontrado (vermelho)
+- [x] AC8: Status depende da data comemorativa selecionada no seletor (AC12)
 
 ### Filtros
-- [ ] AC9: Barra de filtros com campos: Nome da Obra (select com opções únicas), Tipo (select: Todos/Mãe/Pai), Nome (input texto, busca parcial), Cidade (input texto), Estado (select UF)
-- [ ] AC10: Filtros aplicados em tempo real (debounce 300ms para inputs de texto) via chamada à API `/api/brindes/destinatarios`
-- [ ] AC11: Botão "Limpar filtros" reseta todos os campos
-- [ ] AC12: Seletor de Data Comemorativa no topo da página (dropdown com datas ativas ordenadas por data); quando selecionado, a coluna Status reflete o status de entrega para aquela data
+- [x] AC9: Barra de filtros com campos: Nome da Obra (select com opções únicas), Tipo (select: Todos/Mãe/Pai), Nome (input texto, busca parcial), Cidade (input texto), Estado (select UF)
+- [x] AC10: Filtros aplicados em tempo real (debounce 300ms para inputs de texto) via chamada à API `/api/brindes/destinatarios`
+- [x] AC11: Botão "Limpar filtros" reseta todos os campos
+- [x] AC12: Seletor de Data Comemorativa no topo da página (dropdown com datas ativas ordenadas por data); quando selecionado, a coluna Status reflete o status de entrega para aquela data
 
 ### CRUD — Destinatários
-- [ ] AC13: Botão "Novo Destinatário" abre modal de criação com campos: Nome da Obra (input + sugestões das obras existentes), Tipo (select Mãe/Pai/Outro), Nome completo, Observação, e seção de endereço com subcampos: Logradouro, Número, Complemento, Bairro, Cidade, Estado (select UF), CEP, Referência (ex: "OBRA COMUNIDADE")
-- [ ] AC14: Modal de edição abre ao clicar em "Editar" na linha; carrega dados existentes do destinatário
-- [ ] AC15: Confirmação de exclusão antes de deletar; exibir nome do destinatário na mensagem de confirmação
-- [ ] AC16: Após criar/editar/deletar, tabela atualiza sem reload de página (router.refresh() ou revalidação)
+- [x] AC13: Botão "Novo Destinatário" abre modal de criação com campos: Nome da Obra (input + sugestões das obras existentes), Tipo (select Mãe/Pai/Outro), Nome completo, Observação, e seção de endereço com subcampos: Logradouro, Número, Complemento, Bairro, Cidade, Estado (select UF), CEP, Referência (ex: "OBRA COMUNIDADE")
+- [x] AC14: Modal de edição abre ao clicar em "Editar" na linha; carrega dados existentes do destinatário
+- [x] AC15: Confirmação de exclusão antes de deletar; exibir nome do destinatário na mensagem de confirmação
+- [x] AC16: Após criar/editar/deletar, tabela atualiza sem reload de página (router.refresh() ou revalidação)
 
 ### Controle de Status de Entrega
-- [ ] AC17: Badge de status na tabela é clicável quando uma data comemorativa está selecionada
-- [ ] AC18: Clicar no badge abre dropdown inline com opções: "Pendente", "Entregue", "Não encontrado"
-- [ ] AC19: Ao selecionar novo status, chamar `POST /api/brindes/entregas` (upsert) e atualizar badge sem reload
-- [ ] AC20: Para destinatários sem entrega registrada para a data selecionada, badge exibe "Pendente" como estado padrão (cinza)
+- [x] AC17: Badge de status na tabela é clicável quando uma data comemorativa está selecionada
+- [x] AC18: Clicar no badge abre dropdown inline com opções: "Pendente", "Entregue", "Não encontrado"
+- [x] AC19: Ao selecionar novo status, chamar `POST /api/brindes/entregas` (upsert) e atualizar badge sem reload
+- [x] AC20: Para destinatários sem entrega registrada para a data selecionada, badge exibe "Pendente" como estado padrão (cinza)
 
 ### Gerenciar Datas Comemorativas
-- [ ] AC21: Link/botão "Gerenciar Datas" abre modal com lista das datas comemorativas da org
-- [ ] AC22: Modal exibe: nome, data formatada (ex: "25/12/2026"), badge ativa/inativa, botão "Desativar/Ativar"
-- [ ] AC23: Formulário no modal para adicionar nova data: nome (texto), data (input type="date")
+- [x] AC21: Link/botão "Gerenciar Datas" abre modal com lista das datas comemorativas da org
+- [x] AC22: Modal exibe: nome, data formatada (ex: "25/12/2026"), badge ativa/inativa, botão "Desativar/Ativar"
+- [x] AC23: Formulário no modal para adicionar nova data: nome (texto), data (input type="date")
 
 ### Import de Dados da Planilha
-- [ ] AC24: Seção "Importar" abre modal com textarea para colar linhas no formato CSV (separador vírgula ou tab)
-- [ ] AC25: Formato aceito: `obra_nome;tipo;nome;observacao;endereco_raw` (separador `;`)
-- [ ] AC26: Preview das primeiras 5 linhas antes de confirmar import
-- [ ] AC27: Após import, exibir resultado: "X registros importados, Y erros" com detalhes dos erros
-- [ ] AC28: Endereço bruto (`endereco_raw`) passa pelo `parseEndereco()` no servidor via `POST /api/brindes/import`
+- [x] AC24: Seção "Importar" abre modal com textarea para colar linhas no formato CSV (separador vírgula ou tab)
+- [x] AC25: Formato aceito: `obra_nome;tipo;nome;observacao;endereco_raw` (separador `;`)
+- [x] AC26: Preview das primeiras 5 linhas antes de confirmar import
+- [x] AC27: Após import, exibir resultado: "X registros importados, Y erros" com detalhes dos erros
+- [x] AC28: Endereço bruto (`endereco_raw`) passa pelo `parseEndereco()` no servidor via `POST /api/brindes/import`
 
 ## Escopo
 
@@ -210,17 +210,17 @@ FORTEGREEN;mae;Maria Souza;;OBRA FORTEGREEN
 
 ## Tasks
 
-- [ ] 1. Criar `packages/web/src/app/dashboard/brindes/page.tsx` (server component, guard, carga inicial de datas e obras únicas) (AC1, AC3)
-- [ ] 2. Criar `_components/date-selector.tsx` — dropdown de datas comemorativas com estado selecionado (AC12)
-- [ ] 3. Criar `_components/brindes-filter-bar.tsx` — filtros com debounce para texto (AC9, AC10, AC11)
-- [ ] 4. Criar `_components/status-badge.tsx` — badge clicável com dropdown inline de status (AC7, AC17, AC18, AC19, AC20)
-- [ ] 5. Criar `_components/brindes-table.tsx` — tabela paginada integrando filter-bar, date-selector e status-badge (AC4, AC5, AC6, AC8)
-- [ ] 6. Criar `_components/destinatario-modal.tsx` — formulário criar/editar com todos os campos de endereço (AC13, AC14, AC15, AC16)
-- [ ] 7. Criar `_components/datas-modal.tsx` — listar, ativar/desativar, criar nova data comemorativa (AC21, AC22, AC23)
-- [ ] 8. Criar `_components/import-modal.tsx` — textarea CSV, preview 5 linhas, resultado do import (AC24-AC28)
-- [ ] 9. Adicionar item "Brindes" na sidebar do `dashboard/layout.tsx` (AC2)
-- [ ] 10. `npm run typecheck && npm run lint` sem erros
-- [ ] 11. Testar no browser: fluxo completo (filtros, criar, editar, deletar, mudar status, importar)
+- [x] 1. Criar `packages/web/src/app/dashboard/brindes/page.tsx` (server component, guard, carga inicial de datas e obras únicas) (AC1, AC3)
+- [x] 2. Criar `_components/date-selector.tsx` — dropdown de datas comemorativas com estado selecionado (AC12)
+- [x] 3. Criar `_components/brindes-filter-bar.tsx` — filtros com debounce para texto (AC9, AC10, AC11)
+- [x] 4. Criar `_components/status-badge.tsx` — badge clicável com dropdown inline de status (AC7, AC17, AC18, AC19, AC20)
+- [x] 5. Criar `_components/brindes-table.tsx` — tabela paginada integrando filter-bar, date-selector e status-badge (AC4, AC5, AC6, AC8)
+- [x] 6. Criar `_components/destinatario-modal.tsx` — formulário criar/editar com todos os campos de endereço (AC13, AC14, AC15, AC16)
+- [x] 7. Criar `_components/datas-modal.tsx` — listar, ativar/desativar, criar nova data comemorativa (AC21, AC22, AC23)
+- [x] 8. Criar `_components/import-modal.tsx` — textarea CSV, preview 5 linhas, resultado do import (AC24-AC28)
+- [x] 9. Adicionar item "Brindes" na sidebar do `dashboard/layout.tsx` (AC2)
+- [x] 10. `npm run typecheck && npm run lint` sem erros
+- [x] 11. Testar no browser: fluxo completo (filtros, criar, editar, deletar, mudar status, importar)
 
 ## Estimativa: 6h
 
@@ -229,9 +229,37 @@ FORTEGREEN;mae;Maria Souza;;OBRA FORTEGREEN
 - Story 29.1 concluída (tabelas no banco)
 - Story 29.2 concluída (API routes disponíveis)
 
+## Dev Agent Record
+
+### Agent Model Used
+claude-sonnet-4-6
+
+### Files Modified
+- `packages/web/src/app/dashboard/brindes/page.tsx` — CRIADO (server component, guard, carga inicial)
+- `packages/web/src/app/dashboard/brindes/_components/types.ts` — CRIADO (tipos compartilhados)
+- `packages/web/src/app/dashboard/brindes/_components/date-selector.tsx` — CRIADO
+- `packages/web/src/app/dashboard/brindes/_components/brindes-filter-bar.tsx` — CRIADO (5 filtros + debounce)
+- `packages/web/src/app/dashboard/brindes/_components/status-badge.tsx` — CRIADO (badge clicável + dropdown)
+- `packages/web/src/app/dashboard/brindes/_components/brindes-table.tsx` — CRIADO (tabela paginada + state management)
+- `packages/web/src/app/dashboard/brindes/_components/destinatario-modal.tsx` — CRIADO (create/edit)
+- `packages/web/src/app/dashboard/brindes/_components/datas-modal.tsx` — CRIADO (listar + toggle + criar)
+- `packages/web/src/app/dashboard/brindes/_components/import-modal.tsx` — CRIADO (CSV textarea + preview + import)
+- `packages/web/src/app/dashboard/layout.tsx` — MODIFICADO (Gift icon + NAV_ITEM_BRINDES adicionado)
+- `packages/web/src/app/api/brindes/entregas/route.ts` — MODIFICADO (GET adicionado para fetch por data)
+
+### Completion Notes
+- Guard admin/supervisor com redirect para /dashboard em page.tsx ✅
+- Sidebar: `NAV_ITEM_BRINDES` com `<Gift>` JSX inline, no bloco `isAdminOrSupervisor` ✅
+- Paginação 50 por página com total de registros exibido ✅
+- Status badge colorido: pendente (cinza), entregue (verde), não encontrado (vermelho) ✅
+- Dropdown inline de status ao clicar no badge, chama POST /api/brindes/entregas ✅
+- Import CSV com separador `;`, preview 5 linhas, resultado inserted/errors ✅
+- typecheck → 0 errors ✅, lint → 0 novos warnings ✅
+
 ## Change Log
 
 | Data | Versão | Descrição | Agente |
 |------|--------|-----------|--------|
 | 2026-05-13 | 1.0 | Story criada — Epic 29 Controle de Brindes | @sm (River) |
 | 2026-05-13 | 1.1 | Should-Fix: padrão de sidebar corrigido (JSX inline + `NAV_ITEM_BRINDES` + spread condicional) | @po (Pax) |
+| 2026-05-13 | 1.2 | Implementação completa: 9 novos arquivos, sidebar atualizada, GET entregas adicionado | @dev (Dex) |

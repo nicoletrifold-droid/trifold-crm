@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  const dataComemorativaId = new URL(request.url).searchParams.get("data_comemorativa_id")
+  if (!dataComemorativaId) {
+    return NextResponse.json({ error: "data_comemorativa_id é obrigatório" }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from("brindes_entregas")
+    .select("destinatario_id, status, observacao_entrega, entregue_em")
+    .eq("org_id", appUser.org_id)
+    .eq("data_comemorativa_id", dataComemorativaId)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ data: data ?? [] })
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error

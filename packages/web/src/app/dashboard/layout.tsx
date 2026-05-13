@@ -19,6 +19,7 @@ import {
   Shield,
   HardHat,
   Inbox,
+  Gift,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -40,6 +41,7 @@ const NAV_ITEMS_BASE = [
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
+const NAV_ITEM_BRINDES = { href: "/dashboard/brindes", label: "Brindes", icon: <Gift className={ICON_SIZE} /> }
 const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
@@ -79,7 +81,7 @@ export default async function DashboardLayout({
     ? [NAV_ITEM_OBRAS]
     : [
         ...NAV_ITEMS_BASE,
-        ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS] : []),
+        ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES] : []),
         ...(isAdminOrSupervisor
           ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
           : []),
