@@ -28,13 +28,18 @@ export async function GET(request: NextRequest) {
   const estado = searchParams.get("estado")
   if (estado) query = query.eq("endereco_estado", estado)
 
+  const isExport = searchParams.get("export") === "1"
+
+  let finalQuery = query.order("obra_nome").order("nome")
+
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"))
   const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") ?? "50")))
 
-  const { data, error, count } = await query
-    .range((page - 1) * limit, page * limit - 1)
-    .order("obra_nome")
-    .order("nome")
+  if (!isExport) {
+    finalQuery = finalQuery.range((page - 1) * limit, page * limit - 1)
+  }
+
+  const { data, error, count } = await finalQuery
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

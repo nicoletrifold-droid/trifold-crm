@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Upload, CalendarDays, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react"
+import { Plus, Upload, CalendarDays, ChevronLeft, ChevronRight, Pencil, Trash2, Printer } from "lucide-react"
 import { DateSelector } from "./date-selector"
 import { BrindesFilterBar, type BrindesFilters } from "./brindes-filter-bar"
 import { StatusBadge } from "./status-badge"
 import { DestinatarioModal } from "./destinatario-modal"
 import { DatasModal } from "./datas-modal"
 import { ImportModal } from "./import-modal"
+import { PrintModal } from "./print-modal"
 import type { DataComemorativa, Destinatario, Entrega, EntregaStatus } from "./types"
 
 interface BrindesTableProps {
@@ -38,6 +39,7 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
   const [modalEdit, setModalEdit] = useState<Destinatario | null>(null)
   const [modalDatas, setModalDatas] = useState(false)
   const [modalImport, setModalImport] = useState(false)
+  const [modalPrint, setModalPrint] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Destinatario | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -116,6 +118,10 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
           {loadingEntregas && <p className="mt-1 text-xs text-gray-400">Carregando status...</p>}
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setModalPrint(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <Printer className="h-4 w-4" /> Exportar
+          </button>
           <button type="button" onClick={() => setModalDatas(true)}
             className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             <CalendarDays className="h-4 w-4" /> Gerenciar Datas
@@ -257,6 +263,15 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
           onClose={() => { setModalEdit(null); fetchDestinatarios() }} />
       )}
       {modalDatas && <DatasModal datas={datas} onClose={() => setModalDatas(false)} />}
+      {modalPrint && (
+        <PrintModal
+          filters={filters}
+          datas={datas}
+          selectedDateId={selectedDateId}
+          entregasMap={entregasMap}
+          onClose={() => setModalPrint(false)}
+        />
+      )}
       {modalImport && <ImportModal onClose={() => { setModalImport(false); fetchDestinatarios() }} />}
     </div>
   )
