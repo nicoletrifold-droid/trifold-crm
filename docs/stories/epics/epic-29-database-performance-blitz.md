@@ -446,6 +446,17 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_webhook_logs_leadgen
 
 ### Story 29.6 — Migration `035_materialize_meta_campaign_roas.sql`
 
+**Status: DONE** (aplicada em 2026-05-14 via Management API, pendente smoke humano AC 14/15)
+
+**Resultados medidos:**
+- `relkind` v→m confirmado (matview)
+- UNIQUE INDEX `idx_meta_campaign_roas_pk` criado
+- `REFRESH MATERIALIZED VIEW CONCURRENTLY` funcionando (pronto para Story 29.7)
+- EXPLAIN ANALYZE: cost 62.90→0.15 (**-97%**), Execution Time 2.312ms→0.074ms (**-97%**), ~50 ops → 2 ops (Index Scan)
+- SQL puro de aplicação: 4.42s (DROP 1.32s + CREATE MATVIEW 1.53s + CREATE INDEX 1.57s) — muito abaixo dos 30s autorizados
+- Tracking version 035 registrado em `supabase_migrations.schema_migrations`
+- Build PASS (`pnpm --filter @trifold/web build`) — zero breaking changes
+
 **Executor sugerido:** `@data-engineer` | **Quality Gate sugerido:** `@architect`
 **Quality Gate Tools:** `[migration_review, view_diff_audit, downtime_window_validation]`
 **Complexidade:** M (3h) | **Story points:** 5 | **Prioridade:** P0
