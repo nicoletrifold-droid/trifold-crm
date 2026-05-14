@@ -1,18 +1,36 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
+
+const PAGE_SIZE = 50
+
+function buildPageHref(
+  targetPage: number,
+  search?: string,
+  stageId?: string
+): string {
+  const p = new URLSearchParams()
+  p.set("page", String(targetPage))
+  if (search) p.set("search", search)
+  if (stageId) p.set("stage_id", stageId)
+  return `?${p.toString()}`
+}
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; page?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
   const params = await searchParams
 
   const isAdmin = user.role === "admin" || user.role === "supervisor"
+
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
+  const offset = (page - 1) * PAGE_SIZE
 
   let query = supabase
     .from("leads")
@@ -27,17 +45,28 @@ export default async function LeadsPage({
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
 
+  let countQuery = supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("is_active", true)
+
   if (params.search) {
-    query = query.or(
-      `name.ilike.%${params.search}%,phone.ilike.%${params.search}%`
-    )
+    const orFilter = `name.ilike.%${params.search}%,phone.ilike.%${params.search}%`
+    query = query.or(orFilter)
+    countQuery = countQuery.or(orFilter)
   }
 
   if (params.stage_id) {
     query = query.eq("stage_id", params.stage_id)
+    countQuery = countQuery.eq("stage_id", params.stage_id)
   }
 
-  const { data: leads } = await query
+  query = query.range(offset, offset + PAGE_SIZE - 1)
+
+  const [leadsResult, countResult] = await Promise.all([query, countQuery])
+  const leads = leadsResult.data
+  const totalCount = countResult.count ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   return (
     <div className="space-y-6">
@@ -189,6 +218,44 @@ export default async function LeadsPage({
             )}
           </tbody>
         </table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
+            {page > 1 ? (
+              <Link
+                href={buildPageHref(page - 1, params.search, params.stage_id)}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </Link>
+            ) : (
+              <span
+                aria-disabled="true"
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-300 dark:border-stone-800 dark:text-stone-600"
+              >
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </span>
+            )}
+            <span className="text-sm text-gray-500 dark:text-stone-400">
+              Exibindo {leads?.length ?? 0} de {totalCount} leads — Página{" "}
+              {page} de {totalPages}
+            </span>
+            {page < totalPages ? (
+              <Link
+                href={buildPageHref(page + 1, params.search, params.stage_id)}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                Próxima <ChevronRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <span
+                aria-disabled="true"
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-300 dark:border-stone-800 dark:text-stone-600"
+              >
+                Próxima <ChevronRight className="h-4 w-4" />
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
