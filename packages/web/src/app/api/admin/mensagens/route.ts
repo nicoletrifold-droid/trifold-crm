@@ -22,6 +22,21 @@ export interface ClienteConversa {
   } | null
 }
 
+// Shape de retorno da RPC `get_admin_mensagens_paginated` (FASE 1 — migration 039).
+// bigint columns chegam como string no driver — Number() cast obrigatório no map.
+interface AdminMensagensRpcRow {
+  obra_id: string
+  obra_name: string | null
+  cliente_id: string
+  cliente_name: string | null
+  unread_count: number | string
+  last_message_at: string
+  last_message_content: string | null
+  last_message_type: string | null
+  last_message_sender_type: string | null
+  total_count: number | string
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
@@ -34,103 +49,57 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"))
   const limit = Math.min(PAGE_LIMIT_MAX, Math.max(1, parseInt(searchParams.get("limit") ?? String(PAGE_LIMIT_DEFAULT))))
-  const q = (searchParams.get("q") ?? "").trim().toLowerCase()
+  const q = (searchParams.get("q") ?? "").trim()
   const unreadOnly = searchParams.get("unread_only") === "true"
-  const fromDate = searchParams.get("from") ?? null
-  const toDate = searchParams.get("to") ?? null
+  const fromDate = searchParams.get("from")
+  const toDate = searchParams.get("to")
   const offset = (page - 1) * limit
 
-  // Load all messages that have a client context (cliente_id NOT NULL)
-  let msgQuery = supabase
-    .from("obra_mensagens")
-    .select("obra_id, cliente_id, content, message_type, sender_type, read_at, created_at")
-    .eq("org_id", appUser.org_id)
-    .not("cliente_id", "is", null)
-    .order("created_at", { ascending: false })
-
-  if (fromDate) msgQuery = msgQuery.gte("created_at", fromDate)
-  if (toDate) msgQuery = msgQuery.lte("created_at", toDate + "T23:59:59.999Z")
-
-  const { data: msgs, error } = await msgQuery
+  // Story 30.9: paginação real via RPC `get_admin_mensagens_paginated` (migration 039).
+  // Elimina agregação JS + slice — GROUP BY/DISTINCT ON/LIMIT/OFFSET resolvidos no Postgres.
+  const { data, error } = await supabase.rpc("get_admin_mensagens_paginated", {
+    p_org_id: appUser.org_id,
+    p_offset: offset,
+    p_limit: limit,
+    p_q: q || null,
+    p_unread_only: unreadOnly,
+    p_from_date: fromDate || null,
+    // route.ts legado expandia `toDate` para fim do dia (`+ "T23:59:59.999Z"`).
+    // Como o param `from` aparenta vir como `YYYY-MM-DD`, preservamos esse comportamento aqui.
+    p_to_date: toDate ? `${toDate}T23:59:59.999Z` : null,
+  })
 
   if (error) {
+    console.error("[ADMIN_MENSAGENS] RPC get_admin_mensagens_paginated failed", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Aggregate by (obra_id, cliente_id) — first message in DESC = most recent
-  const conversaMap = new Map<string, ClienteConversa>()
-  for (const msg of msgs ?? []) {
-    const key = `${msg.obra_id}::${msg.cliente_id}`
-    if (!conversaMap.has(key)) {
-      conversaMap.set(key, {
-        conversa_id: key,
-        obra_id: msg.obra_id,
-        obra_name: "",
-        cliente_id: msg.cliente_id as string,
-        cliente_name: "",
-        unread_count: 0,
-        last_message_at: msg.created_at,
-        last_message: {
-          content: msg.content,
-          message_type: msg.message_type,
-          sender_type: msg.sender_type,
-          created_at: msg.created_at,
-        },
-      })
-    }
-    if (msg.sender_type === "cliente" && !msg.read_at) {
-      conversaMap.get(key)!.unread_count++
-    }
-  }
+  const rows = (data ?? []) as AdminMensagensRpcRow[]
 
-  if (conversaMap.size === 0) {
-    return NextResponse.json({ conversas: [], total: 0, page, limit, has_more: false })
-  }
+  const conversas: ClienteConversa[] = rows.map((row) => ({
+    conversa_id: `${row.obra_id}::${row.cliente_id}`,
+    obra_id: row.obra_id,
+    obra_name: row.obra_name ?? "",
+    cliente_id: row.cliente_id,
+    cliente_name: row.cliente_name ?? "",
+    unread_count: Number(row.unread_count),
+    last_message_at: row.last_message_at,
+    last_message:
+      row.last_message_content != null ||
+      row.last_message_type != null ||
+      row.last_message_sender_type != null
+        ? {
+            content: row.last_message_content,
+            message_type: row.last_message_type ?? "",
+            sender_type: row.last_message_sender_type ?? "",
+            created_at: row.last_message_at,
+          }
+        : null,
+  }))
 
-  const obraIds = [...new Set([...conversaMap.values()].map((c) => c.obra_id))]
-  const clienteIds = [...new Set([...conversaMap.values()].map((c) => c.cliente_id))]
+  // total_count vem replicado em cada linha (COUNT(*) OVER()); se rows vazias, total = 0.
+  const total = rows.length > 0 ? Number(rows[0].total_count) : 0
+  const has_more = offset + conversas.length < total
 
-  // Resolve obra names
-  const { data: obrasRaw } = await supabase
-    .from("obras")
-    .select("id, name")
-    .in("id", obraIds)
-
-  const obraNameMap = new Map<string, string>()
-  for (const o of obrasRaw ?? []) obraNameMap.set(o.id, o.name)
-  for (const c of conversaMap.values()) c.obra_name = obraNameMap.get(c.obra_id) ?? ""
-
-  // Resolve client names
-  const { data: usersRaw } = await supabase
-    .from("users")
-    .select("id, name")
-    .in("id", clienteIds)
-
-  const userNameMap = new Map<string, string>()
-  for (const u of usersRaw ?? []) userNameMap.set(u.id, u.name ?? "")
-  for (const c of conversaMap.values()) c.cliente_name = userNameMap.get(c.cliente_id) ?? ""
-
-  // Build, filter and sort
-  let conversas = [...conversaMap.values()]
-
-  if (unreadOnly) conversas = conversas.filter((c) => c.unread_count > 0)
-
-  if (q) {
-    conversas = conversas.filter(
-      (c) =>
-        c.cliente_name.toLowerCase().includes(q) ||
-        c.obra_name.toLowerCase().includes(q)
-    )
-  }
-
-  conversas.sort(
-    (a, b) =>
-      new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-  )
-
-  const total = conversas.length
-  const paginated = conversas.slice(offset, offset + limit)
-  const has_more = offset + limit < total
-
-  return NextResponse.json({ conversas: paginated, total, page, limit, has_more })
+  return NextResponse.json({ conversas, total, page, limit, has_more })
 }
