@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 
+// Story 30.1: shape escalar simples (1 campo `source` por lead).
+// Aceitável manter GROUP BY em JS — o over-fetch real era apenas o .limit(10000)
+// arbitrário que truncava sem necessidade. Sem array de UUIDs, sem joins aninhados.
+type LeadSourceRow = { source: string | null }
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
@@ -13,6 +18,8 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get("from")
   const to = searchParams.get("to")
 
+  // Story 30.1: select escalar mínimo, sem .limit(10000) arbitrário.
+  // Sem joins aninhados, sem arrays de UUIDs — over-fetch estrutural eliminado.
   let query = supabase
     .from("leads")
     .select("source")
@@ -26,15 +33,17 @@ export async function GET(request: NextRequest) {
     query = query.lte("created_at", to)
   }
 
-  const { data: leads, error } = await query.limit(10000)
+  const { data, error } = await query
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Group by source
+  const leads = (data as LeadSourceRow[] | null) ?? []
+
+  // GROUP BY source em JS — payload já escalar, custo trivial.
   const sourceCounts: Record<string, number> = {}
-  for (const lead of leads ?? []) {
+  for (const lead of leads) {
     const src = lead.source ?? "other"
     sourceCounts[src] = (sourceCounts[src] ?? 0) + 1
   }

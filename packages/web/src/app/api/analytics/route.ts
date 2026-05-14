@@ -1,6 +1,43 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 
+// Story 30.1: shape do retorno da RPC public.get_analytics_summary(uuid, timestamptz)
+// bigints (count, total_leads, new_leads) podem chegar como string — castar via Number().
+type AnalyticsFunnelEntry = {
+  stage_id: string
+  name: string
+  slug: string
+  color: string
+  position: number
+  count: number | string
+}
+type AnalyticsPropertyEntry = {
+  property_id: string
+  name: string
+  count: number | string
+}
+type AnalyticsBrokerEntry = {
+  user_id: string
+  name: string
+  count: number | string
+  avg_score: number | null
+}
+type AnalyticsSummary = {
+  funnel: AnalyticsFunnelEntry[] | null
+  by_property: AnalyticsPropertyEntry[] | null
+  by_broker: AnalyticsBrokerEntry[] | null
+  source_counts: Record<string, number | string> | null
+  lost_reasons: Record<string, number | string> | null
+  total_leads: number | string
+  new_leads: number | string
+}
+
+const toCount = (v: number | string | null | undefined): number => {
+  if (v === null || v === undefined) return 0
+  const n = typeof v === "string" ? Number(v) : v
+  return Number.isFinite(n) ? n : 0
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
@@ -30,104 +67,59 @@ export async function GET(request: NextRequest) {
 
   const sinceISO = since.toISOString()
 
-  const [
-    { count: totalLeads },
-    { count: newLeads },
-    { data: leadsByStage },
-    { data: leadsByProperty },
-    { data: leadsBySource },
-    { data: brokerPerformance },
-    { data: lostLeads },
-  ] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true)
-      .gte("created_at", sinceISO),
-    supabase
-      .from("kanban_stages")
-      .select("id, name, slug, color, position, leads(id)")
-      .eq("is_active", true)
-      .order("position"),
-    supabase
-      .from("properties")
-      .select("id, name, leads:leads(id)")
-      .eq("is_active", true),
-    supabase
-      .from("leads")
-      .select("source")
-      .eq("is_active", true)
-      .gte("created_at", sinceISO)
-      .limit(10000),
-    supabase
-      .from("users")
-      .select("id, name, leads:leads(id, qualification_score)")
-      .eq("role", "broker")
-      .eq("is_active", true),
-    supabase
-      .from("leads")
-      .select("lost_reason")
-      .eq("is_active", true)
-      .not("lost_reason", "is", null)
-      .limit(10000),
-  ])
+  const { data: analytics, error: analyticsError } = await supabase.rpc(
+    "get_analytics_summary",
+    { p_org_id: appUser.org_id, p_since: sinceISO },
+  )
 
-  // Process funnel
-  const funnel = (leadsByStage ?? []).map((s) => ({
+  if (analyticsError) {
+    console.error("[/api/analytics] get_analytics_summary RPC failed", analyticsError)
+    return NextResponse.json({ error: analyticsError.message }, { status: 500 })
+  }
+
+  const summary = (analytics as AnalyticsSummary | null) ?? null
+
+  // Funnel — mapeia para shape histórico (sem stage_id/position, mantém slug)
+  const funnel = (summary?.funnel ?? []).map((s) => ({
     name: s.name,
     slug: s.slug,
     color: s.color,
-    count: Array.isArray(s.leads) ? s.leads.length : 0,
+    count: toCount(s.count),
   }))
 
-  // Process leads by property
-  const byProperty = (leadsByProperty ?? []).map((p) => ({
+  // byProperty — shape histórico { name, count }
+  const byProperty = (summary?.by_property ?? []).map((p) => ({
     name: p.name,
-    count: Array.isArray(p.leads) ? p.leads.length : 0,
+    count: toCount(p.count),
   }))
 
-  // Process leads by source
-  const sourceCounts: Record<string, number> = {}
-  for (const lead of leadsBySource ?? []) {
-    const src = lead.source ?? "other"
-    sourceCounts[src] = (sourceCounts[src] ?? 0) + 1
+  // bySource — Record<string, number>
+  const bySource: Record<string, number> = {}
+  for (const [k, v] of Object.entries(summary?.source_counts ?? {})) {
+    bySource[k] = toCount(v)
   }
 
-  // Process broker performance
-  const brokers = (brokerPerformance ?? []).map((b) => {
-    const leads = Array.isArray(b.leads) ? b.leads : []
-    const avgScore =
-      leads.length > 0
-        ? Math.round(
-            leads.reduce(
-              (sum: number, l: { qualification_score: number | null }) =>
-                sum + (l.qualification_score ?? 0),
-              0
-            ) / leads.length
-          )
-        : 0
-    return { name: b.name, totalLeads: leads.length, avgScore }
-  })
+  // brokerPerformance — shape histórico { name, totalLeads, avgScore }
+  const brokerPerformance = (summary?.by_broker ?? []).map((b) => ({
+    name: b.name,
+    totalLeads: toCount(b.count),
+    avgScore: b.avg_score ?? 0,
+  }))
 
-  // Process lost reasons
+  // lostReasons — Record<string, number>
   const lostReasons: Record<string, number> = {}
-  for (const lead of lostLeads ?? []) {
-    const reason = lead.lost_reason ?? "Nao informado"
-    lostReasons[reason] = (lostReasons[reason] ?? 0) + 1
+  for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) {
+    lostReasons[k] = toCount(v)
   }
 
   return NextResponse.json({
     data: {
-      totalLeads: totalLeads ?? 0,
-      newLeads: newLeads ?? 0,
+      totalLeads: toCount(summary?.total_leads),
+      newLeads: toCount(summary?.new_leads),
       funnel,
       byProperty,
-      bySource: sourceCounts,
-      brokerPerformance: brokers,
+      bySource,
+      brokerPerformance,
       lostReasons,
       period,
     },
