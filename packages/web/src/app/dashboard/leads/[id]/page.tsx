@@ -77,6 +77,9 @@ export default async function LeadDetailPage({
   const broker = brokerArr?.[0] ?? null
 
   // Fetch conversations and messages
+  // Note: order + limit on embedded `messages` use referencedTable to limit
+  // the nested resource to the 20 most-recent rows per conversation (server-side).
+  // The consumer below re-sorts ASC client-side for chronological display.
   const { data: conversations } = await supabase
     .from("conversations")
     .select(
@@ -87,7 +90,9 @@ export default async function LeadDetailPage({
     )
     .eq("lead_id", id)
     .order("last_message_at", { ascending: false })
+    .order("created_at", { referencedTable: "messages", ascending: false })
     .limit(5)
+    .limit(20, { referencedTable: "messages" })
 
   // Fetch conversation state (collected_data)
   const { data: convState } = await supabase
