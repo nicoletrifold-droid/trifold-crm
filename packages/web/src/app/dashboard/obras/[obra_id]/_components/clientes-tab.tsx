@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { UserPlus, Trash2, Star } from "lucide-react"
+import { UserPlus, Trash2, Star, Pencil, Check, X } from "lucide-react"
 
 interface Cliente {
   id: string
   name: string
   email: string
   is_primary: boolean
+  numero_unidade: string | null
 }
 
 interface ClientesTabProps {
@@ -23,13 +24,20 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   const [nomeA, setNomeA] = useState("")
   const [emailA, setEmailA] = useState("")
   const [senhaA, setSenhaA] = useState("")
+  const [unidadeA, setUnidadeA] = useState("")
   const [savingA, setSavingA] = useState(false)
   const [errorA, setErrorA] = useState<string | null>(null)
 
   // Formulário B: vincular existente por email
   const [emailB, setEmailB] = useState("")
+  const [unidadeB, setUnidadeB] = useState("")
   const [savingB, setSavingB] = useState(false)
   const [errorB, setErrorB] = useState<string | null>(null)
+
+  // Edição inline de unidade na lista
+  const [editingUnidade, setEditingUnidade] = useState<string | null>(null)
+  const [unidadeInput, setUnidadeInput] = useState("")
+  const [savingUnidade, setSavingUnidade] = useState(false)
 
   async function handleCreateCliente(e: React.FormEvent) {
     e.preventDefault()
@@ -44,6 +52,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
           nome: nomeA.trim(),
           email: emailA.trim(),
           senha_temporaria: senhaA,
+          numero_unidade: unidadeA.trim() || undefined,
         }),
       })
       if (!res.ok) {
@@ -53,6 +62,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       setNomeA("")
       setEmailA("")
       setSenhaA("")
+      setUnidadeA("")
       router.refresh()
     } catch (err) {
       setErrorA(err instanceof Error ? err.message : "Erro ao criar cliente")
@@ -70,13 +80,17 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       const res = await fetch(`/api/admin/obras/${obraId}/clientes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailB.trim() }),
+        body: JSON.stringify({
+          email: emailB.trim(),
+          numero_unidade: unidadeB.trim() || undefined,
+        }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.error ?? "Erro ao vincular cliente")
       }
       setEmailB("")
+      setUnidadeB("")
       router.refresh()
     } catch (err) {
       setErrorB(err instanceof Error ? err.message : "Erro ao vincular cliente")
@@ -101,6 +115,41 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       alert(err instanceof Error ? err.message : "Erro ao desvincular")
     }
   }
+
+  function startEditUnidade(cliente: Cliente) {
+    setEditingUnidade(cliente.id)
+    setUnidadeInput(cliente.numero_unidade ?? "")
+  }
+
+  function cancelEditUnidade() {
+    setEditingUnidade(null)
+    setUnidadeInput("")
+  }
+
+  async function handleSalvarUnidade(userId: string) {
+    setSavingUnidade(true)
+    try {
+      const res = await fetch(`/api/admin/obras/${obraId}/clientes/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numero_unidade: unidadeInput.trim() || null }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? "Erro ao salvar unidade")
+      }
+      setEditingUnidade(null)
+      setUnidadeInput("")
+      router.refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao salvar unidade")
+    } finally {
+      setSavingUnidade(false)
+    }
+  }
+
+  const inputCls =
+    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
 
   return (
     <div className="space-y-5">
@@ -133,14 +182,63 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-stone-400">{c.email}</p>
+                  {/* Número de unidade — display ou edição inline */}
+                  {editingUnidade === c.id ? (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={unidadeInput}
+                        onChange={(e) => setUnidadeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSalvarUnidade(c.id)
+                          if (e.key === "Escape") cancelEditUnidade()
+                        }}
+                        placeholder="Ex: 203"
+                        autoFocus
+                        className="w-28 rounded border border-gray-300 px-2 py-0.5 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                      />
+                      <button
+                        onClick={() => handleSalvarUnidade(c.id)}
+                        disabled={savingUnidade}
+                        className="rounded p-0.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-500/15"
+                        title="Salvar"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={cancelEditUnidade}
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100 dark:text-stone-500 dark:hover:bg-stone-800"
+                        title="Cancelar"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    c.numero_unidade && (
+                      <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">
+                        Unidade {c.numero_unidade}
+                      </p>
+                    )
+                  )}
                 </div>
-                <button
-                  onClick={() => handleDesvincular(c.id)}
-                  className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/15 dark:hover:text-red-300"
-                  title="Desvincular"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex flex-shrink-0 items-center gap-1">
+                  {editingUnidade !== c.id && (
+                    <button
+                      onClick={() => startEditUnidade(c)}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                      title="Editar unidade"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDesvincular(c.id)}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/15 dark:hover:text-red-300"
+                    title="Desvincular"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -159,7 +257,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={nomeA}
             onChange={(e) => setNomeA(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+            className={inputCls}
           />
           <input
             type="email"
@@ -167,7 +265,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={emailA}
             onChange={(e) => setEmailA(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+            className={inputCls}
           />
           <input
             type="password"
@@ -175,7 +273,14 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={senhaA}
             onChange={(e) => setSenhaA(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+            className={inputCls}
+          />
+          <input
+            type="text"
+            placeholder="Nº da unidade / apartamento (opcional)"
+            value={unidadeA}
+            onChange={(e) => setUnidadeA(e.target.value)}
+            className={inputCls}
           />
           {errorA && <p className="text-xs text-red-600 dark:text-red-300">{errorA}</p>}
           <button
@@ -201,7 +306,14 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             value={emailB}
             onChange={(e) => setEmailB(e.target.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+            className={inputCls}
+          />
+          <input
+            type="text"
+            placeholder="Nº da unidade / apartamento (opcional)"
+            value={unidadeB}
+            onChange={(e) => setUnidadeB(e.target.value)}
+            className={inputCls}
           />
           {errorB && <p className="text-xs text-red-600 dark:text-red-300">{errorB}</p>}
           <button

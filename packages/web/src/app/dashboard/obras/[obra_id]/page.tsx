@@ -84,7 +84,7 @@ export default async function ObraDetailPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("cliente_obras")
-        .select("is_primary, users(id, name, email)")
+        .select("is_primary, numero_unidade, users(id, name, email)")
         .eq("obra_id", obra_id),
     ])
 
@@ -102,6 +102,7 @@ export default async function ObraDetailPage({
       name: u?.name ?? "",
       email: u?.email ?? "",
       is_primary: row.is_primary,
+      numero_unidade: row.numero_unidade ?? null,
     }
   })
 

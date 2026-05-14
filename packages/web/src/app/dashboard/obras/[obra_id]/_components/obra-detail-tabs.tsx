@@ -60,6 +60,7 @@ interface Cliente {
   name: string
   email: string
   is_primary: boolean
+  numero_unidade: string | null
 }
 
 interface ObraDetailTabsProps {

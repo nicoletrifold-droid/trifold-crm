@@ -31,7 +31,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("cliente_obras")
-    .select("is_primary, users(id, name, email)")
+    .select("is_primary, numero_unidade, users(id, name, email)")
     .eq("obra_id", obra_id)
 
   if (error) {
@@ -45,6 +45,7 @@ export async function GET(
       name: user?.name,
       email: user?.email,
       is_primary: row.is_primary,
+      numero_unidade: row.numero_unidade ?? null,
     }
   })
 
@@ -85,10 +86,11 @@ export async function POST(
   }
 
   if (isModoA) {
-    const { nome, email, senha_temporaria } = body as {
+    const { nome, email, senha_temporaria, numero_unidade } = body as {
       nome: string
       email: string
       senha_temporaria: string
+      numero_unidade?: string
     }
 
     if (!nome?.trim() || !email?.trim() || !senha_temporaria) {
@@ -138,7 +140,15 @@ export async function POST(
 
     const { error: linkError } = await supabaseAdmin
       .from("cliente_obras")
-      .insert({ user_id: newUser.id, obra_id, is_primary: true })
+      .insert({
+        user_id: newUser.id,
+        obra_id,
+        is_primary: true,
+        numero_unidade:
+          typeof numero_unidade === "string" && numero_unidade.trim()
+            ? numero_unidade.trim()
+            : null,
+      })
 
     if (linkError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
@@ -149,7 +159,10 @@ export async function POST(
   }
 
   // Modo B — vincular por email
-  const { email } = body as { email: string }
+  const { email, numero_unidade: numero_unidade_b } = body as {
+    email: string
+    numero_unidade?: string
+  }
 
   const supabaseAdmin = createAdminClient()
 
@@ -170,7 +183,15 @@ export async function POST(
 
   const { error: linkError } = await supabaseAdmin
     .from("cliente_obras")
-    .insert({ user_id: existingUser.id, obra_id, is_primary: false })
+    .insert({
+      user_id: existingUser.id,
+      obra_id,
+      is_primary: false,
+      numero_unidade:
+        typeof numero_unidade_b === "string" && numero_unidade_b.trim()
+          ? numero_unidade_b.trim()
+          : null,
+    })
 
   if (linkError && !linkError.message.includes("duplicate")) {
     return NextResponse.json({ error: linkError.message }, { status: 500 })
