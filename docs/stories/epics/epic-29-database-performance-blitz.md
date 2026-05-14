@@ -227,6 +227,20 @@ echo $SUPABASE_URL                            # → confirmar se já está na 65
 
 ### Story 29.2 — Migration `031_fk_indexes_critical.sql` (~20 índices FK ausentes)
 
+**Status: IMPLEMENTAÇÃO DONE em 2026-05-13 — aguardando `@architect *qa-gate 29.2`**
+**Implementação:** Dara @data-engineer em 2026-05-13 (modo YOLO)
+**Arquivo migration:** `supabase/migrations/031_fk_indexes_critical_remote_only.sql`
+**Story file:** `docs/stories/active/29-2-fk-indexes-criticos.md` (Change Log V1.1)
+**Resultado:**
+- **26 índices criados** (não 29 — spike removeu 3 por colunas inexistentes no remote: `conversation_state.lead_id`, `visit_feedback.appointment_id`, `visit_feedback.org_id`)
+- Aplicação via **Supabase Management API** (single-statement por POST — funciona com CONCURRENTLY já que cada chamada sai da transação)
+- Wall-clock: 21:55Z → 21:58:23Z ≈ **~49s**
+- Todos `indisvalid=true`, `indisready=true`
+- Tracking: `supabase_migrations.schema_migrations` com `version='031'`, `name='fk_indexes_critical_remote_only'`, `array_length(statements,1)=26`
+- Build: `pnpm --filter @trifold/web build` exit code 0
+- EXPLAIN ANALYZE: `idx_system_events_resolved_by` já escolhido pelo planner. Tabelas <30 rows (conversation_state, obra_mensagens) continuam Seq Scan — comportamento correto, índices acionarão automaticamente conforme tabelas crescem
+- Zero downtime observado
+
 **Executor sugerido:** `@data-engineer` | **Quality Gate sugerido:** `@architect`
 **Quality Gate Tools:** `[concurrent_index_validation, idempotency_check, rollback_review, explain_analyze_proof]`
 **Complexidade:** M (2h) | **Story points:** 5 | **Prioridade:** P0
@@ -309,11 +323,12 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_system_events_resolved_by
 
 ---
 
-### Story 29.3 — Migration `032_composite_indexes_hot.sql` (índices compostos)
+### Story 29.3 — Migration `032_composite_indexes_hot_remote_only.sql` (índices compostos) — **DONE (2026-05-14)**
 
 **Executor sugerido:** `@data-engineer` | **Quality Gate sugerido:** `@architect`
 **Complexidade:** M (2h) | **Story points:** 5 | **Prioridade:** P0
-**Dependências:** **29.1 (BLOQUEANTE)**
+**Dependências:** **29.1 (BLOQUEANTE)** — atendido
+**Status:** 9 índices compostos aplicados via Management API single-statement em 16s wall-clock (2026-05-14 12:18:17→12:18:33 UTC). Todos com `indisvalid=true, indisready=true`. Tracking version 032 registrado com 9 statements. EXPLAIN ANALYZE Query B (leads): Seq Scan + top-N heapsort → Index Scan `idx_leads_org_active_updated` (Sort eliminado; custo Limit 18.74..18.86 → 1.16..5.79). Query A (messages): planner mantém índice simples para tabela ~300 rows (comportamento esperado, precedente 29.2 — composto disponível para crescimento). Análise de redundância: os 10 índices simples existentes (`idx_messages_conversation`, `idx_conversations_lead`, `idx_conversations_org`, etc.) foram MANTIDOS como complementares — servem queries sem ORDER BY. system_events compostos novos têm `org_id` como PRIMEIRO campo, superior aos existentes (`idx_system_events_category`, `idx_system_events_level`) para queries multi-tenant. Build PASS após pnpm install (next-themes faltava do Epic 30 — não relacionado). File: `supabase/migrations/032_composite_indexes_hot_remote_only.sql`.
 
 **Descrição:** Índices compostos para queries hot que hoje usam índice simples + sort em memória.
 
@@ -353,11 +368,12 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_system_events_org_category_created
 
 ---
 
-### Story 29.4 — Migration `033_vector_index_knowledge_base.sql`
+### Story 29.4 — Migration `033_vector_index_knowledge_base.sql` — **DONE (2026-05-13)**
 
 **Executor sugerido:** `@data-engineer` | **Quality Gate sugerido:** `@architect`
 **Complexidade:** P (1h) | **Story points:** 3 | **Prioridade:** P0
-**Dependências:** **29.1 (BLOQUEANTE)**
+**Dependências:** **29.1 (BLOQUEANTE)** — atendido
+**Status:** Migration 033 aplicada via Management API. 2 índices criados em 2s cada. `lists=10` calibrado (sqrt(33)≈5.7, piso 10). EXPLAIN ANALYZE: 9.989ms → 0.224ms (~45x). IVFFlat funcional validado em modo forçado (0.208ms). Tracking 033 registrado. Build PASS. Smoke RAG runtime pendente Gabriel.
 
 **Descrição:** Criar vector index IVFFlat em `knowledge_base.embedding` (vector(1536)). Atualmente toda chamada RAG faz sequential scan + distance calc.
 
@@ -389,6 +405,18 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_knowledge_base_org_active
 ---
 
 ### Story 29.5 — Migration `034_partial_indexes_queues.sql`
+
+**Status: DONE (InReview pendente QA gate) — implementada por @data-engineer em 2026-05-14**
+**Story file:** `docs/stories/active/29-5-partial-indexes-queues.md`
+**Spike executado:** 7 colunas confirmadas, 4 partials novos (nenhum conflito), slot 034 livre.
+
+**Resultados (2026-05-14):**
+- 4 índices criados via Management API single-statement (pattern Stories 29.2/29.4)
+- Tracking version 034 registrado em `supabase_migrations.schema_migrations`
+- Todos `indisvalid=true` + `indisready=true`
+- Planner JÁ usa os 4 partials (mesmo com volume baixo). Ganho mais expressivo: `follow_up_log` query **9x mais rápida** (6.889ms → 0.770ms) porque o partial em `(scheduled_at) WHERE status='pending'` eliminou o Sort externo
+- Build `pnpm --filter @trifold/web build` PASS exit 0
+- **Próximo:** `@architect *qa-gate 29.5`
 
 **Executor sugerido:** `@data-engineer` | **Quality Gate sugerido:** `@architect`
 **Complexidade:** XS (30 min) | **Story points:** 2 | **Prioridade:** P1
@@ -563,7 +591,7 @@ SELECT cron.schedule(
 - [ ] 7 migrations aplicadas no remote: `030a_reconcile_migrations`, `031_fk_indexes_critical`, `032_composite_indexes_hot`, `033_vector_index_knowledge_base`, `034_partial_indexes_queues`, `035_materialize_meta_campaign_roas`, `036_pg_cron_cleanup_jobs`.
 - [ ] pg_cron ativo com 5 jobs agendados — validável via `SELECT * FROM cron.job;`.
 - [ ] Materialized view `meta_campaign_roas` com refresh automático a cada 30 min.
-- [ ] `SUPABASE_URL` no Vercel apontando para pooler 6543.
+- [x] `SUPABASE_URL` no Vercel apontando para pooler 6543. **(Story 29.8 done 2026-05-13 — escopo real foi separação private/public var, não mudança de porta TCP. SDK Supabase usa HTTP REST 443, não TCP 6543. `SUPABASE_URL` adicionado em Production+Preview+Development; `NEXT_PUBLIC_SUPABASE_URL` corrigido (estava vazio). Pending @architect qa-gate.)**
 - [ ] QA gate de pelo menos 3 stories críticas (29.2, 29.3, 29.6) PASS com `EXPLAIN ANALYZE` antes/depois comparado.
 - [ ] Dashboard ROAS abre em <500ms (medível em DevTools Network).
 - [ ] RAG search em <100ms.
