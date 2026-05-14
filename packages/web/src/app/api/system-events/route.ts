@@ -2,6 +2,51 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 
+// Shape returned by RPC get_system_events_summary (Story 30.8)
+// bigint fields arrive as string from PostgREST; numeric fields may arrive as string or number
+type SystemEventsSummary = {
+  errors_24h: number | string
+  messages_24h: number | string
+  avg_claude_response_ms: number | string | null
+  rag_total_24h: number | string
+  rag_fallbacks_24h: number | string
+  health_bot_errors_30m: number | string
+  health_bot_warns_30m: number | string
+  health_ai_errors_30m: number | string
+  health_ai_warns_30m: number | string
+  health_webhook_errors_30m: number | string
+  health_webhook_warns_30m: number | string
+  health_cron_errors_30m: number | string
+  health_cron_warns_30m: number | string
+}
+
+const num = (v: number | string | null | undefined): number => {
+  if (v == null) return 0
+  return typeof v === "number" ? v : Number(v)
+}
+
+const status = (errors: number, warns: number): "green" | "yellow" | "red" => {
+  if (errors > 3) return "red"
+  if (warns > 0) return "yellow"
+  return "green"
+}
+
+const emptySummary: SystemEventsSummary = {
+  errors_24h: 0,
+  messages_24h: 0,
+  avg_claude_response_ms: null,
+  rag_total_24h: 0,
+  rag_fallbacks_24h: 0,
+  health_bot_errors_30m: 0,
+  health_bot_warns_30m: 0,
+  health_ai_errors_30m: 0,
+  health_ai_warns_30m: 0,
+  health_webhook_errors_30m: 0,
+  health_webhook_warns_30m: 0,
+  health_cron_errors_30m: 0,
+  health_cron_warns_30m: 0,
+}
+
 export async function GET(request: NextRequest) {
   const user = await getServerUser()
 
@@ -16,6 +61,7 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get("category")
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 200)
 
+  // Query 1: recent events (rows). Preserved as-is — RPC handles aggregates only.
   let query = supabase
     .from("system_events")
     .select("*")
@@ -32,91 +78,42 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Metrics: counts for last 24h
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  // Single RPC replaces 13 sequential count/aggregate queries (Story 30.8).
+  const { data: summaryRaw, error: summaryError } = await supabase.rpc(
+    "get_system_events_summary",
+    { p_org_id: user.orgId, p_window_hours: 24 }
+  )
 
-  const { count: errorsLast24h } = await supabase
-    .from("system_events")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .eq("level", "error")
-    .gte("created_at", oneDayAgo)
-
-  const { count: messagesLast24h } = await supabase
-    .from("system_events")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .eq("category", "bot")
-    .eq("level", "info")
-    .gte("created_at", oneDayAgo)
-
-  // Health status per category (last 30 min)
-  const categories = ["bot", "ai", "webhook", "cron"] as const
-  const health: Record<string, "green" | "yellow" | "red"> = {}
-
-  for (const cat of categories) {
-    const { count: errors30m } = await supabase
-      .from("system_events")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", user.orgId)
-      .eq("category", cat)
-      .eq("level", "error")
-      .gte("created_at", thirtyMinAgo)
-
-    const { count: warns30m } = await supabase
-      .from("system_events")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", user.orgId)
-      .eq("category", cat)
-      .eq("level", "warn")
-      .gte("created_at", thirtyMinAgo)
-
-    health[cat] = (errors30m ?? 0) > 3 ? "red" : (warns30m ?? 0) > 0 ? "yellow" : "green"
+  if (summaryError) {
+    console.error("[SYSTEM_EVENTS] RPC get_system_events_summary failed", summaryError)
   }
 
-  // Average Claude response time (from metadata.response_time_ms)
-  const { data: claudeEvents } = await supabase
-    .from("system_events")
-    .select("metadata")
-    .eq("org_id", user.orgId)
-    .eq("event_type", "CLAUDE_RESPONSE")
-    .gte("created_at", oneDayAgo)
-    .limit(100)
+  const s: SystemEventsSummary =
+    (summaryRaw as SystemEventsSummary | null) ?? emptySummary
 
-  const responseTimes = (claudeEvents ?? [])
-    .map((e) => (e.metadata as Record<string, unknown>)?.response_time_ms as number)
-    .filter((t): t is number => typeof t === "number")
+  // Derive health per category in TS (mirrors pre-refactor logic).
+  const health: Record<string, "green" | "yellow" | "red"> = {
+    bot: status(num(s.health_bot_errors_30m), num(s.health_bot_warns_30m)),
+    ai: status(num(s.health_ai_errors_30m), num(s.health_ai_warns_30m)),
+    webhook: status(num(s.health_webhook_errors_30m), num(s.health_webhook_warns_30m)),
+    cron: status(num(s.health_cron_errors_30m), num(s.health_cron_warns_30m)),
+  }
 
-  const avgResponseTime = responseTimes.length > 0
-    ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
-    : null
+  // Derive rag_fallback_rate in TS (matches previous behaviour).
+  const ragTotal = num(s.rag_total_24h)
+  const ragFallbacks = num(s.rag_fallbacks_24h)
+  const ragFallbackRate = ragTotal > 0 ? Math.round((ragFallbacks / ragTotal) * 100) : 0
 
-  // RAG fallback rate
-  const { count: ragTotal } = await supabase
-    .from("system_events")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .in("event_type", ["RAG_FALLBACK", "RAG_SUCCESS"])
-    .gte("created_at", oneDayAgo)
-
-  const { count: ragFallbacks } = await supabase
-    .from("system_events")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .eq("event_type", "RAG_FALLBACK")
-    .gte("created_at", oneDayAgo)
-
-  const ragFallbackRate = (ragTotal ?? 0) > 0
-    ? Math.round(((ragFallbacks ?? 0) / (ragTotal ?? 1)) * 100)
-    : 0
+  // avg_claude_response_ms: round when present, null otherwise (preserves contract).
+  const avgClaudeResponseMs =
+    s.avg_claude_response_ms != null ? Math.round(num(s.avg_claude_response_ms)) : null
 
   return NextResponse.json({
     data,
     metrics: {
-      errors_24h: errorsLast24h ?? 0,
-      messages_24h: messagesLast24h ?? 0,
-      avg_claude_response_ms: avgResponseTime,
+      errors_24h: num(s.errors_24h),
+      messages_24h: num(s.messages_24h),
+      avg_claude_response_ms: avgClaudeResponseMs,
       rag_fallback_rate: ragFallbackRate,
     },
     health,
