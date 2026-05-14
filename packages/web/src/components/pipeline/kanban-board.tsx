@@ -43,13 +43,56 @@ interface Lead {
   users?: { name: string } | null
 }
 
-interface KanbanBoardProps {
-  initialStages: Stage[]
-  initialLeads: Lead[]
+export interface InitialStageState {
+  stage_id: string
+  leads: Lead[]
+  totalCount: number
+  hasMore: boolean
 }
 
-export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
-  const [leads, setLeads] = useState(initialLeads)
+export interface PipelineFilters {
+  property_id: string | null
+  broker_id: string | null
+  campaign_id: string | null
+  score: string | null
+}
+
+interface KanbanBoardProps {
+  initialStages: Stage[]
+  initialLeadsPerStage: InitialStageState[]
+  activeFilters?: PipelineFilters
+}
+
+interface StageState {
+  leads: Lead[]
+  totalCount: number
+  hasMore: boolean
+  loading: boolean
+}
+
+const PAGE_SIZE = 50
+
+function buildInitialStageMap(initialLeadsPerStage: InitialStageState[]): Map<string, StageState> {
+  const map = new Map<string, StageState>()
+  for (const entry of initialLeadsPerStage) {
+    map.set(entry.stage_id, {
+      leads: entry.leads,
+      totalCount: entry.totalCount,
+      hasMore: entry.hasMore,
+      loading: false,
+    })
+  }
+  return map
+}
+
+export function KanbanBoard({
+  initialStages,
+  initialLeadsPerStage,
+  activeFilters,
+}: KanbanBoardProps) {
+  const [stageMap, setStageMap] = useState<Map<string, StageState>>(() =>
+    buildInitialStageMap(initialLeadsPerStage)
+  )
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [selectedSources, setSelectedSources] = useState<string[]>([])
@@ -59,22 +102,43 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
+  // Flatten all loaded leads across stages for source filter aggregation.
+  const allLeads = useMemo(() => {
+    const out: Lead[] = []
+    for (const state of stageMap.values()) {
+      for (const lead of state.leads) {
+        out.push(lead)
+      }
+    }
+    return out
+  }, [stageMap])
+
   // Compute unique sources with counts from current leads
   const sourceCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const lead of leads) {
+    for (const lead of allLeads) {
       const s = lead.source ?? "other"
       counts[s] = (counts[s] ?? 0) + 1
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])
-  }, [leads])
+  }, [allLeads])
 
-  const filteredLeads = useMemo(() => {
-    if (selectedSources.length === 0) return leads
-    return leads.filter((l) => selectedSources.includes(l.source ?? "other"))
-  }, [leads, selectedSources])
+  const matchesSourceFilter = useCallback(
+    (lead: Lead) => {
+      if (selectedSources.length === 0) return true
+      return selectedSources.includes(lead.source ?? "other")
+    },
+    [selectedSources]
+  )
 
-  const activeLead = activeId ? filteredLeads.find((l) => l.id === activeId) : null
+  const activeLead = useMemo(() => {
+    if (!activeId) return null
+    for (const state of stageMap.values()) {
+      const found = state.leads.find((l) => l.id === activeId)
+      if (found && matchesSourceFilter(found)) return found
+    }
+    return null
+  }, [activeId, stageMap, matchesSourceFilter])
 
   const toggleSource = useCallback((source: string) => {
     setSelectedSources((prev) =>
@@ -99,14 +163,48 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
       const targetStage = initialStages.find((s) => s.id === newStageId)
       if (!targetStage) return
 
-      const lead = leads.find((l) => l.id === leadId)
-      if (!lead || lead.stage_id === newStageId) return
+      // Locate the lead and its current stage.
+      let movedLead: Lead | null = null
+      let sourceStageId: string | null = null
+      for (const [stageId, state] of stageMap.entries()) {
+        const found = state.leads.find((l) => l.id === leadId)
+        if (found) {
+          movedLead = found
+          sourceStageId = stageId
+          break
+        }
+      }
 
-      setLeads((prev) =>
-        prev.map((l) =>
-          l.id === leadId ? { ...l, stage_id: newStageId } : l
-        )
-      )
+      if (!movedLead || !sourceStageId) return
+      if (sourceStageId === newStageId) return
+
+      const previousStageId = movedLead.stage_id ?? sourceStageId
+      const updatedLead: Lead = { ...movedLead, stage_id: newStageId }
+
+      // Optimistic update on the Map state.
+      setStageMap((prev) => {
+        const next = new Map(prev)
+        const src = next.get(sourceStageId!)
+        if (src) {
+          next.set(sourceStageId!, {
+            ...src,
+            leads: src.leads.filter((l) => l.id !== leadId),
+            totalCount: Math.max(0, src.totalCount - 1),
+          })
+        }
+        const dst = next.get(newStageId) ?? {
+          leads: [],
+          totalCount: 0,
+          hasMore: false,
+          loading: false,
+        }
+        next.set(newStageId, {
+          ...dst,
+          leads: [updatedLead, ...dst.leads],
+          totalCount: dst.totalCount + 1,
+        })
+        return next
+      })
 
       const supabase = createClient()
       const { error } = await supabase
@@ -115,25 +213,108 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
         .eq("id", leadId)
 
       if (error) {
-        setLeads((prev) =>
-          prev.map((l) =>
-            l.id === leadId ? { ...l, stage_id: lead.stage_id } : l
-          )
-        )
-      } else {
-        await supabase.from("activities").insert({
-          org_id: lead.assigned_broker_id ? undefined : undefined,
-          lead_id: leadId,
-          type: "stage_change",
-          description: `Lead movido para ${targetStage.name}`,
-          metadata: {
-            from_stage_id: lead.stage_id,
-            to_stage_id: newStageId,
-          },
+        // Rollback on failure.
+        setStageMap((prev) => {
+          const next = new Map(prev)
+          const dst = next.get(newStageId)
+          if (dst) {
+            next.set(newStageId, {
+              ...dst,
+              leads: dst.leads.filter((l) => l.id !== leadId),
+              totalCount: Math.max(0, dst.totalCount - 1),
+            })
+          }
+          const src = next.get(sourceStageId!) ?? {
+            leads: [],
+            totalCount: 0,
+            hasMore: false,
+            loading: false,
+          }
+          next.set(sourceStageId!, {
+            ...src,
+            leads: [{ ...movedLead!, stage_id: previousStageId }, ...src.leads],
+            totalCount: src.totalCount + 1,
+          })
+          return next
+        })
+        return
+      }
+
+      await supabase.from("activities").insert({
+        lead_id: leadId,
+        type: "stage_change",
+        description: `Lead movido para ${targetStage.name}`,
+        metadata: {
+          from_stage_id: previousStageId,
+          to_stage_id: newStageId,
+        },
+      })
+    },
+    [stageMap, initialStages]
+  )
+
+  const handleLoadMore = useCallback(
+    async (stageId: string) => {
+      const current = stageMap.get(stageId)
+      if (!current || !current.hasMore || current.loading) return
+
+      setStageMap((prev) => {
+        const next = new Map(prev)
+        const state = next.get(stageId)
+        if (state) {
+          next.set(stageId, { ...state, loading: true })
+        }
+        return next
+      })
+
+      try {
+        const params = new URLSearchParams()
+        params.set("stage_id", stageId)
+        params.set("offset", String(current.leads.length))
+        params.set("limit", String(PAGE_SIZE))
+        if (activeFilters?.property_id) params.set("property_id", activeFilters.property_id)
+        if (activeFilters?.broker_id) params.set("broker_id", activeFilters.broker_id)
+        if (activeFilters?.campaign_id) params.set("campaign_id", activeFilters.campaign_id)
+        if (activeFilters?.score) params.set("score", activeFilters.score)
+
+        const res = await fetch(`/api/pipeline/leads?${params.toString()}`)
+        if (!res.ok) {
+          throw new Error(`Load more failed: ${res.status}`)
+        }
+        const json = (await res.json()) as {
+          leads: Lead[]
+          totalCount: number
+          hasMore: boolean
+        }
+
+        setStageMap((prev) => {
+          const next = new Map(prev)
+          const state = next.get(stageId)
+          if (!state) return prev
+          // Avoid appending leads that drag/drop already inserted locally.
+          const existingIds = new Set(state.leads.map((l) => l.id))
+          const fresh = (json.leads ?? []).filter((l) => !existingIds.has(l.id))
+          next.set(stageId, {
+            leads: [...state.leads, ...fresh],
+            totalCount: json.totalCount ?? state.totalCount,
+            hasMore: Boolean(json.hasMore),
+            loading: false,
+          })
+          return next
+        })
+      } catch (err) {
+        console.error("[KanbanBoard] load more error:", err)
+        setStageMap((prev) => {
+          const next = new Map(prev)
+          const state = next.get(stageId)
+          if (state) {
+            next.set(stageId, { ...state, loading: false })
+          }
+          return next
         })
       }
     },
-    [leads, initialStages]
+    [stageMap, activeFilters]
   )
 
   return (
@@ -187,14 +368,23 @@ export function KanbanBoard({ initialStages, initialLeads }: KanbanBoardProps) {
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {initialStages.map((stage) => (
-            <KanbanColumn
-              key={stage.id}
-              stage={stage}
-              leads={filteredLeads.filter((l) => l.stage_id === stage.id)}
-              onSelectLead={setSelectedLeadId}
-            />
-          ))}
+          {initialStages.map((stage) => {
+            const state = stageMap.get(stage.id)
+            const stageLeads = state?.leads ?? []
+            const visibleLeads = stageLeads.filter(matchesSourceFilter)
+            return (
+              <KanbanColumn
+                key={stage.id}
+                stage={stage}
+                leads={visibleLeads}
+                totalCount={state?.totalCount ?? visibleLeads.length}
+                hasMore={state?.hasMore ?? false}
+                loading={state?.loading ?? false}
+                onLoadMore={() => handleLoadMore(stage.id)}
+                onSelectLead={setSelectedLeadId}
+              />
+            )
+          })}
         </div>
 
         <DragOverlay>

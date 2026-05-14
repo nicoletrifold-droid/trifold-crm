@@ -1,7 +1,44 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { KanbanBoard } from "@web/components/pipeline/kanban-board"
+import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
 import Link from "next/link"
+
+const PAGE_SIZE = 50
+
+const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
+       property_interest_id, assigned_broker_id, created_at, updated_at,
+       ai_summary, source, utm_campaign,
+       properties:property_interest_id(name),
+       users:assigned_broker_id(name)`
+
+type RawLead = Record<string, unknown>
+
+function normalizeLead(l: RawLead) {
+  return {
+    ...l,
+    properties: Array.isArray(l.properties)
+      ? (l.properties[0] as { name: string } | undefined) ?? null
+      : (l.properties as { name: string } | null) ?? null,
+    users: Array.isArray(l.users)
+      ? (l.users[0] as { name: string } | undefined) ?? null
+      : (l.users as { name: string } | null) ?? null,
+  }
+}
+
+function passesScoreFilter(score: number | null | undefined, filter: string | undefined): boolean {
+  if (!filter) return true
+  const s = score ?? 0
+  switch (filter) {
+    case "high":
+      return s >= 70
+    case "medium":
+      return s >= 40 && s < 70
+    case "low":
+      return s < 40
+    default:
+      return true
+  }
+}
 
 export default async function PipelinePage({
   searchParams,
@@ -37,68 +74,77 @@ export default async function PipelinePage({
         .order("created_at", { ascending: false }),
     ])
 
-  let leadsQuery = supabase
-    .from("leads")
-    .select(
-      `id, name, phone, stage_id, qualification_score, interest_level,
-       property_interest_id, assigned_broker_id, created_at, updated_at,
-       ai_summary, utm_campaign,
-       properties:property_interest_id(name),
-       users:assigned_broker_id(name)`
-    )
-    .eq("is_active", true)
-
-  if (filters.property_id) {
-    leadsQuery = leadsQuery.eq("property_interest_id", filters.property_id)
-  }
-
-  if (filters.broker_id) {
-    leadsQuery = leadsQuery.eq("assigned_broker_id", filters.broker_id)
-  }
-
+  // Resolve campaign filter to lead id allowlist (preserves original logic).
+  let campaignLeadIds: string[] | null = null
   if (filters.campaign_id) {
-    const { data: campaignLeadIds } = await supabase
+    const { data: entries } = await supabase
       .from("campaign_entries")
       .select("lead_id")
       .eq("campaign_id", filters.campaign_id)
       .not("lead_id", "is", null)
 
-    const ids = (campaignLeadIds ?? []).map((e) => e.lead_id).filter(Boolean)
-    if (ids.length > 0) {
-      leadsQuery = leadsQuery.in("id", ids)
-    } else {
-      leadsQuery = leadsQuery.eq("id", "00000000-0000-0000-0000-000000000000")
-    }
+    campaignLeadIds = (entries ?? [])
+      .map((e) => e.lead_id as string | null)
+      .filter((id): id is string => Boolean(id))
   }
 
-  const { data: leads } = await leadsQuery.order("updated_at", {
-    ascending: false,
-  })
+  const stagesList = stages ?? []
 
-  let filteredLeads = leads ?? []
+  // Promise.all: fetch top PAGE_SIZE leads per stage in parallel.
+  const perStageResults = await Promise.all(
+    stagesList.map(async (stage) => {
+      let query = supabase
+        .from("leads")
+        .select(LEADS_SELECT, { count: "exact" })
+        .eq("is_active", true)
+        .eq("stage_id", stage.id)
 
-  if (filters.score) {
-    filteredLeads = filteredLeads.filter((l) => {
-      const score = (l.qualification_score as number) ?? 0
-      switch (filters.score) {
-        case "high":
-          return score >= 70
-        case "medium":
-          return score >= 40 && score < 70
-        case "low":
-          return score < 40
-        default:
-          return true
+      if (filters.property_id) {
+        query = query.eq("property_interest_id", filters.property_id)
+      }
+      if (filters.broker_id) {
+        query = query.eq("assigned_broker_id", filters.broker_id)
+      }
+      if (campaignLeadIds !== null) {
+        if (campaignLeadIds.length === 0) {
+          // Force empty result while keeping a valid query shape.
+          query = query.eq("id", "00000000-0000-0000-0000-000000000000")
+        } else {
+          query = query.in("id", campaignLeadIds)
+        }
+      }
+
+      const { data, count } = await query
+        .order("updated_at", { ascending: false })
+        .limit(PAGE_SIZE)
+
+      const rawLeads = (data ?? []) as RawLead[]
+      // Score filter remains JS-side (parity with previous behaviour).
+      const filtered = rawLeads.filter((l) =>
+        passesScoreFilter(l.qualification_score as number | null | undefined, filters.score)
+      )
+
+      const totalCount = count ?? rawLeads.length
+      const hasMore = totalCount > rawLeads.length
+
+      return {
+        stage_id: stage.id,
+        leads: filtered.map(normalizeLead),
+        totalCount,
+        hasMore,
       }
     })
-  }
+  )
+
+  const initialLeadsPerStage = perStageResults as unknown as InitialStageState[]
+  const totalVisible = initialLeadsPerStage.reduce((acc, s) => acc + s.leads.length, 0)
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Pipeline</h1>
         <p className="text-sm text-gray-500 dark:text-stone-400">
-          {filteredLeads.length} leads no pipeline
+          {totalVisible} leads no pipeline
         </p>
       </div>
 
@@ -201,12 +247,14 @@ export default async function PipelinePage({
       </div>
 
       <KanbanBoard
-        initialStages={stages ?? []}
-        initialLeads={filteredLeads.map((l: Record<string, unknown>) => ({
-          ...l,
-          properties: Array.isArray(l.properties) ? l.properties[0] ?? null : l.properties ?? null,
-          users: Array.isArray(l.users) ? l.users[0] ?? null : l.users ?? null,
-        })) as Parameters<typeof KanbanBoard>[0]["initialLeads"]}
+        initialStages={stagesList}
+        initialLeadsPerStage={initialLeadsPerStage}
+        activeFilters={{
+          property_id: filters.property_id ?? null,
+          broker_id: filters.broker_id ?? null,
+          campaign_id: filters.campaign_id ?? null,
+          score: filters.score ?? null,
+        }}
       />
     </div>
   )

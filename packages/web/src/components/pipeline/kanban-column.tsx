@@ -27,11 +27,24 @@ interface KanbanColumnProps {
     properties?: { name: string } | null
     users?: { name: string } | null
   }>
+  totalCount?: number
+  hasMore?: boolean
+  loading?: boolean
+  onLoadMore?: () => void
   onSelectLead?: (leadId: string) => void
 }
 
-export function KanbanColumn({ stage, leads, onSelectLead }: KanbanColumnProps) {
+export function KanbanColumn({
+  stage,
+  leads,
+  totalCount,
+  hasMore = false,
+  loading = false,
+  onLoadMore,
+  onSelectLead,
+}: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id })
+  const showTotal = typeof totalCount === "number" && totalCount > leads.length
 
   return (
     <div
@@ -50,8 +63,9 @@ export function KanbanColumn({ stage, leads, onSelectLead }: KanbanColumnProps) 
             backgroundColor: `${stage.color}20`,
             color: stage.color,
           }}
+          title={showTotal ? `${leads.length} de ${totalCount}` : undefined}
         >
-          {leads.length}
+          {showTotal ? `${leads.length}/${totalCount}` : leads.length}
         </span>
       </div>
 
@@ -79,6 +93,17 @@ export function KanbanColumn({ stage, leads, onSelectLead }: KanbanColumnProps) 
           <p className="py-8 text-center text-xs text-gray-400 dark:text-stone-500">
             Nenhum lead nesta etapa
           </p>
+        )}
+
+        {hasMore && onLoadMore && (
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loading}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            {loading ? "Carregando..." : "Carregar mais 50"}
+          </button>
         )}
       </div>
     </div>
