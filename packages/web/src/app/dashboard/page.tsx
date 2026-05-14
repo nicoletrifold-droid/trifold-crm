@@ -2,8 +2,10 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 
+type StageCountRow = { stage_id: string; total: number | string }
+
 export default async function DashboardPage() {
-  await getServerUser()
+  const appUser = await getServerUser()
   const supabase = await createClient()
 
   // Fetch metrics in parallel
@@ -13,7 +15,7 @@ export default async function DashboardPage() {
   monday.setDate(monday.getDate() - monday.getDay() + 1)
 
 
-  const [leadsToday, pipeline, properties] = await Promise.all([
+  const [leadsToday, pipeline, properties, stageTotalsResult] = await Promise.all([
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
@@ -23,21 +25,20 @@ export default async function DashboardPage() {
       .select("id, name, slug, color, position")
       .order("position"),
     supabase.from("properties").select("id, name, slug, status, total_units, city").eq("is_active", true),
+    supabase.rpc("get_dashboard_stage_counts", { p_org_id: appUser.orgId }),
   ])
 
   const stages = pipeline.data ?? []
 
-  // Count leads per stage without transferring all IDs
-  const stageCounts: Record<string, number> = {}
-  await Promise.all(
-    stages.map(async (s) => {
-      const { count } = await supabase
-        .from("leads")
-        .select("*", { count: "exact", head: true })
-        .eq("stage_id", s.id)
-        .eq("is_active", true)
-      stageCounts[s.id] = count ?? 0
-    })
+  // Story 30.5: Stage counts via RPC (eliminates N+1: was 6+ round-trips, now 1)
+  if (stageTotalsResult.error) {
+    console.error("[DASHBOARD] Failed to load stage counts", stageTotalsResult.error)
+    // Fallback: stageCounts vazio (UI mostra zeros — degradação graciosa)
+  }
+
+  const stageTotals = (stageTotalsResult.data ?? []) as StageCountRow[]
+  const stageCounts: Record<string, number> = Object.fromEntries(
+    stageTotals.map((r) => [r.stage_id, Number(r.total)])
   )
 
   const totalLeads = Object.values(stageCounts).reduce((a, b) => a + b, 0)
