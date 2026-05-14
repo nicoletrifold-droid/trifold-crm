@@ -31,6 +31,45 @@ export async function GET() {
   ).toISOString()
 
   try {
+    // Load kanban_stages for this org to resolve slug -> stage_id (UUID).
+    // The leads table has stage_id (UUID FK to kanban_stages), NOT a text `stage` column.
+    // Filtering by `.eq("stage", "qualified")` silently returned 0 rows.
+    const { data: stageRows, error: stageError } = await supabase
+      .from("kanban_stages")
+      .select("id, slug")
+      .eq("org_id", orgId)
+      .eq("is_active", true)
+
+    if (stageError) {
+      console.error("[metrics] Failed to load kanban_stages", stageError)
+      return NextResponse.json(
+        { error: "Failed to load stages" },
+        { status: 500 }
+      )
+    }
+
+    const stageMap: Record<string, string> = Object.fromEntries(
+      (stageRows ?? []).map((s) => [s.slug, s.id])
+    )
+
+    const qualificadoId = stageMap["qualificado"]
+    const visitaAgendadaId = stageMap["visita-agendada"]
+
+    // Defensive: log if expected stages are missing, but do NOT throw.
+    // Missing stages yield count=0 (via empty-string filter), preserving response shape.
+    if (!qualificadoId) {
+      console.warn(
+        "[metrics] Stage 'qualificado' not found for org:",
+        orgId
+      )
+    }
+    if (!visitaAgendadaId) {
+      console.warn(
+        "[metrics] Stage 'visita-agendada' not found for org:",
+        orgId
+      )
+    }
+
     // Run all queries in parallel
     const [
       leadsTodayResult,
@@ -49,19 +88,21 @@ export async function GET() {
         .gte("created_at", todayStart),
 
       // Qualified leads this week
+      // Note: schema has no `qualified_at` column; using `updated_at` as proxy
+      // for "moved to qualified stage" (best available without schema change).
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
-        .eq("stage", "qualified")
-        .gte("qualified_at", weekStart),
+        .eq("stage_id", qualificadoId ?? "")
+        .gte("updated_at", weekStart),
 
-      // Scheduled visits this week
+      // Scheduled visits this week (visit_scheduled_at column exists in schema)
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
-        .eq("stage", "visit_scheduled")
+        .eq("stage_id", visitaAgendadaId ?? "")
         .gte("visit_scheduled_at", weekStart),
 
       // Total leads this month (for qualification rate)
@@ -72,17 +113,18 @@ export async function GET() {
         .gte("created_at", monthStart),
 
       // Qualified leads this month (for qualification rate)
+      // Same proxy decision: `updated_at` stands in for missing `qualified_at`.
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
-        .eq("stage", "qualified")
-        .gte("qualified_at", monthStart),
+        .eq("stage_id", qualificadoId ?? "")
+        .gte("updated_at", monthStart),
 
-      // Pipeline counts by stage
+      // Pipeline counts by stage (now keyed by stage_id UUID, not text)
       supabase
         .from("leads")
-        .select("stage")
+        .select("stage_id")
         .eq("org_id", orgId)
         .eq("is_active", true),
 
@@ -102,11 +144,13 @@ export async function GET() {
         ? Math.round((qualifiedLeadsMonth / totalLeadsMonth) * 100)
         : 0
 
-    // Aggregate pipeline counts by stage
+    // Aggregate pipeline counts by stage_id (UUID keys — schema correctness)
     const pipelineCounts: Record<string, number> = {}
     if (pipelineCountsResult.data) {
       for (const lead of pipelineCountsResult.data) {
-        pipelineCounts[lead.stage] = (pipelineCounts[lead.stage] || 0) + 1
+        if (!lead.stage_id) continue
+        pipelineCounts[lead.stage_id] =
+          (pipelineCounts[lead.stage_id] || 0) + 1
       }
     }
 
