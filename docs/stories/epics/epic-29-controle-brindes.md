@@ -31,18 +31,19 @@ A Trifold mantém uma planilha Excel ("Controle Clientes") com ~1015 registros p
 | 29.4 | DB Schema: tabela `brindes_tipos` + FK em `brindes_entregas` | @data-engineer | 1h | Draft |
 | 29.5 | API Routes: CRUD `brindes_tipos` + atualizar rota de entregas | @dev | 2h | Draft |
 | 29.6 | UI: Gestão de tipos de brinde + integração na tabela | @dev | 3h | Draft |
+| 29.7 | Tipo de Brinde padrão no destinatário + pré-seleção no StatusBadge | @dev | 2h | Draft |
 
-**Total estimado:** ~19h de desenvolvimento (~6h adicionais para tipos de brinde)
+**Total estimado:** ~21h de desenvolvimento (~8h adicionais para tipos de brinde)
 
 ## Sequência de Implementação
 
 ```
 Story 29.1 (DB) → Story 29.2 (API) → Story 29.3 (UI)
         ↓
-Story 29.4 (DB tipos) → Story 29.5 (API tipos) → Story 29.6 (UI tipos)
+Story 29.4 (DB tipos) → Story 29.5 (API tipos) → Story 29.6 (UI tipos) → Story 29.7 (tipo padrão destinatário)
 ```
 
-As stories 29.4-29.6 são estritamente sequenciais entre si e dependem das 29.1-29.3 já concluídas.
+As stories 29.4-29.7 são estritamente sequenciais entre si e dependem das 29.1-29.3 já concluídas.
 
 ## Critérios de Sucesso do Epic
 

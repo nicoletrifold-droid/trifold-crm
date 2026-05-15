@@ -42,6 +42,27 @@ export async function PATCH(
   if (body.endereco_cep !== undefined) updates.endereco_cep = str(body.endereco_cep)
   if (body.endereco_referencia !== undefined) updates.endereco_referencia = str(body.endereco_referencia)
 
+  if (body.brinde_tipo_id !== undefined) {
+    const tipoId = typeof body.brinde_tipo_id === "string" && body.brinde_tipo_id.trim()
+      ? body.brinde_tipo_id.trim()
+      : null
+    if (tipoId) {
+      const { data: tipoRow, error: tipoErr } = await supabase
+        .from("brindes_tipos")
+        .select("id")
+        .eq("id", tipoId)
+        .eq("org_id", appUser.org_id)
+        .maybeSingle()
+      if (tipoErr) {
+        return NextResponse.json({ error: tipoErr.message }, { status: 500 })
+      }
+      if (!tipoRow) {
+        return NextResponse.json({ error: "brinde_tipo_id inválido" }, { status: 400 })
+      }
+    }
+    updates.brinde_tipo_id = tipoId
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 })
   }

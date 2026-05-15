@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { X } from "lucide-react"
-import type { Destinatario } from "./types"
+import { X, Plus } from "lucide-react"
+import type { BrindeTipo, Destinatario } from "./types"
 import { UF_OPTIONS } from "./types"
 
 interface DestinatarioModalProps {
@@ -18,13 +18,35 @@ const EMPTY = {
   endereco_logradouro: "", endereco_numero: "", endereco_complemento: "",
   endereco_bairro: "", endereco_cidade: "", endereco_estado: "", endereco_cep: "",
   endereco_referencia: "",
+  brinde_tipo_id: "",
 }
+
+const EMPTY_NEW_TIPO = { nome: "", tamanho: "", cor: "" }
 
 export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: DestinatarioModalProps) {
   const router = useRouter()
   const [fields, setFields] = useState({ ...EMPTY })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [tipos, setTipos] = useState<BrindeTipo[]>([])
+  const [showNewTipoForm, setShowNewTipoForm] = useState(false)
+  const [newTipo, setNewTipo] = useState({ ...EMPTY_NEW_TIPO })
+  const [creatingTipo, setCreatingTipo] = useState(false)
+  const [newTipoError, setNewTipoError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let aborted = false
+    fetch("/api/brindes/tipos?ativo=true")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Erro ao carregar tipos"))))
+      .then((d: { data: BrindeTipo[] }) => {
+        if (!aborted) setTipos(d.data ?? [])
+      })
+      .catch(() => {
+        if (!aborted) setTipos([])
+      })
+    return () => { aborted = true }
+  }, [])
 
   useEffect(() => {
     if (destinatario) {
@@ -41,12 +63,49 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
         endereco_estado: destinatario.endereco_estado ?? "",
         endereco_cep: destinatario.endereco_cep ?? "",
         endereco_referencia: destinatario.endereco_referencia ?? "",
+        brinde_tipo_id: destinatario.brinde_tipo_id ?? "",
       })
     }
   }, [destinatario])
 
   function set(field: keyof typeof EMPTY, value: string) {
     setFields((f) => ({ ...f, [field]: value }))
+  }
+
+  async function handleCreateTipo(e: React.FormEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (creatingTipo) return
+    const nome = newTipo.nome.trim()
+    if (!nome) { setNewTipoError("Nome é obrigatório"); return }
+
+    setCreatingTipo(true)
+    setNewTipoError(null)
+    try {
+      const res = await fetch("/api/brindes/tipos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome,
+          tamanho: newTipo.tamanho.trim() || null,
+          cor: newTipo.cor.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        setNewTipoError(data.error ?? "Erro ao criar tipo.")
+        return
+      }
+      const { data } = (await res.json()) as { data: BrindeTipo }
+      setTipos((prev) => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)))
+      setFields((f) => ({ ...f, brinde_tipo_id: data.id }))
+      setNewTipo({ ...EMPTY_NEW_TIPO })
+      setShowNewTipoForm(false)
+    } catch {
+      setNewTipoError("Erro de rede.")
+    } finally {
+      setCreatingTipo(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -71,6 +130,7 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
       endereco_estado: fields.endereco_estado || null,
       endereco_cep: fields.endereco_cep.trim() || null,
       endereco_referencia: fields.endereco_referencia.trim() || null,
+      brinde_tipo_id: fields.brinde_tipo_id || null,
     }
 
     try {
@@ -147,6 +207,96 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
               <label className={lbl}>Observação</label>
               <input type="text" value={fields.observacao} onChange={(e) => set("observacao", e.target.value)}
                 className={inp} placeholder="Observação de entrega" />
+            </div>
+
+            <div className="col-span-2">
+              <label className={lbl}>Tipo de Brinde padrão</label>
+              <div className="flex items-center gap-2">
+                <select
+                  value={fields.brinde_tipo_id}
+                  onChange={(e) => set("brinde_tipo_id", e.target.value)}
+                  className={inp}
+                >
+                  <option value="">— Sem padrão —</option>
+                  {tipos.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nome}{t.tamanho ? ` · ${t.tamanho}` : ""}{t.cor ? ` · ${t.cor}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewTipoForm((s) => !s); setNewTipoError(null) }}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-gray-300 px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                  aria-label="Criar novo tipo"
+                  title="Criar novo tipo"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              {showNewTipoForm && (
+                <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-stone-700 dark:bg-stone-800/50">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
+                    Novo tipo de brinde
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-3">
+                      <label className={lbl}>Nome <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={newTipo.nome}
+                        onChange={(e) => setNewTipo((t) => ({ ...t, nome: e.target.value }))}
+                        className={inp}
+                        placeholder="Ex: Camiseta"
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Tamanho</label>
+                      <input
+                        type="text"
+                        value={newTipo.tamanho}
+                        onChange={(e) => setNewTipo((t) => ({ ...t, tamanho: e.target.value }))}
+                        className={inp}
+                        placeholder="M, G..."
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={lbl}>Cor</label>
+                      <input
+                        type="text"
+                        value={newTipo.cor}
+                        onChange={(e) => setNewTipo((t) => ({ ...t, cor: e.target.value }))}
+                        className={inp}
+                        placeholder="Azul, Preto..."
+                      />
+                    </div>
+                  </div>
+                  {newTipoError && (
+                    <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                      {newTipoError}
+                    </p>
+                  )}
+                  <div className="mt-3 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowNewTipoForm(false); setNewTipo({ ...EMPTY_NEW_TIPO }); setNewTipoError(null) }}
+                      disabled={creatingTipo}
+                      className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-700"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateTipo}
+                      disabled={creatingTipo}
+                      className="rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                    >
+                      {creatingTipo ? "Criando..." : "Criar tipo"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -76,6 +76,22 @@ export async function POST(request: NextRequest) {
 
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null)
 
+  const brinde_tipo_id = str(body.brinde_tipo_id)
+  if (brinde_tipo_id) {
+    const { data: tipoRow, error: tipoErr } = await supabase
+      .from("brindes_tipos")
+      .select("id")
+      .eq("id", brinde_tipo_id)
+      .eq("org_id", appUser.org_id)
+      .maybeSingle()
+    if (tipoErr) {
+      return NextResponse.json({ error: tipoErr.message }, { status: 500 })
+    }
+    if (!tipoRow) {
+      return NextResponse.json({ error: "brinde_tipo_id inválido" }, { status: 400 })
+    }
+  }
+
   const { data, error } = await supabase
     .from("brindes_destinatarios")
     .insert({
@@ -92,6 +108,7 @@ export async function POST(request: NextRequest) {
       endereco_estado: str(body.endereco_estado),
       endereco_cep: str(body.endereco_cep),
       endereco_referencia: str(body.endereco_referencia),
+      brinde_tipo_id,
     })
     .select()
     .single()

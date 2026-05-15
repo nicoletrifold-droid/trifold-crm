@@ -219,6 +219,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
                         destinatarioId={d.id}
                         dataComemorativaId={selectedDateId ?? ""}
                         currentTipoId={entrega?.brinde_tipo_id ?? null}
+                        defaultTipoId={d.brinde_tipo_id ?? null}
                         tipos={tipos}
                         onStatusChange={handleStatusChange}
                       />

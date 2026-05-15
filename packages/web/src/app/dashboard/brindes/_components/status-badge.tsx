@@ -10,6 +10,7 @@ interface StatusBadgeProps {
   destinatarioId: string
   dataComemorativaId: string
   currentTipoId: string | null
+  defaultTipoId?: string | null
   tipos: BrindeTipo[]
   onStatusChange: (destinatarioId: string, newStatus: EntregaStatus, tipoId: string | null) => void
 }
@@ -22,17 +23,39 @@ export function StatusBadge({
   destinatarioId,
   dataComemorativaId,
   currentTipoId,
+  defaultTipoId = null,
   tipos,
   onStatusChange,
 }: StatusBadgeProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [selectedTipoId, setSelectedTipoId] = useState<string>(currentTipoId ?? "")
   const ref = useRef<HTMLDivElement>(null)
 
+  // Active tipo IDs — only pre-select defaultTipoId if it's still active
+  const tiposAtivos = tipos.filter((t) => t.ativo)
+  const activeIds = tiposAtivos.map((t) => t.id)
+
+  const resolveInitial = (): string => {
+    if (currentTipoId) return currentTipoId
+    if (defaultTipoId && activeIds.includes(defaultTipoId)) return defaultTipoId
+    return ""
+  }
+
+  const [selectedTipoId, setSelectedTipoId] = useState<string>(resolveInitial())
+
   useEffect(() => {
-    setSelectedTipoId(currentTipoId ?? "")
-  }, [currentTipoId])
+    if (currentTipoId) {
+      setSelectedTipoId(currentTipoId)
+      return
+    }
+    if (defaultTipoId && activeIds.includes(defaultTipoId)) {
+      setSelectedTipoId(defaultTipoId)
+      return
+    }
+    setSelectedTipoId("")
+    // activeIds is derived from tipos prop; using tipos identity for dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTipoId, defaultTipoId, tipos])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -71,8 +94,6 @@ export function StatusBadge({
   if (disabled) {
     return <span className="text-xs text-gray-400 dark:text-stone-500">—</span>
   }
-
-  const tiposAtivos = tipos.filter((t) => t.ativo)
 
   return (
     <div ref={ref} className="relative inline-block">
