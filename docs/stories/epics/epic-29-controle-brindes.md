@@ -25,19 +25,24 @@ A Trifold mantém uma planilha Excel ("Controle Clientes") com ~1015 registros p
 
 | Story | Título | Executor | Estimativa | Status |
 |-------|--------|----------|------------|--------|
-| 29.1 | DB Schema: tabelas + RLS + seed datas comemorativas | @data-engineer | 3h | Draft |
-| 29.2 | API Routes: CRUD destinatários, entregas e datas + parser de endereço | @dev | 4h | Draft |
-| 29.3 | UI: Painel `/dashboard/brindes` com tabela, filtros e CRUD | @dev | 6h | Draft |
+| 29.1 | DB Schema: tabelas + RLS + seed datas comemorativas | @data-engineer | 3h | Done |
+| 29.2 | API Routes: CRUD destinatários, entregas e datas + parser de endereço | @dev | 4h | Done |
+| 29.3 | UI: Painel `/dashboard/brindes` com tabela, filtros e CRUD | @dev | 6h | Done |
+| 29.4 | DB Schema: tabela `brindes_tipos` + FK em `brindes_entregas` | @data-engineer | 1h | Draft |
+| 29.5 | API Routes: CRUD `brindes_tipos` + atualizar rota de entregas | @dev | 2h | Draft |
+| 29.6 | UI: Gestão de tipos de brinde + integração na tabela | @dev | 3h | Draft |
 
-**Total estimado:** ~13h de desenvolvimento
+**Total estimado:** ~19h de desenvolvimento (~6h adicionais para tipos de brinde)
 
 ## Sequência de Implementação
 
 ```
 Story 29.1 (DB) → Story 29.2 (API) → Story 29.3 (UI)
+        ↓
+Story 29.4 (DB tipos) → Story 29.5 (API tipos) → Story 29.6 (UI tipos)
 ```
 
-As 3 stories são estritamente sequenciais: cada uma depende da anterior.
+As stories 29.4-29.6 são estritamente sequenciais entre si e dependem das 29.1-29.3 já concluídas.
 
 ## Critérios de Sucesso do Epic
 
