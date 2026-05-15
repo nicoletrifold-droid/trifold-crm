@@ -2,7 +2,7 @@
 story: 31.1
 title: "Tipos e Zod Schema compartilhados — CommercialRules"
 subtitle: "Story de prep — fundação tipada do Epic 31 (Nicole Data Layer Refactor)"
-status: InReview
+status: Done
 epic: 31
 created_at: 2026-05-15
 created_by: River (@sm)
@@ -209,6 +209,7 @@ Doc completo: `/docs/architecture/nicole-data-layer-refactor.md`
 | 2026-05-15 | 1.2 | PO concerns aplicados antes de @dev: (1) Dev Notes atualizadas para deixar explícito que `pnpm --filter @trifold/shared add zod` é obrigatório; (2) T3.7 renumerada com comando correto `pnpm test -- packages/shared/...`; (3) AC 8(e) adicionado cobrindo boundary lower `pct<0`; T3.6 adicionado para testar esse cenário. | Claude (orquestração) |
 | 2026-05-15 | 1.3 | **Dev implementation completa (YOLO).** Arquivos criados: `commercial-rules.ts` + `commercial-rules.test.ts`. Barrel export adicionado. `zod ^4.4.3` instalado como dep direta de `@trifold/shared`. 5/5 testes Vitest passam. `pnpm type-check` clean em todos os 8 pacotes. `pnpm lint` clean em `@trifold/shared` (web lint falha por env issue pré-existente — não introduzido). Status: Ready → InProgress → InReview. | Dex (@dev) |
 | 2026-05-15 | 1.4 | **QA Gate executado — verdict PASS.** 10/10 ACs cumpridos (incluindo AC8(e) novo). 7/7 quality checks PASS. Schema validado linha-a-linha contra Seção 3.5 do doc de arquitetura — zero divergência. Lint web verificado independentemente como pré-existente (`git diff HEAD -- packages/web/` vazio; erro é env issue do `next@16.2.2` chain). Zod version mismatch verificado como inofensivo (toda a árvore já em 4.x). 1 MEDIUM follow-up sugerido (eslint-plugin-import infra), 2 LOW (boundary teste explícito para BRL, alinhamento de versão zod nas próximas stories). Gate file: `docs/qa/gates/31-1-qa-gate.md`. Status: InReview (PASS) — pronto para @devops *push. | Quinn (@qa) |
+| 2026-05-15 | 1.5 | **DevOps push completo.** Branch efêmera `feat/epic-31-story-1-commercial-rules-types` rebaseada sobre `origin/main` (Lucas avançou 2 commits: 44c3770 clientes CRM + 9b1b265 perfis acesso — zero overlap com escopo desta story). Commit final SHA: `b01470b`. Merge ff em `main` + push direto (sem PR, seguindo convenção observada em Epics 29/30). Status: InReview → **Done**. ★ EPIC 31 INICIADO. Próximo: Story 31.2 (migration `commercial_rules` jsonb) — ATENÇÃO: migration 040 foi tomada pelo Lucas (brinde_tipo_id), 041 também (clientes_crm), 042 (cliente_id_destinatario). Story 31.2 deve usar `043_commercial_rules_jsonb.sql` ou superior. | Gage (@devops) |
 
 ---
 
