@@ -48,8 +48,8 @@ Mapa exaustivo do que toca dados de empreendimento ou regras de negócio da Nico
 |------|------|-------|------------------|
 | `supabase/migrations/002_property_schema.sql` | DDL | NONE (read-only histórico) | — |
 | `supabase/migrations/004_rls_policies.sql` | RLS | LOW (validar reuso das políticas existentes) | — (já há `properties_select` por org_id e `properties_manage` por admin/supervisor — adequado) |
-| `supabase/migrations/040_property_commercial_rules_v2.sql` | **NOVA** | MEDIUM | Adiciona CHECK constraint validando sub-schema do jsonb. Ver Seção 3. Próximo slot livre é `040` per Epic 30 closure. |
-| `supabase/migrations/041_backfill_commercial_rules.sql` | **NOVA** | HIGH | UPDATE em Vind + Yarden com os novos campos. Idempotente via JSONB merge (`||`). |
+| `supabase/migrations/043_property_commercial_rules_v2.sql` | **NOVA** | MEDIUM | Adiciona CHECK constraint validando sub-schema do jsonb. Ver Seção 3. Slots 040-042 ocupados por Epic 33 (Módulo CRM Clientes — Lucas, 2026-05-15). |
+| `supabase/migrations/044_backfill_commercial_rules.sql` | **NOVA** | HIGH | UPDATE em Vind + Yarden com os novos campos. Idempotente via JSONB merge (`||`). |
 
 **Estado atual da `properties.commercial_rules` em produção (lido via Management API em 2026-05-15):**
 - Vind: `{ requires_down_payment: true, min_down_payment: 68000, mcmv_eligible: false }`
@@ -125,7 +125,7 @@ Mapa exaustivo do que toca dados de empreendimento ou regras de negócio da Nico
 ### 2.8 Dependências cruzadas e ordem de execução
 
 ```
-Migration 040 (DDL) ──► Migration 041 (Backfill) ──► UI estruturada (Story 5)
+Migration 043 (DDL) ──► Migration 044 (Backfill) ──► UI estruturada (Story 5)
                             │                                  │
                             └──► pipeline buildPropertyDataContext expansion (Story 4)
                                               │
@@ -196,10 +196,10 @@ export type FinancingOption =
   | "mcmv"
 ```
 
-### 3.3 Migration 040 (DDL + CHECK constraint)
+### 3.3 Migration 043 (DDL + CHECK constraint)
 
 ```sql
--- 040_property_commercial_rules_v2.sql
+-- 043_property_commercial_rules_v2.sql
 -- Adiciona CHECK constraint validando sub-schema de commercial_rules
 
 -- Default jsonb com todos os novos campos (idempotente)
@@ -254,10 +254,10 @@ COMMENT ON COLUMN properties.commercial_rules IS
   'identification_keywords, status_label, notes.';
 ```
 
-### 3.4 Migration 041 (Backfill Vind + Yarden)
+### 3.4 Migration 044 (Backfill Vind + Yarden)
 
 ```sql
--- 041_backfill_commercial_rules.sql
+-- 044_backfill_commercial_rules.sql
 -- Popula commercial_rules com valores corretos para Vind e Yarden
 -- ANTES de qualquer remoção do hardcoded nos prompts (ordem garantida).
 -- Idempotente: usa UPDATE com merge de jsonb (||).
@@ -781,9 +781,9 @@ Set via `vercel env add NICOLE_RULES_FROM_DB production` antes do deploy da stor
 ```
 Story 1: Tipos + Zod schema (packages/shared)        [NÃO toca runtime]
    ↓
-Story 2: Migration 040 (DDL + CHECK)                  [DDL aditivo, nada quebra]
+Story 2: Migration 043 (DDL + CHECK)                  [DDL aditivo, nada quebra]
    ↓
-Story 3: Migration 041 (Backfill Vind + Yarden + fix Fire Pit + status Yarden)
+Story 3: Migration 044 (Backfill Vind + Yarden + fix Fire Pit + status Yarden)
                                                        [DB tem dados corretos AGORA]
    ↓
 Story 4: buildPropertyDataContext expansion           [pipeline lê e injeta; prompts AINDA têm hardcoded → ✅ não regride]
@@ -815,7 +815,7 @@ vercel env add NICOLE_RULES_FROM_DB production
 Tempo de recuperação: ~3-5 min (vercel redeploy).
 
 **Cenário B — Schema do DB inválido após Story 2:**
-A migration 040 só **adiciona** CHECK constraint e default. Não é destrutiva.
+A migration 043 só **adiciona** CHECK constraint e default. Não é destrutiva.
 Rollback: `ALTER TABLE properties DROP CONSTRAINT commercial_rules_shape_check;` via Management API.
 
 **Cenário C — Backfill (Story 3) populou valores errados:**
@@ -853,8 +853,8 @@ A página `/dashboard/properties/[id]/edit` continua funcionando porque o modo a
 | # | Story | Estimativa | Definition of Done | Depende de |
 |---|-------|-----------|--------------------|--|
 | 31.1 | **Tipos e Zod schema compartilhados** — criar `packages/shared/src/types/commercial-rules.ts` com interface `CommercialRules`, enum `FinancingOption`, schema Zod `CommercialRulesSchema`. Exportar via `packages/shared/src/index.ts`. | 2h | Tipos compilam em todos os pacotes que consomem `@trifold/shared`. Lint + typecheck clean. Story de prep — não muda runtime. | — |
-| 31.2 | **Migration 040 — DDL CommercialRules v2** — criar `supabase/migrations/040_property_commercial_rules_v2.sql` com default jsonb + CHECK constraint. Aplicar via CLI ou Management API conforme convenção Epic 29. | 3h | Migration aplicada em produção. `SELECT version FROM supabase_migrations.schema_migrations WHERE version = '040'` retorna 1 linha. INSERT/UPDATE com jsonb inválido retorna erro de CHECK. | 31.1 |
-| 31.3 | **Migration 041 — Backfill + Fire Pit + Yarden status** — criar `supabase/migrations/041_backfill_commercial_rules.sql` com UPDATE de Vind/Yarden com novos campos, mudança de status Yarden para `selling`, fix de "Fire pit" → "Fireplace" em amenities + knowledge_base. | 4h | Após aplicar: query `SELECT commercial_rules->>'min_down_payment_pct' FROM properties WHERE slug='vind-residence'` retorna `10`. `amenities` do Yarden contém "Fireplace" e não "Fire pit". `status` do Yarden é `selling`. Knowledge_base sem ocorrências de "fire pit". | 31.2 |
+| 31.2 | **Migration 043 — DDL CommercialRules v2** — criar `supabase/migrations/043_property_commercial_rules_v2.sql` com default jsonb + CHECK constraint. Aplicar via CLI ou Management API conforme convenção Epic 29. | 3h | Migration aplicada em produção. `SELECT version FROM supabase_migrations.schema_migrations WHERE version = '043'` retorna 1 linha. INSERT/UPDATE com jsonb inválido retorna erro de CHECK. | 31.1 |
+| 31.3 | **Migration 044 — Backfill + Fire Pit + Yarden status** — criar `supabase/migrations/044_backfill_commercial_rules.sql` com UPDATE de Vind/Yarden com novos campos, mudança de status Yarden para `selling`, fix de "Fire pit" → "Fireplace" em amenities + knowledge_base. | 4h | Após aplicar: query `SELECT commercial_rules->>'min_down_payment_pct' FROM properties WHERE slug='vind-residence'` retorna `10`. `amenities` do Yarden contém "Fireplace" e não "Fire pit". `status` do Yarden é `selling`. Knowledge_base sem ocorrências de "fire pit". | 31.2 |
 | 31.4 | **Pipeline — buildPropertyDataContext expansion** — expandir a função em `packages/ai/src/chat/pipeline.ts:1072-1142` para injetar todos os campos novos de `commercial_rules` (% entrada, valor exemplo, financing_options, key_selling_points, status_label, etc) com formatação humana e ênfase ("DADOS ATUALIZADOS — USE COMO FONTE DA VERDADE"). | 5h | Unit test do builder (puro) cobrindo: empreendimento com rules completas, com rules vazias, com financing_options=[], etc. Smoke test manual: Nicole diz "em torno de 40 mil" e cita "consórcio contemplado" como opção. | 31.3 |
 | 31.5 | **UI — Form estruturado de Regras Comerciais** — refatorar `packages/web/src/app/dashboard/properties/[id]/edit/page.tsx` adicionando seção estruturada (% entrada, valor exemplo, multi-select financing_options, status_label, ideal_buyer_profile, listas editáveis). Adicionar validação Zod no `/api/properties/[id]/route.ts`. Modo avançado (JSON raw) preservado em `<details>`. | 8h | Admin/supervisor consegue salvar Vind com `min_down_payment_pct=10` via form (não JSON). Erros de validação aparecem inline (% inválido, etc). Page test no Playwright cobrindo fluxo. RLS continua funcionando (lead/broker não acessa edit). | 31.4 |
 | 31.6 | **Prompts refactor — property-presentation + qualification + personality** — implementar feature flag `NICOLE_RULES_FROM_DB`. Quando ativa: remover blocos de dados hardcoded (CONDICOES DE PAGAMENTO em property-presentation, item 7 entrada em qualification, exemplos com nomes em personality) substituindo por instruções genéricas referenciando DADOS ATUALIZADOS. Quando inativa: comportamento atual. | 6h | Token count do bloco estático ≥ 1024 (test `index.test.ts` atualizado). Cache hit ratio em smoke test ≥ baseline. Smoke test manual: Nicole responde "entrada minima de 10%" e "em torno de 40 mil" sem invenção. Test que valida `cache_control: ephemeral` presente continua passando. | 31.5 |
@@ -909,7 +909,7 @@ A página `/dashboard/properties/[id]/edit` continua funcionando porque o modo a
 2. **Confirmado:** API route `PATCH /api/properties/[id]/route.ts` linha 92-95 já usa `.eq("org_id", appUser.org_id)` no UPDATE — duplo defense ✅.
 3. **Adicionar** test E2E: usuário da org A tenta editar property da org B → recebe 404 (esperado pela combinação RLS + filtro do route).
 4. **Story 31.5 inclui** validação explícita: `body.org_id` é ignorado no PATCH (já é hoje, mas documentar).
-5. Backfill (migration 041) é **multi-org-aware**: filtra por `slug`, que é UNIQUE GLOBAL (linha 45 do `002_property_schema.sql`). Se houver outra org com slug "yarden" (improvável dado UNIQUE), o UPDATE atinge ambas. **OK para MVP single-org Trifold.** Se Trifold um dia onboardar outra construtora, revisitar.
+5. Backfill (migration 044) é **multi-org-aware**: filtra por `slug`, que é UNIQUE GLOBAL (linha 45 do `002_property_schema.sql`). Se houver outra org com slug "yarden" (improvável dado UNIQUE), o UPDATE atinge ambas. **OK para MVP single-org Trifold.** Se Trifold um dia onboardar outra construtora, revisitar.
 
 ### Risco 4 — Nicole alucina sobre regras durante a janela de inconsistência
 
@@ -932,7 +932,7 @@ A página `/dashboard/properties/[id]/edit` continua funcionando porque o modo a
 **Por quê:** `identify-property.ts` hoje tem keywords hardcoded por slug. Quando movermos pro DB (`identification_keywords` em `commercial_rules`), se o backfill não popular corretamente os arrays, leads que mencionarem "67m2" ou "rooftop" deixam de ser auto-identificados.
 
 **Mitigação:**
-1. Migration 041 (Story 3) **já popula** `identification_keywords` com os arrays exatos hoje hardcoded — sem regressão.
+1. Migration 044 (Story 3) **já popula** `identification_keywords` com os arrays exatos hoje hardcoded — sem regressão.
 2. Story 31.8 mantém a função `identifyProperty` com **fallback automático**: se `commercial_rules.identification_keywords` for vazio/null, usa lógica auto-gen existente (linhas 46-53 de `identify-property.ts`).
 3. Tests existentes (`identify-property.test.ts`) continuam usando mocks com slugs `vind` e `yarden` e devem passar sem alteração (após Story 8 ler `commercial_rules.identification_keywords` dos mocks).
 
@@ -986,7 +986,7 @@ Vamos usar `status_label` (texto custom) com "lançamento mais recente, sucesso 
 
 ### Q2 — `example_down_payment_brl` — **RESPONDIDO: Por empreendimento, configurável no painel**
 
-Cada empreendimento tem SEU exemplo conforme o preço comercializado. **NÃO usar 40k pra ambos.** O campo `example_down_payment_brl` é por property, editável no painel. Initial backfill (migration 041):
+Cada empreendimento tem SEU exemplo conforme o preço comercializado. **NÃO usar 40k pra ambos.** O campo `example_down_payment_brl` é por property, editável no painel. Initial backfill (migration 044):
 - Vind: `40000` (briefing original)
 - Yarden: `60000` (preço maior — admin ajusta no painel se necessário)
 
@@ -1002,11 +1002,11 @@ Nicole continua falando do Yarden, oferece consórcio, menciona Vind como comple
 
 ### Q5 — Fire pit → Fireplace — **RESPONDIDO: Apenas onde afeta a Nicole**
 
-Manter migration 041 com UPDATE em `properties.amenities` (Yarden) e `knowledge_base.content`. **Não criar ticket separado** para material visual de marketing (fotos/renders/PDFs ficam fora do escopo deste refactor).
+Manter migration 044 com UPDATE em `properties.amenities` (Yarden) e `knowledge_base.content`. **Não criar ticket separado** para material visual de marketing (fotos/renders/PDFs ficam fora do escopo deste refactor).
 
 ### Q6 — `min_down_payment_pct` por empreendimento — **RESPONDIDO: Configurável por property**
 
-Campo `min_down_payment_pct` é POR property (não global), editável no painel. Initial backfill (migration 041):
+Campo `min_down_payment_pct` é POR property (não global), editável no painel. Initial backfill (migration 044):
 - Vind: `10`
 - Yarden: `10`
 
@@ -1014,11 +1014,11 @@ Admin pode ajustar separadamente no painel se a política mudar para algum empre
 
 ### Q-Apêndice A.2 — Descartar `min_down_payment: 68000` do DB Vind — **RESPONDIDO: Descartar**
 
-O resíduo `68000` é substituído pelos novos campos `min_down_payment_pct: 10` + `example_down_payment_brl: 40000`. Migration 041 sobrescreve o jsonb inteiro de `commercial_rules`.
+O resíduo `68000` é substituído pelos novos campos `min_down_payment_pct: 10` + `example_down_payment_brl: 40000`. Migration 044 sobrescreve o jsonb inteiro de `commercial_rules`.
 
 ### Q-Apêndice A.3 — Slug Yarden em produção é `yarden` — **RESPONDIDO: Manter `yarden`**
 
-Migration 041 usa filtro por slug = 'yarden' (não 'yarden-residence'). Story 31.9 atualiza `seed-properties.ts` para sincronizar com produção (`slug: "yarden"`).
+Migration 044 usa filtro por slug = 'yarden' (não 'yarden-residence'). Story 31.9 atualiza `seed-properties.ts` para sincronizar com produção (`slug: "yarden"`).
 
 ---
 
@@ -1026,7 +1026,7 @@ Migration 041 usa filtro por slug = 'yarden' (não 'yarden-residence'). Story 31
 
 Confirmado que ambos `min_down_payment_pct` e `example_down_payment_brl` são **por empreendimento**, editáveis no painel via campos individuais (não JSON cru). Schema da Seção 3.2 já reflete isso — sem mudança estrutural necessária.
 
-### Mudanças no backfill (migration 041)
+### Mudanças no backfill (migration 044)
 
 ```sql
 -- Vind
@@ -1066,3 +1066,13 @@ WHERE slug = 'yarden';
 - **Próximo passo:** @sm cria Stories 31.1 → 31.9 com base nas linhas da tabela na Seção 8. Cada story tem AC, scope IN/OUT, dependências, estimativa.
 - Pontos de bloqueio que requerem decisão de produto: marcados como "PERGUNTA AO PRODUTO" em Apêndice B (6 perguntas, todas verticais ao escopo).
 - Pontos de bloqueio técnicos: nenhum — todas as decisões fechadas.
+
+---
+
+## Change Log do Documento
+
+| Data | Versão | Mudança | Autor |
+|------|--------|---------|-------|
+| 2026-05-15 | 1.0 | Doc inicial criado a partir do briefing do usuário (Caminho B). 9 stories propostas, 6 perguntas ao Produto no Apêndice B. | Aria (@architect) |
+| 2026-05-15 | 1.1 | Apêndice B respondido pelo Produto. Mudanças no schema final pós-decisões Q2 + Q6 (campos `min_down_payment_pct` e `example_down_payment_brl` configuráveis por property). Backfill ajustado: Vind=10%/40k, Yarden=10%/60k. | Claude (orquestração) |
+| 2026-05-15 | 1.2 | **Migrations renumeradas 040→043 e 041→044** devido a colisão com Epic 33 (Módulo CRM Clientes — Lucas mergeou enquanto Story 31.1 estava em InReview). Slots 040-042 ocupados em produção. Todas as referências do doc atualizadas (Seções 2.1, 2.8, 3.3, 3.4, 7.2, 8). | Claude (orquestração) |

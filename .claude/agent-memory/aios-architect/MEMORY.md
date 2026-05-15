@@ -1,5 +1,14 @@
 # Architect Agent Memory
 
+## Project Memory
+
+- [project_epic_29_migration_convention.md](project_epic_29_migration_convention.md) — Convention from Story 29.1 PASS (3-digit prefix, ghost `_remote_only.sql` for CONCURRENTLY, validation via Management API). Required for Stories 29.2-29.7 gates.
+- [project_story_29_8_env_var_pattern.md](project_story_29_8_env_var_pattern.md) — Vercel env var failure pattern: `vercel env ls` confirms existence but NOT value; pull to /tmp to detect empty values. Story 29.8 fixed 40d-old empty NEXT_PUBLIC_SUPABASE_URL.
+- [project_epic_29_closure.md](project_epic_29_closure.md) — Epic 29 closed 2026-05-14 (8/8 PASS). Smoke runtime validável via Management API (cron.job_run_details). Epic closure pattern: status Done + summary table in epic file, no separate doc.
+- [project_epic_30_analytics_rpc_pattern.md](project_epic_30_analytics_rpc_pattern.md) — Pattern Story 30.1 PASS: RPC JSONB com 6 CTEs (anti-IDOR explícito em todas), SECURITY INVOKER, COALESCE defensivo, enum→text, `toCount()` helper. EXPLAIN 3.8ms (13x abaixo de 50ms).
+- [project_story_30_8_count_filter_pattern.md](project_story_30_8_count_filter_pattern.md) — Pattern Story 30.8 PASS: COUNT(*) FILTER sobre scan único quando todas agregações são na mesma tabela. Alternativa ao multi-CTE da 30.1 (quando há JOINs/tabelas diferentes).
+- [project_epic_30_closure.md](project_epic_30_closure.md) — Epic 30 closed 2026-05-14 (9/9 stories Done). 2 migrations, 3 RPCs, 1 trigger. Composição multiplicativa com Epic 29. Padrão de closure: status Done + closed_at + sumário com ganhos no epic file (sem doc separado).
+
 ## EPIC-ACT Wave 2 Quality Gate Review (2026-02-06)
 - Reviewed: ACT-6 (Unified Activation Pipeline, 67 tests, APPROVED)
 - Total EPIC-ACT: 255 tests pass across 4 test suites (0 regressions)

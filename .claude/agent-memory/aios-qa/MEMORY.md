@@ -57,3 +57,10 @@
 - Previous review of 11.2 incorrectly stated `window.confirm()` was used; actual implementation uses shadcn AlertDialog -- always verify actual code, not just spec assumptions
 - Test fixture updates may lag behind interface changes -- always run `vitest run` to confirm
 - All 134 test files / 1281 assertions as of Epic 12+13
+
+## Trifold CRM Project
+
+- [project_trifold_dev_ports.md](project_trifold_dev_ports.md) — Port 3000 locally is often Markuva, not Trifold — verify before browser-driving
+- [project_supabase_auth_cookie_not_httponly.md](project_supabase_auth_cookie_not_httponly.md) — sb-*-auth-token is NOT httpOnly in Trifold (Supabase SSR design); validate logout by cookie removal, not flag state
+- [project_epic_31_qa_patterns.md](project_epic_31_qa_patterns.md) — Epic 31 (Nicole Data Layer) QA patterns + lint web pré-existente conhecido (eslint-plugin-import no Next 16)
+- [project_story_31_2_gate_passed.md](project_story_31_2_gate_passed.md) — Story 31.2 (migration 043 CHECK constraint) PASS — 9 patterns para validar DDL JSON CHECK em produção (Management API + convalidated + post-rollback verify)
