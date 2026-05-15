@@ -1,4 +1,5 @@
 export * from "./types/lead"
+export * from "./types/commercial-rules"
 export * from "./constants/pipeline"
 export * from "./constants/lead-fields"
 export * from "./constants/stages"
