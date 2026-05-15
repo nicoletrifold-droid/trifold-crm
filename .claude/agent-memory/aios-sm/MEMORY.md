@@ -13,6 +13,7 @@
 - Epic 19: Meta Ads Intelligence
 - Epic 20: Portal do Cliente
 - Epic 21: WhatsApp Channel Reliability (Stories 21.1 Done, 21.2 Draft, 21.3 Ready)
+- Epic 33: Cadastro de Clientes CRM (Stories 33.1–33.5 Draft, criadas 2026-05-15)
 
 ## Nicole AI Agent — Critical Rules (always check in story drafts)
 1. NÃO revelar que é AI/bot (apresentar como "Nicole, assistente Trifold")
@@ -50,3 +51,10 @@
 ## Story Numbering Tracker
 - Next story after 21.3: 21.4 or novo epic
 - Epic 20: stories 20-1a, 20-1b, 20-2, 20-3 (Portal do Cliente)
+- Epic 33: 33.1 (schema) → 33.2 (API) → 33.3/33.4/33.5 (UI em paralelo). Migration 041 = clientes + vinculos; migration 042 = brindes_destinatarios.cliente_id (FK ON DELETE SET NULL).
+
+## Epic 33 — CRM Clientes: Notas Críticas
+- `clientes` e `clientes_obras_vinculos` são SEPARADOS de `users.role='cliente'` e `cliente_obras` (portal). Sem FK entre CRM e portal-users.
+- Auth pattern API: `requireAuth()` de `@web/lib/api-auth` (NÃO service_role). RLS aplicado automaticamente.
+- Rotas em `/api/admin/clientes/` (não em `/api/brindes/`). Segmento `search/` ANTES do `[id]/` para evitar conflito de rotas no App Router.
+- Story 33.5 depende de 041 aplicada ANTES de aplicar 042 (FK para `clientes`).

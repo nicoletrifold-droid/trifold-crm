@@ -127,12 +127,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Obras role: restricted to /dashboard/obras and /dashboard/brindes only
+  // Obras role: restricted to /dashboard/obras, /dashboard/brindes and /dashboard/configuracoes/clientes
   if (
     role === "obras" &&
     pathname.startsWith("/dashboard") &&
     !pathname.startsWith("/dashboard/obras") &&
-    !pathname.startsWith("/dashboard/brindes")
+    !pathname.startsWith("/dashboard/brindes") &&
+    !pathname.startsWith("/dashboard/configuracoes/clientes") &&
+    pathname !== "/dashboard/configuracoes"
   ) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard/obras"

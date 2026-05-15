@@ -1,8 +1,7 @@
 # Dex (Builder) Agent Memory
 
-## Project (trifold-crm specific)
-- [Next.js 16 proxy convention](project_nextjs16_proxy_convention.md) — packages/web runs Next 16.2.2; entry point is proxy.ts (not middleware.ts), Node runtime
-- [Supabase logout pattern](project_supabase_logout_pattern.md) — Always use `<form action={logout}>` server action; browser signOut() does NOT clear httpOnly cookies
+## Index
+- [Trifold CRM — module conventions](project_trifold_crm.md) — Next.js project at packages/web, API auth + schema patterns + script naming
 
 ## Key Patterns
 
