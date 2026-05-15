@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("brindes_entregas")
-    .select("destinatario_id, status, observacao_entrega, entregue_em")
+    .select("destinatario_id, status, observacao_entrega, entregue_em, brinde_tipo_id, brindes_tipos(nome, tamanho, cor)")
     .eq("org_id", appUser.org_id)
     .eq("data_comemorativa_id", dataComemorativaId)
 
@@ -56,6 +56,20 @@ export async function POST(request: NextRequest) {
       ? body.observacao_entrega.trim()
       : null
 
+  let brinde_tipo_id: string | null = null
+  if (typeof body.brinde_tipo_id === "string" && body.brinde_tipo_id.trim()) {
+    const { data: tipo } = await supabase
+      .from("brindes_tipos")
+      .select("id")
+      .eq("id", body.brinde_tipo_id.trim())
+      .eq("org_id", appUser.org_id)
+      .single()
+    if (!tipo) {
+      return NextResponse.json({ error: "Tipo de brinde não encontrado" }, { status: 400 })
+    }
+    brinde_tipo_id = tipo.id
+  }
+
   const { data, error } = await supabase
     .from("brindes_entregas")
     .upsert(
@@ -65,6 +79,7 @@ export async function POST(request: NextRequest) {
         data_comemorativa_id,
         status,
         observacao_entrega,
+        brinde_tipo_id,
         entregue_em: status === "entregue" ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       },

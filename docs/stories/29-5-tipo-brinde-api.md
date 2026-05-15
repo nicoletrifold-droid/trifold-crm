@@ -1,6 +1,6 @@
 # Story 29.5 — API Routes: CRUD `brindes_tipos` + atualizar `brindes_entregas`
 
-## Status: Ready
+## Status: Ready for Review
 
 ## Executor Assignment
 executor: "@dev"
@@ -22,19 +22,19 @@ Padrão de rotas baseado em `/api/brindes/datas` (já implementado em 29.2).
 ## Acceptance Criteria
 
 ### Rotas de Tipos de Brinde
-- [ ] AC1: `GET /api/brindes/tipos` — lista tipos da org, ordenados por nome, com suporte ao query param `?ativo=true|false` para filtrar por status
-- [ ] AC2: `POST /api/brindes/tipos` — cria tipo. Body: `{ nome, descricao?, tamanho?, cor? }`. Valida: nome obrigatório e não-vazio; retorna 400 se `nome` já existe para org (UNIQUE constraint)
-- [ ] AC3: `PATCH /api/brindes/tipos/[id]` — atualiza tipo. Body: qualquer combinação de `{ nome?, descricao?, tamanho?, cor?, ativo? }`. Verifica que o tipo pertence à org antes de atualizar
-- [ ] AC4: `DELETE /api/brindes/tipos/[id]` — deleta tipo (hard delete). Verifica que o tipo pertence à org. Se o tipo estiver em uso em brindes_entregas, retorna 409 com mensagem explicativa
+- [x] AC1: `GET /api/brindes/tipos` — lista tipos da org, ordenados por nome, com suporte ao query param `?ativo=true|false` para filtrar por status
+- [x] AC2: `POST /api/brindes/tipos` — cria tipo. Body: `{ nome, descricao?, tamanho?, cor? }`. Valida: nome obrigatório e não-vazio; retorna 400 se `nome` já existe para org (UNIQUE constraint)
+- [x] AC3: `PATCH /api/brindes/tipos/[id]` — atualiza tipo. Body: qualquer combinação de `{ nome?, descricao?, tamanho?, cor?, ativo? }`. Verifica que o tipo pertence à org antes de atualizar
+- [x] AC4: `DELETE /api/brindes/tipos/[id]` — deleta tipo (hard delete). Verifica que o tipo pertence à org. Se o tipo estiver em uso em brindes_entregas, retorna 409 com mensagem explicativa
 
 ### Atualização da Rota de Entregas
-- [ ] AC5: `POST /api/brindes/entregas` — aceita campo opcional `brinde_tipo_id` (uuid). Valida: se informado, verifica que o tipo existe e pertence à org; inclui `brinde_tipo_id` no upsert
-- [ ] AC6: `GET /api/brindes/entregas` — inclui detalhes do tipo via join Supabase: `.select("*, brindes_tipos(nome, tamanho, cor)")` para que a UI possa exibir nome/tamanho/cor sem busca adicional. Resposta de cada entrega inclui `brindes_tipos: { nome, tamanho, cor } | null`
+- [x] AC5: `POST /api/brindes/entregas` — aceita campo opcional `brinde_tipo_id` (uuid). Valida: se informado, verifica que o tipo existe e pertence à org; inclui `brinde_tipo_id` no upsert
+- [x] AC6: `GET /api/brindes/entregas` — inclui detalhes do tipo via join Supabase: `.select("*, brindes_tipos(nome, tamanho, cor)")` para que a UI possa exibir nome/tamanho/cor sem busca adicional. Resposta de cada entrega inclui `brindes_tipos: { nome, tamanho, cor } | null`
 
 ### Segurança e Padrões
-- [ ] AC7: Todas as rotas usam `requireAuth()` para autenticação
-- [ ] AC8: Rotas de escrita (POST, PATCH, DELETE) usam `requireRole(appUser, ["admin", "supervisor", "obras"])`
-- [ ] AC9: Nenhuma query sem filtro `org_id` (proteção de isolamento multi-tenant)
+- [x] AC7: Todas as rotas usam `requireAuth()` para autenticação
+- [x] AC8: Rotas de escrita (POST, PATCH, DELETE) usam `requireRole(appUser, ["admin", "supervisor", "obras"])`
+- [x] AC9: Nenhuma query sem filtro `org_id` (proteção de isolamento multi-tenant)
 
 ## Escopo
 
@@ -144,11 +144,11 @@ export interface BrindeTipo {
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Criar `packages/web/src/app/api/brindes/tipos/route.ts` com GET (lista) e POST (cria) (AC1, AC2)
-- [ ] Task 2: Criar `packages/web/src/app/api/brindes/tipos/[id]/route.ts` com PATCH (edita) e DELETE (remove com 409 se em uso) (AC3, AC4)
-- [ ] Task 3: Atualizar `packages/web/src/app/api/brindes/entregas/route.ts` — aceitar `brinde_tipo_id` opcional no POST e incluir no upsert (AC5, AC6)
-- [ ] Task 4: Verificar `npm run typecheck` e `npm run lint` sem erros
-- [ ] Task 5: Testar manualmente GET /api/brindes/tipos (deve retornar array vazio sem erros)
+- [x] Task 1: Criar `packages/web/src/app/api/brindes/tipos/route.ts` com GET (lista) e POST (cria) (AC1, AC2)
+- [x] Task 2: Criar `packages/web/src/app/api/brindes/tipos/[id]/route.ts` com PATCH (edita) e DELETE (remove com 409 se em uso) (AC3, AC4)
+- [x] Task 3: Atualizar `packages/web/src/app/api/brindes/entregas/route.ts` — aceitar `brinde_tipo_id` opcional no POST e incluir no upsert (AC5, AC6)
+- [x] Task 4: Verificar `npm run type-check` e `npm run lint` sem erros (0 errors)
+- [x] Task 5: Testar manualmente GET /api/brindes/tipos (retorna array vazio sem erros)
 
 ## File List
 
