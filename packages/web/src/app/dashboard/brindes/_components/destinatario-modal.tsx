@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { X, Plus } from "lucide-react"
 import type { BrindeTipo, Destinatario } from "./types"
 import { UF_OPTIONS } from "./types"
+import { ClienteCrmSearch, type ClienteCRMResumido } from "./cliente-crm-search"
 
 interface DestinatarioModalProps {
   mode: "create" | "edit"
@@ -34,6 +35,8 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
   const [newTipo, setNewTipo] = useState({ ...EMPTY_NEW_TIPO })
   const [creatingTipo, setCreatingTipo] = useState(false)
   const [newTipoError, setNewTipoError] = useState<string | null>(null)
+
+  const [clienteId, setClienteId] = useState<string | null>(null)
 
   useEffect(() => {
     let aborted = false
@@ -65,6 +68,7 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
         endereco_referencia: destinatario.endereco_referencia ?? "",
         brinde_tipo_id: destinatario.brinde_tipo_id ?? "",
       })
+      setClienteId(destinatario.cliente_id ?? null)
     }
   }, [destinatario])
 
@@ -108,6 +112,36 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
     }
   }
 
+  function handleClienteSelect(cliente: ClienteCRMResumido | null) {
+    setClienteId(cliente?.id ?? null)
+    if (!cliente) return
+
+    // Pré-preencher apenas campos VAZIOS — não sobrescrever dados do usuário.
+    setFields((f) => {
+      const next = { ...f }
+      if (!next.nome.trim()) next.nome = cliente.nome
+      if (!next.endereco_logradouro.trim() && cliente.endereco_logradouro)
+        next.endereco_logradouro = cliente.endereco_logradouro
+      if (!next.endereco_numero.trim() && cliente.endereco_numero)
+        next.endereco_numero = cliente.endereco_numero
+      if (!next.endereco_complemento.trim() && cliente.endereco_complemento)
+        next.endereco_complemento = cliente.endereco_complemento
+      if (!next.endereco_bairro.trim() && cliente.endereco_bairro)
+        next.endereco_bairro = cliente.endereco_bairro
+      if (!next.endereco_cidade.trim() && cliente.endereco_cidade)
+        next.endereco_cidade = cliente.endereco_cidade
+      if (!next.endereco_estado && cliente.endereco_estado)
+        next.endereco_estado = cliente.endereco_estado
+      if (!next.endereco_cep.trim() && cliente.endereco_cep)
+        next.endereco_cep = cliente.endereco_cep
+      if (!next.endereco_referencia.trim() && cliente.endereco_referencia)
+        next.endereco_referencia = cliente.endereco_referencia
+      if (!next.obra_nome.trim() && cliente.obras[0]?.obra_nome)
+        next.obra_nome = cliente.obras[0].obra_nome
+      return next
+    })
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (loading) return
@@ -131,6 +165,7 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
       endereco_cep: fields.endereco_cep.trim() || null,
       endereco_referencia: fields.endereco_referencia.trim() || null,
       brinde_tipo_id: fields.brinde_tipo_id || null,
+      cliente_id: clienteId,
     }
 
     try {
@@ -177,6 +212,8 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
+          <ClienteCrmSearch clienteId={clienteId} onClienteSelect={handleClienteSelect} />
+
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className={lbl}>Obra <span className="text-red-500">*</span></label>

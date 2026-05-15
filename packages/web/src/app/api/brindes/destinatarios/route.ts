@@ -92,6 +92,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const cliente_id = str(body.cliente_id)
+
   const { data, error } = await supabase
     .from("brindes_destinatarios")
     .insert({
@@ -109,6 +111,7 @@ export async function POST(request: NextRequest) {
       endereco_cep: str(body.endereco_cep),
       endereco_referencia: str(body.endereco_referencia),
       brinde_tipo_id,
+      cliente_id,
     })
     .select()
     .single()

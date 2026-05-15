@@ -15,6 +15,12 @@ const CONFIG_CARDS = [
     description: "Gerenciar usuários e permissões",
   },
   {
+    href: "/dashboard/configuracoes/clientes",
+    icon: "◉",
+    title: "Clientes",
+    description: "Cadastro de clientes e vínculos com obras",
+  },
+  {
     href: "/dashboard/configuracoes/horario",
     icon: "▣",
     title: "Horário Comercial",

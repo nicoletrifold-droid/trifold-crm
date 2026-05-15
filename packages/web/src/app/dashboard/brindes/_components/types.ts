@@ -21,6 +21,7 @@ export interface Destinatario {
   endereco_cep: string | null
   endereco_referencia: string | null
   brinde_tipo_id: string | null
+  cliente_id: string | null
   created_at: string
   updated_at: string
 }

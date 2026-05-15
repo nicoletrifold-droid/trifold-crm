@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { UserPlus, Trash2, Star, Pencil, Check, X } from "lucide-react"
+import { UserPlus, Trash2, Star, Pencil, Check, X, Search } from "lucide-react"
 
 interface Cliente {
   id: string
@@ -15,6 +15,24 @@ interface Cliente {
 interface ClientesTabProps {
   obraId: string
   clientes: Cliente[]
+}
+
+interface CrmClienteObra {
+  obra_id: string
+  obra_nome: string | null
+  numero_unidade: string | null
+}
+
+interface CrmCliente {
+  id: string
+  nome: string
+  email: string | null
+  obras: CrmClienteObra[]
+}
+
+function isValidEmailFormat(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length >= 5 && /.+@.+/.test(trimmed)
 }
 
 export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
@@ -33,6 +51,12 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   const [unidadeB, setUnidadeB] = useState("")
   const [savingB, setSavingB] = useState(false)
   const [errorB, setErrorB] = useState<string | null>(null)
+
+  // Enriquecimento CRM (Story 33.4)
+  const [crmCliente, setCrmCliente] = useState<CrmCliente | null>(null)
+  const [searchingCrm, setSearchingCrm] = useState(false)
+  const [emailBuscadoCrm, setEmailBuscadoCrm] = useState("")
+  const crmAbortRef = useRef<AbortController | null>(null)
 
   // Edição inline de unidade na lista
   const [editingUnidade, setEditingUnidade] = useState<string | null>(null)
@@ -96,6 +120,65 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       setErrorB(err instanceof Error ? err.message : "Erro ao vincular cliente")
     } finally {
       setSavingB(false)
+    }
+  }
+
+  async function buscarClienteCrm(emailRaw: string) {
+    const email = emailRaw.trim()
+    if (!isValidEmailFormat(email)) return
+    if (email === emailBuscadoCrm) return
+
+    // Cancela request anterior (race condition guard)
+    crmAbortRef.current?.abort()
+    const controller = new AbortController()
+    crmAbortRef.current = controller
+
+    setEmailBuscadoCrm(email)
+    setSearchingCrm(true)
+    try {
+      const res = await fetch(
+        `/api/admin/clientes/search?email=${encodeURIComponent(email)}`,
+        { signal: controller.signal }
+      )
+      if (controller.signal.aborted) return
+      if (!res.ok) {
+        // graceful degradation (AC5) — silêncio
+        setCrmCliente(null)
+        return
+      }
+      const json = (await res.json()) as { data?: CrmCliente[] }
+      if (controller.signal.aborted) return
+      const first = json.data?.[0] ?? null
+      setCrmCliente(first)
+    } catch {
+      // Silêncio em erro de rede / abort (AC5)
+    } finally {
+      if (crmAbortRef.current === controller) {
+        setSearchingCrm(false)
+      }
+    }
+  }
+
+  function handleEmailBChange(value: string) {
+    setEmailB(value)
+    if (!value.trim()) {
+      // AC8 — limpar banner quando campo limpo
+      crmAbortRef.current?.abort()
+      setCrmCliente(null)
+      setEmailBuscadoCrm("")
+      return
+    }
+    // Se usuário digitou diferente do que está no banner, invalidar banner
+    // (evita exibir dados de email anterior enquanto novo email é digitado)
+    if (crmCliente && value.trim() !== emailBuscadoCrm) {
+      crmAbortRef.current?.abort()
+      setCrmCliente(null)
+    }
+  }
+
+  function handleUsarNomeCrm() {
+    if (crmCliente && !nomeA.trim()) {
+      setNomeA(crmCliente.nome)
     }
   }
 
@@ -300,14 +383,61 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
           Vincular cliente existente
         </h2>
         <form onSubmit={handleVincularCliente} className="space-y-3">
-          <input
-            type="email"
-            placeholder="Email do cliente *"
-            value={emailB}
-            onChange={(e) => setEmailB(e.target.value)}
-            required
-            className={inputCls}
-          />
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="Email do cliente *"
+                value={emailB}
+                onChange={(e) => handleEmailBChange(e.target.value)}
+                onBlur={(e) => buscarClienteCrm(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button
+                type="button"
+                onClick={() => buscarClienteCrm(emailB)}
+                disabled={searchingCrm || !isValidEmailFormat(emailB)}
+                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                title="Buscar no CRM"
+              >
+                <Search className="h-3.5 w-3.5" />
+                {searchingCrm ? "Buscando..." : "Buscar no CRM"}
+              </button>
+            </div>
+            {crmCliente && (
+              <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="leading-snug">
+                    <span className="font-medium">✓ Cliente CRM encontrado:</span>{" "}
+                    {crmCliente.nome}
+                    {crmCliente.obras.length === 1 && (() => {
+                      const o = crmCliente.obras[0]
+                      const nome = o.obra_nome ?? "obra sem nome"
+                      const sufixo = o.numero_unidade ? ` ${o.numero_unidade}` : ""
+                      return <> — {nome}{sufixo}</>
+                    })()}
+                    {crmCliente.obras.length > 1 && (
+                      <> — {crmCliente.obras.length} obras vinculadas</>
+                    )}
+                    {crmCliente.obras.length === 0 && (
+                      <> — sem obras vinculadas</>
+                    )}
+                  </p>
+                  {!nomeA.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleUsarNomeCrm}
+                      className="flex-shrink-0 rounded border border-orange-300 bg-white px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100 dark:border-orange-400/40 dark:bg-stone-900 dark:text-orange-200 dark:hover:bg-orange-500/20"
+                      title="Pré-preencher o nome no formulário acima"
+                    >
+                      Usar nome
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <input
             type="text"
             placeholder="Nº da unidade / apartamento (opcional)"

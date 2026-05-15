@@ -42,6 +42,17 @@ export async function PATCH(
   if (body.endereco_cep !== undefined) updates.endereco_cep = str(body.endereco_cep)
   if (body.endereco_referencia !== undefined) updates.endereco_referencia = str(body.endereco_referencia)
 
+  if (body.cliente_id !== undefined) {
+    const clienteIdRaw = body.cliente_id
+    if (clienteIdRaw === null) {
+      updates.cliente_id = null
+    } else if (typeof clienteIdRaw === "string" && clienteIdRaw.trim()) {
+      updates.cliente_id = clienteIdRaw.trim()
+    } else {
+      updates.cliente_id = null
+    }
+  }
+
   if (body.brinde_tipo_id !== undefined) {
     const tipoId = typeof body.brinde_tipo_id === "string" && body.brinde_tipo_id.trim()
       ? body.brinde_tipo_id.trim()
