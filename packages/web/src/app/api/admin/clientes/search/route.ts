@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 type ObraRef = { id: string; name: string } | { id: string; name: string }[] | null
 

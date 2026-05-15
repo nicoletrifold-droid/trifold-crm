@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 async function assertClienteOwnership(
   supabase: SupabaseClient,

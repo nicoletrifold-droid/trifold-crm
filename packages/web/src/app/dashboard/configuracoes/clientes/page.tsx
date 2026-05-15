@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 export default async function ClientesCRMPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor"].includes(user.role)) {
+  if (!["admin", "supervisor", "obras"].includes(user.role)) {
     redirect("/dashboard")
   }
 
