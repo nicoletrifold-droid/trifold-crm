@@ -2,18 +2,20 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Upload, CalendarDays, ChevronLeft, ChevronRight, Pencil, Trash2, Printer } from "lucide-react"
+import { Plus, Upload, CalendarDays, ChevronLeft, ChevronRight, Pencil, Trash2, Printer, Package } from "lucide-react"
 import { DateSelector } from "./date-selector"
 import { BrindesFilterBar, type BrindesFilters } from "./brindes-filter-bar"
 import { StatusBadge } from "./status-badge"
 import { DestinatarioModal } from "./destinatario-modal"
 import { DatasModal } from "./datas-modal"
+import { TiposModal } from "./tipos-modal"
 import { ImportModal } from "./import-modal"
 import { PrintModal } from "./print-modal"
-import type { DataComemorativa, Destinatario, Entrega, EntregaStatus } from "./types"
+import type { BrindeTipo, DataComemorativa, Destinatario, Entrega, EntregaStatus } from "./types"
 
 interface BrindesTableProps {
   datas: DataComemorativa[]
+  tipos: BrindeTipo[]
   obraOptions: string[]
 }
 
@@ -21,7 +23,8 @@ const TIPO_LABEL: Record<string, string> = { mae: "Mãe", pai: "Pai", outro: "Ou
 
 const EMPTY_FILTERS: BrindesFilters = { obra_nome: "", tipo: "", nome: "", cidade: "", estado: "" }
 
-export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
+export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: BrindesTableProps) {
+  const [tipos, setTipos] = useState(initialTipos)
   const router = useRouter()
   const [destinatarios, setDestinatarios] = useState<Destinatario[]>([])
   const [total, setTotal] = useState(0)
@@ -38,10 +41,19 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
   const [modalCreate, setModalCreate] = useState(false)
   const [modalEdit, setModalEdit] = useState<Destinatario | null>(null)
   const [modalDatas, setModalDatas] = useState(false)
+  const [modalTipos, setModalTipos] = useState(false)
   const [modalImport, setModalImport] = useState(false)
   const [modalPrint, setModalPrint] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Destinatario | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  const fetchTipos = useCallback(async () => {
+    const res = await fetch("/api/brindes/tipos")
+    if (res.ok) {
+      const d = (await res.json()) as { data: BrindeTipo[] }
+      setTipos(d.data)
+    }
+  }, [])
 
   const fetchDestinatarios = useCallback(async () => {
     setLoadingTable(true)
@@ -83,10 +95,19 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
       .finally(() => setLoadingEntregas(false))
   }, [selectedDateId])
 
-  function handleStatusChange(destinatarioId: string, newStatus: EntregaStatus) {
+  function handleStatusChange(destinatarioId: string, newStatus: EntregaStatus, tipoId: string | null) {
+    const tipoObj = tipoId ? (tipos.find((t) => t.id === tipoId) ?? null) : null
     setEntregasMap((prev) => ({
       ...prev,
-      [destinatarioId]: { ...prev[destinatarioId], destinatario_id: destinatarioId, status: newStatus, observacao_entrega: null, entregue_em: newStatus === "entregue" ? new Date().toISOString() : null },
+      [destinatarioId]: {
+        ...prev[destinatarioId],
+        destinatario_id: destinatarioId,
+        status: newStatus,
+        observacao_entrega: null,
+        entregue_em: newStatus === "entregue" ? new Date().toISOString() : null,
+        brinde_tipo_id: tipoId,
+        brindes_tipos: tipoObj ? { nome: tipoObj.nome, tamanho: tipoObj.tamanho, cor: tipoObj.cor } : null,
+      },
     }))
   }
 
@@ -125,6 +146,10 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
           <button type="button" onClick={() => setModalDatas(true)}
             className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
             <CalendarDays className="h-4 w-4" /> Gerenciar Datas
+          </button>
+          <button type="button" onClick={() => setModalTipos(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
+            <Package className="h-4 w-4" /> Gerenciar Tipos
           </button>
           <button type="button" onClick={() => setModalImport(true)}
             className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
@@ -193,8 +218,17 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
                         disabled={!selectedDateId}
                         destinatarioId={d.id}
                         dataComemorativaId={selectedDateId ?? ""}
+                        currentTipoId={entrega?.brinde_tipo_id ?? null}
+                        tipos={tipos}
                         onStatusChange={handleStatusChange}
                       />
+                      {entrega?.brindes_tipos && (
+                        <span className="text-xs text-gray-400 dark:text-stone-500 block mt-0.5">
+                          {entrega.brindes_tipos.nome}
+                          {entrega.brindes_tipos.tamanho && ` · ${entrega.brindes_tipos.tamanho}`}
+                          {entrega.brindes_tipos.cor && ` · ${entrega.brindes_tipos.cor}`}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -263,6 +297,9 @@ export function BrindesTable({ datas, obraOptions }: BrindesTableProps) {
           onClose={() => { setModalEdit(null); fetchDestinatarios() }} />
       )}
       {modalDatas && <DatasModal datas={datas} onClose={() => setModalDatas(false)} />}
+      {modalTipos && (
+        <TiposModal tipos={tipos} onClose={() => { setModalTipos(false); fetchTipos() }} />
+      )}
       {modalPrint && (
         <PrintModal
           filters={filters}

@@ -2,7 +2,7 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { BrindesTable } from "./_components/brindes-table"
-import type { DataComemorativa } from "./_components/types"
+import type { BrindeTipo, DataComemorativa } from "./_components/types"
 
 export default async function BrindesPage() {
   const user = await getServerUser()
@@ -13,7 +13,7 @@ export default async function BrindesPage() {
 
   const supabase = await createClient()
 
-  const [{ data: datas }, { data: obras }] = await Promise.all([
+  const [{ data: datas }, { data: obras }, { data: tipos }] = await Promise.all([
     supabase
       .from("datas_comemorativas")
       .select("id, nome, data, ativa")
@@ -24,6 +24,11 @@ export default async function BrindesPage() {
       .from("brindes_destinatarios")
       .select("obra_nome")
       .eq("org_id", user.orgId),
+    supabase
+      .from("brindes_tipos")
+      .select("id, nome, descricao, tamanho, cor, ativo")
+      .eq("org_id", user.orgId)
+      .order("nome"),
   ])
 
   const uniqueObras = [...new Set((obras ?? []).map((o: { obra_nome: string }) => o.obra_nome))].sort()
@@ -39,6 +44,7 @@ export default async function BrindesPage() {
 
       <BrindesTable
         datas={(datas ?? []) as DataComemorativa[]}
+        tipos={(tipos ?? []) as BrindeTipo[]}
         obraOptions={uniqueObras}
       />
     </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import type { EntregaStatus } from "./types"
+import type { BrindeTipo, EntregaStatus } from "./types"
 import { STATUS_LABEL, STATUS_BADGE_CLASS } from "./types"
 
 interface StatusBadgeProps {
@@ -9,7 +9,9 @@ interface StatusBadgeProps {
   disabled: boolean
   destinatarioId: string
   dataComemorativaId: string
-  onStatusChange: (destinatarioId: string, newStatus: EntregaStatus) => void
+  currentTipoId: string | null
+  tipos: BrindeTipo[]
+  onStatusChange: (destinatarioId: string, newStatus: EntregaStatus, tipoId: string | null) => void
 }
 
 const ALL_STATUSES: EntregaStatus[] = ["pendente", "entregue", "nao_encontrado"]
@@ -19,11 +21,18 @@ export function StatusBadge({
   disabled,
   destinatarioId,
   dataComemorativaId,
+  currentTipoId,
+  tipos,
   onStatusChange,
 }: StatusBadgeProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [selectedTipoId, setSelectedTipoId] = useState<string>(currentTipoId ?? "")
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setSelectedTipoId(currentTipoId ?? "")
+  }, [currentTipoId])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -36,17 +45,23 @@ export function StatusBadge({
   }, [])
 
   async function selectStatus(newStatus: EntregaStatus) {
-    if (loading || newStatus === status) { setOpen(false); return }
+    if (loading) return
     setLoading(true)
     setOpen(false)
+    const tipoId = selectedTipoId || null
     try {
       const res = await fetch("/api/brindes/entregas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ destinatario_id: destinatarioId, data_comemorativa_id: dataComemorativaId, status: newStatus }),
+        body: JSON.stringify({
+          destinatario_id: destinatarioId,
+          data_comemorativa_id: dataComemorativaId,
+          status: newStatus,
+          brinde_tipo_id: tipoId,
+        }),
       })
       if (res.ok) {
-        onStatusChange(destinatarioId, newStatus)
+        onStatusChange(destinatarioId, newStatus, tipoId)
       }
     } finally {
       setLoading(false)
@@ -56,6 +71,8 @@ export function StatusBadge({
   if (disabled) {
     return <span className="text-xs text-gray-400 dark:text-stone-500">—</span>
   }
+
+  const tiposAtivos = tipos.filter((t) => t.ativo)
 
   return (
     <div ref={ref} className="relative inline-block">
@@ -69,7 +86,30 @@ export function StatusBadge({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white shadow-lg dark:border-stone-800 dark:bg-stone-900">
+        <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded-md border border-gray-200 bg-white shadow-lg dark:border-stone-800 dark:bg-stone-900">
+          {tiposAtivos.length > 0 && (
+            <div className="px-3 py-2 border-b border-gray-100 dark:border-stone-800">
+              <label className="block text-xs text-gray-400 dark:text-stone-500 mb-1">Tipo de brinde</label>
+              <select
+                value={selectedTipoId}
+                onChange={(e) => setSelectedTipoId(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+              >
+                <option value="">— Nenhum —</option>
+                {tiposAtivos.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome}{t.tamanho ? ` · ${t.tamanho}` : ""}{t.cor ? ` · ${t.cor}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {tiposAtivos.length === 0 && (
+            <div className="px-3 py-2 border-b border-gray-100 dark:border-stone-800">
+              <p className="text-xs text-gray-400 dark:text-stone-500">Nenhum tipo cadastrado</p>
+            </div>
+          )}
           {ALL_STATUSES.map((s) => (
             <button
               key={s}

@@ -26,11 +26,22 @@ export interface Destinatario {
 
 export type EntregaStatus = "pendente" | "entregue" | "nao_encontrado"
 
+export interface BrindeTipo {
+  id: string
+  nome: string
+  descricao: string | null
+  tamanho: string | null
+  cor: string | null
+  ativo: boolean
+}
+
 export interface Entrega {
   destinatario_id: string
   status: EntregaStatus
   observacao_entrega: string | null
   entregue_em: string | null
+  brinde_tipo_id: string | null
+  brindes_tipos: { nome: string; tamanho: string | null; cor: string | null } | null
 }
 
 export const UF_OPTIONS = [
