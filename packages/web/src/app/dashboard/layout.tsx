@@ -74,11 +74,13 @@ export default async function DashboardLayout({
           .is("read_at", null),
       ])
 
-  // obras role: Obras + Brindes only
+  const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
+
+  // obras role: Obras + Brindes + Config (para cadastro de clientes)
   // admin/supervisor: full nav + Obras + Brindes + Mensagens
   // Sistema: admin only
   const navItems = isObras
-    ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES]
+    ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES, NAV_ITEM_CONFIG]
     : [
         ...NAV_ITEMS_BASE,
         ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES] : [NAV_ITEM_BRINDES]),
