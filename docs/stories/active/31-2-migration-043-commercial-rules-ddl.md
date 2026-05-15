@@ -2,7 +2,7 @@
 story: 31.2
 title: "Migration 043 — DDL CommercialRules v2 (CHECK constraint)"
 subtitle: "Primeira story que toca DB de produção — aplicar via Management API, mode Pre-Flight obrigatório"
-status: InReview
+status: Done
 epic: 31
 created_at: 2026-05-15
 created_by: River (@sm)
@@ -372,6 +372,7 @@ Este design previne aplicação acidental de DDL com dados em estado inesperado.
 | 2026-05-15 | 1.2 | SF-2 aplicado antes do @data-engineer: T1.2 query trocada de `consrc` → `pg_get_constraintdef(oid) AS definition` (compatível PG17). SF-1 fica como follow-up na Story 31.3 (cleanup do comment stale). | Claude (orquestração) |
 | 2026-05-15 14:54 UTC | 1.3 | **Migration 043 aplicada em produção.** Fases 1-3 (Pre-Flight + DDL drafted + gate humano "pode aplicar") completas em sessão anterior. Fases 4-6 nesta sessão: (a) DDL aplicado em batch via Management API (`POST /v1/projects/dsopqkqjkmhytudaaolv/database/query`) — 4 statements, response `[]` (sucesso). (b) Tracking inserido em `schema_migrations` com `version=043, name=043_property_commercial_rules_v2`. (c) Smoke tests com BEGIN/ROLLBACK: AC3 negativo bloqueado por `commercial_rules_shape_check` (ERROR 23514), AC4 positivo aceito (RETURNING válido), AC5 NULL aceito. Detalhe: primeiros INSERTs falharam em `address NOT NULL` antes do CHECK — corrigido fornecendo address/city/state nos smoke tests. (d) Count final = 2 (baseline preservado, somente Vind+Yarden). 12/12 ACs PASS. Status InProgress → InReview. | Dara (@data-engineer) |
 | 2026-05-15 15:10 UTC | 1.4 | **QA Gate PASS** (Quinn @qa). 12/12 ACs **revalidados independentemente** via Management API (não confiei apenas no log do Dara). 3 tentativas adicionais de quebrar a constraint: NEG-1 (pct=-50) bloqueada, NEG-2 (financing_options=["pix"]) aceita por design (enum-validation é Zod/UI per arch doc linha 580 — não é gap), NEG-3 (example_down_payment_brl=-1000) bloqueada. `convalidated=true` confirmado. RLS intacta. Typecheck clean em todos os 5 pacotes. Zero rows de teste persistidas. Vind/Yarden baseline preservado. 2 CONCERNS não-bloqueantes documentados (drift de tracking inter-epic, enum-validation escopada para 31.5). Gate report completo em `docs/qa/gates/31-2-qa-gate.md`. Status InReview → **ready for @devops *push**. | Quinn (@qa) |
+| 2026-05-15 | 1.5 | **Push concluído. Story closed.** Branch efêmera `feat/epic-31-story-2-migration-043` criada a partir de `main` (sync 0/0 com `origin/main`), commit `7d30840` no escopo da story (36 arquivos, +1990/-20), ff-merge limpo em `main`, push aceito (`9d1fb04..7d30840`), branch deletada. Pre-push: rebase desnecessário (HEAD já igual a `origin/main`). Sem `--no-verify`, sem force push. Bundle adicional: memórias acumuladas dos Epics 29/30 (architect/data-engineer/dev/qa) commitadas junto para manter integridade dos índices `MEMORY.md` (caso contrário ficariam com links quebrados). Status: InReview → **Done**. | Gage (@devops) |
 
 ---
 
