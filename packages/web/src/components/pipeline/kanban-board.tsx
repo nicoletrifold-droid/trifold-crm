@@ -5,16 +5,13 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
-  pointerWithin,
-  rectIntersection,
   PointerSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
-  type CollisionDetection,
 } from "@dnd-kit/core"
-import { KanbanColumn } from "./kanban-column"
+import { KanbanColumn, EMPTY_COLUMN_PREFIX } from "./kanban-column"
 import { LeadCard } from "./lead-card"
 import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 import { SourceBadge } from "@web/components/ui/source-badge"
@@ -105,37 +102,6 @@ export function KanbanBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const stageIds = useMemo(() => initialStages.map((s) => s.id), [initialStages])
-
-  // Estratégia de colisão para Kanban multi-coluna:
-  // 1. pointerWithin → cursor está fisicamente dentro da coluna (inclui colunas vazias)
-  // 2. rectIntersection (só stages) → card arrastado sobrepõe a coluna (fallback para colunas vazias)
-  // 3. closestCenter (só stages) → último recurso, nunca pega card de coluna errada
-  const collisionDetection = useCallback<CollisionDetection>(
-    (args) => {
-      // Prioridade 1: cursor dentro de algum droppable
-      const pointerHits = pointerWithin(args)
-      if (pointerHits.length > 0) {
-        const stageHit = pointerHits.find(({ id }) => stageIds.includes(id as string))
-        return stageHit ? [stageHit] : [pointerHits[0]]
-      }
-
-      // Prioridade 2 e 3: filtra para só stages, evitando que o fallback
-      // resolva para um card de coluna vizinha (que quebraria colunas vazias)
-      const stageOnlyArgs = {
-        ...args,
-        droppableContainers: args.droppableContainers.filter(
-          ({ id }) => stageIds.includes(id as string)
-        ),
-      }
-      const rectHits = rectIntersection(stageOnlyArgs)
-      if (rectHits.length > 0) return rectHits
-
-      return closestCenter(stageOnlyArgs)
-    },
-    [stageIds]
-  )
-
   // Flatten all loaded leads across stages for source filter aggregation.
   const allLeads = useMemo(() => {
     const out: Lead[] = []
@@ -194,8 +160,14 @@ export function KanbanBoard({
       const leadId = active.id as string
       let newStageId = over.id as string
 
-      // over.id can be either a stage ID (dropped on empty column area)
-      // or a lead ID (dropped on top of another card). Resolve to stage ID.
+      // Resolve over.id para um stage ID. Pode ser:
+      // 1. Stage ID direto (dropped na área da coluna)
+      // 2. Prefixo de coluna vazia: "__empty__{stageId}"
+      // 3. Lead ID (dropped em cima de outro card) → busca qual stage contém esse lead
+      if (newStageId.startsWith(EMPTY_COLUMN_PREFIX)) {
+        newStageId = newStageId.slice(EMPTY_COLUMN_PREFIX.length)
+      }
+
       let targetStage = initialStages.find((s) => s.id === newStageId)
       if (!targetStage) {
         for (const [stageId, state] of stageMap.entries()) {
@@ -408,7 +380,7 @@ export function KanbanBoard({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={collisionDetection}
+        collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
