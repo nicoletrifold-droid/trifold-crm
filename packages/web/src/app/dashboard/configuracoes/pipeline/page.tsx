@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { EditStageModal } from "./_components/edit-stage-modal"
+import { CreateStageModal } from "./_components/create-stage-modal"
 
 export default async function PipelineConfigPage() {
   const user = await getServerUser()
@@ -36,9 +37,12 @@ export default async function PipelineConfigPage() {
             Gerencie as etapas do kanban
           </p>
         </div>
-        <p className="text-sm text-gray-500 dark:text-stone-400">
-          {stages?.length ?? 0} etapas
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500 dark:text-stone-400">
+            {stages?.length ?? 0} etapas
+          </p>
+          {isAdmin && <CreateStageModal />}
+        </div>
       </div>
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
