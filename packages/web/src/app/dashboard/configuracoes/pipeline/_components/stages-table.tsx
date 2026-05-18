@@ -19,18 +19,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { EditStageModal } from "./edit-stage-modal"
-
-interface Stage {
-  id: string
-  name: string
-  slug: string
-  type: string
-  position: number
-  color: string | null
-  is_default: boolean
-  is_active: boolean
-  created_at: string
-}
+import type { Stage } from "./types"
 
 const typeLabels: Record<string, string> = {
   novo: "Novo",

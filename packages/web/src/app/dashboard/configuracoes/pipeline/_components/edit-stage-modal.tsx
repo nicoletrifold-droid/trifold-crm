@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import type { Stage } from "./types"
 
 const STAGE_TYPES = [
   { value: "novo", label: "Novo" },
@@ -12,15 +13,6 @@ const STAGE_TYPES = [
   { value: "fechado", label: "Fechado" },
   { value: "perdido", label: "Perdido" },
 ]
-
-interface Stage {
-  id: string
-  name: string
-  type: string
-  color: string | null
-  is_default: boolean
-  [key: string]: unknown
-}
 
 export function EditStageModal({
   stage,
