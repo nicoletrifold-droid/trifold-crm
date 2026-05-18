@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { EditStageModal } from "./_components/edit-stage-modal"
 
 export default async function PipelineConfigPage() {
   const user = await getServerUser()
@@ -86,10 +87,13 @@ export default async function PipelineConfigPage() {
                 </td>
                 {isAdmin && (
                   <td className="px-6 py-4 text-right">
-                    <UpdatePositionForm
-                      stageId={stage.id}
-                      currentPosition={stage.position}
-                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <EditStageModal stage={stage} />
+                      <UpdatePositionForm
+                        stageId={stage.id}
+                        currentPosition={stage.position}
+                      />
+                    </div>
                   </td>
                 )}
               </tr>
