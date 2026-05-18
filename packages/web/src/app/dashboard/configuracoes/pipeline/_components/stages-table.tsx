@@ -49,11 +49,16 @@ function SortableRow({
   stage,
   isAdmin,
   onUpdate,
+  onDelete,
 }: {
   stage: Stage
   isAdmin: boolean
   onUpdate: (updated: Stage) => void
+  onDelete: (id: string) => void
 }) {
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const {
     attributes,
     listeners,
@@ -63,6 +68,16 @@ function SortableRow({
     transition,
     isDragging,
   } = useSortable({ id: stage.id })
+
+  async function handleDelete() {
+    setDeleting(true)
+    const res = await fetch(`/api/stages/${stage.id}`, { method: "DELETE" })
+    if (res.ok) {
+      onDelete(stage.id)
+    }
+    setDeleting(false)
+    setConfirming(false)
+  }
 
   return (
     <tr
@@ -112,7 +127,34 @@ function SortableRow({
       </td>
       {isAdmin && (
         <td className="px-6 py-4 text-right">
-          <EditStageModal stage={stage} onUpdate={onUpdate} />
+          <div className="flex items-center justify-end gap-2">
+            <EditStageModal stage={stage} onUpdate={onUpdate} />
+            {confirming ? (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500 dark:text-stone-400">Confirmar?</span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  {deleting ? "..." : "Sim"}
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-300 dark:hover:bg-stone-600"
+                >
+                  Não
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirming(true)}
+                className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-500/15 dark:text-red-400 dark:hover:bg-red-500/20"
+              >
+                Excluir
+              </button>
+            )}
+          </div>
         </td>
       )}
     </tr>
@@ -186,6 +228,10 @@ export function StagesTable({
     setStages((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)))
   }
 
+  function handleStageDelete(id: string) {
+    setStages((prev) => prev.filter((s) => s.id !== id))
+  }
+
   return (
     <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       {saving && (
@@ -218,6 +264,7 @@ export function StagesTable({
                   stage={stage}
                   isAdmin={isAdmin}
                   onUpdate={handleStageUpdate}
+                  onDelete={handleStageDelete}
                 />
               ))}
               {stages.length === 0 && (
