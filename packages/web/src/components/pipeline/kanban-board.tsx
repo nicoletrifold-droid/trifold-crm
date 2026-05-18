@@ -6,7 +6,7 @@ import {
   DragOverlay,
   closestCenter,
   pointerWithin,
-  getFirstCollision,
+  rectIntersection,
   PointerSensor,
   useSensor,
   useSensors,
@@ -107,16 +107,31 @@ export function KanbanBoard({
 
   const stageIds = useMemo(() => initialStages.map((s) => s.id), [initialStages])
 
-  // Prioriza a coluna onde o cursor está fisicamente (pointerWithin).
-  // Isso garante que colunas vazias sejam detectadas corretamente.
-  // Fallback para closestCenter quando o cursor está fora de qualquer coluna.
+  // Estratégia de colisão para Kanban multi-coluna:
+  // 1. pointerWithin → cursor está fisicamente dentro da coluna (inclui colunas vazias)
+  // 2. rectIntersection (só stages) → card arrastado sobrepõe a coluna (fallback para colunas vazias)
+  // 3. closestCenter (só stages) → último recurso, nunca pega card de coluna errada
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
-      const pointerCollisions = pointerWithin(args)
-      const stageCollision = pointerCollisions.find(({ id }) => stageIds.includes(id as string))
-      if (stageCollision) return [stageCollision]
-      if (pointerCollisions.length > 0) return [pointerCollisions[0]]
-      return closestCenter(args)
+      // Prioridade 1: cursor dentro de algum droppable
+      const pointerHits = pointerWithin(args)
+      if (pointerHits.length > 0) {
+        const stageHit = pointerHits.find(({ id }) => stageIds.includes(id as string))
+        return stageHit ? [stageHit] : [pointerHits[0]]
+      }
+
+      // Prioridade 2 e 3: filtra para só stages, evitando que o fallback
+      // resolva para um card de coluna vizinha (que quebraria colunas vazias)
+      const stageOnlyArgs = {
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          ({ id }) => stageIds.includes(id as string)
+        ),
+      }
+      const rectHits = rectIntersection(stageOnlyArgs)
+      if (rectHits.length > 0) return rectHits
+
+      return closestCenter(stageOnlyArgs)
     },
     [stageIds]
   )
