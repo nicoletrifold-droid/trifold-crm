@@ -31,6 +31,7 @@ const TRIGGER_OPTIONS = [
   { value: "lead.created", label: "Lead criado" },
   { value: "lead.status_changed", label: "Lead mudou status" },
   { value: "cron.daily", label: "Follow-up diário" },
+  { value: "client.birthday", label: "Aniversário de cliente" },
 ]
 
 const DELAY_OPTIONS = [
@@ -196,19 +197,31 @@ export function AutomationForm({ initialData }: AutomationFormProps) {
             )}
           </div>
 
-          {/* Delay */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700">Delay</label>
-            <select
-              value={delayMinutes}
-              onChange={(e) => setDelayMinutes(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            >
-              {DELAY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
+          {/* Birthday info panel */}
+          {triggerEvent === "client.birthday" && (
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3">
+              <p className="text-sm text-indigo-700">
+                Email disparado automaticamente no dia do aniversário de cada cliente com data de nascimento cadastrada.
+                O envio ocorre diariamente às 08h (horário de Brasília).
+              </p>
+            </div>
+          )}
+
+          {/* Delay — hidden for birthday trigger (email always sends on the day) */}
+          {triggerEvent !== "client.birthday" && (
+            <div>
+              <label className="block text-sm font-medium text-stone-700">Delay</label>
+              <select
+                value={delayMinutes}
+                onChange={(e) => setDelayMinutes(Number(e.target.value))}
+                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                {DELAY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Active toggle */}
           <div className="flex items-center justify-between">
