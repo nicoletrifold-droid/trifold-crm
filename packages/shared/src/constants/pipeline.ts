@@ -7,6 +7,7 @@ export const PIPELINE_STAGES = [
   "proposta",
   "fechado",
   "perdido",
+  "represamento",
 ] as const
 
 export type PipelineStage = (typeof PIPELINE_STAGES)[number]

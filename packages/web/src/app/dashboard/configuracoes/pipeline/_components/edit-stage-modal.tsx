@@ -12,6 +12,7 @@ const STAGE_TYPES = [
   { value: "proposta", label: "Proposta" },
   { value: "fechado", label: "Fechado" },
   { value: "perdido", label: "Perdido" },
+  { value: "represamento", label: "Represamento" },
 ]
 
 export function EditStageModal({

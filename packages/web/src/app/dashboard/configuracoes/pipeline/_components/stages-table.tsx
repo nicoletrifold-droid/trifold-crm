@@ -32,6 +32,7 @@ const typeLabels: Record<string, string> = {
   proposta: "Proposta",
   fechado: "Fechado",
   perdido: "Perdido",
+  represamento: "Represamento",
 }
 
 const GripIcon = () => (
