@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 
 const STAGE_TYPES = [
   { value: "novo", label: "Novo" },
@@ -20,10 +19,16 @@ interface Stage {
   type: string
   color: string | null
   is_default: boolean
+  [key: string]: unknown
 }
 
-export function EditStageModal({ stage }: { stage: Stage }) {
-  const router = useRouter()
+export function EditStageModal({
+  stage,
+  onUpdate,
+}: {
+  stage: Stage
+  onUpdate?: (updated: Stage) => void
+}) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(stage.name)
   const [type, setType] = useState(stage.type)
@@ -64,8 +69,11 @@ export function EditStageModal({ stage }: { stage: Stage }) {
       setError((data as { error?: string }).error ?? "Erro ao salvar.")
       return
     }
+    const updated = await res.json().then((d: { data: Stage }) => d.data).catch(() => null)
     setOpen(false)
-    router.refresh()
+    if (onUpdate && updated) {
+      onUpdate(updated)
+    }
   }
 
   return (
