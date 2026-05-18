@@ -158,9 +158,20 @@ export function KanbanBoard({
       if (!over) return
 
       const leadId = active.id as string
-      const newStageId = over.id as string
+      let newStageId = over.id as string
 
-      const targetStage = initialStages.find((s) => s.id === newStageId)
+      // over.id can be either a stage ID (dropped on empty column area)
+      // or a lead ID (dropped on top of another card). Resolve to stage ID.
+      let targetStage = initialStages.find((s) => s.id === newStageId)
+      if (!targetStage) {
+        for (const [stageId, state] of stageMap.entries()) {
+          if (state.leads.some((l) => l.id === newStageId)) {
+            newStageId = stageId
+            targetStage = initialStages.find((s) => s.id === stageId)
+            break
+          }
+        }
+      }
       if (!targetStage) return
 
       // Locate the lead and its current stage.
