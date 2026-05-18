@@ -1,0 +1,53 @@
+schema: 1
+story: '26.1'
+gate: PASS
+status_reason: 'Endpoint e componente implementam todos os 10 ACs com filtros org_id, janelas absolutas de fadiga, fallback de thumbnail e estado vazio corretos. Validado contra schema/dados de produção.'
+reviewer: 'Quinn'
+updated: '2026-05-18T00:00:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Lógica pura de fadiga (cálculo is_fatigued + fatigue_drop_pct) não tem cobertura de unit test, apesar de ser determinística e isolável.'
+    suggested_action: 'Adicionar Vitest com os 4 casos sugeridos nas Dev Notes (queda 50%, queda <40%, spend insuficiente, divisão por zero) em backlog futuro — não bloqueante.'
+  - id: 'REL-001'
+    severity: low
+    finding: 'shiftDays/getPeriodDates usam new Date() local + toISOString(); em dev BR (UTC-3) próximo à meia-noite, a janela pode shiftar 1 dia.'
+    suggested_action: 'Considerar normalizar para UTC explícito ou usar Intl.DateTimeFormat com tz fixa. Backlog.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'Lint do projeto quebrado por motivo pré-existente (eslint-plugin-import ausente) — não causado por esta story (validado via git stash pelo @dev).'
+    suggested_action: 'Story separada de @devops para reinstalar dependência ou remover do config.'
+waiver: { active: false }
+evidence:
+  acs_covered:
+    - 'AC1: seção Criativos inserida após AdSets em campaign-detail-client.tsx:525-535 sem alterar funil/adsets/leads'
+    - 'AC2: card renderiza thumbnail, name, status, spend, impressions, ctr, cpm, cpc, leads, cpl (campaign-creatives.tsx:107-194)'
+    - 'AC3: badge fadiga com fórmula ctr_last_3d < ctr_prev_7d * 0.6 AND spend_3d >= 30 (route.ts:229-230); texto "CTR caiu X%" (campaign-creatives.tsx:165)'
+    - 'AC4: sort por is_fatigued DESC, spend DESC (route.ts:261-264)'
+    - 'AC5: period prop ligado ao filtro do pai; fatigue usa shiftDays(3/4/10) absolutos independentes (route.ts:136-138)'
+    - 'AC6: copy literal "Nenhum dado de criativo disponível. Aguarde o próximo sync (máx. 4h)." (campaign-creatives.tsx:91)'
+    - 'AC7: thumbnail com onError → setThumbBroken → ThumbnailPlaceholder SVG (campaign-creatives.tsx:115-141, 207-226)'
+    - 'AC8: tooltip via title + aria-label com critério completo (campaign-creatives.tsx:39-40, 158-166)'
+    - 'AC9: flex-col → lg:flex-row, thumbnail hidden lg:block (campaign-creatives.tsx:122-127)'
+    - 'AC10: edit isolado, imports e seções existentes (funil/adsets/leads) intactos no campaign-detail-client.tsx'
+  security:
+    - 'requireAuth() em todas as queries (route.ts:82-84)'
+    - 'org_id = appUser.org_id filtrado em meta_campaigns, meta_adsets, meta_ads, e ambas as queries de meta_insights_daily'
+    - 'Sem SQL injection (Supabase JS query builder); encodeURIComponent no fetch do cliente'
+    - 'creative.body renderizado dentro de <p> com line-clamp; sem dangerouslySetInnerHTML'
+  performance:
+    - '2 queries Supabase em Promise.all para insights (period + fatigue) — aggregations em memória'
+    - 'Sem N+1: ads buscados em lote via .in("adset_id", adsetUuids); insights em lote via .in("entity_id", adIds)'
+    - 'Sem limit explícito em ads — risco baixo: campanha real tem 11 ads; campanhas extremas (>100 ads) podem renderizar lista longa, considerar pagination futura'
+  prod_validation:
+    - 'Schema validado: meta_ads.adset_id=uuid, meta_ad_id=text, org_id=uuid, creative=jsonb'
+    - 'Campanha 120238175037080741 retorna 11 ads (5 com insights de 2026-05-17, 6 zerados)'
+    - 'Apenas 1 dia de insights ad-level em prod → ctr_prev_7d=0 → guard impede falsos positivos de fadiga (CORRETO)'
+checks:
+  code_review: PASS
+  tests: PASS_WITH_CONCERNS  # smoke OK, unit tests da lógica de fadiga ficam em backlog (LOW)
+  acceptance_criteria: PASS  # 10/10
+  regressions: PASS  # edit isolado em campaign-detail-client.tsx, outras seções intactas
+  performance: PASS  # 2 queries paralelas, sem N+1
+  security: PASS  # org_id em todas, requireAuth, sem SQL injection, sem XSS
+  documentation: PASS  # File List, Dev Agent Record, Change Log preenchidos

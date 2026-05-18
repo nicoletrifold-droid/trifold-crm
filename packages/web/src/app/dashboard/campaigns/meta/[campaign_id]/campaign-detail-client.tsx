@@ -26,6 +26,7 @@ import {
   STATUS_BADGES,
 } from "@web/lib/meta-constants"
 import CampaignFunnel from "./campaign-funnel"
+import CampaignCreatives from "./campaign-creatives"
 
 interface Props {
   campaignId: string
@@ -519,6 +520,18 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
           <h2 className="text-base font-semibold text-gray-900">AdSets</h2>
         </header>
         <AdsetsTable adsets={adsets} />
+      </section>
+
+      {/* Criativos (Story 26.1) */}
+      <section className="rounded-lg bg-white p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-gray-900">Criativos</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Performance individual de cada anúncio. Criativos com sinal de
+          fadiga aparecem no topo.
+        </p>
+        <div className="mt-4">
+          <CampaignCreatives campaignId={campaignId} period={period} />
+        </div>
       </section>
 
       {/* ROAS */}
