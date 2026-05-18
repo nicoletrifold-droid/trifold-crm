@@ -139,7 +139,7 @@ export function AutomationForm({ initialData }: AutomationFormProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Boas-vindas ao novo lead"
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-300 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
 
@@ -149,7 +149,7 @@ export function AutomationForm({ initialData }: AutomationFormProps) {
             <select
               value={triggerEvent}
               onChange={(e) => { setTriggerEvent(e.target.value); setFilterStatus("") }}
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               {TRIGGER_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -164,7 +164,7 @@ export function AutomationForm({ initialData }: AutomationFormProps) {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="">Selecione o status...</option>
                 {stages.map((s) => (
@@ -183,7 +183,7 @@ export function AutomationForm({ initialData }: AutomationFormProps) {
             <select
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Selecione um template...</option>
               {templates.map((t) => (
@@ -214,7 +214,7 @@ export function AutomationForm({ initialData }: AutomationFormProps) {
               <select
                 value={delayMinutes}
                 onChange={(e) => setDelayMinutes(Number(e.target.value))}
-                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 {DELAY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
