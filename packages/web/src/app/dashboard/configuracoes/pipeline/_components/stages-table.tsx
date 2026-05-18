@@ -11,9 +11,7 @@ import {
   DragOverlay,
   type DragEndEvent,
   type DragStartEvent,
-  type DraggableAttributes,
 } from "@dnd-kit/core"
-import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities"
 import {
   arrayMove,
   SortableContext,
@@ -36,34 +34,16 @@ const typeLabels: Record<string, string> = {
   perdido: "Perdido",
 }
 
-function DragHandle({
-  handleRef,
-  listeners,
-  attributes,
-}: {
-  handleRef: (el: HTMLElement | null) => void
-  listeners: SyntheticListenerMap | undefined
-  attributes: DraggableAttributes
-}) {
-  return (
-    <span
-      ref={handleRef}
-      {...listeners}
-      {...attributes}
-      className="inline-flex cursor-grab select-none touch-none items-center text-gray-300 hover:text-gray-500 dark:text-stone-600 dark:hover:text-stone-400 active:cursor-grabbing"
-      title="Arrastar para reordenar"
-    >
-      <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor">
-        <circle cx="3" cy="4" r="1.5" />
-        <circle cx="9" cy="4" r="1.5" />
-        <circle cx="3" cy="10" r="1.5" />
-        <circle cx="9" cy="10" r="1.5" />
-        <circle cx="3" cy="16" r="1.5" />
-        <circle cx="9" cy="16" r="1.5" />
-      </svg>
-    </span>
-  )
-}
+const GripIcon = () => (
+  <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" aria-hidden="true">
+    <circle cx="3" cy="4" r="1.5" />
+    <circle cx="9" cy="4" r="1.5" />
+    <circle cx="3" cy="10" r="1.5" />
+    <circle cx="9" cy="10" r="1.5" />
+    <circle cx="3" cy="16" r="1.5" />
+    <circle cx="9" cy="16" r="1.5" />
+  </svg>
+)
 
 function SortableRow({
   stage,
@@ -87,20 +67,21 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-      className={`${isDragging ? "opacity-40" : "hover:bg-gray-50 dark:hover:bg-stone-800/30"}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={isDragging ? "opacity-40" : "hover:bg-gray-50 dark:hover:bg-stone-800/30"}
     >
       <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <DragHandle
-              handleRef={setActivatorNodeRef}
-              listeners={listeners}
-              attributes={attributes}
-            />
+            <span
+              ref={setActivatorNodeRef}
+              {...listeners}
+              {...attributes}
+              className="inline-flex cursor-grab touch-none select-none items-center text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-stone-600 dark:hover:text-stone-400"
+              title="Arrastar para reordenar"
+            >
+              <GripIcon />
+            </span>
           )}
           {stage.position}
         </div>
@@ -141,20 +122,12 @@ function SortableRow({
 function DragOverlayRow({ stage }: { stage: Stage }) {
   return (
     <div className="flex items-center gap-4 rounded-lg border border-orange-200 bg-white px-6 py-4 shadow-lg dark:border-orange-800/50 dark:bg-stone-900">
-      <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" className="text-orange-400">
-        <circle cx="3" cy="4" r="1.5" />
-        <circle cx="9" cy="4" r="1.5" />
-        <circle cx="3" cy="10" r="1.5" />
-        <circle cx="9" cy="10" r="1.5" />
-        <circle cx="3" cy="16" r="1.5" />
-        <circle cx="9" cy="16" r="1.5" />
-      </svg>
+      <span className="text-orange-400">
+        <GripIcon />
+      </span>
       <span className="font-medium text-gray-900 dark:text-stone-100">{stage.name}</span>
       {stage.color && (
-        <span
-          className="inline-block h-3 w-3 rounded-full"
-          style={{ backgroundColor: stage.color }}
-        />
+        <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: stage.color }} />
       )}
       <span className="ml-auto text-xs text-gray-400 dark:text-stone-500">
         {typeLabels[stage.type] ?? stage.type}
@@ -180,8 +153,7 @@ export function StagesTable({
   )
 
   function handleDragStart(event: DragStartEvent) {
-    const found = stages.find((s) => s.id === event.active.id)
-    setActiveStage(found ?? null)
+    setActiveStage(stages.find((s) => s.id === event.active.id) ?? null)
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -191,18 +163,13 @@ export function StagesTable({
 
     const oldIndex = stages.findIndex((s) => s.id === active.id)
     const newIndex = stages.findIndex((s) => s.id === over.id)
-    const reordered = arrayMove(stages, oldIndex, newIndex).map((s, i) => ({
-      ...s,
-      position: i,
-    }))
+    const reordered = arrayMove(stages, oldIndex, newIndex).map((s, i) => ({ ...s, position: i }))
+
+    const original = stages
     setStages(reordered)
 
     setSaving(true)
-    const original = stages
-    const changed = reordered.filter((s) => {
-      const orig = original.find((o) => o.id === s.id)
-      return orig?.position !== s.position
-    })
+    const changed = reordered.filter((s) => original.find((o) => o.id === s.id)?.position !== s.position)
     await Promise.all(
       changed.map((s) =>
         fetch(`/api/stages/${s.id}`, {
@@ -266,9 +233,7 @@ export function StagesTable({
             </tbody>
           </SortableContext>
         </table>
-        <DragOverlay>
-          {activeStage && <DragOverlayRow stage={activeStage} />}
-        </DragOverlay>
+        <DragOverlay>{activeStage && <DragOverlayRow stage={activeStage} />}</DragOverlay>
       </DndContext>
     </div>
   )
