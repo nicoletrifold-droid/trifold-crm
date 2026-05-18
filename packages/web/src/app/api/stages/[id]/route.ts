@@ -30,7 +30,12 @@ export async function PATCH(
     .select()
     .single()
 
-  if (error || !stage) {
+  if (error) {
+    console.error("[PATCH /api/stages/:id] DB error:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (!stage) {
     return NextResponse.json({ error: "Stage not found" }, { status: 404 })
   }
 
