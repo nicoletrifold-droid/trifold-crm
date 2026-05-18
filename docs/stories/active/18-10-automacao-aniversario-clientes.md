@@ -2,7 +2,7 @@
 epic: 18
 story: 18.10
 title: Automação de Aniversário para Clientes
-status: Ready
+status: Ready for Review
 priority: P2-MÉDIO
 created_at: 2026-05-18
 created_by: River (@sm)
@@ -269,28 +269,30 @@ O cron roda às `11h UTC` (`0 11 * * *` = 08h BRT). A filtragem de `data_nascime
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Migration 044** (AC: 1)
-  - [ ] Verificar nome exato do constraint existente no schema
-  - [ ] Criar `supabase/migrations/044_email_automations_birthday_trigger.sql`
-  - [ ] DROP + ADD CONSTRAINT com os 4 valores válidos
+- [x] **Task 1 — Migration 044** (AC: 1)
+  - [x] Verificar nome exato do constraint existente no schema
+  - [x] Criar `supabase/migrations/044_email_automations_birthday_trigger.sql`
+  - [x] DROP + ADD CONSTRAINT com os 4 valores válidos
 
-- [ ] **Task 2 — Extensão do cron** (AC: 2, 3, 5, 6)
-  - [ ] Adicionar handler `client.birthday` em `api/cron/email-automations/route.ts`
-  - [ ] Função `checkBirthdaySend` com janela de 365 dias
-  - [ ] Filtro dia+mês com UTC correto
-  - [ ] Retornar `birthday_fired` no response
+- [x] **Task 2 — Extensão do cron** (AC: 2, 3, 5, 6)
+  - [x] Adicionar handler `client.birthday` em `api/cron/email-automations/route.ts`
+  - [x] Função `checkBirthdaySend` com janela de 365 dias
+  - [x] Filtro dia+mês com UTC correto (getUTCMonth/getUTCDate consistentes)
+  - [x] Retornar `birthday_fired` no response
 
-- [ ] **Task 3 — UI automation form** (AC: 4)
-  - [ ] Adicionar `client.birthday` em `TRIGGER_OPTIONS`
-  - [ ] Ocultar campo delay quando `client.birthday` selecionado
-  - [ ] Exibir painel informativo quando trigger birthday ativo
+- [x] **Task 3 — UI automation form** (AC: 4)
+  - [x] Adicionar `client.birthday` em `TRIGGER_OPTIONS`
+  - [x] Ocultar campo delay quando `client.birthday` selecionado
+  - [x] Exibir painel informativo quando trigger birthday ativo
 
-- [ ] **Task 4 — Type check** (AC: 7)
-  - [ ] `npm run type-check` passa sem erros
+- [x] **Task 4 — Type check** (AC: 7)
+  - [x] `npm run type-check` passa sem erros novos (erro pré-existente em commercial-rules.ts não relacionado)
 
 ## File List
 
-*(a preencher pelo @dev durante implementação)*
+- `supabase/migrations/044_email_automations_birthday_trigger.sql` — criado (ALTER CHECK constraint trigger_event)
+- `packages/web/src/app/api/cron/email-automations/route.ts` — modificado (handler client.birthday + checkBirthdaySend)
+- `packages/web/src/app/dashboard/sistema/email-automacoes/_components/automation-form.tsx` — modificado (TRIGGER_OPTIONS + condicional delay + painel birthday)
 
 ## Change Log
 
@@ -298,3 +300,4 @@ O cron roda às `11h UTC` (`0 11 * * *` = 08h BRT). A filtragem de `data_nascime
 |------|---------|-------------|--------|
 | 2026-05-18 | 1.0 | Story criada | River (@sm) |
 | 2026-05-18 | 1.1 | Validada @po (GO 9/10). Status Draft → Ready. CORREÇÕES OBRIGATÓRIAS na implementação: (1) Consistência UTC no filtro de aniversário — usar `today.getUTCMonth() + 1` e `today.getUTCDate()` (não `getMonth()`/`getDate()` que são inconsistentes com `bday.getUTCMonth()`/`bday.getUTCDate()`); (2) Remover filtro redundante `.filter("data_nascimento", "not.is", null)` que duplica o `.not("data_nascimento", "is", null)` acima. | Pax (@po) |
+| 2026-05-18 | 1.2 | Implementação YOLO @dev. 4 tasks concluídas. 3 arquivos modificados/criados. Commit 68d790b. Ambas as correções obrigatórias do @po aplicadas. Erro TS pré-existente em commercial-rules.ts confirmado não-relacionado. Status Ready → Ready for Review. | Dex (@dev) |
