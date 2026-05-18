@@ -48,6 +48,7 @@ export function KanbanColumn({
 
   return (
     <div
+      ref={setNodeRef}
       className={`flex w-72 flex-shrink-0 flex-col rounded-lg bg-gray-100 dark:bg-stone-800/50 ${
         isOver ? "ring-2 ring-orange-400" : ""
       }`}
@@ -70,7 +71,6 @@ export function KanbanColumn({
       </div>
 
       <div
-        ref={setNodeRef}
         className="flex flex-1 flex-col gap-2 overflow-y-auto p-2"
         style={{ minHeight: "100px" }}
       >
