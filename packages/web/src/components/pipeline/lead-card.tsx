@@ -60,6 +60,7 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    touchAction: 'none' as const,
   }
 
   const score = lead.qualification_score ?? 0
