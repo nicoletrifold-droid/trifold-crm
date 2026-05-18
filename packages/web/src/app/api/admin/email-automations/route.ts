@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
       template_id,
       delay_minutes: delay_minutes ?? 0,
       is_active: is_active ?? false,
-      created_by: user.id,
     })
     .select()
     .single()
