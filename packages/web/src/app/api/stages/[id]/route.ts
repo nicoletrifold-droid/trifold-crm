@@ -21,6 +21,8 @@ export async function PATCH(
   const { fields, error: payloadError } = buildUpdatePayload(body, allowedFields)
   if (payloadError) return payloadError
 
+  console.log("[PATCH /api/stages/:id]", { id, org_id: appUser.org_id, fields })
+
   const { data: stage, error } = await supabase
     .from("kanban_stages")
     .update(fields)
@@ -31,11 +33,17 @@ export async function PATCH(
     .single()
 
   if (error) {
-    console.error("[PATCH /api/stages/:id] DB error:", error)
+    console.error("[PATCH /api/stages/:id] DB error:", JSON.stringify(error))
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   if (!stage) {
+    const { data: check } = await supabase
+      .from("kanban_stages")
+      .select("id, org_id, is_active")
+      .eq("id", id)
+      .maybeSingle()
+    console.error("[PATCH /api/stages/:id] not found. Stage in DB:", JSON.stringify(check))
     return NextResponse.json({ error: "Stage not found" }, { status: 404 })
   }
 
