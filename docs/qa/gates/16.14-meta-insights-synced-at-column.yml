@@ -1,0 +1,20 @@
+schema: 1
+story: '16.14'
+gate: PASS
+status_reason: 'Hotfix de schema validado em produção: coluna synced_at presente (TIMESTAMPTZ NOT NULL DEFAULT now()), 64 records sincronizados sem nulls, sister tables intactas, evidência before/after no meta_sync_log.'
+reviewer: 'Quinn'
+updated: '2026-05-18T14:05:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: low
+    finding: 'Migration 045 aplicada via Management API ao invés de `supabase db push` — registro manual em supabase_migrations.schema_migrations introduz risco residual de drift se alguém rodar `db push` no futuro com a 044 ainda pending.'
+    suggested_action: 'Garantir que Story 31.3 (migration 044) seja concluída e que o próximo `supabase db push` reconcilie naturalmente. Sem ação obrigatória nesta story.'
+  - id: 'ARCH-001'
+    severity: low
+    finding: 'Coluna 045 é stricter (NOT NULL DEFAULT now()) que as sister tables criadas em 015 (nullable, sem default). Tecnicamente válido — fornece garantia mais forte — mas há divergência sutil de pattern entre tabelas irmãs.'
+    suggested_action: 'Considerar normalizar sister tables (meta_campaigns/meta_adsets/meta_ads) para NOT NULL DEFAULT now() em migration futura de housekeeping. Não-bloqueante.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Hotfix aplicado direto em produção sem rota por staging — aceitável dado urgência (cron quebrado bloqueando ETL diário) e baixíssimo risco da operação (ADD COLUMN IF NOT EXISTS em Postgres é não-bloqueante e instantâneo em tabela vazia).'
+    suggested_action: 'Para hotfixes futuros, considerar adicionar uma checklist mínima de "smoke local" antes de aplicar em prod, mesmo sob urgência.'
+waiver: { active: false }
