@@ -5,11 +5,14 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
+  pointerWithin,
+  getFirstCollision,
   PointerSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  type CollisionDetection,
 } from "@dnd-kit/core"
 import { KanbanColumn } from "./kanban-column"
 import { LeadCard } from "./lead-card"
@@ -100,6 +103,22 @@ export function KanbanBoard({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  const stageIds = useMemo(() => initialStages.map((s) => s.id), [initialStages])
+
+  // Prioriza a coluna onde o cursor está fisicamente (pointerWithin).
+  // Isso garante que colunas vazias sejam detectadas corretamente.
+  // Fallback para closestCenter quando o cursor está fora de qualquer coluna.
+  const collisionDetection = useCallback<CollisionDetection>(
+    (args) => {
+      const pointerCollisions = pointerWithin(args)
+      const stageCollision = pointerCollisions.find(({ id }) => stageIds.includes(id as string))
+      if (stageCollision) return [stageCollision]
+      if (pointerCollisions.length > 0) return [pointerCollisions[0]]
+      return closestCenter(args)
+    },
+    [stageIds]
   )
 
   // Flatten all loaded leads across stages for source filter aggregation.
@@ -374,7 +393,7 @@ export function KanbanBoard({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
