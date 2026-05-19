@@ -4,27 +4,10 @@ import { useDroppable } from "@dnd-kit/core"
 import {
   SortableContext,
   verticalListSortingStrategy,
-  useSortable,
 } from "@dnd-kit/sortable"
 import { LeadCard } from "./lead-card"
 
-// Prefixo para IDs de placeholder em colunas vazias
 export const EMPTY_COLUMN_PREFIX = "__empty__"
-
-// Elemento invisível que ocupa toda a área da coluna vazia,
-// dando ao dnd-kit um alvo concreto para detecção de colisão.
-function EmptyDropTarget({ id }: { id: string }) {
-  const { setNodeRef } = useSortable({ id })
-  return (
-    <div
-      ref={setNodeRef}
-      className="flex flex-1 items-center justify-center py-8"
-      style={{ minHeight: "120px" }}
-    >
-      <p className="text-xs text-gray-400 dark:text-stone-500">Nenhum lead nesta etapa</p>
-    </div>
-  )
-}
 
 interface KanbanColumnProps {
   stage: {
@@ -94,7 +77,7 @@ export function KanbanColumn({
         style={{ minHeight: "100px" }}
       >
         <SortableContext
-          items={leads.length > 0 ? leads.map((l) => l.id) : [`${EMPTY_COLUMN_PREFIX}${stage.id}`]}
+          items={leads.map((l) => l.id)}
           strategy={verticalListSortingStrategy}
         >
           {leads.map((lead) => (
@@ -107,7 +90,12 @@ export function KanbanColumn({
             />
           ))}
           {leads.length === 0 && (
-            <EmptyDropTarget id={`${EMPTY_COLUMN_PREFIX}${stage.id}`} />
+            <div
+              className="flex flex-1 items-center justify-center py-8"
+              style={{ minHeight: "120px" }}
+            >
+              <p className="text-xs text-gray-400 dark:text-stone-500">Nenhum lead nesta etapa</p>
+            </div>
           )}
         </SortableContext>
 

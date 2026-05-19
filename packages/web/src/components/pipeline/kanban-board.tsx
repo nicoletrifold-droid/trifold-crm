@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react"
 import {
   DndContext,
   DragOverlay,
-  closestCenter,
+  pointerWithin,
   PointerSensor,
   useSensor,
   useSensors,
@@ -161,9 +161,8 @@ export function KanbanBoard({
       let newStageId = over.id as string
 
       // Resolve over.id para um stage ID. Pode ser:
-      // 1. Stage ID direto (dropped na área da coluna)
-      // 2. Prefixo de coluna vazia: "__empty__{stageId}"
-      // 3. Lead ID (dropped em cima de outro card) → busca qual stage contém esse lead
+      // 1. Stage ID direto (dropped na área da coluna, inclusive colunas vazias)
+      // 2. Lead ID (dropped em cima de outro card) → busca qual stage contém esse lead
       if (newStageId.startsWith(EMPTY_COLUMN_PREFIX)) {
         newStageId = newStageId.slice(EMPTY_COLUMN_PREFIX.length)
       }
@@ -380,7 +379,7 @@ export function KanbanBoard({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={pointerWithin}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
