@@ -73,13 +73,23 @@ interface SupremoPage {
   totalPaginas: number
 }
 
-async function fetchPage(page: number): Promise<SupremoPage> {
-  const res = await fetch(`${SUPREMO_BASE}/leads?pagina=${page}`, {
-    headers: { Authorization: `Bearer ${SUPREMO_API_TOKEN}` },
-    signal: AbortSignal.timeout(15_000),
-  })
-  if (!res.ok) throw new Error(`Supremo API ${res.status} on page ${page}`)
-  return res.json()
+async function fetchPage(page: number, retries = 3): Promise<SupremoPage> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(`${SUPREMO_BASE}/leads?pagina=${page}`, {
+      headers: { Authorization: `Bearer ${SUPREMO_API_TOKEN}` },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (res.status === 429) {
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        continue
+      }
+      throw new Error(`Supremo API 429 on page ${page} after ${retries} retries`)
+    }
+    if (!res.ok) throw new Error(`Supremo API ${res.status} on page ${page}`)
+    return res.json()
+  }
+  throw new Error(`fetchPage failed page ${page}`)
 }
 
 async function fetchAllPages(fromPage: number, totalPages: number): Promise<SupremoLead[]> {
@@ -87,7 +97,7 @@ async function fetchAllPages(fromPage: number, totalPages: number): Promise<Supr
   for (let i = fromPage; i <= totalPages; i++) {
     const result = await fetchPage(i)
     leads.push(...result.data)
-    if (i < totalPages) await new Promise(r => setTimeout(r, 200))
+    if (i < totalPages) await new Promise(r => setTimeout(r, 500))
   }
   return leads
 }
