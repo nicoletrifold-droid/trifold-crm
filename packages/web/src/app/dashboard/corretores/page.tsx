@@ -3,6 +3,7 @@ import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { BrokerPropertyAssign } from "@web/components/admin/broker-property-assign"
+import { ToggleAvailabilityButton } from "./_toggle-button"
 
 export default async function CorretoresPage() {
   const user = await getServerUser()
@@ -94,18 +95,18 @@ export default async function CorretoresPage() {
         </div>
       </div>
 
-      <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+      <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
-              <th className="px-6 py-3">Nome</th>
+              <th className="w-48 px-6 py-3">Nome</th>
               <th className="px-6 py-3">Email</th>
-              <th className="px-6 py-3">CRECI</th>
-              <th className="px-6 py-3">Tipo</th>
-              <th className="px-6 py-3">Disponível</th>
+              <th className="w-24 px-6 py-3">CRECI</th>
+              <th className="w-24 px-6 py-3">Tipo</th>
+              <th className="w-28 px-6 py-3">Disponível</th>
               <th className="px-6 py-3">Empreendimentos</th>
-              <th className="px-6 py-3">Leads ativos</th>
-              {isAdmin && <th className="px-6 py-3"></th>}
+              <th className="w-28 px-6 py-3">Leads ativos</th>
+              {isAdmin && <th className="w-32 px-6 py-3"></th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
@@ -130,10 +131,10 @@ export default async function CorretoresPage() {
 
               return (
                 <tr key={broker.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
-                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
+                  <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
                     {brokerUser?.name ?? "Sem nome"}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {brokerUser?.email ?? "-"}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
@@ -187,7 +188,7 @@ export default async function CorretoresPage() {
                         >
                           Editar
                         </Link>
-                        <ToggleAvailability
+                        <ToggleAvailabilityButton
                           brokerId={broker.id}
                           isAvailable={broker.is_available}
                         />
@@ -214,36 +215,3 @@ export default async function CorretoresPage() {
   )
 }
 
-function ToggleAvailability({
-  brokerId,
-  isAvailable,
-}: {
-  brokerId: string
-  isAvailable: boolean
-}) {
-  return (
-    <form
-      action={async () => {
-        "use server"
-        const supabase = await (
-          await import("@web/lib/supabase/server")
-        ).createClient()
-        await supabase
-          .from("brokers")
-          .update({ is_available: !isAvailable })
-          .eq("id", brokerId)
-      }}
-    >
-      <button
-        type="submit"
-        className={`rounded-md px-3 py-1 text-xs font-medium ${
-          isAvailable
-            ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/15 dark:text-red-300 dark:hover:bg-red-500/20"
-            : "bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-500/15 dark:text-green-300 dark:hover:bg-green-500/20"
-        }`}
-      >
-        {isAvailable ? "Desativar" : "Ativar"}
-      </button>
-    </form>
-  )
-}
