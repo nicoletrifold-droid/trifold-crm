@@ -276,9 +276,12 @@ export async function getUserPermissions(
 /**
  * Invalida o cache de permissões de uma org. Deve ser chamada após qualquer
  * mutação em `roles` ou `role_permissions` da org.
+ *
+ * Em Next.js 16, `revalidateTag` requer o profile como segundo argumento.
+ * Usamos `"max"` para semântica de stale-while-revalidate (recomendado).
  */
 export function revalidateOrgPermissions(orgId: string): void {
-  revalidateTag(`permissions-${orgId}`)
+  revalidateTag(`permissions-${orgId}`, "max")
 }
 
 // ============================================================================
@@ -352,6 +355,188 @@ export async function updatePermission(
 
   if (upsertError) {
     return { success: false, error: upsertError.message }
+  }
+
+  // 5. Invalidar cache da org
+  revalidateOrgPermissions(orgId)
+
+  return { success: true }
+}
+
+// ============================================================================
+// Server Action — createRole
+// ============================================================================
+
+/**
+ * Cria um novo role customizado (`is_system = false`) na org e seed das 17
+ * permissões de `ALL_MODULES` em `role_permissions` com `can_access = false`.
+ *
+ * Requer que o usuário autenticado seja `admin` (validado via `public.users`).
+ * Trata a violação de UNIQUE (`org_id`, `name`) com mensagem amigável.
+ *
+ * Retorna `{ success: true, role: OrgRole }` em caso de sucesso, ou
+ * `{ success: false, error: string }` em caso de falha — nunca lança exceção.
+ */
+export async function createRole(
+  orgId: string,
+  data: { name: string; label: string; color: string }
+): Promise<{ success: boolean; role?: OrgRole; error?: string }> {
+  "use server"
+
+  const supabase = await createClient()
+
+  // 1. Verificar autenticação
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 2. Verificar que o usuário é admin (e que pertence à org)
+  const { data: appUser, error: appUserError } = await supabase
+    .from("users")
+    .select("role, org_id")
+    .eq("auth_id", user.id)
+    .maybeSingle()
+
+  if (
+    appUserError ||
+    !appUser ||
+    appUser.role !== "admin" ||
+    appUser.org_id !== orgId
+  ) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 3. INSERT em `roles`
+  const { data: newRole, error: insertError } = await supabase
+    .from("roles")
+    .insert({
+      org_id: orgId,
+      name: data.name,
+      label: data.label,
+      color: data.color,
+      is_system: false,
+    })
+    .select("id, name, label, color, is_system")
+    .single()
+
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return { success: false, error: "Este nome de perfil já está em uso." }
+    }
+    return { success: false, error: insertError.message }
+  }
+
+  if (!newRole) {
+    return { success: false, error: "Falha ao criar perfil." }
+  }
+
+  // 4. Seed 17 permissões em `role_permissions` (todas can_access = false)
+  const permissionsRows = ALL_MODULES.map((module) => ({
+    org_id: orgId,
+    role_id: newRole.id as string,
+    module,
+    can_access: false,
+  }))
+
+  const { error: permsError } = await supabase
+    .from("role_permissions")
+    .insert(permissionsRows)
+
+  if (permsError) {
+    // Best-effort cleanup: se as permissões falharem, remover o role criado
+    // para evitar um role "orfão" sem linhas em role_permissions.
+    await supabase.from("roles").delete().eq("id", newRole.id as string)
+    return { success: false, error: permsError.message }
+  }
+
+  // 5. Invalidar cache da org
+  revalidateOrgPermissions(orgId)
+
+  return { success: true, role: newRole as OrgRole }
+}
+
+// ============================================================================
+// Server Action — deleteRole
+// ============================================================================
+
+/**
+ * Exclui um role customizado (`is_system = false`). Roles do sistema são
+ * rejeitados explicitamente. O DELETE em `roles` faz cascade para
+ * `role_permissions` via FK (ON DELETE CASCADE) — não é necessário deletar
+ * as permissões manualmente.
+ *
+ * Requer que o usuário autenticado seja `admin` (validado via `public.users`).
+ *
+ * Retorna `{ success: true }` em caso de sucesso, ou
+ * `{ success: false, error: string }` em caso de falha — nunca lança exceção.
+ */
+export async function deleteRole(
+  roleId: string
+): Promise<{ success: boolean; error?: string }> {
+  "use server"
+
+  const supabase = await createClient()
+
+  // 1. Verificar autenticação
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 2. Verificar que o usuário é admin
+  const { data: appUser, error: appUserError } = await supabase
+    .from("users")
+    .select("role, org_id")
+    .eq("auth_id", user.id)
+    .maybeSingle()
+
+  if (appUserError || !appUser || appUser.role !== "admin") {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 3. Resolver org_id e is_system do role
+  const { data: roleRow, error: roleError } = await supabase
+    .from("roles")
+    .select("org_id, is_system")
+    .eq("id", roleId)
+    .maybeSingle()
+
+  if (roleError) {
+    return { success: false, error: roleError.message }
+  }
+  if (!roleRow) {
+    return { success: false, error: "Perfil não encontrado." }
+  }
+
+  // Double-check: o usuário admin só pode deletar roles da própria org
+  if (roleRow.org_id !== appUser.org_id) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  if (roleRow.is_system === true) {
+    return {
+      success: false,
+      error: "Roles do sistema não podem ser excluídos.",
+    }
+  }
+
+  const orgId = roleRow.org_id as string
+
+  // 4. DELETE em `roles` — cascade para `role_permissions` via FK
+  const { error: deleteError } = await supabase
+    .from("roles")
+    .delete()
+    .eq("id", roleId)
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message }
   }
 
   // 5. Invalidar cache da org
