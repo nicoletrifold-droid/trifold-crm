@@ -1,15 +1,19 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useRef } from "react"
 import {
   DndContext,
   DragOverlay,
   pointerWithin,
+  rectIntersection,
+  getFirstCollision,
   PointerSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  type CollisionDetection,
+  type UniqueIdentifier,
 } from "@dnd-kit/core"
 import { KanbanColumn, EMPTY_COLUMN_PREFIX } from "./kanban-column"
 import { LeadCard } from "./lead-card"
@@ -102,6 +106,22 @@ export function KanbanBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
+  // Preserva o último alvo válido durante o drag.
+  // Necessário porque pointerWithin pode retornar null no momento exato do soltar
+  // mesmo quando o card estava sobre uma coluna válida um instante antes.
+  const lastOverId = useRef<UniqueIdentifier | null>(null)
+
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const pointerHits = pointerWithin(args)
+    const hits = pointerHits.length > 0 ? pointerHits : rectIntersection(args)
+    const overId = getFirstCollision(hits, "id")
+    if (overId != null) {
+      lastOverId.current = overId
+      return [{ id: overId }]
+    }
+    return lastOverId.current ? [{ id: lastOverId.current }] : []
+  }, [])
+
   // Flatten all loaded leads across stages for source filter aggregation.
   const allLeads = useMemo(() => {
     const out: Lead[] = []
@@ -148,6 +168,7 @@ export function KanbanBoard({
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string)
+    lastOverId.current = null
   }, [])
 
   const handleDragEnd = useCallback(
@@ -155,10 +176,15 @@ export function KanbanBoard({
       setActiveId(null)
       const { active, over } = event
 
-      if (!over) return
+      // Se over for null no momento do soltar (comum em trackpads quando o dedo sai
+      // levemente da área), usa o último alvo detectado durante o drag.
+      const resolvedOverId = (over?.id as string | null) ?? (lastOverId.current as string | null)
+      lastOverId.current = null
+
+      if (!resolvedOverId) return
 
       const leadId = active.id as string
-      let newStageId = over.id as string
+      let newStageId = resolvedOverId
 
       // Resolve over.id para um stage ID. Pode ser:
       // 1. Stage ID direto (dropped na área da coluna, inclusive colunas vazias)
@@ -379,7 +405,7 @@ export function KanbanBoard({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={pointerWithin}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
