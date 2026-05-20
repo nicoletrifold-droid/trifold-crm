@@ -65,6 +65,8 @@ interface SupremoLead {
   nome_campanha: string | null
   etapa: string
   interesses: string | null
+  data_captura: string | null
+  data_ultima_interacao: string | null
 }
 
 interface SupremoPage {
@@ -205,6 +207,8 @@ export async function GET(request: NextRequest) {
             is_active: lead.etapa !== "5",
             supremo_id: lead.id,
             supremo_synced_at: now,
+            ...(lead.data_captura ? { created_at: new Date(lead.data_captura).toISOString() } : {}),
+            ...(lead.data_ultima_interacao ? { updated_at: new Date(lead.data_ultima_interacao).toISOString() } : {}),
           })
           // Add to map so we don't double-insert if same phone appears twice in the batch
           byPhone.set(phone, { id: "pending", supremo_id: lead.id, stage_id: stageId, name: lead.nome_pessoa ?? null })
