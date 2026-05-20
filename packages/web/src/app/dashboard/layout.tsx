@@ -25,19 +25,21 @@ import {
 const ICON_SIZE = "h-[18px] w-[18px]"
 
 const NAV_ITEMS_BASE = [
+  // CRM Core
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className={ICON_SIZE} /> },
   { href: "/dashboard/pipeline", label: "Pipeline", icon: <Kanban className={ICON_SIZE} /> },
   { href: "/dashboard/leads", label: "Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/dashboard/properties", label: "Imóveis", icon: <Building2 className={ICON_SIZE} /> },
   { href: "/dashboard/corretores", label: "Corretores", icon: <UserCheck className={ICON_SIZE} /> },
-  { href: "/dashboard/conversas", label: "Conversas", icon: <MessageSquare className={ICON_SIZE} /> },
+  // Comunicação
+  { href: "/dashboard/conversas", label: "Conversas", icon: <MessageSquare className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
   { href: "/dashboard/alertas", label: "Alertas", icon: <Bell className={ICON_SIZE} /> },
   { href: "/dashboard/atividades", label: "Atividades", icon: <Activity className={ICON_SIZE} /> },
-  { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} /> },
+  // Análise & Crescimento
+  { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/campaigns", label: "Campanhas", icon: <Megaphone className={ICON_SIZE} /> },
   { href: "/dashboard/treinamento", label: "Treinamento", icon: <GraduationCap className={ICON_SIZE} /> },
-  { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> },
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
@@ -45,6 +47,7 @@ const NAV_ITEM_BRINDES = { href: "/dashboard/brindes", label: "Brindes", icon: <
 const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
+const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
 
 export default async function DashboardLayout({
   children,
@@ -74,19 +77,18 @@ export default async function DashboardLayout({
           .is("read_at", null),
       ])
 
-  const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
-
   // obras role: Obras + Brindes + Config (para cadastro de clientes)
   // admin/supervisor: full nav + Obras + Brindes + Mensagens
   // Sistema: admin only
   const navItems = isObras
-    ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES, NAV_ITEM_CONFIG]
+    ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES, { ...NAV_ITEM_CONFIG, separator: true }]
     : [
         ...NAV_ITEMS_BASE,
         ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES] : [NAV_ITEM_BRINDES]),
         ...(isAdminOrSupervisor
           ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
           : []),
+        { ...NAV_ITEM_CONFIG, separator: true },
         ...(user.role === "admin" ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
       ]
 

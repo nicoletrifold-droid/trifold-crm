@@ -2,6 +2,7 @@
 
 ## Index
 - [Trifold CRM — module conventions](project_trifold_crm.md) — Next.js project at packages/web, API auth + schema patterns + script naming
+- [Trifold Epic 35 — Permissions Architecture](project_trifold_epic35_permissions.md) — server-layer permissions module at packages/web/src/lib/permissions.ts consumed by stories 35-3/35-4/35-5
 
 ## Key Patterns
 
