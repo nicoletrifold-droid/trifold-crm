@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 
 const DAYS_OF_WEEK = [
@@ -39,7 +40,9 @@ const DEFAULT_CONFIG: BusinessHoursConfig = {
 export default async function HorarioConfigPage() {
   const user = await getServerUser()
   const supabase = await createClient()
-  const isAdmin = user.role === "admin"
+  // Edição de horário de atendimento — modelado como acesso ao sub-módulo
+  // "configuracoes.horario" (herda de "configuracoes" quando sem exceção).
+  const isAdmin = await canAccess(user.id, user.orgId, "configuracoes.horario")
 
   const { data: agentConfig } = await supabase
     .from("agent_config")
@@ -79,8 +82,9 @@ export default async function HorarioConfigPage() {
               await import("@web/lib/supabase/server")
             ).createClient()
             const { getServerUser: getUser } = await import("@web/lib/auth")
+            const { canAccess: canAccessFn } = await import("@web/lib/permissions")
             const currentUser = await getUser()
-            if (currentUser.role !== "admin") return
+            if (!(await canAccessFn(currentUser.id, currentUser.orgId, "configuracoes.horario"))) return
 
             const isAlwaysOn = formData.get("always_on") === "on"
 

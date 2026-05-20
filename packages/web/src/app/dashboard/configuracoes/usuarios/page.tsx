@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { RoleDropdown, ToggleActiveButton } from "@web/components/admin/role-dropdown"
@@ -8,12 +9,14 @@ import { UserEditModal } from "@web/components/admin/user-edit-modal"
 export default async function UsuariosPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.usuarios"))) {
     redirect("/dashboard")
   }
 
   const supabase = await createClient()
-  const isAdmin = user.role === "admin"
+  // Admin powers intra-página: criar/editar usuários, mudar role, ativar/desativar.
+  // Modelado como acesso ao módulo "sistema" (somente admin tem por padrão).
+  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   const { data: users } = await supabase
     .from("users")
@@ -110,6 +113,7 @@ export default async function UsuariosPage() {
                         userName={u.name ?? ""}
                         userEmail={u.email}
                         isOwnAccount={u.id === user.id}
+                        orgId={user.orgId}
                       />
                       {u.id !== user.id && (
                         <ToggleActiveButton userId={u.id} isActive={u.is_active} />

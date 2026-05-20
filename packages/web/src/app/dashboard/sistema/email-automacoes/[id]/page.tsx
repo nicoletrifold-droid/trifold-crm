@@ -1,5 +1,6 @@
 import { redirect, notFound } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { AutomationForm } from "../_components/automation-form"
 
@@ -9,7 +10,7 @@ export default async function EditarAutomacaoPage({
   params: Promise<{ id: string }>
 }) {
   const user = await getServerUser()
-  if (user.role !== "admin") redirect("/dashboard")
+  if (!(await canAccess(user.id, user.orgId, "sistema"))) redirect("/dashboard")
 
   const { id } = await params
   const supabase = createAdminClient()

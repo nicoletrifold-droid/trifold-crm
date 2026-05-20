@@ -1,0 +1,20 @@
+schema: 1
+story: '35.4'
+gate: PASS
+status_reason: 'Todos os 16 ACs implementados corretamente. Server Actions com auth/admin/org checks robustos, modal com validação adequada, optimistic update e rollback completos. Type-check e lint passam sem erros novos.'
+reviewer: 'Quinn'
+updated: '2026-05-20T13:30:00Z'
+top_issues:
+  - id: 'SEC-001'
+    severity: low
+    finding: '`createRole` aceita `data.label` sem trim/validate server-side. A migration 047 garante NOT NULL mas aceita string vazia.'
+    suggested_action: 'Validar `data.label.trim().length > 0` em `createRole` antes do INSERT (defesa em profundidade — client já valida, mas Server Action é o boundary de segurança).'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Validação funcional no browser (tarefas 5.3-5.7) não executada — depende de sessão admin viva. Code review confirma implementação correta.'
+    suggested_action: 'Smoke test logado como admin antes do deploy: (1) criar perfil → coluna aparece com 17 toggles off; (2) tentar criar perfil com nome duplicado → mensagem inline; (3) excluir perfil customizado → coluna some imediatamente; (4) verificar que roles do sistema não exibem ícone lixeira; (5) inspecionar dark mode do modal.'
+  - id: 'MNT-001'
+    severity: low
+    finding: '`packages/shared/src/types/commercial-rules.ts` mantém erro pré-existente `Cannot find module zod`. Não é da Story 35-4 — herdado de outras stories.'
+    suggested_action: 'Tratar em story dedicada de housekeeping do `packages/shared`. Não bloqueia 35-4.'
+waiver: { active: false }

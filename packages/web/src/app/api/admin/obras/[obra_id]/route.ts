@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
-import { notifyClientes } from "@web/lib/notificacoes"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -88,13 +87,6 @@ export async function PATCH(
   if (["em_andamento", "concluida", "pausada"].includes(body.status)) {
     updates.status = body.status
   }
-  if (
-    typeof body.progress_pct === "number" &&
-    body.progress_pct >= 0 &&
-    body.progress_pct <= 100
-  ) {
-    updates.progress_pct = body.progress_pct
-  }
   if ("expected_delivery_date" in body) {
     updates.expected_delivery_date = body.expected_delivery_date ?? null
   }
@@ -108,11 +100,6 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  // Fire-and-forget: notificar progresso somente quando progress_pct foi atualizado
-  if ("progress_pct" in updates && obra) {
-    notifyClientes(obra_id, "progresso", obra.name).catch(() => {})
   }
 
   return NextResponse.json({ obra })

@@ -1,0 +1,16 @@
+schema: 1
+story: '35.3'
+gate: PASS
+status_reason: 'Todos os 15 ACs implementados corretamente. Type-check e lint passam sem erros novos. Pequenas observações de escopo (código de 35-4 já bundled) não bloqueiam.'
+reviewer: 'Quinn'
+updated: '2026-05-20T12:00:00Z'
+top_issues:
+  - id: 'ARCH-001'
+    severity: low
+    finding: 'Código da Story 35-4 (handleDeleteRole, ProfileActionsHeader, createRole/deleteRole em actions.ts, botão de lixeira nos th de role, estado deletingRoleId) já foi adicionado nos mesmos arquivos da 35-3, embora o File List da 35-3 declare apenas o escopo dela.'
+    suggested_action: 'Confirmar coordenação com Story 35-4: ou explicitar no File List da 35-3 que esses arquivos contêm também código de 35-4, ou mover o código de 35-4 para um commit separado.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Tasks 4.3 e 4.4 (validação browser: toggle persiste após reload, dark mode visual) não foram executadas. Code review confirma a implementação correta, mas validação funcional fica recomendada antes do deploy.'
+    suggested_action: 'Smoke test no browser logado como admin: (1) alterar toggle → reload → confirmar persistência; (2) inspecionar página em dark mode; (3) Network throttle para validar skeleton durante Suspense.'
+waiver: { active: false }

@@ -30,7 +30,6 @@ export function ObraEditModal({ obra, onClose }: ObraEditModalProps) {
   const [name, setName] = useState(obra.name)
   const [description, setDescription] = useState(obra.description ?? "")
   const [status, setStatus] = useState(obra.status)
-  const [progressPct, setProgressPct] = useState(obra.progress_pct)
   const [deliveryDate, setDeliveryDate] = useState(
     obra.expected_delivery_date ?? ""
   )
@@ -50,7 +49,6 @@ export function ObraEditModal({ obra, onClose }: ObraEditModalProps) {
           name: name.trim(),
           description: description.trim() || null,
           status,
-          progress_pct: progressPct,
           expected_delivery_date: deliveryDate || null,
         }),
       })
@@ -121,20 +119,6 @@ export function ObraEditModal({ obra, onClose }: ObraEditModalProps) {
                 </option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-stone-300">
-              Progresso (%)
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={progressPct}
-              onChange={(e) => setProgressPct(Number(e.target.value))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
-            />
           </div>
 
           <div>

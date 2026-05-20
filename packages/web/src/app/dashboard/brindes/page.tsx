@@ -1,4 +1,5 @@
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { BrindesTable } from "./_components/brindes-table"
@@ -7,7 +8,7 @@ import type { BrindeTipo, DataComemorativa } from "./_components/types"
 export default async function BrindesPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor", "obras"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "brindes"))) {
     redirect("/dashboard")
   }
 

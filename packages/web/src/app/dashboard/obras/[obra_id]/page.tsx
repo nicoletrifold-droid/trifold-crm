@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -33,7 +34,7 @@ export default async function ObraDetailPage({
 }) {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor", "obras"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "obras"))) {
     redirect("/dashboard")
   }
 

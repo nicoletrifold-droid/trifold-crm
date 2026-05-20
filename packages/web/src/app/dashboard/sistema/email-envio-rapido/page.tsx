@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { QuickSendForm } from "./_components/quick-send-form"
 
 export default async function EmailEnvioRapidoPage() {
   const user = await getServerUser()
-  if (user.role !== "admin") redirect("/dashboard")
+  if (!(await canAccess(user.id, user.orgId, "sistema"))) redirect("/dashboard")
 
   return (
     <div className="space-y-6">

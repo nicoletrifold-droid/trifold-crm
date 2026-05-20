@@ -1,5 +1,8 @@
 import { unstable_cache, revalidateTag } from "next/cache"
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
+export { ALL_MODULES, MODULE_LABELS, MODULE_DESCRIPTIONS } from "./permissions-modules"
+import { ALL_MODULES } from "./permissions-modules"
 
 // ============================================================================
 // Tipos
@@ -16,32 +19,8 @@ export interface OrgRole {
 export type PermissionsMatrix = Record<string, Record<string, boolean>>
 
 // ============================================================================
-// Constantes — espelham o seed do banco (migration 047_roles_permissions.sql)
+// Constantes — re-exportadas de permissions-modules (sem código server-side)
 // ============================================================================
-
-/**
- * Lista canônica dos 17 módulos do sistema, em ordem alfabética dos identificadores
- * usados na tabela `role_permissions.module`.
- */
-export const ALL_MODULES: readonly string[] = [
-  "agenda",
-  "alertas",
-  "analytics",
-  "atividades",
-  "brindes",
-  "campanhas",
-  "configuracoes",
-  "conversas",
-  "corretores",
-  "dashboard",
-  "imoveis",
-  "leads",
-  "mensagens",
-  "obras",
-  "pipeline",
-  "sistema",
-  "treinamento",
-] as const
 
 /**
  * Roles do sistema (fallback quando uma org não tem seed de `roles`).
@@ -125,7 +104,7 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
 export async function getOrgRoles(orgId: string): Promise<OrgRole[]> {
   return unstable_cache(
     async () => {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       const { data, error } = await supabase
         .from("roles")
         .select("id, name, label, color, is_system")
@@ -156,7 +135,7 @@ export async function getRolePermissions(
 ): Promise<Record<string, boolean>> {
   return unstable_cache(
     async () => {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       const { data, error } = await supabase
         .from("role_permissions")
         .select("module, can_access")
@@ -263,10 +242,79 @@ export async function getUserPermissions(
 
   // 3. Buscar permissões do role
   const perms = await getRolePermissions(roleRow.id as string)
-  if (Object.keys(perms).length === 0) {
-    return getHardcodedPermissions(userRole)
+  const finalPerms =
+    Object.keys(perms).length > 0 ? { ...perms } : { ...getHardcodedPermissions(userRole) }
+
+  // 4. Aplicar exceções individuais (prioridade absoluta sobre o perfil base)
+  const exceptions = await unstable_cache(
+    async () => {
+      const adminClient = createAdminClient()
+      const { data } = await adminClient
+        .from("user_permission_exceptions")
+        .select("module, can_access")
+        .eq("user_id", userId)
+      return (data ?? []) as Array<{ module: string; can_access: boolean }>
+    },
+    [`user-exceptions-${userId}`],
+    { tags: [`permissions-user-${userId}`], revalidate: 60 }
+  )()
+
+  for (const exc of exceptions) {
+    finalPerms[exc.module] = exc.can_access
   }
-  return perms
+
+  return finalPerms
+}
+
+// ============================================================================
+// canAccess — helper booleano por módulo (Story 35-5)
+// ============================================================================
+
+/**
+ * Retorna `true` se o usuário pode acessar o módulo informado, `false` caso
+ * contrário. Reusa `getUserPermissions` (cacheado por userId/orgId), portanto
+ * múltiplas chamadas dentro da mesma request não geram queries adicionais.
+ *
+ * Se o módulo não existir no mapa retornado, retorna `false` (default-deny).
+ *
+ * **Suporte a sub-módulos (Story 35-7):** Quando `module` contém `"."`
+ * (ex: `"configuracoes.clientes"`), a função consulta primeiro
+ * `user_permission_exceptions` diretamente para a chave exata do sub-módulo
+ * via `createAdminClient()` — esta query direta evita importação circular
+ * com `permissions-exceptions-actions.ts` (que importa de `permissions.ts`).
+ *
+ * Se não houver exceção explícita para o sub-módulo, herda a permissão do
+ * módulo pai (recursão para `canAccess(userId, orgId, parentModule)`).
+ */
+export async function canAccess(
+  userId: string,
+  orgId: string,
+  module: string
+): Promise<boolean> {
+  const dotIndex = module.indexOf(".")
+  if (dotIndex !== -1) {
+    // Sub-módulo: consultar exceção explícita primeiro (query direta para
+    // evitar importação circular com permissions-exceptions-actions.ts).
+    const adminClient = createAdminClient()
+    const { data: excRow } = await adminClient
+      .from("user_permission_exceptions")
+      .select("can_access")
+      .eq("user_id", userId)
+      .eq("module", module)
+      .maybeSingle()
+
+    if (excRow !== null && excRow !== undefined) {
+      return (excRow as { can_access: boolean }).can_access
+    }
+
+    // Sem exceção explícita: herdar do módulo pai.
+    const parentModule = module.slice(0, dotIndex)
+    return canAccess(userId, orgId, parentModule)
+  }
+
+  // Módulo top-level: comportamento original.
+  const perms = await getUserPermissions(userId, orgId)
+  return perms[module] ?? false
 }
 
 // ============================================================================
@@ -276,9 +324,12 @@ export async function getUserPermissions(
 /**
  * Invalida o cache de permissões de uma org. Deve ser chamada após qualquer
  * mutação em `roles` ou `role_permissions` da org.
+ *
+ * Em Next.js 16, `revalidateTag` requer o profile como segundo argumento.
+ * Usamos `"max"` para semântica de stale-while-revalidate (recomendado).
  */
 export function revalidateOrgPermissions(orgId: string): void {
-  revalidateTag(`permissions-${orgId}`)
+  revalidateTag(`permissions-${orgId}`, "max")
 }
 
 // ============================================================================
@@ -359,3 +410,179 @@ export async function updatePermission(
 
   return { success: true }
 }
+
+// ============================================================================
+// Server Action — createRole
+// ============================================================================
+
+/**
+ * Cria um novo role customizado (`is_system = false`) na org e seed das 17
+ * permissões de `ALL_MODULES` em `role_permissions` com `can_access = false`.
+ *
+ * Requer que o usuário autenticado seja `admin` (validado via `public.users`).
+ * Trata a violação de UNIQUE (`org_id`, `name`) com mensagem amigável.
+ *
+ * Retorna `{ success: true, role: OrgRole }` em caso de sucesso, ou
+ * `{ success: false, error: string }` em caso de falha — nunca lança exceção.
+ */
+export async function createRole(
+  orgId: string,
+  data: { name: string; label: string; color: string }
+): Promise<{ success: boolean; role?: OrgRole; error?: string }> {
+  "use server"
+
+  const supabase = await createClient()
+
+  // 1. Verificar autenticação
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 2. Verificar que o usuário é admin (e que pertence à org)
+  const { data: appUser, error: appUserError } = await supabase
+    .from("users")
+    .select("role, org_id")
+    .eq("auth_id", user.id)
+    .maybeSingle()
+
+  if (
+    appUserError ||
+    !appUser ||
+    appUser.role !== "admin" ||
+    appUser.org_id !== orgId
+  ) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 3. INSERT em `roles`
+  const { data: newRole, error: insertError } = await supabase
+    .from("roles")
+    .insert({
+      org_id: orgId,
+      name: data.name,
+      label: data.label,
+      color: data.color,
+      is_system: false,
+    })
+    .select("id, name, label, color, is_system")
+    .single()
+
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return { success: false, error: "Este nome de perfil já está em uso." }
+    }
+    return { success: false, error: insertError.message }
+  }
+
+  if (!newRole) {
+    return { success: false, error: "Falha ao criar perfil." }
+  }
+
+  // 4. Seed 17 permissões em `role_permissions` (todas can_access = false)
+  const permissionsRows = ALL_MODULES.map((module) => ({
+    org_id: orgId,
+    role_id: newRole.id as string,
+    module,
+    can_access: false,
+  }))
+
+  const { error: permsError } = await supabase
+    .from("role_permissions")
+    .insert(permissionsRows)
+
+  if (permsError) {
+    // Best-effort cleanup: se as permissões falharem, remover o role criado
+    // para evitar um role "orfão" sem linhas em role_permissions.
+    await supabase.from("roles").delete().eq("id", newRole.id as string)
+    return { success: false, error: permsError.message }
+  }
+
+  // 5. Invalidar cache da org
+  revalidateOrgPermissions(orgId)
+
+  return { success: true, role: newRole as OrgRole }
+}
+
+// ============================================================================
+// Server Action — deleteRole
+// ============================================================================
+
+/**
+ * Exclui um role customizado (`is_system = false`). Roles do sistema são
+ * rejeitados explicitamente. O DELETE em `roles` faz cascade para
+ * `role_permissions` via FK (ON DELETE CASCADE) — não é necessário deletar
+ * as permissões manualmente.
+ *
+ * Requer que o usuário autenticado seja `admin` (validado via `public.users`).
+ *
+ * Retorna `{ success: true }` em caso de sucesso, ou
+ * `{ success: false, error: string }` em caso de falha — nunca lança exceção.
+ */
+export async function deleteRole(
+  roleId: string
+): Promise<{ success: boolean; error?: string }> {
+  "use server"
+
+  const supabase = await createClient()
+
+  // 1. Verificar autenticação
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 2. Verificar que o usuário é admin
+  const { data: appUser, error: appUserError } = await supabase
+    .from("users")
+    .select("role, org_id")
+    .eq("auth_id", user.id)
+    .maybeSingle()
+
+  if (appUserError || !appUser || appUser.role !== "admin") {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  // 3. Resolver org_id e is_system do role
+  const { data: roleRow, error: roleError } = await supabase
+    .from("roles")
+    .select("org_id, is_system")
+    .eq("id", roleId)
+    .maybeSingle()
+
+  if (roleError) {
+    return { success: false, error: roleError.message }
+  }
+  if (!roleRow) {
+    return { success: false, error: "Perfil não encontrado." }
+  }
+
+  // Double-check: o usuário admin só pode deletar roles da própria org
+  if (roleRow.org_id !== appUser.org_id) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  const orgId = roleRow.org_id as string
+
+  // 4. DELETE em `roles` — cascade para `role_permissions` via FK
+  const { error: deleteError } = await supabase
+    .from("roles")
+    .delete()
+    .eq("id", roleId)
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message }
+  }
+
+  // 5. Invalidar cache da org
+  revalidateOrgPermissions(orgId)
+
+  return { success: true }
+}
+

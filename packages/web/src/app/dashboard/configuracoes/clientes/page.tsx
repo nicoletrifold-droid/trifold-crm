@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import { ClientesPageClient, type ClienteRow, type ObraOption } from "./_components/clientes-page-client"
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic"
 export default async function ClientesCRMPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor", "obras"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.clientes"))) {
     redirect("/dashboard")
   }
 
