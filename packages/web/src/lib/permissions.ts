@@ -1,5 +1,6 @@
 import { unstable_cache, revalidateTag } from "next/cache"
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 // ============================================================================
 // Tipos
@@ -125,7 +126,7 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
 export async function getOrgRoles(orgId: string): Promise<OrgRole[]> {
   return unstable_cache(
     async () => {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       const { data, error } = await supabase
         .from("roles")
         .select("id, name, label, color, is_system")
@@ -156,7 +157,7 @@ export async function getRolePermissions(
 ): Promise<Record<string, boolean>> {
   return unstable_cache(
     async () => {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       const { data, error } = await supabase
         .from("role_permissions")
         .select("module, can_access")
