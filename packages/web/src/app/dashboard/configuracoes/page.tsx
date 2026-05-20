@@ -50,6 +50,12 @@ const CONFIG_CARDS = [
     title: "Follow-up",
     description: "Regras de follow-up por etapa",
   },
+  {
+    href: "/dashboard/configuracoes/perfil-acesso",
+    icon: "◫",
+    title: "Perfil de Acesso",
+    description: "Permissões por perfil de usuário",
+  },
 ]
 
 export default async function ConfiguracoesPage() {
