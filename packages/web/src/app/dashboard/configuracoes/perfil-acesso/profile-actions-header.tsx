@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Plus } from "lucide-react"
 import { CreateRoleModal } from "./create-role-modal"
 
 interface ProfileActionsHeaderProps {
@@ -19,9 +20,14 @@ export function ProfileActionsHeader({ orgId }: ProfileActionsHeaderProps) {
       <button
         type="button"
         onClick={() => setIsModalOpen(true)}
-        className="rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700"
+        className="group inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-orange-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-orange-500/25 ring-1 ring-orange-600/30 transition-all hover:from-orange-500 hover:to-orange-700 hover:shadow-lg hover:shadow-orange-500/30 active:translate-y-px focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 dark:ring-orange-400/20 dark:focus:ring-offset-stone-950"
       >
-        + Novo Perfil
+        <Plus
+          className="h-4 w-4 transition-transform group-hover:rotate-90"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+        Novo Perfil
       </button>
 
       <CreateRoleModal
