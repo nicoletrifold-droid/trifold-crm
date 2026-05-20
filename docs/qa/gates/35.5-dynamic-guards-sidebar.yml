@@ -1,0 +1,24 @@
+schema: 1
+story: '35.5'
+gate: PASS
+status_reason: 'Re-review após correção do REQ-001. Todos os 10 ACs implementados; sidebar dinâmico e 17 guards de redirect/UI migrados corretamente (incluindo `properties/[id]/page.tsx`). Type-check e lint passam sem erros novos (baselines pré-existentes confirmados como herdados, não desta story).'
+reviewer: 'Quinn'
+updated: '2026-05-20T19:30:00Z'
+top_issues:
+  - id: 'REQ-001'
+    severity: resolved
+    finding: '`packages/web/src/app/dashboard/properties/[id]/page.tsx` (linha 66) foi corrigido. Agora usa `const isAdminOrSupervisor = await canAccess(appUser.id, appUser.orgId, "sistema")` em vez do array hardcoded `["admin","supervisor"].includes(appUser.role)`. Padrão consistente com o resto do escopo (corretores, properties listing, configuracoes/*). Verificado em re-review: grep por `user.role|isAdminOrSupervisor.*includes|appUser.role` no arquivo retorna zero matches.'
+    suggested_action: 'Resolvido — nenhuma ação adicional necessária.'
+  - id: 'REQ-002'
+    severity: low
+    finding: 'AC:10 estabelece que sidebar do role `obras` exibe `obras`, `brindes` e `configuracoes`. A matriz seed (migration 047) do role `obras` tem apenas `obras: true` e `brindes: true` — `configuracoes: false`. Resultado: item Config não aparece para `obras` por padrão. A Completion Note do dev documenta a decisão de seguir estritamente a matriz do banco. Há divergência semântica entre o texto literal do AC e o seed atual.'
+    suggested_action: 'Não bloqueia. Confirmar com PO se a expectativa do AC:10 era que `obras` veja Config por padrão (caso em que precisaria ajustar o seed para `obras.configuracoes = true`) ou se a decisão correta é a implementada (seguir o seed, e Config aparece apenas se admin ligar na UI 35-3). Para a maioria dos casos de uso a decisão atual é a correta — apenas explicitar a interpretação evita ambiguidade futura. Pode virar item de backlog.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Sem testes unitários adicionados para `canAccess` em `permissions.test.ts`. A seção Testing da story sugere cenários mínimos (módulo true → retorna true; módulo false → retorna false; módulo ausente → retorna false). Implementação confiável por inspeção (wrapper trivial sobre `getUserPermissions`), mas o test gate de longo prazo deveria cobrir o helper.'
+    suggested_action: 'Não bloqueia. Adicionar 3 unit tests em `packages/web/src/lib/permissions.test.ts` cobrindo os cenários documentados na seção Testing da story. Como `getUserPermissions` já tem cobertura própria, o teste de `canAccess` pode usar mock direto da função importada. Item de backlog.'
+  - id: 'MNT-001'
+    severity: low
+    finding: '`packages/shared/src/types/commercial-rules.ts` mantém erro pré-existente `Cannot find module zod`. Não é da Story 35-5 — herdado.'
+    suggested_action: 'Não bloqueia. Tratar em story dedicada de housekeeping do `packages/shared` (mesmo issue herdado de 35.4).'
+waiver: { active: false }

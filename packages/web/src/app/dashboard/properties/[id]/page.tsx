@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ObraVinculadaSection } from "./_components/obra-vinculada-section"
@@ -63,7 +64,7 @@ export default async function PropertyDetailPage({
   const reservedCount = units?.filter((u) => u.status === "reserved").length ?? 0
   const soldCount = units?.filter((u) => u.status === "sold").length ?? 0
 
-  const isAdminOrSupervisor = ["admin", "supervisor"].includes(appUser.role)
+  const isAdminOrSupervisor = await canAccess(appUser.id, appUser.orgId, "sistema")
 
   const paymentMethodLabels: Record<string, string> = {
     financiamento_bancario: "Financiamento bancário",

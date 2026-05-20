@@ -1,4 +1,5 @@
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { TemplateForm } from "../_components/template-form"
@@ -9,7 +10,7 @@ export default async function EditTemplatePage({
   params: Promise<{ id: string }>
 }) {
   const user = await getServerUser()
-  if (user.role !== "admin") redirect("/dashboard")
+  if (!(await canAccess(user.id, user.orgId, "sistema"))) redirect("/dashboard")
 
   const { id } = await params
   const supabase = createAdminClient()

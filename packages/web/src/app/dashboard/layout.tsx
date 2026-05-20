@@ -1,5 +1,6 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
+import { getUserPermissions } from "@web/lib/permissions"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import {
   LayoutDashboard,
@@ -49,6 +50,31 @@ const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon:
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
 
+/**
+ * Mapeamento href → moduleKey para resolver permissões via `getUserPermissions`.
+ * Reflete os 17 módulos canônicos do seed (migration 047) — Story 35-5 AC2.
+ */
+const NAV_MODULE_MAP: Record<string, string> = {
+  "/dashboard": "dashboard",
+  "/dashboard/pipeline": "pipeline",
+  "/dashboard/leads": "leads",
+  "/dashboard/properties": "imoveis",
+  "/dashboard/corretores": "corretores",
+  "/dashboard/conversas": "conversas",
+  "/dashboard/agenda": "agenda",
+  "/dashboard/alertas": "alertas",
+  "/dashboard/atividades": "atividades",
+  "/dashboard/analytics": "analytics",
+  "/dashboard/campaigns": "campanhas",
+  "/dashboard/treinamento": "treinamento",
+  "/dashboard/obras": "obras",
+  "/dashboard/brindes": "brindes",
+  "/dashboard/mensagens": "mensagens",
+  "/dashboard/sistema/email": "sistema",
+  "/dashboard/sistema": "sistema",
+  "/dashboard/configuracoes": "configuracoes",
+}
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -57,40 +83,42 @@ export default async function DashboardLayout({
   const user = await getServerUser()
   const supabase = await createClient()
 
-  const isObras = user.role === "obras"
-  const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
+  // Story 35-5: lê permissões do banco em vez de regras hardcoded por role.
+  const permissions = await getUserPermissions(user.id, user.orgId)
 
-  // Count pending alerts and unread messages — skip for obras role (not needed)
-  const [{ count: alertCount }, { count: mensagensCount }] = isObras
-    ? [{ count: 0 }, { count: 0 }]
-    : await Promise.all([
-        supabase
-          .from("follow_up_log")
-          .select("id", { count: "exact", head: true })
-          .eq("org_id", user.orgId)
-          .eq("status", "pending"),
-        supabase
-          .from("obra_mensagens")
-          .select("id", { count: "exact", head: true })
-          .eq("org_id", user.orgId)
-          .eq("sender_type", "cliente")
-          .is("read_at", null),
-      ])
+  // Contagens de alertas e mensagens — só consulta o banco se os módulos
+  // correspondentes estiverem acessíveis (evita query inútil para roles
+  // sem acesso a esses módulos, ex.: `obras`).
+  const [{ count: alertCount }, { count: mensagensCount }] =
+    permissions["alertas"] || permissions["mensagens"]
+      ? await Promise.all([
+          supabase
+            .from("follow_up_log")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", user.orgId)
+            .eq("status", "pending"),
+          supabase
+            .from("obra_mensagens")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", user.orgId)
+            .eq("sender_type", "cliente")
+            .is("read_at", null),
+        ])
+      : [{ count: 0 }, { count: 0 }]
 
-  // obras role: Obras + Brindes + Config (para cadastro de clientes)
-  // admin/supervisor: full nav + Obras + Brindes + Mensagens
-  // Sistema: admin only
-  const navItems = isObras
-    ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES, { ...NAV_ITEM_CONFIG, separator: true }]
-    : [
-        ...NAV_ITEMS_BASE,
-        ...(isAdminOrSupervisor ? [NAV_ITEM_OBRAS, NAV_ITEM_BRINDES] : [NAV_ITEM_BRINDES]),
-        ...(isAdminOrSupervisor
-          ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
-          : []),
-        { ...NAV_ITEM_CONFIG, separator: true },
-        ...(user.role === "admin" ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
-      ]
+  // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
+  const navItems = [
+    ...NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]]),
+    ...(permissions["obras"] ? [NAV_ITEM_OBRAS] : []),
+    ...(permissions["brindes"] ? [NAV_ITEM_BRINDES] : []),
+    ...(permissions["mensagens"]
+      ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
+      : []),
+    ...(permissions["configuracoes"]
+      ? [{ ...NAV_ITEM_CONFIG, separator: true }]
+      : []),
+    ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
+  ]
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">

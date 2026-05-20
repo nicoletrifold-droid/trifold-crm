@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ObraCreateModal } from "./_components/obra-create-modal"
@@ -27,9 +28,13 @@ function formatDeliveryDate(date: string | null): string {
 export default async function ObrasPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor", "obras"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "obras"))) {
     redirect("/dashboard")
   }
+
+  // Apenas usuários com acesso a "sistema" veem ações administrativas
+  // (ex.: vínculo manual de obras a empreendimentos).
+  const canManageSistema = await canAccess(user.id, user.orgId, "sistema")
 
   const supabase = await createClient()
 
@@ -52,7 +57,7 @@ export default async function ObrasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {user.role === "admin" && (
+          {canManageSistema && (
             <Link
               href="/dashboard/obras/backfill"
               className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"

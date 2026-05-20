@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import { MensagensInbox } from "./_components/mensagens-inbox"
 import type { ClienteConversa } from "@web/app/api/admin/mensagens/route"
@@ -80,7 +81,7 @@ async function getInboxPage(
 export default async function MensagensPage() {
   const user = await getServerUser()
 
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!(await canAccess(user.id, user.orgId, "mensagens"))) {
     redirect("/dashboard")
   }
 

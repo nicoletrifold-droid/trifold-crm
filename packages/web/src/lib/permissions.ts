@@ -270,6 +270,26 @@ export async function getUserPermissions(
 }
 
 // ============================================================================
+// canAccess — helper booleano por módulo (Story 35-5)
+// ============================================================================
+
+/**
+ * Retorna `true` se o usuário pode acessar o módulo informado, `false` caso
+ * contrário. Reusa `getUserPermissions` (cacheado por userId/orgId), portanto
+ * múltiplas chamadas dentro da mesma request não geram queries adicionais.
+ *
+ * Se o módulo não existir no mapa retornado, retorna `false` (default-deny).
+ */
+export async function canAccess(
+  userId: string,
+  orgId: string,
+  module: string
+): Promise<boolean> {
+  const perms = await getUserPermissions(userId, orgId)
+  return perms[module] ?? false
+}
+
+// ============================================================================
 // Cache invalidation
 // ============================================================================
 

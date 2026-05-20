@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { now } from "@web/lib/time"
 import { redirect } from "next/navigation"
 import Link from "next/link"
@@ -7,7 +8,7 @@ import Link from "next/link"
 export default async function AlertasPage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "alertas"))) {
     redirect("/dashboard")
   }
 

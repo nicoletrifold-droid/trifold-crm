@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
@@ -27,7 +28,9 @@ export default async function LeadsPage({
   const supabase = await createClient()
   const params = await searchParams
 
-  const isAdmin = user.role === "admin" || user.role === "supervisor"
+  // "Admin powers" intra-página (ex.: ações de gestão sobre leads):
+  // capturado como acesso ao módulo "sistema" — somente admin tem por padrão.
+  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
   const offset = (page - 1) * PAGE_SIZE

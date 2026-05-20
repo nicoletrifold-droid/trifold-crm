@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 
 export default async function PropertiesPage() {
@@ -12,7 +13,9 @@ export default async function PropertiesPage() {
     .eq("is_active", true)
     .order("created_at", { ascending: false })
 
-  const isAdmin = user.role === "admin" || user.role === "supervisor"
+  // Ações administrativas (criar/editar imóveis) — modeladas como acesso
+  // ao módulo "sistema" (somente admin tem por padrão).
+  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   return (
     <div className="space-y-6">

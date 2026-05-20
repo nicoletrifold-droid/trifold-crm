@@ -2,6 +2,7 @@
 
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, GitMerge } from "lucide-react"
@@ -10,7 +11,7 @@ import { BackfillForm } from "./_components/backfill-form"
 export default async function ObraBackfillPage() {
   const user = await getServerUser()
 
-  if (user.role !== "admin") {
+  if (!(await canAccess(user.id, user.orgId, "sistema"))) {
     redirect("/dashboard/obras")
   }
 

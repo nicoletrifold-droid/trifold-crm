@@ -1,12 +1,15 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 
 export default async function EmpresaPage() {
   const user = await getServerUser()
   const supabase = await createClient()
 
-  const isAdmin = user.role === "admin"
+  // Edição de dados da empresa — modelado como acesso ao módulo "sistema"
+  // (somente admin tem por padrão).
+  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   const { data: org } = await supabase
     .from("organizations")

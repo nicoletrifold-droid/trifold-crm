@@ -1,12 +1,13 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
 export default async function PersonalidadePage() {
   const user = await getServerUser()
 
-  if (!["admin", "supervisor"].includes(user.role)) {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes"))) {
     redirect("/dashboard")
   }
 

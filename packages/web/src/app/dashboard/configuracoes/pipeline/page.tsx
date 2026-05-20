@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { CreateStageModal } from "./_components/create-stage-modal"
 import { StagesTable } from "./_components/stages-table"
 
@@ -7,7 +8,9 @@ export default async function PipelineConfigPage() {
   const user = await getServerUser()
   const supabase = await createClient()
 
-  const isAdmin = user.role === "admin"
+  // Edição da configuração de pipeline — modelado como acesso ao módulo
+  // "sistema" (somente admin tem por padrão).
+  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   const { data: stages } = await supabase
     .from("kanban_stages")
