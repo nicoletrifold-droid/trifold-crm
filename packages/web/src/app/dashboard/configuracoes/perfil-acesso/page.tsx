@@ -133,8 +133,7 @@ export default async function PerfilAcessoPage() {
           />
         </svg>
         <p>
-          Alterações são salvas automaticamente. Perfis do sistema não podem ser
-          excluídos.
+          Alterações são salvas automaticamente. Perfis do sistema podem ser excluídos por admins — use com cuidado.
         </p>
       </div>
     </div>

@@ -478,13 +478,13 @@ export function PermissionsMatrix({
   }
 
   async function handleDeleteRole(role: OrgRole) {
-    if (role.is_system) return
     if (deletingRoleId) return
 
     if (typeof window !== "undefined") {
-      const ok = window.confirm(
-        `Excluir o perfil '${role.label}'? Esta ação não pode ser desfeita.`
-      )
+      const msg = role.is_system
+        ? `'${role.label}' é um perfil do sistema. Excluí-lo removerá as permissões de todos os usuários com este perfil. Continuar?`
+        : `Excluir o perfil '${role.label}'? Esta ação não pode ser desfeita.`
+      const ok = window.confirm(msg)
       if (!ok) return
     }
 
@@ -568,10 +568,10 @@ export function PermissionsMatrix({
 
       {/* Card principal com a matriz */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
-        <div className="overflow-x-auto">
+        <div className="max-h-[600px] overflow-auto">
           <table className="min-w-full">
-            {/* Cabeçalho com chips de role estilizados */}
-            <thead className="border-b border-gray-200 bg-gradient-to-b from-gray-50/80 to-white dark:border-stone-800 dark:from-stone-800/30 dark:to-stone-900">
+            {/* Cabeçalho com chips de role estilizados — sticky para rolar com a tabela */}
+            <thead className="sticky top-0 z-20 border-b border-gray-200 bg-gradient-to-b from-gray-50/80 to-white dark:border-stone-800 dark:from-stone-800/30 dark:to-stone-900">
               <tr>
                 <th
                   scope="col"
@@ -612,28 +612,26 @@ export function PermissionsMatrix({
                             </div>
                           </div>
                         </div>
-                        {!role.is_system && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRole(role)}
-                            disabled={deletingRoleId === role.id}
-                            aria-label={`Excluir perfil ${role.label}`}
-                            title={`Excluir perfil ${role.label}`}
-                            className="rounded-md p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400/40 disabled:opacity-50 dark:text-stone-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"
-                          >
-                            {deletingRoleId === role.id ? (
-                              <Loader2
-                                className="h-3.5 w-3.5 animate-spin"
-                                aria-hidden="true"
-                              />
-                            ) : (
-                              <Trash2
-                                className="h-3.5 w-3.5"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRole(role)}
+                          disabled={deletingRoleId === role.id}
+                          aria-label={`Excluir perfil ${role.label}`}
+                          title={`Excluir perfil ${role.label}`}
+                          className={`rounded-md p-1 transition-colors hover:bg-red-50 hover:text-red-500 focus:outline-none focus:ring-2 focus:ring-red-400/40 disabled:opacity-50 dark:hover:bg-red-500/10 dark:hover:text-red-400 ${role.is_system ? "text-gray-300 dark:text-stone-700" : "text-gray-400 dark:text-stone-500"}`}
+                        >
+                          {deletingRoleId === role.id ? (
+                            <Loader2
+                              className="h-3.5 w-3.5 animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Trash2
+                              className="h-3.5 w-3.5"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </button>
                       </div>
                     </th>
                   )

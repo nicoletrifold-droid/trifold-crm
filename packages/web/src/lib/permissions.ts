@@ -541,13 +541,6 @@ export async function deleteRole(
     return { success: false, error: "Unauthorized" }
   }
 
-  if (roleRow.is_system === true) {
-    return {
-      success: false,
-      error: "Roles do sistema não podem ser excluídos.",
-    }
-  }
-
   const orgId = roleRow.org_id as string
 
   // 4. DELETE em `roles` — cascade para `role_permissions` via FK
