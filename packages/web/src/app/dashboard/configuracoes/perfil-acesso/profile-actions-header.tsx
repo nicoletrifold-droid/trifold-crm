@@ -6,13 +6,14 @@ import { CreateRoleModal } from "./create-role-modal"
 
 interface ProfileActionsHeaderProps {
   orgId: string
+  existingColors: string[]
 }
 
 /**
  * Wrapper Client Component que renderiza o botão "+ Novo Perfil" e gerencia
  * o estado do `CreateRoleModal`. Mantém `page.tsx` como Server Component puro.
  */
-export function ProfileActionsHeader({ orgId }: ProfileActionsHeaderProps) {
+export function ProfileActionsHeader({ orgId, existingColors }: ProfileActionsHeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
@@ -34,6 +35,7 @@ export function ProfileActionsHeader({ orgId }: ProfileActionsHeaderProps) {
         orgId={orgId}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        existingColors={existingColors}
       />
     </>
   )

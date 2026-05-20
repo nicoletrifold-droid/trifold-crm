@@ -14,6 +14,12 @@ import {
 } from "./permissions-matrix"
 import { ProfileActionsHeader } from "./profile-actions-header"
 
+async function ProfileActionsHeaderWithColors({ orgId }: { orgId: string }) {
+  const roles = await getOrgRoles(orgId)
+  const existingColors = roles.map((r) => r.color).filter(Boolean)
+  return <ProfileActionsHeader orgId={orgId} existingColors={existingColors} />
+}
+
 /**
  * Componente assíncrono interno que carrega `roles` e `matrix` em paralelo
  * e renderiza o Client Component `PermissionsMatrix`. Isolar este fetch num
@@ -100,7 +106,7 @@ export default async function PerfilAcessoPage() {
             </Suspense>
           </div>
 
-          <ProfileActionsHeader orgId={user.orgId} />
+          <ProfileActionsHeaderWithColors orgId={user.orgId} />
         </div>
       </div>
 

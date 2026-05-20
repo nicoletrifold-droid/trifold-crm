@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { X, Check, Loader2, Sparkles } from "lucide-react"
+import { X, Loader2, Sparkles } from "lucide-react"
 import { createRole } from "./actions"
 
 // ============================================================================
@@ -55,29 +55,42 @@ const ROLE_COLORS = [
 
 type RoleColor = (typeof ROLE_COLORS)[number]["value"]
 
+const COLORS_ORDER = ROLE_COLORS.map((c) => c.value) as RoleColor[]
+
+function pickAutoColor(existing: string[] = []): RoleColor {
+  const unused = COLORS_ORDER.filter((c) => !existing.includes(c))
+  const pool = unused.length > 0 ? unused : COLORS_ORDER
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
 const NAME_REGEX = /^[a-z0-9-]+$/
 
 interface CreateRoleModalProps {
   orgId: string
   isOpen: boolean
   onClose: () => void
+  existingColors?: string[]
 }
 
 export function CreateRoleModal({
   orgId,
   isOpen,
   onClose,
+  existingColors = [],
 }: CreateRoleModalProps) {
   const [name, setName] = useState("")
   const [label, setLabel] = useState("")
-  const [selectedColor, setSelectedColor] = useState<RoleColor>("blue")
+  const [selectedColor, setSelectedColor] = useState<RoleColor>(() =>
+    pickAutoColor(existingColors)
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [labelError, setLabelError] = useState<string | null>(null)
 
-  // Fecha com ESC e bloqueia scroll do body enquanto aberto
+  // Fecha com ESC, bloqueia scroll e escolhe nova cor ao abrir
   useEffect(() => {
     if (!isOpen) return
+    setSelectedColor(pickAutoColor(existingColors))
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isSubmitting) {
         handleClose()
@@ -96,7 +109,7 @@ export function CreateRoleModal({
   function resetForm() {
     setName("")
     setLabel("")
-    setSelectedColor("blue")
+    setSelectedColor(pickAutoColor(existingColors))
     setNameError(null)
     setLabelError(null)
     setIsSubmitting(false)
@@ -177,10 +190,6 @@ export function CreateRoleModal({
   }
 
   if (!isOpen) return null
-
-  // Preview do label com a cor selecionada
-  const selectedColorData =
-    ROLE_COLORS.find((c) => c.value === selectedColor) ?? ROLE_COLORS[1]
 
   return (
     <div
@@ -318,48 +327,6 @@ export function CreateRoleModal({
                   Apenas letras minúsculas, números e hífens.
                 </p>
               )}
-            </div>
-
-            {/* Color picker — swatches grandes com label e check */}
-            <div>
-              <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">
-                Cor de identificação
-              </span>
-              <div className="grid grid-cols-6 gap-2">
-                {ROLE_COLORS.map((color) => {
-                  const isSelected = selectedColor === color.value
-                  return (
-                    <button
-                      key={color.value}
-                      type="button"
-                      onClick={() => setSelectedColor(color.value)}
-                      disabled={isSubmitting}
-                      aria-pressed={isSelected}
-                      aria-label={color.label}
-                      title={color.label}
-                      className={`relative flex h-11 w-full items-center justify-center rounded-xl ${color.bg} shadow-sm transition-all disabled:opacity-60 ${
-                        isSelected
-                          ? `scale-105 ring-2 ring-offset-2 ${color.ring} shadow-lg ${color.shadow} dark:ring-offset-stone-900`
-                          : "hover:scale-105 hover:shadow-md"
-                      }`}
-                    >
-                      {isSelected && (
-                        <Check
-                          className="h-5 w-5 text-white drop-shadow"
-                          strokeWidth={3}
-                          aria-hidden="true"
-                        />
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="mt-1.5 text-xs text-gray-500 dark:text-stone-400">
-                Selecionado:{" "}
-                <span className="font-medium text-gray-700 dark:text-stone-300">
-                  {selectedColorData.label}
-                </span>
-              </p>
             </div>
 
             {/* Preview do badge — feedback visual do que o usuário está criando */}
