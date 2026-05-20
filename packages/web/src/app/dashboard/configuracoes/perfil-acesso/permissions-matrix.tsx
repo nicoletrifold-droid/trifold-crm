@@ -26,7 +26,7 @@ import {
   CircleDot,
 } from "lucide-react"
 import type { OrgRole, PermissionsMatrix } from "@web/lib/permissions"
-import { MODULE_LABELS, MODULE_DESCRIPTIONS } from "@web/lib/permissions"
+import { MODULE_LABELS, MODULE_DESCRIPTIONS } from "@web/lib/permissions-modules"
 import { deleteRole, updatePermission } from "./actions"
 
 /**

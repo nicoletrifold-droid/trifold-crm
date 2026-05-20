@@ -1,6 +1,8 @@
 import { unstable_cache, revalidateTag } from "next/cache"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+export { ALL_MODULES, MODULE_LABELS, MODULE_DESCRIPTIONS } from "./permissions-modules"
+import { ALL_MODULES } from "./permissions-modules"
 
 // ============================================================================
 // Tipos
@@ -17,72 +19,8 @@ export interface OrgRole {
 export type PermissionsMatrix = Record<string, Record<string, boolean>>
 
 // ============================================================================
-// Constantes — espelham o seed do banco (migration 047_roles_permissions.sql)
+// Constantes — re-exportadas de permissions-modules (sem código server-side)
 // ============================================================================
-
-/**
- * Lista canônica dos 17 módulos do sistema, em ordem alfabética dos identificadores
- * usados na tabela `role_permissions.module`.
- */
-export const ALL_MODULES: readonly string[] = [
-  "agenda",
-  "alertas",
-  "analytics",
-  "atividades",
-  "brindes",
-  "campanhas",
-  "configuracoes",
-  "conversas",
-  "corretores",
-  "dashboard",
-  "imoveis",
-  "leads",
-  "mensagens",
-  "obras",
-  "pipeline",
-  "sistema",
-  "treinamento",
-] as const
-
-export const MODULE_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
-  pipeline: "Pipeline",
-  leads: "Leads",
-  imoveis: "Imóveis",
-  corretores: "Corretores",
-  conversas: "Conversas",
-  agenda: "Agenda",
-  alertas: "Alertas",
-  atividades: "Atividades",
-  analytics: "Analytics",
-  campanhas: "Campanhas",
-  treinamento: "Treinamento",
-  obras: "Obras",
-  brindes: "Brindes",
-  mensagens: "Mensagens",
-  configuracoes: "Configurações",
-  sistema: "Sistema",
-}
-
-export const MODULE_DESCRIPTIONS: Record<string, string> = {
-  dashboard: "Visão geral e métricas",
-  pipeline: "Kanban de oportunidades",
-  leads: "Cadastro e qualificação",
-  imoveis: "Catálogo de propriedades",
-  corretores: "Equipe e performance",
-  conversas: "Mensagens e atendimento",
-  agenda: "Eventos e compromissos",
-  alertas: "Notificações e follow-ups",
-  atividades: "Histórico de ações",
-  analytics: "Relatórios avançados",
-  campanhas: "Marketing e automação",
-  treinamento: "Conteúdos e cursos",
-  obras: "Acompanhamento de obras",
-  brindes: "Presentes e brindes",
-  mensagens: "Comunicação interna",
-  configuracoes: "Preferências da org",
-  sistema: "Administração total",
-}
 
 /**
  * Roles do sistema (fallback quando uma org não tem seed de `roles`).
@@ -617,107 +555,3 @@ export async function deleteRole(
   return { success: true }
 }
 
-// ============================================================================
-// Server Actions — exceções de permissão por usuário (Story 35-6)
-// ============================================================================
-
-/**
- * Retorna todas as exceções individuais de um usuário (dados frescos, sem cache).
- * Usado pela UI admin para renderizar a aba "Exceções" no UserEditModal.
- */
-export async function getUserExceptions(
-  userId: string
-): Promise<Array<{ module: string; can_access: boolean }>> {
-  "use server"
-  const supabase = createAdminClient()
-  const { data } = await supabase
-    .from("user_permission_exceptions")
-    .select("module, can_access")
-    .eq("user_id", userId)
-  return (data ?? []) as Array<{ module: string; can_access: boolean }>
-}
-
-/**
- * Cria ou atualiza uma exceção de permissão para um módulo específico.
- * Após upsert, invalida o cache de permissões do usuário afetado.
- */
-export async function setUserException(
-  userId: string,
-  module: string,
-  canAccess: boolean
-): Promise<{ success: boolean; error?: string }> {
-  "use server"
-
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return { success: false, error: "Unauthorized" }
-
-  const { data: appUser } = await supabase
-    .from("users")
-    .select("role, org_id")
-    .eq("auth_id", user.id)
-    .maybeSingle()
-
-  if (!appUser || appUser.role !== "admin") {
-    return { success: false, error: "Unauthorized" }
-  }
-
-  const { error } = await supabase.from("user_permission_exceptions").upsert(
-    {
-      user_id: userId,
-      module,
-      can_access: canAccess,
-      org_id: appUser.org_id as string,
-    },
-    { onConflict: "user_id,module" }
-  )
-
-  if (error) return { success: false, error: error.message }
-
-  revalidateTag(`permissions-user-${userId}`, "max")
-  return { success: true }
-}
-
-/**
- * Remove uma exceção de permissão, fazendo o usuário voltar ao padrão do perfil.
- * Após delete, invalida o cache de permissões do usuário afetado.
- */
-export async function removeUserException(
-  userId: string,
-  module: string
-): Promise<{ success: boolean; error?: string }> {
-  "use server"
-
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return { success: false, error: "Unauthorized" }
-
-  const { data: appUser } = await supabase
-    .from("users")
-    .select("role")
-    .eq("auth_id", user.id)
-    .maybeSingle()
-
-  if (!appUser || appUser.role !== "admin") {
-    return { success: false, error: "Unauthorized" }
-  }
-
-  const { error } = await supabase
-    .from("user_permission_exceptions")
-    .delete()
-    .eq("user_id", userId)
-    .eq("module", module)
-
-  if (error) return { success: false, error: error.message }
-
-  revalidateTag(`permissions-user-${userId}`, "max")
-  return { success: true }
-}

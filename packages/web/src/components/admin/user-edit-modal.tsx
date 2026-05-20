@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { ALL_MODULES, MODULE_LABELS, getUserExceptions, getUserPermissions, setUserException, removeUserException } from "@web/lib/permissions"
+import { ALL_MODULES, MODULE_LABELS } from "@web/lib/permissions-modules"
+import { getUserExceptions, getUserPermissions, setUserException, removeUserException } from "@web/lib/permissions-exceptions-actions"
 
 type Exception = { module: string; can_access: boolean }
 
