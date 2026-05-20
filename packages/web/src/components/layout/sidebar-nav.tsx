@@ -11,6 +11,7 @@ interface NavItem {
   label: string
   icon: React.ReactNode
   badge?: number
+  separator?: boolean
 }
 
 interface SidebarNavProps {
@@ -59,6 +60,9 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                 const active = isActive(item.href)
                 return (
                   <li key={item.href}>
+                    {item.separator && (
+                      <div className="mx-1 mb-1.5 mt-1 border-t border-stone-100 dark:border-stone-800" />
+                    )}
                     <Link
                       href={item.href}
                       className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
