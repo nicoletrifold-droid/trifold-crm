@@ -82,13 +82,12 @@ async function fetchPage(page: number): Promise<SupremoPage> {
   return res.json()
 }
 
-async function fetchAllPages(totalPages: number): Promise<SupremoLead[]> {
+async function fetchAllPages(fromPage: number, totalPages: number): Promise<SupremoLead[]> {
   const leads: SupremoLead[] = []
-  const BATCH = 5
-  for (let i = 1; i <= totalPages; i += BATCH) {
-    const batch = Array.from({ length: Math.min(BATCH, totalPages - i + 1) }, (_, j) => i + j)
-    const results = await Promise.all(batch.map(fetchPage))
-    for (const r of results) leads.push(...r.data)
+  for (let i = fromPage; i <= totalPages; i++) {
+    const result = await fetchPage(i)
+    leads.push(...result.data)
+    if (i < totalPages) await new Promise(r => setTimeout(r, 200))
   }
   return leads
 }
@@ -124,15 +123,14 @@ export async function GET(request: NextRequest) {
 
     let supremoLeads: SupremoLead[]
     if (mode === "full") {
-      // Fetch remaining pages in parallel batches
-      const remaining = totalPages > 1 ? await fetchAllPages(totalPages) : []
+      const remaining = totalPages > 1 ? await fetchAllPages(2, totalPages) : []
       pagesFetched += totalPages - 1
       supremoLeads = [...firstPage.data, ...remaining]
     } else {
       // Incremental: fetch first 5 pages (100 newest leads)
       const pages = Math.min(5, totalPages)
       if (pages > 1) {
-        const rest = await fetchAllPages(pages)
+        const rest = await fetchAllPages(2, pages)
         pagesFetched += pages - 1
         supremoLeads = [...firstPage.data, ...rest]
       } else {
