@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { ALL_MODULES, MODULE_LABELS } from "@web/lib/permissions-modules"
+import { ALL_MODULES, MODULE_LABELS, SUBMODULE_MAP } from "@web/lib/permissions-modules"
 import { getUserExceptions, getUserPermissions, setUserException, removeUserException } from "@web/lib/permissions-exceptions-actions"
 
 type Exception = { module: string; can_access: boolean }
@@ -35,6 +35,19 @@ export function UserEditModal({
   const [exceptions, setExceptions] = useState<Exception[]>([])
   const [basePerms, setBasePerms] = useState<Record<string, boolean>>({})
   const [exceptionsLoading, setExceptionsLoading] = useState(false)
+  // Quais módulos pai estão expandidos (mostrando seus sub-módulos)
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+
+  function toggleExpanded(mod: string) {
+    setExpandedModules((prev) => {
+      if (prev.has(mod)) {
+        const next = new Set(prev)
+        next.delete(mod)
+        return next
+      }
+      return new Set([...prev, mod])
+    })
+  }
 
   const fetchExceptions = useCallback(async () => {
     setExceptionsLoading(true)
@@ -292,13 +305,36 @@ export function UserEditModal({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-                        {ALL_MODULES.map((mod) => {
+                        {ALL_MODULES.flatMap((mod) => {
                           const exc = getException(mod)
                           const base = basePerms[mod] ?? false
-                          return (
+                          const submodules = SUBMODULE_MAP[mod]
+                          const hasSubmodules = submodules !== undefined
+                          const isExpanded = expandedModules.has(mod)
+
+                          const rows = [
                             <tr key={mod} className="text-xs">
                               <td className="py-2 pr-4 font-medium text-gray-700 dark:text-stone-300">
-                                {MODULE_LABELS[mod] ?? mod}
+                                <div className="flex items-center gap-1">
+                                  {hasSubmodules ? (
+                                    <button
+                                      onClick={() => toggleExpanded(mod)}
+                                      className="inline-flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                                      title={isExpanded ? "Recolher sub-módulos" : "Expandir sub-módulos"}
+                                      aria-label={isExpanded ? "Recolher sub-módulos" : "Expandir sub-módulos"}
+                                      aria-expanded={isExpanded}
+                                    >
+                                      <span
+                                        className={`inline-block transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                      >
+                                        ▶
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <span className="inline-block w-4" aria-hidden="true" />
+                                  )}
+                                  <span>{MODULE_LABELS[mod] ?? mod}</span>
+                                </div>
                               </td>
                               <td className="py-2 pr-4 text-gray-400 dark:text-stone-500">
                                 {base ? "✓ Acesso" : "✗ Sem acesso"}
@@ -347,8 +383,73 @@ export function UserEditModal({
                                   )}
                                 </div>
                               </td>
-                            </tr>
-                          )
+                            </tr>,
+                          ]
+
+                          if (hasSubmodules && isExpanded) {
+                            for (const [subKey, subLabel] of Object.entries(submodules)) {
+                              const subExc = getException(subKey)
+                              // Herdado do módulo pai quando não há exceção explícita no sub-módulo.
+                              const subInheritedBase = base
+                              rows.push(
+                                <tr key={subKey} className="bg-gray-50/40 text-xs dark:bg-stone-800/30">
+                                  <td className="py-2 pr-4 pl-8 text-gray-600 dark:text-stone-400">
+                                    <span className="mr-1 text-gray-400 dark:text-stone-500">↳</span>
+                                    {subLabel}
+                                  </td>
+                                  <td className="py-2 pr-4 text-gray-400 dark:text-stone-500">
+                                    {subInheritedBase ? "✓ Acesso" : "✗ Sem acesso"}
+                                  </td>
+                                  <td className="py-2 pr-4">
+                                    {subExc ? (
+                                      subExc.can_access ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
+                                          + Acesso forçado
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                                          − Acesso bloqueado
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span className="text-gray-400 dark:text-stone-500">↳ Herdado do módulo</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleSetException(subKey, true)}
+                                        disabled={subExc?.can_access === true}
+                                        className="rounded px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-green-400 dark:hover:bg-green-500/10"
+                                        title="Forçar acesso"
+                                      >
+                                        + Forçar
+                                      </button>
+                                      <button
+                                        onClick={() => handleSetException(subKey, false)}
+                                        disabled={subExc?.can_access === false}
+                                        className="rounded px-1.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/10"
+                                        title="Bloquear acesso"
+                                      >
+                                        − Bloquear
+                                      </button>
+                                      {subExc && (
+                                        <button
+                                          onClick={() => handleRemoveException(subKey)}
+                                          className="rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                                          title="Remover exceção"
+                                        >
+                                          ×
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            }
+                          }
+
+                          return rows
                         })}
                       </tbody>
                     </table>

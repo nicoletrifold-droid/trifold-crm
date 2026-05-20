@@ -7,7 +7,7 @@ import { redirect } from "next/navigation"
 export default async function PersonalidadePage() {
   const user = await getServerUser()
 
-  if (!(await canAccess(user.id, user.orgId, "configuracoes"))) {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.personalidade"))) {
     redirect("/dashboard")
   }
 

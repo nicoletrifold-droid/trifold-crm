@@ -7,9 +7,9 @@ export default async function EmpresaPage() {
   const user = await getServerUser()
   const supabase = await createClient()
 
-  // Edição de dados da empresa — modelado como acesso ao módulo "sistema"
-  // (somente admin tem por padrão).
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
+  // Edição de dados da empresa — modelado como acesso ao sub-módulo
+  // "configuracoes.empresa" (herda de "configuracoes" quando sem exceção).
+  const isAdmin = await canAccess(user.id, user.orgId, "configuracoes.empresa")
 
   const { data: org } = await supabase
     .from("organizations")

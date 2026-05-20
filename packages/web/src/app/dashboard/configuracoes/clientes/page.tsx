@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 export default async function ClientesCRMPage() {
   const user = await getServerUser()
 
-  if (!(await canAccess(user.id, user.orgId, "configuracoes"))) {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.clientes"))) {
     redirect("/dashboard")
   }
 

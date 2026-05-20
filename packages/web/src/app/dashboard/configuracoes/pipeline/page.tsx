@@ -8,9 +8,9 @@ export default async function PipelineConfigPage() {
   const user = await getServerUser()
   const supabase = await createClient()
 
-  // Edição da configuração de pipeline — modelado como acesso ao módulo
-  // "sistema" (somente admin tem por padrão).
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
+  // Edição da configuração de pipeline — modelado como acesso ao sub-módulo
+  // "configuracoes.pipeline" (herda de "configuracoes" quando sem exceção).
+  const isAdmin = await canAccess(user.id, user.orgId, "configuracoes.pipeline")
 
   const { data: stages } = await supabase
     .from("kanban_stages")

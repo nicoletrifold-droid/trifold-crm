@@ -276,12 +276,43 @@ export async function getUserPermissions(
  * múltiplas chamadas dentro da mesma request não geram queries adicionais.
  *
  * Se o módulo não existir no mapa retornado, retorna `false` (default-deny).
+ *
+ * **Suporte a sub-módulos (Story 35-7):** Quando `module` contém `"."`
+ * (ex: `"configuracoes.clientes"`), a função consulta primeiro
+ * `user_permission_exceptions` diretamente para a chave exata do sub-módulo
+ * via `createAdminClient()` — esta query direta evita importação circular
+ * com `permissions-exceptions-actions.ts` (que importa de `permissions.ts`).
+ *
+ * Se não houver exceção explícita para o sub-módulo, herda a permissão do
+ * módulo pai (recursão para `canAccess(userId, orgId, parentModule)`).
  */
 export async function canAccess(
   userId: string,
   orgId: string,
   module: string
 ): Promise<boolean> {
+  const dotIndex = module.indexOf(".")
+  if (dotIndex !== -1) {
+    // Sub-módulo: consultar exceção explícita primeiro (query direta para
+    // evitar importação circular com permissions-exceptions-actions.ts).
+    const adminClient = createAdminClient()
+    const { data: excRow } = await adminClient
+      .from("user_permission_exceptions")
+      .select("can_access")
+      .eq("user_id", userId)
+      .eq("module", module)
+      .maybeSingle()
+
+    if (excRow !== null && excRow !== undefined) {
+      return (excRow as { can_access: boolean }).can_access
+    }
+
+    // Sem exceção explícita: herdar do módulo pai.
+    const parentModule = module.slice(0, dotIndex)
+    return canAccess(userId, orgId, parentModule)
+  }
+
+  // Módulo top-level: comportamento original.
   const perms = await getUserPermissions(userId, orgId)
   return perms[module] ?? false
 }

@@ -1,5 +1,7 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import { GoogleIntegrationCard } from "./google-integration-card"
 
@@ -44,6 +46,11 @@ function ConfigField({
 
 export default async function IntegracoesPage() {
   const user = await getServerUser()
+
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.integracoes"))) {
+    redirect("/dashboard")
+  }
+
   const supabase = await createClient()
 
   const { data: org } = await supabase

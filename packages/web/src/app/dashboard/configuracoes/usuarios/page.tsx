@@ -9,7 +9,7 @@ import { UserEditModal } from "@web/components/admin/user-edit-modal"
 export default async function UsuariosPage() {
   const user = await getServerUser()
 
-  if (!(await canAccess(user.id, user.orgId, "configuracoes"))) {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.usuarios"))) {
     redirect("/dashboard")
   }
 

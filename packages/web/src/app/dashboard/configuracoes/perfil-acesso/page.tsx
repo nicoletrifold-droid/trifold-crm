@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { getServerUser } from "@web/lib/auth"
 import {
+  canAccess,
   getOrgPermissionsMatrix,
   getOrgRoles,
   ALL_MODULES,
@@ -59,7 +60,7 @@ async function ProfileStats({ orgId }: { orgId: string }) {
 export default async function PerfilAcessoPage() {
   const user = await getServerUser()
 
-  if (user.role !== "admin") {
+  if (!(await canAccess(user.id, user.orgId, "configuracoes.perfil-acesso"))) {
     redirect("/dashboard")
   }
 

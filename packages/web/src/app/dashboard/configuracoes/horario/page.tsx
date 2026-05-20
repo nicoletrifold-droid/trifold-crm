@@ -40,9 +40,9 @@ const DEFAULT_CONFIG: BusinessHoursConfig = {
 export default async function HorarioConfigPage() {
   const user = await getServerUser()
   const supabase = await createClient()
-  // Edição de horário de atendimento — modelado como acesso ao módulo
-  // "sistema" (somente admin tem por padrão).
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
+  // Edição de horário de atendimento — modelado como acesso ao sub-módulo
+  // "configuracoes.horario" (herda de "configuracoes" quando sem exceção).
+  const isAdmin = await canAccess(user.id, user.orgId, "configuracoes.horario")
 
   const { data: agentConfig } = await supabase
     .from("agent_config")
@@ -84,7 +84,7 @@ export default async function HorarioConfigPage() {
             const { getServerUser: getUser } = await import("@web/lib/auth")
             const { canAccess: canAccessFn } = await import("@web/lib/permissions")
             const currentUser = await getUser()
-            if (!(await canAccessFn(currentUser.id, currentUser.orgId, "sistema"))) return
+            if (!(await canAccessFn(currentUser.id, currentUser.orgId, "configuracoes.horario"))) return
 
             const isAlwaysOn = formData.get("always_on") === "on"
 
