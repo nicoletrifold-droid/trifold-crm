@@ -110,5 +110,20 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Auto-save to template bank — silent, never fails the request
+  const etapa = typeof body.description === "string" ? body.description.trim() : ""
+  if (etapa) {
+    try {
+      await adminSupabase
+        .from("obra_fase_templates")
+        .upsert(
+          { org_id: obra.org_id, nome: name, etapa },
+          { onConflict: "org_id,nome,etapa", ignoreDuplicates: true }
+        )
+    } catch {
+      // silent
+    }
+  }
+
   return NextResponse.json({ fase }, { status: 201 })
 }

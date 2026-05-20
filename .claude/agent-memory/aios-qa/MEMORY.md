@@ -64,3 +64,4 @@
 - [project_supabase_auth_cookie_not_httponly.md](project_supabase_auth_cookie_not_httponly.md) — sb-*-auth-token is NOT httpOnly in Trifold (Supabase SSR design); validate logout by cookie removal, not flag state
 - [project_epic_31_qa_patterns.md](project_epic_31_qa_patterns.md) — Epic 31 (Nicole Data Layer) QA patterns + lint web pré-existente conhecido (eslint-plugin-import no Next 16)
 - [project_story_31_2_gate_passed.md](project_story_31_2_gate_passed.md) — Story 31.2 (migration 043 CHECK constraint) PASS — 9 patterns para validar DDL JSON CHECK em produção (Management API + convalidated + post-rollback verify)
+- [project_epic_35_qa_patterns.md](project_epic_35_qa_patterns.md) — Epic 35 (Roles & Permissions) QA patterns: 17 módulos canônicos, fallback hardcoded espelhado, grep patterns p/ validar migração completa de guards
