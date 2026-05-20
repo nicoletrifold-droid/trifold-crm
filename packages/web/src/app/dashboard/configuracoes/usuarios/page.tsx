@@ -113,6 +113,7 @@ export default async function UsuariosPage() {
                         userName={u.name ?? ""}
                         userEmail={u.email}
                         isOwnAccount={u.id === user.id}
+                        orgId={user.orgId}
                       />
                       {u.id !== user.id && (
                         <ToggleActiveButton userId={u.id} isActive={u.is_active} />

@@ -26,57 +26,8 @@ import {
   CircleDot,
 } from "lucide-react"
 import type { OrgRole, PermissionsMatrix } from "@web/lib/permissions"
+import { MODULE_LABELS, MODULE_DESCRIPTIONS } from "@web/lib/permissions"
 import { deleteRole, updatePermission } from "./actions"
-
-// ============================================================================
-// Labels e helpers visuais
-// ============================================================================
-
-/**
- * Mapa de labels em português dos módulos do sistema (Story 35-3 AC 12).
- */
-const MODULE_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
-  pipeline: "Pipeline",
-  leads: "Leads",
-  imoveis: "Imóveis",
-  corretores: "Corretores",
-  conversas: "Conversas",
-  agenda: "Agenda",
-  alertas: "Alertas",
-  atividades: "Atividades",
-  analytics: "Analytics",
-  campanhas: "Campanhas",
-  treinamento: "Treinamento",
-  obras: "Obras",
-  brindes: "Brindes",
-  mensagens: "Mensagens",
-  configuracoes: "Configurações",
-  sistema: "Sistema",
-}
-
-/**
- * Descrições curtas para cada módulo — exibidas como subtítulo na linha.
- */
-const MODULE_DESCRIPTIONS: Record<string, string> = {
-  dashboard: "Visão geral e métricas",
-  pipeline: "Kanban de oportunidades",
-  leads: "Cadastro e qualificação",
-  imoveis: "Catálogo de propriedades",
-  corretores: "Equipe e performance",
-  conversas: "Mensagens e atendimento",
-  agenda: "Eventos e compromissos",
-  alertas: "Notificações e follow-ups",
-  atividades: "Histórico de ações",
-  analytics: "Relatórios avançados",
-  campanhas: "Marketing e automação",
-  treinamento: "Conteúdos e cursos",
-  obras: "Acompanhamento de obras",
-  brindes: "Presentes e brindes",
-  mensagens: "Comunicação interna",
-  configuracoes: "Preferências da org",
-  sistema: "Administração total",
-}
 
 /**
  * Mapeamento de ícone lucide-react para cada módulo. Espelha o sidebar.

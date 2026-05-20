@@ -1,22 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { ALL_MODULES, MODULE_LABELS, getUserExceptions, getUserPermissions, setUserException, removeUserException } from "@web/lib/permissions"
+
+type Exception = { module: string; can_access: boolean }
 
 export function UserEditModal({
   userId,
   userName,
   userEmail,
   isOwnAccount,
+  orgId,
 }: {
   userId: string
   userName: string
   userEmail: string
   isOwnAccount: boolean
+  orgId: string
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<"edit" | "password">("edit")
+  const [tab, setTab] = useState<"edit" | "password" | "exceptions">("edit")
   const [name, setName] = useState(userName)
   const [email, setEmail] = useState(userEmail)
   const [newPassword, setNewPassword] = useState("")
@@ -24,6 +29,30 @@ export function UserEditModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Estado da aba exceções
+  const [exceptions, setExceptions] = useState<Exception[]>([])
+  const [basePerms, setBasePerms] = useState<Record<string, boolean>>({})
+  const [exceptionsLoading, setExceptionsLoading] = useState(false)
+
+  const fetchExceptions = useCallback(async () => {
+    setExceptionsLoading(true)
+    try {
+      const [excs, perms] = await Promise.all([
+        getUserExceptions(userId),
+        getUserPermissions(userId, orgId),
+      ])
+      setExceptions(excs)
+      setBasePerms(perms)
+    } finally {
+      setExceptionsLoading(false)
+    }
+  }, [userId, orgId])
+
+  useEffect(() => {
+    if (tab !== "exceptions" || !open) return
+    fetchExceptions()
+  }, [tab, open, fetchExceptions])
 
   if (isOwnAccount) return null
 
@@ -38,10 +67,35 @@ export function UserEditModal({
     setConfirmPassword("")
   }
 
-  function switchTab(t: "edit" | "password") {
+  function switchTab(t: "edit" | "password" | "exceptions") {
     setTab(t)
     setError(null)
     setSuccess(null)
+  }
+
+  async function handleSetException(module: string, canAccess: boolean) {
+    const prev = [...exceptions]
+    // Update otimista
+    setExceptions((cur) => {
+      const filtered = cur.filter((e) => e.module !== module)
+      return [...filtered, { module, can_access: canAccess }]
+    })
+    const res = await setUserException(userId, module, canAccess)
+    if (!res.success) {
+      setExceptions(prev)
+      setError(res.error ?? "Erro ao salvar exceção.")
+    }
+  }
+
+  async function handleRemoveException(module: string) {
+    const prev = [...exceptions]
+    // Update otimista
+    setExceptions((cur) => cur.filter((e) => e.module !== module))
+    const res = await removeUserException(userId, module)
+    if (!res.success) {
+      setExceptions(prev)
+      setError(res.error ?? "Erro ao remover exceção.")
+    }
   }
 
   async function handleSaveEdit() {
@@ -99,6 +153,10 @@ export function UserEditModal({
     setConfirmPassword("")
   }
 
+  function getException(module: string): Exception | undefined {
+    return exceptions.find((e) => e.module === module)
+  }
+
   return (
     <>
       <button
@@ -113,7 +171,7 @@ export function UserEditModal({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70"
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <div className={`w-full rounded-xl bg-white p-6 shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800 ${tab === "exceptions" ? "max-w-2xl" : "max-w-md"}`}>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Editar usuário</h2>
               <button
@@ -144,6 +202,16 @@ export function UserEditModal({
                 }`}
               >
                 Redefinir senha
+              </button>
+              <button
+                onClick={() => switchTab("exceptions")}
+                className={`pb-2 text-sm font-medium transition-colors ${
+                  tab === "exceptions"
+                    ? "border-b-2 border-orange-500 text-orange-600 dark:text-orange-300"
+                    : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                }`}
+              >
+                Exceções
               </button>
             </div>
 
@@ -202,6 +270,92 @@ export function UserEditModal({
               </div>
             )}
 
+            {tab === "exceptions" && (
+              <div>
+                <p className="mb-3 text-xs text-gray-500 dark:text-stone-400">
+                  Exceções individuais sobrescrevem o perfil base deste usuário.
+                </p>
+                {exceptionsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+                  </div>
+                ) : (
+                  <div className="max-h-[380px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-white dark:bg-stone-900">
+                        <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-stone-500">
+                          <th className="pb-2 pr-4">Módulo</th>
+                          <th className="pb-2 pr-4">Perfil base</th>
+                          <th className="pb-2 pr-4">Exceção</th>
+                          <th className="pb-2">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
+                        {ALL_MODULES.map((mod) => {
+                          const exc = getException(mod)
+                          const base = basePerms[mod] ?? false
+                          return (
+                            <tr key={mod} className="text-xs">
+                              <td className="py-2 pr-4 font-medium text-gray-700 dark:text-stone-300">
+                                {MODULE_LABELS[mod] ?? mod}
+                              </td>
+                              <td className="py-2 pr-4 text-gray-400 dark:text-stone-500">
+                                {base ? "✓ Acesso" : "✗ Sem acesso"}
+                              </td>
+                              <td className="py-2 pr-4">
+                                {exc ? (
+                                  exc.can_access ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
+                                      + Acesso forçado
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                                      − Acesso bloqueado
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="text-gray-400 dark:text-stone-500">Herdado do perfil</span>
+                                )}
+                              </td>
+                              <td className="py-2">
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleSetException(mod, true)}
+                                    disabled={exc?.can_access === true}
+                                    className="rounded px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-green-400 dark:hover:bg-green-500/10"
+                                    title="Forçar acesso"
+                                  >
+                                    + Forçar
+                                  </button>
+                                  <button
+                                    onClick={() => handleSetException(mod, false)}
+                                    disabled={exc?.can_access === false}
+                                    className="rounded px-1.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/10"
+                                    title="Bloquear acesso"
+                                  >
+                                    − Bloquear
+                                  </button>
+                                  {exc && (
+                                    <button
+                                      onClick={() => handleRemoveException(mod)}
+                                      className="rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                                      title="Remover exceção"
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && (
               <p className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p>
             )}
@@ -209,25 +363,38 @@ export function UserEditModal({
               <p className="mt-3 text-sm text-green-600 dark:text-green-300">{success}</p>
             )}
 
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-              >
-                Fechar
-              </button>
-              <button
-                onClick={tab === "edit" ? handleSaveEdit : handleResetPassword}
-                disabled={loading}
-                className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60"
-              >
-                {loading
-                  ? "Salvando..."
-                  : tab === "edit"
-                    ? "Salvar"
-                    : "Redefinir"}
-              </button>
-            </div>
+            {tab !== "exceptions" && (
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={tab === "edit" ? handleSaveEdit : handleResetPassword}
+                  disabled={loading}
+                  className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60"
+                >
+                  {loading
+                    ? "Salvando..."
+                    : tab === "edit"
+                      ? "Salvar"
+                      : "Redefinir"}
+                </button>
+              </div>
+            )}
+
+            {tab === "exceptions" && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
