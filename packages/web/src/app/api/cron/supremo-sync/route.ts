@@ -10,11 +10,24 @@ const SUPREMO_API_TOKEN = process.env.SUPREMO_API_TOKEN
 const SUPREMO_ORG_ID = process.env.SUPREMO_ORG_ID
 const SUPREMO_BASE = "https://api.supremocrm.com.br/v1"
 
-// Supremo etapa → Trifold stage_id
-const ETAPA_TO_STAGE: Record<string, string> = {
-  "3": STAGE_IDS.novo,
-  "4": STAGE_IDS.fechou,
-  "5": STAGE_IDS.perdido,
+// Supremo id_situacao → Trifold stage_id (granular mapping)
+const SITUACAO_ID_TO_STAGE: Record<number, string> = {
+  11031: STAGE_IDS.novo,             // AGUARDANDO ATENDIMENTO
+  10496: STAGE_IDS.em_qualificacao,  // 1º CONTATO
+  11493: STAGE_IDS.qualificado,      // AGENDAMENTO
+  11477: STAGE_IDS.no_show,          // ATENDIMENTO
+  10260: STAGE_IDS.visitou,          // VISITA
+  10261: STAGE_IDS.negociando,       // PROPOSTA
+  10263: STAGE_IDS.fechou,           // FECHAMENTO
+  10688: STAGE_IDS.perdido,          // REPRESAMENTO
+  10262: STAGE_IDS.perdido,          // NÃO QUALIFICADO
+}
+
+function mapToStageId(etapa: string, idSituacao: number | null): string {
+  if (idSituacao && SITUACAO_ID_TO_STAGE[idSituacao]) return SITUACAO_ID_TO_STAGE[idSituacao]
+  if (etapa === "4") return STAGE_IDS.fechou
+  if (etapa === "5") return STAGE_IDS.perdido
+  return STAGE_IDS.novo
 }
 
 // Supremo nome_origem → lead_source enum
@@ -64,6 +77,7 @@ interface SupremoLead {
   nome_origem: string | null
   nome_campanha: string | null
   etapa: string
+  id_situacao: number | null
   interesses: string | null
   data_captura: string | null
   data_ultima_interacao: string | null
@@ -172,7 +186,7 @@ export async function GET(request: NextRequest) {
         const phone = normalizePhone(lead.telefone_pessoa)
         if (!phone) { skipped++; continue }
 
-        const stageId = ETAPA_TO_STAGE[lead.etapa] ?? STAGE_IDS.novo
+        const stageId = mapToStageId(lead.etapa, lead.id_situacao ?? null)
         const existing = bySupremoId.get(lead.id) ?? byPhone.get(phone) ?? null
 
         if (existing) {
