@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, count, error } = await query
-    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)
 
   if (error) {

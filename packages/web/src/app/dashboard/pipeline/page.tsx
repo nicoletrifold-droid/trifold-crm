@@ -128,7 +128,7 @@ export default async function PipelinePage({
       }
 
       const { data, count } = await query
-        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(PAGE_SIZE)
 
       const rawLeads = (data ?? []) as RawLead[]
