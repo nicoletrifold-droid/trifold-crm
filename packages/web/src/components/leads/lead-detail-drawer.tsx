@@ -64,6 +64,9 @@ interface DrawerState {
   showDetails: boolean
   taskForm: { open: boolean; title: string; action_type: string; due_at: string }
   taskSaving: boolean
+  noteInput: string
+  noteAction: string
+  noteSaving: boolean
 }
 
 type DrawerAction =
@@ -76,6 +79,10 @@ type DrawerAction =
   | { type: "TASK_ADDED"; task: Task }
   | { type: "TASK_TOGGLED"; taskId: string; completed: boolean }
   | { type: "TASK_DELETED"; taskId: string }
+  | { type: "NOTE_INPUT"; value: string }
+  | { type: "NOTE_ACTION"; value: string }
+  | { type: "NOTE_SAVING"; saving: boolean }
+  | { type: "NOTE_ADDED"; note: HistoryItem }
 
 function reducer(state: DrawerState, action: DrawerAction): DrawerState {
   switch (action.type) {
@@ -102,6 +109,19 @@ function reducer(state: DrawerState, action: DrawerAction): DrawerState {
       }
     case "TASK_DELETED":
       return { ...state, tasks: state.tasks.filter(t => t.id !== action.taskId) }
+    case "NOTE_INPUT":
+      return { ...state, noteInput: action.value }
+    case "NOTE_ACTION":
+      return { ...state, noteAction: action.value }
+    case "NOTE_SAVING":
+      return { ...state, noteSaving: action.saving }
+    case "NOTE_ADDED":
+      return {
+        ...state,
+        history: [action.note, ...state.history],
+        noteInput: "",
+        noteSaving: false,
+      }
     default:
       return state
   }
@@ -117,6 +137,9 @@ const initialState: DrawerState = {
   showDetails: false,
   taskForm: { open: false, title: "", action_type: "ligacao", due_at: "" },
   taskSaving: false,
+  noteInput: "",
+  noteAction: "ligacao",
+  noteSaving: false,
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -252,7 +275,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     return () => { cancelled = true }
   }, [leadId, supabase])
 
-  const { loading, lead, messages, history, tasks, showAllHistory, showDetails, taskForm, taskSaving } = state
+  const { loading, lead, messages, history, tasks, showAllHistory, showDetails, taskForm, taskSaving, noteInput, noteAction, noteSaving } = state
   const isCTWA = lead?.source === "whatsapp_click_to_ad"
   const PERDIDO_STAGE_IDS = [
     "00000000-0000-0000-0001-000000000008",
@@ -306,6 +329,25 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     })
     if (res.ok) window.location.reload()
     else alert("Erro ao marcar lead como perdido")
+  }
+
+  async function handleAddNote() {
+    const text = noteInput.trim()
+    if (!text || noteSaving) return
+    dispatch({ type: "NOTE_SAVING", saving: true })
+    const res = await fetch(`/api/leads/${leadId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: text, action_type: noteAction }),
+    })
+    if (res.ok) {
+      const json = (await res.json()) as { data: HistoryItem }
+      dispatch({ type: "NOTE_ADDED", note: json.data })
+    } else {
+      const err = await res.json().catch(() => ({ error: "Erro ao salvar" }))
+      alert(err.error ?? "Erro ao salvar nota")
+      dispatch({ type: "NOTE_SAVING", saving: false })
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────
@@ -570,6 +612,41 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               Histórico de Contatos{history.length > 0 ? ` (${history.length})` : ""}
             </h3>
+
+            {/* Input para adicionar nova nota — bloqueado se perdido */}
+            {!isPerdido && (
+              <div className="mb-4 rounded-lg border border-stone-200 bg-stone-50 p-2.5 dark:border-stone-700 dark:bg-stone-800/50">
+                <div className="flex gap-2">
+                  <select
+                    value={noteAction}
+                    onChange={e => dispatch({ type: "NOTE_ACTION", value: e.target.value })}
+                    disabled={noteSaving}
+                    className="rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    aria-label="Tipo de contato"
+                  >
+                    {Object.entries(actionLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Adicionar ao histórico... (Enter para salvar)"
+                    value={noteInput}
+                    onChange={e => dispatch({ type: "NOTE_INPUT", value: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        handleAddNote()
+                      }
+                    }}
+                    disabled={noteSaving}
+                    className="flex-1 rounded-md border border-stone-200 bg-white px-3 py-1.5 text-sm placeholder:text-stone-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder:text-stone-500"
+                  />
+                </div>
+                <p className="mt-1.5 text-[10px] text-stone-400 dark:text-stone-500">
+                  ⚠ Notas não podem ser editadas ou apagadas depois de enviadas
+                </p>
+              </div>
+            )}
+
             {history.length === 0 ? (
               <p className="text-xs text-stone-400 dark:text-stone-500">Nenhum contato registrado.</p>
             ) : (
