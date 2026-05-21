@@ -18,6 +18,7 @@ interface LeadQuickData {
   interest_level: string | null
   source: string | null
   channel: string | null
+  utm_source: string | null
   utm_campaign: string | null
   ai_summary: string | null
   lost_reason: string | null
@@ -221,6 +222,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             interest_level: (raw.interest_level as string | null) ?? null,
             source: (raw.source as string | null) ?? null,
             channel: (raw.channel as string | null) ?? null,
+            utm_source: (raw.utm_source as string | null) ?? null,
             utm_campaign: (raw.utm_campaign as string | null) ?? null,
             ai_summary: (raw.ai_summary as string | null) ?? null,
             lost_reason: (raw.lost_reason as string | null) ?? null,
@@ -464,6 +466,50 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ── ORIGEM DO LEAD ──────────────────────────────────────── */}
+          <div className="px-5 py-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+              Origem do Lead
+            </h3>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="shrink-0 text-stone-500 dark:text-stone-400">Origem</dt>
+                <dd className="break-words text-right font-medium text-stone-900 dark:text-stone-100">
+                  {lead.utm_source ?? (lead.source ? (
+                    {
+                      meta_ads: "Meta Ads",
+                      whatsapp_organic: "WhatsApp Orgânico",
+                      whatsapp_click_to_ad: "WhatsApp Click-to-Ad",
+                      website: "Website",
+                      referral: "Indicação",
+                      walk_in: "Walk-in",
+                      telegram: "Telegram",
+                      google_forms: "Google Forms",
+                      other: "Outro",
+                    }[lead.source] ?? lead.source
+                  ) : "-")}
+                </dd>
+              </div>
+              {lead.utm_campaign && (
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-stone-500 dark:text-stone-400">Campanha</dt>
+                  <dd className="break-words text-right text-stone-900 dark:text-stone-100">
+                    {lead.utm_campaign}
+                  </dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-3">
+                <dt className="shrink-0 text-stone-500 dark:text-stone-400">Data captura</dt>
+                <dd className="text-right font-medium text-stone-900 dark:text-stone-100">
+                  {new Date(lead.created_at).toLocaleString("pt-BR", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </dd>
+              </div>
+            </dl>
           </div>
 
           {/* ── TAREFAS ─────────────────────────────────────────────────── */}
@@ -714,9 +760,6 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             </button>
             {showDetails && (
               <dl className="mt-3 space-y-2 text-sm">
-                {isCTWA && lead.utm_campaign && (
-                  <div className="flex justify-between"><dt className="text-stone-500">Campanha</dt><dd className="text-right max-w-[60%] truncate font-medium text-stone-900 dark:text-stone-100">{lead.utm_campaign}</dd></div>
-                )}
                 {lead.channel && <div className="flex justify-between"><dt className="text-stone-500">Canal</dt><dd className="font-medium text-stone-900 dark:text-stone-100">{lead.channel}</dd></div>}
                 {lead.preferred_bedrooms != null && <div className="flex justify-between"><dt className="text-stone-500">Quartos</dt><dd className="font-medium text-stone-900 dark:text-stone-100">{lead.preferred_bedrooms}</dd></div>}
                 {lead.preferred_floor && <div className="flex justify-between"><dt className="text-stone-500">Andar</dt><dd className="font-medium text-stone-900 dark:text-stone-100">{lead.preferred_floor}</dd></div>}

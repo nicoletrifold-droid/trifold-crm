@@ -216,6 +216,7 @@ export async function GET(request: NextRequest) {
             channel: "whatsapp",
             stage_id: stageId,
             source: mapSource(lead.nome_origem),
+            utm_source: lead.nome_origem ?? null, // preserva nome original (ex: "Instagram Patrocinado")
             utm_campaign: lead.nome_campanha ?? null,
             ai_summary: lead.interesses ?? null,
             is_active: true,
