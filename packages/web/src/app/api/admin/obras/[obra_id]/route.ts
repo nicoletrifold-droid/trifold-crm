@@ -90,6 +90,9 @@ export async function PATCH(
   if ("expected_delivery_date" in body) {
     updates.expected_delivery_date = body.expected_delivery_date ?? null
   }
+  if (typeof body.progress_pct === "number") {
+    updates.progress_pct = Math.max(0, Math.min(100, Math.round(body.progress_pct)))
+  }
 
   const { data: obra, error } = await supabase
     .from("obras")
