@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { ObraDetailTabs } from "./_components/obra-detail-tabs"
 import { ObraEditButton } from "./_components/obra-edit-button"
+import { ProgressInlineEdit } from "./_components/progress-inline-edit"
 
 const STATUS_LABEL: Record<string, string> = {
   em_andamento: "Em andamento",
@@ -175,20 +176,7 @@ export default async function ObraDetailPage({
           Informações
         </h2>
 
-        <div className="mb-4">
-          <div className="mb-1.5 flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-stone-400">Progresso geral</span>
-            <span className="font-medium text-gray-900 dark:text-stone-100">
-              {obra.progress_pct}%
-            </span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-stone-700">
-            <div
-              className="h-2 rounded-full bg-orange-500 transition-all"
-              style={{ width: `${obra.progress_pct}%` }}
-            />
-          </div>
-        </div>
+        <ProgressInlineEdit obraId={obra.id} value={obra.progress_pct} />
 
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
