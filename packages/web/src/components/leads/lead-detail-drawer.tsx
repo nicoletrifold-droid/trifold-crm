@@ -170,10 +170,8 @@ async function fetchLeadData(id: string) {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5)
 
-  const history = (historyRes.ok ? historyRes : null) ? [] : []
-  // Re-fetch directly from Supabase for history since we already have the client
-  const tasks: Task[] = tasksRes.ok ? ((await tasksRes.json()) as { data: Task[] }).data ?? [] : []
-  const historyItems = historyRes as HistoryItem[]
+  const tasks: Task[] = historyRes.ok ? ((await historyRes.json()) as { data: Task[] }).data ?? [] : []
+  const historyItems: HistoryItem[] = (tasksRes.data ?? []) as HistoryItem[]
 
   return { lead, messages: msgs, history: historyItems, tasks }
 }
