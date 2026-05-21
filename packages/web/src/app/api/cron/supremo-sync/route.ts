@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
             source: mapSource(lead.nome_origem),
             utm_campaign: lead.nome_campanha ?? null,
             ai_summary: lead.interesses ?? null,
-            is_active: lead.etapa !== "5",
+            is_active: true,
             supremo_id: lead.id,
             supremo_synced_at: now,
             ...(lead.data_captura ? { created_at: new Date(lead.data_captura).toISOString() } : {}),
