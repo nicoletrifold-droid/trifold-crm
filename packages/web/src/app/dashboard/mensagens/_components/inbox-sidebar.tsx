@@ -33,6 +33,7 @@ function formatPreview(msg: ClienteConversa["last_message"]): string {
   if (!msg) return "Sem mensagens"
   if (msg.message_type === "image") return "📷 Foto"
   if (msg.message_type === "audio") return "🎵 Áudio"
+  if (msg.message_type === "document") return `📎 ${msg.content ?? "Documento"}`
   const prefix = msg.sender_type === "equipe" ? "Você: " : ""
   const text = msg.content ?? ""
   return prefix + (text.length > 55 ? text.slice(0, 55) + "…" : text)
