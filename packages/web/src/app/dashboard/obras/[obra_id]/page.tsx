@@ -64,7 +64,7 @@ export default async function ObraDetailPage({
 
   const property = propertyRes?.data ?? null
 
-  const [fasesRes, fotosRes, documentosRes, clientesRes] =
+  const [fasesRes, fotosRes, documentosRes, clientesRes, msgClientesRes] =
     await Promise.all([
       supabase
         .from("obra_fases")
@@ -87,6 +87,11 @@ export default async function ObraDetailPage({
         .from("cliente_obras")
         .select("is_primary, numero_unidade, users(id, name, email)")
         .eq("obra_id", obra_id),
+      supabase
+        .from("obra_mensagens")
+        .select("cliente_id")
+        .eq("obra_id", obra_id)
+        .not("cliente_id", "is", null),
     ])
 
   const fases = fasesRes.data ?? []
@@ -106,6 +111,30 @@ export default async function ObraDetailPage({
       numero_unidade: row.numero_unidade ?? null,
     }
   })
+
+  // Incluir clientes que têm mensagens mas não estão em cliente_obras
+  // (ex: cliente removido do vínculo mas com histórico de conversa)
+  const msgIds = [
+    ...new Set(
+      (msgClientesRes.data ?? []).map((m) => m.cliente_id as string).filter(Boolean)
+    ),
+  ]
+  const missingIds = msgIds.filter((id) => !clientes.some((c) => c.id === id))
+  if (missingIds.length > 0) {
+    const { data: extraUsers } = await supabase
+      .from("users")
+      .select("id, name, email")
+      .in("id", missingIds)
+    for (const u of extraUsers ?? []) {
+      clientes.push({
+        id: u.id,
+        name: u.name ?? "",
+        email: u.email ?? "",
+        is_primary: false,
+        numero_unidade: null,
+      })
+    }
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
   const statusBadge = STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
