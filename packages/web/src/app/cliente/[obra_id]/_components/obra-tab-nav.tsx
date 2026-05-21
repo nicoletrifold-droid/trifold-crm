@@ -51,7 +51,8 @@ export function ObraTabNav({ obraId, unreadMensagens = 0 }: ObraTabNavProps) {
         {tabs.map(({ label, href, icon: Icon, exact }) => {
           const isActive = exact ? pathname === href : pathname.startsWith(href)
           const isChat = label === "Chat"
-          const badge = isChat && unreadMensagens > 0 ? unreadMensagens : 0
+          const onMensagensPage = pathname.startsWith(`/cliente/${obraId}/mensagens`)
+          const badge = isChat && !onMensagensPage && unreadMensagens > 0 ? unreadMensagens : 0
           return (
             <Link
               key={href}

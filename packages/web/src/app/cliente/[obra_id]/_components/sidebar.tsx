@@ -81,7 +81,8 @@ export function Sidebar({ obraId, userName, userEmail, unreadMensagens = 0 }: Si
           const to = href(obraId)
           const isActive = exact ? pathname === to : pathname.startsWith(to)
           const isMensagens = label === "Mensagens"
-          const badge = isMensagens && unreadMensagens > 0 ? unreadMensagens : 0
+          const onMensagensPage = pathname.startsWith(`/cliente/${obraId}/mensagens`)
+          const badge = isMensagens && !onMensagensPage && unreadMensagens > 0 ? unreadMensagens : 0
           return (
             <Link
               key={to}
