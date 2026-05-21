@@ -22,7 +22,6 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [status, setStatus] = useState("a_iniciar")
-  const [progressPct, setProgressPct] = useState(0)
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [saving, setSaving] = useState(false)
@@ -85,7 +84,6 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
           name: name.trim(),
           description: description.trim() || undefined,
           status,
-          progress_pct: progressPct,
           start_date: startDate || null,
           end_date: endDate || null,
         }),
@@ -97,7 +95,6 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
       setName("")
       setDescription("")
       setStatus("a_iniciar")
-      setProgressPct(0)
       setStartDate("")
       setEndDate("")
       router.refresh()
@@ -202,37 +199,19 @@ export function FaseCreateForm({ obraId }: FaseCreateFormProps) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
-              Progresso (%)
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={progressPct}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10)
-                setProgressPct(Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0)
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
-            />
-          </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">Status</label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
