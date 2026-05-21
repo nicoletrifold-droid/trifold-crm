@@ -98,6 +98,7 @@ export default async function PipelinePage({
         .select(LEADS_SELECT, { count: "exact" })
         .eq("is_active", true)
         .eq("stage_id", stage.id)
+        .is("lost_reason", null) // safeguard: leads marcados como perdidos não aparecem no kanban
 
       if (filters.property_id) {
         query = query.eq("property_interest_id", filters.property_id)
