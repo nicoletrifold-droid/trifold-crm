@@ -75,6 +75,10 @@ export async function POST(
 
   const VALID_STATUS = ["a_iniciar", "em_andamento", "pausada", "concluida", "pendente"]
   const status = VALID_STATUS.includes(body.status) ? body.status : "a_iniciar"
+  const progress_pct =
+    typeof body.progress_pct === "number"
+      ? Math.min(100, Math.max(0, body.progress_pct))
+      : 0
   const { data: maxFase } = await supabase
     .from("obra_fases")
     .select("order_index")
@@ -95,6 +99,7 @@ export async function POST(
       description: body.description ?? null,
       order_index,
       status,
+      progress_pct,
       start_date: body.start_date ?? null,
       end_date: body.end_date ?? null,
     })
