@@ -82,6 +82,13 @@ export function MensagensInbox({
 
   function handleSelect(conversa: ClienteConversa) {
     setSelectedConversa(conversa)
+    if (conversa.unread_count > 0) {
+      setConversas((prev) =>
+        prev.map((c) =>
+          c.conversa_id === conversa.conversa_id ? { ...c, unread_count: 0 } : c
+        )
+      )
+    }
   }
 
   function handleBack() {
