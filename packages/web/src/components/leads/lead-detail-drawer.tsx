@@ -160,6 +160,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     let cancelled = false
 
     async function load() {
+      // Primeiro: dispara sync de histórico em background (não bloqueia render).
+      // Endpoint usa throttle: se foi sincronizado nos últimos 15 min, retorna fresh.
+      const syncPromise = fetch(`/api/leads/${leadId}/sync-history`, { method: "POST" }).catch(() => null)
+
       const [leadRes, convResult, tasksRes, historyResult] = await Promise.all([
         fetch(`/api/leads/${leadId}`),
         supabase
@@ -219,6 +223,29 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
       const history = (historyResult.data ?? []) as HistoryItem[]
 
       dispatch({ type: "LOADED", lead, messages: msgs, history, tasks })
+
+      // Após o sync em background completar, recarrega tarefas e histórico se houve mudança
+      const syncResult = await syncPromise
+      if (cancelled) return
+      if (syncResult?.ok) {
+        const syncJson = await syncResult.json().catch(() => null) as { ok?: boolean; activitiesAdded?: number; tasksAdded?: number } | null
+        if (syncJson?.ok && ((syncJson.activitiesAdded ?? 0) > 0 || (syncJson.tasksAdded ?? 0) > 0)) {
+          const [tasksRes2, historyRes2] = await Promise.all([
+            fetch(`/api/leads/${leadId}/tasks`),
+            supabase
+              .from("activities")
+              .select("id, type, description, created_at, metadata")
+              .eq("lead_id", leadId)
+              .in("type", ["supremo_contact", "broker_note", "lead_lost"])
+              .order("created_at", { ascending: false })
+              .limit(50),
+          ])
+          if (cancelled) return
+          const tasks2: Task[] = tasksRes2.ok ? ((await tasksRes2.json()) as { data: Task[] }).data ?? [] : []
+          const history2 = (historyRes2.data ?? []) as HistoryItem[]
+          dispatch({ type: "LOADED", lead, messages: msgs, history: history2, tasks: tasks2 })
+        }
+      }
     }
 
     load()

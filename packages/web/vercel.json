@@ -78,7 +78,7 @@
     },
     {
       "path": "/api/cron/supremo-history-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 */2 * * *"
     }
   ]
 }
