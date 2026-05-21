@@ -36,9 +36,18 @@ export default async function MensagensPage({
     .eq("obra_id", obra_id)
     .order("created_at", { ascending: true })
 
-  const { data: mensagens } = userId
-    ? await mensagensQuery.eq("cliente_id", userId)
-    : await mensagensQuery
+  const [{ data: mensagens }] = await Promise.all([
+    userId ? mensagensQuery.eq("cliente_id", userId) : mensagensQuery,
+    userId
+      ? supabase
+          .from("obra_mensagens")
+          .update({ read_at: new Date().toISOString() })
+          .eq("obra_id", obra_id)
+          .eq("cliente_id", userId)
+          .eq("sender_type", "equipe")
+          .is("read_at", null)
+      : Promise.resolve(null),
+  ])
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 

@@ -49,9 +49,10 @@ interface SidebarProps {
   obraId: string
   userName: string
   userEmail: string
+  unreadMensagens?: number
 }
 
-export function Sidebar({ obraId, userName, userEmail }: SidebarProps) {
+export function Sidebar({ obraId, userName, userEmail, unreadMensagens = 0 }: SidebarProps) {
   const pathname = usePathname()
   const initials = userName
     .split(" ")
@@ -79,6 +80,8 @@ export function Sidebar({ obraId, userName, userEmail }: SidebarProps) {
         {NAV_ITEMS.map(({ label, href, icon: Icon, exact }) => {
           const to = href(obraId)
           const isActive = exact ? pathname === to : pathname.startsWith(to)
+          const isMensagens = label === "Mensagens"
+          const badge = isMensagens && unreadMensagens > 0 ? unreadMensagens : 0
           return (
             <Link
               key={to}
@@ -90,7 +93,12 @@ export function Sidebar({ obraId, userName, userEmail }: SidebarProps) {
               }`}
             >
               <Icon className={`h-[17px] w-[17px] flex-shrink-0 ${isActive ? "opacity-100" : "opacity-80"}`} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {badge > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-[#F27A5E]">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
             </Link>
           )
         })}

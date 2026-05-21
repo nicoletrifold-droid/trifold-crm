@@ -6,9 +6,10 @@ import { Home, Layers, Camera, FileText, MessageSquare } from "lucide-react"
 
 interface ObraTabNavProps {
   obraId: string
+  unreadMensagens?: number
 }
 
-export function ObraTabNav({ obraId }: ObraTabNavProps) {
+export function ObraTabNav({ obraId, unreadMensagens = 0 }: ObraTabNavProps) {
   const pathname = usePathname()
 
   const tabs = [
@@ -49,6 +50,8 @@ export function ObraTabNav({ obraId }: ObraTabNavProps) {
       <div className="mx-auto flex max-w-2xl">
         {tabs.map(({ label, href, icon: Icon, exact }) => {
           const isActive = exact ? pathname === href : pathname.startsWith(href)
+          const isChat = label === "Chat"
+          const badge = isChat && unreadMensagens > 0 ? unreadMensagens : 0
           return (
             <Link
               key={href}
@@ -66,7 +69,14 @@ export function ObraTabNav({ obraId }: ObraTabNavProps) {
                   className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-[#F27A5E]"
                 />
               )}
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {badge > 0 && (
+                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F27A5E] px-0.5 text-[9px] font-bold text-white">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </span>
               {label}
             </Link>
           )
