@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { notifyClientes } from "@web/lib/notificacoes"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "broker"]
+const ALLOWED_ROLES = ["admin", "supervisor", "broker", "obras"]
 
 export async function GET(
   req: NextRequest,
