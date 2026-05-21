@@ -105,6 +105,18 @@ export default async function PipelinePage({
       if (filters.broker_id) {
         query = query.eq("assigned_broker_id", filters.broker_id)
       }
+      if (filters.q) {
+        const term = filters.q.trim()
+        if (term) {
+          const digitsOnly = term.replace(/\D/g, "")
+          // Busca por nome OU por dígitos do telefone (se o termo contém números)
+          if (digitsOnly.length >= 3) {
+            query = query.or(`name.ilike.%${term}%,phone.ilike.%${digitsOnly}%`)
+          } else {
+            query = query.ilike("name", `%${term}%`)
+          }
+        }
+      }
       if (campaignLeadIds !== null) {
         if (campaignLeadIds.length === 0) {
           // Force empty result while keeping a valid query shape.
@@ -151,6 +163,19 @@ export default async function PipelinePage({
       {/* Filter Bar */}
       <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <form className="flex flex-wrap items-end gap-4">
+          <div className="min-w-[220px] flex-1">
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Buscar lead
+            </label>
+            <input
+              type="search"
+              name="q"
+              defaultValue={filters.q ?? ""}
+              placeholder="Nome ou telefone..."
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            />
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Empreendimento
@@ -228,7 +253,7 @@ export default async function PipelinePage({
             Filtrar
           </button>
 
-          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id) && (
+          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q) && (
             <Link
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
