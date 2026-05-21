@@ -107,20 +107,28 @@ export async function POST(
     )
   }
 
-  // Validar que cliente_id pertence à obra
-  const { data: vinculo } = await supabase
-    .from("cliente_obras")
-    .select("obra_id")
-    .eq("obra_id", obra_id)
-    .eq("user_id", clienteId)
+  // Validar que clienteId é um usuário válido na org
+  const { data: clienteUser } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", clienteId)
+    .eq("org_id", obra.org_id)
     .single()
 
-  if (!vinculo) {
+  if (!clienteUser) {
     return NextResponse.json(
-      { error: "Cliente não vinculado a esta obra" },
+      { error: "Cliente não encontrado nesta organização" },
       { status: 400 }
     )
   }
+
+  // Garantir vínculo cliente↔obra (upsert defensivo — restaura acesso ao portal se perdido)
+  await supabase
+    .from("cliente_obras")
+    .upsert(
+      { user_id: clienteId, obra_id, is_primary: true },
+      { onConflict: "user_id,obra_id", ignoreDuplicates: true }
+    )
 
   const { data: mensagem, error } = await supabase
     .from("obra_mensagens")
