@@ -33,6 +33,7 @@ export function ObraEditModal({ obra, onClose }: ObraEditModalProps) {
   const [deliveryDate, setDeliveryDate] = useState(
     obra.expected_delivery_date ?? ""
   )
+  const [progressPct, setProgressPct] = useState(obra.progress_pct)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,6 +51,7 @@ export function ObraEditModal({ obra, onClose }: ObraEditModalProps) {
           description: description.trim() || null,
           status,
           expected_delivery_date: deliveryDate || null,
+          progress_pct: progressPct,
         }),
       })
       if (!res.ok) {
@@ -119,6 +121,34 @@ export function ObraEditModal({ obra, onClose }: ObraEditModalProps) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-stone-300">
+              Progresso geral (%)
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={progressPct}
+                onChange={(e) => setProgressPct(Number(e.target.value))}
+                className="flex-1 accent-orange-500"
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={progressPct}
+                onChange={(e) =>
+                  setProgressPct(Math.max(0, Math.min(100, Number(e.target.value))))
+                }
+                className="w-16 rounded-lg border border-gray-300 px-2 py-2 text-center text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+              />
+              <span className="text-sm text-gray-500 dark:text-stone-400">%</span>
+            </div>
           </div>
 
           <div>
