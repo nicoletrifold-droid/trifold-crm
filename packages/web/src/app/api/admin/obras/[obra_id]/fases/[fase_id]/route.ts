@@ -52,6 +52,13 @@ export async function PATCH(
   if (ALLOWED_STATUS.includes(body.status)) {
     updates.status = body.status
   }
+  if (
+    typeof body.progress_pct === "number" &&
+    body.progress_pct >= 0 &&
+    body.progress_pct <= 100
+  ) {
+    updates.progress_pct = body.progress_pct
+  }
   if ("start_date" in body) updates.start_date = body.start_date ?? null
   if ("end_date" in body) updates.end_date = body.end_date ?? null
   if ("expected_start_date" in body) {
