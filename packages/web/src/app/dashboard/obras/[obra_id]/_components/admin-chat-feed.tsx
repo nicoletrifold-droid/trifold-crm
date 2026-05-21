@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
-import { Send, User } from "lucide-react"
+import { Paperclip, Send, User } from "lucide-react"
 
 interface Mensagem {
   id: string
@@ -101,6 +101,49 @@ function SignedImage({
   )
 }
 
+function SignedDocument({
+  storagePath,
+  bucket,
+  filename,
+}: {
+  storagePath: string
+  bucket: string
+  filename: string
+}) {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const supabase = createClient()
+      supabase.storage
+        .from(bucket)
+        .createSignedUrl(storagePath, 300)
+        .then(({ data }) => {
+          if (data) setUrl(data.signedUrl)
+        })
+    } catch {
+      // Supabase browser client unavailable
+    }
+  }, [storagePath, bucket])
+
+  if (!url)
+    return (
+      <span className="text-xs text-gray-500 dark:text-stone-400">Carregando documento...</span>
+    )
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={filename}
+      className="flex items-center gap-2 rounded-lg border border-current/20 bg-current/10 px-3 py-2 text-sm hover:opacity-80"
+    >
+      <span className="text-base">📎</span>
+      <span className="max-w-[180px] truncate font-medium">{filename}</span>
+    </a>
+  )
+}
+
 function AvatarCircle({ name, className }: { name: string; className?: string }) {
   const initials = name
     .split(" ")
@@ -142,6 +185,15 @@ function MensagemBubble({
     if (mensagem.message_type === "audio" && mensagem.storage_path) {
       return (
         <SignedAudio storagePath={mensagem.storage_path} bucket="obra-mensagens" />
+      )
+    }
+    if (mensagem.message_type === "document" && mensagem.storage_path) {
+      return (
+        <SignedDocument
+          storagePath={mensagem.storage_path}
+          bucket="obra-mensagens"
+          filename={mensagem.content ?? "Documento"}
+        />
       )
     }
     return null
@@ -265,6 +317,7 @@ export function AdminChatFeed({
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchMensagens = useCallback(
     async (clienteId: string) => {
@@ -381,6 +434,32 @@ export function AdminChatFeed({
     }
   }
 
+  async function handleFileUpload(file: File) {
+    if (!selectedClienteId) return
+    setError(null)
+    setSending(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("cliente_id", selectedClienteId)
+
+      const res = await fetch(
+        `/api/admin/obras/${obraId}/mensagens/upload`,
+        { method: "POST", body: formData }
+      )
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? "Erro ao enviar arquivo")
+      }
+      const { mensagem } = await res.json()
+      setMensagens((prev) => [...prev, mensagem])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao enviar arquivo")
+    } finally {
+      setSending(false)
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -458,6 +537,28 @@ export function AdminChatFeed({
           <div className="border-t border-gray-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
             {error && <p className="mb-2 text-xs text-red-600 dark:text-red-300">{error}</p>}
             <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending}
+                aria-label="Enviar foto ou documento"
+                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+              >
+                <Paperclip className="h-5 w-5" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    handleFileUpload(file)
+                    e.target.value = ""
+                  }
+                }}
+              />
               <textarea
                 ref={textareaRef}
                 value={text}

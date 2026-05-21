@@ -95,6 +95,42 @@ function SignedImage({ storagePath, bucket }: { storagePath: string; bucket: str
   )
 }
 
+function SignedDocument({
+  storagePath,
+  bucket,
+  filename,
+}: {
+  storagePath: string
+  bucket: string
+  filename: string
+}) {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.storage
+      .from(bucket)
+      .createSignedUrl(storagePath, 300)
+      .then(({ data }) => {
+        if (data) setUrl(data.signedUrl)
+      })
+  }, [storagePath, bucket])
+
+  if (!url) return <span className="text-xs text-stone-500">Carregando documento...</span>
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={filename}
+      className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
+    >
+      <span className="text-lg">📎</span>
+      <span className="max-w-[180px] truncate font-medium">{filename}</span>
+    </a>
+  )
+}
+
 function MensagemBubble({ mensagem }: { mensagem: Mensagem }) {
   const isCliente = mensagem.sender_type === "cliente"
 
@@ -119,6 +155,15 @@ function MensagemBubble({ mensagem }: { mensagem: Mensagem }) {
         <SignedAudio
           storagePath={mensagem.storage_path}
           bucket="obra-mensagens"
+        />
+      )
+    }
+    if (mensagem.message_type === "document" && mensagem.storage_path) {
+      return (
+        <SignedDocument
+          storagePath={mensagem.storage_path}
+          bucket="obra-mensagens"
+          filename={mensagem.content ?? "Documento"}
         />
       )
     }
@@ -236,7 +281,9 @@ export function ChatFeed({
     setError(null)
     setSending(true)
     try {
-      const type = file.type.startsWith("audio/") ? "audio" : "image"
+      const isAudio = file.type.startsWith("audio/")
+      const isImage = file.type.startsWith("image/")
+      const type = isAudio ? "audio" : isImage ? "image" : "document"
       const formData = new FormData()
       formData.append("file", file)
       formData.append("type", type)
@@ -311,7 +358,7 @@ export function ChatFeed({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending}
-            aria-label="Enviar foto ou áudio"
+            aria-label="Enviar foto, áudio ou documento"
             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-800 hover:text-white disabled:opacity-50"
           >
             <Paperclip className="h-5 w-5" />
@@ -319,7 +366,7 @@ export function ChatFeed({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,audio/*"
+            accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0]
