@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 
+const PERDIDO_STAGE_IDS = [
+  "00000000-0000-0000-0001-000000000008", // Represamento
+  "95327bd7-3e88-4038-aa16-250a74ab085c", // Não Qualificado
+]
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -30,6 +35,21 @@ export async function POST(
   const user = await getServerUser()
   const supabase = await createClient()
   const body = await req.json()
+
+  // Bloquear criação de tarefas em leads perdidos
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("stage_id")
+    .eq("id", id)
+    .eq("org_id", user.orgId)
+    .single()
+
+  if (lead && lead.stage_id && PERDIDO_STAGE_IDS.includes(lead.stage_id as string)) {
+    return NextResponse.json(
+      { error: "Não é possível criar tarefas em leads perdidos" },
+      { status: 400 }
+    )
+  }
 
   const { data, error } = await supabase
     .from("lead_tasks")

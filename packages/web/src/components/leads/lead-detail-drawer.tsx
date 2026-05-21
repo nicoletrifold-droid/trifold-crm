@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useRef } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
-import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock } from "lucide-react"
+import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle } from "lucide-react"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
 
@@ -220,6 +220,26 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
 
   const { loading, lead, messages, history, tasks, activeTab, taskForm, taskSaving } = state
   const isCTWA = lead?.source === "whatsapp_click_to_ad"
+  const PERDIDO_STAGE_IDS = [
+    "00000000-0000-0000-0001-000000000008",
+    "95327bd7-3e88-4038-aa16-250a74ab085c",
+  ]
+  const isPerdido = !!lead?.stage && PERDIDO_STAGE_IDS.includes(lead.stage.id)
+
+  async function handleMarkAsLost() {
+    const reason = window.prompt("Motivo da perda (será exibido no histórico do lead):")
+    if (reason === null) return
+    const res = await fetch(`/api/leads/${leadId}/mark-lost`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    })
+    if (res.ok) {
+      window.location.reload()
+    } else {
+      alert("Erro ao marcar lead como perdido")
+    }
+  }
 
   // ── Task actions ──────────────────────────────────────────────────────
 
@@ -453,6 +473,31 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 <div>Criado: {new Date(lead.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}</div>
                 <div>Atualizado: {new Date(lead.updated_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
               </div>
+
+              {/* Marcar como perdido / Estado perdido */}
+              {!isPerdido ? (
+                <div className="px-5 py-4">
+                  <button
+                    onClick={handleMarkAsLost}
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Marcar como Perdido
+                  </button>
+                </div>
+              ) : (
+                <div className="px-5 py-4">
+                  <div className="rounded-lg bg-red-50 p-3 dark:bg-red-500/10">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-300">Lead perdido</p>
+                        {lead.ai_summary && false /* placeholder */}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -514,8 +559,12 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           {/* ── TAB: Tarefas ──────────────────────────────────────────── */}
           {activeTab === "tarefas" && (
             <div className="px-5 py-4 space-y-4">
-              {/* Add task button */}
-              {!taskForm.open ? (
+              {/* Add task button — bloqueado se perdido */}
+              {isPerdido ? (
+                <div className="rounded-lg bg-stone-100 px-4 py-3 text-center text-sm text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                  Lead perdido — novas tarefas não podem ser criadas.
+                </div>
+              ) : !taskForm.open ? (
                 <button
                   onClick={() => dispatch({ type: "TASK_FORM_TOGGLE" })}
                   className="flex w-full items-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-sm text-stone-400 transition-colors hover:border-orange-300 hover:text-orange-500 dark:border-stone-700 dark:hover:border-orange-500/50 dark:hover:text-orange-400"

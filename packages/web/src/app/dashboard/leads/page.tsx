@@ -10,19 +10,26 @@ const PAGE_SIZE = 50
 function buildPageHref(
   targetPage: number,
   search?: string,
-  stageId?: string
+  stageId?: string,
+  view?: string
 ): string {
   const p = new URLSearchParams()
   p.set("page", String(targetPage))
   if (search) p.set("search", search)
   if (stageId) p.set("stage_id", stageId)
+  if (view) p.set("view", view)
   return `?${p.toString()}`
 }
+
+const PERDIDO_STAGE_IDS = [
+  "00000000-0000-0000-0001-000000000008", // Represamento
+  "95327bd7-3e88-4038-aa16-250a74ab085c", // Não Qualificado
+]
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; page?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; page?: string; view?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -32,6 +39,7 @@ export default async function LeadsPage({
   // capturado como acesso ao módulo "sistema" — somente admin tem por padrão.
   const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
+  const view = params.view === "perdidos" ? "perdidos" : "ativos"
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
   const offset = (page - 1) * PAGE_SIZE
 
@@ -39,7 +47,7 @@ export default async function LeadsPage({
     .from("leads")
     .select(
       `
-      id, name, phone, email, qualification_score, interest_level, updated_at, source,
+      id, name, phone, email, qualification_score, interest_level, updated_at, source, lost_reason,
       stage:kanban_stages(id, name, color),
       property_interest:properties!property_interest_id(id, name),
       broker:users!assigned_broker_id(id, name)
@@ -52,6 +60,17 @@ export default async function LeadsPage({
     .from("leads")
     .select("id", { count: "exact", head: true })
     .eq("is_active", true)
+
+  // Filtro por view: ativos exclui stages de perdido, perdidos só inclui
+  if (view === "perdidos") {
+    const inList = `(${PERDIDO_STAGE_IDS.join(",")})`
+    query = query.in("stage_id", PERDIDO_STAGE_IDS)
+    countQuery = countQuery.in("stage_id", PERDIDO_STAGE_IDS)
+    void inList
+  } else {
+    query = query.not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
+    countQuery = countQuery.not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
+  }
 
   if (params.search) {
     const orFilter = `name.ilike.%${params.search}%,phone.ilike.%${params.search}%`
@@ -66,9 +85,18 @@ export default async function LeadsPage({
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
 
-  const [leadsResult, countResult] = await Promise.all([query, countQuery])
+  const [leadsResult, countResult, perdidosCountResult] = await Promise.all([
+    query,
+    countQuery,
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .in("stage_id", PERDIDO_STAGE_IDS),
+  ])
   const leads = leadsResult.data
   const totalCount = countResult.count ?? 0
+  const perdidosCount = perdidosCountResult.count ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   return (
@@ -85,8 +113,33 @@ export default async function LeadsPage({
         )}
       </div>
 
+      {/* Tabs Ativos / Perdidos */}
+      <div className="flex gap-1 border-b border-stone-200 dark:border-stone-800">
+        <Link
+          href="/dashboard/leads"
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            view === "ativos"
+              ? "border-b-2 border-orange-500 text-orange-600 dark:text-orange-400"
+              : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+          }`}
+        >
+          Em atendimento
+        </Link>
+        <Link
+          href="/dashboard/leads?view=perdidos"
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            view === "perdidos"
+              ? "border-b-2 border-red-500 text-red-600 dark:text-red-400"
+              : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+          }`}
+        >
+          Perdidos ({perdidosCount})
+        </Link>
+      </div>
+
       <div>
         <form method="get" className="flex gap-2">
+          {view === "perdidos" && <input type="hidden" name="view" value="perdidos" />}
           <input
             type="text"
             name="search"
@@ -225,7 +278,7 @@ export default async function LeadsPage({
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (
               <Link
-                href={buildPageHref(page - 1, params.search, params.stage_id)}
+                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -244,7 +297,7 @@ export default async function LeadsPage({
             </span>
             {page < totalPages ? (
               <Link
-                href={buildPageHref(page + 1, params.search, params.stage_id)}
+                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Próxima <ChevronRight className="h-4 w-4" />
