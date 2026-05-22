@@ -34,7 +34,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { appUser } = auth
+  const { supabase, appUser } = auth
 
   const forbidden = requireRole(appUser, ["admin"])
   if (forbidden) return forbidden
@@ -46,7 +46,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nome, email, senha e perfil sao obrigatorios" }, { status: 400 })
   }
 
-  if (!["admin", "supervisor", "broker", "obras"].includes(role)) {
+  const { data: validRole } = await supabase
+    .from("roles")
+    .select("name")
+    .eq("org_id", appUser.org_id)
+    .eq("name", role)
+    .maybeSingle()
+
+  if (!validRole) {
     return NextResponse.json({ error: "Perfil invalido" }, { status: 400 })
   }
 

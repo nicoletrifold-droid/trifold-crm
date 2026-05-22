@@ -19,8 +19,16 @@ export async function PATCH(
   const body = await request.json()
   const publicUpdates: Record<string, unknown> = {}
 
-  if (body.role && ["admin", "supervisor", "broker", "obras"].includes(body.role)) {
-    publicUpdates.role = body.role
+  if (body.role) {
+    const { data: validRole } = await supabase
+      .from("roles")
+      .select("name")
+      .eq("org_id", appUser.org_id)
+      .eq("name", body.role)
+      .maybeSingle()
+    if (validRole) {
+      publicUpdates.role = body.role
+    }
   }
   if (body.is_active !== undefined) {
     publicUpdates.is_active = body.is_active

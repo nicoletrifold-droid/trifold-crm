@@ -2,18 +2,22 @@
 
 import { useRouter } from "next/navigation"
 
+type RoleOption = { name: string; label: string }
+
 export function RoleDropdown({
   userId,
   currentRole,
+  roles,
 }: {
   userId: string
   currentRole: string
+  roles: RoleOption[]
 }) {
   const router = useRouter()
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const newRole = e.target.value
-    if (!["admin", "supervisor", "broker", "obras"].includes(newRole)) return
+    if (!newRole) return
 
     await fetch(`/api/users/${userId}`, {
       method: "PATCH",
@@ -30,10 +34,11 @@ export function RoleDropdown({
       onChange={handleChange}
       className="rounded-md border border-stone-200 px-2 py-1 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
     >
-      <option value="admin">Admin</option>
-      <option value="supervisor">Supervisor</option>
-      <option value="broker">Corretor</option>
-      <option value="obras">Obras</option>
+      {roles.map((r) => (
+        <option key={r.name} value={r.name}>
+          {r.label}
+        </option>
+      ))}
     </select>
   )
 }

@@ -6,6 +6,16 @@ import Link from "next/link"
 import { RoleDropdown, ToggleActiveButton } from "@web/components/admin/role-dropdown"
 import { UserEditModal } from "@web/components/admin/user-edit-modal"
 
+const colorMap: Record<string, string> = {
+  purple: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
+  blue: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+  green: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300",
+  orange: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
+  red: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+  gray: "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200",
+}
+
 export default async function UsuariosPage() {
   const user = await getServerUser()
 
@@ -14,29 +24,30 @@ export default async function UsuariosPage() {
   }
 
   const supabase = await createClient()
-  // Admin powers intra-página: criar/editar usuários, mudar role, ativar/desativar.
-  // Modelado como acesso ao módulo "sistema" (somente admin tem por padrão).
   const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
-  const { data: users } = await supabase
-    .from("users")
-    .select("id, name, email, role, is_active, created_at, auth_id")
-    .eq("org_id", user.orgId)
-    .order("name")
+  const [{ data: users }, { data: orgRoles }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, name, email, role, is_active, created_at, auth_id")
+      .eq("org_id", user.orgId)
+      .order("name"),
+    supabase
+      .from("roles")
+      .select("id, name, label, color")
+      .eq("org_id", user.orgId)
+      .order("label"),
+  ])
 
-  const roleColors: Record<string, string> = {
-    admin: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
-    supervisor: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
-    broker: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
-    obras: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300",
-  }
+  const roles = orgRoles ?? []
 
-  const roleLabels: Record<string, string> = {
-    admin: "Admin",
-    supervisor: "Supervisor",
-    broker: "Corretor",
-    obras: "Obras",
-  }
+  const roleColors: Record<string, string> = Object.fromEntries(
+    roles.map((r) => [r.name, colorMap[r.color] ?? colorMap.gray])
+  )
+
+  const roleLabels: Record<string, string> = Object.fromEntries(
+    roles.map((r) => [r.name, r.label])
+  )
 
   return (
     <div className="space-y-6">
@@ -83,11 +94,11 @@ export default async function UsuariosPage() {
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">{u.email}</td>
                 <td className="px-6 py-4">
                   {isAdmin && u.id !== user.id ? (
-                    <RoleDropdown userId={u.id} currentRole={u.role} />
+                    <RoleDropdown userId={u.id} currentRole={u.role} roles={roles} />
                   ) : (
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        roleColors[u.role] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
+                        roleColors[u.role] ?? colorMap.gray
                       }`}
                     >
                       {roleLabels[u.role] ?? u.role}
@@ -139,4 +150,3 @@ export default async function UsuariosPage() {
     </div>
   )
 }
-
