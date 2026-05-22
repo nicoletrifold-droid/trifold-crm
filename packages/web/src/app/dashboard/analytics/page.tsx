@@ -66,9 +66,17 @@ export default async function AnalyticsPage({
     .eq("is_active", true)
     .order("name")
 
-  // Helper: aplica filtro de empreendimento se selecionado
-  const applyPropFilter = <T extends { eq: (col: string, val: string) => T }>(q: T): T =>
-    propertyId ? q.eq("property_interest_id", propertyId) : q
+  // Builders explícitos para evitar inferência recursiva do tipo Supabase
+  const totalQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true)
+  const todayQ = supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString())
+  const weekQ = supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString())
+  const monthQ = supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", monthStart.toISOString())
+  const lpYardenQ = supabase.from("leads").select("id", { count: "exact", head: true })
+    .gte("created_at", monthStart.toISOString())
+    .ilike("utm_campaign", "%LP Yarden%")
+  const lpVindQ = supabase.from("leads").select("id", { count: "exact", head: true })
+    .gte("created_at", monthStart.toISOString())
+    .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
 
   const [
     { count: totalLeads },
@@ -78,20 +86,12 @@ export default async function AnalyticsPage({
     { count: lpYardenCount },
     { count: lpVindCount },
   ] = await Promise.all([
-    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true)),
-    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString())),
-    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString())),
-    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", monthStart.toISOString())),
-    applyPropFilter(
-      supabase.from("leads").select("id", { count: "exact", head: true })
-        .gte("created_at", monthStart.toISOString())
-        .ilike("utm_campaign", "%LP Yarden%")
-    ),
-    applyPropFilter(
-      supabase.from("leads").select("id", { count: "exact", head: true })
-        .gte("created_at", monthStart.toISOString())
-        .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
-    ),
+    propertyId ? totalQ.eq("property_interest_id", propertyId) : totalQ,
+    propertyId ? todayQ.eq("property_interest_id", propertyId) : todayQ,
+    propertyId ? weekQ.eq("property_interest_id", propertyId) : weekQ,
+    propertyId ? monthQ.eq("property_interest_id", propertyId) : monthQ,
+    propertyId ? lpYardenQ.eq("property_interest_id", propertyId) : lpYardenQ,
+    propertyId ? lpVindQ.eq("property_interest_id", propertyId) : lpVindQ,
   ])
 
   // Quando filtra por empreendimento, faz queries diretas em vez de usar RPC
