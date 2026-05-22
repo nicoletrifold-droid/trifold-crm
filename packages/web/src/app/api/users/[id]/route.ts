@@ -20,7 +20,8 @@ export async function PATCH(
   const publicUpdates: Record<string, unknown> = {}
 
   if (body.role) {
-    const { data: validRole } = await supabase
+    const adminSupabase = createAdminClient()
+    const { data: validRole } = await adminSupabase
       .from("roles")
       .select("name")
       .eq("org_id", appUser.org_id)
@@ -28,6 +29,8 @@ export async function PATCH(
       .maybeSingle()
     if (validRole) {
       publicUpdates.role = body.role
+    } else {
+      return NextResponse.json({ error: "Perfil inválido" }, { status: 400 })
     }
   }
   if (body.is_active !== undefined) {
