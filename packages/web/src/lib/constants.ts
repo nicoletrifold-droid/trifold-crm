@@ -28,5 +28,7 @@ export const SOURCE_LABELS_SHORT: Record<string, string> = {
   website: 'Website',
   referral: 'Indicação',
   telegram: 'Telegram',
+  lp_yarden: 'Landing Page Yarden',
+  lp_vind: 'Landing Page Vind',
   other: 'Outro',
 };

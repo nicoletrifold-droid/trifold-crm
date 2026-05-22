@@ -57,6 +57,8 @@ export default async function AnalyticsPage() {
     { count: leadsWeek },
     { count: leadsMonth },
     { data: analytics, error: analyticsError },
+    { count: lpYardenCount },
+    { count: lpVindCount },
   ] = await Promise.all([
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true),
     supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()),
@@ -66,6 +68,17 @@ export default async function AnalyticsPage() {
       p_org_id: appUser.orgId,
       p_since: monthStart.toISOString(),
     }),
+    // Landing Pages: contagem do mês a partir de utm_campaign
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", monthStart.toISOString())
+      .ilike("utm_campaign", "%LP Yarden%"),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", monthStart.toISOString())
+      .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
   ])
 
   if (analyticsError) {
@@ -89,18 +102,34 @@ export default async function AnalyticsPage() {
     count: toCount(p.count),
   }))
 
-  const brokers = (summary?.by_broker ?? []).map((b) => ({
-    id: b.user_id,
-    name: b.name,
-    count: toCount(b.count),
-    avgScore: b.avg_score ?? 0,
-  }))
+  const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
+  const brokers = (summary?.by_broker ?? [])
+    .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()))
+    .map((b) => ({
+      id: b.user_id,
+      name: b.name,
+      count: toCount(b.count),
+      avgScore: b.avg_score ?? 0,
+    }))
 
   const sourceCountsRaw = summary?.source_counts ?? {}
   const sourceCounts: Record<string, number> = {}
   for (const [k, v] of Object.entries(sourceCountsRaw)) {
     sourceCounts[k] = toCount(v)
   }
+
+  // Landing Pages: extrai do utm_campaign e subtrai do "other"
+  const lpYarden = lpYardenCount ?? 0
+  const lpVind = lpVindCount ?? 0
+  if (lpYarden > 0) {
+    sourceCounts["lp_yarden"] = lpYarden
+    sourceCounts.other = Math.max(0, (sourceCounts.other ?? 0) - lpYarden)
+  }
+  if (lpVind > 0) {
+    sourceCounts["lp_vind"] = lpVind
+    sourceCounts.other = Math.max(0, (sourceCounts.other ?? 0) - lpVind)
+  }
+  if (sourceCounts.other === 0) delete sourceCounts.other
 
   const lostReasonsRaw = summary?.lost_reasons ?? {}
   const lostReasons: Record<string, number> = {}
