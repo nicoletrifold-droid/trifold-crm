@@ -68,6 +68,17 @@ function mapSource(origin: string | null): string {
   return SOURCE_MAP[origin.toLowerCase().trim()] ?? "other"
 }
 
+// Mapeia utm_campaign para property_interest_id baseado em palavras-chave
+const PROPERTY_VIND = "00000000-0000-0000-0004-000000000001"
+const PROPERTY_YARDEN = "00000000-0000-0000-0004-000000000002"
+function mapProperty(campaign: string | null): string | null {
+  if (!campaign) return null
+  const upper = campaign.toUpperCase()
+  if (upper.includes("VIND")) return PROPERTY_VIND
+  if (upper.includes("YARDEN")) return PROPERTY_YARDEN
+  return null
+}
+
 interface SupremoLead {
   id: number
   nome_pessoa: string | null
@@ -218,6 +229,7 @@ export async function GET(request: NextRequest) {
             source: mapSource(lead.nome_origem),
             utm_source: lead.nome_origem ?? null, // preserva nome original (ex: "Instagram Patrocinado")
             utm_campaign: lead.nome_campanha ?? null,
+            property_interest_id: mapProperty(lead.nome_campanha),
             ai_summary: lead.interesses ?? null,
             is_active: true,
             supremo_id: lead.id,

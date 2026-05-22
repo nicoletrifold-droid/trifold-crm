@@ -109,7 +109,9 @@ export default async function AnalyticsPage() {
   }
 
   const sourceLabels = SOURCE_LABELS_SHORT
-  const maxFunnelCount = Math.max(...stages.map((s) => s.count), 1)
+  // Escala raiz quadrada para diferenciar valores pequenos sem esmagar os grandes
+  const maxFunnelSqrt = Math.max(...stages.map((s) => Math.sqrt(s.count)), 1)
+  const firstStageCount = stages[0]?.count ?? 0
 
   return (
     <div className="space-y-6">
@@ -140,24 +142,53 @@ export default async function AnalyticsPage() {
 
       {/* Funnel */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Funil de Conversão</h2>
+        <div className="mb-4 flex items-end justify-between">
+          <h2 className="text-lg font-semibold dark:text-stone-100">Funil de Conversão</h2>
+          <p className="text-xs text-gray-500 dark:text-stone-400">% relativa à etapa inicial</p>
+        </div>
         <div className="space-y-2">
-          {stages.map((stage) => (
-            <div key={stage.id} className="flex items-center gap-3">
-              <span className="w-32 text-sm text-gray-600 dark:text-stone-300">{stage.name}</span>
-              <div className="flex-1">
-                <div
-                  className="h-6 rounded"
-                  style={{
-                    width: `${Math.max((stage.count / maxFunnelCount) * 100, 2)}%`,
-                    backgroundColor: stage.color,
-                    opacity: 0.8,
-                  }}
-                />
+          {stages.map((stage) => {
+            const widthPct = stage.count > 0
+              ? Math.max((Math.sqrt(stage.count) / maxFunnelSqrt) * 100, 4)
+              : 0
+            const conversionPct = firstStageCount > 0
+              ? (stage.count / firstStageCount) * 100
+              : 0
+            return (
+              <div key={stage.id} className="flex items-center gap-3">
+                <span className="w-32 shrink-0 text-sm text-gray-600 dark:text-stone-300">{stage.name}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="relative h-7 rounded bg-stone-100 dark:bg-stone-800/60">
+                    {stage.count > 0 && (
+                      <div
+                        className="absolute inset-y-0 left-0 flex items-center justify-end rounded px-2 transition-all"
+                        style={{
+                          width: `${widthPct}%`,
+                          backgroundColor: stage.color,
+                          opacity: 0.85,
+                        }}
+                      >
+                        {widthPct > 18 && (
+                          <span className="text-[11px] font-semibold text-white">
+                            {conversionPct.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {stage.count > 0 && widthPct <= 18 && (
+                      <span
+                        className="absolute inset-y-0 flex items-center text-[11px] font-medium text-stone-600 dark:text-stone-300"
+                        style={{ left: `calc(${widthPct}% + 6px)` }}
+                      >
+                        {conversionPct.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="w-12 shrink-0 text-right text-sm font-medium tabular-nums dark:text-stone-100">{stage.count}</span>
               </div>
-              <span className="w-10 text-right text-sm font-medium dark:text-stone-100">{stage.count}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
