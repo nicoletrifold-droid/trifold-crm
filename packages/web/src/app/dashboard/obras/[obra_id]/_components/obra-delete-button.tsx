@@ -114,14 +114,17 @@ export function ObraDeleteButton({ obraId, obraName }: ObraDeleteButtonProps) {
                 <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">
                   Para confirmar, digite o nome exato da obra:
                 </label>
-                <p className="mt-1 select-none rounded bg-gray-100 px-2 py-1 font-mono text-sm text-gray-800 dark:bg-stone-800 dark:text-stone-200">
+                <p className="mt-1 cursor-text rounded bg-gray-100 px-2 py-1 font-mono text-sm text-gray-800 dark:bg-stone-800 dark:text-stone-200">
                   {obraName}
+                </p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
+                  Selecione o nome acima e cole no campo abaixo.
                 </p>
                 <input
                   type="text"
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
-                  placeholder="Digite o nome da obra..."
+                  placeholder="Cole ou digite o nome da obra..."
                   disabled={loading}
                   className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                 />
