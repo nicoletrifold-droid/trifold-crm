@@ -24,7 +24,7 @@ export default async function DashboardPage() {
       .from("kanban_stages")
       .select("id, name, slug, color, position")
       .order("position"),
-    supabase.from("properties").select("id, name, slug, status, total_units, city").eq("is_active", true),
+    supabase.from("properties").select("id, name, slug, status, total_units, available_units, city").eq("is_active", true),
     supabase.rpc("get_dashboard_stage_counts", { p_org_id: appUser.orgId }),
   ])
 
@@ -120,6 +120,14 @@ export default async function DashboardPage() {
                 <p className="font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
                 <p className="text-sm text-gray-500 dark:text-stone-400">
                   {property.city} &middot; {property.total_units} unidades
+                  {property.available_units != null && (
+                    <>
+                      {" · "}
+                      <span className="font-medium text-emerald-600 dark:text-emerald-300">
+                        {property.available_units} disponíveis
+                      </span>
+                    </>
+                  )}
                 </p>
               </div>
               <span
