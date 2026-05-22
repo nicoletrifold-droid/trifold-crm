@@ -13,7 +13,8 @@ export function FotoDeleteButton({ obraId, fotoId }: FotoDeleteButtonProps) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
 
-  async function handleDelete() {
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
     if (deleting) return
     const confirmed = window.confirm(
       "Tem certeza que deseja excluir esta foto? Esta ação não pode ser desfeita."

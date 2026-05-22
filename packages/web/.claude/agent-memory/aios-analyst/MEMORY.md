@@ -1,0 +1,1 @@
+- [Sienge API — fontes oficiais](reference_sienge_api_docs.md) — links canônicos para autenticação, criação de usuário API, liberação de recursos e webhooks Sienge

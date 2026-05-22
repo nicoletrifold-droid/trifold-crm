@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { getRequestIp, logAudit } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ADMIN_ONLY = ["admin"]
 
 export async function GET(
   _req: Request,
@@ -24,7 +26,8 @@ export async function GET(
     )
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
-    .single()
+    .is("deleted_at", null)
+    .maybeSingle()
 
   if (!obra) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -66,10 +69,10 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("obras")
-    .select("id")
+    .select("id, name, status")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
-    .single()
+    .maybeSingle()
 
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -93,6 +96,9 @@ export async function PATCH(
   if (typeof body.progress_pct === "number") {
     updates.progress_pct = Math.max(0, Math.min(100, Math.round(body.progress_pct)))
   }
+  if ("deleted_at" in body && body.deleted_at === null && ADMIN_ONLY.includes(appUser.role)) {
+    updates.deleted_at = null
+  }
 
   const { data: obra, error } = await supabase
     .from("obras")
@@ -105,5 +111,87 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Differentiate obra.reativar (body.deleted_at === null) from obra.update
+  const isReativar =
+    "deleted_at" in body &&
+    body.deleted_at === null &&
+    ADMIN_ONLY.includes(appUser.role)
+
+  const action = isReativar ? "obra.reativar" : "obra.update"
+
+  const metadata: Record<string, unknown> = {}
+  if (
+    !isReativar &&
+    typeof updates.status === "string" &&
+    updates.status !== existing.status
+  ) {
+    metadata.field = "status"
+    metadata.from = existing.status
+    metadata.to = updates.status
+  }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action,
+    entity_type: "obra",
+    entity_id: obra.id,
+    entity_name: obra.name,
+    obra_id: obra.id,
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    ip_address: getRequestIp(req.headers),
+  })
+
   return NextResponse.json({ obra })
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ obra_id: string }> }
+) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  if (!ADMIN_ONLY.includes(appUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { obra_id } = await params
+
+  const { data: existing } = await supabase
+    .from("obras")
+    .select("id, name")
+    .eq("id", obra_id)
+    .eq("org_id", appUser.org_id)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const { error } = await supabase
+    .from("obras")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", obra_id)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "obra.delete",
+    entity_type: "obra",
+    entity_id: existing.id,
+    entity_name: existing.name,
+    obra_id: existing.id,
+    ip_address: getRequestIp(req.headers),
+  })
+
+  return NextResponse.json({ success: true })
 }

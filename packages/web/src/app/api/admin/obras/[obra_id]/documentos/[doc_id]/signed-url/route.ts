@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
-export async function DELETE(
-  req: NextRequest,
+export async function GET(
+  req: Request,
   { params }: { params: Promise<{ obra_id: string; doc_id: string }> }
 ) {
   const auth = await requireAuth()
@@ -18,42 +18,41 @@ export async function DELETE(
 
   const { obra_id, doc_id } = await params
 
-  const { data: documento } = await supabase
+  const { data: doc } = await supabase
     .from("obra_documentos")
     .select("id, name, filename, storage_path")
     .eq("id", doc_id)
     .eq("obra_id", obra_id)
     .eq("org_id", appUser.org_id)
-    .single()
+    .maybeSingle()
 
-  if (!documento) {
+  if (!doc) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  // Remove do Storage (idempotente — ignora erro se arquivo não existir)
-  await supabase.storage.from("obra-docs").remove([documento.storage_path])
+  const { data: signed, error } = await supabase.storage
+    .from("obra-docs")
+    .createSignedUrl(doc.storage_path, 3600)
 
-  const { error: dbError } = await supabase
-    .from("obra_documentos")
-    .delete()
-    .eq("id", doc_id)
-
-  if (dbError) {
-    return NextResponse.json({ error: dbError.message }, { status: 500 })
+  if (error || !signed?.signedUrl) {
+    return NextResponse.json(
+      { error: error?.message ?? "Erro ao gerar URL" },
+      { status: 500 }
+    )
   }
 
   void logAudit({
     org_id: appUser.org_id,
     user_id: appUser.id,
     user_name: appUser.name,
-    action: "documento.delete",
+    action: "documento.view",
     entity_type: "documento",
-    entity_id: documento.id,
-    entity_name: documento.name,
+    entity_id: doc.id,
+    entity_name: doc.name,
     obra_id,
-    metadata: { filename: documento.filename },
+    metadata: { filename: doc.filename },
     ip_address: getRequestIp(req.headers),
   })
 
-  return new NextResponse(null, { status: 204 })
+  return NextResponse.json({ url: signed.signedUrl })
 }

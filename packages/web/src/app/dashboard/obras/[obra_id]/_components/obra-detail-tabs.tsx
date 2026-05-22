@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { FotoUploadForm } from "./foto-upload-form"
 import { FotoDeleteButton } from "./foto-delete-button"
@@ -382,6 +382,39 @@ export function ObraDetailTabs({
   const [tab, setTab] = useState<Tab>("fases")
   const [addingEtapaToGroup, setAddingEtapaToGroup] = useState<string | null>(null)
 
+  // Documentos — visualização com signed URL
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null)
+  const [viewErrorDoc, setViewErrorDoc] = useState<{ docId: string; message: string } | null>(null)
+
+  async function handleViewDoc(docId: string) {
+    setViewingDocId(docId)
+    setViewErrorDoc(null)
+    try {
+      const res = await fetch(`/api/admin/obras/${obraId}/documentos/${docId}/signed-url`)
+      const data = (await res.json()) as { url?: string; error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao gerar link")
+      window.open(data.url, "_blank")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao gerar link"
+      setViewErrorDoc({ docId, message })
+      setTimeout(() => setViewErrorDoc(null), 4000)
+    } finally {
+      setViewingDocId(null)
+    }
+  }
+
+  // Fotos — lightbox
+  const [lightboxFoto, setLightboxFoto] = useState<Foto | null>(null)
+
+  useEffect(() => {
+    if (!lightboxFoto) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightboxFoto(null)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [lightboxFoto])
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "fases", label: `Fases (${fases.length})` },
     { key: "fotos", label: `Fotos (${fotos.length})` },
@@ -501,7 +534,8 @@ export function ObraDetailTabs({
                   return (
                     <div
                       key={foto.id}
-                      className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800"
+                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800"
+                      onClick={() => setLightboxFoto(foto)}
                     >
                       <div className="relative aspect-square w-full bg-gray-100 dark:bg-stone-800">
                         <Image
@@ -548,20 +582,38 @@ export function ObraDetailTabs({
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-stone-800">
                 {documentos.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="flex items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
-                        {doc.name}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-stone-400">
-                        {doc.category} · {formatBytes(doc.file_size_bytes)} ·{" "}
-                        {formatDate(doc.created_at)}
-                      </p>
+                  <div key={doc.id} className="py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
+                          {doc.name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-stone-400">
+                          {doc.category} · {formatBytes(doc.file_size_bytes)} ·{" "}
+                          {formatDate(doc.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-1">
+                        <button
+                          onClick={() => handleViewDoc(doc.id)}
+                          disabled={viewingDocId === doc.id}
+                          className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
+                          title="Visualizar documento"
+                        >
+                          {viewingDocId === doc.id ? (
+                            <span className="block h-4 w-4 animate-pulse rounded-full bg-gray-300 dark:bg-stone-600" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                        <DocDeleteButton obraId={obraId} docId={doc.id} />
+                      </div>
                     </div>
-                    <DocDeleteButton obraId={obraId} docId={doc.id} />
+                    {viewErrorDoc?.docId === doc.id && (
+                      <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                        {viewErrorDoc.message}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -585,6 +637,25 @@ export function ObraDetailTabs({
       {/* Clientes tab */}
       {tab === "clientes" && (
         <ClientesTab obraId={obraId} clientes={clientes} />
+      )}
+
+      {/* Lightbox de fotos */}
+      {lightboxFoto && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxFoto(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${supabaseUrl}/storage/v1/object/public/obra-fotos/${lightboxFoto.storage_path}`}
+            alt={lightboxFoto.caption ?? "Foto da obra"}
+            className="max-h-[90vh] max-w-[90vw] rounded object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {lightboxFoto.caption && (
+            <p className="mt-3 text-sm text-white/80">{lightboxFoto.caption}</p>
+          )}
+        </div>
       )}
     </div>
   )

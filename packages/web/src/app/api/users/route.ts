@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
+/**
+ * GET /api/users
+ *
+ * Lista usuários da org do usuário autenticado. Restrita a admin.
+ * Usado, p.ex., pelo select de "Usuário" na página de logs de auditoria.
+ *
+ * Retorna: { users: Array<{ id, name, email, role, is_active }> }
+ */
+export async function GET() {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  const forbidden = requireRole(appUser, ["admin"])
+  if (forbidden) return forbidden
+
+  const { data: users, error } = await supabase
+    .from("users")
+    .select("id, name, email, role, is_active")
+    .eq("org_id", appUser.org_id)
+    .order("name", { ascending: true })
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ users: users ?? [] })
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error

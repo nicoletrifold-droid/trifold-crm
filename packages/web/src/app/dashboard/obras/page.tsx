@@ -4,6 +4,7 @@ import { canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ObraCreateModal } from "./_components/obra-create-modal"
+import { ObraReativarButton } from "./_components/obra-reativar-button"
 
 const STATUS_LABEL: Record<string, string> = {
   em_andamento: "Em andamento",
@@ -40,11 +41,12 @@ export default async function ObrasPage() {
 
   const { data: obras } = await supabase
     .from("obras")
-    .select("id, name, status, progress_pct, expected_delivery_date")
+    .select("id, name, status, progress_pct, expected_delivery_date, deleted_at")
     .eq("org_id", user.orgId)
     .order("created_at", { ascending: false })
 
-  const list = obras ?? []
+  const ativas = (obras ?? []).filter((o) => !o.deleted_at)
+  const arquivadas = (obras ?? []).filter((o) => !!o.deleted_at)
 
   return (
     <div className="space-y-6">
@@ -52,9 +54,15 @@ export default async function ObrasPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Obras</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
-            {list.length}{" "}
-            {list.length === 1 ? "obra cadastrada" : "obras cadastradas"}
+            {ativas.length}{" "}
+            {ativas.length === 1 ? "obra cadastrada" : "obras cadastradas"}
           </p>
+          {arquivadas.length > 0 && (
+            <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">
+              {arquivadas.length}{" "}
+              {arquivadas.length === 1 ? "arquivada" : "arquivadas"}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {canManageSistema && (
@@ -81,7 +89,7 @@ export default async function ObrasPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-            {list.map((obra) => {
+            {ativas.map((obra) => {
               const statusBadge =
                 STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
               const statusLabel = STATUS_LABEL[obra.status] ?? obra.status
@@ -124,7 +132,40 @@ export default async function ObrasPage() {
                 </tr>
               )
             })}
-            {list.length === 0 && (
+            {arquivadas.map((obra) => (
+              <tr key={obra.id} className="opacity-50">
+                <td className="px-6 py-4 font-medium text-gray-500 dark:text-stone-400">
+                  {obra.name}
+                </td>
+                <td className="px-6 py-4">
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-stone-700 dark:text-stone-400">
+                    Arquivada
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-24 rounded-full bg-gray-200 dark:bg-stone-700">
+                      <div
+                        className="h-1.5 rounded-full bg-gray-400"
+                        style={{ width: `${obra.progress_pct}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-400 dark:text-stone-500">
+                      {obra.progress_pct}%
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-400 dark:text-stone-500">
+                  {formatDeliveryDate(obra.expected_delivery_date)}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  {user.role === "admin" ? (
+                    <ObraReativarButton obraId={obra.id} obraName={obra.name} />
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+            {ativas.length === 0 && arquivadas.length === 0 && (
               <tr>
                 <td
                   colSpan={5}
