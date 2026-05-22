@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -150,6 +151,17 @@ export async function PATCH(
     )
   }
 
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "cliente.update",
+    entity_type: "cliente",
+    entity_id: id,
+    entity_name: data.nome,
+    ip_address: getRequestIp(request.headers),
+  })
+
   return NextResponse.json({ data })
 }
 
@@ -167,9 +179,10 @@ export async function DELETE(
   const { id } = await params
 
   // Confirmar existência do cliente na org antes de checar dependências
+  // (também captura `nome` para snapshot do audit log antes do delete)
   const { data: cliente, error: clienteErr } = await supabase
     .from("clientes")
-    .select("id")
+    .select("id, nome")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
@@ -226,6 +239,17 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "cliente.delete",
+    entity_type: "cliente",
+    entity_id: id,
+    entity_name: cliente.nome,
+    ip_address: getRequestIp(_request.headers),
+  })
 
   return new NextResponse(null, { status: 204 })
 }

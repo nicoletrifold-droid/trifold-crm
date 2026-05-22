@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -165,6 +166,17 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "cliente.create",
+    entity_type: "cliente",
+    entity_id: data.id,
+    entity_name: data.nome,
+    ip_address: getRequestIp(request.headers),
+  })
 
   return NextResponse.json({ data }, { status: 201 })
 }

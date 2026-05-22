@@ -20,6 +20,15 @@ const ACTION_LABELS: Record<string, string> = {
   "foto.delete": "Foto excluída",
   "session.login": "Login",
   "session.logout": "Logout",
+  "cliente.create": "Cliente criado",
+  "cliente.update": "Cliente atualizado",
+  "cliente.delete": "Cliente excluído",
+  "lead.create": "Lead criado",
+  "lead.update": "Lead atualizado",
+  "lead.delete": "Lead excluído",
+  "lead.stage_change": "Lead — etapa alterada",
+  "lead.mark_lost": "Lead marcado como perdido",
+  "permissao.update": "Permissão alterada",
 }
 
 interface AuditLogRow {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 export async function PATCH(
   request: NextRequest,
@@ -49,22 +50,24 @@ export async function PATCH(
   const needsAuthUpdate =
     hasNewPassword || typeof publicUpdates.email === "string"
 
-  // Fetch target user's auth_id only when Auth-level update is needed,
-  // scoped to same org to prevent cross-org access.
-  let targetAuthId: string | undefined
-  if (needsAuthUpdate) {
-    const { data: targetUser, error: fetchError } = await supabase
-      .from("users")
-      .select("auth_id")
-      .eq("id", id)
-      .eq("org_id", appUser.org_id)
-      .single()
+  // Snapshot ANTES de aplicar publicUpdates — necessário para:
+  //  1. capturar `auth_id` se houver Auth-level update;
+  //  2. computar valores anteriores de `role` / `is_active` para o audit log.
+  // Escopado pelo `org_id` para evitar acesso cross-org.
+  const { data: targetUserSnapshot, error: fetchError } = await supabase
+    .from("users")
+    .select("id, auth_id, name, role, is_active")
+    .eq("id", id)
+    .eq("org_id", appUser.org_id)
+    .single()
 
-    if (fetchError || !targetUser) {
-      return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
-    }
-    targetAuthId = targetUser.auth_id
+  if (fetchError || !targetUserSnapshot) {
+    return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
   }
+
+  const targetAuthId: string | undefined = needsAuthUpdate
+    ? (targetUserSnapshot.auth_id as string | undefined)
+    : undefined
 
   if (hasPublicUpdates) {
     const { error } = await supabase
@@ -96,6 +99,43 @@ export async function PATCH(
     if (authError) {
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
+  }
+
+  // Audit log: registra apenas se role/is_active efetivamente mudaram
+  // (atualização apenas de nome/email/senha NÃO gera evento de permissão).
+  const changes: Record<string, unknown>[] = []
+  if (
+    typeof publicUpdates.role === "string" &&
+    targetUserSnapshot.role !== publicUpdates.role
+  ) {
+    changes.push({
+      field: "role",
+      from: targetUserSnapshot.role,
+      to: publicUpdates.role,
+    })
+  }
+  if (
+    publicUpdates.is_active !== undefined &&
+    targetUserSnapshot.is_active !== publicUpdates.is_active
+  ) {
+    changes.push({
+      field: "is_active",
+      to: publicUpdates.is_active,
+    })
+  }
+
+  if (changes.length > 0) {
+    void logAudit({
+      org_id: appUser.org_id,
+      user_id: appUser.id,
+      user_name: appUser.name,
+      action: "permissao.update",
+      entity_type: "permissao",
+      entity_id: id,
+      entity_name: (targetUserSnapshot.name as string | null) ?? id,
+      metadata: changes.length === 1 ? changes[0] : { changes },
+      ip_address: getRequestIp(request.headers),
+    })
   }
 
   return NextResponse.json({ data: { ok: true } })
