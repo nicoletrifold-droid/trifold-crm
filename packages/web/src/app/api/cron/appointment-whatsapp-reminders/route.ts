@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
       metadata,
       org_id,
       lead:leads!lead_id(id, name, phone),
+      broker:users!broker_id(id, name, phone),
       property:properties!property_id(id, name)
     `)
     .eq("status", "scheduled")
@@ -42,12 +43,8 @@ export async function GET(request: NextRequest) {
   for (const appointment of appointments ?? []) {
     try {
       const lead = Array.isArray(appointment.lead) ? appointment.lead[0] : appointment.lead
+      const broker = Array.isArray(appointment.broker) ? appointment.broker[0] : appointment.broker
       const property = Array.isArray(appointment.property) ? appointment.property[0] : appointment.property
-
-      if (!lead?.phone || lead.phone.startsWith("tg:")) {
-        skipped++
-        continue
-      }
 
       const { data: waConfig } = await supabase
         .from("whatsapp_config")
@@ -67,27 +64,29 @@ export async function GET(request: NextRequest) {
         minute: "2-digit",
       })
 
-      const message = `Olá ${lead.name}! Lembramos que você tem uma visita agendada hoje às ${hora} no imóvel ${property?.name ?? "não informado"}. Em caso de dúvidas, entre em contato.`
+      const propertyName = property?.name ?? ""
 
-      const url = `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${waConfig.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: lead.phone,
-          type: "text",
-          text: { body: message },
-        }),
-        signal: AbortSignal.timeout(15000),
-      })
+      let appointmentSent = false
 
-      if (!res.ok) {
-        const errText = await res.text()
-        throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
+      // WhatsApp ao lead
+      if (lead?.phone && !lead.phone.startsWith("tg:")) {
+        const message = `Olá ${lead.name}! Lembramos que você tem uma visita ao decorado ${propertyName} agendada para hoje às ${hora}, aqui na Av. Nildo Ribeiro, 1337 - Maringá - PR. Te esperamos com muito carinho! Qualquer dúvida, é só chamar. 😊`
+        await sendWhatsApp(waConfig, lead.phone, message)
+        sent++
+        appointmentSent = true
+      }
+
+      // WhatsApp ao corretor
+      if (broker?.phone && !broker.phone.startsWith("tg:")) {
+        const message = `Olá ${broker.name}! Lembrete: visita com ${lead?.name ?? "Lead"} ao decorado ${propertyName} hoje às ${hora}, na Av. Nildo Ribeiro, 1337 - Maringá - PR. Até lá! ☕`
+        await sendWhatsApp(waConfig, broker.phone, message)
+        sent++
+        appointmentSent = true
+      }
+
+      if (!appointmentSent) {
+        skipped++
+        continue
       }
 
       const currentMetadata = (appointment.metadata as Record<string, unknown>) ?? {}
@@ -96,7 +95,6 @@ export async function GET(request: NextRequest) {
         .update({ metadata: { ...currentMetadata, whatsapp_reminded: true } })
         .eq("id", appointment.id)
 
-      sent++
     } catch (err) {
       console.error(`[WHATSAPP-REMINDERS] Erro no appointment ${appointment.id}:`, err)
       errors++
@@ -104,4 +102,31 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ sent, skipped, errors })
+}
+
+async function sendWhatsApp(
+  waConfig: { phone_number_id: string; access_token: string },
+  phone: string,
+  message: string
+): Promise<void> {
+  const url = `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${waConfig.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: phone,
+      type: "text",
+      text: { body: message },
+    }),
+    signal: AbortSignal.timeout(15000),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
+  }
 }
