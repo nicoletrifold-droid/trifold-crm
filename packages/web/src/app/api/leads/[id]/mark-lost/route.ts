@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 const REPRESAMENTO_STAGE = "00000000-0000-0000-0001-000000000008"
 const NAO_QUALIFICADO_STAGE = "95327bd7-3e88-4038-aa16-250a74ab085c"
@@ -15,7 +16,16 @@ export async function POST(
   const body = (await req.json()) as { reason?: string; type?: "represamento" | "nao_qualificado" }
 
   const reason = body.reason?.trim() || null
+  const type = body.type === "nao_qualificado" ? "nao_qualificado" : "represamento"
   const stageId = body.type === "nao_qualificado" ? NAO_QUALIFICADO_STAGE : REPRESAMENTO_STAGE
+
+  // Snapshot do nome do lead ANTES do update — necessário para o audit log
+  const { data: leadSnapshot } = await supabase
+    .from("leads")
+    .select("id, name")
+    .eq("id", id)
+    .eq("org_id", user.orgId)
+    .maybeSingle()
 
   // 1. Atualiza stage e lost_reason
   const { error: updateErr } = await supabase
@@ -44,6 +54,18 @@ export async function POST(
     user_id: user.id,
     type: "lead_lost",
     description: reason || "Lead marcado como perdido",
+  })
+
+  void logAudit({
+    org_id: user.orgId,
+    user_id: user.id,
+    user_name: user.name,
+    action: "lead.mark_lost",
+    entity_type: "lead",
+    entity_id: id,
+    entity_name: leadSnapshot?.name ?? id,
+    metadata: { reason, type },
+    ip_address: getRequestIp(req.headers),
   })
 
   return NextResponse.json({ ok: true })

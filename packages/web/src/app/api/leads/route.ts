@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -117,6 +118,17 @@ export async function POST(request: Request) {
       name: lead.name ?? null,
       phone: lead.phone ?? null,
       org_id: lead.org_id as string,
+    })
+
+    void logAudit({
+      org_id: appUser.org_id,
+      user_id: appUser.id,
+      user_name: appUser.name,
+      action: "lead.create",
+      entity_type: "lead",
+      entity_id: lead.id as string,
+      entity_name: (lead.name as string | null) ?? undefined,
+      ip_address: getRequestIp(request.headers),
     })
   }
 

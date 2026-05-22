@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 export async function POST(
   request: NextRequest,
@@ -95,6 +96,23 @@ export async function POST(
     phone: (updatedLead.phone as string | null) ?? null,
     org_id: appUser.org_id,
   }, { status: newStage.name })
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "lead.stage_change",
+    entity_type: "lead",
+    entity_id: id,
+    entity_name: (updatedLead.name as string | null) ?? undefined,
+    metadata: {
+      from_stage: fromStage
+        ? { id: fromStage.id, name: fromStage.name }
+        : null,
+      to_stage: { id: newStage.id, name: newStage.name },
+    },
+    ip_address: getRequestIp(request.headers),
+  })
 
   return NextResponse.json({ data: updatedLead })
 }

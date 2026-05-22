@@ -48,6 +48,15 @@ const ACTION_LABELS: Record<string, string> = {
   "foto.delete": "Foto excluída",
   "session.login": "Login",
   "session.logout": "Logout",
+  "cliente.create": "Cliente criado",
+  "cliente.update": "Cliente atualizado",
+  "cliente.delete": "Cliente excluído",
+  "lead.create": "Lead criado",
+  "lead.update": "Lead atualizado",
+  "lead.delete": "Lead excluído",
+  "lead.stage_change": "Lead — etapa alterada",
+  "lead.mark_lost": "Lead marcado como perdido",
+  "permissao.update": "Permissão alterada",
 }
 
 // Tipos de ação: cada tipo expõe um conjunto fixo de "ações específicas".
@@ -88,6 +97,33 @@ const ACTION_TYPES: Array<{
     prefix: "session.",
     entity_type: "session",
     actions: ["session.login", "session.logout"],
+  },
+  {
+    value: "cliente",
+    label: "Clientes",
+    prefix: "cliente.",
+    entity_type: "cliente",
+    actions: ["cliente.create", "cliente.update", "cliente.delete"],
+  },
+  {
+    value: "lead",
+    label: "Leads",
+    prefix: "lead.",
+    entity_type: "lead",
+    actions: [
+      "lead.create",
+      "lead.update",
+      "lead.delete",
+      "lead.stage_change",
+      "lead.mark_lost",
+    ],
+  },
+  {
+    value: "permissao",
+    label: "Permissões",
+    prefix: "permissao.",
+    entity_type: "permissao",
+    actions: ["permissao.update"],
   },
 ]
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 export async function GET(
   _req: NextRequest,
@@ -99,6 +100,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "lead.update",
+    entity_type: "lead",
+    entity_id: id,
+    entity_name: (lead.name as string | null) ?? undefined,
+    ip_address: getRequestIp(request.headers),
+  })
+
   return NextResponse.json({ data: lead })
 }
 
@@ -115,8 +127,27 @@ export async function DELETE(
   const forbidden = requireRole(appUser, ["admin"])
   if (forbidden) return forbidden
 
+  // Snapshot ANTES do softDelete — a função não retorna o nome.
+  const { data: leadSnapshot } = await supabase
+    .from("leads")
+    .select("id, name")
+    .eq("id", id)
+    .eq("org_id", appUser.org_id)
+    .maybeSingle()
+
   const result = await softDelete(supabase, "leads", id, appUser.org_id)
   if (result.error) return result.error
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "lead.delete",
+    entity_type: "lead",
+    entity_id: id,
+    entity_name: leadSnapshot?.name ?? id,
+    ip_address: getRequestIp(_req.headers),
+  })
 
   return NextResponse.json({ data: { message: "Lead deleted" } })
 }
