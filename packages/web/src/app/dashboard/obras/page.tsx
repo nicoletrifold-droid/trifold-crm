@@ -42,6 +42,7 @@ export default async function ObrasPage() {
     .from("obras")
     .select("id, name, status, progress_pct, expected_delivery_date")
     .eq("org_id", user.orgId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   const list = obras ?? []

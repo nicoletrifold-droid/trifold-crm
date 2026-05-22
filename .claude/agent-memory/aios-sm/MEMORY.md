@@ -51,13 +51,14 @@
 - Story 35-7 (Draft 2026-05-20): Sub-módulos em `configuracoes`. `SUBMODULE_MAP` em `permissions-modules.ts`. `canAccess` suporta "modulo.submodulo" com herança do pai. Guards de 8 páginas migrados. UI expansível na aba Exceções.
 - Story 36-1 (Done 2026-05-20): Banco de templates de fases. Migration 050 = `obra_fase_templates`. Auto-save no POST de fases. Picker inline no `fase-create-form.tsx`.
 - Story 36-2 (Draft 2026-05-20): Progresso geral automático de obras. Migration 051 = `recalculate_obra_progress()` + trigger `trigger_obra_fases_progress` em `obra_fases`. Remoção do input "Progresso (%)" em `obra-edit-modal.tsx` e do bloco `progress_pct` no PATCH handler. Executor: @data-engineer.
+- Story 36-3 (Draft 2026-05-22): Soft delete de obras. Migration 058 = `deleted_at timestamptz` em `obras`. DELETE handler admin-only. Modal de confirmação destrutiva com digitação do nome da obra. Filtro `deleted_at IS NULL` em listagem + detalhe (admin + portal). ObraDeleteButton renderizado apenas para role admin.
 
 ## Story Numbering Tracker
 - Next story after 21.3: 21.4 or novo epic
 - Epic 20: stories 20-1a, 20-1b, 20-2, 20-3 (Portal do Cliente)
 - Epic 33: 33.1 (schema) → 33.2 (API) → 33.3/33.4/33.5 (UI em paralelo). Migration 041 = clientes + vinculos; migration 042 = brindes_destinatarios.cliente_id (FK ON DELETE SET NULL).
 - Epic 35: stories 35-1 → 35-7 (Draft criada 2026-05-20). Próxima seria 35-8. Latest migration: 051_obra_progress_auto.sql (Story 36-2).
-- Epic 36: stories 36-1 (Done) + 36-2 (Draft criada 2026-05-20). Próxima seria 36-3.
+- Epic 36: stories 36-1 (Done) + 36-2 (Draft) + 36-3 (Draft criada 2026-05-22). Próxima seria 36-4.
 
 ## Epic 35 — Permissões: Padrões Críticos (2026-05-20)
 - Server actions de permissão ficam em `permissions-exceptions-actions.ts` (NÃO em `permissions.ts`) para evitar conflito `"use server"` no arquivo principal.

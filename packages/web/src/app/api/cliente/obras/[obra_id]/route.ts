@@ -16,7 +16,8 @@ export async function GET(
       "id, name, description, progress_pct, status, expected_delivery_date, current_phase_id"
     )
     .eq("id", obra_id)
-    .single()
+    .is("deleted_at", null)
+    .maybeSingle()
 
   if (!obra) {
     return Response.json({ error: "Not found" }, { status: 404 })

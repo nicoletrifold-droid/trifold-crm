@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { ObraDetailTabs } from "./_components/obra-detail-tabs"
 import { ObraEditButton } from "./_components/obra-edit-button"
+import { ObraDeleteButton } from "./_components/obra-delete-button"
 import { ProgressInlineEdit } from "./_components/progress-inline-edit"
 
 const STATUS_LABEL: Record<string, string> = {
@@ -49,7 +50,8 @@ export default async function ObraDetailPage({
     )
     .eq("id", obra_id)
     .eq("org_id", user.orgId)
-    .single()
+    .is("deleted_at", null)
+    .maybeSingle()
 
   if (!obra) {
     notFound()
@@ -166,6 +168,9 @@ export default async function ObraDetailPage({
               {statusLabel}
             </span>
             <ObraEditButton obra={obra} />
+            {user.role === "admin" && (
+              <ObraDeleteButton obraId={obra.id} obraName={obra.name} />
+            )}
           </div>
         </div>
       </div>
