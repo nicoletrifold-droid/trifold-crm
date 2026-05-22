@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { createClient } from "@web/lib/supabase/server"
+import { logAudit } from "@web/lib/audit"
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -36,9 +37,23 @@ export async function login(formData: FormData) {
   // Need both the public.users.id (for cliente_obras lookup) and role.
   const { data: appUser } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, name, role, org_id")
     .eq("auth_id", user.id)
     .single()
+
+  // Log session.login — após auth bem-sucedido, antes do redirect.
+  // Aguardamos para garantir que o insert complete antes do throw do redirect().
+  if (appUser?.id && appUser?.org_id) {
+    await logAudit({
+      org_id: appUser.org_id,
+      user_id: appUser.id,
+      user_name: appUser.name ?? "unknown",
+      action: "session.login",
+      entity_type: "session",
+      metadata: { role: appUser.role },
+      // ip_address omitido — server action não expõe request object
+    })
+  }
 
   let destination: string
 

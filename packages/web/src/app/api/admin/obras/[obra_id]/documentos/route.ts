@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
@@ -128,6 +129,22 @@ export async function POST(
 
   // Fire-and-forget: notificar clientes vinculados
   notifyClientes(obra_id, "novo_documento", obra.name).catch(() => {})
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "documento.upload",
+    entity_type: "documento",
+    entity_id: documento.id,
+    entity_name: documento.name,
+    obra_id,
+    metadata: {
+      filename: documento.filename,
+      file_size_bytes: documento.file_size_bytes,
+    },
+    ip_address: getRequestIp(req.headers),
+  })
 
   return NextResponse.json({ documento }, { status: 201 })
 }

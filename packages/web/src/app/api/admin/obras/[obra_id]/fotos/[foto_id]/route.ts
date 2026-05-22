@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { getRequestIp, logAudit } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ obra_id: string; foto_id: string }> }
 ) {
   const auth = await requireAuth()
@@ -20,7 +21,7 @@ export async function DELETE(
   // Busca a foto restringindo por obra_id e org_id (isolamento explícito)
   const { data: foto } = await supabase
     .from("obra_fotos")
-    .select("id, storage_path")
+    .select("id, caption, storage_path")
     .eq("id", foto_id)
     .eq("obra_id", obra_id)
     .eq("org_id", appUser.org_id)
@@ -44,6 +45,19 @@ export async function DELETE(
       { status: 500 }
     )
   }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "foto.delete",
+    entity_type: "foto",
+    entity_id: foto.id,
+    entity_name: foto.caption ?? undefined,
+    obra_id,
+    metadata: { storage_path: foto.storage_path },
+    ip_address: getRequestIp(req.headers),
+  })
 
   return new NextResponse(null, { status: 204 })
 }

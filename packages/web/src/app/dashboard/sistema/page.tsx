@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
-import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket } from "lucide-react"
+import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket, History } from "lucide-react"
 
 interface SystemEvent {
   id: string
@@ -139,6 +139,24 @@ export default function SistemaPage() {
               <span className="text-xs text-stone-400">{desc}</span>
             </Link>
           ))}
+        </div>
+      </div>
+
+      {/* Auditoria — Log de Atividades (Story 37-2) */}
+      <div className="rounded-lg border border-stone-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
+          <History className="h-4 w-4 text-orange-600" />
+          <h2 className="text-sm font-medium text-stone-700">Auditoria</h2>
+        </div>
+        <div className="p-4">
+          <Link
+            href="/dashboard/sistema/logs"
+            className="flex items-center gap-2 rounded-lg border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-orange-50"
+          >
+            <History className="h-4 w-4 text-orange-600" />
+            Log de Atividades
+            <span className="ml-auto text-xs text-stone-400">Auditoria completa →</span>
+          </Link>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { getRequestIp, logAudit } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 const ADMIN_ONLY = ["admin"]
@@ -68,7 +69,7 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("obras")
-    .select("id")
+    .select("id, name, status")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
@@ -110,11 +111,43 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Differentiate obra.reativar (body.deleted_at === null) from obra.update
+  const isReativar =
+    "deleted_at" in body &&
+    body.deleted_at === null &&
+    ADMIN_ONLY.includes(appUser.role)
+
+  const action = isReativar ? "obra.reativar" : "obra.update"
+
+  const metadata: Record<string, unknown> = {}
+  if (
+    !isReativar &&
+    typeof updates.status === "string" &&
+    updates.status !== existing.status
+  ) {
+    metadata.field = "status"
+    metadata.from = existing.status
+    metadata.to = updates.status
+  }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action,
+    entity_type: "obra",
+    entity_id: obra.id,
+    entity_name: obra.name,
+    obra_id: obra.id,
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    ip_address: getRequestIp(req.headers),
+  })
+
   return NextResponse.json({ obra })
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ obra_id: string }> }
 ) {
   const auth = await requireAuth()
@@ -129,7 +162,7 @@ export async function DELETE(
 
   const { data: existing } = await supabase
     .from("obras")
-    .select("id")
+    .select("id, name")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
     .is("deleted_at", null)
@@ -147,6 +180,18 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "obra.delete",
+    entity_type: "obra",
+    entity_id: existing.id,
+    entity_name: existing.name,
+    obra_id: existing.id,
+    ip_address: getRequestIp(req.headers),
+  })
 
   return NextResponse.json({ success: true })
 }

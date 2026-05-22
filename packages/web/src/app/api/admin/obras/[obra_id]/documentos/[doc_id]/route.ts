@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { getRequestIp, logAudit } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ obra_id: string; doc_id: string }> }
 ) {
   const auth = await requireAuth()
@@ -19,7 +20,7 @@ export async function DELETE(
 
   const { data: documento } = await supabase
     .from("obra_documentos")
-    .select("id, storage_path")
+    .select("id, name, filename, storage_path")
     .eq("id", doc_id)
     .eq("obra_id", obra_id)
     .eq("org_id", appUser.org_id)
@@ -40,6 +41,19 @@ export async function DELETE(
   if (dbError) {
     return NextResponse.json({ error: dbError.message }, { status: 500 })
   }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "documento.delete",
+    entity_type: "documento",
+    entity_id: documento.id,
+    entity_name: documento.name,
+    obra_id,
+    metadata: { filename: documento.filename },
+    ip_address: getRequestIp(req.headers),
+  })
 
   return new NextResponse(null, { status: 204 })
 }
