@@ -40,9 +40,17 @@ const toCount = (v: number | string | null | undefined): number => {
   return Number.isFinite(n) ? n : 0
 }
 
-export default async function AnalyticsPage() {
+const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
+
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ property_id?: string }>
+}) {
   const appUser = await getServerUser()
   const supabase = await createClient()
+  const params = await searchParams
+  const propertyId = params.property_id || null
 
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -51,71 +59,139 @@ export default async function AnalyticsPage() {
   weekStart.setHours(0, 0, 0, 0)
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
+  // Properties (sempre carregar para o seletor)
+  const { data: allProperties } = await supabase
+    .from("properties")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name")
+
+  // Helper: aplica filtro de empreendimento se selecionado
+  const applyPropFilter = <T extends { eq: (col: string, val: string) => T }>(q: T): T =>
+    propertyId ? q.eq("property_interest_id", propertyId) : q
+
   const [
     { count: totalLeads },
     { count: leadsToday },
     { count: leadsWeek },
     { count: leadsMonth },
-    { data: analytics, error: analyticsError },
     { count: lpYardenCount },
     { count: lpVindCount },
   ] = await Promise.all([
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true),
-    supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString()),
-    supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString()),
-    supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", monthStart.toISOString()),
-    supabase.rpc("get_analytics_summary", {
-      p_org_id: appUser.orgId,
-      p_since: monthStart.toISOString(),
-    }),
-    // Landing Pages: contagem do mês a partir de utm_campaign
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", monthStart.toISOString())
-      .ilike("utm_campaign", "%LP Yarden%"),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", monthStart.toISOString())
-      .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true)),
+    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString())),
+    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString())),
+    applyPropFilter(supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", monthStart.toISOString())),
+    applyPropFilter(
+      supabase.from("leads").select("id", { count: "exact", head: true })
+        .gte("created_at", monthStart.toISOString())
+        .ilike("utm_campaign", "%LP Yarden%")
+    ),
+    applyPropFilter(
+      supabase.from("leads").select("id", { count: "exact", head: true })
+        .gte("created_at", monthStart.toISOString())
+        .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
+    ),
   ])
 
-  if (analyticsError) {
-    console.error("[ANALYTICS] get_analytics_summary RPC failed", analyticsError)
-  }
+  // Quando filtra por empreendimento, faz queries diretas em vez de usar RPC
+  let stages: { id: string; name: string; slug: string; color: string; position: number; count: number }[] = []
+  let properties: { id: string; name: string; count: number }[] = []
+  let brokers: { id: string; name: string; count: number; avgScore: number }[] = []
+  const sourceCounts: Record<string, number> = {}
+  const lostReasons: Record<string, number> = {}
 
-  const summary = (analytics as AnalyticsSummary | null) ?? null
+  if (!propertyId) {
+    // SEM filtro — usa RPC
+    const { data: analytics, error: analyticsError } = await supabase.rpc("get_analytics_summary", {
+      p_org_id: appUser.orgId,
+      p_since: monthStart.toISOString(),
+    })
+    if (analyticsError) console.error("[ANALYTICS] get_analytics_summary RPC failed", analyticsError)
+    const summary = (analytics as AnalyticsSummary | null) ?? null
 
-  const stages = (summary?.funnel ?? []).map((s) => ({
-    id: s.stage_id,
-    name: s.name,
-    slug: s.slug,
-    color: s.color,
-    position: s.position,
-    count: toCount(s.count),
-  }))
+    stages = (summary?.funnel ?? []).map((s) => ({
+      id: s.stage_id, name: s.name, slug: s.slug, color: s.color, position: s.position, count: toCount(s.count),
+    }))
+    properties = (summary?.by_property ?? []).map((p) => ({ id: p.property_id, name: p.name, count: toCount(p.count) }))
+    brokers = (summary?.by_broker ?? [])
+      .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()))
+      .map((b) => ({ id: b.user_id, name: b.name, count: toCount(b.count), avgScore: b.avg_score ?? 0 }))
+    for (const [k, v] of Object.entries(summary?.source_counts ?? {})) sourceCounts[k] = toCount(v)
+    for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) lostReasons[k] = toCount(v)
+  } else {
+    // COM filtro — queries diretas
+    const [stagesData, leadsForAggData] = await Promise.all([
+      supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
+      supabase
+        .from("leads")
+        .select("stage_id, assigned_broker_id, source, lost_reason, broker:users!assigned_broker_id(id, name)")
+        .eq("org_id", appUser.orgId)
+        .eq("is_active", true)
+        .eq("property_interest_id", propertyId),
+    ])
 
-  const properties = (summary?.by_property ?? []).map((p) => ({
-    id: p.property_id,
-    name: p.name,
-    count: toCount(p.count),
-  }))
+    // Sources do mês (separado por período)
+    const monthSourcesData = await supabase
+      .from("leads")
+      .select("source")
+      .eq("org_id", appUser.orgId)
+      .eq("property_interest_id", propertyId)
+      .gte("created_at", monthStart.toISOString())
 
-  const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
-  const brokers = (summary?.by_broker ?? [])
-    .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()))
-    .map((b) => ({
-      id: b.user_id,
-      name: b.name,
-      count: toCount(b.count),
-      avgScore: b.avg_score ?? 0,
+    const allLeads = (leadsForAggData.data ?? []) as Array<{
+      stage_id: string | null
+      assigned_broker_id: string | null
+      source: string | null
+      lost_reason: string | null
+      broker: { id: string; name: string } | { id: string; name: string }[] | null
+    }>
+
+    // Funnel
+    const stageMap = new Map<string, number>()
+    for (const l of allLeads) { if (l.stage_id) stageMap.set(l.stage_id, (stageMap.get(l.stage_id) ?? 0) + 1) }
+    stages = (stagesData.data ?? []).map((s) => ({
+      id: s.id, name: s.name, slug: s.slug, color: s.color, position: s.position, count: stageMap.get(s.id) ?? 0,
     }))
 
-  const sourceCountsRaw = summary?.source_counts ?? {}
-  const sourceCounts: Record<string, number> = {}
-  for (const [k, v] of Object.entries(sourceCountsRaw)) {
-    sourceCounts[k] = toCount(v)
+    // Brokers
+    const brokerAgg = new Map<string, { name: string; count: number }>()
+    for (const l of allLeads) {
+      if (!l.assigned_broker_id) continue
+      const b = Array.isArray(l.broker) ? l.broker[0] : l.broker
+      if (!b?.name) continue
+      if (HIDDEN_BROKER_NAMES.has(b.name.toLowerCase().trim())) continue
+      const cur = brokerAgg.get(l.assigned_broker_id) ?? { name: b.name, count: 0 }
+      cur.count++
+      brokerAgg.set(l.assigned_broker_id, cur)
+    }
+    brokers = Array.from(brokerAgg.entries()).map(([id, v]) => ({ id, name: v.name, count: v.count, avgScore: 0 }))
+
+    // Sources (do mês)
+    for (const l of (monthSourcesData.data ?? []) as { source: string | null }[]) {
+      const k = l.source ?? "other"
+      sourceCounts[k] = (sourceCounts[k] ?? 0) + 1
+    }
+
+    // Lost reasons (todos perdidos do empreendimento)
+    for (const l of allLeads) {
+      if (l.lost_reason) {
+        lostReasons[l.lost_reason] = (lostReasons[l.lost_reason] ?? 0) + 1
+      }
+    }
+  }
+
+  // by_property aparece em "Leads por Empreendimento" — sempre mostra ambos sem filtrar
+  if (propertyId) {
+    // Carrega counts diretamente
+    const counts = await Promise.all((allProperties ?? []).map(async (p) => {
+      const { count } = await supabase
+        .from("leads").select("id", { count: "exact", head: true })
+        .eq("org_id", appUser.orgId).eq("is_active", true)
+        .eq("property_interest_id", p.id)
+      return { id: p.id, name: p.name, count: count ?? 0 }
+    }))
+    properties = counts
   }
 
   // Landing Pages: extrai do utm_campaign e subtrai do "other"
@@ -131,22 +207,57 @@ export default async function AnalyticsPage() {
   }
   if (sourceCounts.other === 0) delete sourceCounts.other
 
-  const lostReasonsRaw = summary?.lost_reasons ?? {}
-  const lostReasons: Record<string, number> = {}
-  for (const [k, v] of Object.entries(lostReasonsRaw)) {
-    lostReasons[k] = toCount(v)
-  }
-
   const sourceLabels = SOURCE_LABELS_SHORT
   // Escala raiz quadrada para diferenciar valores pequenos sem esmagar os grandes
   const maxFunnelSqrt = Math.max(...stages.map((s) => Math.sqrt(s.count)), 1)
 
+  const selectedPropertyName = propertyId
+    ? (allProperties ?? []).find((p) => p.id === propertyId)?.name ?? "Empreendimento"
+    : null
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Analytics</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
+          Analytics{selectedPropertyName && (
+            <span className="ml-2 text-base font-normal text-orange-600 dark:text-orange-300">
+              · {selectedPropertyName}
+            </span>
+          )}
+        </h1>
+        {/* Seletor de empreendimento */}
+        <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800">
+          <a
+            href="/dashboard/analytics"
+            className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
+              !propertyId
+                ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
+                : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+            }`}
+          >
+            Todos
+          </a>
+          {(allProperties ?? []).map((p) => (
+            <a
+              key={p.id}
+              href={`/dashboard/analytics?property_id=${p.id}`}
+              className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
+                propertyId === p.id
+                  ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
+                  : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+              }`}
+            >
+              {p.name}
+            </a>
+          ))}
+        </div>
+      </div>
 
       {/* Leads por Período — gráfico interativo com filtros (AC3-AC7) */}
-      <LeadsChart properties={properties.map((p) => ({ id: p.id, name: p.name }))} />
+      <LeadsChart
+        properties={(allProperties ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        initialPropertyId={propertyId ?? undefined}
+      />
 
       {/* Period Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

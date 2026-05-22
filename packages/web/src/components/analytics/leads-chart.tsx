@@ -129,14 +129,15 @@ function CustomTooltip({ active, payload, label, granularity }: TooltipProps) {
 
 interface Props {
   properties: Property[]
+  initialPropertyId?: string
 }
 
-export function LeadsChart({ properties }: Props) {
+export function LeadsChart({ properties, initialPropertyId }: Props) {
   const [granularity, setGranularity] = useState<Granularity>("day")
   const [preset, setPreset] = useState<Preset>("30d")
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
-  const [property, setProperty] = useState("")
+  const [property, setProperty] = useState(initialPropertyId ?? "")
   const [source, setSource] = useState("")
   const [data, setData] = useState<PeriodEntry[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
