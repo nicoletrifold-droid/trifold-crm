@@ -79,6 +79,14 @@
     {
       "path": "/api/cron/supremo-history-sync",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/appointment-email-reminders",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/appointment-whatsapp-reminders",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
