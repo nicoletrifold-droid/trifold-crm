@@ -17,9 +17,8 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("obras")
-    .select("id, name, status, progress_pct, expected_delivery_date")
+    .select("id, name, status, progress_pct, expected_delivery_date, deleted_at")
     .eq("org_id", appUser.org_id)
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   if (semPropriedade) {

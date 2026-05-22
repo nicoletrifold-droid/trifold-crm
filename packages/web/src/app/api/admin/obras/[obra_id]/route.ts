@@ -71,7 +71,7 @@ export async function PATCH(
     .select("id")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
-    .single()
+    .maybeSingle()
 
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -94,6 +94,9 @@ export async function PATCH(
   }
   if (typeof body.progress_pct === "number") {
     updates.progress_pct = Math.max(0, Math.min(100, Math.round(body.progress_pct)))
+  }
+  if ("deleted_at" in body && body.deleted_at === null && ADMIN_ONLY.includes(appUser.role)) {
+    updates.deleted_at = null
   }
 
   const { data: obra, error } = await supabase
