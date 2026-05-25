@@ -55,7 +55,7 @@ O perfil `obras` tem acesso operacional ao módulo de Obras (criado no Epic 25/S
 
 | Story | Título | Pontos | Status |
 |-------|--------|--------|--------|
-| 31.1 | DB Schema: Tabela de Aprovações de Uploads | 3 | Draft |
+| 31.1 | DB Schema: Tabela de Aprovações de Uploads | 3 | Ready for Review |
 | 31.2 | API: Upload com Pendência + Aprovação + Notificações | 5 | Draft |
 | 31.3 | UI: Painel de Aprovações e Indicadores de Status | 5 | Draft |
 
