@@ -637,9 +637,9 @@ export function ObraDetailTabs({
                           {meta.caption}
                         </p>
                       )}
-                      {isRejeitado && (item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao && (
+                      {isRejeitado && item.motivo_rejeicao && (
                         <p className="px-2 pb-1.5 text-[10px] text-red-600 dark:text-red-400">
-                          Motivo: {(item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao}
+                          Motivo: {item.motivo_rejeicao}
                         </p>
                       )}
                     </div>
@@ -743,9 +743,9 @@ export function ObraDetailTabs({
                               {meta.category} · {formatBytes(meta.file_size_bytes ?? null)}
                             </p>
                           )}
-                          {isRejeitado && (item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao && (
+                          {isRejeitado && item.motivo_rejeicao && (
                             <p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">
-                              Motivo: {(item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao}
+                              Motivo: {item.motivo_rejeicao}
                             </p>
                           )}
                         </div>

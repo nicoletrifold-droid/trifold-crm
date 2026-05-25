@@ -119,6 +119,7 @@ export default async function ObraDetailPage({
             .eq("obra_id", obra_id)
             .eq("org_id", user.orgId)
             .eq("enviado_por", user.id)
+            .in("status", ["pendente", "rejeitado"])
             .order("created_at", { ascending: false }),
     ])
 

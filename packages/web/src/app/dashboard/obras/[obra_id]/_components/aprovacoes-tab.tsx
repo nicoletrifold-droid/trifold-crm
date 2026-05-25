@@ -13,6 +13,7 @@ export interface AprovacaoItem {
   enviado_por_nome: string
   created_at: string
   status: string
+  motivo_rejeicao?: string | null
 }
 
 interface AprovacoesTabProps {
