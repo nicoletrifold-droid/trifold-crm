@@ -22,6 +22,16 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName)
+  const keys = await cache.keys()
+  if (keys.length > maxEntries) {
+    await Promise.all(
+      keys.slice(0, keys.length - maxEntries).map((k) => cache.delete(k))
+    )
+  }
+}
+
 const offlineFallback = (page) =>
   caches.match(page).then(
     (r) => r ?? new Response('Offline', { status: 503 })
@@ -66,7 +76,9 @@ self.addEventListener('fetch', (event) => {
       caches.open(STATIC_CACHE).then(async (cache) => {
         const cached = await cache.match(request)
         const networkFetch = fetch(request).then((resp) => {
-          if (resp.ok) cache.put(request, resp.clone())
+          if (resp.ok) {
+            cache.put(request, resp.clone()).then(() => trimCache(STATIC_CACHE, 100))
+          }
           return resp
         }).catch(() => cached ?? offlineFallback())
         return cached ?? networkFetch

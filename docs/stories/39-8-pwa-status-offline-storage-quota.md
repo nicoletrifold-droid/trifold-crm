@@ -1,7 +1,7 @@
 # Story 39-8: Status offline persistente + storage quota management
 
 ## Status
-Ready
+Ready for Review
 
 ## Complexity
 S (Small) — hook de status + badge no header + LRU no SW
@@ -127,16 +127,26 @@ No DevTools → Application > Cache Storage > STATIC_CACHE, verificar que o núm
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta sem blockers.
 
 ### Completion Notes
-_a preencher_
+- `use-online-status.ts` criado conforme spec exata do AC com cleanup correto dos listeners.
+- `offline-badge.tsx` criado: fixed top centrado, WifiOff + "Offline", role="status" aria-live="polite", aria-label, animação slideDown com `motion-safe:`, cores âmbar dark/light.
+- Keyframe `@keyframes slideDown` adicionado em `globals.css` (referência via `motion-safe:animate-[slideDown_0.2s_ease-out]`).
+- `OfflineBadge` importado e renderizado em `layout.tsx` (cobre todas as rotas).
+- `pwa-init.tsx` atualizado com `navigator.storage.persist()` — silencioso, log apenas em dev.
+- `sw.js` atualizado: função `trimCache` adicionada, chamada após cada `cache.put` no STATIC_CACHE com maxEntries=100.
 
 ### File List
-_a preencher_
+- `packages/web/src/hooks/use-online-status.ts` — CRIADO
+- `packages/web/src/components/offline-badge.tsx` — CRIADO
+- `packages/web/src/app/layout.tsx` — MODIFICADO (import + render OfflineBadge)
+- `packages/web/src/app/globals.css` — MODIFICADO (keyframe slideDown)
+- `packages/web/src/components/pwa-init.tsx` — MODIFICADO (storage.persist)
+- `packages/web/public/sw.js` — MODIFICADO (trimCache + chamada após cache.put)
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6

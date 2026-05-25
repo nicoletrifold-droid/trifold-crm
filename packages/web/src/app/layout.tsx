@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@web/components/theme-provider";
 import { PwaInit } from "@web/components/pwa-init";
+import { OfflineBadge } from "@web/components/offline-badge";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,6 +52,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>
+        <OfflineBadge />
         <PwaInit />
       </body>
     </html>
