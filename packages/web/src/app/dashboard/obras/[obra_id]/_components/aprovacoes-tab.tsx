@@ -177,7 +177,7 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
               </p>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                {item.tipo === "documento" && item.signed_url && (
+                {item.signed_url && (
                   <button
                     type="button"
                     onClick={() => window.open(item.signed_url!, "_blank")}
