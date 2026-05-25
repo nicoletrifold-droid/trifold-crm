@@ -1,5 +1,6 @@
-const APP_SHELL_CACHE = 'trifold-shell-v4'
-const STATIC_CACHE = 'trifold-static-v4'
+const BUILD_HASH = '__BUILD_HASH__'
+const APP_SHELL_CACHE = `trifold-shell-${BUILD_HASH}`
+const STATIC_CACHE = `trifold-static-${BUILD_HASH}`
 const OFFLINE_PAGE_CLIENTE = '/cliente/offline'
 const OFFLINE_PAGE_DASHBOARD = '/dashboard/offline'
 

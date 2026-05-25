@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 export function PwaInit() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {})
+    navigator.serviceWorker.register('/sw', { scope: '/' }).catch(() => {})
 
     if (navigator.storage?.persist) {
       navigator.storage.persist().then((granted) => {

@@ -23,7 +23,7 @@ export function PushPrompt() {
   useEffect(() => {
     void (async () => {
       if (!('serviceWorker' in navigator)) return
-      await navigator.serviceWorker.register('/sw.js').catch(() => {})
+      await navigator.serviceWorker.register('/sw').catch(() => {})
       if (
         typeof Notification === 'undefined' ||
         Notification.permission !== 'default' ||

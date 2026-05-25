@@ -1,7 +1,7 @@
 # Story 39-5: Cache versioning por build hash no service worker
 
 ## Status
-Ready
+Ready for Review
 
 ## Complexity
 S (Small) — Next.js route para servir SW com hash + remoção de versão hardcoded
@@ -118,16 +118,24 @@ Alternativa sem `readFileSync`: importar o conteúdo como string via template li
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta sem blockers.
 
 ### Completion Notes
-_a preencher_
+- `src/lib/pwa/sw-source.js` criado com `BUILD_HASH = '__BUILD_HASH__'` e caches usando template literal.
+- `src/app/sw/route.ts` criado: lê template via `readFileSync`, substitui `__BUILD_HASH__` com priority chain (VERCEL_GIT_COMMIT_SHA → BUILD_ID → Date.now()), retorna com headers corretos.
+- `pwa-init.tsx` e `push-prompt.tsx` atualizados de `/sw.js` para `/sw`.
+- `public/sw.js` deletado — SW agora servido exclusivamente pela rota `/sw`.
+- Build confirma rota `/sw` como `ƒ` (dynamic) — HTTP 200 com Content-Type text/javascript.
 
 ### File List
-_a preencher_
+- `packages/web/src/lib/pwa/sw-source.js` — CRIADO (template do SW)
+- `packages/web/src/app/sw/route.ts` — CRIADO (Route Handler)
+- `packages/web/src/components/pwa-init.tsx` — MODIFICADO (URL /sw)
+- `packages/web/src/components/portal/push-prompt.tsx` — MODIFICADO (URL /sw)
+- `packages/web/public/sw.js` — DELETADO
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6
