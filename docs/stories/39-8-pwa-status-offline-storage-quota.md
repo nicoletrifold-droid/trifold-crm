@@ -1,7 +1,7 @@
 # Story 39-8: Status offline persistente + storage quota management
 
 ## Status
-Ready for Review
+Done
 
 ## Complexity
 S (Small) — hook de status + badge no header + LRU no SW
