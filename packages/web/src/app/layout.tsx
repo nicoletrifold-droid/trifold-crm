@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@web/components/theme-provider";
 import { PwaInit } from "@web/components/pwa-init";
 import { OfflineBadge } from "@web/components/offline-badge";
+import { PwaUpdateToast } from "@web/components/pwa-update-toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,6 +54,7 @@ export default function RootLayout({
           {children}
         </ThemeProvider>
         <OfflineBadge />
+        <PwaUpdateToast />
         <PwaInit />
       </body>
     </html>

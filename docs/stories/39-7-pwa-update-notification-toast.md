@@ -1,7 +1,7 @@
 # Story 39-7: Update notification toast + SW message handler
 
 ## Status
-Ready
+Done
 
 ## Complexity
 S (Small) — hook de detecção de update + toast + postMessage no SW
@@ -112,16 +112,25 @@ Para o Portal: o Portal tem tab bar na parte inferior (mobile), então `fixed to
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta sem blockers.
 
 ### Completion Notes
-_a preencher_
+- `pwa-init.tsx` expandido: `.then(reg => ...)` substitui `.catch()` direto — escuta `updatefound` → `statechange` → `installed+controller` → dispara `CustomEvent('pwa-update-available')`.
+- `pwa-update-toast.tsx` criado: toast `fixed bottom-4 right-4` com RefreshCw, botão "Atualizar agora" (accent laranja), botão × dismiss. `controllerchange` listener adicionado ANTES do `postMessage` para evitar race condition.
+- `sw-source.js` atualizado: handler `message` adicionado no final com guard `event.data?.type === 'SKIP_WAITING'`.
+- `layout.tsx` atualizado: `PwaUpdateToast` importado e renderizado entre `OfflineBadge` e `PwaInit`.
+- `globals.css` atualizado: `@keyframes slideUp` adicionado para animação do toast.
+- `npm run type-check` e `npm run lint` passam sem erros.
 
 ### File List
-_a preencher_
+- `packages/web/src/components/pwa-init.tsx` — MODIFICADO (updatefound + custom event)
+- `packages/web/src/components/pwa-update-toast.tsx` — CRIADO
+- `packages/web/src/lib/pwa/sw-source.js` — MODIFICADO (message handler)
+- `packages/web/src/app/layout.tsx` — MODIFICADO (PwaUpdateToast)
+- `packages/web/src/app/globals.css` — MODIFICADO (slideUp keyframe)
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6
