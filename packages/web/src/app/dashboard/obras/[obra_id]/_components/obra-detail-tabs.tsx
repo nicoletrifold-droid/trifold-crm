@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { Pencil, Plus, Trash2, Eye } from "lucide-react"
+import { Pencil, Plus, Trash2, Eye, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { FotoUploadForm } from "./foto-upload-form"
 import { FotoDeleteButton } from "./foto-delete-button"
@@ -12,6 +12,7 @@ import { FaseCreateForm } from "./fase-create-form"
 import { FaseEditModal } from "./fase-edit-modal"
 import { AdminChatFeed } from "./admin-chat-feed"
 import { ClientesTab } from "./clientes-tab"
+import { AprovacoesTab, type AprovacaoItem } from "./aprovacoes-tab"
 
 interface Fase {
   id: string
@@ -72,9 +73,12 @@ interface ObraDetailTabsProps {
   mensagens: Mensagem[]
   clientes: Cliente[]
   supabaseUrl: string
+  userRole: string
+  initialAprovacoes: AprovacaoItem[]
+  initialTab?: string
 }
 
-type Tab = "fases" | "fotos" | "documentos" | "mensagens" | "clientes"
+type Tab = "fases" | "fotos" | "documentos" | "mensagens" | "clientes" | "aprovacoes"
 
 const FASE_STATUS_BADGE: Record<string, string> = {
   pendente: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300",
@@ -127,11 +131,9 @@ function formatDate(iso: string): string {
 
 function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
   const sorted = [...fases].sort((a, b) => {
-    // Concluídas sempre ao final
     const aConc = a.status === "concluida"
     const bConc = b.status === "concluida"
     if (aConc !== bConc) return aConc ? 1 : -1
-    // Dentro do mesmo grupo de status: mais antiga primeiro (mais recente por último)
     if (!a.start_date && !b.start_date) return a.order_index - b.order_index
     if (!a.start_date) return 1
     if (!b.start_date) return -1
@@ -378,8 +380,21 @@ export function ObraDetailTabs({
   mensagens,
   clientes,
   supabaseUrl,
+  userRole,
+  initialAprovacoes,
+  initialTab,
 }: ObraDetailTabsProps) {
-  const [tab, setTab] = useState<Tab>("fases")
+  const isAdminOrSupervisor = userRole === "admin" || userRole === "supervisor"
+  const isObras = userRole === "obras"
+
+  // initialTab vem da URL (?tab=aprovacoes) — validado contra o tipo Tab
+  const validTabs: Tab[] = ["fases", "fotos", "documentos", "mensagens", "clientes", "aprovacoes"]
+  const resolvedInitialTab: Tab =
+    initialTab && validTabs.includes(initialTab as Tab)
+      ? (initialTab as Tab)
+      : "fases"
+
+  const [tab, setTab] = useState<Tab>(resolvedInitialTab)
   const [addingEtapaToGroup, setAddingEtapaToGroup] = useState<string | null>(null)
 
   // Documentos — visualização com signed URL
@@ -415,12 +430,30 @@ export function ObraDetailTabs({
     return () => window.removeEventListener("keydown", onKey)
   }, [lightboxFoto])
 
+  // Uploads pendentes/rejeitados do role obras nas abas fotos/documentos
+  const pendenteFotos = isObras
+    ? initialAprovacoes.filter((a) => a.tipo === "foto")
+    : []
+  const pendenteDocumentos = isObras
+    ? initialAprovacoes.filter((a) => a.tipo === "documento")
+    : []
+
+  const totalPendentes = initialAprovacoes.filter((a) => a.status === "pendente").length
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "fases", label: `Fases (${fases.length})` },
     { key: "fotos", label: `Fotos (${fotos.length})` },
     { key: "documentos", label: `Documentos (${documentos.length})` },
     { key: "mensagens", label: "Mensagens" },
     { key: "clientes", label: `Clientes (${clientes.length})` },
+    ...(isAdminOrSupervisor
+      ? [
+          {
+            key: "aprovacoes" as Tab,
+            label: totalPendentes > 0 ? `Aprovações (${totalPendentes})` : "Aprovações",
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -518,9 +551,9 @@ export function ObraDetailTabs({
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-              Fotos ({fotos.length})
+              Fotos ({fotos.length + (isObras ? pendenteFotos.length : 0)})
             </h2>
-            {fotos.length === 0 ? (
+            {fotos.length === 0 && pendenteFotos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <p className="text-sm text-gray-500 dark:text-stone-400">Nenhuma foto ainda.</p>
                 <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
@@ -529,6 +562,7 @@ export function ObraDetailTabs({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {/* Fotos publicadas */}
                 {fotos.map((foto) => {
                   const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
                   return (
@@ -545,11 +579,66 @@ export function ObraDetailTabs({
                           unoptimized
                           className="object-cover"
                         />
-                        <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
+                        {/* Botão de exclusão apenas para admin/supervisor */}
+                        {isAdminOrSupervisor && (
+                          <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
+                        )}
                       </div>
                       {foto.caption && (
                         <p className="truncate px-2 py-1.5 text-xs text-gray-700 dark:text-stone-300">
                           {foto.caption}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Fotos pendentes/rejeitadas do próprio usuário obras */}
+                {isObras && pendenteFotos.map((item) => {
+                  const isPendente = item.status === "pendente"
+                  const isRejeitado = item.status === "rejeitado"
+                  const meta = item.metadata as { caption?: string }
+                  return (
+                    <div
+                      key={item.id}
+                      className={`relative overflow-hidden rounded-lg border ${
+                        isPendente
+                          ? "border-yellow-300 dark:border-yellow-700/50"
+                          : "border-red-300 dark:border-red-700/50"
+                      }`}
+                    >
+                      <div className={`relative aspect-square w-full bg-gray-100 dark:bg-stone-800 ${isPendente ? "opacity-50" : "opacity-40"}`}>
+                        {item.signed_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.signed_url}
+                            alt={meta.caption ?? "Foto pendente"}
+                            className={`h-full w-full object-cover ${isRejeitado ? "grayscale" : ""}`}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <span className="text-xs text-gray-400 dark:text-stone-500">Sem preview</span>
+                          </div>
+                        )}
+                        {/* Badge de status */}
+                        <span
+                          className={`absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                            isPendente
+                              ? "bg-yellow-400/90 text-yellow-900"
+                              : "bg-red-500/90 text-white"
+                          }`}
+                        >
+                          {isPendente ? "Aguardando aprovação" : "Rejeitado"}
+                        </span>
+                      </div>
+                      {meta.caption && (
+                        <p className="truncate px-2 py-1.5 text-xs text-gray-700 dark:text-stone-300">
+                          {meta.caption}
+                        </p>
+                      )}
+                      {isRejeitado && (item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao && (
+                        <p className="px-2 pb-1.5 text-[10px] text-red-600 dark:text-red-400">
+                          Motivo: {(item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao}
                         </p>
                       )}
                     </div>
@@ -573,14 +662,15 @@ export function ObraDetailTabs({
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-              Documentos ({documentos.length})
+              Documentos ({documentos.length + (isObras ? pendenteDocumentos.length : 0)})
             </h2>
-            {documentos.length === 0 ? (
+            {documentos.length === 0 && pendenteDocumentos.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
                 Nenhum documento enviado ainda.
               </p>
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-stone-800">
+                {/* Documentos publicados */}
                 {documentos.map((doc) => (
                   <div key={doc.id} className="py-3">
                     <div className="flex items-center justify-between gap-3">
@@ -606,7 +696,10 @@ export function ObraDetailTabs({
                             <Eye className="h-4 w-4" />
                           )}
                         </button>
-                        <DocDeleteButton obraId={obraId} docId={doc.id} />
+                        {/* Botão de exclusão apenas para admin/supervisor */}
+                        {isAdminOrSupervisor && (
+                          <DocDeleteButton obraId={obraId} docId={doc.id} />
+                        )}
                       </div>
                     </div>
                     {viewErrorDoc?.docId === doc.id && (
@@ -616,6 +709,49 @@ export function ObraDetailTabs({
                     )}
                   </div>
                 ))}
+
+                {/* Documentos pendentes/rejeitados do próprio usuário obras */}
+                {isObras && pendenteDocumentos.map((item) => {
+                  const isPendente = item.status === "pendente"
+                  const isRejeitado = item.status === "rejeitado"
+                  const meta = item.metadata as { name?: string; category?: string; file_size_bytes?: number }
+                  return (
+                    <div
+                      key={item.id}
+                      className={`py-3 ${isPendente ? "opacity-50" : "opacity-40"}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 flex-shrink-0 text-gray-400 dark:text-stone-500" />
+                            <p className={`truncate text-sm font-medium ${isRejeitado ? "line-through text-gray-500 dark:text-stone-500" : "text-gray-900 dark:text-stone-100"}`}>
+                              {meta.name ?? item.storage_path.split("/").pop()}
+                            </p>
+                            <span
+                              className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                isPendente
+                                  ? "bg-yellow-400/90 text-yellow-900"
+                                  : "bg-red-500/90 text-white"
+                              }`}
+                            >
+                              {isPendente ? "Aguardando aprovação" : "Rejeitado"}
+                            </span>
+                          </div>
+                          {meta.category && (
+                            <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">
+                              {meta.category} · {formatBytes(meta.file_size_bytes ?? null)}
+                            </p>
+                          )}
+                          {isRejeitado && (item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao && (
+                            <p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">
+                              Motivo: {(item as AprovacaoItem & { motivo_rejeicao?: string }).motivo_rejeicao}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </section>
@@ -637,6 +773,16 @@ export function ObraDetailTabs({
       {/* Clientes tab */}
       {tab === "clientes" && (
         <ClientesTab obraId={obraId} clientes={clientes} />
+      )}
+
+      {/* Aprovações tab — apenas admin/supervisor */}
+      {tab === "aprovacoes" && isAdminOrSupervisor && (
+        <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
+            Uploads aguardando aprovação
+          </h2>
+          <AprovacoesTab obraId={obraId} initialItems={initialAprovacoes} />
+        </section>
       )}
 
       {/* Lightbox de fotos */}

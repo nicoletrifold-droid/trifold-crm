@@ -8,6 +8,7 @@ import { ObraDetailTabs } from "./_components/obra-detail-tabs"
 import { ObraEditButton } from "./_components/obra-edit-button"
 import { ObraDeleteButton } from "./_components/obra-delete-button"
 import { ProgressInlineEdit } from "./_components/progress-inline-edit"
+import type { AprovacaoItem } from "./_components/aprovacoes-tab"
 
 const STATUS_LABEL: Record<string, string> = {
   em_andamento: "Em andamento",
@@ -31,8 +32,10 @@ function formatDeliveryDate(date: string | null): string {
 
 export default async function ObraDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ obra_id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const user = await getServerUser()
 
@@ -67,7 +70,9 @@ export default async function ObraDetailPage({
 
   const property = propertyRes?.data ?? null
 
-  const [fasesRes, fotosRes, documentosRes, clientesRes, msgClientesRes] =
+  const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
+
+  const [fasesRes, fotosRes, documentosRes, clientesRes, msgClientesRes, aprovacoesRes] =
     await Promise.all([
       supabase
         .from("obra_fases")
@@ -95,14 +100,34 @@ export default async function ObraDetailPage({
         .select("cliente_id")
         .eq("obra_id", obra_id)
         .not("cliente_id", "is", null),
+      // Busca aprovações: admin/supervisor vê todos os pendentes; obras vê os próprios
+      isAdminOrSupervisor
+        ? supabase
+            .from("obra_upload_aprovacoes")
+            .select(
+              "id, tipo, storage_path, storage_bucket, metadata, status, enviado_por, motivo_rejeicao, created_at, users!enviado_por(name)"
+            )
+            .eq("obra_id", obra_id)
+            .eq("org_id", user.orgId)
+            .eq("status", "pendente")
+            .order("created_at", { ascending: false })
+        : supabase
+            .from("obra_upload_aprovacoes")
+            .select(
+              "id, tipo, storage_path, storage_bucket, metadata, status, motivo_rejeicao, created_at"
+            )
+            .eq("obra_id", obra_id)
+            .eq("org_id", user.orgId)
+            .eq("enviado_por", user.id)
+            .order("created_at", { ascending: false }),
     ])
 
   const fases = fasesRes.data ?? []
   const fotos = fotosRes.data ?? []
   const documentos = documentosRes.data ?? []
-  // Mensagens não são pré-carregadas no SSR — AdminChatFeed carrega client-side após seleção de cliente
   const mensagens: never[] = []
   const clientesRaw = clientesRes.data ?? []
+  const aprovacoesRaw = aprovacoesRes.data ?? []
 
   const clientes = clientesRaw.map((row) => {
     const u = Array.isArray(row.users) ? row.users[0] : row.users
@@ -116,7 +141,6 @@ export default async function ObraDetailPage({
   })
 
   // Incluir clientes que têm mensagens mas não estão em cliente_obras
-  // (ex: cliente removido do vínculo mas com histórico de conversa)
   const msgIds = [
     ...new Set(
       (msgClientesRes.data ?? []).map((m) => m.cliente_id as string).filter(Boolean)
@@ -138,6 +162,38 @@ export default async function ObraDetailPage({
       })
     }
   }
+
+  // Gerar signed URLs para aprovações (admin/supervisor e obras)
+  const initialAprovacoes: AprovacaoItem[] = await Promise.all(
+    aprovacoesRaw.map(async (item) => {
+      const { data: signed } = await supabase.storage
+        .from((item as { storage_bucket?: string }).storage_bucket ?? "obra-fotos")
+        .createSignedUrl(item.storage_path, 3600)
+
+      const userRecord = (item as { users?: unknown }).users
+      const enviado_por_nome = isAdminOrSupervisor
+        ? (() => {
+            if (Array.isArray(userRecord)) return (userRecord[0] as { name?: string })?.name ?? "—"
+            return (userRecord as { name?: string } | null)?.name ?? "—"
+          })()
+        : ""
+
+      return {
+        id: item.id,
+        tipo: item.tipo as "foto" | "documento",
+        storage_path: item.storage_path,
+        signed_url: signed?.signedUrl ?? null,
+        metadata: (item.metadata as Record<string, unknown>) ?? {},
+        enviado_por_nome,
+        created_at: item.created_at,
+        status: item.status,
+        motivo_rejeicao: (item as { motivo_rejeicao?: string }).motivo_rejeicao ?? null,
+      }
+    })
+  )
+
+  const sp = await searchParams
+  const tabParam = typeof sp.tab === "string" ? sp.tab : undefined
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
   const statusBadge = STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
@@ -222,6 +278,9 @@ export default async function ObraDetailPage({
         mensagens={mensagens}
         clientes={clientes}
         supabaseUrl={supabaseUrl}
+        userRole={user.role}
+        initialAprovacoes={initialAprovacoes}
+        initialTab={tabParam}
       />
     </div>
   )

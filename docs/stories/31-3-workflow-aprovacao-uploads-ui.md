@@ -1,6 +1,6 @@
 # Story 31.3 — UI: Painel de Aprovações e Indicadores de Status
 
-## Status: Ready
+## Status: Ready for Review
 
 ## Executor Assignment
 executor: "@dev"
@@ -179,16 +179,16 @@ Verificar se `ObraDetailTabs` já recebe `userRole`. Se não, adicionar ao inter
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 (AC11, AC13): Modificar `page.tsx` da obra — buscar pendentes no server, passar `userRole`, `initialAprovacoes` e `initialTab` para `ObraDetailTabs`
-- [ ] Task 2 (AC1): Adicionar tipo `"aprovacoes"` ao `Tab` union e condicionalmente ao array `tabs` em `obra-detail-tabs.tsx`; adicionar prop `userRole` e `initialAprovacoes`
-- [ ] Task 3 (AC2, AC5, AC6): Criar `aprovacoes-tab.tsx` com listagem de pendentes, preview de foto/ícone de doc, botões Aprovar/Rejeitar com loading state e estado vazio
-- [ ] Task 4 (AC3): Implementar handler de aprovação no `aprovacoes-tab.tsx` — fetch PATCH, optimistic update, mensagem de sucesso
-- [ ] Task 5 (AC4): Criar `rejeitar-modal.tsx` com campo obrigatório; implementar handler de rejeição
-- [ ] Task 6 (AC7, AC8): Modificar aba Fotos em `obra-detail-tabs.tsx` — para role `obras`, incluir uploads pendentes/rejeitados com visual muted + badges; para admin/supervisor, ocultar pendentes da aba Fotos
-- [ ] Task 7 (AC8): Mesma lógica para aba Documentos
-- [ ] Task 8 (AC10): Adicionar badge de pendências globais na sidebar
-- [ ] Task 9 (AC12): Verificar tema claro/escuro em todos os novos elementos
-- [ ] Task 10 (AC13): Suporte a `?tab=aprovacoes` na URL
+- [x] Task 1 (AC11, AC13): Modificar `page.tsx` da obra — buscar pendentes no server, passar `userRole`, `initialAprovacoes` e `initialTab` para `ObraDetailTabs`
+- [x] Task 2 (AC1): Adicionar tipo `"aprovacoes"` ao `Tab` union e condicionalmente ao array `tabs` em `obra-detail-tabs.tsx`; adicionar prop `userRole` e `initialAprovacoes`
+- [x] Task 3 (AC2, AC5, AC6): Criar `aprovacoes-tab.tsx` com listagem de pendentes, preview de foto/ícone de doc, botões Aprovar/Rejeitar com loading state e estado vazio
+- [x] Task 4 (AC3): Implementar handler de aprovação no `aprovacoes-tab.tsx` — fetch PATCH, optimistic update, mensagem de sucesso
+- [x] Task 5 (AC4): Criar `rejeitar-modal.tsx` com campo obrigatório; implementar handler de rejeição
+- [x] Task 6 (AC7, AC8): Modificar aba Fotos em `obra-detail-tabs.tsx` — para role `obras`, incluir uploads pendentes/rejeitados com visual muted + badges; para admin/supervisor, ocultar pendentes da aba Fotos
+- [x] Task 7 (AC8): Mesma lógica para aba Documentos
+- [x] Task 8 (AC10): Adicionar badge de pendências globais na sidebar
+- [x] Task 9 (AC12): Verificar tema claro/escuro em todos os novos elementos
+- [x] Task 10 (AC13): Suporte a `?tab=aprovacoes` na URL
 
 ## Checklist Pré-Commit
 
@@ -228,9 +228,18 @@ Verificar se `ObraDetailTabs` já recebe `userRole`. Se não, adicionar ao inter
 - Max Iterations: 2
 - Severity Filter: CRITICAL, HIGH
 
+## File List
+
+- `packages/web/src/app/dashboard/obras/[obra_id]/page.tsx` — modificado: userRole, initialAprovacoes, initialTab, busca server-side de aprovações
+- `packages/web/src/app/dashboard/obras/[obra_id]/_components/obra-detail-tabs.tsx` — modificado: aba Aprovações, visual muted para obras, badge tab, suporte a ?tab=
+- `packages/web/src/app/dashboard/obras/[obra_id]/_components/aprovacoes-tab.tsx` — criado: listagem, aprovar/rejeitar, optimistic update, estado vazio
+- `packages/web/src/app/dashboard/obras/[obra_id]/_components/rejeitar-modal.tsx` — criado: modal com campo obrigatório, ESC para fechar
+- `packages/web/src/app/dashboard/layout.tsx` — modificado: badge obras na sidebar via Promise.all server-side
+
 ## Change Log
 
 | Data | Agente | Ação |
 |------|--------|------|
 | 2026-05-25 | @sm (River) | Story criada — Draft |
 | 2026-05-25 | @po (Pax) | Validação 10-pt: 7/10 GO — corrigido AC10 (Server Component pattern vs SWR polling); adicionado path exato do layout.tsx; status → Ready |
+| 2026-05-25 | @dev (Dex) | Implementação completa — 5 arquivos (2 modificados, 3 criados) — status → Ready for Review |
