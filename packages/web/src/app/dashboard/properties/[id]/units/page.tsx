@@ -85,27 +85,27 @@ export default async function PropertyUnitsPage({
       <div>
         <Link
           href={`/dashboard/properties/${id}`}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; {property.name}
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">
+        <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
           Unidades - {property.name}
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           {availableCount} disponíveis / {reservedCount} reservadas / {soldCount} vendidas
         </p>
       </div>
 
       {/* Filter Controls */}
-      <div className="rounded-lg bg-white p-4 shadow-sm">
+      <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <form className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500">Status</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">Status</label>
             <select
               name="status"
               defaultValue={filters.status ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todos</option>
               <option value="available">Disponível</option>
@@ -115,33 +115,33 @@ export default async function PropertyUnitsPage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">Andar min</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">Andar min</label>
             <input
               type="number"
               name="floor_min"
               defaultValue={filters.floor_min ?? ""}
               placeholder="Min"
-              className="mt-1 w-20 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 w-20 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">Andar max</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">Andar max</label>
             <input
               type="number"
               name="floor_max"
               defaultValue={filters.floor_max ?? ""}
               placeholder="Max"
-              className="mt-1 w-20 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 w-20 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">Tipologia</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">Tipologia</label>
             <select
               name="typology_id"
               defaultValue={filters.typology_id ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todas</option>
               {typologies?.map((t) => (
@@ -153,11 +153,11 @@ export default async function PropertyUnitsPage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">Vista</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">Vista</label>
             <select
               name="view_direction"
               defaultValue={filters.view_direction ?? ""}
-              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todas</option>
               <option value="north">Norte</option>
@@ -172,13 +172,13 @@ export default async function PropertyUnitsPage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500">Vagas</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">Vagas</label>
             <input
               type="number"
               name="garage_count"
               defaultValue={filters.garage_count ?? ""}
               placeholder="Qtd"
-              className="mt-1 w-20 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 w-20 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             />
           </div>
 
@@ -191,7 +191,7 @@ export default async function PropertyUnitsPage({
 
           <Link
             href={`/dashboard/properties/${id}/units`}
-            className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Limpar
           </Link>
@@ -199,14 +199,14 @@ export default async function PropertyUnitsPage({
       </div>
 
       {/* Units Table */}
-      <div className="rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold">
+      <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">
           Unidades ({units?.length ?? 0})
         </h2>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-stone-700">
             <thead>
-              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-stone-400">
                 <th className="px-4 py-2">Unidade</th>
                 <th className="px-4 py-2">Andar</th>
                 <th className="px-4 py-2">Posição</th>
@@ -218,26 +218,26 @@ export default async function PropertyUnitsPage({
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
               {units?.map((u) => {
                 const typology = u.typology as unknown as { name: string } | null
                 return (
-                  <tr key={u.id} className="hover:bg-gray-50">
+                  <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/50">
                     <td className="px-4 py-2 font-medium">
                       <Link
                         href={`/dashboard/properties/${id}/units/${u.id}`}
-                        className="text-orange-600 hover:text-orange-700 hover:underline"
+                        className="text-orange-600 hover:text-orange-700 hover:underline dark:text-orange-400"
                       >
                         {u.identifier}
                       </Link>
                     </td>
-                    <td className="px-4 py-2">{u.floor}</td>
-                    <td className="px-4 py-2">{u.position ?? "-"}</td>
-                    <td className="px-4 py-2">{u.view_direction ?? "-"}</td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-2 dark:text-stone-300">{u.floor}</td>
+                    <td className="px-4 py-2 dark:text-stone-300">{u.position ?? "-"}</td>
+                    <td className="px-4 py-2 dark:text-stone-300">{u.view_direction ?? "-"}</td>
+                    <td className="px-4 py-2 dark:text-stone-300">
                       {u.private_area_m2 ? `${u.private_area_m2}m2` : "-"}
                     </td>
-                    <td className="px-4 py-2">{u.garage_count}</td>
+                    <td className="px-4 py-2 dark:text-stone-300">{u.garage_count}</td>
                     <td className="px-4 py-2">
                       <Link
                         href={`/dashboard/properties/${id}/units/${u.id}`}
@@ -246,12 +246,12 @@ export default async function PropertyUnitsPage({
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                             u.status === "available"
-                              ? "bg-green-100 text-green-700"
+                              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                               : u.status === "reserved"
-                              ? "bg-yellow-100 text-yellow-700"
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
                               : u.status === "sold"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-700"
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                              : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-300"
                           }`}
                         >
                           {u.status === "available"
@@ -264,13 +264,13 @@ export default async function PropertyUnitsPage({
                         </span>
                       </Link>
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-500">
+                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-stone-400">
                       {typology?.name ?? "-"}
                     </td>
                     <td className="px-4 py-2 text-right">
                       <Link
                         href={`/dashboard/properties/${id}/units/${u.id}`}
-                        className="rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                        className="rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-200 dark:hover:bg-stone-600"
                       >
                         Editar
                       </Link>
@@ -282,7 +282,7 @@ export default async function PropertyUnitsPage({
                 <tr>
                   <td
                     colSpan={9}
-                    className="px-4 py-8 text-center text-sm text-gray-500"
+                    className="px-4 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                   >
                     Nenhuma unidade encontrada com os filtros selecionados.
                   </td>

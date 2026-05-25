@@ -32,9 +32,9 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  em_andamento: "bg-amber-100 text-amber-700",
-  concluida: "bg-green-100 text-green-700",
-  pausada: "bg-gray-100 text-gray-700",
+  em_andamento: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  concluida: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+  pausada: "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-300",
 }
 
 export function ObraVinculadaSection({
@@ -103,31 +103,31 @@ export function ObraVinculadaSection({
   }
 
   return (
-    <div className="rounded-lg bg-white p-5 shadow-sm">
+    <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       <div className="mb-4 flex items-center gap-2">
-        <Building2 className="h-4 w-4 text-gray-400" />
-        <h2 className="text-lg font-semibold text-gray-900">Obra Vinculada</h2>
+        <Building2 className="h-4 w-4 text-gray-400 dark:text-stone-500" />
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Obra Vinculada</h2>
       </div>
 
       {obra ? (
-        <div className="rounded-lg border border-gray-200 p-4">
+        <div className="rounded-lg border border-gray-200 p-4 dark:border-stone-700">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <Link
                 href={`/dashboard/obras/${obra.id}`}
-                className="font-medium text-orange-600 hover:underline"
+                className="font-medium text-orange-600 hover:underline dark:text-orange-400"
               >
                 {obra.name}
               </Link>
               <div className="mt-1 flex items-center gap-3">
                 <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700"}`}
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-300"}`}
                 >
                   {STATUS_LABEL[obra.status] ?? obra.status}
                 </span>
-                <span className="text-sm text-gray-500">{obra.progress_pct}% concluído</span>
+                <span className="text-sm text-gray-500 dark:text-stone-400">{obra.progress_pct}% concluído</span>
               </div>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
+              <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200 dark:bg-stone-700">
                 <div
                   className="h-1.5 rounded-full bg-orange-500"
                   style={{ width: `${obra.progress_pct}%` }}
@@ -137,23 +137,23 @@ export function ObraVinculadaSection({
             {!confirmUnlink ? (
               <button
                 onClick={() => setConfirmUnlink(true)}
-                className="shrink-0 rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-red-600"
+                className="shrink-0 rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-red-400"
               >
                 Desvincular
               </button>
             ) : (
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs text-gray-500">Confirmar?</span>
+                <span className="text-xs text-gray-500 dark:text-stone-400">Confirmar?</span>
                 <button
                   onClick={handleDesvincular}
                   disabled={loading}
-                  className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                 >
                   {loading ? "..." : "Sim"}
                 </button>
                 <button
                   onClick={() => setConfirmUnlink(false)}
-                  className="rounded-md px-2 py-1.5 text-gray-400 hover:text-gray-600"
+                  className="rounded-md px-2 py-1.5 text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -166,7 +166,7 @@ export function ObraVinculadaSection({
           {!showDropdown ? (
             <button
               onClick={() => setShowDropdown(true)}
-              className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600"
+              className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600 dark:border-stone-700 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400"
             >
               <Building2 className="h-4 w-4" />
               Vincular obra de acompanhamento
@@ -177,7 +177,7 @@ export function ObraVinculadaSection({
                 <select
                   value={selectedObraId}
                   onChange={(e) => setSelectedObraId(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-gray-300 px-3 py-2 pr-8 text-sm focus:border-orange-500 focus:outline-none"
+                  className="w-full appearance-none rounded-lg border border-gray-300 px-3 py-2 pr-8 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                 >
                   <option value="">Selecione uma obra...</option>
                   {obrasDisponiveis.map((o) => (
@@ -186,10 +186,10 @@ export function ObraVinculadaSection({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-stone-500" />
               </div>
               {obrasDisponiveis.length === 0 && (
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-400 dark:text-stone-500">
                   Nenhuma obra disponível (todas já vinculadas a empreendimentos)
                 </p>
               )}
@@ -203,7 +203,7 @@ export function ObraVinculadaSection({
                 </button>
                 <button
                   onClick={() => { setShowDropdown(false); setSelectedObraId("") }}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
                 >
                   Cancelar
                 </button>
@@ -213,7 +213,7 @@ export function ObraVinculadaSection({
         </div>
       )}
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>
   )
 }
