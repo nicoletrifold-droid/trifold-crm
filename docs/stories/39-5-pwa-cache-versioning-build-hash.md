@@ -1,7 +1,7 @@
 # Story 39-5: Cache versioning por build hash no service worker
 
 ## Status
-Ready for Review
+Done
 
 ## Complexity
 S (Small) — Next.js route para servir SW com hash + remoção de versão hardcoded
