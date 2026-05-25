@@ -168,8 +168,8 @@ function buildSupabaseMock() {
           if (f.col.includes("->>")) {
             const [parent, child] = f.col.split("->>")
             result = result.filter((r) => {
-              const meta = r[parent] as Record<string, unknown> | undefined
-              return meta?.[child] === f.val
+              const meta = r[parent!] as Record<string, unknown> | undefined
+              return meta?.[child!] === f.val
             })
           } else {
             result = result.filter((r) => r[f.col] === f.val)
@@ -372,7 +372,7 @@ function buildSupabaseMock() {
         const ids = new Set(matched.map((r) => r.id as string))
         const dest = db[table] as Record<string, unknown>[]
         for (let i = dest.length - 1; i >= 0; i--) {
-          if (ids.has(dest[i].id as string)) dest.splice(i, 1)
+          if (ids.has(dest[i]!.id as string)) dest.splice(i, 1)
         }
         return Promise.resolve({ data: matched, error: null })
       }
@@ -511,7 +511,7 @@ describe("WhatsApp webhook — Story 21.1", () => {
     }
 
     expect(db.leads.length).toBe(1)
-    expect(db.leads[0].phone_normalized).toBe("5544999689446")
+    expect(db.leads[0]!.phone_normalized).toBe("5544999689446")
     expect(db.conversations.length).toBe(1)
 
     const userMsgs = db.messages.filter((m) => m.role === "user")
@@ -565,11 +565,11 @@ describe("WhatsApp webhook — Story 21.1", () => {
     await flushAsync()
 
     expect(db.leads.length).toBe(1)
-    expect(db.leads[0].id).toBe("lead-pre")
+    expect(db.leads[0]!.id).toBe("lead-pre")
 
     // Inbound message attached to that lead's new conversation
     expect(db.conversations.length).toBe(1)
-    expect(db.conversations[0].lead_id).toBe("lead-pre")
+    expect(db.conversations[0]!.lead_id).toBe("lead-pre")
 
     // No `lead_created` log this time
     const createdLog = logEventMock.mock.calls

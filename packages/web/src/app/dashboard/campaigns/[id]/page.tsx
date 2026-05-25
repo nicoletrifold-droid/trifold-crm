@@ -58,7 +58,7 @@ export default async function CampaignDetailPage({
 
   const pct = (n: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : "0%")
 
-  const badge = STATUS_BADGES[campaign.status] ?? STATUS_BADGES.draft
+  const badge = STATUS_BADGES[campaign.status] ?? STATUS_BADGES.draft!
   const prop = Array.isArray(campaign.properties) ? campaign.properties[0] : campaign.properties
 
   return (

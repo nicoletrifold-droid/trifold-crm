@@ -60,7 +60,7 @@ const COLORS_ORDER = ROLE_COLORS.map((c) => c.value) as RoleColor[]
 function pickAutoColor(existing: string[] = []): RoleColor {
   const unused = COLORS_ORDER.filter((c) => !existing.includes(c))
   const pool = unused.length > 0 ? unused : COLORS_ORDER
-  return pool[Math.floor(Math.random() * pool.length)]
+  return pool[Math.floor(Math.random() * pool.length)]!
 }
 
 const NAME_REGEX = /^[a-z0-9-]+$/

@@ -412,7 +412,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
                     <span className="font-medium">✓ Cliente CRM encontrado:</span>{" "}
                     {crmCliente.nome}
                     {crmCliente.obras.length === 1 && (() => {
-                      const o = crmCliente.obras[0]
+                      const o = crmCliente.obras[0]!
                       const nome = o.obra_nome ?? "obra sem nome"
                       const sufixo = o.numero_unidade ? ` ${o.numero_unidade}` : ""
                       return <> — {nome}{sufixo}</>

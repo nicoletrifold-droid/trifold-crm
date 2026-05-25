@@ -23,7 +23,7 @@ async function extractFormId(url: string): Promise<string | null> {
 
   // Editor URL: /forms/d/{FORM_ID}/...
   const editorMatch = resolved.match(/\/forms\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/)
-  if (editorMatch && editorMatch[1] !== "e") {
+  if (editorMatch && editorMatch[1] !== undefined && editorMatch[1] !== "e") {
     return editorMatch[1]
   }
 
@@ -36,7 +36,7 @@ async function extractFormId(url: string): Promise<string | null> {
       const res = await fetch(pageUrl)
       const html = await res.text()
       const fbMatch = html.match(/\/forms\/d\/([a-zA-Z0-9_-]{20,})/)
-      if (fbMatch && fbMatch[1] !== "e") return fbMatch[1]
+      if (fbMatch && fbMatch[1] !== undefined && fbMatch[1] !== "e") return fbMatch[1]
     } catch {
       return null
     }

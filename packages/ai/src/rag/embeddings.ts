@@ -54,7 +54,7 @@ async function generateOpenAIEmbedding(
       data: Array<{ embedding: number[] }>
     }
 
-    return data.data[0].embedding
+    return data.data[0]!.embedding
   } catch (err) {
     console.error("[EMBEDDING_FALLBACK] OpenAI embeddings failed, RAG quality degraded:", err)
     return generateHashEmbedding(text)
@@ -91,7 +91,7 @@ function generateHashEmbedding(text: string): number[] {
   )
   if (magnitude > 0) {
     for (let i = 0; i < EMBEDDING_DIMENSION; i++) {
-      vector[i] = vector[i] / magnitude
+      vector[i] = vector[i]! / magnitude
     }
   }
 

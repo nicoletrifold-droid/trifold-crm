@@ -178,8 +178,9 @@ export async function POST(
             .limit(1)
 
           if (conversations && conversations.length > 0) {
+            const conversationId = conversations[0]!.id
             await supabase.from("messages").insert({
-              conversation_id: conversations[0].id,
+              conversation_id: conversationId,
               role: "assistant",
               content: message,
               metadata: { source: "post_visit_followup", appointment_id: id },
@@ -188,7 +189,7 @@ export async function POST(
             await supabase
               .from("conversations")
               .update({ last_message_at: new Date().toISOString() })
-              .eq("id", conversations[0].id)
+              .eq("id", conversationId)
           }
 
           // Activity log

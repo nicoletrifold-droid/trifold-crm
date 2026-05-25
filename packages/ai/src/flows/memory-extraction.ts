@@ -66,49 +66,49 @@ export function extractFactsFromMessage(message: string): ExtractedFact[] {
 
   const professionMatch = text.match(PATTERNS.profession)
   if (professionMatch) {
-    facts.push({ predicate: "profession", object: professionMatch[1].trim(), confidence: 0.8 })
+    facts.push({ predicate: "profession", object: professionMatch[1]!.trim(), confidence: 0.8 })
   }
 
   const maritalMatch = text.match(PATTERNS.marital)
   if (maritalMatch) {
-    facts.push({ predicate: "marital_status", object: maritalMatch[1].toLowerCase(), confidence: 0.9 })
+    facts.push({ predicate: "marital_status", object: maritalMatch[1]!.toLowerCase(), confidence: 0.9 })
   }
 
   const childrenMatch = text.match(PATTERNS.children)
   if (childrenMatch) {
-    facts.push({ predicate: "children_count", object: childrenMatch[1], confidence: 0.9 })
+    facts.push({ predicate: "children_count", object: childrenMatch[1]!, confidence: 0.9 })
   }
 
   // Preferences
   const bedroomsMatch = text.match(PATTERNS.bedrooms)
   if (bedroomsMatch) {
-    facts.push({ predicate: "prefers_bedrooms", object: bedroomsMatch[1], confidence: 0.95 })
+    facts.push({ predicate: "prefers_bedrooms", object: bedroomsMatch[1]!, confidence: 0.95 })
   }
 
   const floorMatch = text.match(PATTERNS.floor)
   if (floorMatch) {
-    facts.push({ predicate: "prefers_floor", object: floorMatch[1].toLowerCase(), confidence: 0.85 })
+    facts.push({ predicate: "prefers_floor", object: floorMatch[1]!.toLowerCase(), confidence: 0.85 })
   }
 
   const viewMatch = text.match(PATTERNS.view)
   if (viewMatch) {
-    facts.push({ predicate: "prefers_view", object: viewMatch[1].toLowerCase(), confidence: 0.85 })
+    facts.push({ predicate: "prefers_view", object: viewMatch[1]!.toLowerCase(), confidence: 0.85 })
   }
 
   const garageMatch = text.match(PATTERNS.garage)
   if (garageMatch) {
-    facts.push({ predicate: "prefers_garage", object: garageMatch[1], confidence: 0.9 })
+    facts.push({ predicate: "prefers_garage", object: garageMatch[1]!, confidence: 0.9 })
   }
 
   // Financial
   const budgetMatch = text.match(PATTERNS.budget)
   if (budgetMatch) {
-    facts.push({ predicate: "budget", object: budgetMatch[1].trim(), confidence: 0.8 })
+    facts.push({ predicate: "budget", object: budgetMatch[1]!.trim(), confidence: 0.8 })
   }
 
   const downPaymentMatch = text.match(PATTERNS.down_payment)
   if (downPaymentMatch) {
-    facts.push({ predicate: "down_payment", object: downPaymentMatch[1].trim(), confidence: 0.85 })
+    facts.push({ predicate: "down_payment", object: downPaymentMatch[1]!.trim(), confidence: 0.85 })
   }
 
   if (PATTERNS.fgts.test(text)) {
@@ -141,7 +141,7 @@ export function extractFactsFromMessage(message: string): ExtractedFact[] {
 
   const relativeDayMatch = text.match(PATTERNS.relative_day)
   if (relativeDayMatch) {
-    facts.push({ predicate: "available_day", object: relativeDayMatch[1].toLowerCase(), confidence: 0.8 })
+    facts.push({ predicate: "available_day", object: relativeDayMatch[1]!.toLowerCase(), confidence: 0.8 })
   }
 
   // Property interest

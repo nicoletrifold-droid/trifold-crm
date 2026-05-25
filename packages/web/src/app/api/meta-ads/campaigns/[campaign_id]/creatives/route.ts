@@ -47,8 +47,8 @@ function getPeriodDates(period: string): { from: string; to: string; days: numbe
   const from = new Date()
   from.setDate(from.getDate() - days)
   return {
-    from: from.toISOString().split("T")[0],
-    to: to.toISOString().split("T")[0],
+    from: from.toISOString().split("T")[0]!,
+    to: to.toISOString().split("T")[0]!,
     days,
   }
 }
@@ -56,7 +56,7 @@ function getPeriodDates(period: string): { from: string; to: string; days: numbe
 function shiftDays(daysAgo: number): string {
   const d = new Date()
   d.setDate(d.getDate() - daysAgo)
-  return d.toISOString().split("T")[0]
+  return d.toISOString().split("T")[0]!
 }
 
 function safeDiv(numerator: number, denominator: number): number {

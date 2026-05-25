@@ -337,7 +337,7 @@ export function ChatFeed({
         )}
         {mensagens.map((m, i) => {
           const currentDay = getDayKey(m.created_at)
-          const prevDay = i > 0 ? getDayKey(mensagens[i - 1].created_at) : null
+          const prevDay = i > 0 ? getDayKey(mensagens[i - 1]!.created_at) : null
           return (
             <React.Fragment key={m.id}>
               {currentDay !== prevDay && <DateDivider label={currentDay} />}

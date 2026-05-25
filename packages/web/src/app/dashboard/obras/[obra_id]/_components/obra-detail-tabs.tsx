@@ -146,7 +146,7 @@ function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
       idx.set(fase.name, groups.length)
       groups.push([fase.name, []])
     }
-    groups[idx.get(fase.name)!][1].push(fase)
+    groups[idx.get(fase.name)!]![1].push(fase)
   }
   return groups
 }
@@ -491,7 +491,7 @@ export function ObraDetailTabs({
             ) : (
               <div className="space-y-3">
                 {buildFaseGroups(fases).map(([groupName, groupFases], groupIdx) => {
-                  const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length]
+                  const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length]!
                   const isAdding = addingEtapaToGroup === groupName
                   return (
                     <div

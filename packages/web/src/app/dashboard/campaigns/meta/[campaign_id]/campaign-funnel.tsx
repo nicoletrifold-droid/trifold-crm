@@ -118,7 +118,7 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
       <div className="space-y-1.5">
         {STAGE_KEYS.map((key, idx) => {
           const count = stages[key]
-          const prev = idx > 0 ? stages[STAGE_KEYS[idx - 1]] : null
+          const prev = idx > 0 ? stages[STAGE_KEYS[idx - 1]!] : null
           const pctOfTop = top > 0 ? (count / top) * 100 : 0
           const pctOfPrev =
             prev != null && prev > 0 ? (count / prev) * 100 : null

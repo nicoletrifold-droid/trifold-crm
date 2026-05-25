@@ -121,7 +121,7 @@ export default async function DashboardLayout({
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const navItems = [
-    ...NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]]),
+    ...NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!]),
     ...(permissions["obras"]
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),

@@ -120,7 +120,7 @@ export default async function CampaignsPage() {
               {campaigns.map((c) => {
                 const counts = entryCounts[c.id] ?? { total: 0, valid: 0 }
                 const rate = counts.total > 0 ? Math.round((counts.valid / counts.total) * 100) : 0
-                const badge = STATUS_BADGES[c.status] ?? STATUS_BADGES.draft
+                const badge = STATUS_BADGES[c.status] ?? STATUS_BADGES.draft!
                 const prop = Array.isArray(c.properties) ? c.properties[0] : c.properties
 
                 return (

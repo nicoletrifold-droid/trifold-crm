@@ -48,7 +48,7 @@ export function parseEndereco(raw: string): EnderecoParseado {
 
   const cityMatch = workStr.match(/[-,]\s*([^,\-]+?)\s*$/)
   if (cityMatch) {
-    const candidate = cityMatch[1].trim()
+    const candidate = cityMatch[1]!.trim()
     // City should not look like a number or be very short (less than 3 chars)
     if (candidate.length >= 3 && !/^\d+$/.test(candidate)) {
       result.endereco_cidade = candidate
@@ -69,7 +69,7 @@ export function parseEndereco(raw: string): EnderecoParseado {
   if (parts.length === 0) return result
 
   // First part: extract street name and number
-  const firstPart = parts[0]
+  const firstPart = parts[0]!
   // Number patterns: "Nº 123", "nº 123", "n° 123", "123" at end
   const numMatch = firstPart.match(/\s+[Nn][°ºo]?\s*(\d+[A-Za-z]?)\s*$/) ||
     firstPart.match(/,?\s*(\d+[A-Za-z]?)\s*$/)

@@ -88,7 +88,7 @@ export async function GET(
     )
 
     // First message
-    const first = sorted[0]
+    const first = sorted[0]!
     events.push({
       type: "first_message",
       title: `Primeira mensagem (${conv.channel})`,
@@ -99,7 +99,7 @@ export async function GET(
 
     // Last message (if different from first)
     if (sorted.length > 1) {
-      const last = sorted[sorted.length - 1]
+      const last = sorted[sorted.length - 1]!
       events.push({
         type: "last_message",
         title: `Ultima mensagem (${conv.channel})`,
@@ -112,7 +112,7 @@ export async function GET(
     // Handoff moments (messages from broker role)
     const handoffs = sorted.filter((m) => m.role === "broker")
     if (handoffs.length > 0) {
-      const firstHandoff = handoffs[0]
+      const firstHandoff = handoffs[0]!
       events.push({
         type: "handoff",
         title: `Handoff para corretor (${conv.channel})`,

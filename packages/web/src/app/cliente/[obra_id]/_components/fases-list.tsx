@@ -41,7 +41,7 @@ export function FasesList({ fases, currentPhaseId }: FasesListProps) {
   return (
     <ul className="space-y-3">
       {fases.map((fase) => {
-        const cfg = STATUS_CONFIG[fase.status] ?? STATUS_CONFIG.pendente
+        const cfg = STATUS_CONFIG[fase.status] ?? STATUS_CONFIG.pendente!
         const isCurrent = fase.id === currentPhaseId
 
         return (

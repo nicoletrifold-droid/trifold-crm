@@ -49,7 +49,7 @@ async function resolveUrl(url: string): Promise<string> {
  */
 function extractEditorFormId(url: string): string | null {
   const match = url.match(/\/forms\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/)
-  if (match && match[1] !== "e") return match[1]
+  if (match && match[1] !== undefined && match[1] !== "e") return match[1]
   return null
 }
 

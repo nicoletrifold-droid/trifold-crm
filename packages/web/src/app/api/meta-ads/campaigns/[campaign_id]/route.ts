@@ -93,8 +93,8 @@ function getPeriodDates(days: number): { from: string; to: string } {
   const from = new Date()
   from.setDate(from.getDate() - days)
   return {
-    from: from.toISOString().split("T")[0],
-    to: to.toISOString().split("T")[0],
+    from: from.toISOString().split("T")[0]!,
+    to: to.toISOString().split("T")[0]!,
   }
 }
 
@@ -129,7 +129,7 @@ function buildTimeseries(
   const cursor = new Date(`${from}T00:00:00.000Z`)
   const end = new Date(`${to}T00:00:00.000Z`)
   while (cursor <= end) {
-    const dateStr = cursor.toISOString().split("T")[0]
+    const dateStr = cursor.toISOString().split("T")[0]!
     const row = map.get(dateStr)
     result.push({
       date: dateStr,

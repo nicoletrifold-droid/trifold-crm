@@ -33,7 +33,7 @@ function slugify(name: string): string {
 
 function extractVariableKeys(text: string): string[] {
   const matches = [...text.matchAll(/\{\{(\w+)\}\}/g)]
-  return [...new Set(matches.map((m) => m[1]))]
+  return [...new Set(matches.map((m) => m[1]!))]
 }
 
 export function TemplateForm({ initialData }: Props) {

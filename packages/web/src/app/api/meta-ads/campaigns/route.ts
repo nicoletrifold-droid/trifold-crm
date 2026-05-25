@@ -43,8 +43,8 @@ function getPeriodDates(period: string): { from: string; to: string } {
   const days = period === "7d" ? 7 : period === "90d" ? 90 : 30
   from.setDate(from.getDate() - days)
   return {
-    from: from.toISOString().split("T")[0],
-    to: to.toISOString().split("T")[0],
+    from: from.toISOString().split("T")[0]!,
+    to: to.toISOString().split("T")[0]!,
   }
 }
 
@@ -126,26 +126,26 @@ export async function GET(request: NextRequest) {
 
     if (lead.utm_campaign) {
       if (!leadIdsByName[lead.utm_campaign]) leadIdsByName[lead.utm_campaign] = new Set()
-      leadIdsByName[lead.utm_campaign].add(lead.id)
+      leadIdsByName[lead.utm_campaign]!.add(lead.id)
       if (respondeu) {
         if (!responderamByName[lead.utm_campaign]) responderamByName[lead.utm_campaign] = new Set()
-        responderamByName[lead.utm_campaign].add(lead.id)
+        responderamByName[lead.utm_campaign]!.add(lead.id)
       }
       if (qualificado) {
         if (!qualificadosByName[lead.utm_campaign]) qualificadosByName[lead.utm_campaign] = new Set()
-        qualificadosByName[lead.utm_campaign].add(lead.id)
+        qualificadosByName[lead.utm_campaign]!.add(lead.id)
       }
     }
     if (metaId) {
       if (!leadIdsByMetaId[metaId]) leadIdsByMetaId[metaId] = new Set()
-      leadIdsByMetaId[metaId].add(lead.id)
+      leadIdsByMetaId[metaId]!.add(lead.id)
       if (respondeu) {
         if (!responderamByMetaId[metaId]) responderamByMetaId[metaId] = new Set()
-        responderamByMetaId[metaId].add(lead.id)
+        responderamByMetaId[metaId]!.add(lead.id)
       }
       if (qualificado) {
         if (!qualificadosByMetaId[metaId]) qualificadosByMetaId[metaId] = new Set()
-        qualificadosByMetaId[metaId].add(lead.id)
+        qualificadosByMetaId[metaId]!.add(lead.id)
       }
     }
   }

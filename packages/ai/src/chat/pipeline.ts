@@ -475,8 +475,9 @@ export async function processMessageWithMetadata(
     },
   })
 
+  const firstBlock = response.content[0]
   const assistantMessage =
-    response.content[0].type === "text" ? response.content[0].text : ""
+    firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
 
   // 9. Extract collected data from user message FIRST (name comes from user, not AI)
   const updatedData = extractCollectedData(message, collectedData)
@@ -598,7 +599,7 @@ export async function processMessageWithMetadata(
 
         if (assignment) {
           const brokers = assignment.brokers as unknown as { user_id: string } | { user_id: string }[]
-          assignedBrokerId = Array.isArray(brokers) ? brokers[0]?.user_id : brokers?.user_id
+          assignedBrokerId = (Array.isArray(brokers) ? brokers[0]?.user_id : brokers?.user_id) ?? null
         }
       }
 

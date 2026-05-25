@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
 
   for (let i = 0; i < records.length; i++) {
     const r = records[i]
+    if (!r) continue
     const obra_nome = typeof r.obra_nome === "string" ? r.obra_nome.trim() : ""
     const tipo = typeof r.tipo === "string" ? r.tipo.trim().toLowerCase() : ""
     const nome = typeof r.nome === "string" ? r.nome.trim() : ""
