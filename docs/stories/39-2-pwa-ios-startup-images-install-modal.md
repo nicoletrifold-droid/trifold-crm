@@ -1,7 +1,7 @@
 # Story 39-2: iOS PWA — startup images + modal de instalação
 
 ## Status
-Draft
+Ready
 
 ## Complexity
 M (Medium) — geração de 14+ imagens de splash + componente React interativo

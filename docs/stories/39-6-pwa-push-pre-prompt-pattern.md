@@ -1,7 +1,7 @@
 # Story 39-6: Pre-prompt pattern para push notifications
 
 ## Status
-Draft
+Ready
 
 ## Complexity
 M (Medium) — refactor do push-prompt existente + dois estágios de UX

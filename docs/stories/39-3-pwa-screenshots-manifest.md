@@ -1,7 +1,7 @@
 # Story 39-3: Screenshots no manifest para rich install dialog
 
 ## Status
-Draft
+Ready
 
 ## Complexity
 S (Small) — capturas de tela + campo screenshots[] nos manifests

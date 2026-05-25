@@ -1,7 +1,7 @@
 # Story 39-7: Update notification toast + SW message handler
 
 ## Status
-Draft
+Ready
 
 ## Complexity
 S (Small) — hook de detecção de update + toast + postMessage no SW

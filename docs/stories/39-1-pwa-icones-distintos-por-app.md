@@ -1,7 +1,7 @@
 # Story 39-1: Ícones distintos por app (CRM vs Portal) + maskable 192px
 
 ## Status
-Draft
+Ready
 
 ## Complexity
 S (Small) — assets visuais + atualização de manifests e layouts
