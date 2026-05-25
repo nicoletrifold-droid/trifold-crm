@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@web/components/theme-provider";
+import { PwaInit } from "@web/components/pwa-init";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,12 +16,20 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Trifold CRM",
-  description: "CRM imobiliario com agente IA Nicole",
+  description: "CRM imobiliário com agente IA Nicole",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Trifold CRM",
+  },
+  icons: {
+    apple: [
+      { url: "/icon-192.png", sizes: "192x192" },
+    ],
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -42,6 +51,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>
+        <PwaInit />
       </body>
     </html>
   );

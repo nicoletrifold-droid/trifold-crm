@@ -1,18 +1,22 @@
+const APP_SHELL_CACHE = 'trifold-shell-v3'
+const STATIC_CACHE = 'trifold-static-v3'
 const OFFLINE_PAGE = '/cliente/offline'
-const OFFLINE_CACHE = 'trifold-offline-v2'
+
+const APP_SHELL_URLS = [OFFLINE_PAGE, '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(OFFLINE_CACHE).then((cache) => cache.add(OFFLINE_PAGE))
+    caches.open(APP_SHELL_CACHE)
+      .then((cache) => cache.addAll(APP_SHELL_URLS))
+      .then(() => self.skipWaiting())
   )
-  self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
+  const keep = [APP_SHELL_CACHE, STATIC_CACHE]
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== OFFLINE_CACHE).map((k) => caches.delete(k))))
-      .catch(() => {})
+      .then((keys) => Promise.all(keys.filter((k) => !keep.includes(k)).map((k) => caches.delete(k))))
       .then(() => clients.claim())
   )
 })
@@ -26,34 +30,72 @@ const offlineFallback = () =>
   )
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate' &&
-      event.request.url.includes('/cliente')) {
+  const { request } = event
+  const url = new URL(request.url)
+
+  // Skip non-GET, cross-origin, and API routes
+  if (request.method !== 'GET') return
+  if (url.origin !== self.location.origin) return
+  if (url.pathname.startsWith('/api/')) return
+
+  // Navigation in /cliente → network-first, offline fallback
+  if (request.mode === 'navigate' && url.pathname.startsWith('/cliente')) {
     event.respondWith(
-      fetch(event.request).catch(() => offlineFallback())
+      fetch(request).catch(() => offlineFallback())
     )
     return
   }
-  event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request).then((r) => r ?? fetch(event.request)))
-  )
+
+  // Next.js static assets + images → cache-first, background revalidate
+  const isStatic =
+    url.pathname.startsWith('/_next/static/') ||
+    /\.(png|jpe?g|svg|gif|webp|ico|woff2?)(\?.*)?$/.test(url.pathname)
+
+  if (isStatic) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then(async (cache) => {
+        const cached = await cache.match(request)
+        const networkFetch = fetch(request).then((resp) => {
+          if (resp.ok) cache.put(request, resp.clone())
+          return resp
+        }).catch(() => cached ?? offlineFallback())
+        return cached ?? networkFetch
+      })
+    )
+  }
 })
 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
     self.registration.showNotification(data.title ?? 'Trifold', {
-      body: data.body,
+      body: data.body ?? 'Você tem uma nova atualização.',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
+      tag: data.tag ?? 'trifold',
+      renotify: !!data.tag,
       data: { url: data.url ?? '/cliente' },
+      actions: Array.isArray(data.actions) ? data.actions : [],
     })
   )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
+  const target = event.notification.data?.url ?? '/cliente'
   event.waitUntil(
-    clients.openWindow(event.notification.data.url)
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((list) => {
+        const existing = list.find((c) => c.url.startsWith(self.location.origin + '/cliente'))
+        if (existing) return existing.focus().then((c) => c.navigate(target))
+        return clients.openWindow(target)
+      })
   )
+})
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'trifold-sync') {
+    event.waitUntil(Promise.resolve())
+  }
 })

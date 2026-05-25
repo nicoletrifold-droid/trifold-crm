@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { ObraTabNav } from "./_components/obra-tab-nav"
 import { Sidebar } from "./_components/sidebar"
 import { PrivacyButton } from "./_components/privacy-button"
@@ -6,12 +6,25 @@ import { PrivacyConsentModal } from "./_components/privacy-consent-modal"
 import { PushPrompt } from "@web/components/portal/push-prompt"
 import { createClient } from "@web/lib/supabase/server"
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#e8856a",
+}
+
 export const metadata: Metadata = {
   manifest: "/cliente-manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Minha Obra",
+  },
+  icons: {
+    apple: [
+      { url: "/icon-192.png", sizes: "192x192" },
+    ],
   },
   other: {
     "mobile-web-app-capable": "yes",

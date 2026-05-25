@@ -1,14 +1,30 @@
 {
+  "id": "/cliente",
   "name": "Trifold — Minha Obra",
   "short_name": "Minha Obra",
   "description": "Acompanhe o progresso da sua obra em tempo real",
-  "start_url": "/cliente",
+  "start_url": "/cliente?utm_source=pwa",
   "scope": "/cliente",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
+  "orientation": "portrait",
   "background_color": "#0c0a09",
   "theme_color": "#e8856a",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "lifestyle"],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Minha Obra",
+      "short_name": "Obra",
+      "url": "/cliente?utm_source=pwa_shortcut",
+      "description": "Ver progresso da obra"
+    }
+  ],
+  "prefer_related_applications": false
 }
