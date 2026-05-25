@@ -1,8 +1,9 @@
-const APP_SHELL_CACHE = 'trifold-shell-v3'
-const STATIC_CACHE = 'trifold-static-v3'
-const OFFLINE_PAGE = '/cliente/offline'
+const APP_SHELL_CACHE = 'trifold-shell-v4'
+const STATIC_CACHE = 'trifold-static-v4'
+const OFFLINE_PAGE_CLIENTE = '/cliente/offline'
+const OFFLINE_PAGE_DASHBOARD = '/dashboard/offline'
 
-const APP_SHELL_URLS = [OFFLINE_PAGE, '/icon-192.png', '/icon-512.png']
+const APP_SHELL_URLS = [OFFLINE_PAGE_CLIENTE, OFFLINE_PAGE_DASHBOARD, '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -21,12 +22,9 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-const offlineFallback = () =>
-  caches.match(OFFLINE_PAGE).then(
-    (r) => r ?? new Response('Você está offline', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })
+const offlineFallback = (page) =>
+  caches.match(page).then(
+    (r) => r ?? new Response('Offline', { status: 503 })
   )
 
 self.addEventListener('fetch', (event) => {
@@ -38,10 +36,22 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
 
+  // Navigation in /dashboard → network-first, offline fallback
+  if (request.mode === 'navigate' && url.pathname.startsWith('/dashboard')) {
+    event.respondWith(
+      fetch(request).catch(() =>
+        caches.match(OFFLINE_PAGE_DASHBOARD).then(
+          (r) => r ?? new Response('Offline', { status: 503 })
+        )
+      )
+    )
+    return
+  }
+
   // Navigation in /cliente → network-first, offline fallback
   if (request.mode === 'navigate' && url.pathname.startsWith('/cliente')) {
     event.respondWith(
-      fetch(request).catch(() => offlineFallback())
+      fetch(request).catch(() => offlineFallback(OFFLINE_PAGE_CLIENTE))
     )
     return
   }

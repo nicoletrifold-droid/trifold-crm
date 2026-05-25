@@ -1,7 +1,7 @@
 # Story 39-4: CRM offline page + fallback no service worker
 
 ## Status
-Ready
+Ready for Review
 
 ## Complexity
 S (Small) — 1 nova página + atualização do SW
@@ -95,16 +95,20 @@ Para testar:
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta, sem blockers.
 
 ### Completion Notes
-_a preencher_
+- Página `/dashboard/offline` criada com todos os elementos do AC: fundo stone-50/950, ícone WifiOff, título "Sem conexão", parágrafo descritivo, botão "Tentar novamente", mensagem de rodapé e listener `online` para redirect automático.
+- `sw.js` atualizado para v4: `OFFLINE_PAGE` renomeado para `OFFLINE_PAGE_CLIENTE`, nova constante `OFFLINE_PAGE_DASHBOARD`, ambas incluídas no `APP_SHELL_URLS`, branch `/dashboard` adicionado antes do branch `/cliente` no handler fetch.
+- Middleware de auth confirmado como server-side (layout.tsx), não edge middleware — `/dashboard/offline` não requer whitelist.
+- `type-check` e `lint` passam sem erros (warnings pré-existentes sem relação com esta story).
 
 ### File List
-_a preencher_
+- `packages/web/src/app/dashboard/offline/page.tsx` — CRIADO
+- `packages/web/public/sw.js` — MODIFICADO (v3→v4, OFFLINE_PAGE_DASHBOARD, branch /dashboard)
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6
