@@ -1,7 +1,7 @@
 # Story 39-1: Ícones distintos por app (CRM vs Portal) + maskable 192px
 
 ## Status
-Ready
+Done
 
 ## Complexity
 S (Small) — assets visuais + atualização de manifests e layouts
@@ -103,16 +103,33 @@ Application > Manifest > Icons mostra preview de cada ícone com propósito. Ver
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta sem blockers.
 
 ### Completion Notes
-_a preencher_
+- 7 ícones PNG gerados via Node.js (zlib): icon-crm-192/512.png, icon-crm-192/512-maskable.png, icon-cliente-192/512.png, icon-cliente-512-maskable.png.
+- CRM icons: laranja #ea580c (sólido). Portal icons: salmão #e8856a (sólido).
+- manifest.json: icons array atualizado para referenciar apenas ícones CRM.
+- cliente-manifest.json: icons array atualizado para ícones Portal.
+- app/layout.tsx: icons.apple → /icon-crm-192.png.
+- cliente/[obra_id]/layout.tsx: icons.apple → /icon-cliente-192.png.
+- sw-source.js: APP_SHELL_URLS atualizado para /icon-crm-192.png e /icon-cliente-192.png.
 
 ### File List
-_a preencher_
+- `packages/web/public/icon-crm-192.png` — CRIADO
+- `packages/web/public/icon-crm-512.png` — CRIADO
+- `packages/web/public/icon-crm-192-maskable.png` — CRIADO
+- `packages/web/public/icon-crm-512-maskable.png` — CRIADO
+- `packages/web/public/icon-cliente-192.png` — CRIADO
+- `packages/web/public/icon-cliente-512.png` — CRIADO
+- `packages/web/public/icon-cliente-512-maskable.png` — CRIADO
+- `packages/web/public/manifest.json` — MODIFICADO (icons array)
+- `packages/web/public/cliente-manifest.json` — MODIFICADO (icons array)
+- `packages/web/src/app/layout.tsx` — MODIFICADO (icons.apple)
+- `packages/web/src/app/cliente/[obra_id]/layout.tsx` — MODIFICADO (icons.apple)
+- `packages/web/src/lib/pwa/sw-source.js` — MODIFICADO (APP_SHELL_URLS)
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6

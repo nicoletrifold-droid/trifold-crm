@@ -1,7 +1,7 @@
 # Story 39-3: Screenshots no manifest para rich install dialog
 
 ## Status
-Ready
+Done
 
 ## Complexity
 S (Small) — capturas de tela + campo screenshots[] nos manifests
@@ -123,16 +123,28 @@ O campo `label` é lido por screen readers — deve ser descritivo e em portugu�
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+sips no macOS 14 não suporta escrita WebP (apenas leitura). Screenshots geradas como PNG — funcionalmente equivalente para o rich install dialog.
 
 ### Completion Notes
-_a preencher_
+- 8 screenshots PNG gerados: 4 CRM (pipeline/leads × wide/mobile) + 4 Portal (obra/fotos × wide/mobile).
+- manifest.json: campo screenshots[] adicionado com 4 entradas CRM (form_factor wide e narrow), type image/png.
+- cliente-manifest.json: campo screenshots[] adicionado com 4 entradas Portal.
+- Formato PNG em vez de WebP por limitação de ferramenta (sips write WebP não suportado). Chrome DevTools > Application > Manifest exibe corretamente screenshots PNG.
 
 ### File List
-_a preencher_
+- `packages/web/public/screenshots/crm-pipeline-wide.png` — CRIADO
+- `packages/web/public/screenshots/crm-leads-wide.png` — CRIADO
+- `packages/web/public/screenshots/crm-pipeline-mobile.png` — CRIADO
+- `packages/web/public/screenshots/crm-leads-mobile.png` — CRIADO
+- `packages/web/public/screenshots/portal-obra-wide.png` — CRIADO
+- `packages/web/public/screenshots/portal-fotos-wide.png` — CRIADO
+- `packages/web/public/screenshots/portal-obra-mobile.png` — CRIADO
+- `packages/web/public/screenshots/portal-fotos-mobile.png` — CRIADO
+- `packages/web/public/manifest.json` — MODIFICADO (screenshots[])
+- `packages/web/public/cliente-manifest.json` — MODIFICADO (screenshots[])
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6

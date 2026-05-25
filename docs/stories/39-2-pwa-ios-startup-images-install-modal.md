@@ -1,7 +1,7 @@
 # Story 39-2: iOS PWA — startup images + modal de instalação
 
 ## Status
-Ready
+Done
 
 ## Complexity
 M (Medium) — geração de 14+ imagens de splash + componente React interativo
@@ -122,16 +122,25 @@ interface IosInstallPromptProps {
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta sem blockers.
 
 ### Completion Notes
-_a preencher_
+- 12 splash PNGs gerados: 6 CRM (fundo #fafaf9) + 6 Portal (fundo #0c0a09) para iPhone SE, 14, 14 Pro, 15, 15 Pro Max e iPad Pro 11".
+- app/layout.tsx e cliente/[obra_id]/layout.tsx: icons.other[] com 6 apple-touch-startup-image links cada (media queries por device).
+- ios-install-prompt.tsx criado: sheet bottom-aligned, 3 passos numerados, trigger 15s+scroll, dismiss TTL 30d ("Entendi") ou 3d ("Mais tarde"), role="dialog" + aria-labelledby, Escape fecha, prop variant="crm"|"portal" para cores.
+- IosInstallPrompt renderizado em ambos os layouts com variant correto.
 
 ### File List
-_a preencher_
+- `packages/web/public/splash/crm-iphone-{se,14,14-pro,15,15-pro-max}-portrait.png` — CRIADO (6 arquivos)
+- `packages/web/public/splash/crm-ipad-pro-11-portrait.png` — CRIADO
+- `packages/web/public/splash/portal-iphone-{se,14,14-pro,15,15-pro-max}-portrait.png` — CRIADO (6 arquivos)
+- `packages/web/public/splash/portal-ipad-pro-11-portrait.png` — CRIADO
+- `packages/web/src/components/ios-install-prompt.tsx` — CRIADO
+- `packages/web/src/app/layout.tsx` — MODIFICADO (startup images + IosInstallPrompt)
+- `packages/web/src/app/cliente/[obra_id]/layout.tsx` — MODIFICADO (startup images + IosInstallPrompt)
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6

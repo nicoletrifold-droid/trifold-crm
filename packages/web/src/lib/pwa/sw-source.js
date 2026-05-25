@@ -4,7 +4,12 @@ const STATIC_CACHE = `trifold-static-${BUILD_HASH}`
 const OFFLINE_PAGE_CLIENTE = '/cliente/offline'
 const OFFLINE_PAGE_DASHBOARD = '/dashboard/offline'
 
-const APP_SHELL_URLS = [OFFLINE_PAGE_CLIENTE, OFFLINE_PAGE_DASHBOARD, '/icon-192.png', '/icon-512.png']
+const APP_SHELL_URLS = [
+  OFFLINE_PAGE_CLIENTE,
+  OFFLINE_PAGE_DASHBOARD,
+  '/icon-crm-192.png',
+  '/icon-cliente-192.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

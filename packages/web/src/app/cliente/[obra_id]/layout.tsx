@@ -4,6 +4,7 @@ import { Sidebar } from "./_components/sidebar"
 import { PrivacyButton } from "./_components/privacy-button"
 import { PrivacyConsentModal } from "./_components/privacy-consent-modal"
 import { PushPrompt } from "@web/components/portal/push-prompt"
+import { IosInstallPrompt } from "@web/components/ios-install-prompt"
 import { createClient } from "@web/lib/supabase/server"
 
 export const viewport: Viewport = {
@@ -23,7 +24,15 @@ export const metadata: Metadata = {
   },
   icons: {
     apple: [
-      { url: "/icon-192.png", sizes: "192x192" },
+      { url: "/icon-cliente-192.png", sizes: "192x192" },
+    ],
+    other: [
+      { rel: "apple-touch-startup-image", url: "/splash/portal-iphone-se-portrait.png",        media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
+      { rel: "apple-touch-startup-image", url: "/splash/portal-iphone-14-portrait.png",        media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
+      { rel: "apple-touch-startup-image", url: "/splash/portal-iphone-14-pro-portrait.png",    media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
+      { rel: "apple-touch-startup-image", url: "/splash/portal-iphone-15-portrait.png",        media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
+      { rel: "apple-touch-startup-image", url: "/splash/portal-iphone-15-pro-max-portrait.png",media: "(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
+      { rel: "apple-touch-startup-image", url: "/splash/portal-ipad-pro-11-portrait.png",      media: "(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" },
     ],
   },
   other: {
@@ -87,6 +96,7 @@ export default async function ObraLayout({
       </div>
       <PrivacyConsentModal privacyAccepted={privacyAccepted} />
       <PushPrompt />
+      <IosInstallPrompt variant="portal" />
     </>
   )
 }

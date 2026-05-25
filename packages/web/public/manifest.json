@@ -14,9 +14,40 @@
   "dir": "ltr",
   "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-crm-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-crm-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-crm-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-crm-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/crm-pipeline-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Pipeline de vendas — acompanhe leads em cada etapa do funil"
+    },
+    {
+      "src": "/screenshots/crm-leads-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Gestão de leads — histórico completo e ações rápidas"
+    },
+    {
+      "src": "/screenshots/crm-pipeline-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pipeline em mobile"
+    },
+    {
+      "src": "/screenshots/crm-leads-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Leads em mobile"
+    }
   ],
   "shortcuts": [
     {
