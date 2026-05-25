@@ -395,6 +395,7 @@ export function ObraDetailTabs({
       : "fases"
 
   const [tab, setTab] = useState<Tab>(resolvedInitialTab)
+  const [aprovacoes, setAprovacoes] = useState<AprovacaoItem[]>(initialAprovacoes)
   const [addingEtapaToGroup, setAddingEtapaToGroup] = useState<string | null>(null)
 
   // Documentos — visualização com signed URL
@@ -432,13 +433,13 @@ export function ObraDetailTabs({
 
   // Uploads pendentes/rejeitados do role obras nas abas fotos/documentos
   const pendenteFotos = isObras
-    ? initialAprovacoes.filter((a) => a.tipo === "foto")
+    ? aprovacoes.filter((a) => a.tipo === "foto")
     : []
   const pendenteDocumentos = isObras
-    ? initialAprovacoes.filter((a) => a.tipo === "documento")
+    ? aprovacoes.filter((a) => a.tipo === "documento")
     : []
 
-  const totalPendentes = initialAprovacoes.filter((a) => a.status === "pendente").length
+  const totalPendentes = aprovacoes.filter((a) => a.status === "pendente").length
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "fases", label: `Fases (${fases.length})` },
@@ -781,7 +782,7 @@ export function ObraDetailTabs({
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
             Uploads aguardando aprovação
           </h2>
-          <AprovacoesTab obraId={obraId} initialItems={initialAprovacoes} />
+          <AprovacoesTab obraId={obraId} items={aprovacoes} setItems={setAprovacoes} />
         </section>
       )}
 

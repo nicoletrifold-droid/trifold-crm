@@ -86,7 +86,7 @@ export async function PATCH(
     } else {
       const meta = aprovacao.metadata as {
         name: string
-        filename: string
+        filename?: string
         category: string
         file_size_bytes: number
       }
@@ -96,7 +96,7 @@ export async function PATCH(
         uploaded_by: aprovacao.enviado_por,
         storage_path: aprovacao.storage_path,
         name: meta.name,
-        filename: meta.filename,
+        filename: meta.filename ?? meta.name,
         category: meta.category,
         file_size_bytes: meta.file_size_bytes,
       })

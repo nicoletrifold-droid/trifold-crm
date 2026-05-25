@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CheckCircle, FileText, ImageIcon } from "lucide-react"
+import { CheckCircle, Eye, ExternalLink, FileText, ImageIcon } from "lucide-react"
 import { RejeitarModal } from "./rejeitar-modal"
 
 export interface AprovacaoItem {
@@ -17,7 +17,8 @@ export interface AprovacaoItem {
 
 interface AprovacoesTabProps {
   obraId: string
-  initialItems: AprovacaoItem[]
+  items: AprovacaoItem[]
+  setItems: React.Dispatch<React.SetStateAction<AprovacaoItem[]>>
 }
 
 function formatDate(iso: string): string {
@@ -30,8 +31,7 @@ function formatDate(iso: string): string {
   })
 }
 
-export function AprovacoesTab({ obraId, initialItems }: AprovacoesTabProps) {
-  const [items, setItems] = useState<AprovacaoItem[]>(initialItems)
+export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [rejeitandoItem, setRejeitandoItem] = useState<AprovacaoItem | null>(null)
   const [toast, setToast] = useState<{ id: string; msg: string } | null>(null)
@@ -128,12 +128,22 @@ export function AprovacoesTab({ obraId, initialItems }: AprovacoesTabProps) {
             {/* Preview */}
             <div className="flex-shrink-0">
               {item.tipo === "foto" && item.signed_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.signed_url}
-                  alt={displayName}
-                  className="h-16 w-16 rounded-lg object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => window.open(item.signed_url!, "_blank")}
+                  className="group relative block h-16 w-16 overflow-hidden rounded-lg"
+                  title="Abrir foto"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.signed_url}
+                    alt={displayName}
+                    className="h-16 w-16 object-cover transition-opacity group-hover:opacity-75"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                    <ExternalLink className="h-4 w-4 text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-100" />
+                  </span>
+                </button>
               ) : item.tipo === "foto" ? (
                 <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100 dark:bg-stone-800">
                   <ImageIcon className="h-6 w-6 text-gray-400 dark:text-stone-500" />
@@ -165,7 +175,17 @@ export function AprovacoesTab({ obraId, initialItems }: AprovacoesTabProps) {
                 Por <span className="font-medium">{item.enviado_por_nome}</span> · {formatDate(item.created_at)}
               </p>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
+                {item.tipo === "documento" && item.signed_url && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(item.signed_url!, "_blank")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                  >
+                    <Eye className="h-3 w-3" />
+                    Visualizar
+                  </button>
+                )}
                 <button
                   onClick={() => handleAprovar(item)}
                   disabled={isLoading}
