@@ -1,7 +1,7 @@
 ---
 epic: 31
 title: Workflow de Aprovação de Uploads do Perfil Obras
-status: In Progress
+status: Done
 created_at: 2026-05-14
 updated_at: 2026-05-14
 created_by: River (@sm)
@@ -55,19 +55,19 @@ O perfil `obras` tem acesso operacional ao módulo de Obras (criado no Epic 25/S
 
 | Story | Título | Pontos | Status |
 |-------|--------|--------|--------|
-| 31.1 | DB Schema: Tabela de Aprovações de Uploads | 3 | Ready for Review |
-| 31.2 | API: Upload com Pendência + Aprovação + Notificações | 5 | Draft |
-| 31.3 | UI: Painel de Aprovações e Indicadores de Status | 5 | Draft |
+| 31.1 | DB Schema: Tabela de Aprovações de Uploads | 3 | Done |
+| 31.2 | API: Upload com Pendência + Aprovação + Notificações | 5 | Done |
+| 31.3 | UI: Painel de Aprovações e Indicadores de Status | 5 | Done |
 
 ## Critérios de Sucesso do Epic
 
-- [ ] Upload por `obras` NÃO aparece imediatamente nas listas de fotos/documentos
-- [ ] Admin e supervisor recebem notificação ao receber pendência
-- [ ] Admin/supervisor pode aprovar → arquivo publicado imediatamente
-- [ ] Admin/supervisor pode rejeitar com motivo → arquivo removido do storage
-- [ ] Usuário `obras` vê indicador de status do upload (pendente/aprovado/rejeitado)
-- [ ] Badge na sidebar indica o número de aprovações pendentes para admin/supervisor
-- [ ] Upload por `admin` e `supervisor` continua publicando diretamente (sem regressão)
+- [x] Upload por `obras` NÃO aparece imediatamente nas listas de fotos/documentos
+- [x] Admin e supervisor recebem notificação ao receber pendência
+- [x] Admin/supervisor pode aprovar → arquivo publicado imediatamente
+- [x] Admin/supervisor pode rejeitar com motivo → arquivo removido do storage
+- [x] Usuário `obras` vê indicador de status do upload (pendente/aprovado/rejeitado)
+- [x] Badge na sidebar indica o número de aprovações pendentes para admin/supervisor
+- [x] Upload por `admin` e `supervisor` continua publicando diretamente (sem regressão)
 
 ## Dependências Técnicas
 

@@ -1,6 +1,6 @@
 # Story 31.1 — DB Schema: Tabela de Aprovações de Uploads
 
-## Status: Ready for Review
+## Status: Done
 
 ## Executor Assignment
 executor: "@data-engineer"

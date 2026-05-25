@@ -1,6 +1,6 @@
 # Story 31.2 — API: Upload com Pendência + Aprovação + Notificações por Email
 
-## Status: Ready for Review
+## Status: Done
 
 ## Executor Assignment
 executor: "@dev"
