@@ -1,6 +1,6 @@
 # Story 31.3 — UI: Painel de Aprovações e Indicadores de Status
 
-## Status: Ready for Review
+## Status: Done
 
 ## Executor Assignment
 executor: "@dev"
@@ -243,3 +243,4 @@ Verificar se `ObraDetailTabs` já recebe `userRole`. Se não, adicionar ao inter
 | 2026-05-25 | @sm (River) | Story criada — Draft |
 | 2026-05-25 | @po (Pax) | Validação 10-pt: 7/10 GO — corrigido AC10 (Server Component pattern vs SWR polling); adicionado path exato do layout.tsx; status → Ready |
 | 2026-05-25 | @dev (Dex) | Implementação completa — 5 arquivos (2 modificados, 3 criados) — status → Ready for Review |
+| 2026-05-25 | @dev (Dex) | Bug fixes pós-teste: (1) preview clicável fotos/docs na aba Aprovações; (2) stale state corrigido — state elevado para ObraDetailTabs; (3) fallback filename→name no route de aprovação; (4) query obras filtrada por status IN (pendente, rejeitado); (5) motivo_rejeicao adicionado à interface AprovacaoItem |
