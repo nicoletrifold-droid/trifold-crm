@@ -1,7 +1,7 @@
 # Story 39-4: CRM offline page + fallback no service worker
 
 ## Status
-Ready for Review
+Done
 
 ## Complexity
 S (Small) — 1 nova página + atualização do SW
