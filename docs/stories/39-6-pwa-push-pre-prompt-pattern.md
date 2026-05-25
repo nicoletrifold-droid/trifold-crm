@@ -1,7 +1,7 @@
 # Story 39-6: Pre-prompt pattern para push notifications
 
 ## Status
-Ready
+Done
 
 ## Complexity
 M (Medium) — refactor do push-prompt existente + dois estágios de UX
@@ -112,16 +112,23 @@ useEffect(() => {
 ## Dev Agent Record
 
 ### Agent Model Used
-_a preencher_
+claude-sonnet-4-6
 
 ### Debug Log References
-_a preencher_
+Nenhum — implementação direta sem blockers.
 
 ### Completion Notes
-_a preencher_
+- `push-prompt.tsx` reescrito com `type Stage = 'hidden' | 'soft' | 'hard' | 'done'`.
+- Stage 1 (soft): banner in-app com delay de 10s, guards de `Notification.permission`, `push-dismissed` (session) e `push-soft-declined-until` (local, 7 dias).
+- Stage 2 (hard): iniciado apenas após click em "Sim, quero receber" — chama `Notification.requestPermission()` + subscribe flow existente.
+- Re-subscription silenciosa quando `permission === 'granted'` (sem banner).
+- "Agora não" grava `push-soft-declined-until` por 7 dias.
+- Animação `motion-safe:animate-[slideUp_0.2s_ease-out]` (reutiliza keyframe já definido em globals.css pela story 39-7).
+- `role="region"` + `aria-label="Ativar notificações"` para acessibilidade.
+- `npm run type-check` e `npm run lint` passam sem erros.
 
 ### File List
-_a preencher_
+- `packages/web/src/components/portal/push-prompt.tsx` — MODIFICADO (dois estágios, soft/hard, delay 10s)
 
 ### Change Log
-_a preencher_
+- 2026-05-25: Implementação concluída por @dev (Dex) — claude-sonnet-4-6
