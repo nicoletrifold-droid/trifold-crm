@@ -33,10 +33,10 @@ const CONFIG_CARDS = [
     description: "Meta Ads, WhatsApp, Telegram",
   },
   {
-    href: "/dashboard/configuracoes/personalidade",
+    href: "/dashboard/configuracoes/nicole",
     icon: "◬",
-    title: "Personalidade Nicole",
-    description: "Prompts e comportamento",
+    title: "Nicole",
+    description: "Personalidade e treinamento da IA",
   },
   {
     href: "/dashboard/configuracoes/pipeline",

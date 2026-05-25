@@ -15,7 +15,6 @@ import {
   BarChart3,
   Megaphone,
   Mail,
-  GraduationCap,
   Settings,
   Shield,
   HardHat,
@@ -40,7 +39,6 @@ const NAV_ITEMS_BASE = [
   // Análise & Crescimento
   { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/campaigns", label: "Campanhas", icon: <Megaphone className={ICON_SIZE} /> },
-  { href: "/dashboard/treinamento", label: "Treinamento", icon: <GraduationCap className={ICON_SIZE} /> },
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
@@ -66,7 +64,6 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/atividades": "atividades",
   "/dashboard/analytics": "analytics",
   "/dashboard/campaigns": "campanhas",
-  "/dashboard/treinamento": "treinamento",
   "/dashboard/obras": "obras",
   "/dashboard/brindes": "brindes",
   "/dashboard/mensagens": "mensagens",
