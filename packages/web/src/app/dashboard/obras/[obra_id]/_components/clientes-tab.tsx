@@ -195,7 +195,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       setCrmClienteB(found)
       if (!found) {
         setErrorB(
-          "CPF não encontrado no cadastro. Cadastre em Configurações → Clientes antes de vincular."
+          "CPF não encontrado no cadastro. Use o formulário abaixo para criar o cliente ou peça ao administrador para cadastrá-lo em Configurações → Clientes."
         )
       }
     } catch {

@@ -120,7 +120,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "CPF não encontrado no cadastro de clientes. Cadastre o cliente em Configurações → Clientes antes de vincular.",
+            "CPF não encontrado no cadastro. Use 'Criar acesso ao portal' abaixo ou peça ao administrador para cadastrar em Configurações → Clientes.",
         },
         { status: 404 }
       )
