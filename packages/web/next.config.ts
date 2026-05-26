@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Identifica o build pelo commit hash do Vercel (facilita rastrear qual versão está em produção).
+  // Em desenvolvimento, usa 'dev'.
+  generateBuildId: async () => process.env.VERCEL_GIT_COMMIT_SHA ?? "dev",
+
   // Permite acesso ao dev server pela rede LAN local (workstation de dev).
   // PRESERVADO da configuração original — não remover.
   allowedDevOrigins: ["192.168.15.64"],
