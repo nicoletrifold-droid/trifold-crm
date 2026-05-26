@@ -162,13 +162,14 @@ export async function POST(
     })
   }
 
-  // ── MODO A: Criar novo cliente + vincular ─────────────────────────────
-  const { nome, cpf, email, senha_temporaria, numero_unidade } = body as {
+  // ── MODO A: Criar acesso ao portal (com ou sem cadastro CRM prévio) ──
+  const { nome, cpf, email, senha_temporaria, numero_unidade, crm_id } = body as {
     nome: string
     cpf: string
     email: string
     senha_temporaria: string
     numero_unidade?: string
+    crm_id?: string   // Presente quando o CPF já existe no CRM (Opção 3)
   }
 
   if (!nome?.trim() || !cpf?.trim() || !email?.trim() || !senha_temporaria) {
@@ -178,34 +179,68 @@ export async function POST(
     )
   }
 
-  // Verificar se CPF já existe no cadastro CRM da org
-  const { data: existingCrm } = await supabase
-    .from("clientes")
-    .select("id, nome")
-    .eq("org_id", appUser.org_id)
-    .eq("cpf", cpf.trim())
-    .maybeSingle()
-
-  if (existingCrm) {
-    return NextResponse.json(
-      {
-        error: `CPF já cadastrado como "${existingCrm.nome}". Use "Vincular por CPF" para vincular este cliente à obra.`,
-        cliente_existente: { id: existingCrm.id, nome: existingCrm.nome },
-      },
-      { status: 409 }
-    )
-  }
-
   const supabaseAdmin = createAdminClient()
 
-  // Criar usuário de portal (acesso ao portal do cliente)
+  // ── Determinar se o cliente CRM já existe ────────────────────────────
+  let clienteCrm: { id: string; nome: string; cpf: string; email: string | null }
+
+  if (crm_id) {
+    // Frontend já verificou — confirmar que o ID pertence à org
+    const { data: found, error: findErr } = await supabase
+      .from("clientes")
+      .select("id, nome, cpf, email")
+      .eq("id", crm_id)
+      .eq("org_id", appUser.org_id)
+      .maybeSingle()
+
+    if (findErr || !found) {
+      return NextResponse.json(
+        { error: "Cliente CRM não encontrado." },
+        { status: 404 }
+      )
+    }
+    clienteCrm = found as typeof clienteCrm
+  } else {
+    // CPF não estava no CRM — verificar de segurança antes de criar
+    const { data: existingCrm } = await supabase
+      .from("clientes")
+      .select("id, nome, cpf, email")
+      .eq("org_id", appUser.org_id)
+      .eq("cpf", cpf.trim())
+      .maybeSingle()
+
+    if (existingCrm) {
+      // Race condition: CPF foi criado por outro processo entre o check e o submit
+      // Usar o registro existente em vez de criar duplicata
+      clienteCrm = existingCrm as typeof clienteCrm
+    } else {
+      // Criar novo registro no CRM
+      const { data: newCrm, error: crmError } = await supabase
+        .from("clientes")
+        .insert({
+          org_id: appUser.org_id,
+          nome: nome.trim(),
+          cpf: cpf.trim(),
+          email: email.trim(),
+        })
+        .select("id, nome, cpf, email")
+        .single()
+
+      if (crmError) {
+        return NextResponse.json({ error: crmError.message }, { status: 500 })
+      }
+      clienteCrm = newCrm as typeof clienteCrm
+    }
+  }
+
+  // Criar usuário de portal (auth + users table)
   const { data: authData, error: authError } =
     await supabaseAdmin.auth.admin.createUser({
       email: email.trim(),
       password: senha_temporaria,
       email_confirm: true,
       app_metadata: { role: "cliente" },
-      user_metadata: { full_name: nome.trim() },
+      user_metadata: { full_name: clienteCrm.nome },
     })
 
   if (authError) {
@@ -223,11 +258,11 @@ export async function POST(
     .insert({
       auth_id: authData.user.id,
       org_id: appUser.org_id,
-      name: nome.trim(),
+      name: clienteCrm.nome,
       email: email.trim(),
       role: "cliente",
     })
-    .select("id, name, email")
+    .select("id")
     .single()
 
   if (userError) {
@@ -235,22 +270,10 @@ export async function POST(
     return NextResponse.json({ error: userError.message }, { status: 500 })
   }
 
-  // Criar registro CRM do cliente (clientes table)
-  const { data: clienteCrm, error: crmError } = await supabase
-    .from("clientes")
-    .insert({
-      org_id: appUser.org_id,
-      nome: nome.trim(),
-      cpf: cpf.trim(),
-      email: email.trim(),
-    })
-    .select("id, nome, cpf, email")
-    .single()
-
-  if (crmError) {
-    await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-    return NextResponse.json({ error: crmError.message }, { status: 500 })
-  }
+  const unidadeNormalizada =
+    typeof numero_unidade === "string" && numero_unidade.trim()
+      ? numero_unidade.trim()
+      : null
 
   // Criar vínculo CRM (clientes_obras_vinculos)
   const { data: vinculo, error: linkCrmErr } = await supabase
@@ -258,10 +281,7 @@ export async function POST(
     .insert({
       cliente_id: clienteCrm.id,
       obra_id,
-      numero_unidade:
-        typeof numero_unidade === "string" && numero_unidade.trim()
-          ? numero_unidade.trim()
-          : null,
+      numero_unidade: unidadeNormalizada,
     })
     .select("id, numero_unidade")
     .single()
@@ -271,12 +291,12 @@ export async function POST(
     return NextResponse.json({ error: linkCrmErr.message }, { status: 500 })
   }
 
-  // Criar vínculo de acesso ao portal (cliente_obras) — mantém acesso ao portal
+  // Criar vínculo de acesso ao portal (cliente_obras)
   await supabaseAdmin.from("cliente_obras").insert({
     user_id: newUser.id,
     obra_id,
     is_primary: true,
-    numero_unidade: vinculo.numero_unidade,
+    numero_unidade: unidadeNormalizada,
   })
 
   return NextResponse.json(
