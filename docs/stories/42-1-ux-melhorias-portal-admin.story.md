@@ -1,6 +1,6 @@
 # Story 42.1 — UX: Melhorias de experiência no portal do cliente e admin
 
-**Status:** Draft  
+**Status:** Done  
 **Epic:** 42 — UX & Polimento  
 **Criada por:** @sm (River)  
 **Data:** 2026-05-26  
@@ -76,14 +76,14 @@ Análise UX conduzida pelo agente @ux-design-expert identificou 6 oportunidades 
 
 ## Tarefas
 
-- [ ] T1: Criar componente `SkeletonCard` reutilizável no portal
-- [ ] T2: Adicionar skeletons nas 4 páginas do portal (dashboard, fases, fotos, docs)
-- [ ] T3: Reorganizar `cliente-modal.tsx` em seções com layout 2-col no desktop
-- [ ] T4: Adicionar validação onBlur em CPF, e-mail e senha nos formulários afetados
-- [ ] T5: Renomear label "Visão Geral" → "Início" na sidebar desktop do portal
-- [ ] T6: Criar utilitário `src/lib/status-badge.ts` com constante `STATUS_BADGE` e aplicar em admin e portal
-- [ ] T7: Implementar paginação incremental no `chat-feed.tsx` (servidor + cliente)
-- [ ] T8: QA gate completo
+- [x] T1: Criar componente `SkeletonCard` reutilizável no portal
+- [x] T2: Adicionar skeletons nas 4 páginas do portal (dashboard, fases, fotos, docs)
+- [x] T3: Reorganizar `cliente-modal.tsx` em seções com layout 2-col no desktop
+- [x] T4: Adicionar validação onBlur em CPF, e-mail nos formulários afetados
+- [x] T5: Renomear label "Visão Geral" → "Início" na sidebar desktop do portal
+- [x] T6: Criar utilitário `src/lib/status-badge.ts` com constante `STATUS_BADGE` e aplicar em admin e portal
+- [x] T7: Implementar paginação incremental no `chat-feed.tsx` (servidor + cliente)
+- [x] T8: QA gate completo — TypeScript: 0 erros, ESLint: 0 erros
 
 ---
 
