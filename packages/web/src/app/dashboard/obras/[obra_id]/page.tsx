@@ -72,7 +72,7 @@ export default async function ObraDetailPage({
 
   const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
 
-  const [fasesRes, fotosRes, documentosRes, clientesRes, msgClientesRes, aprovacoesRes] =
+  const [fasesRes, fotosRes, documentosRes, clientesRes, aprovacoesRes] =
     await Promise.all([
       supabase
         .from("obra_fases")
@@ -95,11 +95,6 @@ export default async function ObraDetailPage({
         .from("clientes_obras_vinculos")
         .select("id, numero_unidade, clientes(id, nome, cpf, email)")
         .eq("obra_id", obra_id),
-      supabase
-        .from("obra_mensagens")
-        .select("cliente_id")
-        .eq("obra_id", obra_id)
-        .not("cliente_id", "is", null),
       // Busca aprovações: admin/supervisor vê todos os pendentes; obras vê os próprios
       isAdminOrSupervisor
         ? supabase
