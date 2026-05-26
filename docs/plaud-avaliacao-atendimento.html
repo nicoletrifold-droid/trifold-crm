@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plaud + IA — Solução de Avaliação de Atendimento</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand:    #1A56DB;
+      --brand-dk: #1240A8;
+      --accent:   #0EA5E9;
+      --green:    #10B981;
+      --yellow:   #F59E0B;
+      --red:      #EF4444;
+      --gray-50:  #F8FAFC;
+      --gray-100: #F1F5F9;
+      --gray-200: #E2E8F0;
+      --gray-400: #94A3B8;
+      --gray-600: #475569;
+      --gray-800: #1E293B;
+      --gray-900: #0F172A;
+      --radius:   10px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #fff;
+      color: var(--gray-800);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    /* ── COVER ─────────────────────────────────────────── */
+    .cover {
+      background: linear-gradient(135deg, var(--gray-900) 0%, var(--brand-dk) 100%);
+      color: #fff;
+      padding: 64px 56px 52px;
+      page-break-after: always;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .cover-logo {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      opacity: .6;
+    }
+
+    .cover-main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 48px 0 32px; }
+
+    .cover-tag {
+      display: inline-block;
+      background: rgba(14,165,233,.25);
+      color: #7DD3FC;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+      width: fit-content;
+    }
+
+    .cover h1 {
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+
+    .cover h1 span { color: #38BDF8; }
+
+    .cover-sub {
+      font-size: 16px;
+      color: rgba(255,255,255,.65);
+      max-width: 520px;
+      margin-bottom: 48px;
+    }
+
+    .cover-divider { border: none; border-top: 1px solid rgba(255,255,255,.15); margin-bottom: 32px; }
+
+    .cover-pills { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    .pill {
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.18);
+      color: rgba(255,255,255,.85);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    .cover-footer {
+      font-size: 12px;
+      color: rgba(255,255,255,.4);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── LAYOUT ────────────────────────────────────────── */
+    .page {
+      padding: 52px 56px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .section { margin-bottom: 48px; }
+
+    /* ── TYPOGRAPHY ────────────────────────────────────── */
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px; height: 30px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .section-lead {
+      color: var(--gray-600);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    p { color: var(--gray-600); margin-bottom: 12px; }
+
+    /* ── DIVIDER ───────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--gray-200);
+      margin: 40px 0;
+    }
+
+    /* ── PIPELINE ─────────────────────────────────────── */
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .pipeline-step {
+      flex: 1;
+      padding: 16px 14px;
+      text-align: center;
+      position: relative;
+    }
+
+    .pipeline-step:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      color: var(--gray-400);
+      z-index: 1;
+    }
+
+    .pipeline-step .step-icon {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .pipeline-step .step-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--brand);
+      margin-bottom: 4px;
+    }
+
+    .pipeline-step .step-desc {
+      font-size: 12px;
+      color: var(--gray-600);
+    }
+
+    /* ── CARDS GRID ───────────────────────────────────── */
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .cards-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    .card {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .card-icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .card-icon.blue   { background: #DBEAFE; }
+    .card-icon.green  { background: #D1FAE5; }
+    .card-icon.purple { background: #EDE9FE; }
+    .card-icon.orange { background: #FEF3C7; }
+    .card-icon.sky    { background: #E0F2FE; }
+    .card-icon.pink   { background: #FCE7F3; }
+
+    .card h3 { margin-bottom: 6px; font-size: 13px; }
+    .card p  { font-size: 12px; margin: 0; }
+
+    /* ── TABLE ────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      background: var(--gray-900);
+      color: #fff;
+      font-weight: 600;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 12px;
+      letter-spacing: .04em;
+    }
+
+    thead th:first-child { border-radius: var(--radius) 0 0 0; }
+    thead th:last-child  { border-radius: 0 var(--radius) 0 0; }
+
+    tbody tr { border-bottom: 1px solid var(--gray-200); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:nth-child(even) { background: var(--gray-50); }
+
+    tbody td { padding: 10px 14px; color: var(--gray-600); }
+    tbody td strong { color: var(--gray-900); font-weight: 600; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .badge.yes    { background: #D1FAE5; color: #065F46; }
+    .badge.no     { background: #FEE2E2; color: #991B1B; }
+    .badge.medium { background: #FEF3C7; color: #92400E; }
+    .badge.info   { background: #DBEAFE; color: #1E40AF; }
+
+    /* ── HIGHLIGHT BOX ────────────────────────────────── */
+    .highlight {
+      border-left: 4px solid var(--brand);
+      background: #EFF6FF;
+      padding: 16px 20px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin-bottom: 16px;
+    }
+
+    .highlight p { color: var(--gray-700); margin: 0; font-size: 13px; }
+
+    .warning {
+      border-left: 4px solid var(--yellow);
+      background: #FFFBEB;
+      padding: 16px 20px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin-bottom: 16px;
+    }
+
+    .warning p { color: #78350F; margin: 0; font-size: 13px; }
+
+    /* ── DIMENSION LIST ───────────────────────────────── */
+    .dim-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .dim-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+
+    .dim-list li .dot {
+      width: 8px; height: 8px;
+      background: var(--brand);
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .dim-list li strong { display: block; color: var(--gray-900); font-size: 12px; font-weight: 600; }
+    .dim-list li span   { color: var(--gray-600); font-size: 11px; }
+
+    /* ── NEXT STEPS ───────────────────────────────────── */
+    .steps-list { list-style: none; counter-reset: steps; }
+
+    .steps-list li {
+      counter-increment: steps;
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+
+    .steps-list li::before {
+      content: counter(steps);
+      width: 28px; height: 28px;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .steps-list li .step-content strong { display: block; color: var(--gray-900); font-size: 13px; font-weight: 600; }
+    .steps-list li .step-content span   { color: var(--gray-600); font-size: 12px; }
+
+    /* ── FOOTER ───────────────────────────────────────── */
+    .doc-footer {
+      border-top: 1px solid var(--gray-200);
+      padding: 24px 56px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--gray-400);
+      page-break-inside: avoid;
+    }
+
+    /* ── PRINT ────────────────────────────────────────── */
+    @media print {
+      body { font-size: 12px; }
+      .cover { min-height: auto; padding: 48px 48px 40px; }
+      .cover h1 { font-size: 34px; }
+      .page { padding: 40px 48px; }
+      .no-break { page-break-inside: avoid; }
+      a { text-decoration: none; color: inherit; }
+    }
+
+    @page {
+      size: A4;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     CAPA
+════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">Trifold CRM &nbsp;·&nbsp; Proposta Técnica</div>
+
+  <div class="cover-main">
+    <div class="cover-tag">Inteligência de Atendimento</div>
+    <h1>Avaliação Automática<br>de Atendimento com <span>IA</span></h1>
+    <p class="cover-sub">
+      Como integrar o Plaud AI ao Trifold CRM para avaliar qualidade de atendimento,
+      identificar pontos fortes e fracos e gerar planos de melhoria contínua automaticamente.
+    </p>
+    <hr class="cover-divider" />
+    <div class="cover-pills">
+      <span class="pill">Plaud MCP API</span>
+      <span class="pill">Claude AI</span>
+      <span class="pill">Trifold CRM</span>
+      <span class="pill">Supabase</span>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>marcos@trifold.eng.br</span>
+    <span>Maio 2026</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 1 — SOLUÇÃO
+════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- SEÇÃO 1 — O QUE O PLAUD OFERECE -->
+  <div class="section no-break">
+    <h2><span class="num">1</span> O que o Plaud MCP oferece</h2>
+    <p class="section-lead">
+      O Plaud é um dispositivo de gravação com IA que transcreve automaticamente reuniões e ligações.
+      Sua API MCP expõe sete ferramentas que permitem acessar gravações, transcrições e notas geradas
+      por IA de forma programática.
+    </p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon blue">🎙️</div>
+        <h3>get_transcript</h3>
+        <p>Transcrição completa da gravação com timestamps e identificação de quem está falando (speaker diarization). Distingue atendente de cliente automaticamente.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon green">📝</div>
+        <h3>get_note</h3>
+        <p>Resumo gerado por IA com itens de ação e tópicos-chave da conversa. Serve como input complementar para avaliação.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon purple">📂</div>
+        <h3>list_files &amp; get_file</h3>
+        <p>Lista todas as gravações com filtros por data e nome. Permite ingestão em lote ou por período (diário, semanal).</p>
+      </div>
+      <div class="card">
+        <div class="card-icon orange">🔗</div>
+        <h3>Autenticação OAuth</h3>
+        <p>Login único por conta. Se as gravações ficarem em uma conta corporativa central, uma única autenticação cobre todos os atendimentos.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- SEÇÃO 2 — COMO FUNCIONARIA -->
+  <div class="section no-break">
+    <h2><span class="num">2</span> Como a integração funcionaria</h2>
+    <p class="section-lead">
+      O fluxo completo vai da gravação da ligação até o relatório salvo no CRM,
+      sem intervenção manual.
+    </p>
+
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <div class="step-icon">🎙️</div>
+        <div class="step-label">Gravação</div>
+        <div class="step-desc">Ligação gravada pelo Plaud</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">📡</div>
+        <div class="step-label">Ingestão</div>
+        <div class="step-desc">MCP busca transcrição + notas</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">🤖</div>
+        <div class="step-label">Avaliação IA</div>
+        <div class="step-desc">Agente Claude analisa o atendimento</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="step-icon">📊</div>
+        <div class="step-label">Relatório</div>
+        <div class="step-desc">Score + pontos + plano salvo no CRM</div>
+      </div>
+    </div>
+
+    <div class="highlight">
+      <p><strong>Identificação de speakers:</strong> O Plaud separa automaticamente as falas do atendente e do cliente na transcrição, o que permite ao agente de IA avaliar cada lado independentemente — qualidade das respostas do atendente versus sentimento e satisfação do cliente.</p>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 2 — AVALIAÇÃO E VIABILIDADE
+════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- SEÇÃO 3 — O QUE O AGENTE AVALIA -->
+  <div class="section no-break">
+    <h2><span class="num">3</span> O que o agente de IA avalia</h2>
+    <p class="section-lead">
+      O agente recebe a transcrição e analisa seis dimensões de qualidade configuráveis
+      conforme os critérios do seu negócio.
+    </p>
+
+    <ul class="dim-list">
+      <li>
+        <div class="dot"></div>
+        <div>
+          <strong>Escuta ativa e empatia</strong>
+          <span>O atendente demonstrou atenção e validou o sentimento do cliente?</span>
+        </div>
+      </li>
+      <li>
+        <div class="dot"></div>
+        <div>
+          <strong>Clareza nas respostas</strong>
+          <span>As informações foram transmitidas de forma objetiva e sem ruídos?</span>
+        </div>
+      </li>
+      <li>
+        <div class="dot"></div>
+        <div>
+          <strong>Resolução do problema</strong>
+          <span>O problema foi solucionado ou encaminhado corretamente?</span>
+        </div>
+      </li>
+      <li>
+        <div class="dot"></div>
+        <div>
+          <strong>Aderência ao processo</strong>
+          <span>O atendente seguiu o roteiro e os procedimentos internos?</span>
+        </div>
+      </li>
+      <li>
+        <div class="dot"></div>
+        <div>
+          <strong>Tom e postura</strong>
+          <span>A comunicação foi profissional, respeitosa e alinhada à marca?</span>
+        </div>
+      </li>
+      <li>
+        <div class="dot"></div>
+        <div>
+          <strong>Sentimento do cliente</strong>
+          <span>Como o cliente entrou e como saiu da conversa?</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- SEÇÃO 4 — VIABILIDADE TÉCNICA -->
+  <div class="section no-break">
+    <h2><span class="num">4</span> Viabilidade técnica</h2>
+    <p class="section-lead">
+      Todos os componentes necessários já estão disponíveis e documentados.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Componente</th>
+          <th>Status</th>
+          <th>Observação</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>API Plaud documentada e pública</strong></td>
+          <td><span class="badge yes">✓ Disponível</span></td>
+          <td>docs.plaud.ai/documentation/plaud_app/mcp</td>
+        </tr>
+        <tr>
+          <td><strong>Transcrições com identificação de speakers</strong></td>
+          <td><span class="badge yes">✓ Disponível</span></td>
+          <td>Distingue atendente vs. cliente nativamente</td>
+        </tr>
+        <tr>
+          <td><strong>Integração com Claude via MCP</strong></td>
+          <td><span class="badge yes">✓ Disponível</span></td>
+          <td>Caso de uso direto da documentação oficial</td>
+        </tr>
+        <tr>
+          <td><strong>Armazenamento no Trifold (Supabase)</strong></td>
+          <td><span class="badge yes">✓ Disponível</span></td>
+          <td>Novo schema vinculado a contatos/oportunidades</td>
+        </tr>
+        <tr>
+          <td><strong>Custo por avaliação (Claude API)</strong></td>
+          <td><span class="badge medium">Baixo</span></td>
+          <td>Transcrições são texto — tokens baratos</td>
+        </tr>
+        <tr>
+          <td><strong>OAuth por conta corporativa</strong></td>
+          <td><span class="badge info">Único</span></td>
+          <td>Uma autenticação se centralizado</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- SEÇÃO 5 — PRINCIPAL LIMITAÇÃO -->
+  <div class="section no-break">
+    <h2><span class="num">5</span> Principal limitação</h2>
+
+    <div class="warning">
+      <p>
+        <strong>OAuth individual por usuário:</strong> Cada atendente precisaria conectar sua
+        própria conta Plaud ao sistema. Se as gravações forem centralizadas em
+        <strong>uma única conta corporativa Plaud</strong>, esse ponto deixa de ser
+        uma limitação — basta uma única autenticação para acessar todos os atendimentos.
+      </p>
+    </div>
+
+    <p style="font-size:13px;">
+      A recomendação é adotar o modelo de <strong>conta corporativa centralizada</strong>,
+      onde todos os atendimentos são gravados e sincronizados em uma única workspace do Plaud.
+      Isso simplifica a autenticação, centraliza os dados e viabiliza relatórios consolidados
+      por equipe ou por período.
+    </p>
+  </div>
+
+</div><!-- /page -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PÁGINA 3 — O QUE PRECISA SER CONSTRUÍDO
+════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- SEÇÃO 6 — O QUE CONSTRUIR -->
+  <div class="section no-break">
+    <h2><span class="num">6</span> O que precisaria ser construído</h2>
+    <p class="section-lead">
+      A solução é composta por quatro blocos independentes que podem ser
+      desenvolvidos e entregues de forma incremental.
+    </p>
+
+    <ol class="steps-list">
+      <li>
+        <div class="step-content">
+          <strong>Configuração do MCP do Plaud no Trifold</strong>
+          <span>Adicionar o servidor MCP do Plaud às configurações do projeto, habilitando o acesso às ferramentas de transcrição via Claude Code.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Prompt de avaliação customizado</strong>
+          <span>Criar um system prompt estruturado que define os critérios de qualidade específicos do seu atendimento — dimensional, com scoring numérico e saída em JSON estruturado.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Pipeline de ingestão automática</strong>
+          <span>Lógica para buscar gravações novas (diário ou em tempo real) e disparar a avaliação para cada transcrição não processada ainda.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Armazenamento e painel no CRM</strong>
+          <span>Novo schema no Supabase para salvar os resultados vinculados a atendentes e clientes, mais um painel de métricas no Trifold com histórico de evolução e ranking de equipe.</span>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- SEÇÃO 7 — OUTPUT ESPERADO -->
+  <div class="section no-break">
+    <h2><span class="num">7</span> Output esperado por avaliação</h2>
+    <p class="section-lead">
+      Para cada atendimento avaliado, o sistema geraria automaticamente:
+    </p>
+
+    <div class="cards-3">
+      <div class="card">
+        <div class="card-icon blue">🏅</div>
+        <h3>Score geral</h3>
+        <p>Nota de 0 a 10 com breakdown por dimensão avaliada.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon green">✅</div>
+        <h3>Pontos fortes</h3>
+        <p>Lista do que o atendente fez bem, com trecho da conversa como evidência.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon pink">⚠️</div>
+        <h3>Pontos de melhoria</h3>
+        <p>Oportunidades identificadas com sugestão concreta de como agir diferente.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon purple">📋</div>
+        <h3>Plano de ação</h3>
+        <p>3 a 5 ações priorizadas para o atendente desenvolver nas próximas semanas.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon sky">😊</div>
+        <h3>Sentimento do cliente</h3>
+        <p>Análise de como o cliente se sentiu ao longo e ao final da conversa.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon orange">📈</div>
+        <h3>Tendência histórica</h3>
+        <p>Comparativo com avaliações anteriores do mesmo atendente.</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     RODAPÉ
+════════════════════════════════════════════════════════ -->
+<div class="doc-footer">
+  <span>Trifold CRM — Proposta Técnica: Avaliação de Atendimento com IA</span>
+  <span>marcos@trifold.eng.br &nbsp;·&nbsp; Maio 2026</span>
+</div>
+
+</body>
+</html>
