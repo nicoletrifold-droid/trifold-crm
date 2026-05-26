@@ -67,3 +67,60 @@ export interface FormattedInstallment {
   status: InstallmentStatus
   hasBoleto: boolean
 }
+
+// ── Enterprise / Unit / Contract (sync de Obras ↔ Empreendimentos) ───
+
+export interface SiengeEnterprise {
+  id: number
+  name: string
+  address: string | null
+  city: string | null
+  totalUnits: number
+  availableUnits: number
+}
+
+export interface SiengeEnterprisesResponse {
+  resultSetMetadata: {
+    count: number
+    offset: number
+    limit: number
+  }
+  results: SiengeEnterprise[]
+}
+
+export interface SiengeUnit {
+  id: number
+  enterpriseId: number
+  block: string | null
+  floor: number | null
+  number: string | null
+  status: string
+}
+
+export interface SiengeUnitsResponse {
+  resultSetMetadata: {
+    count: number
+    offset: number
+    limit: number
+  }
+  results: SiengeUnit[]
+}
+
+export interface SiengeContract {
+  id: number
+  contractNumber: string
+  customerId: number
+  unitId: number
+  status: string
+  totalValue: number
+  signatureDate: string | null
+}
+
+export interface SiengeContractsResponse {
+  resultSetMetadata: {
+    count: number
+    offset: number
+    limit: number
+  }
+  results: SiengeContract[]
+}

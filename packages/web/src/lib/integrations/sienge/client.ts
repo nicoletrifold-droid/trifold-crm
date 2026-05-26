@@ -5,6 +5,11 @@ import type {
   SiengePaymentSlipResponse,
   FormattedInstallment,
   InstallmentStatus,
+  SiengeEnterprise,
+  SiengeEnterprisesResponse,
+  SiengeUnitsResponse,
+  SiengeContract,
+  SiengeContractsResponse,
 } from "./types"
 
 function getBaseUrl(): string {
@@ -149,4 +154,104 @@ export async function getPaymentSlip(
   return siengeRequest<SiengePaymentSlipResponse>(
     `/payment-slip-notification?billReceivableId=${billReceivableId}&installmentId=${installmentId}`
   )
+}
+
+// ── Enterprise / Unit / Contract endpoints ──────────────────────────
+
+const PAGE_SIZE = 200
+const PAGE_DELAY_MS = 300
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Lista todos os empreendimentos do Sienge (paginação automática).
+ */
+export async function getEnterprises(): Promise<SiengeEnterprise[]> {
+  const all: SiengeEnterprise[] = []
+  let offset = 0
+
+  while (true) {
+    const data = await siengeRequest<SiengeEnterprisesResponse>(
+      `/enterprises?limit=${PAGE_SIZE}&offset=${offset}`
+    )
+    all.push(...data.results)
+
+    const total = data.resultSetMetadata.count
+    offset += PAGE_SIZE
+
+    if (offset >= total) break
+    await sleep(PAGE_DELAY_MS)
+  }
+
+  return all
+}
+
+/**
+ * Retorna o conjunto de unit IDs de um empreendimento (paginação automática).
+ */
+export async function getUnitIdsByEnterprise(
+  enterpriseId: number
+): Promise<Set<number>> {
+  const ids = new Set<number>()
+  let offset = 0
+
+  while (true) {
+    const data = await siengeRequest<SiengeUnitsResponse>(
+      `/units?enterpriseId=${enterpriseId}&limit=${PAGE_SIZE}&offset=${offset}`
+    )
+
+    for (const u of data.results) {
+      ids.add(u.id)
+    }
+
+    const total = data.resultSetMetadata.count
+    offset += PAGE_SIZE
+
+    if (offset >= total) break
+    await sleep(PAGE_DELAY_MS)
+  }
+
+  return ids
+}
+
+/**
+ * Lista TODOS os contratos de venda (não há filtro por enterpriseId nativo).
+ * Após obter, filtre por unitId presente em getUnitIdsByEnterprise().
+ */
+export async function getAllSalesContracts(): Promise<SiengeContract[]> {
+  const all: SiengeContract[] = []
+  let offset = 0
+
+  while (true) {
+    const data = await siengeRequest<SiengeContractsResponse>(
+      `/sales-contracts?limit=${PAGE_SIZE}&offset=${offset}`
+    )
+    all.push(...data.results)
+
+    const total = data.resultSetMetadata.count
+    offset += PAGE_SIZE
+
+    if (offset >= total) break
+    await sleep(PAGE_DELAY_MS)
+  }
+
+  return all
+}
+
+/**
+ * Busca detalhe de um cliente pelo ID Sienge. Retorna null se 404.
+ */
+export async function getCustomerById(
+  id: number
+): Promise<SiengeCustomer | null> {
+  try {
+    return await siengeRequest<SiengeCustomer>(`/customers/${id}`)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("HTTP 404")) {
+      return null
+    }
+    throw err
+  }
 }

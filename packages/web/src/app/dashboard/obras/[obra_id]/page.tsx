@@ -8,6 +8,7 @@ import { ObraDetailTabs } from "./_components/obra-detail-tabs"
 import { ObraEditButton } from "./_components/obra-edit-button"
 import { ObraDeleteButton } from "./_components/obra-delete-button"
 import { ProgressInlineEdit } from "./_components/progress-inline-edit"
+import { ObraSiengeSection } from "./_components/obra-sienge-section"
 import type { AprovacaoItem } from "./_components/aprovacoes-tab"
 import { STATUS_BADGE, STATUS_LABEL } from "@web/lib/status-badge"
 
@@ -38,7 +39,7 @@ export default async function ObraDetailPage({
   const { data: obra } = await supabase
     .from("obras")
     .select(
-      "id, name, description, progress_pct, status, expected_delivery_date, property_id"
+      "id, name, description, progress_pct, status, expected_delivery_date, property_id, sienge_enterprise_id, sienge_enterprise_name, sienge_sync_status, sienge_last_synced_at"
     )
     .eq("id", obra_id)
     .eq("org_id", user.orgId)
@@ -232,6 +233,30 @@ export default async function ObraDetailPage({
             {property.name}
           </Link>
         </section>
+      )}
+
+      {/* Sienge integration (apenas admin/supervisor) */}
+      {isAdminOrSupervisor && (
+        <ObraSiengeSection
+          obraId={obra.id}
+          sienge_enterprise_id={
+            (obra as { sienge_enterprise_id?: number | null })
+              .sienge_enterprise_id ?? null
+          }
+          sienge_enterprise_name={
+            (obra as { sienge_enterprise_name?: string | null })
+              .sienge_enterprise_name ?? null
+          }
+          sienge_sync_status={
+            (obra as { sienge_sync_status?: string | null })
+              .sienge_sync_status ?? null
+          }
+          sienge_last_synced_at={
+            (obra as { sienge_last_synced_at?: string | null })
+              .sienge_last_synced_at ?? null
+          }
+          userRole={user.role}
+        />
       )}
 
       {/* Tabs */}
