@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
 
       if (!lastMessages || lastMessages.length === 0) continue
 
-      const lastMessage = lastMessages[0]
+      const lastMessage = lastMessages[0]!
       const lastMessageDate = new Date(lastMessage.created_at)
       const daysSinceLastMessage =
         (now.getTime() - lastMessageDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -361,7 +361,7 @@ export async function GET(request: NextRequest) {
         .limit(1)
 
       if (conversations && conversations.length > 0) {
-        const conversationId = conversations[0].id
+        const conversationId = conversations[0]!.id
 
         await supabase.from("messages").insert({
           conversation_id: conversationId,

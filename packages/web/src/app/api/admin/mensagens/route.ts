@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
   }))
 
   // total_count vem replicado em cada linha (COUNT(*) OVER()); se rows vazias, total = 0.
-  const total = rows.length > 0 ? Number(rows[0].total_count) : 0
+  const total = rows.length > 0 ? Number(rows[0]!.total_count) : 0
   const has_more = offset + conversas.length < total
 
   return NextResponse.json({ conversas, total, page, limit, has_more })

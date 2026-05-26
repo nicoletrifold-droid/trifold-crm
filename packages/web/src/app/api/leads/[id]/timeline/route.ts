@@ -182,8 +182,8 @@ export async function GET(
   const totalDays =
     events.length > 0
       ? Math.ceil(
-          (new Date(events[events.length - 1].timestamp).getTime() -
-            new Date(events[0].timestamp).getTime()) /
+          (new Date(events[events.length - 1]!.timestamp).getTime() -
+            new Date(events[0]!.timestamp).getTime()) /
             (1000 * 60 * 60 * 24)
         )
       : 0

@@ -2,6 +2,7 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { getUserPermissions } from "@web/lib/permissions"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
+import { PwaInstallPrompt } from "@web/components/pwa-install-prompt"
 import {
   LayoutDashboard,
   Kanban,
@@ -15,7 +16,6 @@ import {
   BarChart3,
   Megaphone,
   Mail,
-  GraduationCap,
   Settings,
   Shield,
   HardHat,
@@ -40,7 +40,6 @@ const NAV_ITEMS_BASE = [
   // Análise & Crescimento
   { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/campaigns", label: "Campanhas", icon: <Megaphone className={ICON_SIZE} /> },
-  { href: "/dashboard/treinamento", label: "Treinamento", icon: <GraduationCap className={ICON_SIZE} /> },
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
@@ -66,7 +65,6 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/atividades": "atividades",
   "/dashboard/analytics": "analytics",
   "/dashboard/campaigns": "campanhas",
-  "/dashboard/treinamento": "treinamento",
   "/dashboard/obras": "obras",
   "/dashboard/brindes": "brindes",
   "/dashboard/mensagens": "mensagens",
@@ -86,30 +84,45 @@ export default async function DashboardLayout({
   // Story 35-5: lê permissões do banco em vez de regras hardcoded por role.
   const permissions = await getUserPermissions(user.id, user.orgId)
 
-  // Contagens de alertas e mensagens — só consulta o banco se os módulos
-  // correspondentes estiverem acessíveis (evita query inútil para roles
-  // sem acesso a esses módulos, ex.: `obras`).
-  const [{ count: alertCount }, { count: mensagensCount }] =
-    permissions["alertas"] || permissions["mensagens"]
+  // Contagens de alertas, mensagens e aprovações pendentes de obras — só consulta
+  // o banco se os módulos correspondentes estiverem acessíveis.
+  const isAdminOrSupervisorObras =
+    permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
+
+  const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
+    permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
       ? await Promise.all([
-          supabase
-            .from("follow_up_log")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", user.orgId)
-            .eq("status", "pending"),
-          supabase
-            .from("obra_mensagens")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", user.orgId)
-            .eq("sender_type", "cliente")
-            .is("read_at", null),
+          permissions["alertas"]
+            ? supabase
+                .from("follow_up_log")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", user.orgId)
+                .eq("status", "pending")
+            : Promise.resolve({ count: 0 }),
+          permissions["mensagens"]
+            ? supabase
+                .from("obra_mensagens")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", user.orgId)
+                .eq("sender_type", "cliente")
+                .is("read_at", null)
+            : Promise.resolve({ count: 0 }),
+          isAdminOrSupervisorObras
+            ? supabase
+                .from("obra_upload_aprovacoes")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", user.orgId)
+                .eq("status", "pendente")
+            : Promise.resolve({ count: 0 }),
         ])
-      : [{ count: 0 }, { count: 0 }]
+      : [{ count: 0 }, { count: 0 }, { count: 0 }]
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const navItems = [
-    ...NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]]),
-    ...(permissions["obras"] ? [NAV_ITEM_OBRAS] : []),
+    ...NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!]),
+    ...(permissions["obras"]
+      ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
+      : []),
     ...(permissions["brindes"] ? [NAV_ITEM_BRINDES] : []),
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
@@ -136,6 +149,7 @@ export default async function DashboardLayout({
           {children}
         </div>
       </main>
+      <PwaInstallPrompt />
     </div>
   )
 }

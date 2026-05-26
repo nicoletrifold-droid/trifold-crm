@@ -1,14 +1,60 @@
 {
+  "id": "/cliente",
   "name": "Trifold — Minha Obra",
   "short_name": "Minha Obra",
   "description": "Acompanhe o progresso da sua obra em tempo real",
-  "start_url": "/cliente",
+  "start_url": "/cliente?utm_source=pwa",
   "scope": "/cliente",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
+  "orientation": "portrait",
   "background_color": "#0c0a09",
   "theme_color": "#e8856a",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "lifestyle"],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    { "src": "/icon-cliente-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-cliente-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-cliente-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/portal-obra-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Acompanhe o progresso da sua obra — fotos e atualizações em tempo real"
+    },
+    {
+      "src": "/screenshots/portal-fotos-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Galeria de fotos — veja cada etapa da construção"
+    },
+    {
+      "src": "/screenshots/portal-obra-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Obra no celular"
+    },
+    {
+      "src": "/screenshots/portal-fotos-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Fotos da obra no celular"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Minha Obra",
+      "short_name": "Obra",
+      "url": "/cliente?utm_source=pwa_shortcut",
+      "description": "Ver progresso da obra"
+    }
+  ],
+  "prefer_related_applications": false
 }

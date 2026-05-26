@@ -1,39 +1,57 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
+
+type RoleOption = { name: string; label: string }
 
 export function RoleDropdown({
   userId,
   currentRole,
+  roles,
 }: {
   userId: string
   currentRole: string
+  roles: RoleOption[]
 }) {
   const router = useRouter()
+  const [value, setValue] = useState(currentRole)
+  const [saving, setSaving] = useState(false)
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const newRole = e.target.value
-    if (!["admin", "supervisor", "broker", "obras"].includes(newRole)) return
+    if (!newRole || newRole === value) return
 
-    await fetch(`/api/users/${userId}`, {
+    setSaving(true)
+    setValue(newRole)
+
+    const res = await fetch(`/api/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: newRole }),
     })
 
-    router.refresh()
+    if (!res.ok) {
+      setValue(value)
+    } else {
+      router.refresh()
+    }
+
+    setSaving(false)
   }
 
   return (
     <select
-      defaultValue={currentRole}
+      value={value}
       onChange={handleChange}
-      className="rounded-md border border-stone-200 px-2 py-1 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+      disabled={saving}
+      className="rounded-md border border-stone-200 px-2 py-1 text-xs focus:border-orange-500 focus:outline-none disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
     >
-      <option value="admin">Admin</option>
-      <option value="supervisor">Supervisor</option>
-      <option value="broker">Corretor</option>
-      <option value="obras">Obras</option>
+      {roles.map((r) => (
+        <option key={r.name} value={r.name}>
+          {r.label}
+        </option>
+      ))}
     </select>
   )
 }

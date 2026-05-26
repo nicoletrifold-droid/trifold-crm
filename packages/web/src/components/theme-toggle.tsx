@@ -21,7 +21,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme()
 
   const current = (theme && CYCLE.includes(theme as "light" | "dark" | "system") ? theme : "system") as "light" | "dark" | "system"
-  const nextTheme = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length]
+  const nextTheme = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length]!
   const Icon = ICONS[current]
 
   async function handleClick() {

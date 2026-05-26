@@ -20,7 +20,6 @@ export async function GET(request: NextRequest) {
   // "Tomorrow in SP" = D+1 03:00 UTC to D+2 03:00 UTC (SP is UTC-3, no DST since 2019)
   const tomorrowStartUTC = new Date(now)
   tomorrowStartUTC.setUTCHours(3, 0, 0, 0)
-  // Cron runs at 12:00 UTC — already past 03:00 UTC, so advance to next day
   tomorrowStartUTC.setUTCDate(tomorrowStartUTC.getUTCDate() + 1)
 
   const tomorrowEndUTC = new Date(tomorrowStartUTC)
@@ -34,7 +33,7 @@ export async function GET(request: NextRequest) {
       location,
       metadata,
       org_id,
-      lead:leads!lead_id(id, name),
+      lead:leads!lead_id(id, name, email),
       broker:users!broker_id(id, name, email),
       property:properties!property_id(id, name)
     `)
@@ -52,8 +51,6 @@ export async function GET(request: NextRequest) {
       const broker = Array.isArray(appointment.broker) ? appointment.broker[0] : appointment.broker
       const property = Array.isArray(appointment.property) ? appointment.property[0] : appointment.property
 
-      if (!broker?.email) continue
-
       const scheduledDate = new Date(appointment.scheduled_at)
 
       const hora = scheduledDate.toLocaleTimeString("pt-BR", {
@@ -69,20 +66,41 @@ export async function GET(request: NextRequest) {
         month: "long",
       })
 
-      const result = await sendEmail({
-        to: broker.email,
-        subject: `Lembrete: visita amanhã às ${hora} — ${lead?.name ?? "Lead"}`,
-        html: `
-          <p>Olá, ${broker.name}!</p>
-          <p>Você tem uma visita agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong> com <strong>${lead?.name ?? "Lead"}</strong> no imóvel <strong>${property?.name ?? "não informado"}</strong>.</p>
-          <p><strong>Local:</strong> ${appointment.location ?? "Não informado"}</p>
-          <p>Boas vendas!</p>
-        `,
-        orgId: appointment.org_id,
-      })
+      const propertyName = property?.name ?? ""
+      const leadName = lead?.name ?? "Lead"
 
-      if (result.error) {
-        throw new Error(result.error)
+      // E-mail ao corretor
+      if (broker?.email) {
+        const result = await sendEmail({
+          to: broker.email,
+          subject: `Lembrete: visita ao decorado amanhã às ${hora} — ${leadName}`,
+          html: `
+            <p>Olá, ${broker.name}!</p>
+            <p>Passando para lembrar que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>, com <strong>${leadName}</strong>.</p>
+            <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
+            <p>Até lá! ☕</p>
+          `,
+          orgId: appointment.org_id,
+        })
+        if (result.error) throw new Error(result.error)
+        sent++
+      }
+
+      // E-mail ao lead
+      if (lead?.email) {
+        const result = await sendEmail({
+          to: lead.email,
+          subject: `Lembrete: sua visita ao decorado amanhã às ${hora}`,
+          html: `
+            <p>Olá, ${leadName}!</p>
+            <p>Lembramos que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>.</p>
+            <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
+            <p>Te esperamos com muito carinho! Em caso de dúvidas, é só responder este e-mail. ☕</p>
+          `,
+          orgId: appointment.org_id,
+        })
+        if (result.error) throw new Error(result.error)
+        sent++
       }
 
       const currentMetadata = (appointment.metadata as Record<string, unknown>) ?? {}
@@ -91,7 +109,6 @@ export async function GET(request: NextRequest) {
         .update({ metadata: { ...currentMetadata, email_reminded: true } })
         .eq("id", appointment.id)
 
-      sent++
     } catch (err) {
       console.error(`[EMAIL-REMINDERS] Erro no appointment ${appointment.id}:`, err)
       errors++

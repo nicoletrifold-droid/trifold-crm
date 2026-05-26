@@ -164,7 +164,7 @@ export default async function TimelinePage({
 
             <div className="space-y-6">
               {filteredEvents.map((event, index) => {
-                const colors = actorColors[event.actor] ?? actorColors.system
+                const colors = actorColors[event.actor] ?? actorColors.system!
                 const icon = typeIcons[event.type] ?? "📌"
                 const prevEvent = index > 0 ? filteredEvents[index - 1] : null
                 const daysBetween = prevEvent
@@ -419,8 +419,8 @@ async function fetchTimelineData(
   const totalDays =
     events.length > 0
       ? Math.ceil(
-          (new Date(events[events.length - 1].timestamp).getTime() -
-            new Date(events[0].timestamp).getTime()) /
+          (new Date(events[events.length - 1]!.timestamp).getTime() -
+            new Date(events[0]!.timestamp).getTime()) /
             (1000 * 60 * 60 * 24)
         )
       : 0

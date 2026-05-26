@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useReducer, useRef } from "react"
+import { useEffect, useMemo, useReducer } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
 import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown } from "lucide-react"
@@ -178,7 +178,7 @@ export function LeadDetailDrawer({ leadId, onClose }: LeadDetailDrawerProps) {
 
 function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () => void }) {
   const [state, dispatch] = useReducer(reducer, initialState)
-  const supabase = useRef(createClient()).current
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     let cancelled = false

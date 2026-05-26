@@ -57,7 +57,7 @@ interface Alert {
 function daysAgo(n: number): string {
   const d = new Date()
   d.setUTCDate(d.getUTCDate() - n)
-  return d.toISOString().split("T")[0]
+  return d.toISOString().split("T")[0]!
 }
 
 // ─── Alert detectors ───────────────────────────────────────────────────────
@@ -248,7 +248,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Registrar início no sync log (por org — pegar primeira)
-  const orgId = accounts[0].org_id
+  const orgId = accounts[0]!.org_id
   const { data: syncLog } = await supabase
     .from("meta_sync_log")
     .insert({

@@ -352,7 +352,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
               {data?.campaigns.map((c) => {
-                const badge = STATUS_BADGES[c.status] ?? STATUS_BADGES.ARCHIVED
+                const badge = STATUS_BADGES[c.status] ?? STATUS_BADGES.ARCHIVED!
                 const objective = c.objective
                   ? (OBJECTIVE_LABELS[c.objective] ?? c.objective)
                   : null

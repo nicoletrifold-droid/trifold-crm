@@ -594,9 +594,9 @@ export async function POST(request: NextRequest) {
         if (!voiceSent) {
           for (let i = 0; i < paragraphs.length; i++) {
             await sendTypingAction(chatId)
-            const delay = calculateTypingDelay(paragraphs[i])
+            const delay = calculateTypingDelay(paragraphs[i]!)
             await new Promise((r) => setTimeout(r, delay))
-            await sendTelegramMessage(chatId, paragraphs[i])
+            await sendTelegramMessage(chatId, paragraphs[i]!)
           }
         }
       } catch (aiError) {

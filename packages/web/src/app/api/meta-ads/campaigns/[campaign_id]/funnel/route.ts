@@ -28,8 +28,8 @@ function getPeriodDates(period: string): { from: string; to: string } {
   const days = period === "7d" ? 7 : period === "90d" ? 90 : 30
   from.setDate(from.getDate() - days)
   return {
-    from: from.toISOString().split("T")[0],
-    to: to.toISOString().split("T")[0],
+    from: from.toISOString().split("T")[0]!,
+    to: to.toISOString().split("T")[0]!,
   }
 }
 

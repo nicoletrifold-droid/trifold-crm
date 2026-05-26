@@ -152,7 +152,7 @@ export default async function HorarioConfigPage() {
             </p>
             <div className="space-y-3">
               {DAYS_OF_WEEK.map(({ key, label }) => {
-                const day = hours[key] ?? DEFAULT_CONFIG.hours[key]
+                const day = hours[key] ?? DEFAULT_CONFIG.hours[key]!
                 return (
                   <div
                     key={key}

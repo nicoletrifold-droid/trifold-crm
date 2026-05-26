@@ -235,7 +235,7 @@ export default function SistemaPage() {
         ) : (
           <div className="divide-y divide-stone-50">
             {data.data.map((event) => {
-              const style = LEVEL_STYLES[event.level] ?? LEVEL_STYLES.info
+              const style = LEVEL_STYLES[event.level] ?? LEVEL_STYLES.info!
               const isExpanded = expandedId === event.id
               return (
                 <div key={event.id}>

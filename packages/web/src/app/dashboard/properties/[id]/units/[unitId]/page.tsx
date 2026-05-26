@@ -302,28 +302,28 @@ export default function UnitEditPage() {
   }
 
   const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
 
   return (
     <div className="space-y-6">
       <div>
         <Link
           href={`/dashboard/properties/${propertyId}/units`}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Voltar para unidades
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">
+        <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
           Unidade {unit.identifier}
         </h1>
-        <p className="text-sm text-gray-500">{unit.property.name}</p>
+        <p className="text-sm text-gray-500 dark:text-stone-400">{unit.property.name}</p>
       </div>
 
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="grid gap-6 sm:grid-cols-2">
           {/* Identifier */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Identificador
             </label>
             <input
@@ -336,7 +336,7 @@ export default function UnitEditPage() {
 
           {/* Floor */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Andar
             </label>
             <input
@@ -349,20 +349,20 @@ export default function UnitEditPage() {
 
           {/* Position (read-only) */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Posição
             </label>
-            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300">
               {unit.position ?? "-"}
             </p>
           </div>
 
           {/* View (read-only) */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Vista
             </label>
-            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300">
               {unit.view_direction
                 ? viewLabels[unit.view_direction] ?? unit.view_direction
                 : "-"}
@@ -371,27 +371,27 @@ export default function UnitEditPage() {
 
           {/* Area (read-only) */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Area (m2)
             </label>
-            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300">
               {unit.private_area_m2 ?? "-"}
             </p>
           </div>
 
           {/* Garages (read-only) */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Vagas de garagem
             </label>
-            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300">
               {unit.garage_count}
             </p>
           </div>
 
           {/* Status */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Status
             </label>
             <select
@@ -407,7 +407,7 @@ export default function UnitEditPage() {
 
           {/* Price */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Preco (R$)
             </label>
             <input
@@ -422,10 +422,10 @@ export default function UnitEditPage() {
 
         {/* Messages */}
         {error && (
-          <p className="mt-4 text-sm text-red-600">{error}</p>
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
         {success && (
-          <p className="mt-4 text-sm text-green-600">Salvo com sucesso!</p>
+          <p className="mt-4 text-sm text-green-600 dark:text-green-400">Salvo com sucesso!</p>
         )}
 
         {/* Actions */}
@@ -439,7 +439,7 @@ export default function UnitEditPage() {
           </button>
           <Link
             href={`/dashboard/properties/${propertyId}/units`}
-            className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar
           </Link>
@@ -448,15 +448,15 @@ export default function UnitEditPage() {
 
       {/* Sale Registration Section */}
       {showSaleForm && (
-        <div className="rounded-lg bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">
+        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-stone-100">
             Registrar Venda
           </h2>
 
           <div className="grid gap-6 sm:grid-cols-2">
             {/* Sale Price */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                 Valor da venda (R$) *
               </label>
               <input
@@ -470,7 +470,7 @@ export default function UnitEditPage() {
 
             {/* Payment method */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                 Forma de pagamento
               </label>
               <select
@@ -487,7 +487,7 @@ export default function UnitEditPage() {
 
             {/* Sold at */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                 Data da venda
               </label>
               <input
@@ -500,7 +500,7 @@ export default function UnitEditPage() {
 
             {/* Broker */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                 Corretor responsavel
               </label>
               <select
@@ -522,7 +522,7 @@ export default function UnitEditPage() {
 
             {/* Payment details */}
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                 Detalhes do pagamento
               </label>
               <textarea
@@ -536,7 +536,7 @@ export default function UnitEditPage() {
 
             {/* Notes */}
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-500">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                 Observacoes
               </label>
               <textarea
@@ -549,8 +549,8 @@ export default function UnitEditPage() {
           </div>
 
           {/* Client Section */}
-          <div className="mt-6 border-t pt-6">
-            <h3 className="mb-3 text-sm font-semibold text-gray-700">
+          <div className="mt-6 border-t pt-6 dark:border-stone-700">
+            <h3 className="mb-3 text-sm font-semibold text-gray-700 dark:text-stone-300">
               Dados do cliente
             </h3>
 
@@ -560,8 +560,8 @@ export default function UnitEditPage() {
                 onClick={() => { setClientMode("search"); setSelectedLead(null) }}
                 className={`rounded-md px-3 py-1 text-sm font-medium ${
                   clientMode === "search"
-                    ? "bg-orange-100 text-orange-700"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                    : "bg-gray-100 text-gray-600 dark:bg-stone-700 dark:text-stone-300"
                 }`}
               >
                 Buscar lead existente
@@ -571,8 +571,8 @@ export default function UnitEditPage() {
                 onClick={() => { setClientMode("new"); setSelectedLead(null) }}
                 className={`rounded-md px-3 py-1 text-sm font-medium ${
                   clientMode === "new"
-                    ? "bg-orange-100 text-orange-700"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                    : "bg-gray-100 text-gray-600 dark:bg-stone-700 dark:text-stone-300"
                 }`}
               >
                 Novo cliente
@@ -582,7 +582,7 @@ export default function UnitEditPage() {
             {clientMode === "search" && (
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                     Buscar por nome ou telefone
                   </label>
                   <input
@@ -595,11 +595,11 @@ export default function UnitEditPage() {
                 </div>
 
                 {searchingLeads && (
-                  <p className="text-xs text-gray-500">Buscando...</p>
+                  <p className="text-xs text-gray-500 dark:text-stone-400">Buscando...</p>
                 )}
 
                 {leadResults.length > 0 && !selectedLead && (
-                  <div className="max-h-48 overflow-y-auto rounded-md border">
+                  <div className="max-h-48 overflow-y-auto rounded-md border dark:border-stone-700">
                     {leadResults.map((lead) => (
                       <button
                         key={lead.id}
@@ -608,29 +608,29 @@ export default function UnitEditPage() {
                           setSelectedLead(lead)
                           setLeadResults([])
                         }}
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-stone-800 dark:text-stone-300"
                       >
-                        <span className="font-medium">{lead.name ?? "Sem nome"}</span>
-                        <span className="ml-2 text-gray-500">{lead.phone}</span>
+                        <span className="font-medium dark:text-stone-100">{lead.name ?? "Sem nome"}</span>
+                        <span className="ml-2 text-gray-500 dark:text-stone-400">{lead.phone}</span>
                       </button>
                     ))}
                   </div>
                 )}
 
                 {selectedLead && (
-                  <div className="flex items-center gap-3 rounded-md border border-green-200 bg-green-50 p-3">
+                  <div className="flex items-center gap-3 rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-800/30 dark:bg-green-500/10">
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-green-800">
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300">
                         {selectedLead.name ?? "Sem nome"}
                       </p>
-                      <p className="text-xs text-green-600">
+                      <p className="text-xs text-green-600 dark:text-green-400">
                         {selectedLead.phone} {selectedLead.email ? `| ${selectedLead.email}` : ""}
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setSelectedLead(null)}
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-red-600 hover:underline dark:text-red-400"
                     >
                       Remover
                     </button>
@@ -642,7 +642,7 @@ export default function UnitEditPage() {
             {clientMode === "new" && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                     Nome
                   </label>
                   <input
@@ -653,7 +653,7 @@ export default function UnitEditPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                     Telefone
                   </label>
                   <input
@@ -664,7 +664,7 @@ export default function UnitEditPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                     Email
                   </label>
                   <input
@@ -675,7 +675,7 @@ export default function UnitEditPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
                     CPF
                   </label>
                   <input
@@ -688,12 +688,12 @@ export default function UnitEditPage() {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-stone-300">
                     <input
                       type="checkbox"
                       checked={createLead}
                       onChange={(e) => setCreateLead(e.target.checked)}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 dark:border-stone-600"
                     />
                     Criar como lead no sistema
                   </label>
@@ -704,13 +704,13 @@ export default function UnitEditPage() {
 
           {/* Sale Messages */}
           {saleError && (
-            <p className="mt-4 text-sm text-red-600">{saleError}</p>
+            <p className="mt-4 text-sm text-red-600 dark:text-red-400">{saleError}</p>
           )}
           {saleSuccess && (
             <div className="mt-4 space-y-2">
-              <p className="text-sm text-green-600">Venda registrada com sucesso! Redirecionando...</p>
+              <p className="text-sm text-green-600 dark:text-green-400">Venda registrada com sucesso! Redirecionando...</p>
               {portalVinculado && (
-                <p className="text-sm font-medium text-green-700">
+                <p className="text-sm font-medium text-green-700 dark:text-green-300">
                   Cliente adicionado ao portal de obra ✓
                 </p>
               )}
@@ -732,7 +732,7 @@ export default function UnitEditPage() {
                 setShowSaleForm(false)
                 setStatus(unit.status)
               }}
-              className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               Cancelar venda
             </button>

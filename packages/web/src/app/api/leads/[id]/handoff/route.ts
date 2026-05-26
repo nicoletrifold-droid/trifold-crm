@@ -149,8 +149,9 @@ Seja conciso e objetivo.`
       messages: [{ role: "user", content: prompt }],
     })
 
+    const firstBlock = message.content[0]
     summary =
-      message.content[0].type === "text" ? message.content[0].text : null
+      firstBlock && firstBlock.type === "text" ? firstBlock.text : null
 
     // Save summary to lead
     if (summary) {

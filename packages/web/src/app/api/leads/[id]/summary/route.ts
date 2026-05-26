@@ -127,8 +127,9 @@ Seja conciso e objetivo.`
       messages: [{ role: "user", content: prompt }],
     })
 
+    const firstBlock = message.content[0]
     const summary =
-      message.content[0].type === "text" ? message.content[0].text : ""
+      firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
 
     // Save summary to lead
     const { error: updateError } = await supabase

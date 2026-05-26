@@ -214,27 +214,27 @@ export default function PropertyEditPage() {
   }
 
   const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
 
   return (
     <div className="space-y-6">
       <div>
         <Link
           href={`/dashboard/properties/${propertyId}`}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Voltar para empreendimento
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">
+        <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
           Editar empreendimento
         </h1>
       </div>
 
-      <div className="rounded-lg bg-white p-6 shadow-sm">
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="grid gap-6 sm:grid-cols-2">
           {/* Name */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Nome
             </label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
@@ -242,7 +242,7 @@ export default function PropertyEditPage() {
 
           {/* Slug */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Slug
             </label>
             <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} className={inputClass} />
@@ -250,7 +250,7 @@ export default function PropertyEditPage() {
 
           {/* Status */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Status
             </label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
@@ -262,7 +262,7 @@ export default function PropertyEditPage() {
 
           {/* Address */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Endereço
             </label>
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
@@ -270,7 +270,7 @@ export default function PropertyEditPage() {
 
           {/* Neighborhood */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Bairro
             </label>
             <input type="text" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className={inputClass} />
@@ -278,7 +278,7 @@ export default function PropertyEditPage() {
 
           {/* City */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Cidade
             </label>
             <input type="text" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} />
@@ -286,7 +286,7 @@ export default function PropertyEditPage() {
 
           {/* State */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Estado (UF)
             </label>
             <input type="text" value={state} onChange={(e) => setState(e.target.value)} maxLength={2} className={inputClass} />
@@ -294,7 +294,7 @@ export default function PropertyEditPage() {
 
           {/* Delivery date */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Data de entrega
             </label>
             <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass} />
@@ -302,7 +302,7 @@ export default function PropertyEditPage() {
 
           {/* Total Units */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Total de unidades
             </label>
             <input type="number" value={totalUnits} onChange={(e) => setTotalUnits(e.target.value)} className={inputClass} />
@@ -310,7 +310,7 @@ export default function PropertyEditPage() {
 
           {/* Total Floors */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Total de andares
             </label>
             <input type="number" value={totalFloors} onChange={(e) => setTotalFloors(e.target.value)} className={inputClass} />
@@ -318,7 +318,7 @@ export default function PropertyEditPage() {
 
           {/* Units per floor */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Unidades por andar
             </label>
             <input type="number" value={unitsPerFloor} onChange={(e) => setUnitsPerFloor(e.target.value)} className={inputClass} />
@@ -326,7 +326,7 @@ export default function PropertyEditPage() {
 
           {/* Type floors */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Andares tipo
             </label>
             <input type="number" value={typeFloors} onChange={(e) => setTypeFloors(e.target.value)} className={inputClass} />
@@ -334,7 +334,7 @@ export default function PropertyEditPage() {
 
           {/* Basement floors */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Subsolos
             </label>
             <input type="number" value={basementFloors} onChange={(e) => setBasementFloors(e.target.value)} className={inputClass} />
@@ -342,7 +342,7 @@ export default function PropertyEditPage() {
 
           {/* Leisure floors */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Andares de lazer
             </label>
             <input type="number" value={leisureFloors} onChange={(e) => setLeisureFloors(e.target.value)} className={inputClass} />
@@ -350,7 +350,7 @@ export default function PropertyEditPage() {
 
           {/* Video tour URL */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               URL do vídeo tour
             </label>
             <input type="url" value={videoTourUrl} onChange={(e) => setVideoTourUrl(e.target.value)} className={inputClass} placeholder="https://..." />
@@ -358,7 +358,7 @@ export default function PropertyEditPage() {
 
           {/* Concept */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Conceito
             </label>
             <textarea value={concept} onChange={(e) => setConcept(e.target.value)} rows={3} className={inputClass} />
@@ -366,7 +366,7 @@ export default function PropertyEditPage() {
 
           {/* Description */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Descrição
             </label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={inputClass} />
@@ -374,7 +374,7 @@ export default function PropertyEditPage() {
 
           {/* Amenities */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Amenidades (separadas por vírgula)
             </label>
             <textarea value={amenities} onChange={(e) => setAmenities(e.target.value)} rows={2} className={inputClass} placeholder="Piscina, Academia, Salão de festas" />
@@ -382,7 +382,7 @@ export default function PropertyEditPage() {
 
           {/* Differentials */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Diferenciais (JSON)
             </label>
             <textarea value={differentials} onChange={(e) => setDifferentials(e.target.value)} rows={4} className={inputClass} placeholder='["Diferencial 1", "Diferencial 2"]' />
@@ -390,7 +390,7 @@ export default function PropertyEditPage() {
 
           {/* Commercial rules */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Regras comerciais (JSON)
             </label>
             <textarea value={commercialRules} onChange={(e) => setCommercialRules(e.target.value)} rows={4} className={inputClass} placeholder='{"regra": "valor"}' />
@@ -398,7 +398,7 @@ export default function PropertyEditPage() {
 
           {/* FAQ */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               FAQ (JSON)
             </label>
             <textarea value={faq} onChange={(e) => setFaq(e.target.value)} rows={4} className={inputClass} placeholder='[{"pergunta": "...", "resposta": "..."}]' />
@@ -406,7 +406,7 @@ export default function PropertyEditPage() {
 
           {/* Restrictions */}
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-gray-500">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Restrições (JSON)
             </label>
             <textarea value={restrictions} onChange={(e) => setRestrictions(e.target.value)} rows={4} className={inputClass} placeholder='[{"restrição": "..."}]' />
@@ -414,8 +414,8 @@ export default function PropertyEditPage() {
         </div>
 
         {/* Messages */}
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-        {success && <p className="mt-4 text-sm text-green-600">Salvo com sucesso! Redirecionando...</p>}
+        {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {success && <p className="mt-4 text-sm text-green-600 dark:text-green-400">Salvo com sucesso! Redirecionando...</p>}
 
         {/* Actions */}
         <div className="mt-6 flex items-center gap-3">
@@ -428,7 +428,7 @@ export default function PropertyEditPage() {
           </button>
           <Link
             href={`/dashboard/properties/${propertyId}`}
-            className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar
           </Link>

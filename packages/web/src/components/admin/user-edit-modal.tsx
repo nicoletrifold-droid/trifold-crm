@@ -135,7 +135,9 @@ export function UserEditModal({
       setError((data as { error?: string }).error ?? "Erro ao salvar.")
       return
     }
-    setSuccess("Dados atualizados com sucesso.")
+    // Fecha o modal primeiro, depois atualiza a tabela — evita que o router.refresh()
+    // remonte o componente enquanto o modal ainda está aberto.
+    setOpen(false)
     router.refresh()
   }
 
@@ -165,6 +167,8 @@ export function UserEditModal({
     setSuccess("Senha redefinida com sucesso.")
     setNewPassword("")
     setConfirmPassword("")
+    // Fecha o modal após 1.5s para o usuário ver a confirmação
+    setTimeout(() => setOpen(false), 1500)
   }
 
   function getException(module: string): Exception | undefined {

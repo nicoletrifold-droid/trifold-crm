@@ -245,7 +245,7 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
 
   const { campaign, timeseries, adsets, funnel, leads, roas_summary } = data
   const displayStatus = optimisticStatus ?? campaign.status
-  const statusBadge = STATUS_BADGES[displayStatus] ?? STATUS_BADGES.ARCHIVED
+  const statusBadge = STATUS_BADGES[displayStatus] ?? STATUS_BADGES.ARCHIVED!
   const period = days === 7 ? "7d" : days === 90 ? "90d" : "30d"
   const objectiveLabel = campaign.objective
     ? (OBJECTIVE_LABELS[campaign.objective] ?? campaign.objective)
@@ -837,7 +837,7 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
         </thead>
         <tbody className="divide-y divide-gray-100">
           {adsets.map((a) => {
-            const badge = STATUS_BADGES[a.status] ?? STATUS_BADGES.ARCHIVED
+            const badge = STATUS_BADGES[a.status] ?? STATUS_BADGES.ARCHIVED!
             const goalLabel = a.optimization_goal
               ? (OPTIMIZATION_GOAL_LABELS[a.optimization_goal] ??
                 a.optimization_goal)

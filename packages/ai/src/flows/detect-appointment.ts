@@ -83,8 +83,8 @@ export function detectAppointmentIntent(
 
   // Extract date
   if (dateMatch) {
-    const day = dateMatch[1].padStart(2, "0")
-    const month = dateMatch[2].padStart(2, "0")
+    const day = dateMatch[1]!.padStart(2, "0")
+    const month = dateMatch[2]!.padStart(2, "0")
     const year = dateMatch[3]
       ? dateMatch[3].length === 2
         ? `20${dateMatch[3]}`
@@ -107,11 +107,11 @@ export function detectAppointmentIntent(
   const timeSimpleMatch = message.match(TIME_SIMPLE_PATTERN)
 
   if (timeMatch) {
-    const hours = timeMatch[1].padStart(2, "0")
+    const hours = timeMatch[1]!.padStart(2, "0")
     const minutes = (timeMatch[2] || "00").padStart(2, "0")
     result.time = `${hours}:${minutes}`
   } else if (timeSimpleMatch) {
-    const hours = timeSimpleMatch[1].padStart(2, "0")
+    const hours = timeSimpleMatch[1]!.padStart(2, "0")
     result.time = `${hours}:00`
   }
 

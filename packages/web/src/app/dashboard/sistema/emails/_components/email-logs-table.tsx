@@ -173,7 +173,7 @@ export function EmailLogsTable() {
             </div>
 
             {logs.map((log) => {
-              const style = STATUS_STYLES[log.status] ?? STATUS_STYLES.pending
+              const style = STATUS_STYLES[log.status] ?? STATUS_STYLES.pending!
               return (
                 <div
                   key={log.id}

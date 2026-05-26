@@ -40,7 +40,7 @@ export default async function CorretoresPage() {
   for (const a of assignments ?? []) {
     if (!assignmentsByBroker[a.broker_id]) assignmentsByBroker[a.broker_id] = []
     const prop = Array.isArray(a.properties) ? a.properties[0] : a.properties
-    assignmentsByBroker[a.broker_id].push({
+    assignmentsByBroker[a.broker_id]!.push({
       property_id: a.property_id,
       property_name: (prop as { name: string } | null)?.name ?? "",
     })

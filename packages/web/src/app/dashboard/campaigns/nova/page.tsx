@@ -52,7 +52,7 @@ export default function NovaCampanhaPage() {
   function updateFieldTarget(questionId: string, target: string) {
     setFieldMapping((prev) => ({
       ...prev,
-      [questionId]: { ...prev[questionId], target },
+      [questionId]: { ...prev[questionId]!, target },
     }))
   }
 

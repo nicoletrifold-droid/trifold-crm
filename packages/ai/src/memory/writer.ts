@@ -75,7 +75,8 @@ export async function extractMemoryFragments(
       { timeout: 10000 }
     )
 
-    const text = response.content[0].type === "text" ? response.content[0].text : ""
+    const firstBlock = response.content[0]
+    const text = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
     return parseFragments(text)
   } catch {
     return []

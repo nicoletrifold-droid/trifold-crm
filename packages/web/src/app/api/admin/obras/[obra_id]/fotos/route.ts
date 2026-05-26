@@ -2,9 +2,43 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
+import { sendEmail } from "@web/lib/email"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
+
+async function notificarAdminsNovoUpload(params: {
+  supabase: SupabaseClient
+  orgId: string
+  obraName: string
+  obraId: string
+  tipoUpload: "foto" | "documento"
+  nomeEnviador: string
+}) {
+  const { data: admins } = await params.supabase
+    .from("users")
+    .select("name, email")
+    .eq("org_id", params.orgId)
+    .in("role", ["admin", "supervisor"])
+    .not("email", "is", null)
+
+  if (!admins?.length) return
+
+  const link = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/obras/${params.obraId}?tab=aprovacoes`
+
+  await Promise.allSettled(
+    admins.map((u: { name: string; email: string }) =>
+      sendEmail({
+        to: u.email,
+        subject: `[Trifold] Nova pendência de aprovação — ${params.obraName}`,
+        html: `<p>Olá ${u.name},</p>
+               <p><strong>${params.nomeEnviador}</strong> enviou ${params.tipoUpload === "foto" ? "uma foto" : "um documento"} para a obra <strong>${params.obraName}</strong> aguardando sua aprovação.</p>
+               <p><a href="${link}">Clique aqui para revisar</a></p>`,
+      })
+    )
+  )
+}
 
 export async function POST(
   request: NextRequest,
@@ -117,6 +151,40 @@ export async function POST(
     )
   }
 
+  // Role obras: entra em fila de aprovação
+  if (appUser.role === "obras") {
+    const { data: aprovacao, error: insertError } = await supabase
+      .from("obra_upload_aprovacoes")
+      .insert({
+        org_id: appUser.org_id,
+        obra_id,
+        tipo: "foto",
+        storage_path: storagePath,
+        storage_bucket: "obra-fotos",
+        metadata: { caption, fase_id: faseId, taken_at: takenAt },
+        enviado_por: appUser.id,
+      })
+      .select("id, status")
+      .single()
+
+    if (insertError) {
+      await supabase.storage.from("obra-fotos").remove([storagePath])
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
+    }
+
+    notificarAdminsNovoUpload({
+      supabase,
+      orgId: appUser.org_id,
+      obraName: obra.name,
+      obraId: obra_id,
+      tipoUpload: "foto",
+      nomeEnviador: appUser.name,
+    }).catch(() => {})
+
+    return NextResponse.json({ aprovacao }, { status: 201 })
+  }
+
+  // Role admin/supervisor: publicação direta
   const { data: foto, error: insertError } = await supabase
     .from("obra_fotos")
     .insert({

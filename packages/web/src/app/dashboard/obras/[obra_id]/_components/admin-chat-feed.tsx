@@ -304,7 +304,7 @@ export function AdminChatFeed({
     legacyMode
       ? (initialMensagens.find((m) => m.cliente_id)?.cliente_id ?? null)
       : clientes.length === 1
-        ? clientes[0].id
+        ? clientes[0]!.id
         : null
   )
   const [mensagens, setMensagens] = useState<Mensagem[]>(

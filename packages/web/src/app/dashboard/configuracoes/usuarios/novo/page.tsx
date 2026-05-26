@@ -1,13 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+
+type RoleOption = { name: string; label: string }
 
 export default function NovoUsuarioPage() {
   const router = useRouter()
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [roles, setRoles] = useState<RoleOption[]>([])
+
+  useEffect(() => {
+    fetch("/api/admin/roles")
+      .then((r) => r.json())
+      .then((data) => setRoles(data.roles ?? []))
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -114,11 +124,12 @@ export default function NovoUsuarioPage() {
               required
               className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
             >
-              <option value="">Selecione...</option>
-              <option value="admin">Administrador — acesso total ao sistema</option>
-              <option value="supervisor">Supervisor — monitora conversas, treina IA, vê métricas</option>
-              <option value="broker">Corretor — pipeline próprio, leads designados, agenda</option>
-              <option value="obras">Obras — acesso exclusivo ao módulo de obras</option>
+              <option value="">{roles.length === 0 ? "Carregando perfis..." : "Selecione..."}</option>
+              {roles.map((r) => (
+                <option key={r.name} value={r.name}>
+                  {r.label}
+                </option>
+              ))}
             </select>
             <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
               Corretores só veem seus próprios leads e agenda. Supervisores veem tudo mas não configuram. Admins têm acesso total.

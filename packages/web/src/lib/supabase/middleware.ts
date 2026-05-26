@@ -82,6 +82,9 @@ export async function updateSession(request: NextRequest) {
   // - `/reset-senha`  — password reset form after verifyOtp (story 23.1)
   const isPublicRoute =
     pathname === "/login" ||
+    pathname === "/sw" ||
+    pathname === "/manifest.json" ||
+    pathname === "/cliente-manifest.json" ||
     pathname === "/cliente" ||
     pathname === "/cliente/offline" ||
     pathname === "/politica-de-privacidade" ||

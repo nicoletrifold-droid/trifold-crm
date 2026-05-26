@@ -280,7 +280,7 @@ export default async function BrokerAgendaPage({
               appointments.map((apt) => {
                 const lead = extractRelation<RelatedLead>(apt.lead)
                 const property = extractRelation<RelatedProperty>(apt.property)
-                const s = statusConfig[apt.status] ?? statusConfig.scheduled
+                const s = statusConfig[apt.status] ?? statusConfig.scheduled!
                 const time = new Date(apt.scheduled_at)
                 const isPastScheduled = apt.status === "scheduled" && time.getTime() < nowMs
 
@@ -379,7 +379,7 @@ export default async function BrokerAgendaPage({
                     <span className={`text-xs font-medium ${isToday ? "text-orange-600 dark:text-orange-300" : "text-stone-700 dark:text-stone-300"}`}>{day}</span>
                     <div className="mt-0.5 space-y-0.5">
                       {dayAppts.slice(0, 3).map((apt) => {
-                        const s = statusConfig[apt.status] ?? statusConfig.scheduled
+                        const s = statusConfig[apt.status] ?? statusConfig.scheduled!
                         const lead = extractRelation<RelatedLead>(apt.lead)
                         return (
                           <div key={apt.id} className={`truncate rounded px-1 py-0.5 text-[9px] font-medium ${s.bg} ${s.color}`}>
@@ -471,7 +471,7 @@ export default async function BrokerAgendaPage({
               {/* Appointments */}
               <div className="space-y-1">
                 {dayAppts.map((apt) => {
-                  const s = statusConfig[apt.status] ?? statusConfig.scheduled
+                  const s = statusConfig[apt.status] ?? statusConfig.scheduled!
                   const time = new Date(apt.scheduled_at)
                   const lead = extractRelation<RelatedLead>(apt.lead)
                   const isSelected = params.apt === apt.id
@@ -520,7 +520,7 @@ export default async function BrokerAgendaPage({
 }
 
 function AppointmentDetail({ apt, nowMs }: { apt: Appointment; nowMs: number }) {
-  const s = statusConfig[apt.status] ?? statusConfig.scheduled
+  const s = statusConfig[apt.status] ?? statusConfig.scheduled!
   const date = new Date(apt.scheduled_at)
   const lead = extractRelation<RelatedLead>(apt.lead)
   const property = extractRelation<RelatedProperty>(apt.property)

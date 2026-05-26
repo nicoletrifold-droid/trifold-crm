@@ -113,7 +113,7 @@ export default function CampaignCreatives({ campaignId, period }: Props) {
 
 function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
   const [thumbBroken, setThumbBroken] = useState(false)
-  const badge = STATUS_BADGES[ad.status] ?? STATUS_BADGES.ARCHIVED
+  const badge = STATUS_BADGES[ad.status] ?? STATUS_BADGES.ARCHIVED!
 
   const showThumb = !!ad.thumbnail_url && !thumbBroken
 

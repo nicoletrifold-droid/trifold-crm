@@ -39,10 +39,10 @@ export default async function PersonalidadePage() {
     <div className="space-y-6">
       <div>
         <Link
-          href="/dashboard/configuracoes/pipeline"
+          href="/dashboard/configuracoes/nicole"
           className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
-          &larr; Configurações
+          &larr; Nicole
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
           Personalidade da Nicole

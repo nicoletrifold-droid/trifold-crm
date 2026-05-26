@@ -43,8 +43,9 @@ REGRAS OBRIGATORIAS:
       messages: [{ role: "user", content: prompt }],
     })
 
-    return response.content[0].type === "text"
-      ? response.content[0].text
+    const firstBlock = response.content[0]
+    return firstBlock && firstBlock.type === "text"
+      ? firstBlock.text
       : currentSummary ?? ""
   } catch (error) {
     console.error("Error updating lead memory:", error)

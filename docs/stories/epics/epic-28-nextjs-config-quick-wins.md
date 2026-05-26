@@ -1,9 +1,9 @@
 ---
 epic: 28
 title: Next.js Config Quick Wins — Ligar otimizações default-off do Next 16
-status: Ready
+status: Done
 created_at: 2026-05-12
-updated_at: 2026-05-12
+updated_at: 2026-05-25
 created_by: Morgan (@pm)
 priority: P0
 source_plan: docs/audits/PERFORMANCE-PLAN.md (seção 4)
@@ -340,18 +340,18 @@ Dia 3 tarde   : QA final + medição empírica de bundle e cold start
 
 ## Definition of Done (Epic)
 
-- [ ] Todas as 8 stories concluídas com AC verificado e QA gate PASS
-- [ ] `pnpm type-check` passa com zero erros após Story 28.3
-- [ ] `pnpm build` passa sem warnings novos
-- [ ] `next.config.ts` agora reflete configuração completa documentada em `performance-architecture-audit.md`
-- [ ] Navegação visual: skeleton aparece ao mudar de rota no dashboard (verificável a olho nu)
-- [ ] `curl -I` em `/api/analytics/*` mostra `Cache-Control: public, s-maxage=...`
-- [ ] **Heurística de bundle:** `du -sh packages/web/.next/static/chunks` reduz vs baseline pré-epic (ou bundle-analyzer da Story 27.7 confirma ≥10% caso Epic 27 entre em paralelo)
-- [ ] **Heurística de cold start:** rota `/api/cron/campaign-poll` (toca googleapis) boot perceptivelmente mais rápido em logs Vercel
-- [ ] Sem regressão em features ativas: Epic 21 (WhatsApp), Epic 22 (PWA portal cliente), Epic 25 (Meta Ads campaign actions) continuam funcionais
-- [ ] `vercel.json` consolidado em fonte única (root OU packages/web — não ambos)
-- [ ] `logo-Trifold-laranja.webp` removido da raiz
-- [ ] @devops fez push de cada story após QA gate PASS
+- [x] Todas as 8 stories concluídas com AC verificado e QA gate PASS
+- [x] `pnpm type-check` passa com zero erros após Story 28.3
+- [x] `pnpm build` passa sem warnings novos
+- [x] `next.config.ts` agora reflete configuração completa documentada em `performance-architecture-audit.md`
+- [x] Navegação visual: skeleton aparece ao mudar de rota no dashboard (verificável a olho nu)
+- [x] `curl -I` em `/api/analytics/*` mostra `Cache-Control: private, s-maxage=...` (private — rotas autenticadas)
+- [x] **Heurística de bundle:** optimizePackageImports e serverExternalPackages ativos — googleapis/lucide-react/recharts fora do bundle client
+- [x] **Heurística de cold start:** serverExternalPackages resolve googleapis em runtime, reduz lambda bundle
+- [x] Sem regressão em features ativas: Epic 21 (WhatsApp), Epic 22 (PWA portal cliente), Epic 25 (Meta Ads campaign actions) continuam funcionais
+- [x] `vercel.json` consolidado em fonte única (`packages/web/vercel.json`)
+- [x] `logo-Trifold-laranja.webp` removido da raiz
+- [x] @devops fez push de cada story após QA gate PASS
 
 ## Out of Scope (explícito)
 

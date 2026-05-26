@@ -76,12 +76,12 @@ export default async function PropertyDetailPage({
   return (
     <div className="space-y-6">
       {obra_created === "true" && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 dark:border-green-800/30 dark:bg-green-500/10 dark:text-green-300">
           Obra criada ✓ — a obra de acompanhamento foi vinculada a este empreendimento.
         </div>
       )}
       {obra_error === "true" && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/30 dark:bg-amber-500/10 dark:text-amber-300">
           Empreendimento criado, mas houve um erro ao criar a obra. Você pode vinculá-la manualmente na seção abaixo.
         </div>
       )}
@@ -89,14 +89,14 @@ export default async function PropertyDetailPage({
         <div>
           <Link
             href="/dashboard/properties"
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
           >
             &larr; Empreendimentos
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-gray-900">
+          <h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
             {property.name}
           </h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-stone-400">
             {property.address}, {property.city}/{property.state}
           </p>
         </div>
@@ -112,10 +112,10 @@ export default async function PropertyDetailPage({
           <span
             className={`rounded-full px-3 py-1 text-sm font-medium ${
               property.status === "selling"
-                ? "bg-green-100 text-green-700"
+                ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                 : property.status === "launching"
-                ? "bg-blue-100 text-blue-700"
-                : "bg-gray-100 text-gray-700"
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-300"
             }`}
           >
             {property.status === "selling"
@@ -129,41 +129,41 @@ export default async function PropertyDetailPage({
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Total</p>
-          <p className="text-2xl font-bold">{units?.length ?? 0}</p>
+        <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-sm text-gray-500 dark:text-stone-400">Total</p>
+          <p className="text-2xl font-bold dark:text-stone-100">{units?.length ?? 0}</p>
         </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Disponíveis</p>
-          <p className="text-2xl font-bold text-green-600">{availableCount}</p>
+        <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-sm text-gray-500 dark:text-stone-400">Disponíveis</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{availableCount}</p>
         </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Reservadas</p>
-          <p className="text-2xl font-bold text-yellow-600">{reservedCount}</p>
+        <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-sm text-gray-500 dark:text-stone-400">Reservadas</p>
+          <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{reservedCount}</p>
         </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Vendidas</p>
-          <p className="text-2xl font-bold text-blue-600">{soldCount}</p>
+        <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-sm text-gray-500 dark:text-stone-400">Vendidas</p>
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{soldCount}</p>
         </div>
       </div>
 
       {/* Concept & Details */}
       {property.concept && (
-        <div className="rounded-lg bg-white p-5 shadow-sm">
-          <h2 className="mb-2 text-lg font-semibold">Conceito</h2>
-          <p className="text-gray-600">{property.concept}</p>
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-2 text-lg font-semibold dark:text-stone-100">Conceito</h2>
+          <p className="text-gray-600 dark:text-stone-300">{property.concept}</p>
         </div>
       )}
 
       {/* Amenities */}
       {property.amenities && (property.amenities as string[]).length > 0 && (
-        <div className="rounded-lg bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold">Amenidades</h2>
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">Amenidades</h2>
           <div className="flex flex-wrap gap-2">
             {(property.amenities as string[]).map((a, i) => (
               <span
                 key={i}
-                className="rounded-full bg-orange-50 px-3 py-1 text-sm text-orange-700"
+                className="rounded-full bg-orange-50 px-3 py-1 text-sm text-orange-700 dark:bg-orange-500/10 dark:text-orange-300"
               >
                 {a}
               </span>
@@ -173,13 +173,13 @@ export default async function PropertyDetailPage({
       )}
 
       {/* Typologies */}
-      <div className="rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold">Tipologias</h2>
+      <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">Tipologias</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {typologies?.map((t) => (
-            <div key={t.id} className="rounded-md border p-4">
-              <p className="font-medium text-gray-900">{t.name}</p>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+            <div key={t.id} className="rounded-md border border-gray-200 p-4 dark:border-stone-700">
+              <p className="font-medium text-gray-900 dark:text-stone-100">{t.name}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-stone-400">
                 {t.private_area_m2 && <span>{t.private_area_m2}m2</span>}
                 {t.bedrooms && <span>{t.bedrooms} quartos</span>}
                 {t.suites && <span>{t.suites} suítes</span>}
@@ -187,7 +187,7 @@ export default async function PropertyDetailPage({
                 {t.balcony_bbq && <span>Churrasqueira</span>}
               </div>
               {t.description && (
-                <p className="mt-2 text-sm text-gray-500">{t.description}</p>
+                <p className="mt-2 text-sm text-gray-500 dark:text-stone-400">{t.description}</p>
               )}
             </div>
           ))}
@@ -195,9 +195,9 @@ export default async function PropertyDetailPage({
       </div>
 
       {/* Units Table */}
-      <div className="rounded-lg bg-white p-5 shadow-sm">
+      <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg font-semibold dark:text-stone-100">
             Unidades ({units?.length ?? 0})
           </h2>
           <Link
@@ -208,9 +208,9 @@ export default async function PropertyDetailPage({
           </Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-stone-700">
             <thead>
-              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-stone-400">
                 <th className="px-4 py-2">Unidade</th>
                 <th className="px-4 py-2">Andar</th>
                 <th className="px-4 py-2">Posição</th>
@@ -221,34 +221,34 @@ export default async function PropertyDetailPage({
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
               {units?.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50">
+                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/50">
                   <td className="px-4 py-2 font-medium">
                     <Link
                       href={`/dashboard/properties/${id}/units/${u.id}`}
-                      className="text-orange-600 hover:underline"
+                      className="text-orange-600 hover:underline dark:text-orange-400"
                     >
                       {u.identifier}
                     </Link>
                   </td>
-                  <td className="px-4 py-2">{u.floor}</td>
-                  <td className="px-4 py-2">{u.position ?? "-"}</td>
-                  <td className="px-4 py-2">{u.view_direction ?? "-"}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 dark:text-stone-300">{u.floor}</td>
+                  <td className="px-4 py-2 dark:text-stone-300">{u.position ?? "-"}</td>
+                  <td className="px-4 py-2 dark:text-stone-300">{u.view_direction ?? "-"}</td>
+                  <td className="px-4 py-2 dark:text-stone-300">
                     {u.private_area_m2 ? `${u.private_area_m2}m2` : "-"}
                   </td>
-                  <td className="px-4 py-2">{u.garage_count}</td>
+                  <td className="px-4 py-2 dark:text-stone-300">{u.garage_count}</td>
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         u.status === "available"
-                          ? "bg-green-100 text-green-700"
+                          ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                           : u.status === "reserved"
-                          ? "bg-yellow-100 text-yellow-700"
+                          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
                           : u.status === "sold"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-700"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                          : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-300"
                       }`}
                     >
                       {u.status === "available"
@@ -263,7 +263,7 @@ export default async function PropertyDetailPage({
                   <td className="px-4 py-2 text-right">
                     <Link
                       href={`/dashboard/properties/${id}/units/${u.id}`}
-                      className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200"
+                      className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-200 dark:hover:bg-stone-600"
                     >
                       Editar
                     </Link>
@@ -286,14 +286,14 @@ export default async function PropertyDetailPage({
 
       {/* Sales History */}
       {sales && sales.length > 0 && (
-        <div className="rounded-lg bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold">
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">
             Vendas recentes ({sales.length})
           </h2>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-stone-700">
               <thead>
-                <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-stone-400">
                   <th className="px-4 py-2">Unidade</th>
                   <th className="px-4 py-2">Cliente</th>
                   <th className="px-4 py-2">Valor</th>
@@ -301,26 +301,26 @@ export default async function PropertyDetailPage({
                   <th className="px-4 py-2">Data</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
                 {sales.map((s) => {
                   const unitInfo = s.units as unknown as { identifier: string }
                   return (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium">
+                    <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/50">
+                      <td className="px-4 py-2 font-medium dark:text-stone-100">
                         {unitInfo?.identifier ?? "-"}
                       </td>
-                      <td className="px-4 py-2">{s.client_name ?? "-"}</td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 dark:text-stone-300">{s.client_name ?? "-"}</td>
+                      <td className="px-4 py-2 dark:text-stone-300">
                         {s.sale_price
                           ? `R$ ${Number(s.sale_price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                           : "-"}
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 dark:text-stone-300">
                         {s.payment_method
                           ? paymentMethodLabels[s.payment_method] ?? s.payment_method
                           : "-"}
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 dark:text-stone-300">
                         {s.sold_at
                           ? new Date(s.sold_at).toLocaleDateString("pt-BR")
                           : "-"}
