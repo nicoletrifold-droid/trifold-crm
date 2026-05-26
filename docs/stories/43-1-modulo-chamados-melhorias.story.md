@@ -1,6 +1,6 @@
 # Story 43.1 — Módulo Chamados: tickets de bugs e melhorias do sistema
 
-**Status:** InReview  
+**Status:** Done  
 **Epic:** 43 — Gestão Interna / Feedback do Sistema  
 **Criada por:** @sm (River)  
 **Data:** 2026-05-26  
@@ -159,3 +159,4 @@ O nome "Chamados" foi validado pelo @ux-design-expert como o termo mais adequado
 | 2026-05-26 | @po (Pax) | Validação GO (10/10) — Status: Draft → Ready |
 | 2026-05-26 | @dev (Dex) | Implementação completa — Status: Ready → InProgress |
 | 2026-05-26 | @qa (Quinn) | QA Gate PASS (7/7) — Status: InProgress → InReview |
+| 2026-05-26 | @devops (Gage) | Push commit 71c03f8 — Status: InReview → Done |
