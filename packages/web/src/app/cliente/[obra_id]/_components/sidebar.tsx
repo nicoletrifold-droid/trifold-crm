@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, Layers, Camera, FileText, MessageSquare, Bell, ChevronDown } from "lucide-react"
+import { Home, Layers, Camera, FileText, MessageSquare, Bell, ChevronDown, Wallet } from "lucide-react"
 import { logout } from "@web/app/login/actions"
 
 const NAV_ITEMS = [
@@ -35,6 +35,12 @@ const NAV_ITEMS = [
     label: "Mensagens",
     href: (id: string) => `/cliente/${id}/mensagens`,
     icon: MessageSquare,
+    exact: false,
+  },
+  {
+    label: "Financeiro",
+    href: (id: string) => `/cliente/${id}/financeiro`,
+    icon: Wallet,
     exact: false,
   },
   {

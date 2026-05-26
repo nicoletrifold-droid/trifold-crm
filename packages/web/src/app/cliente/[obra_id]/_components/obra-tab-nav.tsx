@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Layers, Camera, FileText, MessageSquare } from "lucide-react"
+import { Home, Layers, FileText, MessageSquare, Wallet } from "lucide-react"
 
 interface ObraTabNavProps {
   obraId: string
@@ -26,9 +26,9 @@ export function ObraTabNav({ obraId, unreadMensagens = 0 }: ObraTabNavProps) {
       exact: false,
     },
     {
-      label: "Fotos",
-      href: `/cliente/${obraId}/fotos`,
-      icon: Camera,
+      label: "Financeiro",
+      href: `/cliente/${obraId}/financeiro`,
+      icon: Wallet,
       exact: false,
     },
     {
