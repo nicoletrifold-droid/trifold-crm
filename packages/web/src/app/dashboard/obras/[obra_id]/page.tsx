@@ -9,18 +9,7 @@ import { ObraEditButton } from "./_components/obra-edit-button"
 import { ObraDeleteButton } from "./_components/obra-delete-button"
 import { ProgressInlineEdit } from "./_components/progress-inline-edit"
 import type { AprovacaoItem } from "./_components/aprovacoes-tab"
-
-const STATUS_LABEL: Record<string, string> = {
-  em_andamento: "Em andamento",
-  concluida: "Concluída",
-  pausada: "Pausada",
-}
-
-const STATUS_BADGE: Record<string, string> = {
-  em_andamento: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-  concluida: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
-  pausada: "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200",
-}
+import { STATUS_BADGE, STATUS_LABEL } from "@web/lib/status-badge"
 
 function formatDeliveryDate(date: string | null): string {
   if (!date) return "A definir"

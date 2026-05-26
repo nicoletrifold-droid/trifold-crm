@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
-import { Paperclip, Send } from "lucide-react"
+import { Loader2, Paperclip, Send } from "lucide-react"
 
 interface Mensagem {
   id: string
@@ -18,6 +18,8 @@ interface ChatFeedProps {
   userId: string | null
   initialMensagens: Mensagem[]
   supabaseUrl?: string
+  hasMoreInitial?: boolean
+  oldestCursorInitial?: string | null
 }
 
 function getDayKey(iso: string): string {
@@ -199,12 +201,18 @@ export function ChatFeed({
   obraId,
   userId,
   initialMensagens,
+  hasMoreInitial = false,
+  oldestCursorInitial = null,
 }: ChatFeedProps) {
   const [mensagens, setMensagens] = useState<Mensagem[]>(initialMensagens)
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(hasMoreInitial)
+  const [oldestCursor, setOldestCursor] = useState<string | null>(oldestCursorInitial)
+  const [loadingMore, setLoadingMore] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const feedRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Realtime subscription — filtrar client-side por cliente_id do usuário logado
@@ -247,10 +255,50 @@ export function ChatFeed({
     bottomRef.current?.scrollIntoView({ behavior: "instant" })
   }, [])
 
-  // Auto-scroll quando mensagens mudam
+  // Auto-scroll quando mensagens mudam (apenas novas)
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [mensagens])
+
+  async function loadMoreMensagens() {
+    if (loadingMore || !hasMore || !oldestCursor) return
+    setLoadingMore(true)
+
+    // Salvar scroll height antes de inserir mensagens antigas
+    const feed = feedRef.current
+    const prevScrollHeight = feed?.scrollHeight ?? 0
+
+    try {
+      const url = `/api/cliente/obras/${obraId}/mensagens?before=${encodeURIComponent(oldestCursor)}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error("Erro ao carregar mensagens")
+      const { mensagens: older, hasMore: moreExist } = (await res.json()) as {
+        mensagens: Mensagem[]
+        hasMore: boolean
+      }
+
+      if (older.length > 0) {
+        setMensagens((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id))
+          const novas = older.filter((m) => !existingIds.has(m.id))
+          return [...novas, ...prev]
+        })
+        setOldestCursor(older[0]!.created_at)
+
+        // Restaurar scroll position após inserção
+        requestAnimationFrame(() => {
+          if (feed) {
+            feed.scrollTop = feed.scrollHeight - prevScrollHeight
+          }
+        })
+      }
+      setHasMore(moreExist)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao carregar mensagens")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   async function sendText() {
     const content = text.trim()
@@ -329,23 +377,46 @@ export function ChatFeed({
       </div>
 
       {/* Feed de mensagens */}
-      <div className="flex-1 space-y-3 overflow-y-auto bg-stone-900/40 px-4 py-4">
-        {mensagens.length === 0 && (
-          <p className="py-10 text-center text-sm text-stone-500">
-            Nenhuma mensagem ainda. Diga olá para a equipe!
-          </p>
+      <div ref={feedRef} className="flex-1 overflow-y-auto bg-stone-900/40 px-4 py-4">
+        {/* Botão carregar mensagens anteriores */}
+        {hasMore && (
+          <div className="mb-4 flex justify-center">
+            <button
+              type="button"
+              onClick={loadMoreMensagens}
+              disabled={loadingMore}
+              className="flex items-center gap-2 rounded-full border border-stone-700 bg-stone-800/70 px-4 py-2 text-xs font-medium text-stone-300 transition-colors hover:bg-stone-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Carregando...
+                </>
+              ) : (
+                "Carregar mensagens anteriores"
+              )}
+            </button>
+          </div>
         )}
-        {mensagens.map((m, i) => {
-          const currentDay = getDayKey(m.created_at)
-          const prevDay = i > 0 ? getDayKey(mensagens[i - 1]!.created_at) : null
-          return (
-            <React.Fragment key={m.id}>
-              {currentDay !== prevDay && <DateDivider label={currentDay} />}
-              <MensagemBubble mensagem={m} />
-            </React.Fragment>
-          )
-        })}
-        <div ref={bottomRef} />
+
+        <div className="space-y-3">
+          {mensagens.length === 0 && (
+            <p className="py-10 text-center text-sm text-stone-500">
+              Nenhuma mensagem ainda. Diga olá para a equipe!
+            </p>
+          )}
+          {mensagens.map((m, i) => {
+            const currentDay = getDayKey(m.created_at)
+            const prevDay = i > 0 ? getDayKey(mensagens[i - 1]!.created_at) : null
+            return (
+              <React.Fragment key={m.id}>
+                {currentDay !== prevDay && <DateDivider label={currentDay} />}
+                <MensagemBubble mensagem={m} />
+              </React.Fragment>
+            )
+          })}
+          <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Input area */}

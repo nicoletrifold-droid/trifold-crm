@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
+import { FASE_STATUS_BADGE, FASE_STATUS_LABEL } from "@web/lib/status-badge"
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—"
@@ -97,21 +98,6 @@ function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
   return groups
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pendente: "Pendente",
-  a_iniciar: "A iniciar",
-  em_andamento: "Em andamento",
-  pausada: "Pausada",
-  concluida: "Concluída",
-}
-
-const STATUS_BADGE: Record<string, string> = {
-  pendente: "bg-stone-800 text-stone-400",
-  a_iniciar: "bg-stone-800 text-stone-400",
-  em_andamento: "bg-[#F27A5E]/20 text-[#F27A5E]",
-  pausada: "bg-yellow-900/30 text-yellow-400",
-  concluida: "bg-green-900/40 text-green-400",
-}
 
 export default async function FasesPage({
   params,
@@ -198,8 +184,8 @@ export default async function FasesPage({
                     {groupFases.map((fase, subIdx) => {
                       const barColor = color.bars[subIdx % color.bars.length]
                       const badgeClass =
-                        STATUS_BADGE[fase.status] ?? STATUS_BADGE.pendente
-                      const label = STATUS_LABEL[fase.status] ?? fase.status
+                        FASE_STATUS_BADGE[fase.status] ?? FASE_STATUS_BADGE.pendente
+                      const label = FASE_STATUS_LABEL[fase.status] ?? fase.status
 
                       return (
                         <div key={fase.id} className="p-4">

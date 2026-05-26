@@ -8,7 +8,7 @@ import { logout } from "@web/app/login/actions"
 
 const NAV_ITEMS = [
   {
-    label: "Visão Geral",
+    label: "Início",
     href: (id: string) => `/cliente/${id}`,
     icon: Home,
     exact: true,

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Users, X } from "lucide-react"
+import { ChevronDown, ChevronUp, Plus, Users, X } from "lucide-react"
 import type { ObraOption } from "./clientes-page-client"
 
 const UF_OPTIONS = [
@@ -90,6 +90,22 @@ function s(v: string | null | undefined): string {
   return v ?? ""
 }
 
+function validateCpf(value: string): string | null {
+  if (!value.trim()) return "CPF é obrigatório."
+  if (!/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(value.trim())) {
+    return "CPF inválido. Use o formato 000.000.000-00."
+  }
+  return null
+}
+
+function validateEmail(value: string): string | null {
+  if (!value.trim()) return null // e-mail é opcional no CRM
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+    return "E-mail inválido."
+  }
+  return null
+}
+
 export function ClienteModal({
   mode,
   clienteId,
@@ -97,9 +113,14 @@ export function ClienteModal({
   onClose,
 }: ClienteModalProps) {
   const [fields, setFields] = useState({ ...EMPTY_FIELDS })
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string | null>>>({})
   const [loading, setLoading] = useState(false)
   const [loadingCliente, setLoadingCliente] = useState(mode === "edit")
   const [error, setError] = useState<string | null>(null)
+
+  // Collapsible sections — starts collapsed on mobile, expanded on desktop
+  const [pessoaisOpen, setPessoaisOpen] = useState(true)
+  const [enderecoOpen, setEnderecoOpen] = useState(false)
 
   const [vinculosExistentes, setVinculosExistentes] = useState<
     VinculoExistente[]
@@ -155,6 +176,10 @@ export function ClienteModal({
           } satisfies VinculoExistente
         })
         setVinculosExistentes(vincs)
+        // Expandir endereço se tiver dados preenchidos
+        if (c.endereco_logradouro || c.endereco_cidade) {
+          setEnderecoOpen(true)
+        }
       })
       .catch(() => {
         if (!aborted) setError("Erro ao carregar dados do cliente.")
@@ -169,6 +194,18 @@ export function ClienteModal({
 
   function set(field: FieldKey, value: string) {
     setFields((f) => ({ ...f, [field]: value }))
+    // Limpar erro ao digitar
+    if (fieldErrors[field]) {
+      setFieldErrors((e) => ({ ...e, [field]: null }))
+    }
+  }
+
+  function handleBlur(field: FieldKey) {
+    if (field === "cpf") {
+      setFieldErrors((e) => ({ ...e, cpf: validateCpf(fields.cpf) }))
+    } else if (field === "email") {
+      setFieldErrors((e) => ({ ...e, email: validateEmail(fields.email) }))
+    }
   }
 
   function obraNome(id: string): string {
@@ -245,15 +282,12 @@ export function ClienteModal({
   }
 
   function buildBodyForPatch(): Record<string, string | null> {
-    // PATCH envia TODOS os campos do form (a API só atualiza os definidos);
-    // strings vazias viram null para "limpar" o campo de forma explícita.
     return buildBodyForCreate()
   }
 
   async function persistVinculos(targetClienteId: string): Promise<string[]> {
     const errors: string[] = []
 
-    // Remover existentes marcados (apenas em edição)
     for (const vinculoId of vinculosParaRemover) {
       try {
         const res = await fetch(
@@ -269,7 +303,6 @@ export function ClienteModal({
       }
     }
 
-    // Adicionar novos
     for (const novo of vinculosParaAdicionar) {
       try {
         const res = await fetch(
@@ -302,12 +335,17 @@ export function ClienteModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (loading) return
+
     if (!fields.nome.trim()) {
       setError("Nome é obrigatório.")
       return
     }
-    if (!fields.cpf.trim()) {
-      setError("CPF é obrigatório.")
+
+    // Validar CPF e email antes de submeter
+    const cpfErr = validateCpf(fields.cpf)
+    const emailErr = validateEmail(fields.email)
+    if (cpfErr || emailErr) {
+      setFieldErrors({ cpf: cpfErr, email: emailErr })
       return
     }
 
@@ -353,7 +391,6 @@ export function ClienteModal({
         setError(
           `Cliente salvo, mas houve erros em vínculos: ${vinculoErrors.join(" | ")}`
         )
-        // Não bloqueia o fluxo: ainda fechamos modal e refrescamos para refletir o estado real
         onClose(true)
         return
       }
@@ -366,15 +403,41 @@ export function ClienteModal({
     }
   }
 
-  const inp =
-    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+  const inp = (hasErr?: boolean) =>
+    `w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
+      hasErr
+        ? "border-red-400 focus:border-red-500 focus:ring-red-500 dark:border-red-500/70"
+        : "border-gray-300 focus:border-orange-500 focus:ring-orange-500 dark:border-stone-700"
+    } dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500`
+
   const lbl =
     "mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300"
   const secTitle =
-    "mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500"
+    "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500"
 
-  // Vínculos visíveis na lista existente (não marcados como removidos exibem o "X";
-  // os marcados aparecem riscados com botão "Desfazer").
+  const SectionToggle = ({
+    title,
+    open,
+    onToggle,
+  }: {
+    title: string
+    open: boolean
+    onToggle: () => void
+  }) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center justify-between rounded-md px-1 py-1 text-left transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/40"
+    >
+      <p className={secTitle}>{title}</p>
+      {open ? (
+        <ChevronUp className="h-4 w-4 text-gray-400 dark:text-stone-500" />
+      ) : (
+        <ChevronDown className="h-4 w-4 text-gray-400 dark:text-stone-500" />
+      )}
+    </button>
+  )
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-10 dark:bg-black/70">
       <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
@@ -402,9 +465,10 @@ export function ClienteModal({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5 px-5 py-4">
-            {/* DADOS PESSOAIS */}
+
+            {/* ── DADOS OBRIGATÓRIOS ─────────────────────────────────── */}
             <div>
-              <p className={secTitle}>Dados Pessoais</p>
+              <p className={`mb-2 ${secTitle}`}>Dados Obrigatórios</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className={lbl}>
@@ -415,7 +479,7 @@ export function ClienteModal({
                     value={fields.nome}
                     onChange={(e) => set("nome", e.target.value)}
                     required
-                    className={inp}
+                    className={inp()}
                     placeholder="Nome completo"
                   />
                 </div>
@@ -427,191 +491,222 @@ export function ClienteModal({
                     type="text"
                     value={fields.cpf}
                     onChange={(e) => set("cpf", e.target.value)}
+                    onBlur={() => handleBlur("cpf")}
                     required
-                    className={inp}
+                    className={inp(!!fieldErrors.cpf)}
                     placeholder="000.000.000-00"
                   />
+                  {fieldErrors.cpf && (
+                    <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                      {fieldErrors.cpf}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label className={lbl}>RG</label>
-                  <input
-                    type="text"
-                    value={fields.rg}
-                    onChange={(e) => set("rg", e.target.value)}
-                    className={inp}
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Email</label>
+                  <label className={lbl}>E-mail</label>
                   <input
                     type="email"
                     value={fields.email}
                     onChange={(e) => set("email", e.target.value)}
-                    className={inp}
+                    onBlur={() => handleBlur("email")}
+                    className={inp(!!fieldErrors.email)}
                     placeholder="email@exemplo.com"
                   />
-                </div>
-                <div>
-                  <label className={lbl}>Telefone</label>
-                  <input
-                    type="text"
-                    value={fields.telefone}
-                    onChange={(e) => set("telefone", e.target.value)}
-                    className={inp}
-                    placeholder="(00) 0000-0000"
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>WhatsApp</label>
-                  <input
-                    type="text"
-                    value={fields.whatsapp}
-                    onChange={(e) => set("whatsapp", e.target.value)}
-                    className={inp}
-                    placeholder="(00) 00000-0000"
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Data de Nascimento</label>
-                  <input
-                    type="date"
-                    value={fields.data_nascimento}
-                    onChange={(e) => set("data_nascimento", e.target.value)}
-                    className={inp}
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Estado Civil</label>
-                  <input
-                    type="text"
-                    value={fields.estado_civil}
-                    onChange={(e) => set("estado_civil", e.target.value)}
-                    className={inp}
-                    placeholder="Solteiro, Casado..."
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Profissão</label>
-                  <input
-                    type="text"
-                    value={fields.profissao}
-                    onChange={(e) => set("profissao", e.target.value)}
-                    className={inp}
-                  />
+                  {fieldErrors.email && (
+                    <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                      {fieldErrors.email}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* ENDEREÇO */}
-            <div>
-              <p className={secTitle}>Endereço</p>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label className={lbl}>Logradouro</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_logradouro}
-                    onChange={(e) =>
-                      set("endereco_logradouro", e.target.value)
-                    }
-                    className={inp}
-                    placeholder="Rua, Av..."
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Número</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_numero}
-                    onChange={(e) => set("endereco_numero", e.target.value)}
-                    className={inp}
-                    placeholder="123"
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Complemento</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_complemento}
-                    onChange={(e) =>
-                      set("endereco_complemento", e.target.value)
-                    }
-                    className={inp}
-                    placeholder="Apto, Casa..."
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Bairro</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_bairro}
-                    onChange={(e) => set("endereco_bairro", e.target.value)}
-                    className={inp}
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>CEP</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_cep}
-                    onChange={(e) => set("endereco_cep", e.target.value)}
-                    className={inp}
-                    placeholder="00000-000"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className={lbl}>Cidade</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_cidade}
-                    onChange={(e) => set("endereco_cidade", e.target.value)}
-                    className={inp}
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Estado</label>
-                  <select
-                    value={fields.endereco_estado}
-                    onChange={(e) => set("endereco_estado", e.target.value)}
-                    className={inp}
-                  >
-                    <option value="">UF</option>
-                    {UF_OPTIONS.map((uf) => (
-                      <option key={uf} value={uf}>
-                        {uf}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-span-3">
-                  <label className={lbl}>Referência</label>
-                  <input
-                    type="text"
-                    value={fields.endereco_referencia}
-                    onChange={(e) =>
-                      set("endereco_referencia", e.target.value)
-                    }
-                    className={inp}
-                    placeholder='Ex: "Próximo ao mercado"'
-                  />
-                </div>
+            {/* ── DADOS COMPLEMENTARES (colapsível) ─────────────────── */}
+            <div className="rounded-md border border-gray-200 dark:border-stone-700">
+              <div className="px-3 py-2">
+                <SectionToggle
+                  title="Dados Complementares"
+                  open={pessoaisOpen}
+                  onToggle={() => setPessoaisOpen((v) => !v)}
+                />
               </div>
+              {pessoaisOpen && (
+                <div className="border-t border-gray-100 px-3 pb-3 pt-3 dark:border-stone-700/60">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={lbl}>RG</label>
+                      <input
+                        type="text"
+                        value={fields.rg}
+                        onChange={(e) => set("rg", e.target.value)}
+                        className={inp()}
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Telefone</label>
+                      <input
+                        type="text"
+                        value={fields.telefone}
+                        onChange={(e) => set("telefone", e.target.value)}
+                        className={inp()}
+                        placeholder="(00) 0000-0000"
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>WhatsApp</label>
+                      <input
+                        type="text"
+                        value={fields.whatsapp}
+                        onChange={(e) => set("whatsapp", e.target.value)}
+                        className={inp()}
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Data de Nascimento</label>
+                      <input
+                        type="date"
+                        value={fields.data_nascimento}
+                        onChange={(e) => set("data_nascimento", e.target.value)}
+                        className={inp()}
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Estado Civil</label>
+                      <input
+                        type="text"
+                        value={fields.estado_civil}
+                        onChange={(e) => set("estado_civil", e.target.value)}
+                        className={inp()}
+                        placeholder="Solteiro, Casado..."
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Profissão</label>
+                      <input
+                        type="text"
+                        value={fields.profissao}
+                        onChange={(e) => set("profissao", e.target.value)}
+                        className={inp()}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={lbl}>Observação</label>
+                      <textarea
+                        value={fields.observacao}
+                        onChange={(e) => set("observacao", e.target.value)}
+                        className={`${inp()} min-h-[60px]`}
+                        placeholder="Notas adicionais sobre o cliente..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* OBSERVAÇÃO */}
-            <div>
-              <p className={secTitle}>Observação</p>
-              <textarea
-                value={fields.observacao}
-                onChange={(e) => set("observacao", e.target.value)}
-                className={`${inp} min-h-[80px]`}
-                placeholder="Notas adicionais sobre o cliente..."
-              />
+            {/* ── ENDEREÇO (colapsível) ──────────────────────────────── */}
+            <div className="rounded-md border border-gray-200 dark:border-stone-700">
+              <div className="px-3 py-2">
+                <SectionToggle
+                  title="Endereço"
+                  open={enderecoOpen}
+                  onToggle={() => setEnderecoOpen((v) => !v)}
+                />
+              </div>
+              {enderecoOpen && (
+                <div className="border-t border-gray-100 px-3 pb-3 pt-3 dark:border-stone-700/60">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <label className={lbl}>Logradouro</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_logradouro}
+                        onChange={(e) => set("endereco_logradouro", e.target.value)}
+                        className={inp()}
+                        placeholder="Rua, Av..."
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Número</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_numero}
+                        onChange={(e) => set("endereco_numero", e.target.value)}
+                        className={inp()}
+                        placeholder="123"
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Complemento</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_complemento}
+                        onChange={(e) => set("endereco_complemento", e.target.value)}
+                        className={inp()}
+                        placeholder="Apto, Casa..."
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Bairro</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_bairro}
+                        onChange={(e) => set("endereco_bairro", e.target.value)}
+                        className={inp()}
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>CEP</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_cep}
+                        onChange={(e) => set("endereco_cep", e.target.value)}
+                        className={inp()}
+                        placeholder="00000-000"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={lbl}>Cidade</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_cidade}
+                        onChange={(e) => set("endereco_cidade", e.target.value)}
+                        className={inp()}
+                      />
+                    </div>
+                    <div>
+                      <label className={lbl}>Estado</label>
+                      <select
+                        value={fields.endereco_estado}
+                        onChange={(e) => set("endereco_estado", e.target.value)}
+                        className={inp()}
+                      >
+                        <option value="">UF</option>
+                        {UF_OPTIONS.map((uf) => (
+                          <option key={uf} value={uf}>
+                            {uf}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-3">
+                      <label className={lbl}>Referência</label>
+                      <input
+                        type="text"
+                        value={fields.endereco_referencia}
+                        onChange={(e) => set("endereco_referencia", e.target.value)}
+                        className={inp()}
+                        placeholder='Ex: "Próximo ao mercado"'
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* OBRAS VINCULADAS */}
+            {/* ── OBRAS VINCULADAS ───────────────────────────────────── */}
             <div>
-              <p className={secTitle}>Obras Vinculadas</p>
+              <p className={`mb-2 ${secTitle}`}>Obras Vinculadas</p>
 
               <div className="space-y-2">
                 {vinculosExistentes.length === 0 &&
@@ -715,7 +810,7 @@ export function ClienteModal({
                     <select
                       value={novaObraId}
                       onChange={(e) => setNovaObraId(e.target.value)}
-                      className={inp}
+                      className={inp()}
                     >
                       <option value="">Selecione uma obra</option>
                       {obras.map((o) => (
@@ -731,7 +826,7 @@ export function ClienteModal({
                       type="text"
                       value={novoNumeroUnidade}
                       onChange={(e) => setNovoNumeroUnidade(e.target.value)}
-                      className={inp}
+                      className={inp()}
                       placeholder="Ex: 101"
                     />
                   </div>

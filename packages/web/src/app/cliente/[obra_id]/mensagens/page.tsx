@@ -35,14 +35,17 @@ export default async function MensagensPage({
     redirect("/cliente/sem-obra")
   }
 
+  const PAGE_SIZE = 30
+
   const mensagensQuery = supabase
     .from("obra_mensagens")
-    .select("id, content, message_type, storage_path, sender_type, created_at")
+    .select("id, content, message_type, storage_path, sender_type, created_at", { count: "exact" })
     .eq("obra_id", obra_id)
     .eq("cliente_id", userId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(PAGE_SIZE)
 
-  const [{ data: mensagens }] = await Promise.all([
+  const [{ data: mensagensDesc, count: totalCount }] = await Promise.all([
     mensagensQuery,
     supabase
       .from("obra_mensagens")
@@ -52,6 +55,11 @@ export default async function MensagensPage({
       .eq("sender_type", "equipe")
       .is("read_at", null),
   ])
+
+  // Reverter para ordem cronológica (mais antigo primeiro)
+  const mensagens = (mensagensDesc ?? []).reverse()
+  const hasMoreMessages = (totalCount ?? 0) > PAGE_SIZE
+  const oldestCursor = mensagens.length > 0 ? mensagens[0]!.created_at : null
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
@@ -68,8 +76,10 @@ export default async function MensagensPage({
         <ChatFeed
           obraId={obra_id}
           userId={userId}
-          initialMensagens={mensagens ?? []}
+          initialMensagens={mensagens}
           supabaseUrl={supabaseUrl}
+          hasMoreInitial={hasMoreMessages}
+          oldestCursorInitial={oldestCursor}
         />
       </div>
     </div>
