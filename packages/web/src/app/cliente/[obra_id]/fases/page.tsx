@@ -84,7 +84,7 @@ function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
     if (!a.start_date && !b.start_date) return a.order_index - b.order_index
     if (!a.start_date) return 1
     if (!b.start_date) return -1
-    return new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+    return new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
   })
   const groups: [string, Fase[]][] = []
   const idx = new Map<string, number>()
