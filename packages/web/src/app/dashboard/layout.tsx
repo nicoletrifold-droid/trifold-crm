@@ -130,11 +130,18 @@ export default async function DashboardLayout({
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
       : []),
-    ...(permissions["chamados"] ? [{ ...NAV_ITEM_CHAMADOS, separator: true }] : []),
-    ...(permissions["configuracoes"]
-      ? [{ ...NAV_ITEM_CONFIG }]
-      : []),
-    ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
+    // Grupo inferior: Chamados → Config → Email → Sistema
+    // O separator é colocado no primeiro item visível do grupo (linha divisória após Mensagens)
+    ...(() => {
+      const bottomGroup = [
+        ...(permissions["chamados"] ? [NAV_ITEM_CHAMADOS] : []),
+        ...(permissions["configuracoes"] ? [NAV_ITEM_CONFIG] : []),
+        ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
+      ]
+      return bottomGroup.map((item, idx) =>
+        idx === 0 ? { ...item, separator: true } : item
+      )
+    })(),
   ]
 
   return (
