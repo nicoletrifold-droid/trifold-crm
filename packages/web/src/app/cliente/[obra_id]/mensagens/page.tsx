@@ -30,23 +30,27 @@ export default async function MensagensPage({
     : { data: null }
   const userId = userRow?.id ?? null
 
+  // Segurança: sem userId não conseguimos isolar mensagens por cliente — bloquear acesso
+  if (!userId) {
+    redirect("/cliente/sem-obra")
+  }
+
   const mensagensQuery = supabase
     .from("obra_mensagens")
     .select("id, content, message_type, storage_path, sender_type, created_at")
     .eq("obra_id", obra_id)
+    .eq("cliente_id", userId)
     .order("created_at", { ascending: true })
 
   const [{ data: mensagens }] = await Promise.all([
-    userId ? mensagensQuery.eq("cliente_id", userId) : mensagensQuery,
-    userId
-      ? supabase
-          .from("obra_mensagens")
-          .update({ read_at: new Date().toISOString() })
-          .eq("obra_id", obra_id)
-          .eq("cliente_id", userId)
-          .eq("sender_type", "equipe")
-          .is("read_at", null)
-      : Promise.resolve(null),
+    mensagensQuery,
+    supabase
+      .from("obra_mensagens")
+      .update({ read_at: new Date().toISOString() })
+      .eq("obra_id", obra_id)
+      .eq("cliente_id", userId)
+      .eq("sender_type", "equipe")
+      .is("read_at", null),
   ])
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
