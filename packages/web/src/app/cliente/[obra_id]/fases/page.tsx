@@ -80,7 +80,16 @@ function buildFaseGroups(fases: Fase[]): [string, Fase[]][] {
   const sorted = [...fases].sort((a, b) => {
     const aConc = a.status === "concluida"
     const bConc = b.status === "concluida"
-    if (aConc !== bConc) return aConc ? 1 : -1
+    // Concluídas sempre no topo
+    if (aConc !== bConc) return aConc ? -1 : 1
+    if (aConc && bConc) {
+      // Entre concluídas: a que terminou mais recentemente vem primeiro
+      if (!a.end_date && !b.end_date) return 0
+      if (!a.end_date) return 1
+      if (!b.end_date) return -1
+      return new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
+    }
+    // Entre não-concluídas: a que começa mais cedo vem primeiro
     if (!a.start_date && !b.start_date) return a.order_index - b.order_index
     if (!a.start_date) return 1
     if (!b.start_date) return -1
