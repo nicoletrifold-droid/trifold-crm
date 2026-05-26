@@ -484,6 +484,8 @@ export function ObraDetailTabs({
       {/* Fases tab */}
       {tab === "fases" && (
         <div className="space-y-4">
+          <FaseCreateForm obraId={obraId} />
+
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             {fases.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
@@ -543,8 +545,6 @@ export function ObraDetailTabs({
               </div>
             )}
           </section>
-
-          <FaseCreateForm obraId={obraId} />
         </div>
       )}
 
