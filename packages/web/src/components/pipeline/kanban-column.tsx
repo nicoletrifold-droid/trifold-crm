@@ -66,9 +66,9 @@ export function KanbanColumn({
             backgroundColor: `${stage.color}20`,
             color: stage.color,
           }}
-          title={showTotal ? `${leads.length} de ${totalCount}` : undefined}
+          title={showTotal ? `${leads.length} carregados de ${totalCount}` : undefined}
         >
-          {showTotal ? `${leads.length}/${totalCount}` : leads.length}
+          {typeof totalCount === "number" ? totalCount : leads.length} {(typeof totalCount === "number" ? totalCount : leads.length) === 1 ? "lead" : "leads"}
         </span>
       </div>
 
