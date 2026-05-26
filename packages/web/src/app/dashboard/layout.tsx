@@ -21,6 +21,7 @@ import {
   HardHat,
   Inbox,
   Gift,
+  MessageSquarePlus,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -48,6 +49,7 @@ const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", i
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
+const NAV_ITEM_CHAMADOS = { href: "/dashboard/chamados", label: "Chamados", icon: <MessageSquarePlus className={ICON_SIZE} /> }
 
 /**
  * Mapeamento href → moduleKey para resolver permissões via `getUserPermissions`.
@@ -71,6 +73,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/sistema/email": "sistema",
   "/dashboard/sistema": "sistema",
   "/dashboard/configuracoes": "configuracoes",
+  "/dashboard/chamados": "chamados",
 }
 
 export default async function DashboardLayout({
@@ -127,8 +130,9 @@ export default async function DashboardLayout({
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
       : []),
+    ...(permissions["chamados"] ? [{ ...NAV_ITEM_CHAMADOS, separator: true }] : []),
     ...(permissions["configuracoes"]
-      ? [{ ...NAV_ITEM_CONFIG, separator: true }]
+      ? [{ ...NAV_ITEM_CONFIG }]
       : []),
     ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
   ]

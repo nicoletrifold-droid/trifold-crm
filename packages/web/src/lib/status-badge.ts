@@ -41,3 +41,21 @@ export const FASE_STATUS_LABEL: Record<string, string> = {
   pausada: "Pausada",
   concluida: "Concluída",
 }
+
+/**
+ * Classes Tailwind para badges de status de chamados.
+ */
+export const CHAMADO_STATUS_BADGE: Record<string, string> = {
+  aberto:
+    "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  em_analise:
+    "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+  resolvido:
+    "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
+}
+
+export const CHAMADO_STATUS_LABEL: Record<string, string> = {
+  aberto: "Aberto",
+  em_analise: "Em análise",
+  resolvido: "Resolvido",
+}

@@ -78,6 +78,7 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         alertas: true,
         atividades: true,
         treinamento: true,
+        chamados: true,
       }
 
     case "obras":
@@ -85,10 +86,12 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         ...emptyMatrix(),
         obras: true,
         brindes: true,
+        chamados: true,
       }
 
     default:
-      return emptyMatrix()
+      // Qualquer role desconhecido ainda tem acesso a chamados
+      return { ...emptyMatrix(), chamados: true }
   }
 }
 
