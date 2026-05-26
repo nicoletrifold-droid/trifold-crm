@@ -6,6 +6,7 @@ import { PwaInit } from "@web/components/pwa-init";
 import { OfflineBadge } from "@web/components/offline-badge";
 import { PwaUpdateToast } from "@web/components/pwa-update-toast";
 import { IosInstallPrompt } from "@web/components/ios-install-prompt";
+import { AndroidInstallPrompt } from "@web/components/android-install-prompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,6 +66,7 @@ export default function RootLayout({
         <OfflineBadge />
         <PwaUpdateToast />
         <IosInstallPrompt variant="crm" />
+        <AndroidInstallPrompt variant="crm" />
         <PwaInit />
       </body>
     </html>

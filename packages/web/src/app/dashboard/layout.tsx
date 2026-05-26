@@ -2,7 +2,6 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { getUserPermissions } from "@web/lib/permissions"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { PwaInstallPrompt } from "@web/components/pwa-install-prompt"
 import {
   LayoutDashboard,
   Kanban,
@@ -160,7 +159,6 @@ export default async function DashboardLayout({
           {children}
         </div>
       </main>
-      <PwaInstallPrompt />
     </div>
   )
 }

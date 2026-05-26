@@ -5,6 +5,7 @@ import { PrivacyButton } from "./_components/privacy-button"
 import { PrivacyConsentModal } from "./_components/privacy-consent-modal"
 import { PushPrompt } from "@web/components/portal/push-prompt"
 import { IosInstallPrompt } from "@web/components/ios-install-prompt"
+import { AndroidInstallPrompt } from "@web/components/android-install-prompt"
 import { createClient } from "@web/lib/supabase/server"
 
 export const viewport: Viewport = {
@@ -97,6 +98,7 @@ export default async function ObraLayout({
       <PrivacyConsentModal privacyAccepted={privacyAccepted} />
       <PushPrompt />
       <IosInstallPrompt variant="portal" />
+      <AndroidInstallPrompt variant="portal" />
     </>
   )
 }
