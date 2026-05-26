@@ -89,8 +89,12 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         chamados: true,
       }
 
+    case "cliente":
+      // Portal do cliente — sem acesso ao dashboard nem aos seus módulos
+      return emptyMatrix()
+
     default:
-      // Qualquer role desconhecido ainda tem acesso a chamados
+      // Qualquer role interno desconhecido recebe acesso a chamados
       return { ...emptyMatrix(), chamados: true }
   }
 }
