@@ -10,10 +10,14 @@
     "seed": "tsx scripts/run-seed.ts && tsx scripts/seed-properties.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
     "aios": "node bin/aios.js",
     "aios:init": "node bin/aios-init.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "tsx": "^4.21.0",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0",
