@@ -1,28 +1,57 @@
 import { useState, useEffect, useRef } from 'react'
 
-const OFFLINE_DEBOUNCE_MS = 4000
+const PING_URL = '/api/ping'
+const OFFLINE_DEBOUNCE_MS = 3000
+const PING_INTERVAL_MS = 30000
+
+async function checkConnectivity(): Promise<boolean> {
+  try {
+    const resp = await fetch(PING_URL, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    })
+    return resp.ok
+  } catch {
+    return false
+  }
+}
 
 export function useOnlineStatus() {
-  const [online, setOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  )
-  const timer = useRef<ReturnType<typeof setTimeout>>(null)
+  const [online, setOnline] = useState(true)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(null)
+  const pingInterval = useRef<ReturnType<typeof setInterval>>(null)
 
   useEffect(() => {
-    const on = () => {
-      if (timer.current) clearTimeout(timer.current)
+    // Verifica conectividade real ao montar
+    checkConnectivity().then(setOnline)
+
+    // Ping periódico para detectar quedas sem disparo de evento
+    pingInterval.current = setInterval(() => {
+      checkConnectivity().then(setOnline)
+    }, PING_INTERVAL_MS)
+
+    const onOnline = () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
       setOnline(true)
     }
-    const off = () => {
-      // Debounce para ignorar quedas breves (iOS/troca de rede)
-      timer.current = setTimeout(() => setOnline(false), OFFLINE_DEBOUNCE_MS)
+
+    const onOffline = () => {
+      // Confirma com ping real antes de marcar offline
+      debounceTimer.current = setTimeout(async () => {
+        const connected = await checkConnectivity()
+        setOnline(connected)
+      }, OFFLINE_DEBOUNCE_MS)
     }
-    window.addEventListener('online', on)
-    window.addEventListener('offline', off)
+
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+
     return () => {
-      window.removeEventListener('online', on)
-      window.removeEventListener('offline', off)
-      if (timer.current) clearTimeout(timer.current)
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+      if (pingInterval.current) clearInterval(pingInterval.current)
     }
   }, [])
 
