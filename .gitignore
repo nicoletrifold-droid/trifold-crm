@@ -42,3 +42,4 @@ package-lock.json
 
 # Environment & Secrets (AIOS)
 .env.local
+.env*.local

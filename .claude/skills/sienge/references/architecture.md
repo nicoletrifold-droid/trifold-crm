@@ -84,19 +84,29 @@ CREATE TABLE sienge_contracts (
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Parcelas a receber
+-- Extrato financeiro do cliente (parcelas + recibos)
+-- Fonte: GET /customer-financial-statements?customerId={id}
 CREATE TABLE sienge_installments (
-  id                  SERIAL PRIMARY KEY,
-  sienge_installment_id INT UNIQUE NOT NULL,
-  sienge_contract_id  INT,
-  sienge_customer_id  INT,
-  tenant              TEXT NOT NULL,
-  due_date            DATE,
-  value               NUMERIC,
-  status              TEXT,
-  paid_date           DATE,
-  raw                 JSONB,
-  synced_at           TIMESTAMPTZ DEFAULT NOW()
+  id                    SERIAL PRIMARY KEY,
+  sienge_installment_id INT UNIQUE NOT NULL,       -- installmentId
+  sienge_customer_id    INT NOT NULL,              -- customerId (chave de consulta)
+  bill_receivable_id    INT,                       -- billReceivableId
+  document_id           TEXT,                      -- ex: "VIND-101"
+  tenant                TEXT NOT NULL,
+  installment_number    TEXT,                      -- installmentNumber
+  due_date              DATE,                      -- dueDate
+  condition_type        TEXT,                      -- AT | PI | PM | CH
+  original_value        NUMERIC,                   -- originalValue
+  current_balance       NUMERIC,                   -- currentBalance (0 = pago)
+  interest_percent      NUMERIC,                   -- interestPercent da parcela
+  fine_percent          NUMERIC,                   -- finePercent (do billReceivable)
+  generated_billet      BOOLEAN DEFAULT FALSE,     -- generatedBillet
+  status                TEXT,                      -- pago | boleto_gerado | em_aberto (computado)
+  paid_date             DATE,                      -- receiptDate do primeiro receipt
+  net_receipt_value     NUMERIC,                   -- netReceiptValue (valor pago líquido)
+  receipts              JSONB,                     -- array completo de receipts
+  raw                   JSONB,                     -- payload completo da parcela
+  synced_at             TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Controle de sync
@@ -131,7 +141,7 @@ CREATE TABLE sienge_webhook_events (
 | Unidades | Webhook + polling 6h | Tempo real | Status muda com vendas |
 | Clientes | Webhook + polling 6h | Tempo real | Dados críticos |
 | Contratos | Webhook + polling 4h | Tempo real | Crítico para pipeline |
-| Parcelas | Polling | 4x/dia | Sem webhook de baixa em todos os planos |
+| Parcelas | Polling por cliente | 4x/dia | Endpoint é `?customerId=X` — sem listagem global |
 | Comissões | Polling | 2x/dia | Não é tempo real |
 
 ## Exceções: Direct Query ao Sienge
@@ -169,6 +179,10 @@ CREATE TABLE sienge_credentials (
 4. **N+1 após webhook**: batch os fetches quando múltiplos webhooks chegam juntos
 5. **Paginação serial**: sem Bulk Data, carga inicial de 5.000 clientes = 25 requests seriais (não paralelos — rate limit)
 6. **Reconciliação**: webhooks podem ser perdidos se endpoint ficou offline. Polling de 6h como fallback é obrigatório
+7. **`/accounts-receivable` não existe**: a doc oficial do Sienge cita este endpoint, mas ele retorna 404 no tenant `construtoraexpansao`. Usar `/customer-financial-statements?customerId=X` como substituto validado em produção
+8. **Sync de parcelas é por cliente**: não existe listagem global de parcelas — é obrigatório iterar pelos `sienge_customer_id` conhecidos e fazer 1 request por cliente. Respeitar rate limit (200 req/min)
+9. **Boleto via `/payment-slip-notification`**: o campo `generatedBillet: true` indica que existe boleto. Para obter o PDF, chamar `GET /payment-slip-notification?billReceivableId={id}&installmentId={id}`. Só funciona se a parcela tiver cobrança registrada no Sienge E saldo > 0. Retorna 422 caso contrário
+10. **`customer-income-tax` não habilitado**: informe de rendimentos retorna 404 no tenant `construtoraexpansao`. Módulo separado — solicitar ao suporte Sienge para habilitar. Endpoint existe na doc oficial
 
 ## Padrão de Polling com Cursor
 

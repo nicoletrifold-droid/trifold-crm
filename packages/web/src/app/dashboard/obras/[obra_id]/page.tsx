@@ -93,7 +93,7 @@ export default async function ObraDetailPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("clientes_obras_vinculos")
-        .select("id, numero_unidade, clientes(id, nome, cpf, email)")
+        .select("id, numero_unidade, clientes(id, nome, cpf, email, sienge_customer_id)")
         .eq("obra_id", obra_id),
       // Busca aprovações: admin/supervisor vê todos os pendentes; obras vê os próprios
       isAdminOrSupervisor
@@ -129,13 +129,16 @@ export default async function ObraDetailPage({
     const c = Array.isArray(row.clientes) ? row.clientes[0] : row.clientes
     return {
       id: row.id,              // vinculo_id — usado em desvincular/editar
+      clienteId: (c as { id?: string } | null)?.id ?? "",
       name: (c as { nome?: string } | null)?.nome ?? "",
-      cpf: (c as { cpf?: string } | null)?.cpf ?? "",
+      cpf: (c as { cpf?: string | null } | null)?.cpf ?? null,
       email: (c as { email?: string } | null)?.email ?? "",
       is_primary: false,
       numero_unidade: row.numero_unidade ?? null,
+      sienge_customer_id: (c as { sienge_customer_id?: number | null } | null)?.sienge_customer_id ?? null,
     }
   })
+
 
   // Gerar signed URLs para aprovações (admin/supervisor e obras)
   const initialAprovacoes: AprovacaoItem[] = await Promise.all(

@@ -58,11 +58,13 @@ interface Mensagem {
 
 interface Cliente {
   id: string
+  clienteId: string
   name: string
-  cpf: string
   email: string
+  cpf: string | null
   is_primary: boolean
   numero_unidade: string | null
+  sienge_customer_id: number | null
 }
 
 interface ObraDetailTabsProps {

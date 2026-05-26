@@ -72,6 +72,7 @@ interface ClienteApiResponse {
   endereco_cep: string | null
   endereco_referencia: string | null
   observacao: string | null
+  sienge_customer_id: number | null
   clientes_obras_vinculos:
     | Array<{
         id: string

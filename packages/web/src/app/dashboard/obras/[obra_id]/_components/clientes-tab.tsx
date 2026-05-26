@@ -2,15 +2,17 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { UserPlus, Trash2, Pencil, Check, X, Search, Lock } from "lucide-react"
+import { UserPlus, Trash2, Pencil, Check, X, Search, Lock, Link2, Link2Off, Loader2 } from "lucide-react"
 
 interface Cliente {
   id: string         // vinculo_id (clientes_obras_vinculos.id)
+  clienteId: string  // CRM client UUID (clientes.id) — usado no Sienge
   name: string
-  cpf: string
+  cpf: string | null
   email: string
   is_primary: boolean
   numero_unidade: string | null
+  sienge_customer_id: number | null
 }
 
 interface ClientesTabProps {
@@ -23,6 +25,14 @@ interface CrmClienteEncontrado {
   nome: string
   cpf: string | null
   email: string | null
+}
+
+interface SiengeVinculo {
+  clienteId: string
+  cpfInput: string
+  loading: boolean
+  error: string | null
+  success: string | null
 }
 
 function isValidCpfFormat(cpf: string): boolean {
@@ -61,6 +71,101 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   const [editingUnidade, setEditingUnidade] = useState<string | null>(null)
   const [unidadeInput, setUnidadeInput] = useState("")
   const [savingUnidade, setSavingUnidade] = useState(false)
+
+  // ── Sienge vinculation state per client ──────────────────────────────
+  const [siengeOpen, setSiengeOpen] = useState<string | null>(null)
+  const [siengeState, setSiengeState] = useState<Record<string, SiengeVinculo>>({})
+
+  function openSiengePanel(cliente: Cliente) {
+    setSiengeOpen(cliente.clienteId)
+    if (!siengeState[cliente.clienteId]) {
+      setSiengeState((prev) => ({
+        ...prev,
+        [cliente.clienteId]: {
+          clienteId: cliente.clienteId,
+          cpfInput: cliente.cpf ?? "",
+          loading: false,
+          error: null,
+          success: null,
+        },
+      }))
+    }
+  }
+
+  function closeSiengePanel() {
+    setSiengeOpen(null)
+  }
+
+  function updateSiengeField(clienteId: string, patch: Partial<SiengeVinculo>) {
+    setSiengeState((prev) => ({
+      ...prev,
+      [clienteId]: { ...prev[clienteId]!, ...patch },
+    }))
+  }
+
+  async function handleVincularSienge(clienteId: string) {
+    const state = siengeState[clienteId]
+    if (!state) return
+    updateSiengeField(clienteId, { loading: true, error: null, success: null })
+
+    try {
+      const res = await fetch(`/api/admin/clientes/${clienteId}/sienge-vincular`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cpf: state.cpfInput }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        updateSiengeField(clienteId, {
+          loading: false,
+          error: data.error ?? "Erro ao vincular",
+        })
+        return
+      }
+      const contratoLabel = data.contrato ? ` — ${data.contrato}` : ""
+      updateSiengeField(clienteId, {
+        loading: false,
+        success: `${data.nome_sienge}${contratoLabel} vinculado ✓`,
+        error: null,
+      })
+      router.refresh()
+    } catch {
+      updateSiengeField(clienteId, {
+        loading: false,
+        error: "Erro de conexão",
+      })
+    }
+  }
+
+  async function handleDesvincularSienge(clienteId: string) {
+    if (!window.confirm("Desvincular este cliente do Sienge?")) return
+    updateSiengeField(clienteId, { loading: true, error: null, success: null })
+
+    try {
+      const res = await fetch(`/api/admin/clientes/${clienteId}/sienge-vincular`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        updateSiengeField(clienteId, {
+          loading: false,
+          error: data.error ?? "Erro ao desvincular",
+        })
+        return
+      }
+      updateSiengeField(clienteId, {
+        loading: false,
+        success: null,
+        error: null,
+      })
+      router.refresh()
+    } catch {
+      updateSiengeField(clienteId, {
+        loading: false,
+        error: "Erro de conexão",
+      })
+    }
+  }
 
   // ── Lookup CPF no formulário A ────────────────────────────────────────
 
@@ -328,83 +433,173 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
           </p>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-stone-800">
-            {clientes.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center justify-between gap-3 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
-                    {c.name}
-                  </p>
-                  {c.cpf && (
-                    <p className="text-xs text-gray-500 dark:text-stone-400">
-                      CPF: {c.cpf}
-                    </p>
-                  )}
-                  {c.email && (
-                    <p className="text-xs text-gray-400 dark:text-stone-500">
-                      {c.email}
-                    </p>
-                  )}
-                  {editingUnidade === c.id ? (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={unidadeInput}
-                        onChange={(e) => setUnidadeInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSalvarUnidade(c.id)
-                          if (e.key === "Escape") cancelEditUnidade()
-                        }}
-                        placeholder="Ex: 203"
-                        autoFocus
-                        className="w-28 rounded border border-gray-300 px-2 py-0.5 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-                      />
+            {clientes.map((c) => {
+              const sienge = siengeState[c.clienteId]
+              const isOpen = siengeOpen === c.clienteId
+
+              return (
+                <div key={c.id} className="py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
+                          {c.name}
+                        </p>
+                        {/* Badge Sienge */}
+                        {c.sienge_customer_id ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
+                            <Link2 className="h-3 w-3" />
+                            Sienge vinculado
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-stone-800 dark:text-stone-400">
+                            Sienge não vinculado
+                          </span>
+                        )}
+                      </div>
+                      {c.cpf && (
+                        <p className="text-xs text-gray-500 dark:text-stone-400">
+                          CPF: {c.cpf}
+                        </p>
+                      )}
+                      {c.email && (
+                        <p className="text-xs text-gray-400 dark:text-stone-500">
+                          {c.email}
+                        </p>
+                      )}
+                      {editingUnidade === c.id ? (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={unidadeInput}
+                            onChange={(e) => setUnidadeInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSalvarUnidade(c.id)
+                              if (e.key === "Escape") cancelEditUnidade()
+                            }}
+                            placeholder="Ex: 203"
+                            autoFocus
+                            className="w-28 rounded border border-gray-300 px-2 py-0.5 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                          />
+                          <button
+                            onClick={() => handleSalvarUnidade(c.id)}
+                            disabled={savingUnidade}
+                            className="rounded p-0.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-500/15"
+                            title="Salvar"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={cancelEditUnidade}
+                            className="rounded p-0.5 text-gray-400 hover:bg-gray-100 dark:text-stone-500 dark:hover:bg-stone-800"
+                            title="Cancelar"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        c.numero_unidade && (
+                          <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">
+                            Unidade {c.numero_unidade}
+                          </p>
+                        )
+                      )}
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-1">
+                      {/* Botão Sienge */}
                       <button
-                        onClick={() => handleSalvarUnidade(c.id)}
-                        disabled={savingUnidade}
-                        className="rounded p-0.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-500/15"
-                        title="Salvar"
+                        onClick={() => isOpen ? closeSiengePanel() : openSiengePanel(c)}
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                        title={c.sienge_customer_id ? "Gerenciar vínculo Sienge" : "Vincular ao Sienge"}
                       >
-                        <Check className="h-3.5 w-3.5" />
+                        <Link2 className="h-4 w-4" />
                       </button>
+                      {editingUnidade !== c.id && (
+                        <button
+                          onClick={() => startEditUnidade(c)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                          title="Editar unidade"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
-                        onClick={cancelEditUnidade}
-                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100 dark:text-stone-500 dark:hover:bg-stone-800"
-                        title="Cancelar"
+                        onClick={() => handleDesvincular(c.id)}
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/15 dark:hover:text-red-300"
+                        title="Desvincular da obra"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  ) : (
-                    c.numero_unidade && (
-                      <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">
-                        Unidade {c.numero_unidade}
+                  </div>
+
+                  {/* Painel inline Sienge */}
+                  {isOpen && (
+                    <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-stone-700 dark:bg-stone-800/50">
+                      <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider dark:text-stone-400">
+                        Integração Sienge
                       </p>
-                    )
+
+                      {c.sienge_customer_id ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs text-green-700 dark:text-green-400">
+                            ID Sienge: <span className="font-mono font-medium">{c.sienge_customer_id}</span>
+                          </p>
+                          <button
+                            onClick={() => handleDesvincularSienge(c.clienteId)}
+                            disabled={sienge?.loading}
+                            className="inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-400/30 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-500/10"
+                          >
+                            {sienge?.loading ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Link2Off className="h-3 w-3" />
+                            )}
+                            Desvincular
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="CPF (somente números)"
+                              value={sienge?.cpfInput ?? ""}
+                              onChange={(e) =>
+                                updateSiengeField(c.clienteId, { cpfInput: e.target.value })
+                              }
+                              maxLength={14}
+                              className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-orange-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+                            />
+                            <button
+                              onClick={() => handleVincularSienge(c.clienteId)}
+                              disabled={sienge?.loading || !sienge?.cpfInput?.replace(/\D/g, "").length}
+                              className="inline-flex flex-shrink-0 items-center gap-1 rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                            >
+                              {sienge?.loading ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Link2 className="h-3 w-3" />
+                              )}
+                              Vincular
+                            </button>
+                          </div>
+                          {sienge?.error && (
+                            <p className="text-xs text-red-600 dark:text-red-300">{sienge.error}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {sienge?.success && (
+                        <p className="mt-2 text-xs font-medium text-green-700 dark:text-green-400">
+                          {sienge.success}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
-                <div className="flex flex-shrink-0 items-center gap-1">
-                  {editingUnidade !== c.id && (
-                    <button
-                      onClick={() => startEditUnidade(c)}
-                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-                      title="Editar unidade"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDesvincular(c.id)}
-                    className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/15 dark:hover:text-red-300"
-                    title="Desvincular"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>

@@ -58,15 +58,154 @@ https://api.sienge.com.br/{subdomain}/public/api/v1/
 
 ## Prioridade Alta — Financeiro
 
-### Contas a Receber (`/accounts-receivable`)
+### Extrato Financeiro do Cliente (`/customer-financial-statements`)
+
+> ⚠️ **ATENÇÃO:** O endpoint `/accounts-receivable/installments` documentado na doc oficial do Sienge **NÃO EXISTE** no tenant `construtoraexpansao` (retorna 404). O endpoint real validado em produção é `/customer-financial-statements`.
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| GET | `/accounts-receivable/installments` | Parcelas a receber |
-| GET | `/accounts-receivable/installments/{id}` | Detalhe da parcela |
-| GET | `/accounts-receivable/{id}/anticipation` | Preview de antecipação (DIRECT QUERY — não cachear) |
+| GET | `/customer-financial-statements?customerId={id}` | Extrato completo do cliente (parcelas + recibos) |
 
-**Campos-chave:** `id`, `contractId`, `customerId`, `dueDate`, `value`, `status`, `paidDate`
+**Parâmetro obrigatório:** `customerId` (Integer) — sem ele retorna 400.
+
+**Estrutura da resposta:**
+
+```json
+{
+  "resultSetMetadata": { "count": 1, "offset": 0, "limit": 1 },
+  "results": [
+    {
+      "billsReceivable": [
+        {
+          "billReceivableId": 11045,
+          "costCenterId": 8,
+          "finePercent": 2.0,
+          "interestPercent": 1.0,
+          "documentId": "VIND-101",
+          "documentCode": "CT",
+          "subJudice": false,
+          "installments": [
+            {
+              "installmentId": 1,
+              "installmentNumber": "1",
+              "dueDate": "2026-04-27",
+              "conditionType": "AT",
+              "originalValue": 10000.0,
+              "currentBalance": 0.0,
+              "interestPercent": 0.0,
+              "generatedBillet": true,
+              "receipts": [
+                {
+                  "calculationDate": "2026-03-01",
+                  "receiptDate": "2026-04-29",
+                  "receiptValue": 10000.0,
+                  "interestValue": 0.0,
+                  "additionalValue": 0.0,
+                  "discountValue": 0.0,
+                  "administrativeFee": 0.0,
+                  "netReceiptValue": 10000.0,
+                  "receiptType": "Recebimento",
+                  "insuranceAmount": 0.0,
+                  "bankMovements": [],
+                  "accountNumber": "QITECHCOB",
+                  "creditDate": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Campos do nível `billsReceivable`:**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `billReceivableId` | Int | ID da conta a receber |
+| `documentId` | String | Número do contrato (ex: `VIND-101`) |
+| `documentCode` | String | Tipo do documento |
+| `finePercent` | Float | % de multa por atraso |
+| `interestPercent` | Float | % de juros mensais |
+| `costCenterId` | Int | Centro de custo |
+| `subJudice` | Bool | Contrato em processo judicial |
+
+**Campos do nível `installments`:**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `installmentId` | Int | ID da parcela |
+| `installmentNumber` | String | Número sequencial da parcela |
+| `dueDate` | Date | Data de vencimento |
+| `conditionType` | String | `AT`=Ato, `PI`=Intermediária, `PM`=Mensal, `CH`=Chaves |
+| `originalValue` | Float | Valor original sem juros |
+| `currentBalance` | Float | Saldo atual (com juros/correção) — `0.0` = pago |
+| `interestPercent` | Float | Juros aplicados à parcela |
+| `generatedBillet` | Bool | `true` = boleto foi gerado (sem URL do PDF aqui) |
+| `receipts` | Array | Registros de pagamento — vazio = não pago |
+
+**Campos dentro de `receipts` (parcela paga):**
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `receiptDate` | Date | Data do recebimento |
+| `receiptValue` | Float | Valor recebido |
+| `netReceiptValue` | Float | Valor líquido (descontando taxas) |
+| `discountValue` | Float | Desconto aplicado |
+| `interestValue` | Float | Juros cobrados |
+| `creditDate` | Date\|null | Data de crédito na conta |
+| `accountNumber` | String | Conta de crédito (ex: `QITECHCOB`) |
+
+**Lógica de status da parcela:**
+- `receipts.length > 0` → **PAGO**
+- `receipts.length === 0 && generatedBillet === true` → **BOLETO GERADO / AGUARDANDO**
+- `receipts.length === 0 && generatedBillet === false` → **EM ABERTO**
+
+> **Lacuna conhecida:** `generatedBillet: true` indica que existe boleto, mas o endpoint **não retorna URL nem código de barras** do PDF. Investigar endpoint separado para download do boleto quando necessário.
+
+### Boleto — Segunda Via (`/payment-slip-notification`)
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/payment-slip-notification?billReceivableId={id}&installmentId={id}` | Gera segunda via do boleto |
+
+**Parâmetros obrigatórios:** `billReceivableId` (Integer) + `installmentId` (Integer)
+
+- `billReceivableId` vem do campo `billReceivableId` dentro de `billsReceivable[]` no extrato
+- `installmentId` vem do campo `installmentId` dentro de `installments[]` no extrato
+
+**Pré-requisito:** a parcela precisa ter uma cobrança registrada no Sienge (`generatedBillet: true`) e saldo devedor maior que zero (`currentBalance > 0`). Se não tiver cobrança cadastrada retorna 422:
+```json
+{ "status": 422, "clientMessage": "Não foram encontradas parcelas aptas para geração da segunda via..." }
+```
+
+**Lógica de uso no Portal do Cliente:**
+```typescript
+// Só mostrar botão "Ver Boleto" quando:
+const podeGerarBoleto = installment.generatedBillet === true && installment.currentBalance > 0
+
+// Se true → chamar:
+GET /payment-slip-notification?billReceivableId={bill.billReceivableId}&installmentId={inst.installmentId}
+```
+
+**Fluxo completo:**
+```
+GET /customer-financial-statements?customerId={id}
+  → billsReceivable[].billReceivableId         (ex: 11045)
+  → billsReceivable[].installments[].installmentId  (ex: 4)
+  → billsReceivable[].installments[].generatedBillet (true/false)
+  → billsReceivable[].installments[].currentBalance  (> 0 = em aberto)
+       ↓
+GET /payment-slip-notification?billReceivableId=11045&installmentId=4
+  → PDF / link do boleto
+```
+
+### Informe de Rendimentos (`/customer-income-tax`)
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/customer-income-tax?customerId={id}&year={ano}` | Informe de rendimentos IRPF |
+
+> ⚠️ **Status no tenant `construtoraexpansao`:** retorna **404** — módulo não habilitado no plano atual. Solicitar ao suporte Sienge a habilitação do recurso `customer-income-tax`. Endpoint existe na doc oficial e em outros tenants.
 
 ## Prioridade Média
 
