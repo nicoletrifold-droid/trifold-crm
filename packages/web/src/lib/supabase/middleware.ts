@@ -130,12 +130,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Obras role: restricted to /dashboard/obras, /dashboard/brindes and /dashboard/configuracoes/clientes
+  // Obras role: restricted to /dashboard/obras, /dashboard/brindes,
+  // /dashboard/mensagens, /dashboard/chamados e /dashboard/configuracoes/clientes
   if (
     role === "obras" &&
     pathname.startsWith("/dashboard") &&
     !pathname.startsWith("/dashboard/obras") &&
     !pathname.startsWith("/dashboard/brindes") &&
+    !pathname.startsWith("/dashboard/mensagens") &&
+    !pathname.startsWith("/dashboard/chamados") &&
     !pathname.startsWith("/dashboard/configuracoes/clientes") &&
     pathname !== "/dashboard/configuracoes"
   ) {
