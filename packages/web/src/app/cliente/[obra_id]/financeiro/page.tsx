@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { getFinancialStatement } from "@web/lib/integrations/sienge/client"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
 
@@ -111,7 +112,8 @@ export default async function FinanceiroPage({ params }: PageProps) {
           siengeCustomerId =
             (c as { sienge_customer_id?: number | null })?.sienge_customer_id ?? null
           if (siengeCustomerId) {
-            await supabase
+            const adminClient = createAdminClient()
+            await adminClient
               .from("users")
               .update({ sienge_customer_id: siengeCustomerId })
               .eq("id", portalUser.id)
