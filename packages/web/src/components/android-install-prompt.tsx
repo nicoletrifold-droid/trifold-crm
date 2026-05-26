@@ -55,7 +55,7 @@ export function AndroidInstallPrompt({ variant = 'crm' }: AndroidInstallPromptPr
       if (!scrolled && window.scrollY > 200) { scrolled = true; show() }
     }
 
-    const timer = setTimeout(show, 15_000)
+    const timer = setTimeout(show, 5_000)
     window.addEventListener('scroll', handleScroll, { passive: true })
 
     return () => {

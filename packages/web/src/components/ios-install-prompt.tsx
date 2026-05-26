@@ -42,8 +42,8 @@ export function IosInstallPrompt({ variant = 'crm' }: IosInstallPromptProps) {
       }
     }
 
-    // Show after 15 s or after 200px scroll, whichever comes first
-    const timer = setTimeout(show, 15_000)
+    // Show after 5 s or after 200px scroll, whichever comes first
+    const timer = setTimeout(show, 5_000)
     window.addEventListener('scroll', handleScroll, { passive: true })
 
     return () => {
