@@ -652,7 +652,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
           </div>
           <input
             type="text"
-            placeholder="Nº da unidade / apartamento (opcional)"
+            placeholder="Nº da unidade / apartamento"
             value={unidadeB}
             onChange={(e) => setUnidadeB(e.target.value)}
             className={inputCls}
@@ -784,7 +784,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
           {(cpfEncontradoNoCrm || cpfNaoEncontrado) && (
             <input
               type="text"
-              placeholder="Nº da unidade / apartamento (opcional)"
+              placeholder="Nº da unidade / apartamento"
               value={unidadeA}
               onChange={(e) => setUnidadeA(e.target.value)}
               className={inputCls}
