@@ -92,8 +92,8 @@ export default async function ObraDetailPage({
         .eq("obra_id", obra_id)
         .order("created_at", { ascending: false }),
       supabase
-        .from("cliente_obras")
-        .select("is_primary, numero_unidade, users(id, name, email)")
+        .from("clientes_obras_vinculos")
+        .select("id, numero_unidade, clientes(id, nome, cpf, email)")
         .eq("obra_id", obra_id),
       supabase
         .from("obra_mensagens")
@@ -131,38 +131,16 @@ export default async function ObraDetailPage({
   const aprovacoesRaw = aprovacoesRes.data ?? []
 
   const clientes = clientesRaw.map((row) => {
-    const u = Array.isArray(row.users) ? row.users[0] : row.users
+    const c = Array.isArray(row.clientes) ? row.clientes[0] : row.clientes
     return {
-      id: u?.id ?? "",
-      name: u?.name ?? "",
-      email: u?.email ?? "",
-      is_primary: row.is_primary,
+      id: row.id,              // vinculo_id — usado em desvincular/editar
+      name: (c as { nome?: string } | null)?.nome ?? "",
+      cpf: (c as { cpf?: string } | null)?.cpf ?? "",
+      email: (c as { email?: string } | null)?.email ?? "",
+      is_primary: false,
       numero_unidade: row.numero_unidade ?? null,
     }
   })
-
-  // Incluir clientes que têm mensagens mas não estão em cliente_obras
-  const msgIds = [
-    ...new Set(
-      (msgClientesRes.data ?? []).map((m) => m.cliente_id as string).filter(Boolean)
-    ),
-  ]
-  const missingIds = msgIds.filter((id) => !clientes.some((c) => c.id === id))
-  if (missingIds.length > 0) {
-    const { data: extraUsers } = await supabase
-      .from("users")
-      .select("id, name, email")
-      .in("id", missingIds)
-    for (const u of extraUsers ?? []) {
-      clientes.push({
-        id: u.id,
-        name: u.name ?? "",
-        email: u.email ?? "",
-        is_primary: false,
-        numero_unidade: null,
-      })
-    }
-  }
 
   // Gerar signed URLs para aprovações (admin/supervisor e obras)
   const initialAprovacoes: AprovacaoItem[] = await Promise.all(

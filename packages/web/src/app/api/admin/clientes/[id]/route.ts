@@ -110,6 +110,14 @@ export async function PATCH(
     )
   }
 
+  // CPF é obrigatório — rejeitar se estiver sendo explicitamente limpo
+  if ("cpf" in updates && !updates.cpf) {
+    return NextResponse.json(
+      { error: "CPF é obrigatório e não pode ser removido" },
+      { status: 400 }
+    )
+  }
+
   // CPF unicidade na org (excluindo o próprio cliente)
   if (updates.cpf) {
     const { data: existing, error: cpfErr } = await supabase

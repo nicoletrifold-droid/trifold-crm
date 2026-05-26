@@ -2,11 +2,12 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { UserPlus, Trash2, Star, Pencil, Check, X, Search } from "lucide-react"
+import { UserPlus, Trash2, Pencil, Check, X, Search } from "lucide-react"
 
 interface Cliente {
-  id: string
+  id: string         // vinculo_id (clientes_obras_vinculos.id)
   name: string
+  cpf: string
   email: string
   is_primary: boolean
   numero_unidade: string | null
@@ -17,22 +18,19 @@ interface ClientesTabProps {
   clientes: Cliente[]
 }
 
-interface CrmClienteObra {
-  obra_id: string
-  obra_nome: string | null
-  numero_unidade: string | null
-}
-
-interface CrmCliente {
+interface CrmClienteEncontrado {
   id: string
   nome: string
+  cpf: string | null
   email: string | null
-  obras: CrmClienteObra[]
 }
 
-function isValidEmailFormat(value: string): boolean {
-  const trimmed = value.trim()
-  return trimmed.length >= 5 && /.+@.+/.test(trimmed)
+function normalizeCpf(cpf: string): string {
+  return cpf.replace(/\D/g, "")
+}
+
+function isValidCpfFormat(cpf: string): boolean {
+  return normalizeCpf(cpf).length === 11
 }
 
 export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
@@ -40,22 +38,23 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
 
   // Formulário A: criar novo cliente
   const [nomeA, setNomeA] = useState("")
+  const [cpfA, setCpfA] = useState("")
   const [emailA, setEmailA] = useState("")
   const [senhaA, setSenhaA] = useState("")
   const [unidadeA, setUnidadeA] = useState("")
   const [savingA, setSavingA] = useState(false)
   const [errorA, setErrorA] = useState<string | null>(null)
+  const [crmConflito, setCrmConflito] = useState<CrmClienteEncontrado | null>(null)
+  const [checkingCpfA, setCheckingCpfA] = useState(false)
 
-  // Formulário B: vincular existente por email
-  const [emailB, setEmailB] = useState("")
+  // Formulário B: vincular existente por CPF
+  const [cpfB, setCpfB] = useState("")
   const [unidadeB, setUnidadeB] = useState("")
   const [savingB, setSavingB] = useState(false)
   const [errorB, setErrorB] = useState<string | null>(null)
-
-  // Enriquecimento CRM (Story 33.4)
-  const [crmCliente, setCrmCliente] = useState<CrmCliente | null>(null)
+  const [crmClienteB, setCrmClienteB] = useState<CrmClienteEncontrado | null>(null)
   const [searchingCrm, setSearchingCrm] = useState(false)
-  const [emailBuscadoCrm, setEmailBuscadoCrm] = useState("")
+  const [cpfBuscado, setCpfBuscado] = useState("")
   const crmAbortRef = useRef<AbortController | null>(null)
 
   // Edição inline de unidade na lista
@@ -63,9 +62,31 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   const [unidadeInput, setUnidadeInput] = useState("")
   const [savingUnidade, setSavingUnidade] = useState(false)
 
+  // ── Formulário A ──────────────────────────────────────────────────────
+
+  async function checkCpfNoCrm(cpfRaw: string) {
+    const cpf = cpfRaw.trim()
+    if (!isValidCpfFormat(cpf)) return
+    setCheckingCpfA(true)
+    setCrmConflito(null)
+    try {
+      const res = await fetch(
+        `/api/admin/clientes/search?cpf=${encodeURIComponent(cpf)}`
+      )
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: CrmClienteEncontrado[] }
+      const found = json.data?.[0] ?? null
+      setCrmConflito(found)
+    } catch {
+      // graceful
+    } finally {
+      setCheckingCpfA(false)
+    }
+  }
+
   async function handleCreateCliente(e: React.FormEvent) {
     e.preventDefault()
-    if (!nomeA.trim() || !emailA.trim() || !senhaA) return
+    if (!nomeA.trim() || !cpfA.trim() || !emailA.trim() || !senhaA) return
     setErrorA(null)
     setSavingA(true)
     try {
@@ -74,6 +95,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nome: nomeA.trim(),
+          cpf: cpfA.trim(),
           email: emailA.trim(),
           senha_temporaria: senhaA,
           numero_unidade: unidadeA.trim() || undefined,
@@ -84,9 +106,11 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
         throw new Error(d.error ?? "Erro ao criar cliente")
       }
       setNomeA("")
+      setCpfA("")
       setEmailA("")
       setSenhaA("")
       setUnidadeA("")
+      setCrmConflito(null)
       router.refresh()
     } catch (err) {
       setErrorA(err instanceof Error ? err.message : "Erro ao criar cliente")
@@ -95,9 +119,66 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
     }
   }
 
+  // ── Formulário B ──────────────────────────────────────────────────────
+
+  async function buscarClientePorCpf(cpfRaw: string) {
+    const cpf = cpfRaw.trim()
+    if (!isValidCpfFormat(cpf)) return
+    if (cpf === cpfBuscado) return
+
+    crmAbortRef.current?.abort()
+    const controller = new AbortController()
+    crmAbortRef.current = controller
+
+    setCpfBuscado(cpf)
+    setSearchingCrm(true)
+    setCrmClienteB(null)
+    try {
+      const res = await fetch(
+        `/api/admin/clientes/search?cpf=${encodeURIComponent(cpf)}`,
+        { signal: controller.signal }
+      )
+      if (controller.signal.aborted) return
+      if (!res.ok) {
+        setErrorB("CPF não encontrado no cadastro. Cadastre em Configurações → Clientes antes de vincular.")
+        return
+      }
+      const json = (await res.json()) as { data?: CrmClienteEncontrado[] }
+      if (controller.signal.aborted) return
+      const found = json.data?.[0] ?? null
+      setCrmClienteB(found)
+      if (!found) {
+        setErrorB("CPF não encontrado no cadastro. Cadastre em Configurações → Clientes antes de vincular.")
+      } else {
+        setErrorB(null)
+      }
+    } catch {
+      // Silêncio em abort/network error
+    } finally {
+      if (crmAbortRef.current === controller) {
+        setSearchingCrm(false)
+      }
+    }
+  }
+
+  function handleCpfBChange(value: string) {
+    setCpfB(value)
+    if (!value.trim()) {
+      crmAbortRef.current?.abort()
+      setCrmClienteB(null)
+      setCpfBuscado("")
+      setErrorB(null)
+      return
+    }
+    if (crmClienteB && value.trim() !== cpfBuscado) {
+      crmAbortRef.current?.abort()
+      setCrmClienteB(null)
+    }
+  }
+
   async function handleVincularCliente(e: React.FormEvent) {
     e.preventDefault()
-    if (!emailB.trim()) return
+    if (!cpfB.trim()) return
     setErrorB(null)
     setSavingB(true)
     try {
@@ -105,7 +186,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: emailB.trim(),
+          cpf: cpfB.trim(),
           numero_unidade: unidadeB.trim() || undefined,
         }),
       })
@@ -113,8 +194,10 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.error ?? "Erro ao vincular cliente")
       }
-      setEmailB("")
+      setCpfB("")
       setUnidadeB("")
+      setCrmClienteB(null)
+      setCpfBuscado("")
       router.refresh()
     } catch (err) {
       setErrorB(err instanceof Error ? err.message : "Erro ao vincular cliente")
@@ -123,70 +206,13 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
     }
   }
 
-  async function buscarClienteCrm(emailRaw: string) {
-    const email = emailRaw.trim()
-    if (!isValidEmailFormat(email)) return
-    if (email === emailBuscadoCrm) return
+  // ── Lista ─────────────────────────────────────────────────────────────
 
-    // Cancela request anterior (race condition guard)
-    crmAbortRef.current?.abort()
-    const controller = new AbortController()
-    crmAbortRef.current = controller
-
-    setEmailBuscadoCrm(email)
-    setSearchingCrm(true)
-    try {
-      const res = await fetch(
-        `/api/admin/clientes/search?email=${encodeURIComponent(email)}`,
-        { signal: controller.signal }
-      )
-      if (controller.signal.aborted) return
-      if (!res.ok) {
-        // graceful degradation (AC5) — silêncio
-        setCrmCliente(null)
-        return
-      }
-      const json = (await res.json()) as { data?: CrmCliente[] }
-      if (controller.signal.aborted) return
-      const first = json.data?.[0] ?? null
-      setCrmCliente(first)
-    } catch {
-      // Silêncio em erro de rede / abort (AC5)
-    } finally {
-      if (crmAbortRef.current === controller) {
-        setSearchingCrm(false)
-      }
-    }
-  }
-
-  function handleEmailBChange(value: string) {
-    setEmailB(value)
-    if (!value.trim()) {
-      // AC8 — limpar banner quando campo limpo
-      crmAbortRef.current?.abort()
-      setCrmCliente(null)
-      setEmailBuscadoCrm("")
-      return
-    }
-    // Se usuário digitou diferente do que está no banner, invalidar banner
-    // (evita exibir dados de email anterior enquanto novo email é digitado)
-    if (crmCliente && value.trim() !== emailBuscadoCrm) {
-      crmAbortRef.current?.abort()
-      setCrmCliente(null)
-    }
-  }
-
-  function handleUsarNomeCrm() {
-    if (crmCliente && !nomeA.trim()) {
-      setNomeA(crmCliente.nome)
-    }
-  }
-
-  async function handleDesvincular(userId: string) {
+  async function handleDesvincular(vinculoId: string) {
     if (!window.confirm("Desvincular este cliente da obra?")) return
     try {
       const res = await fetch(
-        `/api/admin/obras/${obraId}/clientes/${userId}`,
+        `/api/admin/obras/${obraId}/clientes/${vinculoId}`,
         { method: "DELETE" }
       )
       if (!res.ok) {
@@ -209,14 +235,17 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
     setUnidadeInput("")
   }
 
-  async function handleSalvarUnidade(userId: string) {
+  async function handleSalvarUnidade(vinculoId: string) {
     setSavingUnidade(true)
     try {
-      const res = await fetch(`/api/admin/obras/${obraId}/clientes/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numero_unidade: unidadeInput.trim() || null }),
-      })
+      const res = await fetch(
+        `/api/admin/obras/${obraId}/clientes/${vinculoId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numero_unidade: unidadeInput.trim() || null }),
+        }
+      )
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.error ?? "Erro ao salvar unidade")
@@ -257,14 +286,17 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
                     <p className="truncate text-sm font-medium text-gray-900 dark:text-stone-100">
                       {c.name}
                     </p>
-                    {c.is_primary && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
-                        <Star className="h-3 w-3" />
-                        Principal
-                      </span>
-                    )}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-stone-400">{c.email}</p>
+                  {c.cpf && (
+                    <p className="text-xs text-gray-500 dark:text-stone-400">
+                      CPF: {c.cpf}
+                    </p>
+                  )}
+                  {c.email && (
+                    <p className="text-xs text-gray-400 dark:text-stone-500">
+                      {c.email}
+                    </p>
+                  )}
                   {/* Número de unidade — display ou edição inline */}
                   {editingUnidade === c.id ? (
                     <div className="mt-1.5 flex items-center gap-1.5">
@@ -328,11 +360,78 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
         )}
       </section>
 
+      {/* Formulário B: Vincular por CPF (CRM) */}
+      <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
+          Vincular cliente por CPF
+        </h2>
+        <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">
+          O cliente deve estar cadastrado em{" "}
+          <span className="font-medium text-orange-500">Configurações → Clientes</span>.
+        </p>
+        <form onSubmit={handleVincularCliente} className="space-y-3">
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="CPF do cliente (000.000.000-00) *"
+                value={cpfB}
+                onChange={(e) => handleCpfBChange(e.target.value)}
+                onBlur={(e) => buscarClientePorCpf(e.target.value)}
+                required
+                className={inputCls}
+              />
+              <button
+                type="button"
+                onClick={() => buscarClientePorCpf(cpfB)}
+                disabled={searchingCrm || !isValidCpfFormat(cpfB)}
+                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                title="Buscar no cadastro"
+              >
+                <Search className="h-3.5 w-3.5" />
+                {searchingCrm ? "Buscando..." : "Buscar"}
+              </button>
+            </div>
+            {crmClienteB && (
+              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-200">
+                <span className="font-medium">✓ Cliente encontrado:</span>{" "}
+                {crmClienteB.nome}
+                {crmClienteB.email && (
+                  <span className="ml-1 text-green-600 dark:text-green-400">
+                    — {crmClienteB.email}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <input
+            type="text"
+            placeholder="Nº da unidade / apartamento (opcional)"
+            value={unidadeB}
+            onChange={(e) => setUnidadeB(e.target.value)}
+            className={inputCls}
+          />
+          {errorB && (
+            <p className="text-xs text-red-600 dark:text-red-300">{errorB}</p>
+          )}
+          <button
+            type="submit"
+            disabled={savingB || !cpfB.trim() || !crmClienteB}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50 dark:border-orange-400 dark:text-orange-300 dark:hover:bg-orange-500/15"
+          >
+            {savingB ? "Vinculando..." : "Vincular"}
+          </button>
+        </form>
+      </section>
+
       {/* Formulário A: Criar novo cliente */}
       <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
           Criar novo cliente
         </h2>
+        <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">
+          Cria o cadastro no CRM e acesso ao portal simultaneamente.
+        </p>
         <form onSubmit={handleCreateCliente} className="space-y-3">
           <input
             type="text"
@@ -342,9 +441,36 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             required
             className={inputCls}
           />
+          <div className="space-y-1">
+            <input
+              type="text"
+              placeholder="CPF (000.000.000-00) *"
+              value={cpfA}
+              onChange={(e) => {
+                setCpfA(e.target.value)
+                setCrmConflito(null)
+              }}
+              onBlur={(e) => checkCpfNoCrm(e.target.value)}
+              required
+              className={inputCls}
+            />
+            {checkingCpfA && (
+              <p className="text-xs text-gray-400 dark:text-stone-500">
+                Verificando CPF no cadastro...
+              </p>
+            )}
+            {crmConflito && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                ⚠️ CPF já cadastrado como{" "}
+                <span className="font-medium">{crmConflito.nome}</span>. Use{" "}
+                <span className="font-medium">Vincular cliente por CPF</span>{" "}
+                acima para vincular este cliente.
+              </div>
+            )}
+          </div>
           <input
             type="email"
-            placeholder="Email *"
+            placeholder="Email (acesso ao portal) *"
             value={emailA}
             onChange={(e) => setEmailA(e.target.value)}
             required
@@ -365,93 +491,23 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             onChange={(e) => setUnidadeA(e.target.value)}
             className={inputCls}
           />
-          {errorA && <p className="text-xs text-red-600 dark:text-red-300">{errorA}</p>}
+          {errorA && (
+            <p className="text-xs text-red-600 dark:text-red-300">{errorA}</p>
+          )}
           <button
             type="submit"
-            disabled={savingA || !nomeA.trim() || !emailA.trim() || !senhaA}
+            disabled={
+              savingA ||
+              !nomeA.trim() ||
+              !cpfA.trim() ||
+              !emailA.trim() ||
+              !senhaA ||
+              !!crmConflito
+            }
             className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
           >
             <UserPlus className="h-4 w-4" />
             {savingA ? "Criando..." : "Criar e Vincular"}
-          </button>
-        </form>
-      </section>
-
-      {/* Formulário B: Vincular existente por email */}
-      <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-          Vincular cliente existente
-        </h2>
-        <form onSubmit={handleVincularCliente} className="space-y-3">
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Email do cliente *"
-                value={emailB}
-                onChange={(e) => handleEmailBChange(e.target.value)}
-                onBlur={(e) => buscarClienteCrm(e.target.value)}
-                required
-                className={inputCls}
-              />
-              <button
-                type="button"
-                onClick={() => buscarClienteCrm(emailB)}
-                disabled={searchingCrm || !isValidEmailFormat(emailB)}
-                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-                title="Buscar no CRM"
-              >
-                <Search className="h-3.5 w-3.5" />
-                {searchingCrm ? "Buscando..." : "Buscar no CRM"}
-              </button>
-            </div>
-            {crmCliente && (
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="leading-snug">
-                    <span className="font-medium">✓ Cliente CRM encontrado:</span>{" "}
-                    {crmCliente.nome}
-                    {crmCliente.obras.length === 1 && (() => {
-                      const o = crmCliente.obras[0]!
-                      const nome = o.obra_nome ?? "obra sem nome"
-                      const sufixo = o.numero_unidade ? ` ${o.numero_unidade}` : ""
-                      return <> — {nome}{sufixo}</>
-                    })()}
-                    {crmCliente.obras.length > 1 && (
-                      <> — {crmCliente.obras.length} obras vinculadas</>
-                    )}
-                    {crmCliente.obras.length === 0 && (
-                      <> — sem obras vinculadas</>
-                    )}
-                  </p>
-                  {!nomeA.trim() && (
-                    <button
-                      type="button"
-                      onClick={handleUsarNomeCrm}
-                      className="flex-shrink-0 rounded border border-orange-300 bg-white px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100 dark:border-orange-400/40 dark:bg-stone-900 dark:text-orange-200 dark:hover:bg-orange-500/20"
-                      title="Pré-preencher o nome no formulário acima"
-                    >
-                      Usar nome
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          <input
-            type="text"
-            placeholder="Nº da unidade / apartamento (opcional)"
-            value={unidadeB}
-            onChange={(e) => setUnidadeB(e.target.value)}
-            className={inputCls}
-          />
-          {errorB && <p className="text-xs text-red-600 dark:text-red-300">{errorB}</p>}
-          <button
-            type="submit"
-            disabled={savingB || !emailB.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50 dark:border-orange-400 dark:text-orange-300 dark:hover:bg-orange-500/15"
-          >
-            {savingB ? "Vinculando..." : "Vincular"}
           </button>
         </form>
       </section>

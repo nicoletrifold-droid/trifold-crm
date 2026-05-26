@@ -214,9 +214,11 @@ export function ClienteModal({
   }
 
   function buildBodyForCreate(): Record<string, string | null> {
-    const body: Record<string, string | null> = { nome: fields.nome.trim() }
+    const body: Record<string, string | null> = {
+      nome: fields.nome.trim(),
+      cpf: fields.cpf.trim() || null,
+    }
     const optionalFields: FieldKey[] = [
-      "cpf",
       "rg",
       "email",
       "telefone",
@@ -301,6 +303,10 @@ export function ClienteModal({
     if (loading) return
     if (!fields.nome.trim()) {
       setError("Nome é obrigatório.")
+      return
+    }
+    if (!fields.cpf.trim()) {
+      setError("CPF é obrigatório.")
       return
     }
 
@@ -413,11 +419,14 @@ export function ClienteModal({
                   />
                 </div>
                 <div>
-                  <label className={lbl}>CPF</label>
+                  <label className={lbl}>
+                    CPF <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={fields.cpf}
                     onChange={(e) => set("cpf", e.target.value)}
+                    required
                     className={inp}
                     placeholder="000.000.000-00"
                   />

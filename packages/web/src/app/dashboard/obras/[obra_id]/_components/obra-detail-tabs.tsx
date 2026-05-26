@@ -59,6 +59,7 @@ interface Mensagem {
 interface Cliente {
   id: string
   name: string
+  cpf: string
   email: string
   is_primary: boolean
   numero_unidade: string | null

@@ -126,6 +126,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "nome é obrigatório" }, { status: 400 })
   }
 
+  const cpfRaw = typeof body.cpf === "string" ? body.cpf.trim() : ""
+  if (!cpfRaw) {
+    return NextResponse.json({ error: "CPF é obrigatório" }, { status: 400 })
+  }
+
   const insertRow: Record<string, unknown> = {
     org_id: appUser.org_id,
     nome,

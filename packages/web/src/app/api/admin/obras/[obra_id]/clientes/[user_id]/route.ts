@@ -3,6 +3,9 @@ import { requireAuth } from "@web/lib/api-auth"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
+// Nota: o parâmetro se chama "user_id" por compatibilidade de rota,
+// mas agora representa o ID do vínculo em clientes_obras_vinculos.
+
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ obra_id: string; user_id: string }> }
@@ -15,8 +18,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const { obra_id, user_id } = await params
+  const { obra_id, user_id: vinculo_id } = await params
 
+  // Verificar que a obra pertence à org
   const { data: obra } = await supabase
     .from("obras")
     .select("id")
@@ -29,9 +33,9 @@ export async function DELETE(
   }
 
   const { error } = await supabase
-    .from("cliente_obras")
+    .from("clientes_obras_vinculos")
     .delete()
-    .eq("user_id", user_id)
+    .eq("id", vinculo_id)
     .eq("obra_id", obra_id)
 
   if (error) {
@@ -53,7 +57,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const { obra_id, user_id } = await params
+  const { obra_id, user_id: vinculo_id } = await params
 
   const { data: obra } = await supabase
     .from("obras")
@@ -71,9 +75,9 @@ export async function PATCH(
       : null
 
   const { error } = await supabase
-    .from("cliente_obras")
+    .from("clientes_obras_vinculos")
     .update({ numero_unidade })
-    .eq("user_id", user_id)
+    .eq("id", vinculo_id)
     .eq("obra_id", obra_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

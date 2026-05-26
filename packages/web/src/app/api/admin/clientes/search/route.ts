@@ -14,6 +14,7 @@ type VinculoRow = {
 type ClienteRow = {
   id: string
   nome: string
+  cpf: string | null
   email: string | null
   telefone: string | null
   clientes_obras_vinculos: VinculoRow[] | null
@@ -29,11 +30,12 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const email = searchParams.get("email")?.trim() || ""
+  const cpf = searchParams.get("cpf")?.trim() || ""
   const q = searchParams.get("q")?.trim() || ""
 
-  if (!email && !q) {
+  if (!email && !cpf && !q) {
     return NextResponse.json(
-      { error: "Parâmetro 'email' ou 'q' é obrigatório" },
+      { error: "Parâmetro 'cpf', 'email' ou 'q' é obrigatório" },
       { status: 400 }
     )
   }
@@ -41,17 +43,19 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("clientes")
     .select(
-      "id, nome, email, telefone, clientes_obras_vinculos(obra_id, numero_unidade, obras(id, name))"
+      "id, nome, cpf, email, telefone, clientes_obras_vinculos(obra_id, numero_unidade, obras(id, name))"
     )
     .eq("org_id", appUser.org_id)
     .limit(10)
 
-  if (email) {
+  if (cpf) {
+    query = query.eq("cpf", cpf)
+  } else if (email) {
     query = query.eq("email", email)
   } else if (q) {
     const sanitized = q.replace(/[%,]/g, "")
     if (sanitized) {
-      query = query.or(`nome.ilike.%${sanitized}%,email.ilike.%${sanitized}%`)
+      query = query.or(`nome.ilike.%${sanitized}%,email.ilike.%${sanitized}%,cpf.ilike.%${sanitized}%`)
     }
   }
 
@@ -66,6 +70,7 @@ export async function GET(request: NextRequest) {
   const result = rows.map((row) => ({
     id: row.id,
     nome: row.nome,
+    cpf: row.cpf,
     email: row.email,
     telefone: row.telefone,
     obras: (row.clientes_obras_vinculos ?? []).map((v) => {
