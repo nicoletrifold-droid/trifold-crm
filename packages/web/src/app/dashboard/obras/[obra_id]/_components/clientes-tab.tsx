@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { UserPlus, Trash2, Pencil, Check, X, Search, Lock, Link2, Link2Off, Loader2 } from "lucide-react"
+import { UserPlus, Trash2, Pencil, Check, X, Search, Lock, Link2, Link2Off, Loader2, KeyRound } from "lucide-react"
+import { SenhaClienteModal } from "@web/app/dashboard/_components/senha-cliente-modal"
 
 interface Cliente {
   id: string         // vinculo_id (clientes_obras_vinculos.id)
@@ -13,6 +14,7 @@ interface Cliente {
   is_primary: boolean
   numero_unidade: string | null
   sienge_customer_id: number | null
+  portalUserId?: string | null  // ID da tabela users (portal), se existir
 }
 
 interface ClientesTabProps {
@@ -71,6 +73,13 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   const [editingUnidade, setEditingUnidade] = useState<string | null>(null)
   const [unidadeInput, setUnidadeInput] = useState("")
   const [savingUnidade, setSavingUnidade] = useState(false)
+
+  // ── Modal de senha ───────────────────────────────────────────────────
+  const [senhaModal, setSenhaModal] = useState<{
+    userId: string
+    nome: string
+    email: string
+  } | null>(null)
 
   // ── Sienge vinculation state per client ──────────────────────────────
   const [siengeOpen, setSiengeOpen] = useState<string | null>(null)
@@ -506,6 +515,22 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
                       )}
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-1">
+                      {/* Botão Senha (portal) */}
+                      {c.portalUserId && (
+                        <button
+                          onClick={() =>
+                            setSenhaModal({
+                              userId: c.portalUserId!,
+                              nome: c.name,
+                              email: c.email,
+                            })
+                          }
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-[#E8856A] dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-[#E8856A]"
+                          title="Gerenciar senha do portal"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                      )}
                       {/* Botão Sienge */}
                       <button
                         onClick={() => isOpen ? closeSiengePanel() : openSiengePanel(c)}
@@ -669,6 +694,16 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
           </button>
         </form>
       </section>
+
+      {/* Modal de Senha */}
+      {senhaModal && (
+        <SenhaClienteModal
+          userId={senhaModal.userId}
+          clienteNome={senhaModal.nome}
+          clienteEmail={senhaModal.email}
+          onClose={() => setSenhaModal(null)}
+        />
+      )}
 
       {/* Formulário A: Criar acesso / novo cliente */}
       <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">

@@ -74,8 +74,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  const rows = data ?? []
+
+  // Buscar portal_user_id para clientes com e-mail — mapeia email → users.id
+  const emails = rows.map((r) => r.email).filter(Boolean) as string[]
+  const portalUserMap: Record<string, string> = {}
+  if (emails.length > 0) {
+    const { data: portalUsers } = await supabase
+      .from("users")
+      .select("id, email")
+      .eq("org_id", appUser.org_id)
+      .eq("role", "cliente")
+      .in("email", emails)
+    for (const pu of portalUsers ?? []) {
+      if (pu.email) portalUserMap[pu.email] = pu.id
+    }
+  }
+
+  const enrichedData = rows.map((r) => ({
+    ...r,
+    portal_user_id: r.email ? (portalUserMap[r.email] ?? null) : null,
+  }))
+
   return NextResponse.json({
-    data: data ?? [],
+    data: enrichedData,
     total: count ?? 0,
     page,
     per_page: perPage,

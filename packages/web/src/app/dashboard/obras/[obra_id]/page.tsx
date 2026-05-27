@@ -115,17 +115,40 @@ export default async function ObraDetailPage({
   const clientesRaw = clientesRes.data ?? []
   const aprovacoesRaw = aprovacoesRes.data ?? []
 
+  // Coletar emails dos clientes para buscar usuários de portal vinculados
+  const clienteEmails = clientesRaw
+    .map((row) => {
+      const c = Array.isArray(row.clientes) ? row.clientes[0] : row.clientes
+      return (c as { email?: string } | null)?.email ?? ""
+    })
+    .filter(Boolean)
+
+  const portalUsersMap: Record<string, string> = {}
+  if (clienteEmails.length > 0) {
+    const { data: portalUsers } = await supabase
+      .from("users")
+      .select("id, email")
+      .eq("org_id", user.orgId)
+      .eq("role", "cliente")
+      .in("email", clienteEmails)
+    for (const pu of portalUsers ?? []) {
+      if (pu.email) portalUsersMap[pu.email] = pu.id
+    }
+  }
+
   const clientes = clientesRaw.map((row) => {
     const c = Array.isArray(row.clientes) ? row.clientes[0] : row.clientes
+    const email = (c as { email?: string } | null)?.email ?? ""
     return {
       id: row.id,              // vinculo_id — usado em desvincular/editar
       clienteId: (c as { id?: string } | null)?.id ?? "",
       name: (c as { nome?: string } | null)?.nome ?? "",
       cpf: (c as { cpf?: string | null } | null)?.cpf ?? null,
-      email: (c as { email?: string } | null)?.email ?? "",
+      email,
       is_primary: false,
       numero_unidade: row.numero_unidade ?? null,
       sienge_customer_id: (c as { sienge_customer_id?: number | null } | null)?.sienge_customer_id ?? null,
+      portalUserId: portalUsersMap[email] ?? null,
     }
   })
 

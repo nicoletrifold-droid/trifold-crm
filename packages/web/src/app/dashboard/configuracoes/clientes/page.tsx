@@ -35,9 +35,29 @@ export default async function ClientesCRMPage() {
       .order("name", { ascending: true }),
   ])
 
-  const clientes = (clientesResult.data ?? []) as unknown as ClienteRow[]
+  const clientesRaw = (clientesResult.data ?? []) as unknown as ClienteRow[]
   const total = clientesResult.count ?? 0
   const obras = (obrasResult.data ?? []) as ObraOption[]
+
+  // Enriquecer clientes com portal_user_id (busca por email)
+  const emails = clientesRaw.map((c) => c.email).filter(Boolean) as string[]
+  const portalUserMap: Record<string, string> = {}
+  if (emails.length > 0) {
+    const { data: portalUsers } = await supabase
+      .from("users")
+      .select("id, email")
+      .eq("org_id", user.orgId)
+      .eq("role", "cliente")
+      .in("email", emails)
+    for (const pu of (portalUsers ?? []) as { id: string; email: string | null }[]) {
+      if (pu.email) portalUserMap[pu.email] = pu.id
+    }
+  }
+
+  const clientes: ClienteRow[] = clientesRaw.map((c) => ({
+    ...c,
+    portal_user_id: c.email ? (portalUserMap[c.email] ?? null) : null,
+  }))
 
   return (
     <div className="space-y-6">

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Eye, Pencil, Plus, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Eye, KeyRound, Pencil, Plus, Trash2 } from "lucide-react"
 import { ClienteModal } from "./cliente-modal"
+import { SenhaClienteModal } from "@web/app/dashboard/_components/senha-cliente-modal"
 
 export interface ObraOption {
   id: string
@@ -24,6 +25,7 @@ export interface ClienteRow {
   telefone: string | null
   created_at: string
   clientes_obras_vinculos: ClienteVinculo[] | null
+  portal_user_id?: string | null
 }
 
 interface ClientesPageClientProps {
@@ -79,6 +81,11 @@ export function ClientesPageClient({
   const [deleteConfirm, setDeleteConfirm] = useState<ClienteRow | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [senhaModal, setSenhaModal] = useState<{
+    userId: string
+    nome: string
+    email: string
+  } | null>(null)
 
   // Debounce do filtro de texto (500ms)
   useEffect(() => {
@@ -323,6 +330,23 @@ export function ClientesPageClient({
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
+                      {c.portal_user_id && c.email && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSenhaModal({
+                              userId: c.portal_user_id!,
+                              nome: c.nome,
+                              email: c.email!,
+                            })
+                          }
+                          className="text-gray-400 hover:text-[#E8856A] dark:text-stone-500 dark:hover:text-[#E8856A]"
+                          aria-label="Gerenciar senha do portal"
+                          title="Gerenciar senha do portal"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -431,6 +455,14 @@ export function ClientesPageClient({
           clienteId={modalEdit.id}
           obras={obras}
           onClose={(refresh) => handleModalClose(refresh)}
+        />
+      )}
+      {senhaModal && (
+        <SenhaClienteModal
+          userId={senhaModal.userId}
+          clienteNome={senhaModal.nome}
+          clienteEmail={senhaModal.email}
+          onClose={() => setSenhaModal(null)}
         />
       )}
     </div>
