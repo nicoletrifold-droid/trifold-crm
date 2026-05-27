@@ -3,7 +3,6 @@ import { requireAuth, requireRole } from "@web/lib/api-auth"
 import {
   searchCustomerByCpf,
   getFinancialStatement,
-  getUnitIdsByEnterprise,
   getAllSalesContracts,
 } from "@web/lib/integrations/sienge/client"
 
@@ -133,8 +132,8 @@ export async function POST(
     if (enterpriseIds.size > 0) {
       // Carrega contratos uma vez
       const allContracts = await getAllSalesContracts()
-      const customerContracts = allContracts.filter(
-        (c) => c.customerId === siengeCustomer.id
+      const customerContracts = allContracts.filter((c) =>
+        c.salesContractCustomers.some((sc) => sc.id === siengeCustomer.id)
       )
 
       for (const v of vinculosArr) {
@@ -144,11 +143,10 @@ export async function POST(
         if (!enterpriseId) continue
 
         try {
-          const unitIds = await getUnitIdsByEnterprise(enterpriseId)
-          const relevant = customerContracts.filter((c) =>
-            unitIds.has(c.unitId)
+          const relevant = customerContracts.filter(
+            (c) => c.enterpriseId === enterpriseId
           )
-          const contractNumbers = relevant.map((c) => c.contractNumber)
+          const contractNumbers = relevant.map((c) => c.number)
 
           if (contractNumbers.length > 0) {
             const existing =

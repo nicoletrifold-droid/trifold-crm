@@ -1,7 +1,6 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  getUnitIdsByEnterprise,
   getAllSalesContracts,
   getCustomerById,
 } from "./client"
@@ -77,10 +76,9 @@ export async function syncObraClientes(obraId: string): Promise<SyncResult> {
     .eq("id", obraId)
 
   try {
-    // 2. Coleta unit IDs + contratos relevantes
-    const unitIds = await getUnitIdsByEnterprise(enterpriseId)
+    // 2. Busca contratos do empreendimento (filtra por enterpriseId direto da API)
     const allContracts = await getAllSalesContracts()
-    const relevant = allContracts.filter((c) => unitIds.has(c.unitId))
+    const relevant = allContracts.filter((c) => c.enterpriseId === enterpriseId)
 
     let synced = 0
     let created = 0
@@ -139,8 +137,14 @@ async function syncContract(
   obra: ObraContext,
   supabaseAdmin: SupabaseClient
 ): Promise<SyncContractResult | null> {
+  // Extrai cliente principal do contrato
+  const mainCustomer =
+    contract.salesContractCustomers.find((c) => c.main) ??
+    contract.salesContractCustomers[0]
+  if (!mainCustomer) return null
+
   // 1. Detalhe do cliente
-  const customer = await getCustomerById(contract.customerId)
+  const customer = await getCustomerById(mainCustomer.id)
   if (!customer) return null
 
   const cpfSanitized = customer.cpf?.replace(/\D/g, "") || null
@@ -159,7 +163,7 @@ async function syncContract(
   const vinculoId = await upsertVinculo(
     clienteId,
     obra.id,
-    contract.contractNumber,
+    contract.number,
     supabaseAdmin
   )
 

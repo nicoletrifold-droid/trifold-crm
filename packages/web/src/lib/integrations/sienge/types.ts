@@ -73,10 +73,9 @@ export interface FormattedInstallment {
 export interface SiengeEnterprise {
   id: number
   name: string
-  address: string | null
-  city: string | null
-  totalUnits: number
-  availableUnits: number
+  commercialName: string | null
+  cnpj: string
+  companyId: number
 }
 
 export interface SiengeEnterprisesResponse {
@@ -91,10 +90,10 @@ export interface SiengeEnterprisesResponse {
 export interface SiengeUnit {
   id: number
   enterpriseId: number
-  block: string | null
-  floor: number | null
-  number: string | null
-  status: string
+  name: string | null
+  propertyType: string | null
+  floor: string | null
+  commercialStock: string | null
 }
 
 export interface SiengeUnitsResponse {
@@ -106,14 +105,22 @@ export interface SiengeUnitsResponse {
   results: SiengeUnit[]
 }
 
+export interface SiengeContractCustomer {
+  id: number
+  name: string
+  main: boolean
+  spouse: boolean
+}
+
 export interface SiengeContract {
   id: number
-  contractNumber: string
-  customerId: number
-  unitId: number
-  status: string
-  totalValue: number
-  signatureDate: string | null
+  enterpriseId: number
+  enterpriseName: string
+  number: string
+  situation: string
+  value: number
+  contractDate: string | null
+  salesContractCustomers: SiengeContractCustomer[]
 }
 
 export interface SiengeContractsResponse {
