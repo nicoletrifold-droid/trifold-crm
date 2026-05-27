@@ -5,6 +5,7 @@ import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Home, Layers, Camera, FileText, MessageSquare, Bell, ChevronDown, Wallet } from "lucide-react"
 import { logout } from "@web/app/login/actions"
+import { useUnreadBadge } from "./unread-badge-provider"
 
 const NAV_ITEMS = [
   {
@@ -55,11 +56,14 @@ interface SidebarProps {
   obraId: string
   userName: string
   userEmail: string
+  /** @deprecated — use UnreadBadgeProvider context instead; kept for SSR initial render */
   unreadMensagens?: number
 }
 
 export function Sidebar({ obraId, userName, userEmail, unreadMensagens = 0 }: SidebarProps) {
   const pathname = usePathname()
+  const { unread: realtimeUnread } = useUnreadBadge()
+  const effectiveUnread = realtimeUnread !== 0 ? realtimeUnread : unreadMensagens
   const initials = userName
     .split(" ")
     .slice(0, 2)
@@ -88,7 +92,7 @@ export function Sidebar({ obraId, userName, userEmail, unreadMensagens = 0 }: Si
           const isActive = exact ? pathname === to : pathname.startsWith(to)
           const isMensagens = label === "Mensagens"
           const onMensagensPage = pathname.startsWith(`/cliente/${obraId}/mensagens`)
-          const badge = isMensagens && !onMensagensPage && unreadMensagens > 0 ? unreadMensagens : 0
+          const badge = isMensagens && !onMensagensPage && effectiveUnread > 0 ? effectiveUnread : 0
           return (
             <Link
               key={to}

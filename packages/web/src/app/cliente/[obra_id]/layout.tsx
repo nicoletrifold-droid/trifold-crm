@@ -6,6 +6,7 @@ import { PrivacyConsentModal } from "./_components/privacy-consent-modal"
 import { PushPrompt } from "@web/components/portal/push-prompt"
 import { IosInstallPrompt } from "@web/components/ios-install-prompt"
 import { AndroidInstallPrompt } from "@web/components/android-install-prompt"
+import { UnreadBadgeProvider } from "./_components/unread-badge-provider"
 import { createClient } from "@web/lib/supabase/server"
 
 export const viewport: Viewport = {
@@ -54,6 +55,7 @@ export default async function ObraLayout({
   let userName = "Usuário"
   let userEmail = ""
   let privacyAccepted = false
+  let userId = ""
 
   const {
     data: { user },
@@ -68,6 +70,7 @@ export default async function ObraLayout({
       .eq("auth_id", user.id)
       .single()
     if (userData) {
+      userId = userData.id
       userName = userData.name ?? "Usuário"
       userEmail = userData.email ?? user.email ?? ""
       privacyAccepted = !!userData.privacy_accepted_at
@@ -86,7 +89,7 @@ export default async function ObraLayout({
   }
 
   return (
-    <>
+    <UnreadBadgeProvider obraId={obra_id} userId={userId} initialUnread={unreadMensagens}>
       <div className="flex min-h-screen bg-stone-950">
         <Sidebar obraId={obra_id} userName={userName} userEmail={userEmail} unreadMensagens={unreadMensagens} />
         <div className="flex flex-1 flex-col pb-16 lg:pl-[260px] lg:pb-0">
@@ -99,6 +102,6 @@ export default async function ObraLayout({
       <PushPrompt />
       <IosInstallPrompt variant="portal" />
       <AndroidInstallPrompt variant="portal" />
-    </>
+    </UnreadBadgeProvider>
   )
 }

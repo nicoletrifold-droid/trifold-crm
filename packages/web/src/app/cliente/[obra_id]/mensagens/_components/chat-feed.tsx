@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import { Loader2, Paperclip, Send } from "lucide-react"
+import { useUnreadBadge } from "../../_components/unread-badge-provider"
 
 interface Mensagem {
   id: string
@@ -214,6 +215,13 @@ export function ChatFeed({
   const bottomRef = useRef<HTMLDivElement>(null)
   const feedRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { clearUnread } = useUnreadBadge()
+
+  // Zerar badge ao abrir o chat (mensagens são marcadas como lidas pelo server no page.tsx)
+  useEffect(() => {
+    clearUnread()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Realtime subscription — filtrar client-side por cliente_id do usuário logado
   useEffect(() => {

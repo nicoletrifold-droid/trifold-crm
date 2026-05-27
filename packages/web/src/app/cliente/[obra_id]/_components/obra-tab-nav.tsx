@@ -3,14 +3,19 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, Layers, FileText, MessageSquare, Wallet } from "lucide-react"
+import { useUnreadBadge } from "./unread-badge-provider"
 
 interface ObraTabNavProps {
   obraId: string
+  /** @deprecated — use UnreadBadgeProvider context instead; kept for SSR initial render */
   unreadMensagens?: number
 }
 
 export function ObraTabNav({ obraId, unreadMensagens = 0 }: ObraTabNavProps) {
   const pathname = usePathname()
+  const { unread: realtimeUnread } = useUnreadBadge()
+  // Prefer live Realtime count; fall back to server-rendered initial value on first render
+  const effectiveUnread = realtimeUnread !== 0 ? realtimeUnread : unreadMensagens
 
   const tabs = [
     {
@@ -52,7 +57,7 @@ export function ObraTabNav({ obraId, unreadMensagens = 0 }: ObraTabNavProps) {
           const isActive = exact ? pathname === href : pathname.startsWith(href)
           const isChat = label === "Chat"
           const onMensagensPage = pathname.startsWith(`/cliente/${obraId}/mensagens`)
-          const badge = isChat && !onMensagensPage && unreadMensagens > 0 ? unreadMensagens : 0
+          const badge = isChat && !onMensagensPage && effectiveUnread > 0 ? effectiveUnread : 0
           return (
             <Link
               key={href}
