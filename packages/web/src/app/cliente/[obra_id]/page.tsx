@@ -254,14 +254,20 @@ export default async function ObraPage({
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-stone-500">
               Etapa Atual
             </p>
-            <p className="truncate text-[17px] font-bold text-white leading-tight">
+            <p className="line-clamp-2 text-sm font-bold text-white leading-snug">
               {currentPhase?.description ?? currentPhase?.name ?? statusLabel}
             </p>
             {currentPhase && (
-              <p className="mt-1 text-xs font-medium text-white/60 truncate">
-                {currentPhase.name}
-                {currentPhase.end_date ? ` · Prev. ${formatShortDate(currentPhase.end_date)}` : ""}
-              </p>
+              <div className="mt-1 space-y-0.5">
+                <p className="truncate text-[10px] font-medium text-white/50 uppercase tracking-wide">
+                  {currentPhase.name}
+                </p>
+                {currentPhase.end_date && (
+                  <p className="text-[10px] font-medium text-[#F27A5E]">
+                    Prev. {formatShortDate(currentPhase.end_date)}
+                  </p>
+                )}
+              </div>
             )}
           </Link>
 
