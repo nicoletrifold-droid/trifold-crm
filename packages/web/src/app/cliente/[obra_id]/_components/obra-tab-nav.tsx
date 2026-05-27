@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Layers, FileText, MessageSquare, Wallet } from "lucide-react"
+import { Home, Layers, FileText, MessageSquare, Camera } from "lucide-react"
 import { useUnreadBadge } from "./unread-badge-provider"
 
 interface ObraTabNavProps {
@@ -31,9 +31,9 @@ export function ObraTabNav({ obraId, unreadMensagens = 0 }: ObraTabNavProps) {
       exact: false,
     },
     {
-      label: "Financeiro",
-      href: `/cliente/${obraId}/financeiro`,
-      icon: Wallet,
+      label: "Fotos",
+      href: `/cliente/${obraId}/fotos`,
+      icon: Camera,
       exact: false,
     },
     {
