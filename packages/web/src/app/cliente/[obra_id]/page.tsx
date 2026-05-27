@@ -4,6 +4,7 @@ import { Bell, FileText } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
 import { logout } from "@web/app/login/actions"
 import { AnimatedProgressBar } from "./_components/animated-progress-bar"
+import { ServicosSection } from "./_components/servicos-section"
 
 const STATUS_LABEL: Record<string, string> = {
   em_andamento: "Em andamento",
@@ -177,6 +178,11 @@ export default async function ObraPage({
             sub="Previsão"
             subVariant="highlight"
           />
+        </div>
+
+        {/* Serviços */}
+        <div className="mb-5">
+          <ServicosSection obraId={obra_id} />
         </div>
 
         {/* Activities + milestones */}
