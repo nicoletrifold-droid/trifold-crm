@@ -217,16 +217,18 @@ export async function getUnitIdsByEnterprise(
 }
 
 /**
- * Lista TODOS os contratos de venda (não há filtro por enterpriseId nativo).
- * Após obter, filtre por unitId presente em getUnitIdsByEnterprise().
+ * Lista contratos de venda. Filtra por enterpriseId na API quando fornecido.
  */
-export async function getAllSalesContracts(): Promise<SiengeContract[]> {
+export async function getAllSalesContracts(
+  enterpriseId?: number
+): Promise<SiengeContract[]> {
   const all: SiengeContract[] = []
   let offset = 0
+  const filter = enterpriseId ? `&enterpriseId=${enterpriseId}` : ""
 
   while (true) {
     const data = await siengeRequest<SiengeContractsResponse>(
-      `/sales-contracts?limit=${PAGE_SIZE}&offset=${offset}`
+      `/sales-contracts?limit=${PAGE_SIZE}&offset=${offset}${filter}`
     )
     all.push(...data.results)
 

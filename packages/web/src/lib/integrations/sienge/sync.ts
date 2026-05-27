@@ -76,9 +76,8 @@ export async function syncObraClientes(obraId: string): Promise<SyncResult> {
     .eq("id", obraId)
 
   try {
-    // 2. Busca contratos do empreendimento (filtra por enterpriseId direto da API)
-    const allContracts = await getAllSalesContracts()
-    const relevant = allContracts.filter((c) => c.enterpriseId === enterpriseId)
+    // 2. Busca contratos do empreendimento (filtro na API)
+    const relevant = await getAllSalesContracts(enterpriseId)
 
     let synced = 0
     let created = 0

@@ -130,12 +130,6 @@ export async function POST(
     }
 
     if (enterpriseIds.size > 0) {
-      // Carrega contratos uma vez
-      const allContracts = await getAllSalesContracts()
-      const customerContracts = allContracts.filter((c) =>
-        c.salesContractCustomers.some((sc) => sc.id === siengeCustomer.id)
-      )
-
       for (const v of vinculosArr) {
         const obra = Array.isArray(v.obras) ? v.obras[0] : v.obras
         const enterpriseId = (obra as { sienge_enterprise_id?: number | null })
@@ -143,8 +137,9 @@ export async function POST(
         if (!enterpriseId) continue
 
         try {
-          const relevant = customerContracts.filter(
-            (c) => c.enterpriseId === enterpriseId
+          const enterpriseContracts = await getAllSalesContracts(enterpriseId)
+          const relevant = enterpriseContracts.filter((c) =>
+            c.salesContractCustomers.some((sc) => sc.id === siengeCustomer.id)
           )
           const contractNumbers = relevant.map((c) => c.number)
 
