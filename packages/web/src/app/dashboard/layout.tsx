@@ -36,9 +36,9 @@ const NAV_ITEMS_BASE = [
   { href: "/dashboard/conversas", label: "Conversas", icon: <MessageSquare className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
   { href: "/dashboard/alertas", label: "Alertas", icon: <Bell className={ICON_SIZE} /> },
-  { href: "/dashboard/atividades", label: "Atividades", icon: <Activity className={ICON_SIZE} /> },
+  { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} /> },
   // Análise & Crescimento
-  { href: "/dashboard/analytics", label: "Analytics", icon: <BarChart3 className={ICON_SIZE} />, separator: true },
+  { href: "/dashboard/atividades", label: "Atividades", icon: <Activity className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/campaigns", label: "Campanhas", icon: <Megaphone className={ICON_SIZE} /> },
 ]
 
