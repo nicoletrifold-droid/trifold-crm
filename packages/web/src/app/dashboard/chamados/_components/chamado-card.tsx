@@ -46,7 +46,7 @@ export function ChamadoCard({ chamado, showReporter = false }: ChamadoCardProps)
             <div className="relative h-20 w-20 overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
               <Image
                 src={chamado.image_url}
-                alt="Screenshot do chamado"
+                alt="Screenshot do ticket"
                 fill
                 className="object-cover"
                 sizes="80px"

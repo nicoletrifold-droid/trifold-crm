@@ -48,7 +48,7 @@ const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", i
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
-const NAV_ITEM_CHAMADOS = { href: "/dashboard/chamados", label: "Chamados", icon: <MessageSquarePlus className={ICON_SIZE} /> }
+const NAV_ITEM_CHAMADOS = { href: "/dashboard/chamados", label: "Suporte", icon: <MessageSquarePlus className={ICON_SIZE} /> }
 
 /**
  * Mapeamento href → moduleKey para resolver permissões via `getUserPermissions`.

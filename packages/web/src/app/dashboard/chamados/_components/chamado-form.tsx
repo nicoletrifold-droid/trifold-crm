@@ -103,7 +103,7 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
       const json = await res.json()
 
       if (!res.ok) {
-        setGlobalError(json.error ?? "Erro ao enviar chamado")
+        setGlobalError(json.error ?? "Erro ao enviar ticket")
         return
       }
 
@@ -138,7 +138,7 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
       {submitted && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 dark:bg-green-500/10 dark:text-green-300">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
-          Chamado enviado com sucesso!
+          Ticket enviado com sucesso!
         </div>
       )}
 
@@ -308,7 +308,7 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
         ) : (
           <>
             <Send className="h-4 w-4" />
-            Enviar Chamado
+            Enviar Ticket
           </>
         )}
       </button>

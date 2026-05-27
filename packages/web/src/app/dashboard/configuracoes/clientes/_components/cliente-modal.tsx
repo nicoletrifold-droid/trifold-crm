@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ChevronDown, ChevronUp, Plus, Users, X } from "lucide-react"
+import { ChevronDown, ChevronUp, Eye, Plus, Users, X } from "lucide-react"
 import type { ObraOption } from "./clientes-page-client"
 
 const UF_OPTIONS = [
@@ -10,7 +10,7 @@ const UF_OPTIONS = [
 ]
 
 interface ClienteModalProps {
-  mode: "create" | "edit"
+  mode: "create" | "edit" | "view"
   clienteId?: string
   obras: ObraOption[]
   onClose: (refresh: boolean) => void
@@ -114,8 +114,9 @@ export function ClienteModal({
 }: ClienteModalProps) {
   const [fields, setFields] = useState({ ...EMPTY_FIELDS })
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string | null>>>({})
+  const isViewMode = mode === "view"
   const [loading, setLoading] = useState(false)
-  const [loadingCliente, setLoadingCliente] = useState(mode === "edit")
+  const [loadingCliente, setLoadingCliente] = useState(mode === "edit" || mode === "view")
   const [error, setError] = useState<string | null>(null)
 
   // Collapsible sections — starts collapsed on mobile, expanded on desktop
@@ -133,9 +134,9 @@ export function ClienteModal({
   const [novaObraId, setNovaObraId] = useState("")
   const [novoNumeroUnidade, setNovoNumeroUnidade] = useState("")
 
-  // Carregar cliente em modo edição
+  // Carregar cliente em modo edição ou visualização
   useEffect(() => {
-    if (mode !== "edit" || !clienteId) return
+    if ((mode !== "edit" && mode !== "view") || !clienteId) return
     let aborted = false
     setLoadingCliente(true)
     fetch(`/api/admin/clientes/${clienteId}`)
@@ -334,7 +335,7 @@ export function ClienteModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (loading) return
+    if (loading || isViewMode) return
 
     if (!fields.nome.trim()) {
       setError("Nome é obrigatório.")
@@ -405,10 +406,12 @@ export function ClienteModal({
 
   const inp = (hasErr?: boolean) =>
     `w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
-      hasErr
-        ? "border-red-400 focus:border-red-500 focus:ring-red-500 dark:border-red-500/70"
-        : "border-gray-300 focus:border-orange-500 focus:ring-orange-500 dark:border-stone-700"
-    } dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500`
+      isViewMode
+        ? "border-gray-200 bg-gray-50 text-gray-700 cursor-default dark:border-stone-700 dark:bg-stone-800/40 dark:text-stone-300"
+        : hasErr
+          ? "border-red-400 focus:border-red-500 focus:ring-red-500 dark:border-red-500/70 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+          : "border-gray-300 focus:border-orange-500 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+    }`
 
   const lbl =
     "mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300"
@@ -443,9 +446,13 @@ export function ClienteModal({
       <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-stone-800">
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-orange-600" />
+            {isViewMode ? (
+              <Eye className="h-5 w-5 text-[#E8856A]" />
+            ) : (
+              <Users className="h-5 w-5 text-orange-600" />
+            )}
             <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
-              {mode === "create" ? "Novo Cliente" : "Editar Cliente"}
+              {mode === "create" ? "Novo Cliente" : mode === "view" ? "Visualizar Cliente" : "Editar Cliente"}
             </h2>
           </div>
           <button
@@ -472,27 +479,29 @@ export function ClienteModal({
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className={lbl}>
-                    Nome <span className="text-red-500">*</span>
+                    Nome {!isViewMode && <span className="text-red-500">*</span>}
                   </label>
                   <input
                     type="text"
                     value={fields.nome}
                     onChange={(e) => set("nome", e.target.value)}
-                    required
+                    readOnly={isViewMode}
+                    required={!isViewMode}
                     className={inp()}
                     placeholder="Nome completo"
                   />
                 </div>
                 <div>
                   <label className={lbl}>
-                    CPF <span className="text-red-500">*</span>
+                    CPF {!isViewMode && <span className="text-red-500">*</span>}
                   </label>
                   <input
                     type="text"
                     value={fields.cpf}
                     onChange={(e) => set("cpf", e.target.value)}
-                    onBlur={() => handleBlur("cpf")}
-                    required
+                    onBlur={() => !isViewMode && handleBlur("cpf")}
+                    readOnly={isViewMode}
+                    required={!isViewMode}
                     className={inp(!!fieldErrors.cpf)}
                     placeholder="000.000.000-00"
                   />
@@ -508,7 +517,8 @@ export function ClienteModal({
                     type="email"
                     value={fields.email}
                     onChange={(e) => set("email", e.target.value)}
-                    onBlur={() => handleBlur("email")}
+                    onBlur={() => !isViewMode && handleBlur("email")}
+                    readOnly={isViewMode}
                     className={inp(!!fieldErrors.email)}
                     placeholder="email@exemplo.com"
                   />
@@ -539,6 +549,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.rg}
                         onChange={(e) => set("rg", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                       />
                     </div>
@@ -548,6 +559,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.telefone}
                         onChange={(e) => set("telefone", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="(00) 0000-0000"
                       />
@@ -558,6 +570,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.whatsapp}
                         onChange={(e) => set("whatsapp", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="(00) 00000-0000"
                       />
@@ -568,6 +581,7 @@ export function ClienteModal({
                         type="date"
                         value={fields.data_nascimento}
                         onChange={(e) => set("data_nascimento", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                       />
                     </div>
@@ -577,6 +591,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.estado_civil}
                         onChange={(e) => set("estado_civil", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="Solteiro, Casado..."
                       />
@@ -587,6 +602,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.profissao}
                         onChange={(e) => set("profissao", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                       />
                     </div>
@@ -595,6 +611,7 @@ export function ClienteModal({
                       <textarea
                         value={fields.observacao}
                         onChange={(e) => set("observacao", e.target.value)}
+                        readOnly={isViewMode}
                         className={`${inp()} min-h-[60px]`}
                         placeholder="Notas adicionais sobre o cliente..."
                       />
@@ -622,6 +639,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_logradouro}
                         onChange={(e) => set("endereco_logradouro", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="Rua, Av..."
                       />
@@ -632,6 +650,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_numero}
                         onChange={(e) => set("endereco_numero", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="123"
                       />
@@ -642,6 +661,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_complemento}
                         onChange={(e) => set("endereco_complemento", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="Apto, Casa..."
                       />
@@ -652,6 +672,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_bairro}
                         onChange={(e) => set("endereco_bairro", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                       />
                     </div>
@@ -661,6 +682,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_cep}
                         onChange={(e) => set("endereco_cep", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder="00000-000"
                       />
@@ -671,6 +693,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_cidade}
                         onChange={(e) => set("endereco_cidade", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                       />
                     </div>
@@ -679,6 +702,7 @@ export function ClienteModal({
                       <select
                         value={fields.endereco_estado}
                         onChange={(e) => set("endereco_estado", e.target.value)}
+                        disabled={isViewMode}
                         className={inp()}
                       >
                         <option value="">UF</option>
@@ -695,6 +719,7 @@ export function ClienteModal({
                         type="text"
                         value={fields.endereco_referencia}
                         onChange={(e) => set("endereco_referencia", e.target.value)}
+                        readOnly={isViewMode}
                         className={inp()}
                         placeholder='Ex: "Próximo ao mercado"'
                       />
@@ -744,25 +769,27 @@ export function ClienteModal({
                           </span>
                         )}
                       </div>
-                      {marcadoParaRemover ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleUndoRemoveVinculoExistente(v.id)
-                          }
-                          className="text-xs text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
-                        >
-                          Desfazer
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveVinculoExistente(v.id)}
-                          className="text-gray-400 hover:text-red-600 dark:text-stone-500 dark:hover:text-red-300"
-                          aria-label="Remover vínculo"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                      {!isViewMode && (
+                        marcadoParaRemover ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUndoRemoveVinculoExistente(v.id)
+                            }
+                            className="text-xs text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                          >
+                            Desfazer
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVinculoExistente(v.id)}
+                            className="text-gray-400 hover:text-red-600 dark:text-stone-500 dark:hover:text-red-300"
+                            aria-label="Remover vínculo"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )
                       )}
                     </div>
                   )
@@ -787,61 +814,65 @@ export function ClienteModal({
                         (novo)
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveVinculoNovo(v.tempId)}
-                      className="text-gray-400 hover:text-red-600 dark:text-stone-500 dark:hover:text-red-300"
-                      aria-label="Remover vínculo"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    {!isViewMode && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVinculoNovo(v.tempId)}
+                        className="text-gray-400 hover:text-red-600 dark:text-stone-500 dark:hover:text-red-300"
+                        aria-label="Remover vínculo"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
 
-              {/* Novo vínculo */}
-              <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-stone-700 dark:bg-stone-800/50">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
-                  Adicionar vínculo
-                </p>
-                <div className="grid grid-cols-12 gap-2">
-                  <div className="col-span-7">
-                    <label className={lbl}>Obra</label>
-                    <select
-                      value={novaObraId}
-                      onChange={(e) => setNovaObraId(e.target.value)}
-                      className={inp()}
-                    >
-                      <option value="">Selecione uma obra</option>
-                      {obras.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-3">
-                    <label className={lbl}>Unidade</label>
-                    <input
-                      type="text"
-                      value={novoNumeroUnidade}
-                      onChange={(e) => setNovoNumeroUnidade(e.target.value)}
-                      className={inp()}
-                      placeholder="Ex: 101"
-                    />
-                  </div>
-                  <div className="col-span-2 flex items-end">
-                    <button
-                      type="button"
-                      onClick={handleAddVinculo}
-                      disabled={!novaObraId}
-                      className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
-                    >
-                      <Plus className="h-4 w-4" /> Add
-                    </button>
+              {/* Novo vínculo — oculto no modo visualização */}
+              {!isViewMode && (
+                <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-stone-700 dark:bg-stone-800/50">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
+                    Adicionar vínculo
+                  </p>
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-7">
+                      <label className={lbl}>Obra</label>
+                      <select
+                        value={novaObraId}
+                        onChange={(e) => setNovaObraId(e.target.value)}
+                        className={inp()}
+                      >
+                        <option value="">Selecione uma obra</option>
+                        {obras.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-3">
+                      <label className={lbl}>Unidade</label>
+                      <input
+                        type="text"
+                        value={novoNumeroUnidade}
+                        onChange={(e) => setNovoNumeroUnidade(e.target.value)}
+                        className={inp()}
+                        placeholder="Ex: 101"
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-end">
+                      <button
+                        type="button"
+                        onClick={handleAddVinculo}
+                        disabled={!novaObraId}
+                        className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                      >
+                        <Plus className="h-4 w-4" /> Add
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {error && (
@@ -851,25 +882,37 @@ export function ClienteModal({
             )}
 
             <div className="flex items-center justify-end gap-2 border-t border-gray-200 pt-3 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => onClose(false)}
-                disabled={loading}
-                className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
-              >
-                {loading
-                  ? "Salvando..."
-                  : mode === "create"
-                    ? "Criar"
-                    : "Salvar"}
-              </button>
+              {isViewMode ? (
+                <button
+                  type="button"
+                  onClick={() => onClose(false)}
+                  className="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+                >
+                  Fechar
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onClose(false)}
+                    disabled={loading}
+                    className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    {loading
+                      ? "Salvando..."
+                      : mode === "create"
+                        ? "Criar"
+                        : "Salvar"}
+                  </button>
+                </>
+              )}
             </div>
           </form>
         )}

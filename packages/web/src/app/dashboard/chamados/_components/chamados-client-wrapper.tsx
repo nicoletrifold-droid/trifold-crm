@@ -68,12 +68,12 @@ export function ChamadosClientWrapper({ initialChamados, isAdmin }: Props) {
           <div>
             <p className="text-sm font-medium text-stone-500 dark:text-stone-400">
               {statusFilter !== "todos"
-                ? "Nenhum chamado com este status"
-                : "Nenhum chamado aberto ainda"}
+                ? "Nenhum ticket com este status"
+                : "Nenhum ticket aberto ainda"}
             </p>
             {statusFilter === "todos" && (
               <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
-                Use o formulário ao lado para abrir o primeiro chamado
+                Use o formulário ao lado para abrir o primeiro ticket
               </p>
             )}
           </div>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Eye, Pencil, Plus, Trash2 } from "lucide-react"
 import { ClienteModal } from "./cliente-modal"
 
 export interface ObraOption {
@@ -74,6 +74,7 @@ export function ClientesPageClient({
   const isFirstLoad = useRef(true)
 
   const [modalCreate, setModalCreate] = useState(false)
+  const [modalView, setModalView] = useState<ClienteRow | null>(null)
   const [modalEdit, setModalEdit] = useState<ClienteRow | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<ClienteRow | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -308,6 +309,14 @@ export function ClientesPageClient({
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
+                        onClick={() => setModalView(c)}
+                        className="text-gray-400 hover:text-[#E8856A] dark:text-stone-500 dark:hover:text-[#E8856A]"
+                        aria-label="Visualizar"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setModalEdit(c)}
                         className="text-gray-400 hover:text-orange-600 dark:text-stone-500 dark:hover:text-orange-300"
                         aria-label="Editar"
@@ -406,6 +415,14 @@ export function ClientesPageClient({
           mode="create"
           obras={obras}
           onClose={(refresh) => handleModalClose(refresh)}
+        />
+      )}
+      {modalView && (
+        <ClienteModal
+          mode="view"
+          clienteId={modalView.id}
+          obras={obras}
+          onClose={() => setModalView(null)}
         />
       )}
       {modalEdit && (
