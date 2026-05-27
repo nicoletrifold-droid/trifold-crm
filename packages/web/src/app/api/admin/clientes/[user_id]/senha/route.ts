@@ -108,7 +108,7 @@ export async function POST(
 
   const { error: updateErr } = await adminClient.auth.admin.updateUserById(
     portalUser.auth_id,
-    { password }
+    { password, email_confirm: true }
   )
 
   if (updateErr) {

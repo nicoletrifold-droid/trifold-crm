@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import {
   searchCustomerByCpf,
   getFinancialStatement,
@@ -97,6 +98,24 @@ export async function POST(
       .update({ sienge_customer_id: siengeCustomer.id })
       .eq("email", crmCliente.email)
       .eq("role", "cliente")
+
+    // Confirmar e-mail do portal user automaticamente (best-effort)
+    try {
+      const { data: portalUser } = await supabase
+        .from("users")
+        .select("auth_id")
+        .eq("email", crmCliente.email)
+        .eq("role", "cliente")
+        .maybeSingle()
+
+      const authId = (portalUser as { auth_id?: string | null } | null)?.auth_id
+      if (authId) {
+        const adminClient = createAdminClient()
+        await adminClient.auth.admin.updateUserById(authId, { email_confirm: true })
+      }
+    } catch {
+      // best-effort — não bloqueia o retorno
+    }
   }
 
   // Buscar contrato (best-effort — não bloqueia se falhar)

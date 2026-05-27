@@ -353,6 +353,16 @@ async function maybeInviteCliente(
         .from("users")
         .update({ sienge_customer_id: siengeCustomerId })
         .eq("id", userId)
+
+      // Confirmar e-mail do portal user automaticamente (best-effort)
+      try {
+        const authId = (existingUser as { auth_id?: string | null }).auth_id
+        if (authId) {
+          await supabaseAdmin.auth.admin.updateUserById(authId, { email_confirm: true })
+        }
+      } catch {
+        // best-effort — não bloqueia o sync
+      }
     }
   } else {
     // Cria auth user via generateLink (não envia email pelo Supabase,
