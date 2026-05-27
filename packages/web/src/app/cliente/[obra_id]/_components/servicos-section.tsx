@@ -8,7 +8,7 @@ interface ServicosSectionProps {
 export function ServicosSection({ obraId }: ServicosSectionProps) {
   return (
     <div className="rounded-2xl border border-stone-800 bg-stone-900 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-white">Serviços</h3>
+      <h3 className="mb-4 text-sm font-semibold text-white">Financeiro</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {/* Boleto → sub-página financeiro/boleto */}
         <Link
