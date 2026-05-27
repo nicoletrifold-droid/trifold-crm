@@ -67,7 +67,7 @@ export default async function ObraPage({
     supabase
       .from("obra_fases")
       .select(
-        "id, name, status, progress_pct, order_index, start_date, end_date"
+        "id, name, description, status, progress_pct, order_index, start_date, end_date"
       )
       .eq("obra_id", obra_id)
       .order("order_index"),
@@ -246,22 +246,21 @@ export default async function ObraPage({
             subVariant={obra.status === "em_andamento" ? "success" : "muted"}
           />
 
-          {/* TAREFA 2: "Fase da Obra" clicável */}
+          {/* "Etapa Atual" clicável */}
           <Link
             href={`/cliente/${obra_id}/fases`}
             className="cursor-pointer rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:ring-1 hover:ring-[#F27A5E]/40"
           >
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-stone-500">
-              Fase da Obra
+              Etapa Atual
             </p>
             <p className="truncate text-[17px] font-bold text-white leading-tight">
-              {currentPhase?.name ?? statusLabel}
+              {currentPhase?.description ?? currentPhase?.name ?? statusLabel}
             </p>
             {currentPhase && (
-              <p className="mt-1 text-xs font-medium text-white/60">
-                {currentPhase.status === "em_andamento"
-                  ? "Em execução"
-                  : (FASE_STATUS_LABEL[currentPhase.status] ?? "")}
+              <p className="mt-1 text-xs font-medium text-white/60 truncate">
+                {currentPhase.name}
+                {currentPhase.end_date ? ` · Prev. ${formatShortDate(currentPhase.end_date)}` : ""}
               </p>
             )}
           </Link>
