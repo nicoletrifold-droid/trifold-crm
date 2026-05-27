@@ -355,55 +355,98 @@ async function maybeInviteCliente(
         .eq("id", userId)
     }
   } else {
-    // Convida via magic link
+    // Cria auth user via generateLink (não envia email pelo Supabase,
+    // evitando rate limit de email em syncs em massa).
+    // O cliente pode acessar via magic link ou receive convite por Resend.
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
     const redirectTo = appUrl ? `${appUrl}/cliente` : undefined
 
     try {
-      const { data: inviteData, error: inviteErr } =
-        await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-          redirectTo,
-          data: { full_name: name },
-        })
-
-      if (inviteErr || !inviteData?.user) {
-        // Não bloqueia o sync — apenas registra
-        console.error(
-          `[sienge-sync] falha ao convidar ${email}:`,
-          inviteErr?.message
-        )
-        return false
-      }
-
-      const { data: newUser, error: userErr } = await supabaseAdmin
-        .from("users")
-        .insert({
-          auth_id: inviteData.user.id,
-          org_id: orgId,
-          name,
+      const { data: linkData, error: linkErr } =
+        await supabaseAdmin.auth.admin.generateLink({
+          type: "invite",
           email,
-          role: "cliente",
-          sienge_customer_id: siengeCustomerId,
+          options: { redirectTo, data: { full_name: name } },
         })
-        .select("id")
-        .single()
 
-      if (userErr || !newUser) {
-        console.error(
-          `[sienge-sync] falha ao inserir users para ${email}:`,
-          userErr?.message
-        )
-        return false
+      if (linkErr || !linkData?.user) {
+        const msg = linkErr?.message ?? ""
+        const isAlreadyExists =
+          msg.includes("already been registered") ||
+          msg.includes("already_exists")
+
+        if (isAlreadyExists) {
+          // Usuário existe em auth com outro role — vincula sem re-convidar
+          const { data: anyUser } = await supabaseAdmin
+            .from("users")
+            .select("id")
+            .eq("email", email)
+            .maybeSingle()
+          userId = (anyUser as { id: string } | null)?.id ?? null
+          if (!userId) {
+            console.error(
+              `[sienge-sync] ${email} existe em auth mas não em users — pulando`
+            )
+            return false
+          }
+          // userId já resolvido — pula criação de users record
+        } else {
+          console.error(
+            `[sienge-sync] falha ao criar link para ${email}:`,
+            linkErr?.message
+          )
+          return false
+        }
+      } else {
+        // generateLink bem-sucedido — cria registro em users
+        const authUserId = linkData.user.id
+
+        const { data: newUser, error: userErr } = await supabaseAdmin
+          .from("users")
+          .insert({
+            auth_id: authUserId,
+            org_id: orgId,
+            name,
+            email,
+            role: "cliente",
+            sienge_customer_id: siengeCustomerId,
+          })
+          .select("id")
+          .single()
+
+        if (userErr || !newUser) {
+          // Conflito de auth_id: usuário auth já existia na tabela users
+          if ((userErr as { code?: string })?.code === "23505") {
+            const { data: byAuth } = await supabaseAdmin
+              .from("users")
+              .select("id")
+              .eq("auth_id", authUserId)
+              .maybeSingle()
+            userId = (byAuth as { id: string } | null)?.id ?? null
+          } else {
+            console.error(
+              `[sienge-sync] falha ao inserir users para ${email}:`,
+              userErr?.message
+            )
+            return false
+          }
+        } else {
+          userId = (newUser as { id: string }).id
+        }
       }
-
-      userId = (newUser as { id: string }).id
     } catch (err) {
       console.error(
-        `[sienge-sync] exception ao convidar ${email}:`,
+        `[sienge-sync] exception para ${email}:`,
         err instanceof Error ? err.message : err
       )
       return false
     }
+  }
+
+  // Se userId ainda for null aqui, não há como criar a ligação portal
+  if (!userId) {
+    console.error(`[sienge-sync] userId não resolvido para ${email} — abortando`)
+    return false
   }
 
   // Garante vínculo cliente_obras (portal)
