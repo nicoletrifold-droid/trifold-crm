@@ -42,6 +42,10 @@ export async function PATCH(req: NextRequest) {
     "notify_push",
     "notify_email",
     "notify_whatsapp",
+    "priorizar_lead_ativo",
+    "max_leads_per_day",
+    "notify_user_on_distribution",
+    "notify_user_on_fora_horario",
   ] as const
 
   const patch: Record<string, unknown> = {}

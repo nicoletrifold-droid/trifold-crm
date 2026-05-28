@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useTransition, useEffect } from "react"
-import { Clock, SlidersHorizontal, Bell } from "lucide-react"
+import { Clock, SlidersHorizontal, Bell, Users, ShieldCheck } from "lucide-react"
+import type { GestorUser } from "../page"
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 
@@ -14,13 +15,18 @@ interface RoletaConfig {
   notify_push: boolean
   notify_email: boolean
   notify_whatsapp: boolean
+  priorizar_lead_ativo: boolean
+  max_leads_per_day: number
+  notify_user_on_distribution: string | null
+  notify_user_on_fora_horario: string | null
 }
 
 interface Props {
   initialConfig: RoletaConfig | null
+  gestores: GestorUser[]
 }
 
-export function RoletaConfigPanel({ initialConfig }: Props) {
+export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
   const defaults: RoletaConfig = {
     is_active: false,
     business_days: [1, 2, 3, 4, 5],
@@ -30,6 +36,10 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
     notify_push: true,
     notify_email: true,
     notify_whatsapp: true,
+    priorizar_lead_ativo: true,
+    max_leads_per_day: 50,
+    notify_user_on_distribution: null,
+    notify_user_on_fora_horario: null,
   }
 
   const [config, setConfig] = useState<RoletaConfig>(initialConfig ?? defaults)
@@ -37,7 +47,6 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
 
-  // Auto-dismiss "Salvo!" after 3s
   useEffect(() => {
     if (!saved) return
     const t = setTimeout(() => setSaved(false), 3000)
@@ -70,8 +79,12 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
     })
   }
 
+  const selectCls =
+    "w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
+
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900 p-5 space-y-5">
+    <div className="rounded-xl border border-stone-800 bg-stone-900 p-5 space-y-6">
+      {/* Header — toggle ativo/pausado */}
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-white flex items-center gap-2">
           <SlidersHorizontal className={`h-4 w-4 ${config.is_active ? "text-emerald-400" : "text-stone-500"}`} />
@@ -81,7 +94,6 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
           onClick={() => { setConfig((c) => ({ ...c, is_active: !c.is_active })); setSaved(false) }}
           aria-label={config.is_active ? "Desativar roleta" : "Ativar roleta"}
           aria-pressed={config.is_active}
-          title={config.is_active ? "Desativar roleta" : "Ativar roleta"}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
             config.is_active ? "bg-emerald-500" : "bg-stone-700"
           }`}
@@ -93,12 +105,12 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
       </div>
 
       {config.is_active ? (
-        <p className="text-xs text-emerald-400 font-medium">Roleta ativa — leads serão distribuídos automaticamente</p>
+        <p className="text-xs text-emerald-400 font-medium -mt-4">Roleta ativa — leads serão distribuídos automaticamente</p>
       ) : (
-        <p className="text-xs text-stone-500">Roleta pausada — nenhum lead será distribuído</p>
+        <p className="text-xs text-stone-500 -mt-4">Roleta pausada — nenhum lead será distribuído</p>
       )}
 
-      {/* Business days */}
+      {/* Dias de atendimento */}
       <fieldset>
         <legend className="text-xs font-medium text-stone-400 mb-2 flex items-center gap-1.5">
           <Clock className="h-3.5 w-3.5" /> Dias de atendimento
@@ -122,7 +134,7 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
         </div>
       </fieldset>
 
-      {/* Hours */}
+      {/* Horário */}
       <fieldset>
         <legend className="sr-only">Horário de atendimento</legend>
         <div className="flex flex-wrap items-center gap-4">
@@ -150,7 +162,61 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
         <p className="mt-2 text-xs text-stone-600">Fuso horário: {config.timezone}</p>
       </fieldset>
 
-      {/* Notifications */}
+      {/* Priorizar lead ativo */}
+      <div className="rounded-lg border border-stone-800 bg-stone-800/40 p-4 space-y-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldCheck className="h-4 w-4 text-stone-400 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-white">
+                PRIORIZAR <span className="text-[#E8856A]">LEAD ATIVO</span>
+              </p>
+              <p className="text-xs text-stone-400 mt-0.5">
+                Enviar lead para o corretor que já está atendendo o cliente
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setConfig((c) => ({ ...c, priorizar_lead_ativo: !c.priorizar_lead_ativo })); setSaved(false) }}
+            aria-label={config.priorizar_lead_ativo ? "Desativar priorização" : "Ativar priorização"}
+            aria-pressed={config.priorizar_lead_ativo}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+              config.priorizar_lead_ativo ? "bg-[#E8856A]" : "bg-stone-700"
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              config.priorizar_lead_ativo ? "translate-x-6" : "translate-x-1"
+            }`} />
+          </button>
+        </div>
+        <p className="text-xs text-stone-500 pl-6">
+          *Mesmo que o corretor não esteja na roleta no momento.
+        </p>
+      </div>
+
+      {/* Limite diário */}
+      <div>
+        <label htmlFor="max-leads-day" className="text-xs font-medium text-stone-400 block mb-1.5">
+          Núm. máx. de leads por dia por corretor
+        </label>
+        <input
+          id="max-leads-day"
+          type="number"
+          min={1}
+          max={999}
+          value={config.max_leads_per_day}
+          onChange={(e) => {
+            const v = parseInt(e.target.value)
+            if (!isNaN(v) && v > 0) {
+              setConfig((c) => ({ ...c, max_leads_per_day: v }))
+              setSaved(false)
+            }
+          }}
+          className="w-32 rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
+        />
+      </div>
+
+      {/* Notificações ao corretor */}
       <div>
         <p className="text-xs font-medium text-stone-400 mb-2 flex items-center gap-1.5">
           <Bell className="h-3.5 w-3.5" /> Notificações ao corretor
@@ -173,6 +239,51 @@ export function RoletaConfigPanel({ initialConfig }: Props) {
               <span className="text-sm text-stone-300">{label}</span>
             </label>
           ))}
+        </div>
+      </div>
+
+      {/* Notificações à imobiliária */}
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-stone-400 flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5" /> Notificações à imobiliária
+        </p>
+
+        <div>
+          <label htmlFor="notify-dist" className="text-xs text-stone-500 block mb-1">
+            NOTIFICAR (1) — quando distribuir um lead para um corretor
+          </label>
+          <select
+            id="notify-dist"
+            value={config.notify_user_on_distribution ?? ""}
+            onChange={(e) => { setConfig((c) => ({ ...c, notify_user_on_distribution: e.target.value || null })); setSaved(false) }}
+            className={selectCls}
+          >
+            <option value="">Não notificar</option>
+            {gestores.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} — {g.email}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="notify-fora" className="text-xs text-stone-500 block mb-1">
+            NOTIFICAR (2) — quando o horário da roleta não for atendido
+          </label>
+          <select
+            id="notify-fora"
+            value={config.notify_user_on_fora_horario ?? ""}
+            onChange={(e) => { setConfig((c) => ({ ...c, notify_user_on_fora_horario: e.target.value || null })); setSaved(false) }}
+            className={selectCls}
+          >
+            <option value="">Não notificar</option>
+            {gestores.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} — {g.email}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

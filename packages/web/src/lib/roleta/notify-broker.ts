@@ -118,6 +118,86 @@ async function sendBrokerWhatsApp(
   }
 }
 
+// ============================================================================
+// notifyImobiliaria — avisa o usuário gestor (admin/supervisor)
+// ============================================================================
+
+interface NotifyImobiliariaParams {
+  orgId: string
+  userId: string
+  title: string
+  messageBody: string
+  lead: { id: string; name: string | null; phone: string | null }
+  brokerName?: string
+}
+
+export async function notifyImobiliaria(params: NotifyImobiliariaParams): Promise<void> {
+  const { orgId, userId, title, messageBody, lead } = params
+  const admin = createAdminClient()
+
+  const { data: user } = await admin
+    .from("users")
+    .select("name, email, phone")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (!user?.email) return
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+  const leadUrl = `${appUrl}/dashboard/leads/${lead.id}`
+
+  await Promise.allSettled([
+    sendPushToUser(admin, userId, { title, body: messageBody, url: leadUrl })
+      .catch((e: unknown) => console.error("[roleta] imob push error:", e)),
+
+    sendEmail({
+      to: user.email as string,
+      subject: title,
+      html: buildImobiliariaEmailHtml({ title, body: messageBody, leadUrl }),
+      orgId,
+    }).catch((e: unknown) => console.error("[roleta] imob email error:", e)),
+
+    (user.phone as string | null)
+      ? sendBrokerWhatsApp(
+          admin, orgId,
+          user.phone as string,
+          (user.name as string) ?? "",
+          title,
+          messageBody,
+          leadUrl,
+        ).catch((e: unknown) => console.error("[roleta] imob whatsapp error:", e))
+      : Promise.resolve(),
+  ])
+}
+
+function buildImobiliariaEmailHtml(p: { title: string; body: string; leadUrl: string }): string {
+  const title = escHtml(p.title)
+  const body  = escHtml(p.body)
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden;">
+    <div style="background: #0F0F0F; padding: 24px; text-align: center;">
+      <span style="color: #F27A5E; font-size: 22px; font-weight: bold; letter-spacing: 2px;">TRIFOLD</span>
+    </div>
+    <div style="padding: 32px 24px;">
+      <p style="color: #333; font-size: 16px; margin: 0 0 16px; font-weight: 600;">${title}</p>
+      <p style="color: #555; font-size: 15px; margin: 0 0 24px;">${body}</p>
+      <div style="text-align: center; margin-bottom: 24px;">
+        <a href="${p.leadUrl}"
+           style="background: #F27A5E; color: #fff; padding: 12px 28px; border-radius: 6px;
+                  text-decoration: none; font-weight: 600; font-size: 15px;">
+          Ver Lead no CRM
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+// ============================================================================
+
 function escHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

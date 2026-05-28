@@ -3,6 +3,13 @@ import { getServerUser } from "@web/lib/auth"
 import { RoletaConfigPanel } from "./_components/roleta-config-panel"
 import { RoletaFilaPanel } from "./_components/roleta-fila-panel"
 
+export interface GestorUser {
+  id: string
+  name: string
+  email: string
+  role: string
+}
+
 export default async function RoletaPage() {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -11,6 +18,7 @@ export default async function RoletaPage() {
     { data: config },
     { data: filaRaw },
     { data: brokers },
+    { data: gestoresRaw },
   ] = await Promise.all([
     supabase
       .from("roleta_config")
@@ -27,6 +35,13 @@ export default async function RoletaPage() {
       .select("id, user_id, is_available, users!inner(name, email)")
       .eq("org_id", user.orgId)
       .eq("is_available", true),
+    // Usuários gestores (não corretores, não clientes) para notificações
+    supabase
+      .from("users")
+      .select("id, name, email, role")
+      .eq("org_id", user.orgId)
+      .not("role", "in", '("broker","cliente")')
+      .order("name"),
   ])
 
   // Normalize fila entries
@@ -68,6 +83,8 @@ export default async function RoletaPage() {
       }
     })
 
+  const gestores: GestorUser[] = (gestoresRaw ?? []) as GestorUser[]
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
@@ -88,7 +105,7 @@ export default async function RoletaPage() {
         </p>
       </div>
 
-      <RoletaConfigPanel initialConfig={config} />
+      <RoletaConfigPanel initialConfig={config} gestores={gestores} />
       <RoletaFilaPanel fila={fila} availableBrokers={availableBrokers} />
     </div>
   )
