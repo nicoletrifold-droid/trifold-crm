@@ -423,6 +423,8 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   // CPF foi buscado e NÃO encontrado no CRM
   const cpfNaoEncontrado =
     cpfABuscado.length > 0 && !searchingCpfA && !crmClienteA
+  // CRM tem email cadastrado — se não tiver, usuário precisa informar para criar o portal
+  const crmTemEmail = cpfEncontradoNoCrm && !!crmClienteA?.email
 
   const inputCls =
     "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
@@ -783,7 +785,7 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
             </div>
           )}
 
-          {/* Email — readonly se veio do CRM */}
+          {/* Email — readonly se veio do CRM e o CRM tem email; editável se CRM não tem email */}
           {(cpfEncontradoNoCrm || cpfNaoEncontrado) && (
             <div className="relative">
               <input
@@ -791,13 +793,13 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
                 placeholder="Email (acesso ao portal) *"
                 value={emailA}
                 onChange={(e) =>
-                  !cpfEncontradoNoCrm && setEmailA(e.target.value)
+                  !crmTemEmail && setEmailA(e.target.value)
                 }
-                readOnly={cpfEncontradoNoCrm}
+                readOnly={crmTemEmail}
                 required
-                className={cpfEncontradoNoCrm ? inputReadonlyCls : inputCls}
+                className={crmTemEmail ? inputReadonlyCls : inputCls}
               />
-              {cpfEncontradoNoCrm && (
+              {crmTemEmail && (
                 <Lock className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-500" />
               )}
             </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { logAudit, getRequestIp } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -31,7 +32,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("clientes_obras_vinculos")
-    .select("id, numero_unidade, clientes(id, nome, cpf, email)")
+    .select("id, numero_unidade, clientes(id, nome, cpf, email, sienge_customer_id)")
     .eq("obra_id", obra_id)
 
   if (error) {
@@ -48,6 +49,7 @@ export async function GET(
       email: c?.email ?? "",
       is_primary: false,
       numero_unidade: row.numero_unidade ?? null,
+      sienge_customer_id: (c as { sienge_customer_id?: number | null } | null)?.sienge_customer_id ?? null,
     }
   })
 
@@ -230,6 +232,17 @@ export async function POST(
         return NextResponse.json({ error: crmError.message }, { status: 500 })
       }
       clienteCrm = newCrm as typeof clienteCrm
+
+      void logAudit({
+        org_id: appUser.org_id,
+        user_id: appUser.id,
+        user_name: appUser.name,
+        action: "cliente.create",
+        entity_type: "cliente",
+        entity_id: clienteCrm.id,
+        entity_name: clienteCrm.nome,
+        ip_address: getRequestIp(req.headers),
+      })
     }
   }
 
@@ -297,6 +310,17 @@ export async function POST(
     obra_id,
     is_primary: true,
     numero_unidade: unidadeNormalizada,
+  })
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "cliente.portal_access_created",
+    entity_type: "cliente",
+    entity_id: clienteCrm.id,
+    entity_name: clienteCrm.nome,
+    ip_address: getRequestIp(req.headers),
   })
 
   return NextResponse.json(
