@@ -62,7 +62,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/leads": "leads",
   "/dashboard/properties": "imoveis",
   "/dashboard/corretores": "corretores",
-  "/dashboard/roleta": "corretores",
+  "/dashboard/roleta": "roleta",
   "/dashboard/conversas": "conversas",
   "/dashboard/agenda": "agenda",
   "/dashboard/alertas": "alertas",

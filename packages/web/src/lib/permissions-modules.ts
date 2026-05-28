@@ -17,6 +17,7 @@ export const ALL_MODULES: readonly string[] = [
   "mensagens",
   "obras",
   "pipeline",
+  "roleta",
   "sistema",
   "treinamento",
 ] as const
@@ -39,6 +40,7 @@ export const MODULE_LABELS: Record<string, string> = {
   brindes: "Brindes",
   mensagens: "Mensagens",
   configuracoes: "Configurações",
+  roleta: "Roleta de Leads",
   sistema: "Sistema",
 }
 
@@ -60,6 +62,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   brindes: "Presentes e brindes",
   mensagens: "Comunicação interna",
   configuracoes: "Preferências da org",
+  roleta: "Distribuição automática de leads",
   sistema: "Administração total",
 }
 
