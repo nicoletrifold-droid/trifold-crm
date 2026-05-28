@@ -69,6 +69,58 @@ export interface FormattedInstallment {
   receiptDate?: string
 }
 
+// ── Informe de Rendimentos ────────────────────────────────────────────
+
+export interface SiengeIncomeTaxPayment {
+  month: number
+  value: number
+}
+
+export interface SiengeIncomeTaxContract {
+  contractNumber: string
+  unitDescription: string | null
+  totalContractValue: number
+  paidValueInYear: number
+  accumulatedPaidValue: number
+  remainingBalance: number
+  payments: SiengeIncomeTaxPayment[]
+}
+
+export interface SiengeIncomeTaxEnterprise {
+  enterpriseId: number
+  enterpriseName: string
+  cnpj: string | null
+  contracts: SiengeIncomeTaxContract[]
+}
+
+export interface SiengeIncomeTaxResult {
+  customerId: number
+  year: number
+  enterprises: SiengeIncomeTaxEnterprise[]
+}
+
+export interface SiengeIncomeTaxResponse {
+  results: SiengeIncomeTaxResult[]
+}
+
+export interface InformeMonthEntry {
+  month: number
+  monthName: string
+  value: number
+  installments: { number: string; value: number; date: string }[]
+}
+
+export interface ComputedInforme {
+  year: number
+  totalPaidInYear: number
+  accumulatedPaid: number
+  remainingBalance: number
+  totalContractValue: number
+  monthlyBreakdown: InformeMonthEntry[]
+  contractNumbers: string[]
+  source: "sienge" | "calculated"
+}
+
 // ── Enterprise / Unit / Contract (sync de Obras ↔ Empreendimentos) ───
 
 export interface SiengeEnterprise {

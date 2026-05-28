@@ -10,6 +10,9 @@ import type {
   SiengeUnitsResponse,
   SiengeContract,
   SiengeContractsResponse,
+  SiengeIncomeTaxResponse,
+  ComputedInforme,
+  InformeMonthEntry,
 } from "./types"
 
 function getBaseUrl(): string {
@@ -146,6 +149,88 @@ export async function getFinancialStatement(
   }
 
   return installments
+}
+
+const MONTH_NAMES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
+
+/**
+ * Tenta buscar o informe de rendimentos via endpoint dedicado do Sienge.
+ * Retorna null se o módulo não estiver habilitado (HTTP 404).
+ */
+export async function getIncomeTax(
+  customerId: number,
+  year: number
+): Promise<SiengeIncomeTaxResponse | null> {
+  try {
+    return await siengeRequest<SiengeIncomeTaxResponse>(
+      `/customer-income-tax?customerId=${customerId}&year=${year}`
+    )
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("HTTP 404")) {
+      return null
+    }
+    throw err
+  }
+}
+
+/**
+ * Calcula o informe de rendimentos a partir do extrato financeiro já disponível.
+ * Usado como fallback quando /customer-income-tax retorna 404.
+ */
+export function computeInformeFromStatements(
+  installments: FormattedInstallment[],
+  year: number
+): ComputedInforme {
+  const yearStr = year.toString()
+
+  const monthMap = new Map<number, { value: number; entries: InformeMonthEntry["installments"] }>()
+
+  for (const inst of installments) {
+    const rd = inst.receiptDate
+    if (!rd || !rd.startsWith(yearStr)) continue
+    const month = parseInt(rd.split("-")[1] ?? "0")
+    const entry = monthMap.get(month) ?? { value: 0, entries: [] }
+    entry.value += inst.originalValue
+    entry.entries.push({ number: inst.installmentNumber, value: inst.originalValue, date: rd })
+    monthMap.set(month, entry)
+  }
+
+  const monthlyBreakdown: InformeMonthEntry[] = Array.from(monthMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([month, data]) => ({
+      month,
+      monthName: MONTH_NAMES[month - 1] ?? "",
+      value: data.value,
+      installments: data.entries,
+    }))
+
+  const totalPaidInYear = monthlyBreakdown.reduce((sum, m) => sum + m.value, 0)
+
+  const accumulatedPaid = installments
+    .filter((i) => i.status === "PAGO")
+    .reduce((sum, i) => sum + i.originalValue, 0)
+
+  const remainingBalance = installments
+    .filter((i) => i.status !== "PAGO")
+    .reduce((sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue), 0)
+
+  const totalContractValue = installments.reduce((sum, i) => sum + i.originalValue, 0)
+
+  const contractNumbers = [...new Set(installments.map((i) => i.documentId).filter(Boolean))]
+
+  return {
+    year,
+    totalPaidInYear,
+    accumulatedPaid,
+    remainingBalance,
+    totalContractValue,
+    monthlyBreakdown,
+    contractNumbers,
+    source: "calculated",
+  }
 }
 
 export async function getPaymentSlip(
