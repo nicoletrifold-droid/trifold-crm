@@ -118,12 +118,23 @@ async function sendBrokerWhatsApp(
   }
 }
 
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
 function buildBrokerEmailHtml(p: {
   brokerName: string
   leadName: string
   leadPhone: string
   leadUrl: string
 }): string {
+  const name = escHtml(p.brokerName)
+  const lead = escHtml(p.leadName)
+  const phone = escHtml(p.leadPhone)
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 24px;">
@@ -132,11 +143,11 @@ function buildBrokerEmailHtml(p: {
       <span style="color: #F27A5E; font-size: 22px; font-weight: bold; letter-spacing: 2px;">TRIFOLD</span>
     </div>
     <div style="padding: 32px 24px;">
-      <p style="color: #333; font-size: 16px; margin: 0 0 12px;">Olá, <strong>${p.brokerName}</strong>!</p>
+      <p style="color: #333; font-size: 16px; margin: 0 0 12px;">Olá, <strong>${name}</strong>!</p>
       <p style="color: #555; font-size: 15px; margin: 0 0 20px;">Você recebeu um novo lead pela roleta:</p>
       <div style="background: #f9f9f9; border-left: 4px solid #F27A5E; padding: 16px; border-radius: 4px; margin-bottom: 24px;">
-        <p style="margin: 0 0 8px; color: #333;"><strong>Nome:</strong> ${p.leadName}</p>
-        <p style="margin: 0; color: #333;"><strong>Telefone:</strong> ${p.leadPhone}</p>
+        <p style="margin: 0 0 8px; color: #333;"><strong>Nome:</strong> ${lead}</p>
+        <p style="margin: 0; color: #333;"><strong>Telefone:</strong> ${phone}</p>
       </div>
       <div style="text-align: center; margin-bottom: 32px;">
         <a href="${p.leadUrl}"

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { Users, Plus, Trash2, ToggleLeft, ToggleRight } from "lucide-react"
+import Link from "next/link"
 
 interface FilaEntry {
   id: string
@@ -28,11 +29,16 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
   const [fila, setFila] = useState<FilaEntry[]>(initialFila)
   const [available, setAvailable] = useState<BrokerOption[]>(initialAvailable)
   const [selectedBroker, setSelectedBroker] = useState("")
-  const [isPending, startTransition] = useTransition()
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [isAdding, startAddTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  // Two-step remove confirmation
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
   function addBroker() {
     if (!selectedBroker) return
-    startTransition(async () => {
+    setError(null)
+    startAddTransition(async () => {
       const res = await fetch("/api/roleta/fila", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -57,36 +63,43 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
           setAvailable((a) => a.filter((b) => b.brokerId !== selectedBroker))
           setSelectedBroker("")
         }
+      } else {
+        setError("Erro ao adicionar corretor. Tente novamente.")
       }
     })
   }
 
-  function toggleEntry(id: string, currentActive: boolean) {
-    startTransition(async () => {
-      const res = await fetch("/api/roleta/fila", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, is_active: !currentActive }),
-      })
-      if (res.ok) {
-        setFila((f) =>
-          f.map((e) => (e.id === id ? { ...e, is_active: !currentActive } : e))
-        )
-      }
+  async function toggleEntry(id: string, currentActive: boolean) {
+    setPendingId(id)
+    setError(null)
+    const res = await fetch("/api/roleta/fila", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, is_active: !currentActive }),
     })
+    if (res.ok) {
+      setFila((f) => f.map((e) => (e.id === id ? { ...e, is_active: !currentActive } : e)))
+    } else {
+      setError("Erro ao atualizar. Tente novamente.")
+    }
+    setPendingId(null)
   }
 
-  function removeEntry(entry: FilaEntry) {
-    startTransition(async () => {
-      const res = await fetch(`/api/roleta/fila?id=${entry.id}`, { method: "DELETE" })
-      if (res.ok) {
-        setFila((f) => f.filter((e) => e.id !== entry.id))
-        setAvailable((a) => [
-          ...a,
-          { brokerId: entry.broker_id, name: entry.brokerName, email: entry.brokerEmail },
-        ])
-      }
-    })
+  async function removeEntry(entry: FilaEntry) {
+    setPendingId(entry.id)
+    setError(null)
+    const res = await fetch(`/api/roleta/fila?id=${entry.id}`, { method: "DELETE" })
+    if (res.ok) {
+      setFila((f) => f.filter((e) => e.id !== entry.id))
+      setAvailable((a) => [
+        ...a,
+        { brokerId: entry.broker_id, name: entry.brokerName, email: entry.brokerEmail },
+      ])
+    } else {
+      setError("Erro ao remover. Tente novamente.")
+    }
+    setPendingId(null)
+    setConfirmRemoveId(null)
   }
 
   return (
@@ -97,54 +110,103 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
         <span className="ml-auto text-xs font-normal text-stone-500">{fila.length} corretor(es)</span>
       </h2>
 
-      {fila.length === 0 ? (
-        <p className="text-sm text-stone-500 py-4 text-center">
-          Nenhum corretor na fila. Adicione corretores abaixo.
-        </p>
+      {error && (
+        <p role="alert" className="text-xs text-red-400">{error}</p>
+      )}
+
+      {fila.length === 0 && available.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <Users className="h-8 w-8 text-stone-700" />
+          <p className="text-sm text-stone-400">Nenhum corretor disponível.</p>
+          <p className="text-xs text-stone-600">
+            Ative corretores na página de{" "}
+            <Link href="/dashboard/corretores" className="underline hover:text-stone-400">
+              Corretores
+            </Link>{" "}
+            primeiro.
+          </p>
+        </div>
+      ) : fila.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-8 text-center">
+          <Users className="h-8 w-8 text-stone-700" />
+          <p className="text-sm text-stone-400">Nenhum corretor na fila.</p>
+          <p className="text-xs text-stone-600">Selecione um corretor abaixo para começar.</p>
+        </div>
       ) : (
         <div className="space-y-2">
-          {fila.map((entry, idx) => (
-            <div
-              key={entry.id}
-              className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${
-                entry.is_active
-                  ? "border-stone-700 bg-stone-800"
-                  : "border-stone-800 bg-stone-900 opacity-50"
-              }`}
-            >
-              <span className="text-xs font-bold text-stone-500 w-5 text-center">{idx + 1}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{entry.brokerName}</p>
-                <p className="text-xs text-stone-500 truncate">{entry.brokerEmail}</p>
-              </div>
-              {idx === 0 && entry.is_active && (
-                <span className="flex-shrink-0 rounded-full bg-emerald-950 border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-400">
-                  Próximo
-                </span>
-              )}
-              <button
-                onClick={() => toggleEntry(entry.id, entry.is_active)}
-                disabled={isPending}
-                title={entry.is_active ? "Pausar" : "Ativar"}
-                className="text-stone-500 hover:text-stone-300 transition-colors"
+          {fila.map((entry, idx) => {
+            const isThisPending = pendingId === entry.id
+            const isConfirming = confirmRemoveId === entry.id
+            return (
+              <div
+                key={entry.id}
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-opacity ${
+                  entry.is_active
+                    ? "border-stone-700 bg-stone-800"
+                    : "border-stone-800 bg-stone-900 opacity-50"
+                } ${isThisPending ? "animate-pulse" : ""}`}
               >
-                {entry.is_active ? (
-                  <ToggleRight className="h-5 w-5 text-emerald-500" />
-                ) : (
-                  <ToggleLeft className="h-5 w-5" />
+                <span className="text-xs font-bold text-stone-500 w-5 text-center shrink-0">{idx + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{entry.brokerName}</p>
+                  <p className="text-xs text-stone-500 truncate hidden sm:block">{entry.brokerEmail}</p>
+                </div>
+                {idx === 0 && entry.is_active && (
+                  <span className="flex-shrink-0 rounded-full bg-emerald-950 border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                    Próximo
+                  </span>
                 )}
-              </button>
-              <button
-                onClick={() => removeEntry(entry)}
-                disabled={isPending}
-                title="Remover da fila"
-                className="text-stone-600 hover:text-red-400 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
+                {/* Toggle */}
+                <button
+                  onClick={() => toggleEntry(entry.id, entry.is_active)}
+                  disabled={isThisPending}
+                  aria-label={entry.is_active ? `Pausar ${entry.brokerName}` : `Ativar ${entry.brokerName}`}
+                  aria-pressed={entry.is_active}
+                  title={entry.is_active ? "Pausar" : "Ativar"}
+                  className="text-stone-500 hover:text-stone-300 transition-colors disabled:opacity-40"
+                >
+                  {entry.is_active ? (
+                    <ToggleRight className="h-5 w-5 text-emerald-500" />
+                  ) : (
+                    <ToggleLeft className="h-5 w-5" />
+                  )}
+                </button>
+                {/* Two-step remove */}
+                {isConfirming ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => removeEntry(entry)}
+                      disabled={isThisPending}
+                      className="text-xs font-semibold text-red-400 hover:text-red-300 disabled:opacity-40"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => setConfirmRemoveId(null)}
+                      className="text-xs text-stone-500 hover:text-stone-300"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmRemoveId(entry.id)}
+                    disabled={isThisPending}
+                    aria-label={`Remover ${entry.brokerName} da fila`}
+                    title="Remover da fila"
+                    className="text-stone-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
+      )}
+
+      {isAdding && (
+        <p className="text-xs text-stone-500 animate-pulse">Adicionando…</p>
       )}
 
       {available.length > 0 && (
@@ -154,7 +216,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
             onChange={(e) => setSelectedBroker(e.target.value)}
             className="flex-1 rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
           >
-            <option value="">Selecionar corretor…</option>
+            <option value="" disabled>Selecionar corretor…</option>
             {available.map((b) => (
               <option key={b.brokerId} value={b.brokerId}>
                 {b.name} — {b.email}
@@ -163,7 +225,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
           </select>
           <button
             onClick={addBroker}
-            disabled={!selectedBroker || isPending}
+            disabled={!selectedBroker || isAdding}
             className="flex items-center gap-1.5 rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#d4705a] disabled:opacity-40"
           >
             <Plus className="h-4 w-4" />

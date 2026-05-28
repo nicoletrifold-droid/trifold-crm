@@ -71,7 +71,18 @@ export default async function RoletaPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Roleta de Leads</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-white">Roleta de Leads</h1>
+          {config?.is_active ? (
+            <span className="rounded-full bg-emerald-950 border border-emerald-700 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
+              Ativa
+            </span>
+          ) : (
+            <span className="rounded-full bg-stone-800 border border-stone-700 px-2.5 py-0.5 text-xs font-semibold text-stone-400">
+              Pausada
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-stone-400">
           Distribuição automática de leads por round-robin entre os corretores ativos.
         </p>

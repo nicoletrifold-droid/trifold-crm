@@ -38,6 +38,18 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient()
 
+  // Validate broker belongs to caller's org
+  const { data: brokerCheck } = await admin
+    .from("brokers")
+    .select("id")
+    .eq("id", brokerId)
+    .eq("org_id", appUser.org_id)
+    .maybeSingle()
+
+  if (!brokerCheck) {
+    return NextResponse.json({ error: "Corretor não encontrado" }, { status: 404 })
+  }
+
   // Get max position in this org
   const { data: existing } = await admin
     .from("roleta_fila")
