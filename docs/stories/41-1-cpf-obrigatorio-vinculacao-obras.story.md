@@ -1,6 +1,6 @@
 # Story 41.1 — CPF obrigatório e vinculação de clientes em obras via CPF
 
-**Status:** InProgress  
+**Status:** Done  
 **Branch:** main  
 **Epic:** Cadastro de Clientes  
 
@@ -19,15 +19,15 @@ CPF torna-se campo obrigatório no cadastro de clientes (Configurações > Clien
 
 ## Tasks
 - [x] T1: Criar story
-- [ ] T2: cliente-modal.tsx — CPF obrigatório
-- [ ] T3: POST /api/admin/clientes — CPF required
-- [ ] T4: PATCH /api/admin/clientes/[id] — rejeitar limpeza de CPF
-- [ ] T5: /api/admin/clientes/search — adicionar param cpf
-- [ ] T6: clientes-tab.tsx — refatorar formulários para CPF
-- [ ] T7: POST /api/admin/obras/[obra_id]/clientes — novo fluxo CPF
-- [ ] T8: GET /api/admin/obras/[obra_id]/clientes — usar clientes_obras_vinculos
-- [ ] T9: DELETE/PATCH /api/admin/obras/[obra_id]/clientes/[user_id] — usar clientes_obras_vinculos
-- [ ] T10: page.tsx obras/[obra_id] — carregar clientes de clientes_obras_vinculos
+- [x] T2: cliente-modal.tsx — CPF obrigatório
+- [x] T3: POST /api/admin/clientes — CPF required
+- [x] T4: PATCH /api/admin/clientes/[id] — rejeitar limpeza de CPF
+- [x] T5: /api/admin/clientes/search — adicionar param cpf
+- [x] T6: clientes-tab.tsx — refatorar formulários para CPF
+- [x] T7: POST /api/admin/obras/[obra_id]/clientes — novo fluxo CPF
+- [x] T8: GET /api/admin/obras/[obra_id]/clientes — usar clientes_obras_vinculos
+- [x] T9: DELETE/PATCH /api/admin/obras/[obra_id]/clientes/[user_id] — usar clientes_obras_vinculos
+- [x] T10: page.tsx obras/[obra_id] — carregar clientes de clientes_obras_vinculos
 
 ## File List
 - packages/web/src/app/dashboard/configuracoes/clientes/_components/cliente-modal.tsx
