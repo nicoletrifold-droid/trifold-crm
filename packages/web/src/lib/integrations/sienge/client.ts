@@ -139,6 +139,7 @@ export async function getFinancialStatement(
           generatedBillet: inst.generatedBillet,
           status,
           hasBoleto: inst.generatedBillet && inst.currentBalance > 0,
+          receiptDate: inst.receipts[0]?.receiptDate,
         })
       }
     }

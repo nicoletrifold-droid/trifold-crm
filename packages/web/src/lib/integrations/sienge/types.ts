@@ -66,6 +66,7 @@ export interface FormattedInstallment {
   generatedBillet: boolean
   status: InstallmentStatus
   hasBoleto: boolean
+  receiptDate?: string
 }
 
 // ── Enterprise / Unit / Contract (sync de Obras ↔ Empreendimentos) ───

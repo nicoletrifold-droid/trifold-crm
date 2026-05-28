@@ -42,6 +42,7 @@ const nextConfig: NextConfig = {
     "google-auth-library",
     "web-push",
     "resend",
+    "@react-pdf/renderer",
   ],
 
   // next/image: habilita AVIF/WebP e whitelist de domínios remotos usados pelo app.
