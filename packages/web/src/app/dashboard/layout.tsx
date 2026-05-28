@@ -21,6 +21,7 @@ import {
   Inbox,
   Gift,
   MessageSquarePlus,
+  Shuffle,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -32,6 +33,7 @@ const NAV_ITEMS_BASE = [
   { href: "/dashboard/leads", label: "Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/dashboard/properties", label: "Imóveis", icon: <Building2 className={ICON_SIZE} /> },
   { href: "/dashboard/corretores", label: "Corretores", icon: <UserCheck className={ICON_SIZE} /> },
+  { href: "/dashboard/roleta", label: "Roleta", icon: <Shuffle className={ICON_SIZE} /> },
   // Comunicação
   { href: "/dashboard/conversas", label: "Conversas", icon: <MessageSquare className={ICON_SIZE} />, separator: true },
   { href: "/dashboard/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
@@ -60,6 +62,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/leads": "leads",
   "/dashboard/properties": "imoveis",
   "/dashboard/corretores": "corretores",
+  "/dashboard/roleta": "corretores",
   "/dashboard/conversas": "conversas",
   "/dashboard/agenda": "agenda",
   "/dashboard/alertas": "alertas",

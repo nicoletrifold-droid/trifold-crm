@@ -5,6 +5,7 @@ import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
+import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { normalizePhoneBR } from "@trifold/shared"
 
 export const maxDuration = 60
@@ -539,6 +540,9 @@ export async function POST(request: NextRequest) {
           phone: phoneNormalized,
           org_id: orgId,
         })
+        void distributeLeadToNextBroker(lead.id, orgId).catch((err) =>
+          console.error("[roleta] distribution error:", err)
+        )
       }
 
       // Nicole pipeline
