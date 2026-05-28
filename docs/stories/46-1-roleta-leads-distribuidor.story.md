@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 46 — Roleta de Leads
 - **Story:** 46-1
-- **Status:** Approved
+- **Status:** Done
 - **Created:** 2026-05-28
 - **Author:** @sm (River)
 - **Validated:** @po (Pax)
@@ -40,37 +40,37 @@ O CRM recebe leads via Meta Ads webhook e formulários manuais. Hoje os leads ca
 
 ## Acceptance Criteria
 
-- [ ] AC1: Quando um lead é criado (ou marcado como "novo"), `distributeLeadToNextBroker(leadId, orgId)` é chamado automaticamente
-- [ ] AC2: A função seleciona o próximo corretor na fila round-robin que:
+- [x] AC1: Quando um lead é criado (ou marcado como "novo"), `distributeLeadToNextBroker(leadId, orgId)` é chamado automaticamente
+- [x] AC2: A função seleciona o próximo corretor na fila round-robin que:
   - Tem `broker_assignments` contendo o `property_interest_id` do lead
   - Tem `is_available = true`
   - Tem leads ativos < `max_leads`
   - (Se fora do horário comercial, enfileira para distribuição posterior)
-- [ ] AC3: O corretor selecionado recebe:
+- [x] AC3: O corretor selecionado recebe:
   - Push notification: título "Novo Lead", corpo com nome do lead e empreendimento, URL para o lead no CRM
   - E-mail via Resend: template com nome, telefone do lead, empreendimento, link direto
   - WhatsApp via Meta Cloud API: mensagem com nome do lead, telefone, empreendimento
-- [ ] AC4: `leads.assigned_broker_id` é atualizado com o `user_id` do corretor selecionado
-- [ ] AC5: Cada distribuição gera um registro em `lead_distribution_log`
-- [ ] AC6: UI admin em `/dashboard/roleta` mostra:
+- [x] AC4: `leads.assigned_broker_id` é atualizado com o `user_id` do corretor selecionado
+- [x] AC5: Cada distribuição gera um registro em `lead_distribution_log`
+- [x] AC6: UI admin em `/dashboard/roleta` mostra:
   - Status da roleta (ativa/pausada)
   - Posição de cada corretor na fila (quem é o próximo)
   - Configuração de horário comercial (dias da semana + hora início/fim)
   - Botões para pausar/ativar a roleta globalmente
-- [ ] AC7: Se nenhum corretor elegível existe no momento, o lead fica sem atribuição e um log registra `"sem_corretor_disponivel"`
-- [ ] AC8: TypeScript compila sem erros, ESLint passa
+- [x] AC7: Se nenhum corretor elegível existe no momento, o lead fica sem atribuição e um log registra `"sem_corretor_disponivel"`
+- [x] AC8: TypeScript compila sem erros, ESLint passa
 
 ---
 
 ## Tasks
 
-- [ ] **T1** — Migration: criar tabelas `roleta_config`, `roleta_fila`, `lead_distribution_log`
-- [ ] **T2** — Engine: `packages/web/src/lib/roleta/distributor.ts` — lógica round-robin + filtros
-- [ ] **T3** — Notificações: `packages/web/src/lib/roleta/notify-broker.ts` — push + email + WhatsApp
-- [ ] **T4** — Hook de lead: chamar `distributeLeadToNextBroker` quando lead é criado (Meta webhook + criação manual)
-- [ ] **T5** — Admin UI: `packages/web/src/app/dashboard/roleta/page.tsx` — status, fila, config de horário
-- [ ] **T6** — API routes: `POST /api/roleta/distribute` (manual trigger), `GET/PATCH /api/roleta/config`
-- [ ] **T7** — QA: TypeScript + lint + teste manual do fluxo end-to-end
+- [x] **T1** — Migration: criar tabelas `roleta_config`, `roleta_fila`, `lead_distribution_log`
+- [x] **T2** — Engine: `packages/web/src/lib/roleta/distributor.ts` — lógica round-robin + filtros
+- [x] **T3** — Notificações: `packages/web/src/lib/roleta/notify-broker.ts` — push + email + WhatsApp
+- [x] **T4** — Hook de lead: chamar `distributeLeadToNextBroker` quando lead é criado (Meta webhook + criação manual)
+- [x] **T5** — Admin UI: `packages/web/src/app/dashboard/roleta/page.tsx` — status, fila, config de horário
+- [x] **T6** — API routes: `POST /api/roleta/distribute` (manual trigger), `GET/PATCH /api/roleta/config`
+- [x] **T7** — QA: TypeScript + lint + teste manual do fluxo end-to-end
 
 ---
 
@@ -161,12 +161,12 @@ Body: nome, telefone, empreendimento, link para `/dashboard/leads/{lead_id}`
 
 ## Definition of Done
 
-- [ ] Migration aplicada em produção sem erros
-- [ ] Lead criado via Meta webhook recebe corretor atribuído automaticamente
-- [ ] Corretor notificado por push, email e WhatsApp
-- [ ] Admin consegue ver e configurar a roleta em `/dashboard/roleta`
-- [ ] TypeScript + ESLint passam sem erros
-- [ ] Log de distribuição registrado para cada lead
+- [x] Migration aplicada em produção sem erros
+- [x] Lead criado via Meta webhook recebe corretor atribuído automaticamente
+- [x] Corretor notificado por push, email e WhatsApp
+- [x] Admin consegue ver e configurar a roleta em `/dashboard/roleta`
+- [x] TypeScript + ESLint passam sem erros
+- [x] Log de distribuição registrado para cada lead
 
 ---
 

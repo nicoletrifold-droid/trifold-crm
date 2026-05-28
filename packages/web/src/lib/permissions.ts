@@ -183,10 +183,12 @@ export async function getOrgPermissionsMatrix(
       const entries = await Promise.all(
         roles.map(async (role) => {
           const perms = await getRolePermissions(role.id)
-          // Se for um role hardcoded (id fictício) ou veio vazio do banco,
-          // aplicar fallback hardcoded por nome para manter UI consistente.
+          // Admin sempre tem acesso total a todos os módulos — incluindo novos
+          // adicionados a ALL_MODULES antes de uma migration de seed.
           const finalPerms =
-            Object.keys(perms).length > 0 ? perms : getHardcodedPermissions(role.name)
+            role.name === "admin"
+              ? fullMatrix()
+              : Object.keys(perms).length > 0 ? perms : getHardcodedPermissions(role.name)
           return [role.id, finalPerms] as const
         })
       )
@@ -249,8 +251,12 @@ export async function getUserPermissions(
 
   // 3. Buscar permissões do role
   const perms = await getRolePermissions(roleRow.id as string)
+  // Admin sempre tem acesso total a todos os módulos — incluindo novos
+  // adicionados a ALL_MODULES antes de uma migration de seed.
   const finalPerms =
-    Object.keys(perms).length > 0 ? { ...perms } : { ...getHardcodedPermissions(userRole) }
+    userRole === "admin"
+      ? fullMatrix()
+      : Object.keys(perms).length > 0 ? { ...perms } : { ...getHardcodedPermissions(userRole) }
 
   // 4. Aplicar exceções individuais (prioridade absoluta sobre o perfil base)
   const exceptions = await unstable_cache(
