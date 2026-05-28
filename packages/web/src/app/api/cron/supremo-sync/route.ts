@@ -17,9 +17,9 @@ const SITUACAO_ID_TO_STAGE: Record<number, string> = {
   11493: STAGE_IDS.qualificado,      // AGENDAMENTO
   11477: STAGE_IDS.no_show,          // ATENDIMENTO
   10260: STAGE_IDS.visitou,          // VISITA
-  10261: "9d3ddf3c-8049-4dd8-9e8b-81bba99ee529", // PROPOSTA
-  10263: STAGE_IDS.fechou,                        // FECHAMENTO
-  10688: STAGE_IDS.perdido,                       // REPRESAMENTO
+  10261: STAGE_IDS.proposta,         // PROPOSTA
+  10263: STAGE_IDS.fechou,           // FECHAMENTO
+  10688: STAGE_IDS.represamento,     // REPRESAMENTO
   10262: "95327bd7-3e88-4038-aa16-250a74ab085c",  // NÃO QUALIFICADO
 }
 
