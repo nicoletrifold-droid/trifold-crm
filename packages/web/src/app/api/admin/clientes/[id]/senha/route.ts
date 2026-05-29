@@ -7,7 +7,7 @@ const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ user_id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
@@ -16,13 +16,13 @@ export async function POST(
   const roleError = requireRole(appUser, ALLOWED_ROLES)
   if (roleError) return roleError
 
-  const { user_id } = await params
+  const { id } = await params
 
   // Buscar o usuário portal pelo ID da tabela users, validando org e role
   const { data: portalUser, error: userErr } = await supabase
     .from("users")
     .select("id, auth_id, email, name, role")
-    .eq("id", user_id)
+    .eq("id", id)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
 
@@ -88,7 +88,7 @@ export async function POST(
       user_name: appUser.name,
       action: "cliente.senha.reset_email_sent",
       entity_type: "user",
-      entity_id: user_id,
+      entity_id: id,
       entity_name: portalUser.name,
       ip_address: getRequestIp(request.headers),
     })
@@ -121,7 +121,7 @@ export async function POST(
     user_name: appUser.name,
     action: "cliente.senha.set_password",
     entity_type: "user",
-    entity_id: user_id,
+    entity_id: id,
     entity_name: portalUser.name,
     ip_address: getRequestIp(request.headers),
   })
