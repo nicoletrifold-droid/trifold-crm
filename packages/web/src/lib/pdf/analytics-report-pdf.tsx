@@ -30,7 +30,6 @@ export interface AnalyticsReportData {
   properties: { name: string; count: number }[]
   sources: { label: string; count: number }[]
   brokers: { name: string; count: number }[]
-  lostReasons: { reason: string; count: number }[]
   comparison: WeekComparisonGroup[]
 }
 
@@ -224,28 +223,16 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           </View>
         </View>
 
-        {/* 2 columns: Brokers | Lost Reasons */}
-        <View style={s.cols2Last}>
-          <View style={s.colLeftLast}>
-            <Text style={s.sectionTitle}>Performance por Corretor</Text>
-            {data.brokers.map((b, i) => (
-              <View key={i} style={i === data.brokers.length - 1 ? s.tableRowLast : s.tableRow}>
-                <Text style={s.rowLabel}>{b.name}</Text>
-                <Text style={s.rowValue}>{b.count} leads</Text>
-              </View>
-            ))}
-            {data.brokers.length === 0 && <Text style={s.noData}>Nenhum corretor</Text>}
-          </View>
-          <View style={s.colRightLast}>
-            <Text style={s.sectionTitle}>Motivos de Perda</Text>
-            {data.lostReasons.map((r, i) => (
-              <View key={i} style={i === data.lostReasons.length - 1 ? s.tableRowLast : s.tableRow}>
-                <Text style={s.rowLabel}>{r.reason}</Text>
-                <Text style={s.rowValue}>{r.count}</Text>
-              </View>
-            ))}
-            {data.lostReasons.length === 0 && <Text style={s.noData}>Sem perdas registradas</Text>}
-          </View>
+        {/* Brokers — full width */}
+        <View style={{ ...s.section, marginBottom: 12 }}>
+          <Text style={s.sectionTitle}>Performance por Corretor</Text>
+          {data.brokers.map((b, i) => (
+            <View key={i} style={i === data.brokers.length - 1 ? s.tableRowLast : s.tableRow}>
+              <Text style={s.rowLabel}>{b.name}</Text>
+              <Text style={s.rowValue}>{b.count} leads</Text>
+            </View>
+          ))}
+          {data.brokers.length === 0 && <Text style={s.noData}>Nenhum corretor</Text>}
         </View>
 
         {/* Week-over-week comparison table */}

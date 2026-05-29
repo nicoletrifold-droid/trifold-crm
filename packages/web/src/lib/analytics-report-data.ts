@@ -198,10 +198,6 @@ export async function buildAnalyticsReportData(
     .sort(([, a], [, b]) => b - a)
     .map(([key, count]) => ({ label: SOURCE_LABELS_SHORT[key] ?? key, count }))
 
-  const lostReasons = Object.entries(summary?.lost_reasons ?? {})
-    .sort(([, a], [, b]) => toN(b) - toN(a))
-    .map(([reason, count]) => ({ reason, count: toN(count) }))
-
   // ── Week-over-week comparison ─────────────────────────────────────────────
   const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
 
@@ -240,7 +236,6 @@ export async function buildAnalyticsReportData(
     properties,
     sources,
     brokers,
-    lostReasons,
     comparison,
   }
 }
