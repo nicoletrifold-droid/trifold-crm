@@ -40,7 +40,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-56 lg:flex-col">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-56 lg:flex-col">
         <div className="flex h-full flex-col border-r border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-950">
           {/* Logo */}
           <div className="flex h-20 shrink-0 items-center border-b border-stone-100 px-5 dark:border-stone-800">
