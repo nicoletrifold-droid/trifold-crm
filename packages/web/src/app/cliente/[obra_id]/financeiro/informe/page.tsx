@@ -178,7 +178,7 @@ export default async function InformePage({ params, searchParams }: PageProps) {
         </div>
 
         {/* Seletor de ano */}
-        <form method="GET" className="mb-5 flex items-center gap-3 rounded-xl border border-stone-800 bg-stone-900 p-4">
+        <form method="GET" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-stone-800 bg-stone-900 p-4">
           <label className="text-sm font-medium text-stone-300">Ano-Calendário</label>
           <select
             name="ano"
@@ -236,9 +236,12 @@ export default async function InformePage({ params, searchParams }: PageProps) {
                   <span className="text-xs font-semibold text-emerald-400">Pago em {safeYear}</span>
                 </div>
                 <p className="text-lg font-bold text-white">{formatCurrency(informe.totalPaidInYear)}</p>
-                <p className="mt-1 text-xs text-stone-500">
-                  {informe.monthlyBreakdown.reduce((n, m) => n + m.installments.length, 0)} parcela(s)
-                </p>
+                {informe.source === "calculated" && (() => {
+                  const count = informe.monthlyBreakdown.reduce((n, m) => n + m.installments.length, 0)
+                  return count > 0 ? (
+                    <p className="mt-1 text-xs text-stone-500">{count} parcela(s)</p>
+                  ) : null
+                })()}
               </div>
 
               <div className="rounded-xl border border-stone-800 bg-stone-900 p-4">

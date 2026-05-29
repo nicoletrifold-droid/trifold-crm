@@ -322,12 +322,12 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
                       <p className="mt-1 text-xs text-stone-500">
                         Vencimento: {formatDate(inst.dueDate)}
                         {inst.receiptDate && (
-                          <span className="ml-3 text-emerald-600">
+                          <span className="ml-3 text-emerald-400">
                             Pago em: {formatDate(inst.receiptDate)}
                           </span>
                         )}
                         {inst.documentId && (
-                          <span className="ml-3 text-stone-600">Doc: {inst.documentId}</span>
+                          <span className="ml-3 text-stone-400">Doc: {inst.documentId}</span>
                         )}
                       </p>
                       <p className="mt-2 text-base font-bold text-white">
