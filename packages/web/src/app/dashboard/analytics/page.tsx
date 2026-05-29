@@ -218,13 +218,21 @@ export default async function AnalyticsPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
-          Analytics{selectedPropertyName && (
-            <span className="ml-2 text-base font-normal text-orange-600 dark:text-orange-300">
-              · {selectedPropertyName}
-            </span>
-          )}
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
+            Analytics{selectedPropertyName && (
+              <span className="ml-2 text-base font-normal text-orange-600 dark:text-orange-300">
+                · {selectedPropertyName}
+              </span>
+            )}
+          </h1>
+          <a
+            href="/dashboard/analytics/report"
+            className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            Relatório PDF
+          </a>
+        </div>
         {/* Seletor de empreendimento */}
         <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800">
           <a

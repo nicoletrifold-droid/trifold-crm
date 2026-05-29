@@ -91,6 +91,10 @@
     {
       "path": "/api/cron/appointment-whatsapp-reminders",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/analytics-report",
+      "schedule": "0 2 * * 1"
     }
   ]
 }
