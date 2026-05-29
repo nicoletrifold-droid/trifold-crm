@@ -5,6 +5,7 @@ import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { LogoutButton } from "./logout-button"
 import { ThemeToggle } from "@web/components/theme-toggle"
+import { WeatherWidget } from "@web/components/weather-widget"
 
 interface NavItem {
   href: string
@@ -43,7 +44,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
       <aside className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-56 lg:flex-col">
         <div className="flex h-full flex-col border-r border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-950">
           {/* Logo */}
-          <div className="flex h-20 shrink-0 items-center border-b border-stone-100 px-5 dark:border-stone-800">
+          <div className="flex h-20 shrink-0 items-center justify-between border-b border-stone-100 px-5 dark:border-stone-800">
             <Image
               src="/logo-trifold.webp"
               alt="Trifold"
@@ -51,6 +52,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
               height={143}
               className="brightness-0 dark:brightness-0 dark:invert"
             />
+            <WeatherWidget variant="system" />
           </div>
 
           {/* Nav Items — scrollable */}
@@ -120,6 +122,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
           <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Trifold</span>
         </div>
         <div className="flex items-center gap-2">
+          <WeatherWidget variant="system" />
           <ThemeToggle />
           <LogoutButton />
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-[10px] font-semibold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
