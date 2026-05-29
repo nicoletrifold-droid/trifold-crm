@@ -211,8 +211,8 @@ export default function EditCorretorPage({
         {/* Empreendimentos + Status */}
         <div className="space-y-4">
           {/* Empreendimentos vinculados */}
-          <div className="rounded-xl bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-stone-900">Empreendimentos vinculados</h2>
+          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+            <h2 className="mb-4 text-lg font-semibold text-stone-900 dark:text-stone-100">Empreendimentos vinculados</h2>
             <p className="mb-3 text-xs text-stone-500 dark:text-stone-400">
               Clique para vincular ou desvincular. Leads desses empreendimentos serão direcionados automaticamente para este corretor.
             </p>
@@ -253,8 +253,8 @@ export default function EditCorretorPage({
             </div>
           </div>
 
-          <div className="rounded-xl bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-stone-900">Status</h2>
+          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+            <h2 className="mb-4 text-lg font-semibold text-stone-900 dark:text-stone-100">Status</h2>
             <div className="flex items-center gap-3">
               <span className={`rounded-full px-3 py-1 text-sm font-medium ${
                 broker.user.is_active ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
