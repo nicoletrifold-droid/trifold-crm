@@ -330,10 +330,10 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Painel de filtros */}
-      <div className="rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
+      <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+        <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3 dark:border-stone-800">
           <Filter className="h-4 w-4 text-stone-500" />
-          <h2 className="text-sm font-medium text-stone-700">Filtros</h2>
+          <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Filtros</h2>
         </div>
         <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 lg:grid-cols-3">
           {/* Usuário */}
@@ -344,7 +344,7 @@ export default function AuditLogsPage() {
               onChange={(e) =>
                 setDraftFilters((p) => ({ ...p, user_id: e.target.value }))
               }
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700"
+              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
             >
               <option value="">Todos os usuários</option>
               {users.map((u) => (
@@ -363,7 +363,7 @@ export default function AuditLogsPage() {
             <select
               value={draftFilters.type}
               onChange={(e) => handleTypeChange(e.target.value)}
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700"
+              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
             >
               <option value="">Todos os tipos</option>
               {ACTION_TYPES.map((t) => (
@@ -385,7 +385,7 @@ export default function AuditLogsPage() {
                 setDraftFilters((p) => ({ ...p, action: e.target.value }))
               }
               disabled={!draftFilters.type}
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 disabled:bg-stone-50 disabled:text-stone-400"
+              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 disabled:bg-stone-50 disabled:text-stone-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:disabled:bg-stone-800 dark:disabled:text-stone-600"
             >
               <option value="">Todas do tipo</option>
               {specificActions.map((a) => (
@@ -406,7 +406,7 @@ export default function AuditLogsPage() {
                 setDraftFilters((p) => ({ ...p, obra_id: e.target.value }))
               }
               placeholder="ID da obra"
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700"
+              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
             />
           </div>
 
@@ -419,7 +419,7 @@ export default function AuditLogsPage() {
               onChange={(e) =>
                 setDraftFilters((p) => ({ ...p, date_from: e.target.value }))
               }
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700"
+              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
             />
           </div>
 
@@ -432,11 +432,11 @@ export default function AuditLogsPage() {
               onChange={(e) =>
                 setDraftFilters((p) => ({ ...p, date_to: e.target.value }))
               }
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700"
+              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
             />
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-stone-100 px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-stone-100 px-4 py-3 dark:border-stone-800">
           <button
             type="button"
             onClick={handleResetFilters}
@@ -472,7 +472,7 @@ export default function AuditLogsPage() {
           type="button"
           onClick={handleExport}
           disabled={exporting || total === 0}
-          className="inline-flex items-center gap-1.5 rounded border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
         >
           <Download className="h-3.5 w-3.5" />
           {exporting ? "Exportando…" : "Exportar CSV"}
@@ -480,7 +480,7 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Tabela de logs */}
-      <div className="rounded-lg border border-stone-200 bg-white">
+      <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         {error ? (
           <div className="px-4 py-8 text-center text-sm text-red-600">{error}</div>
         ) : loading ? (
@@ -494,8 +494,8 @@ export default function AuditLogsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-stone-100 text-sm">
-              <thead className="bg-stone-50">
-                <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-stone-500">
+              <thead className="bg-stone-50 dark:bg-stone-800">
+                <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400">
                   <th className="px-4 py-2">Data/Hora</th>
                   <th className="px-4 py-2">Usuário</th>
                   <th className="px-4 py-2">Ação</th>
@@ -504,17 +504,17 @@ export default function AuditLogsPage() {
                   <th className="px-4 py-2">IP</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-50">
+              <tbody className="divide-y divide-stone-50 dark:divide-stone-800">
                 {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-stone-25">
+                  <tr key={log.id} className="hover:bg-stone-50 dark:hover:bg-stone-800">
                     <td className="whitespace-nowrap px-4 py-2 text-xs text-stone-500 tabular-nums">
                       {formatDateBR(log.created_at)}
                     </td>
-                    <td className="px-4 py-2 text-stone-700">{log.user_name}</td>
-                    <td className="px-4 py-2 text-stone-700">
+                    <td className="px-4 py-2 text-stone-700 dark:text-stone-300">{log.user_name}</td>
+                    <td className="px-4 py-2 text-stone-700 dark:text-stone-300">
                       {ACTION_LABELS[log.action] ?? log.action}
                     </td>
-                    <td className="px-4 py-2 text-stone-600">
+                    <td className="px-4 py-2 text-stone-600 dark:text-stone-400">
                       {log.entity_name ?? log.entity_type ?? "—"}
                     </td>
                     <td className="px-4 py-2 text-xs text-stone-500">

@@ -75,8 +75,8 @@ export function EmailTemplateList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-stone-900">Templates de Email</h1>
-          <p className="mt-0.5 text-sm text-stone-500">
+          <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">Templates de Email</h1>
+          <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
             {total} template{total !== 1 ? "s" : ""}
           </p>
         </div>
@@ -88,13 +88,13 @@ export function EmailTemplateList() {
         </Link>
       </div>
 
-      <div className="rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
-          <h2 className="text-sm font-medium text-stone-700">Templates</h2>
+      <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+        <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+          <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Templates</h2>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600"
+            className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
           >
             <option value="">Todos</option>
             <option value="transacional">Transacional</option>
@@ -114,7 +114,7 @@ export function EmailTemplateList() {
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-stone-50">
+          <div className="divide-y divide-stone-50 dark:divide-stone-800">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-stone-400">
               <span>Nome</span>
               <span>Categoria</span>
@@ -128,28 +128,28 @@ export function EmailTemplateList() {
                 className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center px-4 py-3"
               >
                 <div>
-                  <p className="text-sm font-medium text-stone-800">{t.name}</p>
+                  <p className="text-sm font-medium text-stone-800 dark:text-stone-100">{t.name}</p>
                   <p className="font-mono text-[11px] text-stone-400">{t.slug}</p>
                 </div>
-                <span className="text-xs text-stone-600">
+                <span className="text-xs text-stone-600 dark:text-stone-400">
                   {CATEGORY_LABELS[t.category] ?? t.category}
                 </span>
                 <span>
                   {t.is_active ? (
-                    <span className="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700">
+                    <span className="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
                       Ativo
                     </span>
                   ) : (
-                    <span className="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium bg-stone-100 text-stone-500">
+                    <span className="inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400">
                       Rascunho
                     </span>
                   )}
                 </span>
-                <span className="text-xs text-stone-500">{formatDate(t.created_at)}</span>
+                <span className="text-xs text-stone-500 dark:text-stone-400">{formatDate(t.created_at)}</span>
                 <div className="flex justify-end gap-3">
                   <Link
                     href={`/dashboard/sistema/email-templates/${t.id}`}
-                    className="text-xs text-indigo-600 hover:underline"
+                    className="text-xs text-indigo-600 hover:underline dark:text-indigo-400"
                   >
                     Editar
                   </Link>
@@ -168,15 +168,15 @@ export function EmailTemplateList() {
 
       {confirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <h3 className="text-sm font-semibold text-stone-900">Arquivar template?</h3>
-            <p className="mt-1.5 text-sm text-stone-500">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+            <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">Arquivar template?</h3>
+            <p className="mt-1.5 text-sm text-stone-500 dark:text-stone-400">
               O template será desativado e não ficará disponível para novos envios.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmId(null)}
-                className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50"
+                className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Cancelar
               </button>

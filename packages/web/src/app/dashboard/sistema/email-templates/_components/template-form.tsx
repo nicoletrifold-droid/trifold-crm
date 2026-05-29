@@ -127,21 +127,26 @@ export function TemplateForm({ initialData }: Props) {
     }
   }
 
+  const inputClass = "block w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+  const labelClass = "mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400"
+  const sectionClass = "space-y-4 rounded-lg border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900"
+  const sectionTitleClass = "text-sm font-medium text-stone-700 dark:text-stone-300"
+
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-700 dark:bg-red-500/15 dark:text-red-400">
           {error}
         </div>
       )}
 
       {/* Basic info */}
-      <div className="space-y-4 rounded-lg border border-stone-200 bg-white p-5">
-        <h2 className="text-sm font-medium text-stone-700">Informações básicas</h2>
+      <div className={sectionClass}>
+        <h2 className={sectionTitleClass}>Informações básicas</h2>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">
+            <label className={labelClass}>
               Nome <span className="text-red-500">*</span>
             </label>
             <input
@@ -149,30 +154,30 @@ export function TemplateForm({ initialData }: Props) {
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Ex: Boas-vindas ao cliente"
-              className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">Slug</label>
+            <label className={labelClass}>Slug</label>
             <input
               type="text"
               value={slug}
               onChange={(e) => handleSlugChange(e.target.value)}
               placeholder="auto-gerado do nome"
-              className="block w-full rounded-lg border border-stone-200 px-3 py-2 font-mono text-sm text-stone-600 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className={`${inputClass} font-mono`}
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">
+            <label className={labelClass}>
               Categoria <span className="text-red-500">*</span>
             </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as Category)}
-              className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             >
               <option value="">Selecionar categoria</option>
               <option value="transacional">Transacional</option>
@@ -183,7 +188,7 @@ export function TemplateForm({ initialData }: Props) {
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-stone-600">
+          <label className={labelClass}>
             Assunto <span className="text-red-500">*</span>
             <span className="ml-2 font-normal text-stone-400">{"Suporta {{variavel}}"}</span>
           </label>
@@ -192,15 +197,15 @@ export function TemplateForm({ initialData }: Props) {
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder={"Ex: Bem-vindo ao Trifold, {{nome}}!"}
-            className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className={inputClass}
           />
         </div>
       </div>
 
       {/* HTML body */}
-      <div className="space-y-3 rounded-lg border border-stone-200 bg-white p-5">
+      <div className={`${sectionClass} space-y-3`}>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-stone-700">
+          <h2 className={sectionTitleClass}>
             Corpo HTML <span className="text-red-500">*</span>
             <span className="ml-2 text-xs font-normal text-stone-400">{"Suporta {{variavel}}"}</span>
           </h2>
@@ -208,7 +213,7 @@ export function TemplateForm({ initialData }: Props) {
             type="button"
             onClick={() => setShowPreview(true)}
             disabled={!htmlBody}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-40 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Preview
           </button>
@@ -219,13 +224,13 @@ export function TemplateForm({ initialData }: Props) {
           rows={16}
           placeholder={"<p>Olá {{nome}}, bem-vindo!</p>"}
           spellCheck={false}
-          className="block w-full resize-none rounded-lg border border-stone-200 px-3 py-2 font-mono text-xs text-stone-700 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          className={`${inputClass} resize-none font-mono text-xs`}
         />
       </div>
 
       {/* Variables */}
-      <div className="space-y-3 rounded-lg border border-stone-200 bg-white p-5">
-        <h2 className="text-sm font-medium text-stone-700">
+      <div className={`${sectionClass} space-y-3`}>
+        <h2 className={sectionTitleClass}>
           Variáveis detectadas
           {syncedVariables.length > 0 && (
             <span className="ml-2 text-xs font-normal text-stone-400">
@@ -241,7 +246,7 @@ export function TemplateForm({ initialData }: Props) {
         <button
           type="button"
           onClick={() => router.push("/dashboard/sistema/email-templates")}
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           Cancelar
         </button>
@@ -250,7 +255,7 @@ export function TemplateForm({ initialData }: Props) {
             type="button"
             onClick={() => save(false)}
             disabled={saving}
-            className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+            className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Salvar Rascunho
           </button>

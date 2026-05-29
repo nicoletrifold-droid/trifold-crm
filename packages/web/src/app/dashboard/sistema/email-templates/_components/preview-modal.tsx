@@ -37,12 +37,12 @@ export function PreviewModal({ htmlBody, variables, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex h-[80vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-          <h2 className="text-sm font-medium text-stone-900">Preview do Template</h2>
+      <div className="flex h-[80vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3 dark:border-stone-800">
+          <h2 className="text-sm font-medium text-stone-900 dark:text-stone-100">Preview do Template</h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+            className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800"
             aria-label="Fechar preview"
           >
             <X className="h-4 w-4" />

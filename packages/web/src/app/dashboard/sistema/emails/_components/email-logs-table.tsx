@@ -104,13 +104,13 @@ export function EmailLogsTable() {
   const currentPage = Math.floor(offset / LIMIT) + 1
 
   return (
-    <div className="rounded-lg border border-stone-200 bg-white">
+    <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-4 py-3 dark:border-stone-800">
         <select
           defaultValue="today"
           onChange={(e) => { setPeriod(e.target.value); setOffset(0) }}
-          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600"
+          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
         >
           <option value="today">Hoje</option>
           <option value="7d">Últimos 7 dias</option>
@@ -121,7 +121,7 @@ export function EmailLogsTable() {
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setOffset(0) }}
-          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600"
+          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
         >
           <option value="">Todos os status</option>
           <option value="pending">Pendente</option>
@@ -137,7 +137,7 @@ export function EmailLogsTable() {
         <select
           value={templateId}
           onChange={(e) => { setTemplateId(e.target.value); setOffset(0) }}
-          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600"
+          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
         >
           <option value="">Todos os templates</option>
           {templates.map((t) => (
@@ -149,7 +149,7 @@ export function EmailLogsTable() {
           type="text"
           placeholder="Buscar por email..."
           onChange={(e) => handleSearchChange(e.target.value)}
-          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 placeholder-stone-300 focus:border-indigo-300 focus:outline-none"
+          className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 placeholder-stone-300 focus:border-indigo-300 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:placeholder-stone-500"
         />
 
         <span className="ml-auto text-xs text-stone-400">{total} registro{total !== 1 ? "s" : ""}</span>
@@ -162,7 +162,7 @@ export function EmailLogsTable() {
         <div className="px-4 py-8 text-center text-sm text-stone-400">Nenhum registro encontrado</div>
       ) : (
         <>
-          <div className="divide-y divide-stone-50">
+          <div className="divide-y divide-stone-50 dark:divide-stone-800">
             <div className="grid grid-cols-[2fr_1fr_2fr_1fr_1fr_auto] px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-stone-400">
               <span>Destinatário</span>
               <span>Template</span>
@@ -217,7 +217,7 @@ export function EmailLogsTable() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-stone-100 px-4 py-3">
+            <div className="flex items-center justify-between border-t border-stone-100 px-4 py-3 dark:border-stone-800">
               <button
                 onClick={() => setOffset(Math.max(0, offset - LIMIT))}
                 disabled={offset === 0}

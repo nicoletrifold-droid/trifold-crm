@@ -19,7 +19,7 @@ export function VariableEditor({ variables, onChange }: Props) {
 
   if (variables.length === 0) {
     return (
-      <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+      <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 dark:border-stone-700 dark:bg-stone-800">
         <p className="text-xs text-stone-400">
           Nenhuma variável detectada. Use{" "}
           <code className="rounded bg-stone-200 px-1 text-stone-600">{"{{nome}}"}</code> no assunto
@@ -34,7 +34,7 @@ export function VariableEditor({ variables, onChange }: Props) {
       {variables.map((v) => (
         <div
           key={v.key}
-          className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-lg border border-stone-200 bg-white p-3"
+          className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
         >
           <code className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-mono text-indigo-600">
             {`{{${v.key}}}`}
@@ -44,12 +44,12 @@ export function VariableEditor({ variables, onChange }: Props) {
             value={v.label}
             onChange={(e) => update(v.key, "label", e.target.value)}
             placeholder="Label (ex: Nome do destinatário)"
-            className="block w-full rounded border border-stone-200 px-2 py-1 text-xs text-stone-700 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+            className="block w-full rounded border border-stone-200 px-2 py-1 text-xs text-stone-700 placeholder-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:placeholder-stone-500"
           />
           <select
             value={v.type}
             onChange={(e) => update(v.key, "type", e.target.value)}
-            className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 focus:border-indigo-400 focus:outline-none"
+            className="rounded border border-stone-200 px-2 py-1 text-xs text-stone-600 focus:border-indigo-400 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
           >
             <option value="text">Texto</option>
             <option value="url">URL</option>
