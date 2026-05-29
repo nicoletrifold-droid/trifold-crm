@@ -156,8 +156,9 @@ export default async function HorarioConfigPage() {
                 return (
                   <div
                     key={key}
-                    className="flex items-center gap-4 rounded-lg border border-stone-200 px-4 py-3 dark:border-stone-800"
+                    className="overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-800"
                   >
+                  <div className="flex min-w-max items-center gap-4 px-4 py-3">
                     <label className="flex w-40 items-center gap-2.5">
                       <input
                         type="checkbox"
@@ -185,6 +186,7 @@ export default async function HorarioConfigPage() {
                         className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 disabled:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:disabled:bg-stone-800/60"
                       />
                     </div>
+                  </div>
                   </div>
                 )
               })}

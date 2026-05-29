@@ -94,7 +94,8 @@ export function BlastList() {
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-stone-50">
+          <div className="overflow-x-auto">
+          <div className="divide-y divide-stone-50 min-w-[500px]">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-stone-400">
               <span>Campanha</span>
               <span>Template</span>
@@ -149,6 +150,7 @@ export function BlastList() {
                 </div>
               )
             })}
+          </div>
           </div>
         )}
       </div>

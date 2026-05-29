@@ -385,7 +385,7 @@ export default async function AgendaPage({
         const nextMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1)
 
         return (
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="overflow-x-auto rounded-xl bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <Link
                 href={`/dashboard/agenda?view=month&date=${formatDateISO(prevMonth)}${params.broker_id ? `&broker_id=${params.broker_id}` : ""}`}
@@ -403,7 +403,7 @@ export default async function AgendaPage({
                 &rarr;
               </Link>
             </div>
-            <div className="grid grid-cols-7 gap-px rounded-lg border border-stone-200 bg-stone-200 dark:border-stone-800 dark:bg-stone-800">
+            <div className="grid grid-cols-7 gap-px rounded-lg border border-stone-200 bg-stone-200 dark:border-stone-800 dark:bg-stone-800 min-w-[560px]">
               {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (
                 <div key={d} className="bg-stone-50 px-2 py-1.5 text-center text-[11px] font-medium text-stone-500 dark:bg-stone-900 dark:text-stone-400">{d}</div>
               ))}
@@ -480,7 +480,8 @@ export default async function AgendaPage({
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg bg-gray-200 shadow-sm dark:bg-stone-800">
+      <div className="overflow-x-auto">
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg bg-gray-200 shadow-sm dark:bg-stone-800 min-w-[560px]">
         {weekDays.map((day) => {
           const key = formatDateISO(day)
           const dayAppts = appointmentsByDay[key] ?? []
@@ -560,6 +561,7 @@ export default async function AgendaPage({
             </div>
           )
         })}
+      </div>
       </div>
 
       </>)}

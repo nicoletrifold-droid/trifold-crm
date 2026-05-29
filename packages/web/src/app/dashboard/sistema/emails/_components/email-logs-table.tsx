@@ -162,7 +162,8 @@ export function EmailLogsTable() {
         <div className="px-4 py-8 text-center text-sm text-stone-400">Nenhum registro encontrado</div>
       ) : (
         <>
-          <div className="divide-y divide-stone-50 dark:divide-stone-800">
+          <div className="overflow-x-auto">
+          <div className="divide-y divide-stone-50 dark:divide-stone-800 min-w-[600px]">
             <div className="grid grid-cols-[2fr_1fr_2fr_1fr_1fr_auto] px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-stone-400">
               <span>Destinatário</span>
               <span>Template</span>
@@ -213,6 +214,7 @@ export function EmailLogsTable() {
                 </div>
               )
             })}
+          </div>
           </div>
 
           {/* Pagination */}

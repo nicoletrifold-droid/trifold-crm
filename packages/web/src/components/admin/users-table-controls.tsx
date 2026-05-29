@@ -113,7 +113,7 @@ export function UsersTableControls({
       </div>
 
       {/* Table */}
-      <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+      <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">

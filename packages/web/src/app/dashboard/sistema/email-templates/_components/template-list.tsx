@@ -114,7 +114,8 @@ export function EmailTemplateList() {
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-stone-50 dark:divide-stone-800">
+          <div className="overflow-x-auto">
+          <div className="divide-y divide-stone-50 dark:divide-stone-800 min-w-[500px]">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-stone-400">
               <span>Nome</span>
               <span>Categoria</span>
@@ -162,6 +163,7 @@ export function EmailTemplateList() {
                 </div>
               </div>
             ))}
+          </div>
           </div>
         )}
       </div>

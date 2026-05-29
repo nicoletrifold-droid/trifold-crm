@@ -79,7 +79,7 @@ export default async function CampaignDetailPage({
             <p className="mt-1 text-sm text-gray-400 dark:text-stone-500">{campaign.description}</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <CampaignActions campaignId={id} status={campaign.status} />
           <Link
             href={`/dashboard/pipeline?campaign_id=${id}`}
@@ -106,7 +106,7 @@ export default async function CampaignDetailPage({
       </div>
 
       {/* Detail breakdown */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-stone-300">WhatsApp</h3>
           <div className="grid grid-cols-4 gap-2 text-center text-xs">

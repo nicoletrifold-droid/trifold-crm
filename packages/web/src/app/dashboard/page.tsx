@@ -76,7 +76,8 @@ export default async function DashboardPage() {
       {/* Pipeline Summary */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-stone-100">Pipeline</h2>
-        <div className="flex gap-2">
+        <div className="overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
           {stages.map((stage) => {
             const count = stageCounts[stage.id] ?? 0
             return (
@@ -95,6 +96,7 @@ export default async function DashboardPage() {
               </div>
             )
           })}
+        </div>
         </div>
       </div>
 

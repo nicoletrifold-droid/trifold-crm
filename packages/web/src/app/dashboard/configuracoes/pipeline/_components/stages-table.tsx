@@ -234,7 +234,7 @@ export function StagesTable({
   }
 
   return (
-    <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+    <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       {saving && (
         <div className="border-b border-orange-100 px-6 py-2 text-xs text-orange-600 dark:border-orange-900/30 dark:text-orange-400">
           Salvando ordem...

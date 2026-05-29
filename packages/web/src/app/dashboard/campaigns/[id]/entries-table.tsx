@@ -129,8 +129,8 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
 
   return (
     <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-stone-800">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-3 dark:border-stone-800">
+        <div className="flex flex-wrap gap-2">
           {(
             [
               ["all", "Todos"],

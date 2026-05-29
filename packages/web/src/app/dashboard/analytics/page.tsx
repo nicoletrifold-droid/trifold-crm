@@ -234,7 +234,8 @@ export default async function AnalyticsPage({
           </a>
         </div>
         {/* Seletor de empreendimento */}
-        <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800">
+        <div className="overflow-x-auto">
+        <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800 min-w-max">
           <a
             href="/dashboard/analytics"
             className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
@@ -258,6 +259,7 @@ export default async function AnalyticsPage({
               {p.name}
             </a>
           ))}
+        </div>
         </div>
       </div>
 

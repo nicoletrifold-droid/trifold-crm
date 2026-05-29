@@ -276,7 +276,7 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
         {siengeConfigured && !siengeUnavailable && installments.length > 0 && (
           <>
             {/* Resumo rápido */}
-            <div className="mb-4 grid grid-cols-3 gap-3">
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {(["PAGO", "BOLETO_GERADO", "EM_ABERTO"] as const).map((status) => {
                 const group = installments.filter((i) => i.status === status)
                 if (group.length === 0) return null
