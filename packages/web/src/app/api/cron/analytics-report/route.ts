@@ -8,7 +8,9 @@ import { AnalyticsReportPDF } from "@web/lib/pdf/analytics-report-pdf"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const REPORT_RECIPIENT = process.env.ANALYTICS_REPORT_EMAIL ?? "marcos@trifold.eng.br"
+const REPORT_RECIPIENTS = process.env.ANALYTICS_REPORT_EMAILS
+  ? process.env.ANALYTICS_REPORT_EMAILS.split(",").map((e) => e.trim())
+  : ["alexandre@trifold.eng.br", "marcos@trifold.eng.br"]
 const SENDER = "Trifold CRM <contato@trifold.com.br>"
 
 export async function GET(request: NextRequest) {
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
 
       const { error } = await resend.emails.send({
         from: SENDER,
-        to: REPORT_RECIPIENT,
+        to: REPORT_RECIPIENTS,
         subject: `Resumo semanal de leads · ${data.weekRange}`,
         html: `
           <p>Olá!</p>
