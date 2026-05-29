@@ -12,13 +12,21 @@ export default async function AnalyticsReportPage() {
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
-            Relatório de Analytics
-          </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Gerado com dados atuais. Enviado automaticamente todo domingo às 23h.
-          </p>
+        <div className="flex items-center gap-4">
+          <a
+            href="/dashboard/analytics"
+            className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+          >
+            ← Voltar
+          </a>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
+              Relatório de Analytics
+            </h1>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              Gerado com dados atuais. Enviado automaticamente todo domingo às 23h.
+            </p>
+          </div>
         </div>
         <a
           href="/api/analytics/report"
