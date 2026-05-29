@@ -95,6 +95,8 @@ export async function POST(request: NextRequest) {
     const authUser = authData.user
 
     // Step 2: Create users table row
+    const phone: string | null = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+
     const { data: newUser, error: userError } = await adminSupabase
       .from("users")
       .insert({
@@ -104,6 +106,7 @@ export async function POST(request: NextRequest) {
         email: body.email.trim(),
         role: "broker",
         is_active: true,
+        ...(phone ? { phone } : {}),
       })
       .select("id")
       .single()

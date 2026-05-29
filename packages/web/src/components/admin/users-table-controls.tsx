@@ -10,6 +10,7 @@ type User = {
   id: string
   name: string | null
   email: string
+  phone?: string | null
   role: string
   is_active: boolean
   auth_id?: string | null
@@ -173,6 +174,7 @@ export function UsersTableControls({
                         userId={u.id}
                         userName={u.name ?? ""}
                         userEmail={u.email}
+                        userPhone={u.phone}
                         isOwnAccount={u.id === currentUserId}
                         orgId={currentOrgId}
                       />

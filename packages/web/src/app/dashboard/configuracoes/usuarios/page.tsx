@@ -41,7 +41,7 @@ export default async function UsuariosPage({
 
   let usersQuery = supabase
     .from("users")
-    .select("id, name, email, role, is_active, auth_id")
+    .select("id, name, email, phone, role, is_active, auth_id")
     .eq("org_id", user.orgId)
 
   if (q.trim()) {

@@ -11,12 +11,14 @@ export function UserEditModal({
   userId,
   userName,
   userEmail,
+  userPhone,
   isOwnAccount,
   orgId,
 }: {
   userId: string
   userName: string
   userEmail: string
+  userPhone?: string | null
   isOwnAccount: boolean
   orgId: string
 }) {
@@ -25,6 +27,7 @@ export function UserEditModal({
   const [tab, setTab] = useState<"edit" | "password" | "exceptions">("edit")
   const [name, setName] = useState(userName)
   const [email, setEmail] = useState(userEmail)
+  const [phone, setPhone] = useState(userPhone ?? "")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -77,6 +80,7 @@ export function UserEditModal({
     setSuccess(null)
     setName(userName)
     setEmail(userEmail)
+    setPhone(userPhone ?? "")
     setNewPassword("")
     setConfirmPassword("")
   }
@@ -127,7 +131,7 @@ export function UserEditModal({
     const res = await fetch(`/api/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+      body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() || null }),
     })
     setLoading(false)
     if (!res.ok) {
@@ -254,6 +258,18 @@ export function UserEditModal({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-stone-300">
+                    Telefone / WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(44) 99999-9999"
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>

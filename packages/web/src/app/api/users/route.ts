@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nome, email, senha e perfil sao obrigatorios" }, { status: 400 })
   }
 
+  const phone: string | null = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+
   const { data: validRole } = await supabase
     .from("roles")
     .select("name")
@@ -84,6 +86,7 @@ export async function POST(request: NextRequest) {
     name: name.trim(),
     email: email.trim(),
     role,
+    ...(phone ? { phone } : {}),
   })
 
   if (userError) {

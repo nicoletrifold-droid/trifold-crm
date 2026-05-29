@@ -14,6 +14,7 @@ interface BrokerData {
     id: string
     name: string
     email: string
+    phone: string | null
     is_active: boolean
   }
 }
@@ -30,6 +31,7 @@ export default function EditCorretorPage({
 }) {
   const router = useRouter()
   const [broker, setBroker] = useState<BrokerData | null>(null)
+  const [phone, setPhone] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
@@ -46,6 +48,7 @@ export default function EditCorretorPage({
         .then((r) => r.json())
         .then((d) => {
           setBroker(d.data)
+          setPhone(d.data?.user?.phone ?? "")
           setLoading(false)
         })
         .catch(() => setLoading(false))
@@ -69,16 +72,25 @@ export default function EditCorretorPage({
 
     const form = new FormData(e.currentTarget)
 
-    const res = await fetch(`/api/brokers/${brokerId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        creci: form.get("creci") || null,
-        type: form.get("type"),
-        max_leads: parseInt(form.get("max_leads") as string, 10) || 50,
-        is_available: form.get("is_available") === "on",
+    const [res] = await Promise.all([
+      fetch(`/api/brokers/${brokerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creci: form.get("creci") || null,
+          type: form.get("type"),
+          max_leads: parseInt(form.get("max_leads") as string, 10) || 50,
+          is_available: form.get("is_available") === "on",
+        }),
       }),
-    })
+      broker?.user.id
+        ? fetch(`/api/users/${broker.user.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: phone.trim() || null }),
+          })
+        : Promise.resolve(new Response()),
+    ])
 
     if (res.ok) {
       setMessage("Salvo com sucesso!")
@@ -131,6 +143,17 @@ export default function EditCorretorPage({
                 defaultValue={broker.creci ?? ""}
                 className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
                 placeholder="Ex: 12345-PR"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">Telefone / WhatsApp</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(44) 99999-9999"
+                className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
               />
             </div>
 

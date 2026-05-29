@@ -14,7 +14,7 @@ export async function GET(
 
   const { data: broker } = await supabase
     .from("brokers")
-    .select("id, creci, type, is_available, max_leads, user:users!user_id(id, name, email, is_active)")
+    .select("id, creci, type, is_available, max_leads, user:users!user_id(id, name, email, phone, is_active)")
     .eq("id", id)
     .single()
 

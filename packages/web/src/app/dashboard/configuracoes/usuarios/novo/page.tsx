@@ -29,6 +29,7 @@ export default function NovoUsuarioPage() {
     const email = form.get("email") as string
     const password = form.get("password") as string
     const role = form.get("role") as string
+    const phone = (form.get("phone") as string).trim() || null
 
     if (!name || !email || !password || !role) {
       setError("Preencha todos os campos")
@@ -45,7 +46,7 @@ export default function NovoUsuarioPage() {
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, role }),
+      body: JSON.stringify({ name, email, password, role, phone }),
     })
 
     if (!res.ok) {
@@ -98,6 +99,18 @@ export default function NovoUsuarioPage() {
               required
               className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
               placeholder="email@empresa.com"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">
+              Telefone / WhatsApp
+            </label>
+            <input
+              name="phone"
+              type="tel"
+              className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
+              placeholder="(44) 99999-9999"
             />
           </div>
 

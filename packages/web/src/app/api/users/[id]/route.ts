@@ -42,6 +42,9 @@ export async function PATCH(
   if (typeof body.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) {
     publicUpdates.email = body.email.trim()
   }
+  if (typeof body.phone === "string") {
+    publicUpdates.phone = body.phone.trim() || null
+  }
 
   const hasNewPassword =
     typeof body.new_password === "string" && body.new_password.length > 0

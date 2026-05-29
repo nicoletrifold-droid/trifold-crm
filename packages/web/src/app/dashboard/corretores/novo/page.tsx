@@ -14,6 +14,7 @@ export default function NovoCorretorPage() {
 
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [creci, setCreci] = useState("")
   const [type, setType] = useState<"internal" | "external">("internal")
@@ -40,6 +41,7 @@ export default function NovoCorretorPage() {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          phone: phone.trim() || null,
           password,
           creci: creci.trim() || null,
           type,
@@ -117,6 +119,19 @@ export default function NovoCorretorPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="corretor@email.com"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Telefone / WhatsApp
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(44) 99999-9999"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
             />
           </div>
