@@ -1,7 +1,7 @@
 import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { AnalyticsReportData } from "@web/lib/pdf/analytics-report-pdf"
+import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 
 type AnalyticsFunnelEntry = { stage_id: string; name: string; slug: string; color: string; position: number; count: number | string }
@@ -17,6 +17,14 @@ type AnalyticsSummary = {
   new_leads: number | string
 }
 
+type RawLead = {
+  created_at: string
+  property_interest_id: string | null
+  assigned_broker_id: string | null
+  source: string | null
+  broker: { id: string; name: string } | { id: string; name: string }[] | null
+}
+
 const toN = (v: number | string | null | undefined): number => {
   if (v == null) return 0
   const n = typeof v === "string" ? Number(v) : v
@@ -24,6 +32,94 @@ const toN = (v: number | string | null | undefined): number => {
 }
 
 const HIDDEN_BROKERS = new Set(["corretor demo", "target editado"])
+
+function brokerName(lead: RawLead): string | null {
+  if (!lead.broker) return null
+  const b = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
+  return b?.name ?? null
+}
+
+function buildComparison(
+  currLeads: RawLead[],
+  prevLeads: RawLead[],
+  propNames: Map<string, string>
+): WeekComparisonGroup[] {
+  // ── Total ────────────────────────────────────────────────────────────────
+  const groups: WeekComparisonGroup[] = [
+    {
+      title: "Total",
+      items: [{ label: "Novos leads", current: currLeads.length, previous: prevLeads.length }],
+    },
+  ]
+
+  // ── Por empreendimento ───────────────────────────────────────────────────
+  const propCurr = new Map<string, number>()
+  const propPrev = new Map<string, number>()
+  for (const l of currLeads) if (l.property_interest_id) propCurr.set(l.property_interest_id, (propCurr.get(l.property_interest_id) ?? 0) + 1)
+  for (const l of prevLeads) if (l.property_interest_id) propPrev.set(l.property_interest_id, (propPrev.get(l.property_interest_id) ?? 0) + 1)
+
+  const propIds = new Set([...propCurr.keys(), ...propPrev.keys()])
+  const propItems = [...propIds]
+    .map((id) => ({
+      label: propNames.get(id) ?? id,
+      current: propCurr.get(id) ?? 0,
+      previous: propPrev.get(id) ?? 0,
+    }))
+    .sort((a, b) => b.current - a.current)
+
+  if (propItems.length > 0) groups.push({ title: "Por Empreendimento", items: propItems })
+
+  // ── Por corretor ─────────────────────────────────────────────────────────
+  const brokerCurr = new Map<string, { name: string; count: number }>()
+  const brokerPrev = new Map<string, { name: string; count: number }>()
+
+  for (const l of currLeads) {
+    if (!l.assigned_broker_id) continue
+    const name = brokerName(l)
+    if (!name || HIDDEN_BROKERS.has(name.toLowerCase().trim())) continue
+    const cur = brokerCurr.get(l.assigned_broker_id) ?? { name, count: 0 }
+    cur.count++
+    brokerCurr.set(l.assigned_broker_id, cur)
+  }
+  for (const l of prevLeads) {
+    if (!l.assigned_broker_id) continue
+    const name = brokerName(l)
+    if (!name || HIDDEN_BROKERS.has(name.toLowerCase().trim())) continue
+    const cur = brokerPrev.get(l.assigned_broker_id) ?? { name, count: 0 }
+    cur.count++
+    brokerPrev.set(l.assigned_broker_id, cur)
+  }
+
+  const brokerIds = new Set([...brokerCurr.keys(), ...brokerPrev.keys()])
+  const brokerItems = [...brokerIds]
+    .map((id) => ({
+      label: brokerCurr.get(id)?.name ?? brokerPrev.get(id)?.name ?? id,
+      current: brokerCurr.get(id)?.count ?? 0,
+      previous: brokerPrev.get(id)?.count ?? 0,
+    }))
+    .sort((a, b) => b.current - a.current)
+
+  if (brokerItems.length > 0) groups.push({ title: "Por Corretor", items: brokerItems })
+
+  // ── Por origem ───────────────────────────────────────────────────────────
+  const srcCurr: Record<string, number> = {}
+  const srcPrev: Record<string, number> = {}
+  for (const l of currLeads) { const k = l.source ?? "other"; srcCurr[k] = (srcCurr[k] ?? 0) + 1 }
+  for (const l of prevLeads) { const k = l.source ?? "other"; srcPrev[k] = (srcPrev[k] ?? 0) + 1 }
+
+  const srcKeys = new Set([...Object.keys(srcCurr), ...Object.keys(srcPrev)])
+  const srcItems = [...srcKeys]
+    .map((k) => ({
+      label: SOURCE_LABELS_SHORT[k] ?? k,
+      current: srcCurr[k] ?? 0,
+      previous: srcPrev[k] ?? 0,
+    }))
+    .sort((a, b) => b.current - a.current)
+
+  if (srcItems.length > 0) groups.push({ title: "Por Origem", items: srcItems })
+
+  return groups
+}
 
 export async function buildAnalyticsReportData(
   supabase: SupabaseClient,
@@ -35,6 +131,8 @@ export async function buildAnalyticsReportData(
   weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1)
   weekStart.setHours(0, 0, 0, 0)
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
   const [
     { count: totalLeads },
@@ -44,6 +142,8 @@ export async function buildAnalyticsReportData(
     { data: analytics },
     { count: lpYardenCount },
     { count: lpVindCount },
+    { data: recentLeadsRaw },
+    { data: propertiesRaw },
   ] = await Promise.all([
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).eq("org_id", orgId),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", todayStart.toISOString()),
@@ -52,6 +152,12 @@ export async function buildAnalyticsReportData(
     supabase.rpc("get_analytics_summary", { p_org_id: orgId, p_since: monthStart.toISOString() }),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    supabase.from("leads")
+      .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
+      .eq("org_id", orgId)
+      .gte("created_at", twoWeeksAgo.toISOString())
+      .order("created_at"),
+    supabase.from("properties").select("id, name").eq("is_active", true),
   ])
 
   const summary = (analytics as AnalyticsSummary | null) ?? null
@@ -96,6 +202,16 @@ export async function buildAnalyticsReportData(
     .sort(([, a], [, b]) => toN(b) - toN(a))
     .map(([reason, count]) => ({ reason, count: toN(count) }))
 
+  // ── Week-over-week comparison ─────────────────────────────────────────────
+  const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
+
+  const allRecent = (recentLeadsRaw ?? []) as RawLead[]
+  const currLeads = allRecent.filter((l) => new Date(l.created_at) >= oneWeekAgo)
+  const prevLeads = allRecent.filter((l) => new Date(l.created_at) < oneWeekAgo)
+
+  const comparison = buildComparison(currLeads, prevLeads, propNames)
+
+  // ── Date labels ───────────────────────────────────────────────────────────
   const generatedAt = now.toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
     day: "2-digit",
@@ -105,13 +221,13 @@ export async function buildAnalyticsReportData(
     minute: "2-digit",
   })
 
-  const weekEnd = new Date(weekStart)
+  const weekEnd = new Date(oneWeekAgo)
   weekEnd.setDate(weekEnd.getDate() + 6)
 
   const fmtDate = (d: Date) =>
     d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short" })
 
-  const weekRange = `${fmtDate(weekStart)} – ${fmtDate(weekEnd)}`
+  const weekRange = `${fmtDate(oneWeekAgo)} – ${fmtDate(now)}`
 
   return {
     generatedAt,
@@ -125,5 +241,6 @@ export async function buildAnalyticsReportData(
     sources,
     brokers,
     lostReasons,
+    comparison,
   }
 }

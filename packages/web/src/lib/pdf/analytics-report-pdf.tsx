@@ -5,6 +5,19 @@ const DARK = "#1C1917"
 const GRAY = "#78716C"
 const LIGHT = "#F5F5F4"
 const BORDER = "#E7E5E4"
+const GREEN = "#16A34A"
+const RED = "#DC2626"
+
+export interface WeekComparisonItem {
+  label: string
+  current: number
+  previous: number
+}
+
+export interface WeekComparisonGroup {
+  title: string
+  items: WeekComparisonItem[]
+}
 
 export interface AnalyticsReportData {
   generatedAt: string
@@ -18,6 +31,7 @@ export interface AnalyticsReportData {
   sources: { label: string; count: number }[]
   brokers: { name: string; count: number }[]
   lostReasons: { reason: string; count: number }[]
+  comparison: WeekComparisonGroup[]
 }
 
 const s = StyleSheet.create({
@@ -51,7 +65,7 @@ const s = StyleSheet.create({
   cardValueDefault: { fontFamily: "Helvetica-Bold", fontSize: 20, color: DARK },
   cardValueBlue: { fontFamily: "Helvetica-Bold", fontSize: 20, color: "#2563EB" },
   cardValueOrange: { fontFamily: "Helvetica-Bold", fontSize: 20, color: BRAND },
-  cardValueGreen: { fontFamily: "Helvetica-Bold", fontSize: 20, color: "#16A34A" },
+  cardValueGreen: { fontFamily: "Helvetica-Bold", fontSize: 20, color: GREEN },
 
   section: { marginBottom: 12, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
   sectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 10, color: DARK, marginBottom: 8 },
@@ -75,7 +89,7 @@ const s = StyleSheet.create({
   cols2: { flexDirection: "row", marginBottom: 12 },
   colLeft: { flex: 1, marginRight: 6, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
   colRight: { flex: 1, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
-  cols2Last: { flexDirection: "row" },
+  cols2Last: { flexDirection: "row", marginBottom: 12 },
   colLeftLast: { flex: 1, marginRight: 6, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
   colRightLast: { flex: 1, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
 
@@ -85,7 +99,51 @@ const s = StyleSheet.create({
   funnelBarFill: { height: 8, borderRadius: 2 },
   funnelCount: { width: 24, fontSize: 7, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "right", marginLeft: 4 },
   noData: { fontSize: 8, color: GRAY },
+
+  // Comparison table
+  compSection: { borderWidth: 1, borderColor: BORDER, borderRadius: 4 },
+  compSectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 10, color: DARK, paddingHorizontal: 10, paddingTop: 10, marginBottom: 6 },
+  compHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: DARK,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  compHeaderLabel: { flex: 1, fontSize: 7, color: "#FFFFFF", fontFamily: "Helvetica-Bold" },
+  compHeaderCell: { width: 55, fontSize: 7, color: "#FFFFFF", fontFamily: "Helvetica-Bold", textAlign: "right" },
+  compHeaderDelta: { width: 44, fontSize: 7, color: "#FFFFFF", fontFamily: "Helvetica-Bold", textAlign: "right" },
+  compGroupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: LIGHT,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+  compGroupLabel: { flex: 1, fontSize: 7, color: GRAY, fontFamily: "Helvetica-Bold" },
+  compDataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+  compDataLabel: { flex: 1, fontSize: 8, color: DARK },
+  compDataCell: { width: 55, fontSize: 8, color: DARK, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  compDeltaPos: { width: 44, fontSize: 8, color: GREEN, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  compDeltaNeg: { width: 44, fontSize: 8, color: RED, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  compDeltaNeutral: { width: 44, fontSize: 8, color: GRAY, textAlign: "right" },
 })
+
+function DeltaText({ current, previous }: { current: number; previous: number }) {
+  const delta = current - previous
+  if (delta === 0) return <Text style={s.compDeltaNeutral}>—</Text>
+  if (delta > 0) return <Text style={s.compDeltaPos}>+{delta}</Text>
+  return <Text style={s.compDeltaNeg}>{delta}</Text>
+}
 
 export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
   const maxCount = Math.max(...data.stages.map((st) => st.count), 1)
@@ -189,6 +247,37 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
             {data.lostReasons.length === 0 && <Text style={s.noData}>Sem perdas registradas</Text>}
           </View>
         </View>
+
+        {/* Week-over-week comparison table */}
+        {data.comparison.length > 0 && (
+          <View style={s.compSection}>
+            <Text style={s.compSectionTitle}>Comparativo Semanal — últimos 7 dias vs semana anterior</Text>
+            {/* Column headers */}
+            <View style={s.compHeaderRow}>
+              <Text style={s.compHeaderLabel}>Métrica</Text>
+              <Text style={s.compHeaderCell}>Esta sem.</Text>
+              <Text style={s.compHeaderCell}>Sem. ant.</Text>
+              <Text style={s.compHeaderDelta}>Var.</Text>
+            </View>
+            {data.comparison.map((group) => (
+              <View key={group.title}>
+                {/* Group subheader */}
+                <View style={s.compGroupRow}>
+                  <Text style={s.compGroupLabel}>{group.title}</Text>
+                </View>
+                {/* Data rows */}
+                {group.items.map((item, j) => (
+                  <View key={j} style={s.compDataRow}>
+                    <Text style={s.compDataLabel}>{item.label}</Text>
+                    <Text style={s.compDataCell}>{item.current}</Text>
+                    <Text style={s.compDataCell}>{item.previous}</Text>
+                    <DeltaText current={item.current} previous={item.previous} />
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
       </Page>
     </Document>
   )
