@@ -2,6 +2,7 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { getUserPermissions } from "@web/lib/permissions"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
+import { WeatherWidget } from "@web/components/weather-widget"
 import {
   LayoutDashboard,
   Kanban,
@@ -148,6 +149,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <WeatherWidget variant="system" className="fixed top-4 right-4 z-40" />
       <SidebarNav
         items={navItems}
         userName={user.name}

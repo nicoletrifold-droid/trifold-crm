@@ -92,19 +92,19 @@ export function WeatherWidget({ variant = "system", className = "" }: Props) {
 
   if (!weather) return null
 
-  const textCls =
+  const pillCls =
     variant === "dark"
-      ? "text-stone-400"
-      : "text-stone-500 dark:text-stone-400"
+      ? "bg-stone-900/70 ring-stone-700/60 text-stone-200"
+      : "bg-white/80 ring-stone-200/70 text-stone-700 dark:bg-stone-900/70 dark:ring-stone-700/60 dark:text-stone-200"
 
   return (
     <span
       title={`${weather.label} — ${weather.temp}°C`}
       aria-label={`Temperatura atual: ${weather.temp}°C, ${weather.label}`}
-      className={`flex items-center gap-1 select-none ${textCls} ${className}`}
+      className={`flex items-center gap-1.5 select-none backdrop-blur-sm rounded-full px-3 py-1.5 ring-1 shadow-sm ${pillCls} ${className}`}
     >
-      <span className="text-base leading-none" aria-hidden="true">{weather.emoji}</span>
-      <span className="text-sm font-medium tabular-nums">{weather.temp}°</span>
+      <span className="text-xl leading-none" aria-hidden="true">{weather.emoji}</span>
+      <span className="text-sm font-semibold tabular-nums">{weather.temp}°</span>
     </span>
   )
 }
