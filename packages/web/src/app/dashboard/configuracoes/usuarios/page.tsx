@@ -43,6 +43,7 @@ export default async function UsuariosPage({
     .from("users")
     .select("id, name, email, phone, role, is_active, auth_id")
     .eq("org_id", user.orgId)
+    .neq("role", "cliente")
 
   if (q.trim()) {
     usersQuery = usersQuery.or(`name.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%`)
