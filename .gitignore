@@ -42,4 +42,8 @@ package-lock.json
 
 # Environment & Secrets (AIOS)
 .env.local
-.env*.local
+
+# Playwright E2E
+e2e-results/
+playwright-report/
+test-results/

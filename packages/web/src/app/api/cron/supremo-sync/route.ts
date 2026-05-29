@@ -108,7 +108,8 @@ async function fetchPage(page: number, retries = 3): Promise<SupremoPage> {
     })
     if (res.status === 429) {
       if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        // Backoff longo: 15s, 30s, 45s — Supremo tem rate limit por janela de ~30s
+        await new Promise(r => setTimeout(r, 15_000 * (attempt + 1)))
         continue
       }
       throw new Error(`Supremo API 429 on page ${page} after ${retries} retries`)
@@ -124,7 +125,7 @@ async function fetchAllPages(fromPage: number, totalPages: number): Promise<Supr
   for (let i = fromPage; i <= totalPages; i++) {
     const result = await fetchPage(i)
     leads.push(...result.data)
-    if (i < totalPages) await new Promise(r => setTimeout(r, 500))
+    if (i < totalPages) await new Promise(r => setTimeout(r, 1_200))
   }
   return leads
 }
