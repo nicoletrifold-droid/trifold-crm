@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       const { error } = await resend.emails.send({
         from: SENDER,
         to: REPORT_RECIPIENT,
-        subject: `Relatório Semanal de Analytics · ${data.weekRange}`,
+        subject: `Resumo semanal de leads · ${data.weekRange}`,
         html: `
           <p>Olá!</p>
           <p>Segue o relatório semanal de analytics da plataforma Trifold CRM.</p>
