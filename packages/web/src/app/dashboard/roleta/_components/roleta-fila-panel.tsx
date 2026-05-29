@@ -103,11 +103,11 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
   }
 
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900 p-5 space-y-4">
-      <h2 className="text-base font-semibold text-white flex items-center gap-2">
+    <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-4 dark:border-stone-800 dark:bg-stone-900">
+      <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
         <Users className="h-4 w-4" />
         Fila de Corretores
-        <span className="ml-auto text-xs font-normal text-stone-500">{fila.length} corretor(es)</span>
+        <span className="ml-auto text-xs font-normal text-stone-400 dark:text-stone-500">{fila.length} corretor(es)</span>
       </h2>
 
       {error && (
@@ -116,11 +116,11 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
 
       {fila.length === 0 && available.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <Users className="h-8 w-8 text-stone-700" />
-          <p className="text-sm text-stone-400">Nenhum corretor disponível.</p>
-          <p className="text-xs text-stone-600">
+          <Users className="h-8 w-8 text-stone-300 dark:text-stone-700" />
+          <p className="text-sm text-stone-500 dark:text-stone-400">Nenhum corretor disponível.</p>
+          <p className="text-xs text-stone-400 dark:text-stone-600">
             Ative corretores na página de{" "}
-            <Link href="/dashboard/corretores" className="underline hover:text-stone-400">
+            <Link href="/dashboard/corretores" className="underline hover:text-stone-600 dark:hover:text-stone-400">
               Corretores
             </Link>{" "}
             primeiro.
@@ -128,9 +128,9 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
         </div>
       ) : fila.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
-          <Users className="h-8 w-8 text-stone-700" />
-          <p className="text-sm text-stone-400">Nenhum corretor na fila.</p>
-          <p className="text-xs text-stone-600">Selecione um corretor abaixo para começar.</p>
+          <Users className="h-8 w-8 text-stone-300 dark:text-stone-700" />
+          <p className="text-sm text-stone-500 dark:text-stone-400">Nenhum corretor na fila.</p>
+          <p className="text-xs text-stone-400 dark:text-stone-600">Selecione um corretor abaixo para começar.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -142,17 +142,17 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                 key={entry.id}
                 className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-opacity ${
                   entry.is_active
-                    ? "border-stone-700 bg-stone-800"
-                    : "border-stone-800 bg-stone-900 opacity-50"
+                    ? "border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800"
+                    : "border-stone-100 bg-white opacity-50 dark:border-stone-800 dark:bg-stone-900"
                 } ${isThisPending ? "animate-pulse" : ""}`}
               >
-                <span className="text-xs font-bold text-stone-500 w-5 text-center shrink-0">{idx + 1}</span>
+                <span className="text-xs font-bold text-stone-400 dark:text-stone-500 w-5 text-center shrink-0">{idx + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{entry.brokerName}</p>
-                  <p className="text-xs text-stone-500 truncate hidden sm:block">{entry.brokerEmail}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{entry.brokerName}</p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500 truncate hidden sm:block">{entry.brokerEmail}</p>
                 </div>
                 {idx === 0 && entry.is_active && (
-                  <span className="flex-shrink-0 rounded-full bg-emerald-950 border border-emerald-700 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                  <span className="flex-shrink-0 rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:border-emerald-700 dark:text-emerald-400">
                     Próximo
                   </span>
                 )}
@@ -163,7 +163,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                   aria-label={entry.is_active ? `Pausar ${entry.brokerName}` : `Ativar ${entry.brokerName}`}
                   aria-pressed={entry.is_active}
                   title={entry.is_active ? "Pausar" : "Ativar"}
-                  className="text-stone-500 hover:text-stone-300 transition-colors disabled:opacity-40"
+                  className="text-stone-400 hover:text-stone-600 transition-colors disabled:opacity-40 dark:text-stone-500 dark:hover:text-stone-300"
                 >
                   {entry.is_active ? (
                     <ToggleRight className="h-5 w-5 text-emerald-500" />
@@ -177,13 +177,13 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                     <button
                       onClick={() => removeEntry(entry)}
                       disabled={isThisPending}
-                      className="text-xs font-semibold text-red-400 hover:text-red-300 disabled:opacity-40"
+                      className="text-xs font-semibold text-red-500 hover:text-red-400 disabled:opacity-40 dark:text-red-400 dark:hover:text-red-300"
                     >
                       Confirmar
                     </button>
                     <button
                       onClick={() => setConfirmRemoveId(null)}
-                      className="text-xs text-stone-500 hover:text-stone-300"
+                      className="text-xs text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
                     >
                       Cancelar
                     </button>
@@ -194,7 +194,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                     disabled={isThisPending}
                     aria-label={`Remover ${entry.brokerName} da fila`}
                     title="Remover da fila"
-                    className="text-stone-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                    className="text-stone-400 hover:text-red-500 transition-colors disabled:opacity-40 dark:text-stone-600 dark:hover:text-red-400"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -206,7 +206,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
       )}
 
       {isAdding && (
-        <p className="text-xs text-stone-500 animate-pulse">Adicionando…</p>
+        <p className="text-xs text-stone-400 dark:text-stone-500 animate-pulse">Adicionando…</p>
       )}
 
       {available.length > 0 && (
@@ -214,7 +214,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
           <select
             value={selectedBroker}
             onChange={(e) => setSelectedBroker(e.target.value)}
-            className="flex-1 rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
+            className="flex-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
           >
             <option value="" disabled>Selecionar corretor…</option>
             {available.map((b) => (
@@ -235,7 +235,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
       )}
 
       {available.length === 0 && fila.length > 0 && (
-        <p className="text-xs text-stone-500 pt-1">
+        <p className="text-xs text-stone-400 dark:text-stone-500 pt-1">
           Todos os corretores disponíveis já estão na fila.
         </p>
       )}

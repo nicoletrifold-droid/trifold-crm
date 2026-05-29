@@ -38,6 +38,8 @@ export async function PATCH(req: NextRequest) {
     "business_days",
     "business_hour_start",
     "business_hour_end",
+    "weekend_hour_start",
+    "weekend_hour_end",
     "timezone",
     "notify_push",
     "notify_email",

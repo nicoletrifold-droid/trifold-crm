@@ -11,6 +11,8 @@ interface RoletaConfig {
   business_days: number[]
   business_hour_start: string
   business_hour_end: string
+  weekend_hour_start: string | null
+  weekend_hour_end: string | null
   timezone: string
   notify_push: boolean
   notify_email: boolean
@@ -32,6 +34,8 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
     business_days: [1, 2, 3, 4, 5],
     business_hour_start: "08:00",
     business_hour_end: "18:00",
+    weekend_hour_start: null,
+    weekend_hour_end: null,
     timezone: "America/Sao_Paulo",
     notify_push: true,
     notify_email: true,
@@ -80,18 +84,18 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
   }
 
   const selectCls =
-    "w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
+    "w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-900 dark:text-white"
 
-  const sectionLabel = "text-xs font-semibold uppercase tracking-wide text-stone-500"
+  const sectionLabel = "text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-500"
 
   return (
-    <div className="rounded-xl border border-stone-800 bg-stone-900 p-5 space-y-5">
+    <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-5 dark:border-stone-800 dark:bg-stone-900">
 
       {/* ── Header — toggle ativo/pausado ── */}
       <div>
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <SlidersHorizontal className={`h-4 w-4 ${config.is_active ? "text-emerald-400" : "text-stone-500"}`} />
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <SlidersHorizontal className={`h-4 w-4 ${config.is_active ? "text-emerald-600 dark:text-emerald-400" : "text-stone-400 dark:text-stone-500"}`} />
             Configuração da Roleta
           </h2>
           <button
@@ -99,7 +103,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             aria-label={config.is_active ? "Desativar roleta" : "Ativar roleta"}
             aria-pressed={config.is_active}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              config.is_active ? "bg-emerald-500" : "bg-stone-700"
+              config.is_active ? "bg-emerald-500" : "bg-stone-300 dark:bg-stone-700"
             }`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -107,14 +111,14 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             }`} />
           </button>
         </div>
-        <p className={`mt-1.5 text-xs font-medium ${config.is_active ? "text-emerald-400" : "text-stone-500"}`}>
+        <p className={`mt-1.5 text-xs font-medium ${config.is_active ? "text-emerald-600 dark:text-emerald-400" : "text-stone-500"}`}>
           {config.is_active
             ? "Roleta ativa — leads serão distribuídos automaticamente"
             : "Roleta pausada — nenhum lead será distribuído"}
         </p>
       </div>
 
-      <div className="border-t border-stone-800" />
+      <div className="border-t border-stone-200 dark:border-stone-800" />
 
       {/* ── Horário de funcionamento ── */}
       <section aria-label="Horário de funcionamento">
@@ -136,7 +140,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                   className={`h-8 rounded-lg text-xs font-semibold transition-colors ${
                     config.business_days.includes(idx)
                       ? "bg-[#E8856A] text-white"
-                      : "bg-stone-800 text-stone-400 hover:bg-stone-700"
+                      : "bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                   }`}
                 >
                   {label}
@@ -150,39 +154,83 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             <legend className="sr-only">Horário de atendimento</legend>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label htmlFor="hour-start" className="text-xs font-medium text-stone-400 block mb-1">Início</label>
+                <label htmlFor="hour-start" className="text-xs font-medium text-stone-500 dark:text-stone-400 block mb-1">Início</label>
                 <input
                   id="hour-start"
                   type="time"
                   value={config.business_hour_start}
                   onChange={(e) => { setConfig((c) => ({ ...c, business_hour_start: e.target.value })); setSaved(false) }}
-                  className="rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
+                  className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                 />
               </div>
-              <span className="text-stone-600 text-sm pb-2">—</span>
+              <span className="text-stone-400 dark:text-stone-600 text-sm pb-2">—</span>
               <div>
-                <label htmlFor="hour-end" className="text-xs font-medium text-stone-400 block mb-1">Fim</label>
+                <label htmlFor="hour-end" className="text-xs font-medium text-stone-500 dark:text-stone-400 block mb-1">Fim</label>
                 <input
                   id="hour-end"
                   type="time"
                   value={config.business_hour_end}
                   onChange={(e) => { setConfig((c) => ({ ...c, business_hour_end: e.target.value })); setSaved(false) }}
-                  className="rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-white focus:border-[#E8856A] focus:outline-none"
+                  className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                 />
               </div>
             </div>
-            <p className="mt-2 text-xs text-stone-600">Fuso horário: {config.timezone}</p>
+            <p className="mt-2 text-xs text-stone-400 dark:text-stone-600">Fuso horário: {config.timezone}</p>
           </fieldset>
+
+          {/* Horário de fim de semana — visível somente se Dom ou Sáb estiver selecionado */}
+          {(config.business_days.includes(0) || config.business_days.includes(6)) && (
+            <fieldset className="mt-4 pt-4 border-t border-stone-100 dark:border-stone-800">
+              <legend className="text-xs font-semibold text-stone-500 dark:text-stone-500 mb-2">
+                Horário específico para fim de semana
+              </legend>
+              <p className="text-xs text-stone-400 dark:text-stone-600 mb-3">
+                Se não preenchido, usa o horário dos dias úteis acima.
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="weekend-hour-start" className="text-xs font-medium text-stone-500 dark:text-stone-400 block mb-1">Início</label>
+                  <input
+                    id="weekend-hour-start"
+                    type="time"
+                    value={config.weekend_hour_start ?? ""}
+                    onChange={(e) => { setConfig((c) => ({ ...c, weekend_hour_start: e.target.value || null })); setSaved(false) }}
+                    className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                  />
+                </div>
+                <span className="text-stone-400 dark:text-stone-600 text-sm pb-2">—</span>
+                <div>
+                  <label htmlFor="weekend-hour-end" className="text-xs font-medium text-stone-500 dark:text-stone-400 block mb-1">Fim</label>
+                  <input
+                    id="weekend-hour-end"
+                    type="time"
+                    value={config.weekend_hour_end ?? ""}
+                    onChange={(e) => { setConfig((c) => ({ ...c, weekend_hour_end: e.target.value || null })); setSaved(false) }}
+                    className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+                  />
+                </div>
+                {(config.weekend_hour_start || config.weekend_hour_end) && (
+                  <button
+                    type="button"
+                    onClick={() => { setConfig((c) => ({ ...c, weekend_hour_start: null, weekend_hour_end: null })); setSaved(false) }}
+                    className="text-xs text-stone-400 hover:text-red-500 transition-colors pb-2 dark:text-stone-500 dark:hover:text-red-400"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </fieldset>
+          )}
         </div>
       </section>
 
-      <div className="border-t border-stone-800" />
+      <div className="border-t border-stone-200 dark:border-stone-800" />
 
       {/* ── Regras de distribuição ── */}
       <section aria-label="Regras de distribuição">
         <p className={`${sectionLabel} mb-3`}>Regras de distribuição</p>
 
-        <div className="rounded-lg border border-stone-800 bg-stone-800/30 divide-y divide-stone-800">
+        <div className="rounded-lg border border-stone-200 bg-stone-50 divide-y divide-stone-200 dark:border-stone-800 dark:bg-stone-800/30 dark:divide-stone-800">
 
           {/* Priorizar lead ativo */}
           <div className="p-4">
@@ -190,10 +238,10 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
               <div className="flex items-start gap-2.5 min-w-0">
                 <ShieldCheck className="h-4 w-4 text-[#E8856A] shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-white leading-snug">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">
                     Priorizar lead ativo
                   </p>
-                  <p className="text-xs text-stone-400 mt-0.5">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                     Enviar lead para o corretor que já está atendendo o cliente, mesmo que não esteja na roleta.
                   </p>
                 </div>
@@ -203,7 +251,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                 aria-label={config.priorizar_lead_ativo ? "Desativar priorização" : "Ativar priorização"}
                 aria-pressed={config.priorizar_lead_ativo}
                 className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                  config.priorizar_lead_ativo ? "bg-[#E8856A]" : "bg-stone-700"
+                  config.priorizar_lead_ativo ? "bg-[#E8856A]" : "bg-stone-300 dark:bg-stone-700"
                 }`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -216,10 +264,10 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
           {/* Limite diário */}
           <div className="p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <label htmlFor="max-leads-day" className="text-sm font-semibold text-white block leading-snug">
+              <label htmlFor="max-leads-day" className="text-sm font-semibold text-gray-900 dark:text-white block leading-snug">
                 Limite diário por corretor
               </label>
-              <p className="text-xs text-stone-400 mt-0.5">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                 Número máximo de leads recebidos por corretor em um dia.
               </p>
             </div>
@@ -236,13 +284,13 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                   setSaved(false)
                 }
               }}
-              className="w-24 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white text-center focus:border-[#E8856A] focus:outline-none"
+              className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 text-center focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-900 dark:text-white"
             />
           </div>
         </div>
       </section>
 
-      <div className="border-t border-stone-800" />
+      <div className="border-t border-stone-200 dark:border-stone-800" />
 
       {/* ── Notificações ── */}
       <section aria-label="Notificações">
@@ -250,11 +298,11 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
           <Bell className="h-3.5 w-3.5" /> Notificações
         </p>
 
-        <div className="rounded-lg border border-stone-800 bg-stone-800/30 divide-y divide-stone-800">
+        <div className="rounded-lg border border-stone-200 bg-stone-50 divide-y divide-stone-200 dark:border-stone-800 dark:bg-stone-800/30 dark:divide-stone-800">
 
           {/* Notificações ao corretor */}
           <div className="p-4">
-            <p className="text-xs font-semibold text-stone-300 mb-2.5">Ao corretor</p>
+            <p className="text-xs font-semibold text-stone-600 dark:text-stone-300 mb-2.5">Ao corretor</p>
             <div className="flex flex-wrap gap-4">
               {(
                 [
@@ -268,9 +316,9 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                     type="checkbox"
                     checked={config[key]}
                     onChange={(e) => { setConfig((c) => ({ ...c, [key]: e.target.checked })); setSaved(false) }}
-                    className="h-4 w-4 rounded border-stone-700 accent-[#E8856A]"
+                    className="h-4 w-4 rounded border-stone-300 accent-[#E8856A] dark:border-stone-700"
                   />
-                  <span className="text-sm text-stone-300">{label}</span>
+                  <span className="text-sm text-stone-700 dark:text-stone-300">{label}</span>
                 </label>
               ))}
             </div>
@@ -279,12 +327,12 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
           {/* Notificações à imobiliária */}
           <div className="p-4 space-y-3">
             <div className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-stone-500" />
-              <p className="text-xs font-semibold text-stone-300">A gestores da imobiliária</p>
+              <Users className="h-3.5 w-3.5 text-stone-400 dark:text-stone-500" />
+              <p className="text-xs font-semibold text-stone-600 dark:text-stone-300">A gestores da imobiliária</p>
             </div>
 
             <div>
-              <label htmlFor="notify-dist" className="text-xs text-stone-500 block mb-1">
+              <label htmlFor="notify-dist" className="text-xs text-stone-500 dark:text-stone-500 block mb-1">
                 Ao distribuir um lead para um corretor
               </label>
               <select
@@ -303,7 +351,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             </div>
 
             <div>
-              <label htmlFor="notify-fora" className="text-xs text-stone-500 block mb-1">
+              <label htmlFor="notify-fora" className="text-xs text-stone-500 dark:text-stone-500 block mb-1">
                 Quando lead chegar fora do horário da roleta
               </label>
               <select

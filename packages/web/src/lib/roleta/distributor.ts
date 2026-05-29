@@ -21,6 +21,8 @@ interface RoletaConfig {
   business_days: number[]
   business_hour_start: string
   business_hour_end: string
+  weekend_hour_start: string | null
+  weekend_hour_end: string | null
   timezone: string
   notify_push: boolean
   notify_email: boolean
@@ -39,8 +41,12 @@ function isWithinBusinessHours(config: RoletaConfig): boolean {
   const dayOfWeek = tzDate.getDay()
   if (!config.business_days.includes(dayOfWeek)) return false
 
-  const [startH, startM] = config.business_hour_start.split(":").map(Number)
-  const [endH, endM] = config.business_hour_end.split(":").map(Number)
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+  const hourStart = (isWeekend && config.weekend_hour_start) ? config.weekend_hour_start : config.business_hour_start
+  const hourEnd   = (isWeekend && config.weekend_hour_end)   ? config.weekend_hour_end   : config.business_hour_end
+
+  const [startH, startM] = hourStart.split(":").map(Number)
+  const [endH, endM] = hourEnd.split(":").map(Number)
   const current = tzDate.getHours() * 60 + tzDate.getMinutes()
   const start = (startH ?? 8) * 60 + (startM ?? 0)
   const end = (endH ?? 18) * 60 + (endM ?? 0)
@@ -58,7 +64,8 @@ export async function distributeLeadToNextBroker(
   const { data: config } = await admin
     .from("roleta_config")
     .select(
-      "is_active, business_days, business_hour_start, business_hour_end, timezone, " +
+      "is_active, business_days, business_hour_start, business_hour_end, " +
+      "weekend_hour_start, weekend_hour_end, timezone, " +
       "notify_push, notify_email, notify_whatsapp, " +
       "priorizar_lead_ativo, max_leads_per_day, " +
       "notify_user_on_distribution, notify_user_on_fora_horario"
