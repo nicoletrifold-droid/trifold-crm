@@ -83,7 +83,7 @@ export async function GET(
     return NextResponse.json({ error: "Erro ao buscar boleto" }, { status: 502 })
   }
 
-  const url = slip?.url
+  const url = slip?.results?.[0]?.urlReport
   if (!url) {
     return NextResponse.json({ error: "URL do boleto não disponível" }, { status: 404 })
   }
