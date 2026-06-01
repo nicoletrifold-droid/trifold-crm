@@ -165,8 +165,8 @@ export async function GET(request: NextRequest) {
       pagesFetched += totalPages - 1
       supremoLeads = [...firstPage.data, ...remaining]
     } else {
-      // Incremental: fetch first 5 pages (100 newest leads)
-      const pages = Math.min(5, totalPages)
+      // Incremental: fetch first 15 pages (300 newest leads) — cron roda a cada 1 min
+      const pages = Math.min(15, totalPages)
       if (pages > 1) {
         const rest = await fetchAllPages(2, pages)
         pagesFetched += pages - 1
