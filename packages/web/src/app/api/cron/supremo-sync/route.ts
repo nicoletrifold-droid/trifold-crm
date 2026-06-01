@@ -144,6 +144,9 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const mode = searchParams.get("mode") ?? "incremental"
+  // Suporte a range manual: ?from_page=41&to_page=80
+  const fromPageParam = parseInt(searchParams.get("from_page") ?? "1", 10)
+  const toPageParam = searchParams.get("to_page") ? parseInt(searchParams.get("to_page")!, 10) : null
   const startedAt = new Date().toISOString()
   const supabase = createAdminClient()
 
@@ -160,10 +163,18 @@ export async function GET(request: NextRequest) {
     const totalPages = firstPage.totalPaginas
 
     let supremoLeads: SupremoLead[]
-    if (mode === "full") {
-      const remaining = totalPages > 1 ? await fetchAllPages(2, totalPages) : []
-      pagesFetched += totalPages - 1
-      supremoLeads = [...firstPage.data, ...remaining]
+    if (mode === "full" || toPageParam) {
+      // Range mode: processa from_page até to_page (máx 40 págs por chamada para evitar timeout)
+      const from = Math.max(1, fromPageParam)
+      const to = Math.min(toPageParam ?? totalPages, totalPages)
+      if (from === 1) {
+        const rest = to > 1 ? await fetchAllPages(2, to) : []
+        pagesFetched += to - 1
+        supremoLeads = [...firstPage.data, ...rest]
+      } else {
+        supremoLeads = await fetchAllPages(from, to)
+        pagesFetched += to - from + 1
+      }
     } else {
       // Incremental: fetch first 15 pages (300 newest leads) — cron roda a cada 1 min
       const pages = Math.min(15, totalPages)
