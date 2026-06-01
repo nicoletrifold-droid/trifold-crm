@@ -92,10 +92,11 @@ const s = StyleSheet.create({
   },
   tableRow: {
     flexDirection: "row",
+    alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     borderBottomStyle: "solid",
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 8,
   },
   tableRowAlt: {
@@ -110,17 +111,20 @@ const s = StyleSheet.create({
     color: GRAY,
   },
   // Column widths
-  cParcela: { width: "13%" },
-  cTipo: { width: "11%" },
+  cParcela: { width: "10%" },
+  cTipo: { width: "10%" },
   cVenc: { width: "14%" },
-  cOrig: { width: "16%", textAlign: "right" as const },
-  cSaldo: { width: "16%", textAlign: "right" as const },
-  cStatus: { width: "13%" },
+  cOrig: { width: "17%", textAlign: "right" as const },
+  cSaldo: { width: "17%", textAlign: "right" as const },
+  cStatus: { width: "15%", paddingLeft: 8 },
   cPgto: { width: "17%" },
-  // Status colors
-  sPago: { fontFamily: "Helvetica-Bold", fontSize: 7, color: "#059669" },
-  sBoleto: { fontFamily: "Helvetica-Bold", fontSize: 7, color: "#D97706" },
-  sAberto: { fontFamily: "Helvetica-Bold", fontSize: 7, color: GRAY },
+  // Status pill badges
+  badgePago: { backgroundColor: "#D1FAE5", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
+  badgePagoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#059669" },
+  badgeBoleto: { backgroundColor: "#FEF3C7", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
+  badgeBoletoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#D97706" },
+  badgeAberto: { backgroundColor: "#F5F5F4", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
+  badgeAbertoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: GRAY },
   // ── Summary
   summaryRow: {
     flexDirection: "row",
@@ -297,17 +301,13 @@ export function ExtratoPDF({
               <Text style={[s.cell, s.cOrig]}>{fmtCurrency(inst.originalValue)}</Text>
               <Text style={[s.cell, s.cSaldo]}>{fmtCurrency(valor)}</Text>
               <View style={s.cStatus}>
-                <Text
-                  style={
-                    inst.status === "PAGO"
-                      ? s.sPago
-                      : inst.status === "BOLETO_GERADO"
-                        ? s.sBoleto
-                        : s.sAberto
-                  }
-                >
-                  {inst.status === "PAGO" ? "Pago" : inst.status === "BOLETO_GERADO" ? "Boleto" : "Em aberto"}
-                </Text>
+                {inst.status === "PAGO" ? (
+                  <View style={s.badgePago}><Text style={s.badgePagoText}>Pago</Text></View>
+                ) : inst.status === "BOLETO_GERADO" ? (
+                  <View style={s.badgeBoleto}><Text style={s.badgeBoletoText}>Boleto</Text></View>
+                ) : (
+                  <View style={s.badgeAberto}><Text style={s.badgeAbertoText}>Em aberto</Text></View>
+                )}
               </View>
               <Text style={[s.cellGray, s.cPgto]}>
                 {inst.receiptDate ? fmtDate(inst.receiptDate) : "—"}
