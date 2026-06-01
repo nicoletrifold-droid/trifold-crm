@@ -47,3 +47,4 @@ package-lock.json
 e2e-results/
 playwright-report/
 test-results/
+.env*
