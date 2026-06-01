@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { sendEmail } from "@web/lib/email"
+import { renderBaseLayout, renderButton } from "@web/lib/email-layout"
 
 export async function GET() {
   const auth = await requireAuth()
@@ -72,6 +74,116 @@ export async function POST(request: NextRequest) {
   if (forbidden) return forbidden
 
   const body = await request.json()
+
+  // If creating a new broker via email invite (no password set by admin)
+  if (body.email && body.sendInvite && body.name) {
+    const adminSupabase = createAdminClient()
+
+    // Step 1: Create auth user without a real password (random temp)
+    const tempPassword = `Tmp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}!`
+    const { data: authData, error: authError } =
+      await adminSupabase.auth.admin.createUser({
+        email: body.email.trim(),
+        password: tempPassword,
+        email_confirm: true,
+      })
+
+    if (authError) {
+      return NextResponse.json(
+        { error: `Erro ao criar usuario: ${authError.message}` },
+        { status: 400 }
+      )
+    }
+
+    const authUser = authData.user
+
+    // Step 2: Create users table row
+    const phone: string | null = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+
+    const { data: newUser, error: userError } = await adminSupabase
+      .from("users")
+      .insert({
+        auth_id: authUser.id,
+        org_id: appUser.org_id,
+        name: body.name.trim(),
+        email: body.email.trim(),
+        role: "broker",
+        is_active: true,
+        ...(phone ? { phone } : {}),
+      })
+      .select("id")
+      .single()
+
+    if (userError) {
+      await adminSupabase.auth.admin.deleteUser(authUser.id)
+      return NextResponse.json(
+        { error: `Erro ao criar usuario: ${userError.message}` },
+        { status: 500 }
+      )
+    }
+
+    // Step 3: Create broker record
+    const { data: broker, error: brokerError } = await adminSupabase
+      .from("brokers")
+      .insert({
+        org_id: appUser.org_id,
+        user_id: newUser.id,
+        creci: body.creci?.trim() || null,
+        type: body.type || "internal",
+        max_leads: body.max_leads ?? 50,
+        is_available: true,
+      })
+      .select()
+      .single()
+
+    if (brokerError) {
+      return NextResponse.json(
+        { error: `Erro ao criar corretor: ${brokerError.message}` },
+        { status: 500 }
+      )
+    }
+
+    // Step 4: Generate password setup link and send branded email
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
+    const { data: linkData } = await adminSupabase.auth.admin.generateLink({
+      type: "recovery",
+      email: body.email.trim(),
+      options: { redirectTo: `${siteUrl}/reset-senha` },
+    })
+
+    if (linkData?.properties?.action_link) {
+      const brokerName = body.name.trim()
+      const actionLink = linkData.properties.action_link
+      const html = renderBaseLayout(
+        `
+        <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">Olá, ${brokerName}!</p>
+        <p style="margin:0 0 24px;color:#6b7280;">
+          Você foi cadastrado como corretor no sistema da <strong>Trifold</strong>.
+          Para acessar o CRM, você precisa criar sua senha clicando no botão abaixo.
+        </p>
+        ${renderButton("Criar minha senha", actionLink)}
+        <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
+          Após criar sua senha, acesse o sistema em:<br>
+          <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
+        </p>
+        <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
+          Este link expira em 24 horas. Se você não esperava este e-mail, pode ignorá-lo.
+        </p>
+        `,
+        { orgName: "Trifold CRM", previewText: `${brokerName}, crie sua senha de acesso ao Trifold CRM` }
+      )
+
+      await sendEmail({
+        to: body.email.trim(),
+        subject: "Crie sua senha — Trifold CRM",
+        html,
+        tags: [{ name: "type", value: "broker_invite" }],
+        orgId: appUser.org_id,
+      })
+    }
+
+    return NextResponse.json({ data: broker }, { status: 201 })
+  }
 
   // If creating a new broker with email/password (full creation flow)
   if (body.email && body.password && body.name) {

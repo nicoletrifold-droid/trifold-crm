@@ -16,6 +16,7 @@ export default function NovoCorretorPage() {
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
+  const [passwordMode, setPasswordMode] = useState<"manual" | "invite">("manual")
   const [creci, setCreci] = useState("")
   const [type, setType] = useState<"internal" | "external">("internal")
   const [saving, setSaving] = useState(false)
@@ -35,17 +36,15 @@ export default function NovoCorretorPage() {
     setSaving(true)
 
     try {
+      const body =
+        passwordMode === "invite"
+          ? { name: name.trim(), email: email.trim(), phone: phone.trim() || null, creci: creci.trim() || null, type, sendInvite: true }
+          : { name: name.trim(), email: email.trim(), phone: phone.trim() || null, password, creci: creci.trim() || null, type }
+
       const res = await fetch("/api/brokers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone.trim() || null,
-          password,
-          creci: creci.trim() || null,
-          type,
-        }),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok) {
@@ -136,19 +135,50 @@ export default function NovoCorretorPage() {
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
+          <div className="sm:col-span-2">
+            <label className="mb-2 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Senha *
             </label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
-            />
+            <div className="mb-3 flex gap-3">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="passwordMode"
+                  value="manual"
+                  checked={passwordMode === "manual"}
+                  onChange={() => setPasswordMode("manual")}
+                  className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-sm text-stone-700 dark:text-stone-300">Definir senha agora</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="passwordMode"
+                  value="invite"
+                  checked={passwordMode === "invite"}
+                  onChange={() => setPasswordMode("invite")}
+                  className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-sm text-stone-700 dark:text-stone-300">Enviar link por email</span>
+              </label>
+            </div>
+            {passwordMode === "manual" ? (
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+              />
+            ) : (
+              <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                Um e-mail será enviado ao corretor com um link para criar a própria senha. O e-mail incluirá o endereço do sistema:{" "}
+                <strong>crm.trifold.eng.br</strong>
+              </p>
+            )}
           </div>
 
           <div>
