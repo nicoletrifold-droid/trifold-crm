@@ -97,10 +97,7 @@ export async function POST(request: Request) {
   let leadId: string | null = body.lead_id ?? null
 
   if (!leadId && body.client_phone) {
-    const assignedBrokerId =
-      body.broker_id ||
-      (appUser.role === "broker" ? appUser.id : null) ||
-      null
+    const assignedBrokerId = body.broker_id || appUser.id
 
     // Find-or-create: check if any lead with this phone exists for this org (active or not)
     const normalizedPhone = normalizePhoneBR(body.client_phone.trim())
@@ -184,7 +181,7 @@ export async function POST(request: Request) {
     .insert({
       org_id: appUser.org_id,
       lead_id: leadId,
-      broker_id: body.broker_id || (appUser.role === "broker" ? appUser.id : null) || null,
+      broker_id: body.broker_id || appUser.id,
       property_id: body.property_id || null,
       scheduled_at: body.scheduled_at,
       duration_minutes: duration,

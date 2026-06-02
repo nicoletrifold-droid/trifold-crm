@@ -3,6 +3,7 @@ import { now } from "@web/lib/time"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { NewAppointmentButton } from "@web/app/dashboard/_components/new-appointment-modal"
+import { DeleteAppointmentButton } from "@web/app/dashboard/_components/delete-appointment-button"
 
 const statusConfig: Record<
   string,
@@ -594,16 +595,24 @@ function AppointmentDetail({
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-      <div className="mb-4 flex items-start justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">
           Detalhes do Agendamento
         </h2>
-        <Link
-          href={closeUrl}
-          className="rounded-md px-3 py-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-        >
-          Fechar
-        </Link>
+        <div className="flex items-center gap-2">
+          {apt.status !== "cancelled" && (
+            <DeleteAppointmentButton
+              appointmentId={apt.id}
+              redirectUrl={closeUrl}
+            />
+          )}
+          <Link
+            href={closeUrl}
+            className="rounded-md px-3 py-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+          >
+            Fechar
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
