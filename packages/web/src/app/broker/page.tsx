@@ -138,52 +138,46 @@ export default async function BrokerHomePage() {
       </div>
 
       {/* ── Stats ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2.5">
         <Link
           href="/broker/leads"
-          className="group flex items-center gap-3 rounded-2xl border border-stone-800 bg-stone-900 px-4 py-4 transition-all hover:border-orange-500/30 hover:bg-stone-900/80"
+          className="flex flex-col items-center gap-2 rounded-2xl border border-stone-800 bg-stone-900 px-2 py-4 text-center transition-all active:bg-stone-800 hover:border-orange-500/30"
         >
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500/10">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10">
             <Users className="h-4 w-4 text-orange-400" />
           </div>
-          <div className="min-w-0">
-            <p className="text-xl font-bold leading-none text-stone-100">{totalLeads}</p>
-            <p className="mt-1 truncate text-xs text-stone-500">Leads ativos</p>
+          <div>
+            <p className="text-2xl font-bold leading-none text-stone-100">{totalLeads}</p>
+            <p className="mt-1 text-[11px] font-medium text-stone-500">Leads</p>
           </div>
-          <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-stone-700 transition-colors group-hover:text-stone-500" />
         </Link>
 
         <Link
           href="/broker/agenda"
-          className="group flex items-center gap-3 rounded-2xl border border-stone-800 bg-stone-900 px-4 py-4 transition-all hover:border-blue-500/30 hover:bg-stone-900/80"
+          className="flex flex-col items-center gap-2 rounded-2xl border border-stone-800 bg-stone-900 px-2 py-4 text-center transition-all active:bg-stone-800 hover:border-blue-500/30"
         >
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10">
             <CalendarDays className="h-4 w-4 text-blue-400" />
           </div>
-          <div className="min-w-0">
-            <p className="text-xl font-bold leading-none text-stone-100">{totalAppointments}</p>
-            <p className="mt-1 truncate text-xs text-stone-500">
-              {totalAppointments === 1 ? "Compromisso" : "Compromissos"}
-            </p>
+          <div>
+            <p className="text-2xl font-bold leading-none text-stone-100">{totalAppointments}</p>
+            <p className="mt-1 text-[11px] font-medium text-stone-500">Agenda</p>
           </div>
-          <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-stone-700 transition-colors group-hover:text-stone-500" />
         </Link>
 
-        <Link
-          href="/broker/alertas"
-          className="group flex items-center gap-3 rounded-2xl border border-stone-800 bg-stone-900 px-4 py-4 transition-all hover:border-yellow-500/30 hover:bg-stone-900/80"
+        <div
+          className="flex flex-col items-center gap-2 rounded-2xl border border-stone-800 bg-stone-900 px-2 py-4 text-center"
         >
-          <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${totalPending > 0 ? "bg-yellow-500/15" : "bg-stone-800"}`}>
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${totalPending > 0 ? "bg-yellow-500/15" : "bg-stone-800"}`}>
             <Bell className={`h-4 w-4 ${totalPending > 0 ? "text-yellow-400" : "text-stone-500"}`} />
           </div>
-          <div className="min-w-0">
-            <p className={`text-xl font-bold leading-none ${totalPending > 0 ? "text-yellow-400" : "text-stone-100"}`}>
+          <div>
+            <p className={`text-2xl font-bold leading-none ${totalPending > 0 ? "text-yellow-400" : "text-stone-100"}`}>
               {totalPending}
             </p>
-            <p className="mt-1 truncate text-xs text-stone-500">Pendências</p>
+            <p className="mt-1 text-[11px] font-medium text-stone-500">Follow-up</p>
           </div>
-          <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-stone-700 transition-colors group-hover:text-stone-500" />
-        </Link>
+        </div>
       </div>
 
       {/* ── Pipeline by stage ─────────────────────────────────────── */}
@@ -201,19 +195,19 @@ export default async function BrokerHomePage() {
         {stageSummary.length === 0 ? (
           <p className="py-4 text-center text-sm text-stone-600">Nenhum lead atribuído ainda.</p>
         ) : (
-          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(stageSummary.length, 7)}, minmax(0, 1fr))` }}>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
             {stageSummary.map((stage) => (
               <Link
                 key={stage.id}
                 href={`/broker/leads?stage=${stage.id}`}
-                className="flex flex-col items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 py-3 transition-all hover:border-stone-700 hover:bg-stone-800/60"
+                className="flex min-w-[80px] flex-shrink-0 flex-col items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-3 transition-all hover:border-stone-700 hover:bg-stone-800/60 active:bg-stone-800/80"
               >
                 <span className="text-2xl font-bold leading-none" style={{ color: stage.color }}>
                   {stage.count}
                 </span>
                 <span
-                  className="rounded-full px-2 py-0.5 text-center text-[10px] font-medium leading-tight"
-                  style={{ backgroundColor: `${stage.color}20`, color: stage.color }}
+                  className="w-full text-center text-[10px] font-medium leading-tight"
+                  style={{ color: stage.color }}
                 >
                   {stage.name}
                 </span>
@@ -300,12 +294,6 @@ export default async function BrokerHomePage() {
         <div className="flex flex-col rounded-2xl border border-stone-800 bg-stone-900">
           <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
             <h2 className="text-sm font-semibold text-stone-300">Pendências de follow-up</h2>
-            <Link
-              href="/broker/alertas"
-              className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400"
-            >
-              Ver alertas <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
 
           {myPendingLogs.length === 0 ? (

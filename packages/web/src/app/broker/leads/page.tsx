@@ -48,100 +48,153 @@ export default async function BrokerLeadsPage({
   ])
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meus Leads</h1>
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-gray-500 dark:text-stone-400">
-            {filtered.length} {(search || stage) ? `de ${leads?.length ?? 0}` : ""} leads
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-100">Meus Leads</h1>
+          <p className="text-sm text-stone-500">
+            {filtered.length}{(search || stage) ? ` de ${leads?.length ?? 0}` : ""} leads
           </p>
-          <LeadSearch />
-          <NewLeadModal
-            properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}
-            stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
-          />
         </div>
+        <NewLeadModal
+          properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}
+          stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
+        />
       </div>
 
+      {/* Search */}
+      <LeadSearch />
+
       {filtered.length === 0 ? (
-        <div className="rounded-lg bg-white p-12 text-center shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-gray-500 dark:text-stone-400">
+        <div className="rounded-xl bg-stone-900 p-12 text-center ring-1 ring-stone-800">
+          <p className="text-stone-500">
             {search
               ? `Nenhum lead encontrado para "${q}".`
               : "Você não tem leads designados. Novos leads serão atribuídos pelo supervisor."}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
-            <thead>
-              <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
-                <th className="px-6 py-3">Lead</th>
-                <th className="px-6 py-3">Empreendimento</th>
-                <th className="px-6 py-3">Etapa</th>
-                <th className="px-6 py-3">Score</th>
-                <th className="px-6 py-3">Último contato</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-              {filtered.map((lead: Record<string, unknown>) => {
-                const stage = Array.isArray(lead.kanban_stages)
-                  ? lead.kanban_stages[0]
-                  : lead.kanban_stages
-                const property = Array.isArray(lead.properties)
-                  ? lead.properties[0]
-                  : lead.properties
-                return (
-                  <tr key={lead.id as string} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
-                    <td className="px-6 py-4">
-                      <Link
-                        href={`/broker/leads/${lead.id}`}
-                        className="font-medium text-gray-900 hover:text-orange-600 dark:text-stone-100 dark:hover:text-orange-300"
+        <>
+          {/* Mobile: card list */}
+          <div className="space-y-2 lg:hidden">
+            {filtered.map((lead: Record<string, unknown>) => {
+              const stageData = Array.isArray(lead.kanban_stages)
+                ? lead.kanban_stages[0]
+                : lead.kanban_stages
+              const property = Array.isArray(lead.properties)
+                ? lead.properties[0]
+                : lead.properties
+              return (
+                <Link
+                  key={lead.id as string}
+                  href={`/broker/leads/${lead.id}`}
+                  className="flex items-center gap-3 rounded-xl bg-stone-900 px-4 py-3.5 ring-1 ring-stone-800 active:bg-stone-800"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-stone-100">
+                      {(lead.name as string) || (lead.phone as string)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-stone-500">{lead.phone as string}</p>
+                    {(property as { name?: string } | null)?.name && (
+                      <p className="mt-0.5 truncate text-xs text-stone-600">
+                        {(property as { name: string }).name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5">
+                    {stageData && (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                        style={{
+                          backgroundColor: `${(stageData as { color: string }).color}20`,
+                          color: (stageData as { color: string }).color,
+                        }}
                       >
-                        {(lead.name as string) || (lead.phone as string)}
-                      </Link>
-                      <p className="text-xs text-gray-500 dark:text-stone-400">{lead.phone as string}</p>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                      {(property as { name?: string } | null)?.name ?? "-"}
-                    </td>
-                    <td className="px-6 py-4">
-                      {stage && (
-                        <span
-                          className="rounded-full px-2 py-0.5 text-xs font-medium"
-                          style={{
-                            backgroundColor: `${(stage as { color: string }).color}20`,
-                            color: (stage as { color: string }).color,
-                          }}
-                        >
-                          {(stage as { name: string }).name}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {lead.qualification_score != null && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            (lead.qualification_score as number) >= 70
-                              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                              : (lead.qualification_score as number) >= 40
-                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
-                              : "bg-gray-100 text-gray-500 dark:bg-stone-700/50 dark:text-stone-400"
-                          }`}
-                        >
-                          {lead.qualification_score as number}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
+                        {(stageData as { name: string }).name}
+                      </span>
+                    )}
+                    <p className="text-[11px] text-stone-600">
                       {new Date(lead.updated_at as string).toLocaleDateString("pt-BR")}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </p>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden overflow-x-auto rounded-xl bg-stone-900 ring-1 ring-stone-800 lg:block">
+            <table className="min-w-full divide-y divide-stone-800">
+              <thead>
+                <tr className="text-left text-xs font-medium uppercase tracking-wider bg-stone-800/50 text-stone-400">
+                  <th className="px-6 py-3">Lead</th>
+                  <th className="px-6 py-3">Empreendimento</th>
+                  <th className="px-6 py-3">Etapa</th>
+                  <th className="px-6 py-3">Score</th>
+                  <th className="px-6 py-3">Último contato</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-800">
+                {filtered.map((lead: Record<string, unknown>) => {
+                  const stageData = Array.isArray(lead.kanban_stages)
+                    ? lead.kanban_stages[0]
+                    : lead.kanban_stages
+                  const property = Array.isArray(lead.properties)
+                    ? lead.properties[0]
+                    : lead.properties
+                  return (
+                    <tr key={lead.id as string} className="hover:bg-stone-800/30">
+                      <td className="px-6 py-4">
+                        <Link
+                          href={`/broker/leads/${lead.id}`}
+                          className="font-medium text-stone-100 hover:text-orange-300"
+                        >
+                          {(lead.name as string) || (lead.phone as string)}
+                        </Link>
+                        <p className="text-xs text-stone-500">{lead.phone as string}</p>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-stone-400">
+                        {(property as { name?: string } | null)?.name ?? "-"}
+                      </td>
+                      <td className="px-6 py-4">
+                        {stageData && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-xs font-medium"
+                            style={{
+                              backgroundColor: `${(stageData as { color: string }).color}20`,
+                              color: (stageData as { color: string }).color,
+                            }}
+                          >
+                            {(stageData as { name: string }).name}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {lead.qualification_score != null && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              (lead.qualification_score as number) >= 70
+                                ? "bg-green-500/15 text-green-300"
+                                : (lead.qualification_score as number) >= 40
+                                ? "bg-yellow-500/15 text-yellow-300"
+                                : "bg-stone-700/50 text-stone-400"
+                            }`}
+                          >
+                            {lead.qualification_score as number}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-stone-400">
+                        {new Date(lead.updated_at as string).toLocaleDateString("pt-BR")}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )
