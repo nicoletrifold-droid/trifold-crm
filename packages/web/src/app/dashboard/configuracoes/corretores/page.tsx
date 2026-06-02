@@ -4,6 +4,7 @@ import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { BrokerPropertyAssign } from "@web/components/admin/broker-property-assign"
 import { ToggleAvailabilityButton } from "./_toggle-button"
+import { PasswordButton } from "./_password-button"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 export default async function CorretoresPage() {
@@ -189,6 +190,10 @@ export default async function CorretoresPage() {
                         >
                           Editar
                         </Link>
+                        <PasswordButton
+                          userId={brokerUser?.id ?? ""}
+                          email={brokerUser?.email ?? ""}
+                        />
                         <ToggleAvailabilityButton
                           brokerId={broker.id}
                           isAvailable={broker.is_available}
