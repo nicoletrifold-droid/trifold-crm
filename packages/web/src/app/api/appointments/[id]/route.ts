@@ -122,13 +122,22 @@ export async function DELETE(
   // Fetch current appointment to get google_event_id before soft-deleting
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id, google_event_id, lead_id")
+    .select("id, google_event_id, lead_id, broker_id")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
 
   if (!existing) {
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
+  }
+
+  // Brokers may only delete their own appointments
+  const privilegedRoles = ["admin", "supervisor", "gerente-comercial"]
+  if (!privilegedRoles.includes(appUser.role) && existing.broker_id !== appUser.id) {
+    return NextResponse.json(
+      { error: "Sem permissão para excluir este agendamento" },
+      { status: 403 }
+    )
   }
 
   // Soft delete: set status to cancelled

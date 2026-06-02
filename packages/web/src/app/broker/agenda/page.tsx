@@ -82,6 +82,7 @@ interface Appointment {
   location: string | null
   status: string
   notes: string | null
+  broker_id: string | null
   lead: unknown
   property: unknown
 }
@@ -152,7 +153,7 @@ export default async function BrokerAgendaPage({
     .from("appointments")
     .select(
       `
-      id, scheduled_at, duration_minutes, location, status, notes,
+      id, scheduled_at, duration_minutes, location, status, notes, broker_id,
       lead:leads!lead_id(id, name, phone),
       property:properties!property_id(id, name)
     `
@@ -522,6 +523,7 @@ export default async function BrokerAgendaPage({
           apt={selectedApt}
           nowMs={nowMs}
           closeUrl={buildUrl({ apt: undefined })}
+          currentUserId={user.id}
         />
       )}
     </div>
@@ -532,10 +534,12 @@ function AppointmentDetail({
   apt,
   nowMs,
   closeUrl,
+  currentUserId,
 }: {
   apt: Appointment
   nowMs: number
   closeUrl: string
+  currentUserId: string
 }) {
   const s = statusConfig[apt.status] ?? statusConfig.scheduled!
   const date = new Date(apt.scheduled_at)
@@ -566,7 +570,7 @@ function AppointmentDetail({
               Dar feedback
             </Link>
           )}
-          {apt.status !== "cancelled" && (
+          {apt.status !== "cancelled" && apt.broker_id === currentUserId && (
             <DeleteAppointmentButton appointmentId={apt.id} redirectUrl={closeUrl} />
           )}
           <Link
