@@ -120,12 +120,13 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const target = event.notification.data?.url ?? '/cliente'
+  const target = event.notification.data?.url ?? '/'
   event.waitUntil(
     clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((list) => {
-        const existing = list.find((c) => c.url.startsWith(self.location.origin + '/cliente'))
+        // Focus any existing window from this origin and navigate it to the target
+        const existing = list.find((c) => c.url.startsWith(self.location.origin))
         if (existing) return existing.focus().then((c) => c.navigate(target))
         return clients.openWindow(target)
       })

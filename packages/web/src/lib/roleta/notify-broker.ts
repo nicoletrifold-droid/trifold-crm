@@ -36,7 +36,7 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const result: NotifyResult = { push: false, email: false, whatsapp: false }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
-  const leadUrl = `${appUrl}/dashboard/leads/${lead.id}`
+  const leadUrl = `${appUrl}/broker/leads/${lead.id}`
   const leadName = lead.name ?? "Novo Lead"
 
   const pushP = config.notify_push
