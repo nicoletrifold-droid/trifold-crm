@@ -64,8 +64,18 @@ const CONFIG_CARDS = [
   },
 ]
 
+// Cards visíveis para gerente-comercial
+const GERENTE_ALLOWED: string[] = [
+  "/dashboard/configuracoes/corretores",
+  "/dashboard/pipeline/config",
+]
+
 export default async function ConfiguracoesPage() {
-  await getServerUser()
+  const user = await getServerUser()
+  const isGerenteComercial = user.role === "gerente-comercial"
+  const visibleCards = isGerenteComercial
+    ? CONFIG_CARDS.filter((c) => GERENTE_ALLOWED.includes(c.href))
+    : CONFIG_CARDS
 
   return (
     <div className="space-y-6">
@@ -77,7 +87,7 @@ export default async function ConfiguracoesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {CONFIG_CARDS.map((card) => (
+        {visibleCards.map((card) => (
           <Link
             key={card.href}
             href={card.href}

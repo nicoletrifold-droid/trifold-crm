@@ -90,7 +90,7 @@ export function ScrollableX({ children, className = "", innerClassName = "" }: S
       <div
         ref={mirrorRef}
         className="sticky bottom-0 overflow-x-auto"
-        style={{ height: 12 }}
+        style={{ height: 16 }}
       >
         {/* Ghost element that carries the scrollable width */}
         <div ref={ghostRef} style={{ height: 1 }} />
