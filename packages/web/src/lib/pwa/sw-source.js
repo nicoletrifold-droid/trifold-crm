@@ -3,10 +3,12 @@ const APP_SHELL_CACHE = `trifold-shell-${BUILD_HASH}`
 const STATIC_CACHE = `trifold-static-${BUILD_HASH}`
 const OFFLINE_PAGE_CLIENTE = '/cliente/offline'
 const OFFLINE_PAGE_DASHBOARD = '/dashboard/offline'
+const OFFLINE_PAGE_BROKER = '/broker/offline'
 
 const APP_SHELL_URLS = [
   OFFLINE_PAGE_CLIENTE,
   OFFLINE_PAGE_DASHBOARD,
+  OFFLINE_PAGE_BROKER,
   '/icon-crm-192.png',
   '/icon-cliente-192.png',
 ]
@@ -60,6 +62,14 @@ self.addEventListener('fetch', (event) => {
           (r) => r ?? new Response('Offline', { status: 503 })
         )
       )
+    )
+    return
+  }
+
+  // Navigation in /broker → network-first, offline fallback
+  if (request.mode === 'navigate' && url.pathname.startsWith('/broker')) {
+    event.respondWith(
+      fetch(request).catch(() => offlineFallback(OFFLINE_PAGE_BROKER))
     )
     return
   }

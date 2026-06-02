@@ -3,6 +3,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { LayoutDashboard, Users, Kanban, CalendarDays, Bell, MessageSquarePlus } from "lucide-react"
+import { NewLeadNotification } from "./_components/new-lead-notification"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -52,6 +53,8 @@ export default async function BrokerLayout({
           {children}
         </div>
       </main>
+
+      <NewLeadNotification userId={user.id} orgId={user.orgId} />
     </div>
   )
 }

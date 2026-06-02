@@ -67,6 +67,12 @@
       "short_name": "Alertas",
       "url": "/dashboard/alertas?utm_source=pwa_shortcut",
       "description": "Ver alertas pendentes"
+    },
+    {
+      "name": "Meus Leads",
+      "short_name": "Meus Leads",
+      "url": "/broker/leads?utm_source=pwa_shortcut",
+      "description": "Ver meus leads como corretor"
     }
   ],
   "prefer_related_applications": false
