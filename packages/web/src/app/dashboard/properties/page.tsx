@@ -86,7 +86,7 @@ export default async function PropertiesPage() {
                     href={`/dashboard/properties/${p.id}`}
                     className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                   >
-                    Editar
+                    {isAdmin ? "Editar" : "Ver"}
                   </Link>
                 </td>
               </tr>

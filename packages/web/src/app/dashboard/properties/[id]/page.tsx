@@ -200,12 +200,14 @@ export default async function PropertyDetailPage({
           <h2 className="text-lg font-semibold dark:text-stone-100">
             Unidades ({units?.length ?? 0})
           </h2>
-          <Link
-            href={`/dashboard/properties/${id}/units`}
-            className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
-          >
-            Gerenciar unidades
-          </Link>
+          {isAdminOrSupervisor && (
+            <Link
+              href={`/dashboard/properties/${id}/units`}
+              className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
+            >
+              Gerenciar unidades
+            </Link>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-stone-700">
@@ -261,12 +263,14 @@ export default async function PropertyDetailPage({
                     </span>
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <Link
-                      href={`/dashboard/properties/${id}/units/${u.id}`}
-                      className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-200 dark:hover:bg-stone-600"
-                    >
-                      Editar
-                    </Link>
+                    {isAdminOrSupervisor && (
+                      <Link
+                        href={`/dashboard/properties/${id}/units/${u.id}`}
+                        className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-200 dark:hover:bg-stone-600"
+                      >
+                        Editar
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))}
