@@ -2,7 +2,7 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { Users, Kanban, CalendarDays, Bell } from "lucide-react"
+import { Users, Kanban, CalendarDays, Bell, MessageSquarePlus } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/broker/pipeline", label: "Pipeline", icon: <Kanban className={ICON_SIZE} /> },
   { href: "/broker/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
   { href: "/broker/alertas", label: "Alertas", icon: <Bell className={ICON_SIZE} /> },
+  { href: "/broker/suporte", label: "Suporte", icon: <MessageSquarePlus className={ICON_SIZE} /> },
 ]
 
 export default async function BrokerLayout({
