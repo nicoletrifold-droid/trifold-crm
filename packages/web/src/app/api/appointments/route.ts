@@ -102,15 +102,12 @@ export async function POST(request: Request) {
       (appUser.role === "broker" ? appUser.id : null) ||
       null
 
-    // Find-or-create: check if lead with this phone already exists (match on normalized phone)
+    // Find-or-create: check if any lead with this phone exists for this org (active or not)
     const normalizedPhone = normalizePhoneBR(body.client_phone.trim())
-    const { data: existingLead } = await supabase
-      .from("leads")
-      .select("id")
-      .eq("org_id", appUser.org_id)
-      .eq("phone_normalized", normalizedPhone)
-      .eq("is_active", true)
-      .maybeSingle()
+    const phoneQuery = normalizedPhone
+      ? supabase.from("leads").select("id").eq("org_id", appUser.org_id).eq("phone_normalized", normalizedPhone)
+      : supabase.from("leads").select("id").eq("org_id", appUser.org_id).eq("phone", body.client_phone.trim())
+    const { data: existingLead } = await phoneQuery.limit(1).maybeSingle()
 
     if (existingLead) {
       leadId = existingLead.id
