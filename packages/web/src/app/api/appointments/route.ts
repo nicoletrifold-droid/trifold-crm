@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createCalendarEvent } from "@web/lib/google-calendar"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -68,10 +69,10 @@ export async function POST(request: Request) {
 
   const body = await request.json()
 
-  // Validation
-  if (!body.lead_id) {
+  // Validate: either lead_id or client_phone must be provided
+  if (!body.lead_id && !body.client_phone) {
     return NextResponse.json(
-      { error: "lead_id is required" },
+      { error: "lead_id or client_phone is required" },
       { status: 400 }
     )
   }
@@ -91,19 +92,97 @@ export async function POST(request: Request) {
     )
   }
 
+  // Resolve lead_id: auto-create lead if only client_phone was provided
+  let leadId: string | null = body.lead_id ?? null
+
+  if (!leadId && body.client_phone) {
+    const assignedBrokerId =
+      body.broker_id ||
+      (appUser.role === "broker" ? appUser.id : null) ||
+      null
+
+    const { data: newLead, error: leadError } = await supabase
+      .from("leads")
+      .insert({
+        org_id: appUser.org_id,
+        name: body.client_name?.trim() || body.client_phone,
+        phone: body.client_phone.trim(),
+        email: body.client_email?.trim() || null,
+        assigned_broker_id: assignedBrokerId,
+      })
+      .select("id")
+      .single()
+
+    if (leadError || !newLead) {
+      return NextResponse.json(
+        { error: leadError?.message ?? "Failed to create lead" },
+        { status: 500 }
+      )
+    }
+
+    leadId = newLead.id
+  }
+
+  // Double-booking check: same location and overlapping time window
+  const location = body.location?.trim() || "Stand Trifold"
+  const duration = body.duration_minutes || 30
+  const newStart = new Date(body.scheduled_at)
+  const newEnd = new Date(newStart.getTime() + duration * 60000)
+
+  if (location) {
+    const { data: conflicts } = await supabase
+      .from("appointments")
+      .select("id, scheduled_at, duration_minutes")
+      .eq("org_id", appUser.org_id)
+      .eq("location", location)
+      .in("status", ["scheduled", "confirmed"])
+      .gte(
+        "scheduled_at",
+        new Date(newStart.getTime() - 120 * 60000).toISOString()
+      )
+      .lte("scheduled_at", newEnd.toISOString())
+
+    const trueConflict = (conflicts ?? []).some((existing) => {
+      const existStart = new Date(existing.scheduled_at)
+      const existEnd = new Date(
+        existStart.getTime() + (existing.duration_minutes ?? 30) * 60000
+      )
+      // Overlap: newStart < existEnd && existStart < newEnd
+      return newStart < existEnd && existStart < newEnd
+    })
+
+    if (trueConflict) {
+      return NextResponse.json(
+        { error: "Conflito de horário: já existe um agendamento nesse local e horário." },
+        { status: 409 }
+      )
+    }
+  }
+
+  // Determine created_by
+  let createdBy: "admin" | "broker" | "nicole" = "admin"
+  if (appUser.role === "broker") {
+    createdBy = "broker"
+  } else if (body.created_by) {
+    createdBy = body.created_by
+  }
+
   const { data: appointment, error } = await supabase
     .from("appointments")
     .insert({
       org_id: appUser.org_id,
-      lead_id: body.lead_id,
-      broker_id: body.broker_id || null,
+      lead_id: leadId,
+      broker_id: body.broker_id || (appUser.role === "broker" ? appUser.id : null) || null,
       property_id: body.property_id || null,
       scheduled_at: body.scheduled_at,
-      duration_minutes: body.duration_minutes || 30,
-      location: body.location?.trim() || "Stand Trifold",
+      duration_minutes: duration,
+      location,
       status: body.status || "scheduled",
       notes: body.notes?.trim() || null,
-      created_by: body.created_by || "admin",
+      created_by: createdBy,
+      client_name: body.client_name?.trim() || null,
+      client_email: body.client_email?.trim() || null,
+      client_phone: body.client_phone?.trim() || null,
     })
     .select()
     .single()
@@ -112,15 +191,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Create Google Calendar event (fire-and-forget)
+  const googleEventId = await createCalendarEvent({
+    title: `Visita ao decorado${body.client_name ? ` — ${body.client_name}` : ""}`,
+    description: [
+      body.notes ?? "",
+      location ? `Local: ${location}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    startAt: newStart,
+    endAt: newEnd,
+    attendeeEmail: body.client_email?.trim() || undefined,
+  })
+
+  if (googleEventId) {
+    await supabase
+      .from("appointments")
+      .update({ google_event_id: googleEventId })
+      .eq("id", appointment.id)
+  }
+
   // Create activity log
   await supabase.from("activities").insert({
     org_id: appUser.org_id,
-    lead_id: body.lead_id,
+    lead_id: leadId,
     user_id: appUser.id,
     type: "appointment_created",
     description: `Agendamento criado para ${scheduledAt.toLocaleString("pt-BR")}`,
     metadata: { appointment_id: appointment.id },
   })
 
-  return NextResponse.json({ data: appointment }, { status: 201 })
+  return NextResponse.json({ data: { ...appointment, google_event_id: googleEventId } }, { status: 201 })
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 const CRON_SECRET = process.env.CRON_SECRET
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
       scheduled_at,
       metadata,
       org_id,
+      cancel_token,
       lead:leads!lead_id(id, name, phone),
       broker:users!broker_id(id, name, phone),
       property:properties!property_id(id, name)
@@ -65,12 +67,13 @@ export async function GET(request: NextRequest) {
       })
 
       const propertyName = property?.name ?? ""
+      const cancelUrl = `${siteUrl}/agendar/cancelar/${appointment.cancel_token}`
 
       let appointmentSent = false
 
       // WhatsApp ao lead
       if (lead?.phone && !lead.phone.startsWith("tg:")) {
-        const message = `Olá ${lead.name}! Lembramos que você tem uma visita ao decorado ${propertyName} agendada para hoje às ${hora}, aqui na Av. Nildo Ribeiro, 1337 - Maringá - PR. Te esperamos com muito carinho! Qualquer dúvida, é só chamar. 😊`
+        const message = `Olá ${lead.name}! Lembramos que você tem uma visita ao decorado ${propertyName} agendada para hoje às ${hora}, aqui na Av. Nildo Ribeiro, 1337 - Maringá - PR. Te esperamos com muito carinho! Qualquer dúvida, é só chamar. 😊\n\nPara cancelar: ${cancelUrl}`
         await sendWhatsApp(waConfig, lead.phone, message)
         sent++
         appointmentSent = true

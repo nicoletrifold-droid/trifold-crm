@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
+import { renderBaseLayout, renderButton } from "@web/lib/email-layout"
 
 const CRON_SECRET = process.env.CRON_SECRET
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -33,6 +35,7 @@ export async function GET(request: NextRequest) {
       location,
       metadata,
       org_id,
+      cancel_token,
       lead:leads!lead_id(id, name, email),
       broker:users!broker_id(id, name, email),
       property:properties!property_id(id, name)
@@ -68,18 +71,21 @@ export async function GET(request: NextRequest) {
 
       const propertyName = property?.name ?? ""
       const leadName = lead?.name ?? "Lead"
+      const cancelUrl = `${siteUrl}/agendar/cancelar/${appointment.cancel_token}`
 
       // E-mail ao corretor
       if (broker?.email) {
+        const brokerHtml = renderBaseLayout(
+          `<p>Olá, ${broker.name}!</p>
+          <p>Passando para lembrar que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>, com <strong>${leadName}</strong>.</p>
+          <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
+          <p>Até lá! ☕</p>`,
+          { orgName: "Trifold" }
+        )
         const result = await sendEmail({
           to: broker.email,
           subject: `Lembrete: visita ao decorado amanhã às ${hora} — ${leadName}`,
-          html: `
-            <p>Olá, ${broker.name}!</p>
-            <p>Passando para lembrar que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>, com <strong>${leadName}</strong>.</p>
-            <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
-            <p>Até lá! ☕</p>
-          `,
+          html: brokerHtml,
           orgId: appointment.org_id,
         })
         if (result.error) throw new Error(result.error)
@@ -88,15 +94,19 @@ export async function GET(request: NextRequest) {
 
       // E-mail ao lead
       if (lead?.email) {
+        const cancelButtonHtml = renderButton("Cancelar compromisso", cancelUrl)
+        const leadHtml = renderBaseLayout(
+          `<p>Olá, ${leadName}!</p>
+          <p>Lembramos que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>.</p>
+          <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
+          <p>Te esperamos com muito carinho! Em caso de dúvidas, é só responder este e-mail. ☕</p>
+          <p style="margin-top:16px">${cancelButtonHtml}</p>`,
+          { orgName: "Trifold" }
+        )
         const result = await sendEmail({
           to: lead.email,
           subject: `Lembrete: sua visita ao decorado amanhã às ${hora}`,
-          html: `
-            <p>Olá, ${leadName}!</p>
-            <p>Lembramos que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>.</p>
-            <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
-            <p>Te esperamos com muito carinho! Em caso de dúvidas, é só responder este e-mail. ☕</p>
-          `,
+          html: leadHtml,
           orgId: appointment.org_id,
         })
         if (result.error) throw new Error(result.error)

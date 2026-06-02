@@ -2,6 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { now } from "@web/lib/time"
 import Link from "next/link"
+import { NewAppointmentButton } from "@web/app/broker/_components/new-appointment-modal"
 
 const statusConfig: Record<
   string,
@@ -215,6 +216,7 @@ export default async function BrokerAgendaPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Minha Agenda</h1>
+          <NewAppointmentButton />
           {/* View toggle */}
           <div className="flex rounded-lg border border-stone-200 bg-white p-0.5 dark:border-stone-800 dark:bg-stone-900">
             {(["day", "week", "month"] as const).map((v) => (
