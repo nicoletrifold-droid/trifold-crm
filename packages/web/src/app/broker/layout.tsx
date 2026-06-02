@@ -2,12 +2,13 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { Users, Kanban, CalendarDays, Bell, MessageSquarePlus } from "lucide-react"
+import { LayoutDashboard, Users, Kanban, CalendarDays, Bell, MessageSquarePlus } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
 const NAV_ITEMS = [
-  { href: "/broker", label: "Meus Leads", icon: <Users className={ICON_SIZE} /> },
+  { href: "/broker", label: "Início", icon: <LayoutDashboard className={ICON_SIZE} /> },
+  { href: "/broker/leads", label: "Meus Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/broker/pipeline", label: "Pipeline", icon: <Kanban className={ICON_SIZE} /> },
   { href: "/broker/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
   { href: "/broker/alertas", label: "Alertas", icon: <Bell className={ICON_SIZE} /> },
