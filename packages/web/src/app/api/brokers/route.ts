@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
   // Verify the user exists and belongs to the same org
   const { data: targetUser } = await supabase
     .from("users")
-    .select("id, org_id")
+    .select("id, name, email, auth_id, org_id")
     .eq("id", body.user_id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -291,6 +291,62 @@ export async function POST(request: NextRequest) {
       { error: "Broker record already exists for this user" },
       { status: 409 }
     )
+  }
+
+  // Garante que o usuário tenha conta no Supabase Auth.
+  // Usuários criados por fluxos legados podem não ter auth_id.
+  if (!targetUser.auth_id && targetUser.email) {
+    const adminSupabase = createAdminClient()
+    const tempPassword = `Tmp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}!`
+
+    const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
+      email: (targetUser.email as string).trim(),
+      password: tempPassword,
+      email_confirm: true,
+    })
+
+    if (!authError && authData?.user) {
+      await adminSupabase
+        .from("users")
+        .update({ auth_id: authData.user.id })
+        .eq("id", targetUser.id)
+
+      // Envia link de criação de senha
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
+      const { data: linkData } = await adminSupabase.auth.admin.generateLink({
+        type: "recovery",
+        email: (targetUser.email as string).trim(),
+        options: { redirectTo: `${siteUrl}/reset-senha` },
+      })
+
+      if (linkData?.properties?.action_link) {
+        const brokerName = (targetUser.name as string) ?? "Corretor"
+        const html = renderBaseLayout(
+          `
+          <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">Olá, ${brokerName}!</p>
+          <p style="margin:0 0 24px;color:#6b7280;">
+            Você foi cadastrado como corretor no sistema da <strong>Trifold</strong>.
+            Para acessar o CRM, crie sua senha clicando no botão abaixo.
+          </p>
+          ${renderButton("Criar minha senha", linkData.properties.action_link)}
+          <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
+            Após criar sua senha, acesse em:<br>
+            <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
+          </p>
+          <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">Este link expira em 24 horas.</p>
+          `,
+          { orgName: "Trifold CRM", previewText: `${brokerName}, crie sua senha de acesso ao Trifold CRM` }
+        )
+
+        await sendEmail({
+          to: (targetUser.email as string).trim(),
+          subject: "Crie sua senha — Trifold CRM",
+          html,
+          tags: [{ name: "type", value: "broker_invite" }],
+          orgId: appUser.org_id,
+        })
+      }
+    }
   }
 
   const { data: broker, error } = await supabase
