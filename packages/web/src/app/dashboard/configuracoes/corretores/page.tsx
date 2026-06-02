@@ -13,7 +13,9 @@ export default async function CorretoresPage() {
 
   // Ações administrativas em corretores (atribuir imóveis, etc.) — modeladas
   // como acesso ao módulo "sistema" (somente admin tem por padrão).
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
+  // "sistema" = admin full access; "corretores" = gerente-comercial can manage brokers
+  const isAdmin = await canAccess(user.id, user.orgId, "sistema") ||
+    await canAccess(user.id, user.orgId, "corretores")
 
   // Get brokers with user info
   const { data: brokers } = await supabase
