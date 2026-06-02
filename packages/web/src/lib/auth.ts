@@ -7,7 +7,7 @@ export interface AppUser {
   orgId: string
   name: string
   email: string
-  role: "admin" | "supervisor" | "broker" | "obras"
+  role: "admin" | "supervisor" | "broker" | "obras" | "gerente-comercial"
   avatarUrl: string | null
   theme: "light" | "dark" | "system"
 }
