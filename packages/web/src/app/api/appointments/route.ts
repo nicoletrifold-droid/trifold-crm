@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createCalendarEvent } from "@web/lib/google-calendar"
+import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -101,26 +102,40 @@ export async function POST(request: Request) {
       (appUser.role === "broker" ? appUser.id : null) ||
       null
 
-    const { data: newLead, error: leadError } = await supabase
+    // Find-or-create: check if lead with this phone already exists (match on normalized phone)
+    const normalizedPhone = normalizePhoneBR(body.client_phone.trim())
+    const { data: existingLead } = await supabase
       .from("leads")
-      .insert({
-        org_id: appUser.org_id,
-        name: body.client_name?.trim() || body.client_phone,
-        phone: body.client_phone.trim(),
-        email: body.client_email?.trim() || null,
-        assigned_broker_id: assignedBrokerId,
-      })
       .select("id")
-      .single()
+      .eq("org_id", appUser.org_id)
+      .eq("phone_normalized", normalizedPhone)
+      .eq("is_active", true)
+      .maybeSingle()
 
-    if (leadError || !newLead) {
-      return NextResponse.json(
-        { error: leadError?.message ?? "Failed to create lead" },
-        { status: 500 }
-      )
+    if (existingLead) {
+      leadId = existingLead.id
+    } else {
+      const { data: newLead, error: leadError } = await supabase
+        .from("leads")
+        .insert({
+          org_id: appUser.org_id,
+          name: body.client_name?.trim() || body.client_phone,
+          phone: body.client_phone.trim(),
+          email: body.client_email?.trim() || null,
+          assigned_broker_id: assignedBrokerId,
+        })
+        .select("id")
+        .single()
+
+      if (leadError || !newLead) {
+        return NextResponse.json(
+          { error: leadError?.message ?? "Failed to create lead" },
+          { status: 500 }
+        )
+      }
+
+      leadId = newLead.id
     }
-
-    leadId = newLead.id
   }
 
   // Double-booking check: same location and overlapping time window
