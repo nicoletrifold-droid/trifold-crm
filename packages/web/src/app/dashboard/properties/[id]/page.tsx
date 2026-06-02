@@ -64,7 +64,7 @@ export default async function PropertyDetailPage({
   const reservedCount = units?.filter((u) => u.status === "reserved").length ?? 0
   const soldCount = units?.filter((u) => u.status === "sold").length ?? 0
 
-  const isAdminOrSupervisor = await canAccess(appUser.id, appUser.orgId, "sistema")
+  const isAdminOrSupervisor = await canAccess(appUser.id, appUser.orgId, "sistema") || appUser.role === "obras"
 
   const paymentMethodLabels: Record<string, string> = {
     financiamento_bancario: "Financiamento bancário",

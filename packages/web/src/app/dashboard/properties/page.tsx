@@ -14,9 +14,10 @@ export default async function PropertiesPage() {
     .eq("is_active", true)
     .order("created_at", { ascending: false })
 
-  // Ações administrativas (criar/editar imóveis) — modeladas como acesso
-  // ao módulo "sistema" (somente admin tem por padrão).
+  // Admin/supervisor (módulo "sistema") e obras podem editar imóveis.
+  // "Novo empreendimento" continua restrito a admin/supervisor.
   const isAdmin = await canAccess(user.id, user.orgId, "sistema")
+  const canEditImoveis = isAdmin || user.role === "obras"
 
   return (
     <div className="space-y-6">
@@ -86,7 +87,7 @@ export default async function PropertiesPage() {
                     href={`/dashboard/properties/${p.id}`}
                     className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                   >
-                    {isAdmin ? "Editar" : "Ver"}
+                    {canEditImoveis ? "Editar" : "Ver"}
                   </Link>
                 </td>
               </tr>
