@@ -2,12 +2,12 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { now } from "@web/lib/time"
 import Link from "next/link"
+import { Users, CalendarDays, Bell, ChevronRight, MapPin, Clock } from "lucide-react"
 import { NewAppointmentButton } from "./_components/new-appointment-modal"
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", {
     timeZone: "America/Sao_Paulo",
-    weekday: "short",
     day: "numeric",
     month: "short",
   })
@@ -22,12 +22,13 @@ function formatTime(iso: string) {
 }
 
 function greeting() {
-  const hour = new Date().toLocaleString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    hour: "numeric",
-    hour12: false,
-  })
-  const h = parseInt(hour)
+  const h = parseInt(
+    new Date().toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "numeric",
+      hour12: false,
+    })
+  )
   if (h < 12) return "Bom dia"
   if (h < 18) return "Boa tarde"
   return "Boa noite"
@@ -96,7 +97,7 @@ export default async function BrokerHomePage() {
     .filter((s) => s.count > 0)
     .sort((a, b) => a.position - b.position)
 
-  // Filter pending logs to this broker's leads
+  // Filter pending logs to this broker's leads only
   const myPendingLogs = (pendingLogs ?? [])
     .filter((log) => {
       const lead = Array.isArray(log.lead) ? log.lead[0] : log.lead
@@ -116,76 +117,103 @@ export default async function BrokerHomePage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <p className="text-sm font-medium text-orange-500">{greeting()},</p>
-        <h1 className="mt-0.5 text-2xl font-bold text-stone-100">{user.name}</h1>
+    <div className="space-y-7">
+
+      {/* ── Greeting ──────────────────────────────────────────────── */}
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-sm font-medium text-orange-500">{greeting()},</p>
+          <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-stone-100">
+            {user.name}
+          </h1>
+        </div>
+        <p className="text-xs text-stone-600">
+          {new Date().toLocaleDateString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
+        </p>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* ── Stats ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-3">
         <Link
           href="/broker/leads"
-          className="group rounded-xl border border-stone-800 bg-stone-900 p-4 transition-colors hover:border-orange-500/40 hover:bg-stone-800/60"
+          className="group flex items-center gap-3 rounded-2xl border border-stone-800 bg-stone-900 px-4 py-4 transition-all hover:border-orange-500/30 hover:bg-stone-900/80"
         >
-          <p className="text-2xl font-bold text-stone-100">{totalLeads}</p>
-          <p className="mt-1 text-xs text-stone-500 group-hover:text-stone-400">Meus leads ativos</p>
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500/10">
+            <Users className="h-4 w-4 text-orange-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xl font-bold leading-none text-stone-100">{totalLeads}</p>
+            <p className="mt-1 truncate text-xs text-stone-500">Leads ativos</p>
+          </div>
+          <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-stone-700 transition-colors group-hover:text-stone-500" />
         </Link>
+
         <Link
           href="/broker/agenda"
-          className="group rounded-xl border border-stone-800 bg-stone-900 p-4 transition-colors hover:border-blue-500/40 hover:bg-stone-800/60"
+          className="group flex items-center gap-3 rounded-2xl border border-stone-800 bg-stone-900 px-4 py-4 transition-all hover:border-blue-500/30 hover:bg-stone-900/80"
         >
-          <p className="text-2xl font-bold text-stone-100">{totalAppointments}</p>
-          <p className="mt-1 text-xs text-stone-500 group-hover:text-stone-400">
-            {totalAppointments === 1 ? "Próximo compromisso" : "Próximos compromissos"}
-          </p>
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
+            <CalendarDays className="h-4 w-4 text-blue-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xl font-bold leading-none text-stone-100">{totalAppointments}</p>
+            <p className="mt-1 truncate text-xs text-stone-500">
+              {totalAppointments === 1 ? "Compromisso" : "Compromissos"}
+            </p>
+          </div>
+          <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-stone-700 transition-colors group-hover:text-stone-500" />
         </Link>
+
         <Link
           href="/broker/alertas"
-          className="group rounded-xl border border-stone-800 bg-stone-900 p-4 transition-colors hover:border-yellow-500/40 hover:bg-stone-800/60"
+          className="group flex items-center gap-3 rounded-2xl border border-stone-800 bg-stone-900 px-4 py-4 transition-all hover:border-yellow-500/30 hover:bg-stone-900/80"
         >
-          <p className={`text-2xl font-bold ${totalPending > 0 ? "text-yellow-400" : "text-stone-100"}`}>
-            {totalPending}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 group-hover:text-stone-400">Pendências de follow-up</p>
+          <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${totalPending > 0 ? "bg-yellow-500/15" : "bg-stone-800"}`}>
+            <Bell className={`h-4 w-4 ${totalPending > 0 ? "text-yellow-400" : "text-stone-500"}`} />
+          </div>
+          <div className="min-w-0">
+            <p className={`text-xl font-bold leading-none ${totalPending > 0 ? "text-yellow-400" : "text-stone-100"}`}>
+              {totalPending}
+            </p>
+            <p className="mt-1 truncate text-xs text-stone-500">Pendências</p>
+          </div>
+          <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-stone-700 transition-colors group-hover:text-stone-500" />
         </Link>
       </div>
 
-      {/* Pipeline by stage */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-400">
-            Leads por etapa
-          </h2>
-          <Link href="/broker/pipeline" className="text-xs text-orange-500 hover:text-orange-400">
-            Ver pipeline
+      {/* ── Pipeline by stage ─────────────────────────────────────── */}
+      <div className="rounded-2xl border border-stone-800 bg-stone-900 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-stone-300">Leads por etapa</h2>
+          <Link
+            href="/broker/pipeline"
+            className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400"
+          >
+            Ver pipeline <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
+
         {stageSummary.length === 0 ? (
-          <div className="rounded-xl border border-stone-800 bg-stone-900 px-6 py-8 text-center">
-            <p className="text-sm text-stone-500">Nenhum lead atribuído ainda.</p>
-          </div>
+          <p className="py-4 text-center text-sm text-stone-600">Nenhum lead atribuído ainda.</p>
         ) : (
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(stageSummary.length, 7)}, minmax(0, 1fr))` }}>
             {stageSummary.map((stage) => (
               <Link
                 key={stage.id}
                 href={`/broker/leads?stage=${stage.id}`}
-                className="group flex min-w-[100px] flex-col items-center gap-1 rounded-xl border border-stone-800 bg-stone-900 px-4 py-3 transition-colors hover:border-stone-600"
+                className="flex flex-col items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 py-3 transition-all hover:border-stone-700 hover:bg-stone-800/60"
               >
-                <span
-                  className="text-lg font-bold"
-                  style={{ color: stage.color }}
-                >
+                <span className="text-2xl font-bold leading-none" style={{ color: stage.color }}>
                   {stage.count}
                 </span>
                 <span
-                  className="rounded-full px-2 py-0.5 text-center text-[10px] font-medium"
-                  style={{
-                    backgroundColor: `${stage.color}20`,
-                    color: stage.color,
-                  }}
+                  className="rounded-full px-2 py-0.5 text-center text-[10px] font-medium leading-tight"
+                  style={{ backgroundColor: `${stage.color}20`, color: stage.color }}
                 >
                   {stage.name}
                 </span>
@@ -195,28 +223,30 @@ export default async function BrokerHomePage() {
         )}
       </div>
 
-      {/* Two-column: Appointments + Follow-ups */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ── Two columns ───────────────────────────────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+
         {/* Upcoming appointments */}
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-400">
-              Próximos compromissos
-            </h2>
-            <div className="flex items-center gap-3">
-              <NewAppointmentButton />
-              <Link href="/broker/agenda" className="text-xs text-orange-500 hover:text-orange-400">
-                Ver agenda
-              </Link>
-            </div>
+        <div className="flex flex-col rounded-2xl border border-stone-800 bg-stone-900">
+          <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
+            <h2 className="text-sm font-semibold text-stone-300">Próximos compromissos</h2>
+            <Link
+              href="/broker/agenda"
+              className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400"
+            >
+              Ver agenda <ChevronRight className="h-3 w-3" />
+            </Link>
           </div>
-          <div className="rounded-xl border border-stone-800 bg-stone-900">
-            {!upcomingAppointments || upcomingAppointments.length === 0 ? (
-              <div className="px-6 py-8 text-center">
-                <p className="text-sm text-stone-500">Nenhum compromisso agendado.</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-stone-800">
+
+          {!upcomingAppointments || upcomingAppointments.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10">
+              <CalendarDays className="h-8 w-8 text-stone-700" />
+              <p className="text-sm text-stone-600">Nenhum compromisso agendado.</p>
+              <NewAppointmentButton />
+            </div>
+          ) : (
+            <>
+              <ul className="divide-y divide-stone-800/70">
                 {upcomingAppointments.map((appt) => {
                   const lead = Array.isArray(appt.lead) ? appt.lead[0] : appt.lead
                   const property = Array.isArray(appt.property) ? appt.property[0] : appt.property
@@ -225,85 +255,98 @@ export default async function BrokerHomePage() {
                     appt.client_name ||
                     "Cliente não identificado"
                   return (
-                    <li key={appt.id} className="flex items-start gap-3 px-4 py-3">
-                      <div className="mt-0.5 flex-shrink-0 text-center">
-                        <p className="text-xs font-semibold text-blue-400">
+                    <li key={appt.id} className="flex items-center gap-4 px-5 py-3.5">
+                      {/* Date/time column */}
+                      <div className="w-14 flex-shrink-0 text-center">
+                        <p className="text-xs font-medium text-blue-400">
                           {formatDate(appt.scheduled_at)}
                         </p>
-                        <p className="text-base font-bold text-stone-100">
+                        <p className="text-sm font-bold text-stone-100">
                           {formatTime(appt.scheduled_at)}
                         </p>
                       </div>
+                      {/* Divider */}
+                      <div className="h-8 w-px flex-shrink-0 bg-stone-800" />
+                      {/* Info */}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-stone-200">{clientDisplay}</p>
-                        <p className="truncate text-xs text-stone-500">
-                          {appt.location ?? "Stand Trifold"}
-                          {(property as { name?: string } | null)?.name
-                            ? ` · ${(property as { name: string }).name}`
-                            : ""}
-                        </p>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-stone-500">
+                          <MapPin className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">
+                            {appt.location ?? "Stand Trifold"}
+                            {(property as { name?: string } | null)?.name
+                              ? ` · ${(property as { name: string }).name}`
+                              : ""}
+                          </span>
+                        </div>
                       </div>
-                      <span className="flex-shrink-0 rounded-full bg-blue-500/15 px-2 py-0.5 text-xs text-blue-400">
+                      {/* Duration */}
+                      <div className="flex-shrink-0 flex items-center gap-1 text-xs text-stone-500">
+                        <Clock className="h-3 w-3" />
                         {appt.duration_minutes}min
-                      </span>
+                      </div>
                     </li>
                   )
                 })}
               </ul>
-            )}
-          </div>
+              <div className="border-t border-stone-800 px-5 py-3">
+                <NewAppointmentButton />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Pending follow-ups */}
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-400">
-              Pendências de follow-up
-            </h2>
-            <Link href="/broker/alertas" className="text-xs text-orange-500 hover:text-orange-400">
-              Ver alertas
+        <div className="flex flex-col rounded-2xl border border-stone-800 bg-stone-900">
+          <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
+            <h2 className="text-sm font-semibold text-stone-300">Pendências de follow-up</h2>
+            <Link
+              href="/broker/alertas"
+              className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400"
+            >
+              Ver alertas <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="rounded-xl border border-stone-800 bg-stone-900">
-            {myPendingLogs.length === 0 ? (
-              <div className="px-6 py-8 text-center">
-                <p className="text-sm text-stone-500">Nenhuma pendência. Tudo em dia!</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-stone-800">
-                {myPendingLogs.map((log) => {
-                  const lead = Array.isArray(log.lead) ? log.lead[0] : log.lead
-                  return (
-                    <li key={log.id} className="flex items-start gap-3 px-4 py-3">
-                      <span className="mt-0.5 flex-shrink-0 rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-yellow-400">
-                        {logTypeLabel[log.type] ?? log.type}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        {lead ? (
-                          <Link
-                            href={`/broker/leads/${(lead as { id: string }).id}`}
-                            className="truncate text-sm font-medium text-stone-200 hover:text-orange-300"
-                          >
-                            {(lead as { name?: string | null }).name ||
-                              (lead as { phone?: string | null }).phone ||
-                              "Lead"}
-                          </Link>
-                        ) : (
-                          <p className="truncate text-sm font-medium text-stone-200">Lead</p>
-                        )}
-                        {log.message && (
-                          <p className="mt-0.5 truncate text-xs text-stone-500">{log.message}</p>
-                        )}
-                      </div>
-                      <p className="flex-shrink-0 text-xs text-stone-600">
-                        {new Date(log.created_at).toLocaleDateString("pt-BR")}
-                      </p>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
+
+          {myPendingLogs.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10">
+              <Bell className="h-8 w-8 text-stone-700" />
+              <p className="text-sm text-stone-600">Nenhuma pendência. Tudo em dia!</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-stone-800/70">
+              {myPendingLogs.map((log) => {
+                const lead = Array.isArray(log.lead) ? log.lead[0] : log.lead
+                return (
+                  <li key={log.id} className="flex items-center gap-3 px-5 py-3.5">
+                    <span className="flex-shrink-0 rounded-lg bg-yellow-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-400">
+                      {logTypeLabel[log.type] ?? log.type}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {lead ? (
+                        <Link
+                          href={`/broker/leads/${(lead as { id: string }).id}`}
+                          className="block truncate text-sm font-medium text-stone-200 hover:text-orange-300"
+                        >
+                          {(lead as { name?: string | null }).name ||
+                            (lead as { phone?: string | null }).phone ||
+                            "Lead"}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-sm font-medium text-stone-500">Lead removido</p>
+                      )}
+                      {log.message && (
+                        <p className="mt-0.5 truncate text-xs text-stone-600">{log.message}</p>
+                      )}
+                    </div>
+                    <p className="flex-shrink-0 text-xs text-stone-600">
+                      {new Date(log.created_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
       </div>
     </div>
