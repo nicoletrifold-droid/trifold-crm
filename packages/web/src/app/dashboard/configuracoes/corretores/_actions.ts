@@ -9,5 +9,5 @@ export async function toggleBrokerAvailability(brokerId: string, currentValue: b
     .from("brokers")
     .update({ is_available: !currentValue })
     .eq("id", brokerId)
-  revalidatePath("/dashboard/corretores")
+  revalidatePath("/dashboard/configuracoes/corretores")
 }

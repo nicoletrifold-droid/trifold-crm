@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 function CampaignsTabs() {
   return (
@@ -103,7 +104,7 @@ export default async function CampaignsPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <ScrollableX className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
             <thead className="bg-gray-50 dark:bg-stone-800/50">
               <tr>
@@ -149,7 +150,7 @@ export default async function CampaignsPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       )}
     </div>
   )

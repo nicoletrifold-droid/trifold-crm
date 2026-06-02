@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 const typeBadgeStyles: Record<string, string> = {
   stage_change: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
@@ -41,7 +42,7 @@ export default async function AtividadesPage() {
       </div>
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <div className="overflow-x-auto">
+        <ScrollableX>
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
@@ -125,7 +126,7 @@ export default async function AtividadesPage() {
             )}
           </tbody>
         </table>
-        </div>
+        </ScrollableX>
       </div>
     </div>
   )

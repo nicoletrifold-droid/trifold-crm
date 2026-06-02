@@ -120,7 +120,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
           <p className="text-sm text-stone-500 dark:text-stone-400">Nenhum corretor disponível.</p>
           <p className="text-xs text-stone-400 dark:text-stone-600">
             Ative corretores na página de{" "}
-            <Link href="/dashboard/corretores" className="underline hover:text-stone-600 dark:hover:text-stone-400">
+            <Link href="/dashboard/configuracoes/corretores" className="underline hover:text-stone-600 dark:hover:text-stone-400">
               Corretores
             </Link>{" "}
             primeiro.

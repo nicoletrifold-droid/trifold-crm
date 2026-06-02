@@ -2,6 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 // Story 30.1: shape do retorno da RPC public.get_analytics_summary(uuid, timestamptz)
 // bigints (count, total_leads, new_leads) podem chegar como string — castar via Number().
@@ -234,7 +235,7 @@ export default async function AnalyticsPage({
           </a>
         </div>
         {/* Seletor de empreendimento */}
-        <div className="overflow-x-auto">
+        <ScrollableX>
         <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800 min-w-max">
           <a
             href="/dashboard/analytics"
@@ -260,7 +261,7 @@ export default async function AnalyticsPage({
             </a>
           ))}
         </div>
-        </div>
+        </ScrollableX>
       </div>
 
       {/* Leads por Período — gráfico interativo com filtros (AC3-AC7) */}

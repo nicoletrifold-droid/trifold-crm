@@ -68,7 +68,7 @@ export default function NovoCorretorPage() {
         }
       }
 
-      router.push("/dashboard/corretores")
+      router.push("/dashboard/configuracoes/corretores")
     } catch {
       setError("Erro ao criar corretor")
       setSaving(false)
@@ -79,7 +79,7 @@ export default function NovoCorretorPage() {
     <div className="space-y-6">
       <div>
         <Link
-          href="/dashboard/corretores"
+          href="/dashboard/configuracoes/corretores"
           className="text-sm text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
         >
           &larr; Corretores
@@ -250,7 +250,7 @@ export default function NovoCorretorPage() {
             {saving ? "Criando..." : "Criar Corretor"}
           </button>
           <Link
-            href="/dashboard/corretores"
+            href="/dashboard/configuracoes/corretores"
             className="rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Cancelar

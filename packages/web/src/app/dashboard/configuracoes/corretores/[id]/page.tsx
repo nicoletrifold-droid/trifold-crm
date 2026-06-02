@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { Lock } from "lucide-react"
 
 interface BrokerData {
   id: string
@@ -39,6 +40,11 @@ export default function EditCorretorPage({
   const [properties, setProperties] = useState<Property[]>([])
   const [assignedProperties, setAssignedProperties] = useState<string[]>([])
   const [assignLoading, setAssignLoading] = useState(false)
+  const [passwordMode, setPasswordMode] = useState<"manual" | "invite">("manual")
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordMessage, setPasswordMessage] = useState<{ text: string; ok: boolean } | null>(null)
 
   useEffect(() => {
     params.then((p) => {
@@ -94,7 +100,7 @@ export default function EditCorretorPage({
 
     if (res.ok) {
       setMessage("Salvo com sucesso!")
-      setTimeout(() => router.push("/dashboard/corretores"), 1000)
+      setTimeout(() => router.push("/dashboard/configuracoes/corretores"), 1000)
     } else {
       setMessage("Erro ao salvar")
     }
@@ -114,7 +120,40 @@ export default function EditCorretorPage({
     })
 
     router.refresh()
-    router.push("/dashboard/corretores")
+    router.push("/dashboard/configuracoes/corretores")
+  }
+
+  async function handlePasswordAction(e: React.FormEvent) {
+    e.preventDefault()
+    setPasswordSaving(true)
+    setPasswordMessage(null)
+
+    if (passwordMode === "invite") {
+      const res = await fetch(`/api/users/${broker?.user.id}/reset-password`, { method: "POST" })
+      if (res.ok) {
+        setPasswordMessage({ text: "Link enviado para o e-mail do corretor.", ok: true })
+        setPasswordOpen(false)
+      } else {
+        const json = await res.json().catch(() => ({}))
+        setPasswordMessage({ text: (json as { error?: string }).error ?? "Erro ao enviar link.", ok: false })
+      }
+    } else {
+      const res = await fetch(`/api/users/${broker?.user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: newPassword }),
+      })
+      if (res.ok) {
+        setPasswordMessage({ text: "Senha alterada com sucesso.", ok: true })
+        setNewPassword("")
+        setPasswordOpen(false)
+      } else {
+        const json = await res.json().catch(() => ({}))
+        setPasswordMessage({ text: (json as { error?: string }).error ?? "Erro ao alterar senha.", ok: false })
+      }
+    }
+
+    setPasswordSaving(false)
   }
 
   if (loading) return <div className="p-8 text-stone-400 dark:text-stone-500">Carregando...</div>
@@ -123,7 +162,7 @@ export default function EditCorretorPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/dashboard/corretores" className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200">
+        <Link href="/dashboard/configuracoes/corretores" className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200">
           &larr; Corretores
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-stone-900 dark:text-stone-100">Editar Corretor</h1>
@@ -267,6 +306,91 @@ export default function EditCorretorPage({
                   : "O corretor está desativado. Não recebe novos leads mas o histórico é mantido."}
               </p>
             </div>
+          </div>
+
+          {/* Acesso ao sistema */}
+          <div className="rounded-xl bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Acesso ao sistema</h2>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">Defina ou reenvie a senha deste corretor</p>
+              </div>
+              <button
+                onClick={() => { setPasswordOpen(!passwordOpen); setPasswordMessage(null) }}
+                className="flex items-center gap-2 rounded-lg bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+              >
+                <Lock className="h-4 w-4" />
+                Alterar senha
+              </button>
+            </div>
+
+            {passwordOpen && (
+              <form onSubmit={handlePasswordAction} className="mt-4 space-y-4 border-t border-stone-100 pt-4 dark:border-stone-800">
+                <div className="flex gap-4">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="pwMode"
+                      value="manual"
+                      checked={passwordMode === "manual"}
+                      onChange={() => setPasswordMode("manual")}
+                      className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-stone-700 dark:text-stone-300">Definir senha agora</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="pwMode"
+                      value="invite"
+                      checked={passwordMode === "invite"}
+                      onChange={() => setPasswordMode("invite")}
+                      className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-stone-700 dark:text-stone-300">Enviar link por e-mail</span>
+                  </label>
+                </div>
+
+                {passwordMode === "manual" ? (
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Nova senha (mínimo 8 caracteres)"
+                    className="block w-full rounded-lg border border-stone-200 bg-stone-50 px-4 py-2.5 text-sm outline-none focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 dark:focus:bg-stone-800"
+                  />
+                ) : (
+                  <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                    Um e-mail será enviado para <strong>{broker.user.email}</strong> com um link para criar nova senha. O link expira em 24 horas.
+                  </p>
+                )}
+
+                {passwordMessage && (
+                  <p className={`text-sm ${passwordMessage.ok ? "text-green-600 dark:text-green-300" : "text-red-600 dark:text-red-300"}`}>
+                    {passwordMessage.text}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={passwordSaving}
+                    className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    {passwordSaving ? "Aguarde..." : passwordMode === "invite" ? "Enviar link" : "Salvar senha"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPasswordOpen(false); setPasswordMessage(null); setNewPassword("") }}
+                    className="rounded-lg border border-stone-200 px-5 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-400 dark:hover:bg-stone-800"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           <div className="rounded-xl border-2 border-dashed border-stone-200 p-6 dark:border-stone-800">

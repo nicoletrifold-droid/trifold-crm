@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 interface CampaignMetrics {
   spend: number
@@ -299,7 +300,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Tabela */}
       {!loading && !error && (data?.campaigns.length ?? 0) > 0 && (
-        <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <ScrollableX className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
             <thead className="bg-gray-50 dark:bg-stone-800/50">
               <tr>
@@ -426,7 +427,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
       )}
     </div>
   )

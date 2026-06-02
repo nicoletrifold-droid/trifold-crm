@@ -22,6 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { EditStageModal } from "./edit-stage-modal"
 import type { Stage } from "./types"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 const typeLabels: Record<string, string> = {
   novo: "Novo",
@@ -234,7 +235,7 @@ export function StagesTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+    <ScrollableX className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       {saving && (
         <div className="border-b border-orange-100 px-6 py-2 text-xs text-orange-600 dark:border-orange-900/30 dark:text-orange-400">
           Salvando ordem...
@@ -283,6 +284,6 @@ export function StagesTable({
         </table>
         <DragOverlay>{activeStage && <DragOverlayRow stage={activeStage} />}</DragOverlay>
       </DndContext>
-    </div>
+    </ScrollableX>
   )
 }

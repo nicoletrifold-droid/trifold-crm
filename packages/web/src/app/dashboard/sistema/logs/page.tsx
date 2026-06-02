@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Filter, History, RotateCcw } from "lucide-react"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 interface AuditLog {
   id: string
@@ -492,7 +493,7 @@ export default function AuditLogsPage() {
             Nenhum registro encontrado
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <ScrollableX>
             <table className="min-w-full divide-y divide-stone-100 text-sm">
               <thead className="bg-stone-50 dark:bg-stone-800">
                 <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400">
@@ -527,7 +528,7 @@ export default function AuditLogsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableX>
         )}
       </div>
 

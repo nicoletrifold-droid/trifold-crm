@@ -4,6 +4,7 @@ import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { BrokerPropertyAssign } from "@web/components/admin/broker-property-assign"
 import { ToggleAvailabilityButton } from "./_toggle-button"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 export default async function CorretoresPage() {
   const user = await getServerUser()
@@ -86,7 +87,7 @@ export default async function CorretoresPage() {
           </p>
           {isAdmin && (
             <Link
-              href="/dashboard/corretores/novo"
+              href="/dashboard/configuracoes/corretores/novo"
               className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
             >
               Novo Corretor
@@ -95,7 +96,7 @@ export default async function CorretoresPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+      <ScrollableX className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
@@ -183,7 +184,7 @@ export default async function CorretoresPage() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          href={`/dashboard/corretores/${broker.id}`}
+                          href={`/dashboard/configuracoes/corretores/${broker.id}`}
                           className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
                         >
                           Editar
@@ -210,8 +211,7 @@ export default async function CorretoresPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </ScrollableX>
     </div>
   )
 }
-

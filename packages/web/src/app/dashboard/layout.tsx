@@ -8,7 +8,6 @@ import {
   Kanban,
   Users,
   Building2,
-  UserCheck,
   MessageSquare,
   CalendarDays,
   Bell,
@@ -33,7 +32,6 @@ const NAV_ITEMS_BASE = [
   { href: "/dashboard/pipeline", label: "Pipeline", icon: <Kanban className={ICON_SIZE} /> },
   { href: "/dashboard/leads", label: "Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/dashboard/properties", label: "Imóveis", icon: <Building2 className={ICON_SIZE} /> },
-  { href: "/dashboard/corretores", label: "Corretores", icon: <UserCheck className={ICON_SIZE} /> },
   { href: "/dashboard/roleta", label: "Roleta", icon: <Shuffle className={ICON_SIZE} /> },
   // Comunicação
   { href: "/dashboard/conversas", label: "Conversas", icon: <MessageSquare className={ICON_SIZE} />, separator: true },
@@ -62,7 +60,6 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/pipeline": "pipeline",
   "/dashboard/leads": "leads",
   "/dashboard/properties": "imoveis",
-  "/dashboard/corretores": "corretores",
   "/dashboard/roleta": "roleta",
   "/dashboard/conversas": "conversas",
   "/dashboard/agenda": "agenda",

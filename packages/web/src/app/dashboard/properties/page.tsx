@@ -2,6 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 export default async function PropertiesPage() {
   const user = await getServerUser()
@@ -31,7 +32,7 @@ export default async function PropertiesPage() {
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+      <ScrollableX className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
@@ -102,7 +103,7 @@ export default async function PropertiesPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </ScrollableX>
     </div>
   )
 }

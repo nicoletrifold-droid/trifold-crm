@@ -4,6 +4,7 @@ import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 const PAGE_SIZE = 50
 
@@ -157,7 +158,7 @@ export default async function LeadsPage({
       </div>
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <div className="overflow-x-auto">
+        <ScrollableX>
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
@@ -275,7 +276,7 @@ export default async function LeadsPage({
             )}
           </tbody>
         </table>
-        </div>
+        </ScrollableX>
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (

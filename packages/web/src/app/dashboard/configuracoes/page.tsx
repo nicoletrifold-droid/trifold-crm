@@ -15,6 +15,12 @@ const CONFIG_CARDS = [
     description: "Gerenciar usuários e permissões",
   },
   {
+    href: "/dashboard/configuracoes/corretores",
+    icon: "◈",
+    title: "Corretores",
+    description: "Cadastro e gestão de corretores",
+  },
+  {
     href: "/dashboard/configuracoes/clientes",
     icon: "◉",
     title: "Clientes",

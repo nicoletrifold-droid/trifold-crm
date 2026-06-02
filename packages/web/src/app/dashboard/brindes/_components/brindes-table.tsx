@@ -12,6 +12,7 @@ import { TiposModal } from "./tipos-modal"
 import { ImportModal } from "./import-modal"
 import { PrintModal } from "./print-modal"
 import type { BrindeTipo, DataComemorativa, Destinatario, Entrega, EntregaStatus } from "./types"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 interface BrindesTableProps {
   datas: DataComemorativa[]
@@ -175,7 +176,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <ScrollableX>
           <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
             <thead>
               <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
@@ -248,7 +249,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollableX>
 
         {/* Pagination */}
         {totalPages > 1 && (

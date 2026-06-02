@@ -20,6 +20,7 @@ import { LeadCard } from "./lead-card"
 import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { createClient } from "@web/lib/supabase/client"
+import { ScrollableX } from "@web/components/ui/scrollable-x"
 
 interface Stage {
   id: string
@@ -409,7 +410,7 @@ export function KanbanBoard({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <ScrollableX innerClassName="flex gap-4 pb-4">
           {initialStages.map((stage) => {
             const state = stageMap.get(stage.id)
             const stageLeads = state?.leads ?? []
@@ -427,7 +428,7 @@ export function KanbanBoard({
               />
             )
           })}
-        </div>
+        </ScrollableX>
 
         <DragOverlay>
           {activeLead && (
