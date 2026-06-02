@@ -107,12 +107,8 @@ async function fetchPage(page: number, retries = 3): Promise<SupremoPage> {
       signal: AbortSignal.timeout(15_000),
     })
     if (res.status === 429) {
-      if (attempt < retries) {
-        // Backoff longo: 15s, 30s, 45s — Supremo tem rate limit por janela de ~30s
-        await new Promise(r => setTimeout(r, 15_000 * (attempt + 1)))
-        continue
-      }
-      throw new Error(`Supremo API 429 on page ${page} after ${retries} retries`)
+      // Falha rápida — não retentar 429 dentro do mesmo run para evitar sobreposição de crons
+      throw new Error(`Supremo API 429 on page ${page}`)
     }
     if (!res.ok) throw new Error(`Supremo API ${res.status} on page ${page}`)
     return res.json()
