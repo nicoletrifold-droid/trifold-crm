@@ -55,8 +55,11 @@ export async function POST(request: Request) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
-  if (forbidden) return forbidden
+  const isBroker = appUser.role === "broker"
+  if (!isBroker) {
+    const forbidden = requireRole(appUser, ["admin", "supervisor"])
+    if (forbidden) return forbidden
+  }
 
   const body = await request.json()
 
@@ -84,6 +87,9 @@ export async function POST(request: Request) {
     )
   }
 
+  // Brokers can only create leads assigned to themselves
+  const assignedBrokerId = isBroker ? appUser.id : (body.assigned_broker_id || null)
+
   const { data: lead, error } = await supabase
     .from("leads")
     .insert({
@@ -99,8 +105,8 @@ export async function POST(request: Request) {
       preferred_view: body.preferred_view?.trim() || null,
       preferred_garage_count: body.preferred_garage_count ?? null,
       interest_level: body.interest_level || null,
-      source: body.source || null,
-      assigned_broker_id: body.assigned_broker_id || null,
+      source: body.source || "manual",
+      assigned_broker_id: assignedBrokerId,
       org_id: appUser.org_id,
       is_active: true,
     })

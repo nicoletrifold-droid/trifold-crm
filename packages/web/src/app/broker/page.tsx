@@ -1,12 +1,19 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
+import { NewLeadModal } from "./_components/new-lead-modal"
+import { LeadSearch } from "./_components/lead-search"
 
-export default async function BrokerHomePage() {
+export default async function BrokerHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
   const user = await getServerUser()
   const supabase = await createClient()
+  const { q } = await searchParams
+  const search = q?.trim().toLowerCase() ?? ""
 
-  // Get broker's leads
   const { data: leads } = await supabase
     .from("leads")
     .select(
@@ -19,20 +26,47 @@ export default async function BrokerHomePage() {
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
 
+  // Filter client-side so search works across joined name/phone/email
+  const filtered = (leads ?? []).filter((lead) => {
+    if (!search) return true
+    const name = ((lead.name as string) ?? "").toLowerCase()
+    const phone = ((lead.phone as string) ?? "").toLowerCase()
+    const email = ((lead.email as string) ?? "").toLowerCase()
+    const stage = (() => {
+      const s = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
+      return ((s as { name?: string } | null)?.name ?? "").toLowerCase()
+    })()
+    return name.includes(search) || phone.includes(search) || email.includes(search) || stage.includes(search)
+  })
+
+  // Load options for the new-lead modal
+  const [{ data: properties }, { data: stages }] = await Promise.all([
+    supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
+    supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
+  ])
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meus Leads</h1>
-        <p className="text-sm text-gray-500 dark:text-stone-400">
-          {leads?.length ?? 0} leads designados
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500 dark:text-stone-400">
+            {filtered.length} {search ? `de ${leads?.length ?? 0}` : ""} leads
+          </p>
+          <LeadSearch />
+          <NewLeadModal
+            properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}
+            stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
+          />
+        </div>
       </div>
 
-      {(!leads || leads.length === 0) ? (
+      {filtered.length === 0 ? (
         <div className="rounded-lg bg-white p-12 text-center shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-gray-500 dark:text-stone-400">
-            Você não tem leads designados. Novos leads serão atribuídos pelo
-            supervisor.
+            {search
+              ? `Nenhum lead encontrado para "${q}".`
+              : "Você não tem leads designados. Novos leads serão atribuídos pelo supervisor."}
           </p>
         </div>
       ) : (
@@ -48,7 +82,7 @@ export default async function BrokerHomePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-              {leads.map((lead: Record<string, unknown>) => {
+              {filtered.map((lead: Record<string, unknown>) => {
                 const stage = Array.isArray(lead.kanban_stages)
                   ? lead.kanban_stages[0]
                   : lead.kanban_stages
@@ -67,18 +101,18 @@ export default async function BrokerHomePage() {
                       <p className="text-xs text-gray-500 dark:text-stone-400">{lead.phone as string}</p>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                      {property?.name ?? "-"}
+                      {(property as { name?: string } | null)?.name ?? "-"}
                     </td>
                     <td className="px-6 py-4">
                       {stage && (
                         <span
                           className="rounded-full px-2 py-0.5 text-xs font-medium"
                           style={{
-                            backgroundColor: `${stage.color}20`,
-                            color: stage.color,
+                            backgroundColor: `${(stage as { color: string }).color}20`,
+                            color: (stage as { color: string }).color,
                           }}
                         >
-                          {stage.name}
+                          {(stage as { name: string }).name}
                         </span>
                       )}
                     </td>
