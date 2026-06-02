@@ -79,6 +79,15 @@ export async function PATCH(
     return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
   }
 
+  // Usuário sem auth_id foi cadastrado pelo fluxo legado — não tem conta no Supabase Auth.
+  // Alterar senha ou e-mail é impossível sem auth_id; retorna erro descritivo.
+  if (hasNewPassword && !targetUserSnapshot.auth_id) {
+    return NextResponse.json(
+      { error: "Este usuário não tem conta de acesso criada. Use 'Enviar link por e-mail' para criar a senha pela primeira vez." },
+      { status: 422 }
+    )
+  }
+
   const targetAuthId: string | undefined = needsAuthUpdate
     ? (targetUserSnapshot.auth_id as string | undefined)
     : undefined

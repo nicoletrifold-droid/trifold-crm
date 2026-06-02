@@ -28,6 +28,13 @@ export async function POST(
     return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
   }
 
+  if (!targetUser.auth_id) {
+    return NextResponse.json(
+      { error: "Este usuário não tem conta de acesso criada. Entre em contato com o suporte para criá-la manualmente." },
+      { status: 422 }
+    )
+  }
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
   const adminSupabase = createAdminClient()
 
