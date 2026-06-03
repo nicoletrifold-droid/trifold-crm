@@ -72,6 +72,7 @@ export interface FormattedInstallment {
   status: InstallmentStatus
   hasBoleto: boolean
   receiptDate?: string
+  receiptValue?: number
 }
 
 // ── Informe de Rendimentos ────────────────────────────────────────────

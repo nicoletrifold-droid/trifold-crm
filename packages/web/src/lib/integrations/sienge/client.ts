@@ -143,6 +143,9 @@ export async function getFinancialStatement(
           status,
           hasBoleto: inst.generatedBillet && inst.currentBalance > 0,
           receiptDate: inst.receipts[0]?.receiptDate,
+          receiptValue: inst.receipts.length > 0
+            ? inst.receipts.reduce((sum, r) => sum + r.receiptValue, 0)
+            : undefined,
         })
       }
     }
@@ -192,9 +195,10 @@ export function computeInformeFromStatements(
     const rd = inst.receiptDate
     if (!rd || !rd.startsWith(yearStr)) continue
     const month = parseInt(rd.split("-")[1] ?? "0")
+    const paid = inst.receiptValue ?? inst.originalValue
     const entry = monthMap.get(month) ?? { value: 0, entries: [] }
-    entry.value += inst.originalValue
-    entry.entries.push({ number: inst.installmentNumber, value: inst.originalValue, date: rd })
+    entry.value += paid
+    entry.entries.push({ number: inst.installmentNumber, value: paid, date: rd })
     monthMap.set(month, entry)
   }
 
@@ -211,7 +215,7 @@ export function computeInformeFromStatements(
 
   const accumulatedPaid = installments
     .filter((i) => i.status === "PAGO")
-    .reduce((sum, i) => sum + i.originalValue, 0)
+    .reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
 
   const remainingBalance = installments
     .filter((i) => i.status !== "PAGO")
