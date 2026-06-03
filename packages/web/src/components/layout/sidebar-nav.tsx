@@ -12,6 +12,7 @@ interface NavItem {
   icon: React.ReactNode
   badge?: number
   separator?: boolean
+  external?: boolean
 }
 
 interface SidebarNavProps {
@@ -63,27 +64,39 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                     {item.separator && (
                       <div className="mx-1 mb-1.5 mt-1 border-t border-stone-100 dark:border-stone-800" />
                     )}
-                    <Link
-                      href={item.href}
-                      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
-                        active
-                          ? "bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
-                          : "text-stone-500 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100"
-                      }`}
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
-                      <span className="flex-1">{item.label}</span>
-                      {item.badge != null && item.badge > 0 && !active && (
-                        <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
-                          {item.badge > 99 ? "99+" : item.badge}
-                        </span>
-                      )}
-                      {item.label === "Alertas" && alertCount != null && alertCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                          {alertCount > 99 ? "99+" : alertCount}
-                        </span>
-                      )}
-                    </Link>
+                    {item.external ? (
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all text-stone-500 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100"
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                        <span className="flex-1">{item.label}</span>
+                      </a>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
+                          active
+                            ? "bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                            : "text-stone-500 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800/60 dark:hover:text-stone-100"
+                        }`}
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                        <span className="flex-1">{item.label}</span>
+                        {item.badge != null && item.badge > 0 && !active && (
+                          <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                            {item.badge > 99 ? "99+" : item.badge}
+                          </span>
+                        )}
+                        {item.label === "Alertas" && alertCount != null && alertCount > 0 && (
+                          <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                            {alertCount > 99 ? "99+" : alertCount}
+                          </span>
+                        )}
+                      </Link>
+                    )}
                   </li>
                 )
               })}
@@ -133,16 +146,22 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
         <div className="flex items-center justify-around px-1 py-1">
           {items.slice(0, 5).map((item) => {
             const active = isActive(item.href)
-            return (
-              <Link
+            const mobileClass = `flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors ${
+              active ? "text-orange-600 dark:text-orange-300" : "text-stone-400 dark:text-stone-500"
+            }`
+            return item.external ? (
+              <a
                 key={item.href}
                 href={item.href}
-                className={`flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors ${
-                  active
-                    ? "text-orange-600 dark:text-orange-300"
-                    : "text-stone-400 dark:text-stone-500"
-                }`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={mobileClass}
               >
+                <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </a>
+            ) : (
+              <Link key={item.href} href={item.href} className={mobileClass}>
                 <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                 <span className="text-[10px] font-medium">{item.label}</span>
               </Link>

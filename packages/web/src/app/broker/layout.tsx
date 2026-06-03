@@ -1,7 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone } from "lucide-react"
+import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone, CreditCard } from "lucide-react"
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/broker/pipeline", label: "Pipeline", icon: <Kanban className={ICON_SIZE} /> },
   { href: "/broker/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
   { href: "/broker/instalar", label: "Instalar app", icon: <Smartphone className={ICON_SIZE} />, separator: true },
+  { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true },
 ]
 
 export default async function BrokerLayout({

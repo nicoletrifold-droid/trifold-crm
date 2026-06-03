@@ -22,6 +22,7 @@ import {
   Gift,
   MessageSquarePlus,
   Shuffle,
+  CreditCard,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -142,6 +143,9 @@ export default async function DashboardLayout({
         idx === 0 ? { ...item, separator: true } : item
       )
     })(),
+    ...(user.role === "admin"
+      ? [{ href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true }]
+      : []),
   ]
 
   return (
