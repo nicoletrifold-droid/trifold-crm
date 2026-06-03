@@ -5,6 +5,7 @@ import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone, CreditCard, M
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
+import { WeatherWidget } from "@web/components/weather-widget"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -31,6 +32,7 @@ export default async function BrokerLayout({
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 hidden lg:flex" />
       <SidebarNav
         items={NAV_ITEMS}
         userName={user.name}
