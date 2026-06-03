@@ -4,6 +4,7 @@ import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone, CreditCard } from "lucide-react"
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
+import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -44,6 +45,7 @@ export default async function BrokerLayout({
 
       <NewLeadNotification userId={user.id} orgId={user.orgId} />
       <BrokerPushPrompt />
+      <BrokerInstallPrompt />
     </div>
   )
 }
