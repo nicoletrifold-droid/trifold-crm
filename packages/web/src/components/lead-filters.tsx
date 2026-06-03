@@ -22,12 +22,6 @@ interface LeadFiltersProps {
   daysParam?: string
 }
 
-const DAYS_OPTIONS = [
-  { label: "3+ dias", value: "3" },
-  { label: "7+ dias", value: "7" },
-  { label: "30+ dias", value: "30" },
-]
-
 export function LeadFilters({
   stages,
   properties,
@@ -46,99 +40,60 @@ export function LeadFilters({
   const setParam = useCallback(
     (key: string, value: string) => {
       const params = new URLSearchParams(searchParams.toString())
-      if (value) {
-        params.set(key, value)
-      } else {
-        params.delete(key)
-      }
+      if (value) params.set(key, value)
+      else params.delete(key)
       params.delete("page")
       router.push(`${pathname}?${params.toString()}`)
     },
     [router, pathname, searchParams]
   )
 
-  const chipBase = "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border"
-  const chipActive = "border-orange-500 bg-orange-500/15 text-orange-400"
-  const chipInactive = "border-stone-700 bg-transparent text-stone-400 hover:border-stone-500 hover:text-stone-200"
+  const selectClass =
+    "h-8 rounded-lg border border-stone-700 bg-stone-800 px-2.5 py-0 text-xs text-stone-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 border-gray-300 bg-white text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
 
   const hasFilters = activeStage || activeProperty || activeDays
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-wrap items-center gap-2">
       {/* Etapa */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-stone-500 w-20">Etapa</span>
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => setParam(stageParam, "")}
-            className={`${chipBase} ${!activeStage ? chipActive : chipInactive}`}
-          >
-            Todas
-          </button>
-          {stages.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setParam(stageParam, activeStage === s.id ? "" : s.id)}
-              className={`${chipBase} ${activeStage === s.id ? chipActive : chipInactive}`}
-              style={activeStage === s.id ? undefined : { borderColor: s.color ? `${s.color}50` : undefined }}
-            >
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle"
-                style={{ backgroundColor: s.color ?? "#888" }}
-              />
-              {s.name}
-            </button>
-          ))}
-        </div>
-      </div>
+      <select
+        value={activeStage}
+        onChange={(e) => setParam(stageParam, e.target.value)}
+        className={selectClass}
+      >
+        <option value="">Etapa: Todas</option>
+        {stages.map((s) => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
 
       {/* Empreendimento */}
       {properties.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-stone-500 w-20">Produto</span>
-          <div className="flex gap-1.5">
-            <button
-              onClick={() => setParam(propertyParam, "")}
-              className={`${chipBase} ${!activeProperty ? chipActive : chipInactive}`}
-            >
-              Todos
-            </button>
-            {properties.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setParam(propertyParam, activeProperty === p.id ? "" : p.id)}
-                className={`${chipBase} ${activeProperty === p.id ? chipActive : chipInactive}`}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-        </div>
+        <select
+          value={activeProperty}
+          onChange={(e) => setParam(propertyParam, e.target.value)}
+          className={selectClass}
+        >
+          <option value="">Empreendimento: Todos</option>
+          {properties.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
       )}
 
       {/* Sem contato */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-stone-500 w-20">Parado</span>
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => setParam(daysParam, "")}
-            className={`${chipBase} ${!activeDays ? chipActive : chipInactive}`}
-          >
-            Qualquer
-          </button>
-          {DAYS_OPTIONS.map((d) => (
-            <button
-              key={d.value}
-              onClick={() => setParam(daysParam, activeDays === d.value ? "" : d.value)}
-              className={`${chipBase} ${activeDays === d.value ? chipActive : chipInactive}`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <select
+        value={activeDays}
+        onChange={(e) => setParam(daysParam, e.target.value)}
+        className={selectClass}
+      >
+        <option value="">Sem contato: Qualquer</option>
+        <option value="3">Parado 3+ dias</option>
+        <option value="7">Parado 7+ dias</option>
+        <option value="30">Parado 30+ dias</option>
+      </select>
 
-      {/* Limpar filtros */}
+      {/* Limpar */}
       {hasFilters && (
         <button
           onClick={() => {
@@ -149,9 +104,9 @@ export function LeadFilters({
             params.delete("page")
             router.push(`${pathname}?${params.toString()}`)
           }}
-          className="text-[11px] text-stone-500 hover:text-orange-400 underline underline-offset-2"
+          className="text-xs text-stone-500 hover:text-orange-400 underline underline-offset-2"
         >
-          Limpar filtros
+          Limpar
         </button>
       )}
     </div>
