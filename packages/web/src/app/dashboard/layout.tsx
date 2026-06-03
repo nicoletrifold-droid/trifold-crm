@@ -122,8 +122,19 @@ export default async function DashboardLayout({
       : [{ count: 0 }, { count: 0 }, { count: 0 }]
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
+  const baseFiltered = NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!])
+
+  const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
+  const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
+  const roletaIdx = baseFiltered.findIndex((item) => item.href === "/dashboard/roleta")
+  const baseWithFluxo = showFluxo && roletaIdx >= 0
+    ? [...baseFiltered.slice(0, roletaIdx + 1), fluxoItem, ...baseFiltered.slice(roletaIdx + 1)]
+    : showFluxo
+    ? [...baseFiltered, fluxoItem]
+    : baseFiltered
+
   const navItems = [
-    ...NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!]),
+    ...baseWithFluxo,
     ...(permissions["obras"]
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),
@@ -143,9 +154,6 @@ export default async function DashboardLayout({
         idx === 0 ? { ...item, separator: true } : item
       )
     })(),
-    ...(user.role === "admin" || user.role === "gerente-comercial"
-      ? [{ href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true }]
-      : []),
   ]
 
   return (
