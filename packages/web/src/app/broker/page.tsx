@@ -195,20 +195,21 @@ export default async function BrokerHomePage() {
         {stageSummary.length === 0 ? (
           <p className="py-4 text-center text-sm text-stone-600">Nenhum lead atribuído ainda.</p>
         ) : (
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+          <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2 scrollbar-none">
             {stageSummary.map((stage) => (
               <Link
                 key={stage.id}
                 href={`/broker/leads?stage=${stage.id}`}
-                className="flex min-w-[80px] flex-shrink-0 flex-col items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-3 transition-all hover:border-stone-700 hover:bg-stone-800/60 active:bg-stone-800/80"
+                className="relative flex min-w-[96px] flex-shrink-0 flex-col overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/60 p-4 transition-all hover:border-stone-700 hover:bg-stone-800/60 active:bg-stone-800/80"
               >
-                <span className="text-2xl font-bold leading-none" style={{ color: stage.color }}>
+                <span
+                  className="absolute inset-x-0 top-0 h-[3px]"
+                  style={{ backgroundColor: stage.color }}
+                />
+                <span className="mt-1 text-3xl font-bold leading-none text-stone-100">
                   {stage.count}
                 </span>
-                <span
-                  className="w-full text-center text-[10px] font-medium leading-tight"
-                  style={{ color: stage.color }}
-                >
+                <span className="mt-2 text-[11px] font-medium leading-tight text-stone-500">
                   {stage.name}
                 </span>
               </Link>
