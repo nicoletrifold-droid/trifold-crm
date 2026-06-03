@@ -147,8 +147,19 @@ export default async function BoletoPage({ params }: PageProps) {
           ?.sienge_contract_numbers ?? []
 
       if (contractNumbers.length > 0) {
-        installments = installments.filter((i) =>
-          contractNumbers.includes(i.documentId)
+        // Extrai sufixo da unidade (ex: "504" de "VIND.504" ou "VIND-504")
+        // para também incluir documentos de personalização como "REEMB. PERSON. 504"
+        const unitSuffixes = [
+          ...new Set(
+            contractNumbers
+              .map((cn) => cn.split(/[.\-\s]+/).pop())
+              .filter(Boolean) as string[]
+          ),
+        ]
+        installments = installments.filter(
+          (i) =>
+            contractNumbers.includes(i.documentId) ||
+            unitSuffixes.some((s) => i.documentId.endsWith(s))
         )
       }
 
@@ -215,7 +226,9 @@ export default async function BoletoPage({ params }: PageProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold text-white">
-                        {CONDITION_LABEL[inst.conditionType] ?? inst.conditionType}{" "}
+                        {inst.documentId?.includes("PERSON.")
+                          ? "Personalização"
+                          : (CONDITION_LABEL[inst.conditionType] ?? inst.conditionType)}{" "}
                         {inst.installmentNumber}
                       </span>
                       <StatusBadge status={inst.status} />
