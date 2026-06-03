@@ -143,7 +143,7 @@ export default async function DashboardLayout({
         idx === 0 ? { ...item, separator: true } : item
       )
     })(),
-    ...(user.role === "admin"
+    ...(user.role === "admin" || user.role === "gerente-comercial"
       ? [{ href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true }]
       : []),
   ]
