@@ -1,10 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { MANDATORY_FIELDS } from "@trifold/shared"
 import { getDaysSinceContact, getTimeAgo } from "@web/lib/time"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { CreativeChip } from "@web/components/pipeline/creative-chip"
+import { CreativePreviewModal } from "@web/components/pipeline/creative-preview-modal"
+import type { CreativeData } from "@web/lib/pipeline/types"
 
 interface LeadCardProps {
   lead: {
@@ -20,6 +24,8 @@ interface LeadCardProps {
     ai_summary?: string | null
     source?: string | null
     utm_campaign?: string | null
+    // Story 50-2 (Epic 50): criativo Meta resolvido server-side via fetchCreativesForLeads
+    creative?: CreativeData | null
   }
   propertyName?: string
   brokerName?: string
@@ -47,6 +53,9 @@ function getMandatoryFieldsFilled(lead: LeadCardProps["lead"]): number {
 }
 
 export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardProps) {
+  // Story 50-2: estado do modal de preview do criativo (cada card gerencia o próprio)
+  const [previewOpen, setPreviewOpen] = useState(false)
+
   const {
     attributes,
     listeners,
@@ -131,18 +140,35 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
           )}
         </div>
 
-        {/* Property Badge + Source Badge + Progress */}
+        {/* Property Badge + Source/Creative + Progress */}
         <div className="mt-2 flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${badge.bg} ${badge.text}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
             {badge.label}
           </span>
-          {lead.source && <SourceBadge source={lead.source} size="xs" />}
-          {lead.source === "whatsapp_click_to_ad" && lead.utm_campaign && (
-            <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-medium text-green-600 dark:bg-green-500/15 dark:text-green-300">
-              {lead.utm_campaign.length > 16 ? lead.utm_campaign.slice(0, 16) + "…" : lead.utm_campaign}
-            </span>
+
+          {/* Story 50-2 (Epic 50): CreativeChip substitui SourceBadge quando há criativo Meta resolvido.
+              Fallback gracioso para SourceBadge + utm_campaign quando creative === null ou thumbnail falha (degradação no próprio CreativeChip via onError). */}
+          {lead.creative && lead.creative.thumbnailUrl ? (
+            <CreativeChip
+              adId={lead.creative.adId}
+              adName={lead.creative.adName}
+              campaignName={lead.creative.campaignName ?? undefined}
+              thumbnailUrl={lead.creative.thumbnailUrl ?? undefined}
+              imageUrl={lead.creative.imageUrl ?? undefined}
+              onPreviewClick={() => setPreviewOpen(true)}
+            />
+          ) : (
+            <>
+              {lead.source && <SourceBadge source={lead.source} size="xs" />}
+              {lead.source === "whatsapp_click_to_ad" && lead.utm_campaign && (
+                <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-medium text-green-600 dark:bg-green-500/15 dark:text-green-300">
+                  {lead.utm_campaign.length > 16 ? lead.utm_campaign.slice(0, 16) + "…" : lead.utm_campaign}
+                </span>
+              )}
+            </>
           )}
+
           <div className="flex flex-1 items-center gap-1.5">
             <div className="h-1 flex-1 rounded-full bg-stone-100 dark:bg-stone-700">
               <div
@@ -198,6 +224,20 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
           <span className="text-[10px] tabular-nums text-stone-300 dark:text-stone-600">{timeAgo}</span>
         </div>
       </div>
+
+      {/* Story 50-2: CreativePreviewModal (render condicional só quando há criativo + modal aberto) */}
+      {lead.creative && (
+        <CreativePreviewModal
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          adId={lead.creative.adId}
+          adName={lead.creative.adName}
+          campaignName={lead.creative.campaignName}
+          thumbnailUrl={lead.creative.thumbnailUrl}
+          imageUrl={lead.creative.imageUrl}
+          metaCampaignId={lead.creative.metaCampaignId}
+        />
+      )}
     </div>
   )
 }

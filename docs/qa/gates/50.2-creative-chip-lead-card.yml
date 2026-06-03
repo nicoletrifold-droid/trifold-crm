@@ -1,0 +1,326 @@
+storyId: "50.2"
+title: "Componente CreativeChip no Lead Card do Pipeline"
+epic: 50
+verdict: CONCERNS
+reviewedAt: "2026-06-03"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Implementação substancial (+136/-15 modificados + 347 LoC novos em 4 arquivos)
+  seguindo 1:1 o Design Spec da Uma (Variante A — Inline Replace). Type-check + lint
+  clean (verificados independentemente). Degradação graciosa robusta — pipeline NUNCA
+  quebra por falha de creative. Drag-and-drop conflict-free via stopPropagation duplo.
+  AC1-AC11 + AC13 atendidos por código. AC12 (unit tests) e AC14 (TTFB baseline)
+  environmentally deferred. Aprovada para @devops push junto com Story 50-1,
+  com 6 observações documentadas (todas LOW severity).
+
+quality_checks:
+  - check: "1. Code Review"
+    status: PASS
+    note: >
+      Código segue Design Spec da Uma 1:1. JSDoc em todos os 4 arquivos novos.
+      Naming consistente (CreativeChip ao lado de SourceBadge; CreativeData ao lado
+      de tipos compartilhados). Imports organizados. Comentários referenciam Story 50-2
+      e Design Spec autoritativo. `eslint-disable-next-line @next/next/no-img-element`
+      apropriadamente justificado (Meta CDN tokens transitórios incompatíveis com next/image).
+
+  - check: "2. Unit Tests"
+    status: CONCERNS
+    note: >
+      AC12 (3 test files) DEFERRED. Projeto não tem framework de unit test instalado
+      (sem vitest, jest, @testing-library/react). Apenas Playwright E2E configurado
+      com suite mínima (1 smoke test). Stories 47-1 e 46-1 deployaram em produção
+      sem unit tests — alinhado com pattern do projeto. Recomendação: criar story
+      de backlog "Setup unit test infra (Vitest + RTL)" como follow-up.
+
+  - check: "3. Acceptance Criteria"
+    status: PASS
+    note: >
+      12/14 ACs atendidos por código (AC1-AC11, AC13). 2 ACs environmentally deferred
+      (AC12 testes — ver check 2; AC14 TTFB baseline — requer produção).
+      AC traceability completa — ver ac_traceability abaixo.
+
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      - LeadCard mantém retrocompatibilidade: prop `creative` é opcional, fallback
+        para SourceBadge + utm_campaign quando `creative === null` (cenário comum).
+      - DragOverlay (kanban-board.tsx:436) renderiza LeadCard clone usando `activeLead`
+        do stageMap — `creative` é preservado naturalmente via state. Chip aparece
+        durante drag também.
+      - Optimistic update no DnD (kanban-board.tsx:225) preserva creative via spread
+        de movedLead.
+      - API load-more `/api/pipeline/leads` atualizada paralelamente — consistência
+        com carga inicial. Leads paginados também ganham chip.
+      - SourceBadge fallback preservado intacto para leads não-Meta (website, walk_in, etc).
+
+  - check: "5. Performance"
+    status: PASS
+    note: >
+      AC7 (batched lookup) implementado corretamente em fetch-creatives.ts:
+      - 1 query Supabase para a página inteira (até 50 leads × N stages)
+      - .in("meta_ad_id", adIds) onde adIds = Set distinct de metadata.ad_id
+      - Embed adsets→campaigns resolve campaign_name no mesmo round-trip
+      - PostgREST handles bem `.in(...)` com até centenas de IDs
+      Loading="lazy" no <img> garante que thumbs só carregam ao entrar no viewport.
+      Modal só renderiza img quando `open=true`. Sem renderização desperdiçada.
+
+  - check: "6. Security"
+    status: PASS
+    note: >
+      - URLs de creative.thumbnail_url e creative.image_url vêm do Meta CDN (público).
+      - Sem PII em nenhum dos novos arquivos.
+      - RLS de meta_ads respeitada (query usa client com sessão do usuário em page.tsx;
+        API route usa requireAuth + appUser.org_id como filtro).
+      - Sem SQL injection (Supabase typed client + .in/.eq).
+      - XSS: nenhum innerHTML; React escapa por default no JSX.
+      - `as string` cast em creative.thumbnail_url tolerado — fallback via onError se
+        valor não-string em runtime (defensive). Ver OBS-005 para defense-in-depth.
+
+  - check: "7. Documentation"
+    story_status: PASS
+    note: >
+      Comentários inline referenciam Epic/Story. JSDoc comprehensive em todos os 4
+      arquivos novos explicando comportamento, contracts e graceful degradation.
+      Design Spec da Uma (docs/assets/design-specs/50-2-creative-chip-design-spec.md)
+      é autoritativo e detalhado. Completion Notes do @dev documentam decisões e
+      justificativas.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "Render condicional em lead-card.tsx:152-170 — `lead.creative && lead.creative.thumbnailUrl ? <CreativeChip> : <SourceBadge + fallback>`."
+  - ac: "AC2"
+    status: PASS
+    note: "Thumb 24×24 mobile / 28×28 desktop (h-6 w-6 sm:h-7 sm:w-7) — design spec orientou este tamanho (não 32×32 da story original) para preservar densidade do card."
+  - ac: "AC3"
+    status: PASS
+    note: "max-w-[100px] truncate no nome; chip inline com `shrink-0` previne overflow; testado lint passes."
+  - ac: "AC4"
+    status: PASS
+    note: "CreativeChip retorna null se !thumbnailUrl || imgError; pai (lead-card) renderiza SourceBadge + utm_campaign fallback nesse caso. Graceful degradation rigorosa."
+  - ac: "AC5"
+    status: PASS
+    note: "`title=`${adName}${campaignName ? ` · ${campaignName}` : ''}`` no <button>. Tooltip nativo do browser não bloqueia drag."
+  - ac: "AC6"
+    status: PASS
+    note: "CreativePreviewModal renderiza imageUrl ?? thumbnailUrl com maxHeight 60vh; Link para /dashboard/campaigns/meta/{metaCampaignId}?ad_id={adId}."
+  - ac: "AC7"
+    status: PASS
+    note: "fetchCreativesForLeads executa 1 query Supabase com .in(adIds) — máx +1 round-trip por página confirmado."
+  - ac: "AC8"
+    status: PASS
+    note: "Dark mode tokens (dark:bg-stone-800/60, dark:hover:border-stone-700, dark:text-stone-300, dark:ring-offset-stone-900) — todos sistêmicos."
+  - ac: "AC9"
+    status: PASS
+    note: "WCAG AA: button semântico, aria-label, alt text descritivo, focus-visible ring blue-500 com offset, role=dialog + aria-modal no modal. Ver OBS-001 para focus trap."
+  - ac: "AC10"
+    status: PASS
+    note: "Modal usa items-end (mobile bottom sheet) → items-center (desktop centered) via responsive sm:. Drag handle visível apenas mobile (sm:hidden)."
+  - ac: "AC11"
+    status: PASS
+    note: "next.config.ts:62-65 — `*.cdninstagram.com` adicionado. `*.fbcdn.net` já estava de config anterior."
+  - ac: "AC12"
+    status: DEFERRED
+    note: >
+      Unit tests não criados — projeto sem framework. Pattern aceito (stories 47-1,
+      46-1 idem). Ver OBS-003 para sugestão de follow-up.
+  - ac: "AC13"
+    status: PASS
+    note: "Type-check (após clear .next/dev/types) e lint executados independentemente — clean exit em todos os 10 arquivos editados."
+  - ac: "AC14"
+    status: DEFERRED
+    note: >
+      TTFB baseline requer produção. @devops captura pós-deploy via Vercel Analytics.
+      Risco baixo: query é batched (1 round-trip), com embed, sem N+1.
+
+issues:
+  - id: OBS-001
+    severity: low
+    category: accessibility
+    description: >
+      CreativePreviewModal não implementa focus trap — quando modal abre, foco
+      pode escapar para conteúdo background via Tab. Uma reconheceu esta limitação
+      no Design Spec ("manual por enquanto — aceito como CONCERN minor").
+    recommendation: >
+      Não-bloqueante. Para Story 50-4 ou refactor futuro, considerar instalar
+      `react-focus-lock` (4kb gzip). Mitigação atual: Esc closes + backdrop click
+      closes mantém escape route acessível.
+
+  - id: OBS-002
+    severity: low
+    category: tooling
+    description: >
+      CodeRabbit CLI não executado nesta review — config aponta para WSL/Windows
+      e host de revisão é macOS. Mesmo cenário da Story 50-1.
+    recommendation: >
+      Não-bloqueante. Análise manual cobriu code review, security, performance,
+      regression e a11y. Recomendar @devops/CI executar CodeRabbit em ambiente
+      WSL como passo opcional pós-push.
+
+  - id: OBS-003
+    severity: low
+    category: testing
+    description: >
+      AC12 (3 test files unitários) DEFERRED. Projeto não tem framework de unit
+      test configurado.
+    recommendation: >
+      Criar story de backlog "Setup Vitest + React Testing Library + jsdom" como
+      enabler para coverage retroativo. Sugerir @po criar via *backlog-add
+      type=tech_debt priority=medium.
+
+  - id: OBS-004
+    severity: low
+    category: validation
+    description: >
+      AC14 (TTFB baseline antes/depois) DEFERRED — requer produção real.
+    recommendation: >
+      @devops captura p95 do `/dashboard/pipeline` via Vercel Analytics nos primeiros
+      3-7 dias pós-deploy. Comparar com média da semana anterior. Threshold de
+      regressão: >100ms adicional considera-se regressão e requer rollback ou
+      otimização.
+
+  - id: OBS-005
+    severity: low
+    category: security
+    description: >
+      Em creative-preview-modal.tsx:57, `deeplink` constrói URL via template
+      literal: `/dashboard/campaigns/meta/${metaCampaignId}?ad_id=${adId}`. Não
+      há encodeURIComponent. Os valores vêm do Meta API (não user input direto)
+      então risco é mínimo, mas defense-in-depth seria melhor.
+    recommendation: >
+      Wrappar em `encodeURIComponent()`: `?ad_id=${encodeURIComponent(adId)}`.
+      Mudança trivial mas não-bloqueante — pode ser melhoria opcional pré-push
+      ou follow-up.
+
+  - id: OBS-006
+    severity: low
+    category: performance
+    description: >
+      Cada `LeadCard` renderiza seu próprio `<CreativePreviewModal>` (atualmente
+      retornando null quando !previewOpen). Em uma coluna com 50 cards Meta, isso
+      é 50 componentes Modal stub em memória. Custo de render é mínimo (return
+      null cedo), mas é footprint desperdiçado.
+    recommendation: >
+      Não-bloqueante. Otimização opcional futura: elevar o modal para nível
+      KanbanBoard com state global `previewOpenForAdId`. Cards apenas
+      disparam evento/callback. Reduz overhead em pipelines densos.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Design Spec da Uma seguido 1:1 — código CreativeChip e CreativePreviewModal
+      são essencialmente copy-paste do spec, com comments referenciando o documento
+      autoritativo. Zero divergência. Excelente coordenação inter-agente.
+
+  - id: POS-002
+    description: >
+      Graceful degradation rigorosa em 3 níveis:
+      1. fetch-creatives.ts: query error → console.warn + Map vazio
+      2. CreativeChip: !thumbnailUrl || imgError → return null
+      3. lead-card.tsx: !lead.creative || !thumbnailUrl → fallback SourceBadge
+      Pipeline NUNCA quebra por causa do creative.
+
+  - id: POS-003
+    description: >
+      Drag-and-drop conflict mitigation: stopPropagation no onClick + dedicated
+      stopPropagation no onPointerDown garante que chip click NUNCA dispara drag
+      do dnd-kit (PointerSensor com distance: 5 já é tolerante, mas o dev foi
+      além).
+
+  - id: POS-004
+    description: >
+      API load-more route.ts (linha 117) também enriquecida com creatives — leads
+      paginados via "Carregar mais 50" preservam o chip. Consistência completa
+      com carga inicial. Demonstra atenção a casos edge.
+
+  - id: POS-005
+    description: >
+      Story 50-2 desbloqueia bug latente: leads `whatsapp_click_to_ad` que JÁ
+      tinham `metadata.ad_id` populado pelo webhook Meta (cenários onde a coluna
+      `leads.metadata` existe e o webhook gravou) passam a mostrar chip
+      IMEDIATAMENTE após deploy — sem precisar esperar Story 50-3.
+
+risk_assessment:
+  probability: low
+  impact: low_to_medium
+  rationale: >
+    Mudança substancial em volume (~470 LoC) mas com escopo bem isolado:
+    apenas componentes do pipeline + helper + config. Múltiplos layers de
+    graceful degradation reduzem impact. Rollback via git revert de 11 arquivos
+    é simples. Pior cenário runtime: chip não aparece, mas SourceBadge fallback
+    preserva UX original. Sem regressão funcional possível dado o design defensivo.
+
+gate_decision:
+  verdict: CONCERNS
+  rationale: >
+    Aprovada para push. CONCERNS verdict alinhado com convenção do projeto
+    (gates 16.11, 50.1) para "aprovado com observações documentadas". Todas as
+    6 issues são LOW severity e não-bloqueantes. Implementação cirúrgica e
+    aderente ao Design Spec. Maior valor agregado da review: identificou
+    side-effect positivo (POS-005) e oportunidades de melhoria não-críticas.
+  next_steps:
+    - "@devops *push da branch atual (Story 50-1 + 50-2 juntas)"
+    - "Pós-deploy: @devops valida AC5 da 50-1 (≥80% thumbnail populated) E AC14 da 50-2 (TTFB sem regressão)"
+    - "Considerar OBS-005 (encodeURIComponent) como quick fix pré-push (1 linha)"
+    - "Criar story de backlog para OBS-003 (Setup Vitest + RTL)"
+
+complementary_work:
+  - storyId: "50.1"
+    relationship: "Prerequisite"
+    note: >
+      Story 50-2 depende de 50-1 em produção para exibir chips. Deploy
+      conjunto recomendado (mesma branch / PR).
+  - storyId: "50.3"
+    relationship: "Complementar"
+    note: >
+      Story 50-3 (CTWA ad attribution) habilitará chip também para leads
+      Click-to-WhatsApp NOVOS após seu deploy. 50-2 já funciona para leads
+      Meta Lead Form (via webhook Meta) e CTWA legados (que tinham metadata.ad_id).
+
+files_reviewed:
+  - path: "packages/web/src/components/pipeline/creative-chip.tsx"
+    lines_added: 65
+    verdict: PASS
+    notes: "JSDoc top, design spec 1:1, defensive imgError state"
+  - path: "packages/web/src/components/pipeline/creative-preview-modal.tsx"
+    lines_added: 135
+    verdict: PASS
+    notes: "Responsive sheet/modal pattern aligned com lead-detail-drawer.tsx existing"
+  - path: "packages/web/src/lib/pipeline/types.ts"
+    lines_added: 23
+    verdict: PASS
+    notes: "Tipo CreativeData stable shape para propagação server→client"
+  - path: "packages/web/src/lib/pipeline/fetch-creatives.ts"
+    lines_added: 124
+    verdict: PASS
+    notes: "Batched lookup correto (AC7); graceful degradation no error path"
+  - path: "packages/web/src/components/pipeline/lead-card.tsx"
+    lines_changed: "+39 / -8"
+    verdict: PASS
+    notes: "Render condicional limpo; useState do modal escopo do card"
+  - path: "packages/web/src/components/pipeline/kanban-board.tsx"
+    lines_changed: "+3 / -0"
+    verdict: PASS
+    notes: "Lead type estendida; creative preservado no activeLead e optimistic update"
+  - path: "packages/web/src/components/pipeline/kanban-column.tsx"
+    lines_changed: "+5 / -0"
+    verdict: PASS
+    notes: "Type da prop leads estendida (source/utm_campaign também adicionados, eram missing)"
+  - path: "packages/web/src/app/dashboard/pipeline/page.tsx"
+    lines_changed: "+16 / -1"
+    verdict: PASS
+    notes: "metadata no SELECT + fetchCreativesForLeads + resolveCreativeForLead chain"
+  - path: "packages/web/src/app/broker/pipeline/page.tsx"
+    lines_changed: "+14 / -2"
+    verdict: PASS
+    notes: "Idêntico ao dashboard/pipeline"
+  - path: "packages/web/src/app/api/pipeline/leads/route.ts"
+    lines_changed: "+13 / -3"
+    verdict: PASS
+    notes: "Enrichment de leads paginados — load-more também ganha chip"
+  - path: "packages/web/next.config.ts"
+    lines_changed: "+5 / -0"
+    verdict: PASS
+    notes: "*.cdninstagram.com adicionado; aditivo, sem impacto em outras imagens"

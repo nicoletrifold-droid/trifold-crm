@@ -6,6 +6,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { LeadCard } from "./lead-card"
+import type { CreativeData } from "@web/lib/pipeline/types"
 
 export const EMPTY_COLUMN_PREFIX = "__empty__"
 
@@ -26,8 +27,12 @@ interface KanbanColumnProps {
     created_at: string
     updated_at: string
     ai_summary?: string | null
+    source?: string | null
+    utm_campaign?: string | null
     properties?: { name: string } | null
     users?: { name: string } | null
+    // Story 50-2 (Epic 50): criativo Meta resolvido server-side
+    creative?: CreativeData | null
   }>
   totalCount?: number
   hasMore?: boolean

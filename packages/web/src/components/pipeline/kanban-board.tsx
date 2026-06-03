@@ -21,6 +21,7 @@ import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { createClient } from "@web/lib/supabase/client"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
+import type { CreativeData } from "@web/lib/pipeline/types"
 
 interface Stage {
   id: string
@@ -46,6 +47,8 @@ interface Lead {
   utm_campaign?: string | null
   properties?: { name: string } | null
   users?: { name: string } | null
+  // Story 50-2 (Epic 50): criativo Meta resolvido server-side
+  creative?: CreativeData | null
 }
 
 export interface InitialStageState {

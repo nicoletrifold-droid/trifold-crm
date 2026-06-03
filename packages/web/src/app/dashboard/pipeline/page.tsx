@@ -1,13 +1,15 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
+import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
 import Link from "next/link"
 
 const PAGE_SIZE = 50
 
+// Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
        property_interest_id, assigned_broker_id, created_at, updated_at,
-       ai_summary, source, utm_campaign,
+       ai_summary, source, utm_campaign, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
 
@@ -151,7 +153,18 @@ export default async function PipelinePage({
     })
   )
 
-  const initialLeadsPerStage = perStageResults as unknown as InitialStageState[]
+  // Story 50-2 (Epic 50): batched lookup de criativos Meta (máx +1 query Supabase / AC7)
+  // Flatten leads across stages, build distinct ad_ids, attach creative back to each lead
+  const allLeads = perStageResults.flatMap((s) => s.leads as RawLead[])
+  const creativesMap = await fetchCreativesForLeads(supabase, allLeads, user.orgId)
+
+  const initialLeadsPerStage = perStageResults.map((s) => ({
+    ...s,
+    leads: (s.leads as RawLead[]).map((l) => ({
+      ...l,
+      creative: resolveCreativeForLead(l, creativesMap),
+    })),
+  })) as unknown as InitialStageState[]
   // Usa totalCount (contagem real do DB por stage) em vez de leads.length
   // (leads.length é limitado por PAGE_SIZE=50 e filtro de score client-side)
   const totalPipeline = initialLeadsPerStage.reduce((acc, s) => acc + s.totalCount, 0)

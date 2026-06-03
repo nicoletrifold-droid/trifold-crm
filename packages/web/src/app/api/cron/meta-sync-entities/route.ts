@@ -164,10 +164,19 @@ export async function GET(request: NextRequest) {
       const adsetMap = new Map(dbAdsets?.map((a) => [a.meta_adset_id, a.id]) ?? [])
 
       // --- Sync Ads ---
+      // Story 50-1 (Epic 50): expandir `creative` para incluir thumbnail/image
+      // habilitando o componente CreativeChip no lead-card do pipeline (Story 50-2)
+      // sem chamadas extras à Graph API. Shape esperado de `creative`:
+      //   { id, name, thumbnail_url, image_url, effective_object_story_id, object_story_spec }
+      // Campos podem estar ausentes em ads de vídeo, carrossel ou criativos legados —
+      // persistência defensiva via `a.creative ?? null` (linha abaixo) tolera.
       const { data: ads, apiCalls: adCalls } = await fetchAllPages<MetaAd>(
         `${accountPath}/ads`,
         token,
-        { fields: "id,name,adset_id,status,creative" },
+        {
+          fields:
+            "id,name,adset_id,status,creative{id,name,thumbnail_url,image_url,effective_object_story_id,object_story_spec}",
+        },
       )
       totalApiCalls += adCalls
 
