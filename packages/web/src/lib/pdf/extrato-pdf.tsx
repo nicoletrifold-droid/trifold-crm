@@ -223,8 +223,9 @@ export function ExtratoPDF({
 }: ExtratoPDFProps) {
   const totalPago = installments
     .filter((i) => i.status === "PAGO")
-    .reduce((sum, i) => sum + i.originalValue, 0)
+    .reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
 
+  // BOLETO_GERADO e EM_ABERTO somados como "Em aberto" (total ainda devido)
   const totalAberto = installments
     .filter((i) => i.status !== "PAGO")
     .reduce((sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue), 0)
@@ -285,7 +286,7 @@ export function ExtratoPDF({
         {installments.map((inst, idx) => {
           const valor =
             inst.status === "PAGO"
-              ? inst.originalValue
+              ? (inst.receiptValue ?? inst.originalValue)
               : inst.currentBalance > 0
                 ? inst.currentBalance
                 : inst.originalValue

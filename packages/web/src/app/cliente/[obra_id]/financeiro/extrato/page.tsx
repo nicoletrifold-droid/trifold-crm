@@ -276,32 +276,33 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
         {siengeConfigured && !siengeUnavailable && installments.length > 0 && (
           <>
             {/* Resumo rápido */}
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {(["PAGO", "BOLETO_GERADO", "EM_ABERTO"] as const).map((status) => {
-                const group = installments.filter((i) => i.status === status)
-                if (group.length === 0) return null
-                const total = group.reduce(
-                  (sum, i) =>
-                    sum + (status === "PAGO" ? i.originalValue : i.currentBalance > 0 ? i.currentBalance : i.originalValue),
-                  0
-                )
-                const label =
-                  status === "PAGO" ? "Pago" : status === "BOLETO_GERADO" ? "Boleto" : "Em aberto"
-                const color =
-                  status === "PAGO"
-                    ? "text-emerald-400"
-                    : status === "BOLETO_GERADO"
-                      ? "text-amber-400"
-                      : "text-stone-400"
-                return (
-                  <div key={status} className="rounded-xl border border-stone-800 bg-stone-900 p-3 text-center">
-                    <p className={`text-xs font-semibold ${color}`}>{label}</p>
-                    <p className="mt-1 text-sm font-bold text-white">{formatCurrency(total)}</p>
-                    <p className="text-xs text-stone-500">{group.length} parcela{group.length !== 1 ? "s" : ""}</p>
-                  </div>
-                )
-              })}
-            </div>
+            {(() => {
+              const pagas = installments.filter((i) => i.status === "PAGO")
+              const pendentes = installments.filter((i) => i.status !== "PAGO")
+              const totalPago = pagas.reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
+              const totalPendente = pendentes.reduce(
+                (sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue),
+                0
+              )
+              return (
+                <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {pagas.length > 0 && (
+                    <div className="rounded-xl border border-stone-800 bg-stone-900 p-3 text-center">
+                      <p className="text-xs font-semibold text-emerald-400">Pago</p>
+                      <p className="mt-1 text-sm font-bold text-white">{formatCurrency(totalPago)}</p>
+                      <p className="text-xs text-stone-500">{pagas.length} parcela{pagas.length !== 1 ? "s" : ""}</p>
+                    </div>
+                  )}
+                  {pendentes.length > 0 && (
+                    <div className="rounded-xl border border-stone-800 bg-stone-900 p-3 text-center">
+                      <p className="text-xs font-semibold text-stone-400">Em aberto</p>
+                      <p className="mt-1 text-sm font-bold text-white">{formatCurrency(totalPendente)}</p>
+                      <p className="text-xs text-stone-500">{pendentes.length} parcela{pendentes.length !== 1 ? "s" : ""}</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Lista de parcelas */}
             <div className="space-y-3">
@@ -333,7 +334,7 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
                       <p className="mt-2 text-base font-bold text-white">
                         {formatCurrency(
                           inst.status === "PAGO"
-                            ? inst.originalValue
+                            ? (inst.receiptValue ?? inst.originalValue)
                             : inst.currentBalance > 0
                               ? inst.currentBalance
                               : inst.originalValue

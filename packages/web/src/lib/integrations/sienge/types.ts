@@ -47,9 +47,14 @@ export interface SiengeFinancialStatementsResponse {
   results: SiengeFinancialStatement[]
 }
 
+export interface SiengePaymentSlipResult {
+  urlReport?: string
+  digitableNumber?: string
+}
+
 export interface SiengePaymentSlipResponse {
-  url?: string
-  [key: string]: unknown
+  resultSetMetadata?: { count: number; offset: number; limit: number }
+  results: SiengePaymentSlipResult[]
 }
 
 export type InstallmentStatus = "PAGO" | "BOLETO_GERADO" | "EM_ABERTO"
@@ -67,6 +72,7 @@ export interface FormattedInstallment {
   status: InstallmentStatus
   hasBoleto: boolean
   receiptDate?: string
+  receiptValue?: number
 }
 
 // ── Informe de Rendimentos ────────────────────────────────────────────
