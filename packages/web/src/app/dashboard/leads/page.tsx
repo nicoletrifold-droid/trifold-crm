@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
+import { LeadFilters } from "@web/components/lead-filters"
 
 const PAGE_SIZE = 50
 
@@ -12,13 +13,17 @@ function buildPageHref(
   targetPage: number,
   search?: string,
   stageId?: string,
-  view?: string
+  view?: string,
+  propertyId?: string,
+  days?: string
 ): string {
   const p = new URLSearchParams()
   p.set("page", String(targetPage))
   if (search) p.set("search", search)
   if (stageId) p.set("stage_id", stageId)
   if (view) p.set("view", view)
+  if (propertyId) p.set("property_id", propertyId)
+  if (days) p.set("days", days)
   return `?${p.toString()}`
 }
 
@@ -30,7 +35,7 @@ const PERDIDO_STAGE_IDS = [
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; page?: string; view?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -84,9 +89,20 @@ export default async function LeadsPage({
     countQuery = countQuery.eq("stage_id", params.stage_id)
   }
 
+  if (params.property_id) {
+    query = query.eq("property_interest_id", params.property_id)
+    countQuery = countQuery.eq("property_interest_id", params.property_id)
+  }
+
+  if (params.days) {
+    const daysAgo = new Date(Date.now() - Number(params.days) * 86400000).toISOString()
+    query = query.lt("updated_at", daysAgo)
+    countQuery = countQuery.lt("updated_at", daysAgo)
+  }
+
   query = query.range(offset, offset + PAGE_SIZE - 1)
 
-  const [leadsResult, countResult, perdidosCountResult] = await Promise.all([
+  const [leadsResult, countResult, perdidosCountResult, stagesResult, propertiesResult] = await Promise.all([
     query,
     countQuery,
     supabase
@@ -94,11 +110,15 @@ export default async function LeadsPage({
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
       .in("stage_id", PERDIDO_STAGE_IDS),
+    supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
+    supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
   ])
   const leads = leadsResult.data
   const totalCount = countResult.count ?? 0
   const perdidosCount = perdidosCountResult.count ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const allStages = stagesResult.data ?? []
+  const allProperties = propertiesResult.data ?? []
 
   return (
     <div className="space-y-6">
@@ -138,7 +158,7 @@ export default async function LeadsPage({
         </Link>
       </div>
 
-      <div>
+      <div className="space-y-3">
         <form method="get" className="flex gap-2">
           {view === "perdidos" && <input type="hidden" name="view" value="perdidos" />}
           <input
@@ -155,6 +175,13 @@ export default async function LeadsPage({
             Buscar
           </button>
         </form>
+        <LeadFilters
+          stages={allStages.map(s => ({ id: s.id, name: s.name, color: s.color }))}
+          properties={allProperties.map(p => ({ id: p.id, name: p.name }))}
+          stageParam="stage_id"
+          propertyParam="property_id"
+          daysParam="days"
+        />
       </div>
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
@@ -281,7 +308,7 @@ export default async function LeadsPage({
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (
               <Link
-                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined)}
+                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -300,7 +327,7 @@ export default async function LeadsPage({
             </span>
             {page < totalPages ? (
               <Link
-                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined)}
+                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Próxima <ChevronRight className="h-4 w-4" />

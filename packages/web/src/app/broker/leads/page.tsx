@@ -3,15 +3,16 @@ import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
+import { LeadFilters } from "@web/components/lead-filters"
 
 export default async function BrokerLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string }>
+  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
-  const { q, stage } = await searchParams
+  const { q, stage, property, days } = await searchParams
   const search = q?.trim().toLowerCase() ?? ""
 
   const { data: leads } = await supabase
@@ -26,10 +27,14 @@ export default async function BrokerLeadsPage({
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
 
+  // Corte de data para filtro "parado há X dias"
+  const daysAgo = days ? new Date(Date.now() - Number(days) * 86400000).toISOString() : null
+
   // Filter client-side so search works across joined name/phone/email/stage
   const filtered = (leads ?? []).filter((lead) => {
-    // Stage filter from URL param
     if (stage && lead.stage_id !== stage) return false
+    if (property && lead.property_interest_id !== property) return false
+    if (daysAgo && (lead.updated_at as string) >= daysAgo) return false
     if (!search) return true
     const name = ((lead.name as string) ?? "").toLowerCase()
     const phone = ((lead.phone as string) ?? "").toLowerCase()
@@ -63,8 +68,15 @@ export default async function BrokerLeadsPage({
         />
       </div>
 
-      {/* Search */}
+      {/* Search + Filters */}
       <LeadSearch />
+      <LeadFilters
+        stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
+        properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}
+        stageParam="stage"
+        propertyParam="property"
+        daysParam="days"
+      />
 
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-stone-900 p-12 text-center ring-1 ring-stone-800">
