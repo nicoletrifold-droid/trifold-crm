@@ -48,12 +48,13 @@ export interface SiengeFinancialStatementsResponse {
 }
 
 export interface SiengePaymentSlipResult {
-  urlReport?: string
-  digitableNumber?: string
+  urlReport: string
+  digitableNumber: string
+  parameter1207?: string
 }
 
 export interface SiengePaymentSlipResponse {
-  resultSetMetadata?: { count: number; offset: number; limit: number }
+  resultSetMetadata: { count: number; offset: number; limit: number }
   results: SiengePaymentSlipResult[]
 }
 
