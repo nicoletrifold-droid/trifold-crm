@@ -10,7 +10,14 @@ const SUPREMO_API_TOKEN = process.env.SUPREMO_API_TOKEN
 const SUPREMO_ORG_ID = process.env.SUPREMO_ORG_ID
 const SUPREMO_BASE = "https://api.supremocrm.com.br/v1"
 
-// Supremo id_situacao → Trifold stage_id (granular mapping)
+// Estágios que só existem no trifold ou são protegidos — nunca sobrescrever via sync
+const PROTECTED_STAGE_IDS = new Set<string>([
+  STAGE_IDS.acao_muffato,   // campanha pontual, não gerenciada pelo Supremo
+  STAGE_IDS.visita_agendada,// coluna exclusiva trifold
+  STAGE_IDS.negociando,     // coluna exclusiva trifold
+])
+
+// Mapeamento por id_situacao (IDs específicos da conta Trifold no Supremo)
 const SITUACAO_ID_TO_STAGE: Record<number, string> = {
   11031: STAGE_IDS.novo,             // AGUARDANDO ATENDIMENTO
   10496: STAGE_IDS.em_qualificacao,  // 1º CONTATO
@@ -23,11 +30,59 @@ const SITUACAO_ID_TO_STAGE: Record<number, string> = {
   10262: "95327bd7-3e88-4038-aa16-250a74ab085c",  // NÃO QUALIFICADO
 }
 
+// Mapeamento por nome de situação (fallback p/ situações sem ID mapeado, ex: IMPORTAR CRM)
+const SITUACAO_NOME_TO_STAGE: Record<string, string> = {
+  "aguardando atendimento": STAGE_IDS.novo,
+  "1º contato":             STAGE_IDS.em_qualificacao,
+  "1o contato":             STAGE_IDS.em_qualificacao,
+  "atendimento":            STAGE_IDS.no_show,
+  "agendamento":            STAGE_IDS.qualificado,
+  "visita":                 STAGE_IDS.visitou,
+  "não qualificado":        "95327bd7-3e88-4038-aa16-250a74ab085c",
+  "nao qualificado":        "95327bd7-3e88-4038-aa16-250a74ab085c",
+  "proposta":               STAGE_IDS.proposta,
+  "fechamento":             STAGE_IDS.fechou,
+  "represamento":           STAGE_IDS.represamento,
+  "importar crm":           STAGE_IDS.importar_crm,
+}
+
+// Preenchido dinamicamente no início de cada run via GET /leads/situacoes
+const dynamicSituacaoMap = new Map<number, string>()
+
+async function fetchSituacoes(): Promise<void> {
+  try {
+    const res = await fetch(`${SUPREMO_BASE}/leads/situacoes`, {
+      headers: { Authorization: `Bearer ${SUPREMO_API_TOKEN}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return
+    const data: Array<{ id: number; nome: string }> = await res.json()
+    for (const s of data) {
+      const staticStage = SITUACAO_ID_TO_STAGE[s.id] ?? null
+      if (staticStage) {
+        // já mapeado estático
+        dynamicSituacaoMap.set(s.id, staticStage)
+      } else {
+        const nomeKey = s.nome.toLowerCase().trim()
+        const stageId = SITUACAO_NOME_TO_STAGE[nomeKey] ?? null
+        if (stageId) dynamicSituacaoMap.set(s.id, stageId)
+      }
+    }
+  } catch {
+    // não bloqueia o sync se falhar — cai no mapeamento estático
+  }
+}
+
 function mapToStageId(etapa: string, idSituacao: number | null): string {
-  if (idSituacao && SITUACAO_ID_TO_STAGE[idSituacao]) return SITUACAO_ID_TO_STAGE[idSituacao]
+  if (idSituacao) {
+    const dynamic = dynamicSituacaoMap.get(idSituacao)
+    if (dynamic) return dynamic
+    const static_ = SITUACAO_ID_TO_STAGE[idSituacao]
+    if (static_) return static_
+  }
   if (etapa === "4") return STAGE_IDS.fechou
   if (etapa === "5") return STAGE_IDS.perdido
-  return STAGE_IDS.novo
+  return STAGE_IDS.importar_crm // default: cai em Importar CRM em vez de Aguardando
 }
 
 // Supremo nome_origem → lead_source enum
@@ -153,6 +208,9 @@ export async function GET(request: NextRequest) {
   let syncError: string | null = null
 
   try {
+    // Buscar situações dinamicamente para completar o mapeamento (ex: IMPORTAR CRM)
+    await fetchSituacoes()
+
     // Determine which pages to fetch
     const firstPage = await fetchPage(1)
     pagesFetched++
@@ -209,7 +267,12 @@ export async function GET(request: NextRequest) {
         const existing = bySupremoId.get(lead.id) ?? byPhone.get(phone) ?? null
 
         if (existing) {
-          // Skip if stage and supremo_id are already up to date
+          // Não sobrescrever leads em colunas protegidas (Ação Muffato, Visita Agendada, Negociando)
+          if (existing.stage_id && PROTECTED_STAGE_IDS.has(existing.stage_id)) {
+            skipped++
+            continue
+          }
+          // Skip se nada mudou
           if (existing.supremo_id === lead.id && existing.stage_id === stageId) {
             skipped++
             continue
