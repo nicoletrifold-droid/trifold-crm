@@ -222,7 +222,7 @@ export function LeadsBulkTable({
 
       {/* Barra de ação em massa */}
       {someSelected && (
-        <div className="sticky bottom-0 z-10 flex items-center gap-4 rounded-b-lg border-t border-stone-200 bg-stone-800 px-6 py-4 dark:border-stone-700">
+        <div className="fixed bottom-0 left-60 right-0 z-50 flex items-center gap-4 border-t border-stone-700 bg-stone-900 px-6 py-4 shadow-2xl">
           <span className="min-w-max text-sm font-medium text-white">
             {selected.size} selecionado{selected.size !== 1 ? "s" : ""}
           </span>
