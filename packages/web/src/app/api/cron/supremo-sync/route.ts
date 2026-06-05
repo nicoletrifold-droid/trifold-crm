@@ -46,10 +46,15 @@ const SITUACAO_NOME_TO_STAGE: Record<string, string> = {
   "importar crm":           STAGE_IDS.importar_crm,
 }
 
-// Preenchido dinamicamente no início de cada run via GET /leads/situacoes
+// Limite diário Supremo: 4.000 req. Cron a cada 5 min = 288 runs/dia.
+// Budget por run: 4.000 / 288 ≈ 13,8 → usamos 8 páginas + 1 situacoes (cacheada 1h) = ~9 req/run → ~2.600/dia.
+
 const dynamicSituacaoMap = new Map<number, string>()
+let situacoesLastFetched = 0  // timestamp ms — module-level cache entre runs quentes
 
 async function fetchSituacoes(): Promise<void> {
+  const ONE_HOUR = 60 * 60 * 1_000
+  if (dynamicSituacaoMap.size > 0 && Date.now() - situacoesLastFetched < ONE_HOUR) return
   try {
     const res = await fetch(`${SUPREMO_BASE}/leads/situacoes`, {
       headers: { Authorization: `Bearer ${SUPREMO_API_TOKEN}` },
@@ -60,7 +65,6 @@ async function fetchSituacoes(): Promise<void> {
     for (const s of data) {
       const staticStage = SITUACAO_ID_TO_STAGE[s.id] ?? null
       if (staticStage) {
-        // já mapeado estático
         dynamicSituacaoMap.set(s.id, staticStage)
       } else {
         const nomeKey = s.nome.toLowerCase().trim()
@@ -68,6 +72,7 @@ async function fetchSituacoes(): Promise<void> {
         if (stageId) dynamicSituacaoMap.set(s.id, stageId)
       }
     }
+    situacoesLastFetched = Date.now()
   } catch {
     // não bloqueia o sync se falhar — cai no mapeamento estático
   }
@@ -230,8 +235,8 @@ export async function GET(request: NextRequest) {
         pagesFetched += to - from + 1
       }
     } else {
-      // Incremental: fetch first 15 pages (300 newest leads) — cron roda a cada 1 min
-      const pages = Math.min(15, totalPages)
+      // Incremental: 8 páginas (160 leads mais recentes) — budget: 8×288=2.304 req/dia < 4.000 limite
+      const pages = Math.min(8, totalPages)
       if (pages > 1) {
         const rest = await fetchAllPages(2, pages)
         pagesFetched += pages - 1
