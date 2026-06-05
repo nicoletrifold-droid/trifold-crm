@@ -3,9 +3,9 @@ import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { SourceBadge } from "@web/components/ui/source-badge"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { LeadFilters } from "@web/components/lead-filters"
+import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
 
 const PAGE_SIZE = 50
 
@@ -102,7 +102,7 @@ export default async function LeadsPage({
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
 
-  const [leadsResult, countResult, perdidosCountResult, stagesResult, propertiesResult] = await Promise.all([
+  const [leadsResult, countResult, perdidosCountResult, stagesResult, propertiesResult, brokersResult] = await Promise.all([
     query,
     countQuery,
     supabase
@@ -112,6 +112,7 @@ export default async function LeadsPage({
       .in("stage_id", PERDIDO_STAGE_IDS),
     supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
     supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
+    supabase.from("users").select("id, name").eq("org_id", user.orgId).eq("is_active", true).in("role", ["broker", "gerente-comercial"]).order("name"),
   ])
   const leads = leadsResult.data
   const totalCount = countResult.count ?? 0
@@ -119,6 +120,7 @@ export default async function LeadsPage({
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const allStages = stagesResult.data ?? []
   const allProperties = propertiesResult.data ?? []
+  const allBrokers = brokersResult.data ?? []
 
   return (
     <div className="space-y-6">
@@ -186,123 +188,25 @@ export default async function LeadsPage({
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <ScrollableX>
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
-          <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
-              <th className="px-6 py-3">Nome</th>
-              <th className="px-6 py-3">Telefone</th>
-              <th className="px-6 py-3">Empreendimento</th>
-              <th className="px-6 py-3">Etapa</th>
-              <th className="px-6 py-3">Origem</th>
-              <th className="px-6 py-3">Corretor</th>
-              <th className="px-6 py-3">Score</th>
-              <th className="px-6 py-3">Último contato</th>
-              <th className="px-6 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-            {leads?.map((lead) => {
-              const stageArr = lead.stage as unknown as Array<{
-                id: string
-                name: string
-                color: string | null
-              }> | null
-              const stage = stageArr?.[0] ?? null
-              const propertyArr = lead.property_interest as unknown as Array<{
-                id: string
-                name: string
-              }> | null
-              const property = propertyArr?.[0] ?? null
-              const brokerArr = lead.broker as unknown as Array<{
-                id: string
-                name: string
-              }> | null
-              const broker = brokerArr?.[0] ?? null
-
-              return (
-                <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
-                  <td className="px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
-                    {lead.name || "Sem nome"}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                    {lead.phone}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                    {property?.name ?? "-"}
-                  </td>
-                  <td className="px-6 py-4">
-                    {stage ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-xs font-medium"
-                        style={{
-                          backgroundColor: stage.color
-                            ? `${stage.color}20`
-                            : "#f3f4f6",
-                          color: stage.color || "#374151",
-                        }}
-                      >
-                        {stage.name}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <SourceBadge source={(lead as unknown as Record<string, unknown>).source as string | null} />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                    {broker?.name ?? "-"}
-                  </td>
-                  <td className="px-6 py-4">
-                    {lead.qualification_score != null ? (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          lead.qualification_score >= 70
-                            ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                            : lead.qualification_score >= 40
-                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
-                              : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
-                        }`}
-                      >
-                        {lead.qualification_score}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                    {lead.updated_at
-                      ? new Date(lead.updated_at).toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "-"}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link
-                      href={`/dashboard/leads/${lead.id}`}
-                      className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
-                    >
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-              )
+          <LeadsBulkTable
+            leads={(leads ?? []).map((lead) => {
+              const stageArr = lead.stage as unknown as Array<{ id: string; name: string; color: string | null }> | null
+              const propertyArr = lead.property_interest as unknown as Array<{ id: string; name: string }> | null
+              const brokerArr = lead.broker as unknown as Array<{ id: string; name: string }> | null
+              return {
+                id: lead.id,
+                name: lead.name ?? null,
+                phone: lead.phone,
+                qualification_score: lead.qualification_score ?? null,
+                updated_at: lead.updated_at ?? null,
+                source: (lead as unknown as Record<string, unknown>).source as string | null,
+                stage: stageArr?.[0] ?? null,
+                property_interest: propertyArr?.[0] ?? null,
+                broker: brokerArr?.[0] ?? null,
+              }
             })}
-            {(!leads || leads.length === 0) && (
-              <tr>
-                <td
-                  colSpan={9}
-                  className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
-                >
-                  Nenhum lead encontrado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            brokers={allBrokers}
+          />
         </ScrollableX>
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
