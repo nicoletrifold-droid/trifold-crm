@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { SourceBadge } from "@web/components/ui/source-badge"
@@ -220,9 +221,9 @@ export function LeadsBulkTable({
         </tbody>
       </table>
 
-      {/* Barra de ação em massa */}
-      {someSelected && (
-        <div className="fixed bottom-0 left-60 right-0 z-50 flex items-center gap-4 border-t border-stone-700 bg-stone-900 px-6 py-4 shadow-2xl">
+      {/* Barra de ação em massa — renderizada no body via portal para escapar qualquer overflow/sticky */}
+      {someSelected && typeof document !== "undefined" && createPortal(
+        <div className="fixed bottom-0 left-0 right-0 z-[9999] flex items-center gap-4 border-t border-stone-700 bg-stone-900 px-6 py-4 shadow-2xl" style={{ paddingLeft: "calc(14rem + 1.5rem)" }}>
           <span className="min-w-max text-sm font-medium text-white">
             {selected.size} selecionado{selected.size !== 1 ? "s" : ""}
           </span>
@@ -280,7 +281,8 @@ export function LeadsBulkTable({
           >
             Cancelar
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
