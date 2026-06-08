@@ -23,12 +23,14 @@ export default async function DashboardPage() {
     supabase
       .from("kanban_stages")
       .select("id, name, slug, color, position")
+      .eq("is_active", true)
       .order("position"),
     supabase.from("properties").select("id, name, slug, status, total_units, available_units, city").eq("is_active", true),
     supabase.rpc("get_dashboard_stage_counts", { p_org_id: appUser.orgId }),
   ])
 
   const stages = pipeline.data ?? []
+  const activeStageIds = new Set(stages.map((s) => s.id))
 
   // Story 30.5: Stage counts via RPC (eliminates N+1: was 6+ round-trips, now 1)
   if (stageTotalsResult.error) {
@@ -41,7 +43,10 @@ export default async function DashboardPage() {
     stageTotals.map((r) => [r.stage_id, Number(r.total)])
   )
 
-  const totalLeads = Object.values(stageCounts).reduce((a, b) => a + b, 0)
+  // Total only counts leads in active stages (excludes inactive like Perdido, Não Qualificado)
+  const totalLeads = Object.entries(stageCounts)
+    .filter(([id]) => activeStageIds.has(id))
+    .reduce((a, [, b]) => a + b, 0)
 
   return (
     <div className="space-y-6">
