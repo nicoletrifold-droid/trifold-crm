@@ -93,25 +93,30 @@ export default async function DashboardLayout({
   const isAdminOrSupervisorObras =
     permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
 
-  // Busca obras_notifications_seen_at para filtrar badge de aprovações
-  const obrasSeenAt = isAdminOrSupervisorObras
+  // Busca alertas_notifications_seen_at para zerar badge ao visitar Alertas
+  const alertasSeenAt = permissions["alertas"]
     ? await supabase
         .from("users")
-        .select("obras_notifications_seen_at")
+        .select("alertas_notifications_seen_at")
         .eq("id", user.id)
         .single()
-        .then(({ data }) => data?.obras_notifications_seen_at ?? null)
+        .then(({ data }) => (data as { alertas_notifications_seen_at: string | null } | null)?.alertas_notifications_seen_at ?? null)
     : null
 
   const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
     permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
       ? await Promise.all([
           permissions["alertas"]
-            ? supabase
-                .from("follow_up_log")
-                .select("id", { count: "exact", head: true })
-                .eq("org_id", user.orgId)
-                .eq("status", "pending")
+            ? (() => {
+                let q = supabase
+                  .from("follow_up_log")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .eq("status", "pending")
+                // Só conta alertas MAIS NOVOS que a última visita ao módulo
+                if (alertasSeenAt) q = q.gt("created_at", alertasSeenAt)
+                return q
+              })()
             : Promise.resolve({ count: 0 }),
           permissions["mensagens"]
             ? supabase
@@ -122,16 +127,11 @@ export default async function DashboardLayout({
                 .is("read_at", null)
             : Promise.resolve({ count: 0 }),
           isAdminOrSupervisorObras
-            ? (() => {
-                let q = supabase
-                  .from("obra_upload_aprovacoes")
-                  .select("id", { count: "exact", head: true })
-                  .eq("org_id", user.orgId)
-                  .eq("status", "pendente")
-                // Só conta aprovações MAIS NOVAS que a última visita ao módulo
-                if (obrasSeenAt) q = q.gt("created_at", obrasSeenAt)
-                return q
-              })()
+            ? supabase
+                .from("obra_upload_aprovacoes")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", user.orgId)
+                .eq("status", "pendente")
             : Promise.resolve({ count: 0 }),
         ])
       : [{ count: 0 }, { count: 0 }, { count: 0 }]

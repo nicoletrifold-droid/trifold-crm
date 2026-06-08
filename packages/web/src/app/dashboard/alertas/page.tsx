@@ -12,6 +12,15 @@ export default async function AlertasPage() {
     redirect("/dashboard")
   }
 
+  // Marca alertas como vistos — badge zera ao entrar, volta apenas para novos alertas
+  {
+    const { createAdminClient } = await import("@web/lib/supabase/admin")
+    void createAdminClient()
+      .from("users")
+      .update({ alertas_notifications_seen_at: new Date().toISOString() })
+      .eq("id", user.id)
+  }
+
   const supabase = await createClient()
 
   // Pending follow-up logs

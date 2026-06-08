@@ -34,15 +34,6 @@ export default async function ObrasPage() {
     redirect("/dashboard")
   }
 
-  // Marca notificações de obras como vistas — badge some e só volta para novas aprovações
-  if (user.role === "admin" || user.role === "supervisor") {
-    const { createAdminClient } = await import("@web/lib/supabase/admin")
-    await createAdminClient()
-      .from("users")
-      .update({ obras_notifications_seen_at: new Date().toISOString() })
-      .eq("id", user.id)
-  }
-
   // Apenas usuários com acesso a "sistema" veem ações administrativas
   // (ex.: vínculo manual de obras a empreendimentos).
   const canManageSistema = await canAccess(user.id, user.orgId, "sistema")
