@@ -93,6 +93,16 @@ export default async function DashboardLayout({
   const isAdminOrSupervisorObras =
     permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
 
+  // Busca obras_notifications_seen_at para filtrar badge de aprovações
+  const obrasSeenAt = isAdminOrSupervisorObras
+    ? await supabase
+        .from("users")
+        .select("obras_notifications_seen_at")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => data?.obras_notifications_seen_at ?? null)
+    : null
+
   const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
     permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
       ? await Promise.all([
@@ -112,11 +122,16 @@ export default async function DashboardLayout({
                 .is("read_at", null)
             : Promise.resolve({ count: 0 }),
           isAdminOrSupervisorObras
-            ? supabase
-                .from("obra_upload_aprovacoes")
-                .select("id", { count: "exact", head: true })
-                .eq("org_id", user.orgId)
-                .eq("status", "pendente")
+            ? (() => {
+                let q = supabase
+                  .from("obra_upload_aprovacoes")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .eq("status", "pendente")
+                // Só conta aprovações MAIS NOVAS que a última visita ao módulo
+                if (obrasSeenAt) q = q.gt("created_at", obrasSeenAt)
+                return q
+              })()
             : Promise.resolve({ count: 0 }),
         ])
       : [{ count: 0 }, { count: 0 }, { count: 0 }]
