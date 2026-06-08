@@ -126,14 +126,12 @@ export default async function LeadsPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Leads</h1>
-        {isAdmin && (
-          <Link
-            href="/dashboard/leads/new"
-            className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
-          >
-            Novo lead
-          </Link>
-        )}
+        <Link
+          href="/dashboard/leads/new"
+          className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
+        >
+          Novo lead
+        </Link>
       </div>
 
       {/* Tabs Ativos / Perdidos */}
