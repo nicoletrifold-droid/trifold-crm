@@ -7,6 +7,8 @@ import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { normalizePhoneBR } from "@trifold/shared"
+import type { WhatsAppReferral } from "@trifold/shared"
+import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
 
 export const maxDuration = 60
 
@@ -278,18 +280,14 @@ export async function POST(request: NextRequest) {
   // ---- CTWA referral metadata (sync, lightweight) -----------------------
   // Preserve existing logic but skip the Graph-API-style lookups here.
   // It's already only DB-local lookups; cheap enough to keep sync.
-  const referral = value?.messages?.[0]?.referral
+  const referral = value?.messages?.[0]?.referral as
+    | WhatsAppReferral
+    | undefined
   if (referral) {
     try {
-      const referralData: Record<string, unknown> = {
-        source_url: referral.source_url ?? null,
-        source_id: referral.source_id ?? null,
-        ctwa_clid: referral.ctwa_clid ?? null,
-        headline: referral.headline ?? null,
-        body: referral.body ?? null,
-        media_type: referral.media_type ?? null,
-      }
-
+      // Story 50-3: CTWA referral persisted in leads.metadata (Epic 50).
+      // ad_id (= referral.source_id) é a chave consumida pelo CreativeChip
+      // (Story 50-2). Em re-engajamento, preservamos o ad_id original (AC3).
       let campaignName: string | null = referral.headline ?? null
       if (referral.source_id) {
         const { data: ad } = await supabase
@@ -319,20 +317,27 @@ export async function POST(request: NextRequest) {
       }
 
       const leadRef = lead as unknown as Record<string, unknown>
-      const baseTime = leadRef.created_at
+      const baseTimestampMs = leadRef.created_at
         ? new Date(leadRef.created_at as string).getTime()
         : Date.now()
-      const ctwaWindowExpiresAt = new Date(
-        baseTime + 72 * 60 * 60 * 1000
-      ).toISOString()
 
-      // Hot-fix Story 21.1 deploy: leads.metadata column does NOT exist (see
-      // migration 016 doc). Preserve UTMs (real columns) but skip metadata
-      // enrichment until follow-up story adds the column. CTWA referral context
-      // (referralData, ctwaWindowExpiresAt) is lost on this code path until
-      // then — non-blocking for P0 dedup fix.
-      void referralData
-      void ctwaWindowExpiresAt
+      // Re-engajamento: preservar ad_id original (mesma lógica que o webhook
+      // Meta usa em meta-ads/route.ts:201-209 para utm_campaign). Ler o
+      // metadata atual antes do merge para não sobrescrever atribuição prévia.
+      const { data: currentLead } = await supabase
+        .from("leads")
+        .select("metadata")
+        .eq("id", lead.id)
+        .maybeSingle()
+
+      const mergedMetadata = buildCtwaMetadata({
+        currentMetadata: currentLead?.metadata as
+          | Record<string, unknown>
+          | null
+          | undefined,
+        referral,
+        baseTimestampMs,
+      })
 
       await supabase
         .from("leads")
@@ -341,6 +346,7 @@ export async function POST(request: NextRequest) {
           utm_source: "meta_ads",
           utm_medium: "whatsapp_ctwa",
           utm_campaign: campaignName,
+          metadata: mergedMetadata,
         })
         .eq("id", lead.id)
     } catch (refErr) {
@@ -671,10 +677,9 @@ async function findOrUpsertLead(
   const { orgId, phoneRaw, phoneNormalized } = args
 
   // 1) find existing lead — ordered, maybeSingle
-  // NOTE: leads.metadata column does NOT exist (see migration 016 doc).
-  // Hot-fix Story 21.1 deploy: remove metadata from select to unblock webhook.
-  // CTWA referral path (lines 322-345) gracefully degrades via `?? {}` fallback.
-  // TODO follow-up: design metadata column migration if CTWA enrichment needed.
+  // Story 50-3 (Epic 50): leads.metadata é populado via migration 074.
+  // O select abaixo intencionalmente NÃO carrega metadata — o branch CTWA
+  // (acima) lê metadata em separado para fazer merge não-destrutivo do ad_id.
   const { data: existing } = await supabase
     .from("leads")
     .select("id, created_at")

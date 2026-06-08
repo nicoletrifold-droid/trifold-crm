@@ -1,0 +1,45 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "test_waba_id",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "5511999999999",
+              "phone_number_id": "test_phone_number_id"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Lead Teste CTWA" },
+                "wa_id": "5511988887777"
+              }
+            ],
+            "messages": [
+              {
+                "from": "5511988887777",
+                "id": "wamid.test_ctwa_001",
+                "timestamp": "1717430400",
+                "type": "text",
+                "text": { "body": "Olá, vi seu anúncio!" },
+                "referral": {
+                  "source_url": "https://fb.me/test_ad_url",
+                  "source_id": "test_ad_123",
+                  "source_type": "ad",
+                  "headline": "Apartamento 2 quartos em SP",
+                  "body": "Pronto para morar, financiamento facilitado",
+                  "media_type": "image",
+                  "image_url": "https://scontent.fb.example/test.jpg",
+                  "ctwa_clid": "test_ctwa_clid_abcdef"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
