@@ -1,5 +1,7 @@
+import { headers } from "next/headers"
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { getUserPermissions } from "@web/lib/permissions"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { WeatherWidget } from "@web/components/weather-widget"
@@ -93,15 +95,30 @@ export default async function DashboardLayout({
   const isAdminOrSupervisorObras =
     permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
 
-  // Busca alertas_notifications_seen_at para zerar badge ao visitar Alertas
-  const alertasSeenAt = permissions["alertas"]
-    ? await supabase
+  // Detecta se o usuário está visitando /dashboard/alertas agora
+  // para marcar como visto e zerar o badge neste mesmo render
+  const requestHeaders = await headers()
+  const currentPath = requestHeaders.get("x-invoke-path") ?? requestHeaders.get("next-url") ?? ""
+  const isOnAlertas = currentPath.includes("/dashboard/alertas")
+
+  let alertasSeenAt: string | null = null
+  if (permissions["alertas"]) {
+    if (isOnAlertas) {
+      // Marca como visto agora e usa este timestamp no filtro — zero lag
+      alertasSeenAt = new Date().toISOString()
+      void createAdminClient()
+        .from("users")
+        .update({ alertas_notifications_seen_at: alertasSeenAt })
+        .eq("id", user.id)
+    } else {
+      alertasSeenAt = await supabase
         .from("users")
         .select("alertas_notifications_seen_at")
         .eq("id", user.id)
         .single()
         .then(({ data }) => (data as { alertas_notifications_seen_at: string | null } | null)?.alertas_notifications_seen_at ?? null)
-    : null
+    }
+  }
 
   const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
     permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
