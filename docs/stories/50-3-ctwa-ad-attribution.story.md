@@ -76,7 +76,7 @@ if (referral) {
    WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'metadata';
    ```
 
-2. **Resultado A (coluna NÃO existe):** Adicionar migration `074_leads_metadata.sql`:
+2. **Resultado A (coluna NÃO existe):** Adicionar migration `075_leads_metadata.sql`:
    ```sql
    ALTER TABLE leads ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}';
    CREATE INDEX IF NOT EXISTS idx_leads_metadata_ad_id
@@ -85,13 +85,13 @@ if (referral) {
    ```
    **NOTA:** Isso significa que o webhook Meta (`/api/webhooks/meta-ads/route.ts`) está atualmente **silenciosamente falhando** ao gravar em `leads.metadata` — esta migration corrige um bug latente.
 
-3. **Resultado B (coluna JÁ existe via migration remote-only não committed):** Adicionar a migration `074_leads_metadata.sql` com `IF NOT EXISTS` (idempotente) + criar o índice acima se ainda não existir. Documentar a descoberta nos `Completion Notes`.
+3. **Resultado B (coluna JÁ existe via migration remote-only não committed):** Adicionar a migration `075_leads_metadata.sql` com `IF NOT EXISTS` (idempotente) + criar o índice acima se ainda não existir. Documentar a descoberta nos `Completion Notes`.
 
 ---
 
 ## Acceptance Criteria
 
-- [x] **AC0 (Pre-Flight):** Estado de `leads.metadata` validado no banco real e documentado nos `Completion Notes`. Se ausente, migration `074_leads_metadata.sql` criada
+- [x] **AC0 (Pre-Flight):** Estado de `leads.metadata` validado no banco real e documentado nos `Completion Notes`. Se ausente, migration `075_leads_metadata.sql` criada
 - [x] **AC1:** No handler do WhatsApp webhook (`packages/web/src/app/api/webhook/whatsapp/route.ts`), quando `value?.messages?.[0]?.referral` está presente, `referralData` deixa de ser descartado (`void`) e passa a ser persistido em `leads.metadata`
 - [x] **AC2:** Shape do `leads.metadata` populado para CTWA:
   ```json
@@ -122,7 +122,7 @@ if (referral) {
 
 - [x] **T0** — Pre-Flight Check (AC0)
   - Validar existência de `leads.metadata` no banco real
-  - Criar migration `074_leads_metadata.sql` se necessário (ver Pre-Flight Check)
+  - Criar migration `075_leads_metadata.sql` se necessário (ver Pre-Flight Check)
   - Coordenar com @data-engineer antes de prosseguir
 
 - [x] **T1** — Definir/exportar tipo `WhatsAppReferral` (AC7)
@@ -231,7 +231,7 @@ if (referral) {
 }
 ```
 
-### Migration `074_leads_metadata.sql` (condicional — Pre-Flight)
+### Migration `075_leads_metadata.sql` (condicional — Pre-Flight)
 
 ```sql
 -- Story 50-3 — Adiciona coluna leads.metadata (JSONB) para attribution Meta
@@ -261,7 +261,7 @@ COMMENT ON COLUMN leads.metadata IS
 packages/web/src/app/api/webhook/whatsapp/route.ts          ← editar (T2, T3)
 packages/web/src/app/api/webhooks/meta-ads/route.ts         ← referência de padrão de merge
 packages/shared/src/whatsapp/types.ts                       ← criar (T1)
-supabase/migrations/074_leads_metadata.sql                  ← criar se Pre-Flight=A
+supabase/migrations/075_leads_metadata.sql                  ← criar se Pre-Flight=A
 packages/web/__tests__/webhooks/whatsapp-ctwa.test.ts       ← criar (T4)
 ```
 
@@ -317,7 +317,7 @@ Usar o mesmo pattern de `/api/webhooks/meta-ads/route.ts:201-209`:
 - [ ] AC0-AC9 marcados como completos
 - [ ] T0-T6 marcados como done
 - [ ] Pre-Flight resultado documentado nos `Completion Notes`
-- [ ] @data-engineer aprovou migration 074 (se criada)
+- [ ] @data-engineer aprovou migration 075 (se criada)
 - [ ] @qa executou quality gate (`*qa-gate`) com verdict ≥ PASS
 - [ ] @devops fez push (`*push`)
 - [ ] Monitoramento de 24h pós-deploy sem regressão
@@ -327,12 +327,12 @@ Usar o mesmo pattern de `/api/webhooks/meta-ads/route.ts:201-209`:
 ## File List
 
 ### Modified
-- `packages/web/src/app/api/webhook/whatsapp/route.ts` — handler CTWA refatorado (T2, T3, AC1, AC2, AC3, AC4, AC6). Hot-fix comment 21.1 removido; comentário stale em `findOrUpsertLead` também atualizado para refletir migration 074.
+- `packages/web/src/app/api/webhook/whatsapp/route.ts` — handler CTWA refatorado (T2, T3, AC1, AC2, AC3, AC4, AC6). Hot-fix comment 21.1 removido; comentário stale em `findOrUpsertLead` também atualizado para refletir migration 075.
 - `packages/shared/src/index.ts` — adicionado `export * from "./whatsapp/types"` (T1, AC7).
 
 ### Created
 - `packages/shared/src/whatsapp/types.ts` — interface `WhatsAppReferral` (T1, AC7).
-- `supabase/migrations/074_leads_metadata.sql` — adiciona `leads.metadata JSONB` + índice parcial `idx_leads_metadata_ad_id` (T0, AC0). Idempotente (`IF NOT EXISTS`).
+- `supabase/migrations/075_leads_metadata.sql` — adiciona `leads.metadata JSONB` + índice parcial `idx_leads_metadata_ad_id` (T0, AC0). Idempotente (`IF NOT EXISTS`).
 - `packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.ts` — pure helper `buildCtwaMetadata` extraído para testabilidade isolada (T2, T3).
 - `packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.test.ts` — 8 cenários cobrindo AC2/AC3/AC5 (T4, AC5, AC8).
 - `packages/web/src/app/api/webhook/whatsapp/__fixtures__/ctwa-referral.json` — payload CTWA anonimizado (T4).
@@ -350,7 +350,7 @@ Usar o mesmo pattern de `/api/webhooks/meta-ads/route.ts:201-209`:
 |------|--------|-----------|-------|
 | 2026-06-03 | 0.1 | Story drafted a partir do Epic 50; Pre-Flight Check adicionado após descoberta da inconsistência `leads.metadata` no código | @sm (River) |
 | 2026-06-03 | 0.2 | Validation @po: GO (8/10). Executor Assignment condicional ao Pre-Flight (Resultado A → @data-engineer T0; Resultado B → @dev tudo). Complexity range clarificado. Status: Draft → Ready | @po (Pax) |
-| 2026-06-08 | 0.3 | Implementação @dev (YOLO): T0-T5 + AC0-AC8 concluídos. Migration 074 criada como idempotente (Opção 2). Tipo `WhatsAppReferral` em `@trifold/shared`. Helper `buildCtwaMetadata` extraído para testabilidade (8 testes verdes). Status: Ready → Ready for Review. AC9/T6 aguardam pós-deploy. | @dev (Dex) |
+| 2026-06-08 | 0.3 | Implementação @dev (YOLO): T0-T5 + AC0-AC8 concluídos. migration 075 criada como idempotente (Opção 2). Tipo `WhatsAppReferral` em `@trifold/shared`. Helper `buildCtwaMetadata` extraído para testabilidade (8 testes verdes). Status: Ready → Ready for Review. AC9/T6 aguardam pós-deploy. | @dev (Dex) |
 | 2026-06-08 | 0.4 | QA Gate @qa: verdict CONCERNS (não-bloqueante; alinhado com gates 50.1/50.2). 7/7 checks PASS, 5 observações documentadas (PERF-001, MNT-001, TEST-001 pré-existentes, DOC-001, OBS-001). 6 positive findings. Verificação independente: 8/8 testes do helper passing, type-check + lint clean, regression confirmada via git stash. Status: Ready for Review → Done. Aprovada para push pelo @devops. | @qa (Quinn) |
 
 ---
@@ -370,7 +370,7 @@ Claude Opus 4.7 (1M context) — @dev (Dex), modo YOLO.
 - Comentário em `016_meta_campaign_roas_view.sql:34` declara coluna inexistente.
 - Porém `/api/webhooks/meta-ads/route.ts:206,223` grava em `leads.metadata` sem erro reportado em produção → forte indício de Cenário B (migration remote-only não-committed) OU bug latente silencioso.
 
-**Decisão:** Seguir **Opção 2** (recomendada pelo usuário no prompt) — criar migration `074_leads_metadata.sql` com `ADD COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`. Idempotente em **ambos** os cenários:
+**Decisão:** Seguir **Opção 2** (recomendada pelo usuário no prompt) — criar migration `075_leads_metadata.sql` com `ADD COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`. Idempotente em **ambos** os cenários:
 - Cenário A → cria a coluna e o índice (corrige bug latente do webhook Meta).
 - Cenário B → no-op na coluna; cria índice apenas se ainda não existir.
 
@@ -380,7 +380,7 @@ Claude Opus 4.7 (1M context) — @dev (Dex), modo YOLO.
 
 **Implementação seguiu Technical Design da story integralmente:**
 
-1. **T0 — Migration `074_leads_metadata.sql`** criada exatamente como sugerido (linhas 236-253 da story), com comentário expandido documentando a inconsistência entre código e migrations + shape esperado do JSONB.
+1. **T0 — Migration `075_leads_metadata.sql`** criada exatamente como sugerido (linhas 236-253 da story), com comentário expandido documentando a inconsistência entre código e migrations + shape esperado do JSONB.
 
 2. **T1 — `WhatsAppReferral` type** criado em `packages/shared/src/whatsapp/types.ts` com todos os 7 campos opcionais documentados. Exportado via `packages/shared/src/index.ts`. Consumido como `import type { WhatsAppReferral } from "@trifold/shared"`.
 
@@ -389,7 +389,7 @@ Claude Opus 4.7 (1M context) — @dev (Dex), modo YOLO.
    - Chama `buildCtwaMetadata({ currentMetadata, referral, baseTimestampMs })`,
    - Grava o resultado via `update({ ..., metadata })`.
 
-   Hot-fix comment (linhas 329-335) removido (AC6) e substituído por comentário Story 50-3. Comentário stale em `findOrUpsertLead` (linhas 674-677, referência ao mesmo hot-fix 21.1) também foi atualizado para refletir migration 074 (doc-only, sem mudança funcional).
+   Hot-fix comment (linhas 329-335) removido (AC6) e substituído por comentário Story 50-3. Comentário stale em `findOrUpsertLead` (linhas 674-677, referência ao mesmo hot-fix 21.1) também foi atualizado para refletir migration 075 (doc-only, sem mudança funcional).
 
 4. **T4 — Testes.** 8 cenários implementados, cobrindo os 3 obrigatórios de AC5 + 5 adicionais (ad_id como string vazia, payload minimalista, janela CTWA exata 72h, idempotência sob retry, branch de `currentMetadata=undefined`). Resultado: `8/8 passed` (`pnpm test packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.test.ts`).
 
@@ -449,10 +449,10 @@ WHERE schemaname = 'public'
   - Validar que `pnpm test packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.test.ts` passa (8/8).
   - Validar type-check + lint nos arquivos desta story (zero regressões esperadas).
   - Os 6 testes pré-existentes em `__tests__/route.test.ts` (Story 21.1) **continuam falhando** por motivo alheio a esta story (alias `@web/*` não resolvido pelo vitest) — não é fix desta story, mas potencial debt para nova story de QA infra.
-  - Comentário pré-existente em `016_meta_campaign_roas_view.sql:34` agora está desatualizado (declara coluna inexistente, mas migration 074 cria). Fora de escopo, mas notável.
+  - Comentário pré-existente em `016_meta_campaign_roas_view.sql:34` agora está desatualizado (declara coluna inexistente, mas migration 075 cria). Fora de escopo, mas notável.
 
 - **Para @devops (Gage):**
-  - Aplicar migration `074_leads_metadata.sql` antes/junto com o deploy do código (ordem garante zero downtime — migration é idempotente, código já tolera coluna ausente via try/catch).
+  - Aplicar migration `075_leads_metadata.sql` antes/junto com o deploy do código (ordem garante zero downtime — migration é idempotente, código já tolera coluna ausente via try/catch).
   - Após push, executar queries de T6 e anexar resultado ao Completion Notes (24h depois).
   - Verificar ambiente: o `route.ts` agora importa `WhatsAppReferral` de `@trifold/shared` → garantir que o build do workspace produz a re-export corretamente em produção.
 
@@ -478,7 +478,7 @@ Gate: CONCERNS → `docs/qa/gates/50.3-ctwa-ad-attribution.yml`
 | 4 | No Regressions | PASS | Suite full: 274 passing + 6 pré-existentes failing (route.test.ts, alias `@web/*` issue) — confirmado pré-existente em `main` via `git stash`. UTM handling bit-a-bit idêntico. Lookup chain meta_ads/adsets/campaigns intacto. |
 | 5 | Performance | PASS | Round-trip extra do SELECT metadata é aceitável (CTWA é baixa frequência, ~<1% dos webhooks WA). Índice parcial `idx_leads_metadata_ad_id` apropriado para CreativeChip. Ver PERF-001 para otimização opcional. |
 | 6 | Security | PASS | NFR-4 OK (sem log de payload externo). Sem JSONB injection (typed Supabase + nullish coalescing). Idempotência R4 validada por teste. HMAC validation preservado. |
-| 7 | Documentation | PASS | Story file completa. Migration 074 com header histórico documentando cenários A/B. JSDoc comprehensive em helper, types e tests. |
+| 7 | Documentation | PASS | Story file completa. migration 075 com header histórico documentando cenários A/B. JSDoc comprehensive em helper, types e tests. |
 
 ### Verificação Independente Executada
 
@@ -488,7 +488,7 @@ Gate: CONCERNS → `docs/qa/gates/50.3-ctwa-ad-attribution.yml`
 - `pnpm --filter @trifold/shared type-check` → **clean (zero errors)**
 - `pnpm exec eslint` nos 3 arquivos da story → **zero hits**
 - `git show HEAD:route.ts | grep utm_` → confirmou UTM handling bit-a-bit idêntico (no UTM regression)
-- `ls supabase/migrations/ | tail` → confirmou 074 é próximo número disponível e segue padrão `IF NOT EXISTS` de migration 048
+- `ls supabase/migrations/ | tail` → confirmou 075 é próximo número disponível (074 reservado para `074_brokers_manage_gerente_comercial`); segue padrão `IF NOT EXISTS` de migration 048
 
 ### Observações Não-Bloqueantes (5 issues, todas LOW/MEDIUM)
 
@@ -497,14 +497,14 @@ Gate: CONCERNS → `docs/qa/gates/50.3-ctwa-ad-attribution.yml`
 | PERF-001 | low | performance | SELECT extra antes do UPDATE (1 round-trip). Aceitável; otimização futura via `metadata \|\| jsonb_build_object(...)` em SQL puro perderia testabilidade pura. |
 | MNT-001 | low | maintainability | UTMs em re-engajamento CTWA são UNCONDITIONALLY sobrescritos (divergência do padrão Meta webhook que preserva). **Pré-existente em main** — não regressão. Sugerir backlog story de harmonização. |
 | TEST-001 | medium | testing | 6 testes pré-existentes em `route.test.ts` (Story 21.1) seguem falhando por alias `@web/*` não resolvido no vitest. **Pré-existente** — confirmado via `git stash`. Sugerir backlog para fix de vitest config. |
-| DOC-001 | low | documentation | Comentário stale em `016_meta_campaign_roas_view.sql:34` (declara `leads.metadata NÃO existe`) — após migration 074 está incorreto. Fora de escopo desta story; micro-PR follow-up. |
+| DOC-001 | low | documentation | Comentário stale em `016_meta_campaign_roas_view.sql:34` (declara `leads.metadata NÃO existe`) — após migration 075 está incorreto. Fora de escopo desta story; micro-PR follow-up. |
 | OBS-001 | low | tooling | CodeRabbit CLI não executado (host macOS, config WSL). Mesmo cenário das 50-1/50-2. Análise manual cobriu code/security/perf/regression/testing. |
 
 ### Positive Findings (6)
 
 - **POS-001:** Merge SUPERA padrão referencial — `{...current, ...new}` preserva campos prévios (form_id, campaign_id) que o webhook Meta sobrescreveria.
 - **POS-002:** Extração `buildCtwaMetadata` é decisão exemplar de testabilidade (zero stubs Supabase).
-- **POS-003:** Migration 074 é idempotente E documenta histórico de inconsistência (cenários A/B + shape JSONB).
+- **POS-003:** migration 075 é idempotente E documenta histórico de inconsistência (cenários A/B + shape JSONB).
 - **POS-004:** Tests cobrem todos os 4 riscos da story (R1-R4) explicitamente.
 - **POS-005:** Tipo `WhatsAppReferral` reusável documenta variação Meta Business Account vs Cloud API (R2).
 - **POS-006:** Fecha o ciclo Epic 50 — leads CTWA novos aparecem com CreativeChip imediatamente pós-deploy.
@@ -515,12 +515,12 @@ Gate: CONCERNS → `docs/qa/gates/50.3-ctwa-ad-attribution.yml`
 |----------|-----------|
 | **Probability** | low |
 | **Impact** | low |
-| **Rationale** | Mudança bem isolada (1 route + 4 arquivos novos). Try/catch envolvente preserva idempotência core da 21.1. Migration 074 idempotente — safe ambos cenários A/B. Rollback trivial via `git revert`. Pior caso: branch CTWA falha → log + lead criado sem ad_id (estado atual de `main`). Sem regressão funcional possível. |
+| **Rationale** | Mudança bem isolada (1 route + 4 arquivos novos). Try/catch envolvente preserva idempotência core da 21.1. migration 075 idempotente — safe ambos cenários A/B. Rollback trivial via `git revert`. Pior caso: branch CTWA falha → log + lead criado sem ad_id (estado atual de `main`). Sem regressão funcional possível. |
 
 ### Próximos Passos
 
 1. `@devops *push` da branch atual
-2. Aplicar migration `074_leads_metadata.sql` antes/junto com deploy (ordem segura: migration primeiro — idempotente — código tolera via try/catch)
+2. Aplicar migration `075_leads_metadata.sql` antes/junto com deploy (ordem segura: migration primeiro — idempotente — código tolera via try/catch)
 3. **Pós-deploy (24h):** @devops executa queries SQL de T6/AC9 documentadas em Completion Notes
 4. **Backlog opcional:** @po cria stories para TEST-001 (vitest alias config) e MNT-001 (harmonização UTM-preservation)
 5. **Micro-PR opcional:** DOC-001 (atualizar comentário stale em 016_meta_campaign_roas_view.sql)

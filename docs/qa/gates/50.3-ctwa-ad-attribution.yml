@@ -54,7 +54,7 @@ quality_checks:
     note: >
       AC0-AC8 todos atendidos (8/9 código + AC9 deferido por design):
         - AC0 (Pre-Flight): Documentado em Completion Notes; Opção 2 aplicada
-          via migration 074 idempotente.
+          via migration 075 idempotente.
         - AC1 (persistência): linhas 333-340 do route.ts.
         - AC2 (shape): exato conforme spec, verificado em test AC5.1.
         - AC3 (preservação): buildCtwaMetadata.ts:55-60 + test AC5.3.
@@ -85,7 +85,7 @@ quality_checks:
         (linhas 292-317) — mesma lógica que existia antes do refactor.
       - Webhook `idempotency check` (linhas 158-206) e `findOrUpsertLead` (linhas
         668-774) inalterados funcionalmente. Único change em findOrUpsertLead:
-        comentário stale atualizado para refletir migration 074 (doc-only).
+        comentário stale atualizado para refletir migration 075 (doc-only).
       - Try/catch envolvente do branch CTWA (linhas 287, 352-364) preservado —
         falha na atribuição CTWA continua não-fatal e gera `ctwa_referral_error`
         log sem quebrar o webhook.
@@ -139,7 +139,7 @@ quality_checks:
         - Status `Ready for Review`.
         - Blockers/notas para @qa e @devops bem articuladas, incluindo tech
           debt latente (016_meta_campaign_roas_view.sql:34 comment agora stale).
-      Migration 074 tem header documentando o contexto histórico, ambos cenários
+      migration 075 tem header documentando o contexto histórico, ambos cenários
       A/B, shape esperado do JSONB e referência à Epic 50. JSDoc no helper
       explica regras de merge linha a linha. Tipo `WhatsAppReferral` documenta
       cada campo com semântica de origem (Cloud API vs Business Account).
@@ -147,7 +147,7 @@ quality_checks:
 ac_traceability:
   - ac: "AC0"
     status: PASS
-    note: "Pre-Flight documentado em Completion Notes; Opção 2 aplicada via migration 074 idempotente."
+    note: "Pre-Flight documentado em Completion Notes; Opção 2 aplicada via migration 075 idempotente."
   - ac: "AC1"
     status: PASS
     note: "route.ts:286-365 — `referralData` é construído e persistido (não mais `void`)."
@@ -189,7 +189,7 @@ issues:
       Não-bloqueante. Para otimização futura, considerar refactor para SQL puro
       via `UPDATE leads SET metadata = jsonb_set(...) || jsonb_build_object('ad_id',
       COALESCE(metadata->>'ad_id', $1::text), ...) WHERE id = $2`. Custo: perde
-      testabilidade pura do helper. Como migração 074 já cria o índice parcial,
+      testabilidade pura do helper. Como migração 075 já cria o índice parcial,
       essa otimização não é urgente.
 
   - id: MNT-001
@@ -238,13 +238,13 @@ issues:
     description: >
       Comentário em `supabase/migrations/016_meta_campaign_roas_view.sql:34`
       ainda declara `leads.metadata NÃO existe — branch removido vs. proposta
-      original do epic`. Após migration 074, este comentário é incorreto e
+      original do epic`. Após migration 075, este comentário é incorreto e
       potencialmente confunde futuros leitores que façam arqueologia.
     recommendation: >
       Não-bloqueante. Documentado em Completion Notes da 50-3 como "fora de
       escopo, mas notável". Considerar uma micro-PR follow-up que atualize o
       comentário para algo como "Coluna leads.metadata adicionada em migration
-      074 (Story 50-3, Epic 50). Comentário histórico mantido para contexto."
+      075 (Story 50-3, Epic 50). Comentário histórico mantido para contexto."
 
   - id: OBS-001
     severity: low
@@ -278,7 +278,7 @@ positive_findings:
 
   - id: POS-003
     description: >
-      Migration 074 é idempotente E documenta histórico. Header explica:
+      migration 075 é idempotente E documenta histórico. Header explica:
       (1) inconsistência entre código e migrations committed,
       (2) ambos cenários A/B (coluna ausente vs migration remote-only),
       (3) shape esperado do JSONB com TODOS os campos atuais e futuros.
@@ -315,7 +315,7 @@ risk_assessment:
     Mudança bem isolada: 1 arquivo route modificado + 4 arquivos novos (helper,
     test, fixture, migration, tipo). Try/catch envolvente garante que falha na
     atribuição CTWA NÃO quebra o webhook (preserva idempotência core da 21.1).
-    Migration 074 é idempotente — safe para ambos cenários A/B e safe para
+    migration 075 é idempotente — safe para ambos cenários A/B e safe para
     reapply. Rollback via `git revert` é trivial (5 arquivos). Pior caso
     runtime: branch CTWA falha → log `ctwa_referral_error` + lead criado sem
     ad_id (mesmo estado de antes da story). Sem regressão funcional possível.
@@ -338,7 +338,7 @@ independent_verification:
     result: "clean (zero hits)"
   - check: "Migration ordering"
     command: "ls supabase/migrations/ | tail"
-    result: "074_leads_metadata.sql is next available number; follows IF NOT EXISTS pattern of 048_supremo_sync.sql"
+    result: "075_leads_metadata.sql is next available number; follows IF NOT EXISTS pattern of 048_supremo_sync.sql"
   - check: "UTM regression check"
     command: "git show HEAD:packages/web/src/app/api/webhook/whatsapp/route.ts | grep utm_"
     result: "Bit-for-bit identical UTM handling in main vs new branch — no UTM regression"
@@ -359,7 +359,7 @@ gate_decision:
     pre-existentes que esta story não introduz nem agrava.
   next_steps:
     - "@devops *push da branch atual"
-    - "Aplicar migration 074 ANTES ou JUNTO com deploy do código (ordem segura: migration primeiro porque é idempotente; código tem try/catch)"
+    - "Aplicar migration 075 ANTES ou JUNTO com deploy do código (ordem segura: migration primeiro porque é idempotente; código tem try/catch)"
     - "Pós-deploy: @devops executa queries de T6/AC9 documentadas nos Completion Notes da story (24h após push)"
     - "Considerar quick-fix DOC-001 (atualizar comentário stale em 016_meta_campaign_roas_view.sql:34) como follow-up"
     - "@po cria backlog para TEST-001 (vitest alias config) e MNT-001 (harmonização UTM-preservation)"
@@ -387,7 +387,7 @@ files_reviewed:
   - path: "packages/web/src/app/api/webhook/whatsapp/route.ts"
     lines_changed: "modified"
     verdict: PASS
-    notes: "Branch CTWA refatorado (linhas 280-365); hot-fix comment removido; comentário stale em findOrUpsertLead atualizado para refletir migration 074."
+    notes: "Branch CTWA refatorado (linhas 280-365); hot-fix comment removido; comentário stale em findOrUpsertLead atualizado para refletir migration 075."
   - path: "packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.ts"
     lines_added: 79
     verdict: PASS
@@ -408,7 +408,7 @@ files_reviewed:
     lines_changed: "+1 / -0"
     verdict: PASS
     notes: "Barrel export `export * from './whatsapp/types'`."
-  - path: "supabase/migrations/074_leads_metadata.sql"
+  - path: "supabase/migrations/075_leads_metadata.sql"
     lines_added: 44
     verdict: PASS
     notes: "Idempotente (IF NOT EXISTS); índice parcial para CreativeChip lookup; COMMENT ON COLUMN documenta shape JSONB."
