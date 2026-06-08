@@ -18,12 +18,35 @@ export interface MetaAdSet {
   daily_budget?: string
 }
 
+/**
+ * Story 50-1 (Epic 50): `creative` foi expandido de `Record<string, unknown>` raso
+ * para shape tipado com subfields da Graph API.
+ *
+ * Todos os subfields são opcionais — a Meta pode omitir qualquer um (ex.: `thumbnail_url`
+ * ausente em criativos de vídeo, dynamic creatives ou ads arquivados). Consumidores
+ * DEVEM usar optional chaining (`creative?.thumbnail_url`) ao acessar.
+ *
+ * O sync persiste o objeto `as is` em `meta_ads.creative` (JSONB) — não normalizar
+ * nem fazer parse manual.
+ *
+ * Referência Graph API v21.0:
+ *   GET /act_<account_id>/ads?fields=creative{id,name,thumbnail_url,...}
+ */
+export interface MetaAdCreative {
+  id: string
+  name?: string
+  thumbnail_url?: string
+  image_url?: string
+  effective_object_story_id?: string
+  object_story_spec?: Record<string, unknown>
+}
+
 export interface MetaAd {
   id: string
   name: string
   adset_id: string
   status: string
-  creative?: Record<string, unknown>
+  creative?: MetaAdCreative
 }
 
 export interface MetaInsight {

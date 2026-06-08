@@ -1,0 +1,414 @@
+storyId: "50.3"
+title: "Attribution ad_id para Leads Click-to-WhatsApp (CTWA)"
+epic: 50
+verdict: CONCERNS
+reviewedAt: "2026-06-08"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Implementação cirúrgica e bem testada (+106 LoC no route + 79 LoC do helper
+  + 184 LoC de testes + migration idempotente). Pure function `buildCtwaMetadata`
+  extraída para testabilidade — decisão justificada e neutra em comportamento.
+  8/8 testes verdes cobrindo os 3 cenários obrigatórios de AC5 + 5 cenários
+  extras (string vazia, payload mínimo, janela 72h exata, idempotência, branch
+  undefined). Type-check + lint clean (verificado independentemente em ambiente
+  macOS sem stash). Pre-Flight aplicou Opção 2 (migration idempotente) —
+  funciona em ambos cenários A/B. AC0-AC8 atendidos por código; AC9 deferido
+  por design para validação pós-deploy. Aprovada para @devops push com 5
+  observações documentadas (todas LOW/MEDIUM, não-bloqueantes).
+
+quality_checks:
+  - check: "1. Code Review"
+    status: PASS
+    note: >
+      Padrão de merge não-destrutivo segue o referencial citado na story
+      (/api/webhooks/meta-ads/route.ts:201-209) com ADAPTAÇÃO superior: o Meta
+      webhook faz REPLACE de metadata (linha 206: metadata: metaMetadata),
+      enquanto a 50-3 faz MERGE real via spread (...current). Isso significa
+      que se um lead já tem metadata populado pelo webhook Meta (ex: form_id,
+      campaign_id) e depois clica em CTWA, todos os campos prévios são
+      preservados — comportamento mais robusto que o referencial. Helper
+      `buildCtwaMetadata` extraído justificadamente (testabilidade pura sem
+      stub de Supabase admin client). JSDoc comprehensive em todos os
+      arquivos novos. Naming consistente com o padrão do projeto. Comentários
+      inline referenciam Story 50-3 e padrão de re-engajamento. Hot-fix
+      comment da 21.1 removido conforme AC6 e substituído por comentário de
+      ponte para a 50-3.
+
+  - check: "2. Unit Tests"
+    status: PASS
+    note: >
+      `pnpm test packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.test.ts`
+      executado independentemente → **8/8 passed** (151ms). Cobre os 3 cenários
+      obrigatórios de AC5:
+        - AC5.1: Lead novo com referral → metadata populado com shape AC2 ✅
+        - AC5.2: Lead existente sem metadata.ad_id → atualizado ✅
+        - AC5.3: Lead existente com metadata.ad_id → NÃO sobrescrito ✅
+      Plus 5 cenários extras incluindo idempotência (R4 da story), janela CTWA
+      exata, branch undefined e ad_id como string vazia. Fixture anonimizada
+      em __fixtures__/ctwa-referral.json reflete shape real da Meta Cloud API.
+
+  - check: "3. Acceptance Criteria"
+    status: PASS
+    note: >
+      AC0-AC8 todos atendidos (8/9 código + AC9 deferido por design):
+        - AC0 (Pre-Flight): Documentado em Completion Notes; Opção 2 aplicada
+          via migration 075 idempotente.
+        - AC1 (persistência): linhas 333-340 do route.ts.
+        - AC2 (shape): exato conforme spec, verificado em test AC5.1.
+        - AC3 (preservação): buildCtwaMetadata.ts:55-60 + test AC5.3.
+        - AC4 (utm/source novo): linhas 345-348 preservam comportamento atual
+          para leads novos (UTMs em re-engajamento — ver OBS-002).
+        - AC5 (testes): 8/8 passing.
+        - AC6 (hot-fix removido): linhas 288-290 (comentário novo Story 50-3).
+        - AC7 (tipo TS): packages/shared/src/whatsapp/types.ts criado + barrel
+          export em index.ts.
+        - AC8 (compila + lint): type-check verde, lint nos arquivos da story
+          também verde.
+        - AC9 (pós-deploy): DEFERIDO — query SQL documentada para @devops.
+
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      - `pnpm test` (full): 274 passing + 6 pre-existentes failing em
+        packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts.
+      - Confirmado via `git stash` + re-run: as 6 falhas ocorrem em `main`
+        SEM as mudanças da 50-3, devido a alias `@web/lib/supabase/admin` não
+        resolvido pelo vitest (incompatibilidade vitest config × Next.js tsconfig
+        paths). Tech debt da Story 21.1 — fora do escopo desta story.
+      - Comportamento UTM (utm_source, utm_medium, utm_campaign) **preservado
+        bit-a-bit** para CTWA — verificado contra `git show HEAD:route.ts`
+        (linhas 341-343 idênticas). Re-engajamento de leads CTWA já sobrescrevia
+        UTMs em `main` — não é regressão da 50-3 (ver OBS-002).
+      - Lookup chain `meta_ads → meta_adsets → meta_campaigns` mantido intacto
+        (linhas 292-317) — mesma lógica que existia antes do refactor.
+      - Webhook `idempotency check` (linhas 158-206) e `findOrUpsertLead` (linhas
+        668-774) inalterados funcionalmente. Único change em findOrUpsertLead:
+        comentário stale atualizado para refletir migration 075 (doc-only).
+      - Try/catch envolvente do branch CTWA (linhas 287, 352-364) preservado —
+        falha na atribuição CTWA continua não-fatal e gera `ctwa_referral_error`
+        log sem quebrar o webhook.
+
+  - check: "5. Performance"
+    status: PASS
+    note: >
+      - Select extra de `leads.metadata` antes do update (linhas 327-331) adiciona
+        1 round-trip Supabase ao path CTWA. Story declara explicitamente como
+        "aceitável pois CTWA é fluxo de baixa frequência" (Dev Notes). Confirmo
+        avaliação: estimativa típica é <1% dos webhooks WhatsApp são CTWA (a
+        maioria é texto direto), então impacto agregado é negligível. Otimização
+        para `UPDATE ... SET metadata = metadata || jsonb_build_object(...)` em
+        SQL puro é viável e seria 1 round-trip ao invés de 2, mas adicionaria
+        complexidade no helper (perderia testabilidade pura). Ver OBS-005.
+      - Índice parcial `idx_leads_metadata_ad_id ON leads ((metadata->>'ad_id'))
+        WHERE metadata->>'ad_id' IS NOT NULL` é apropriado para o lookup do
+        CreativeChip (Story 50-2 fetchCreativesForLeads). Filtro WHERE economiza
+        espaço (só indexa leads com ad_id resolvido — provavelmente <30% do
+        total). Não há risco de performance degradation com este índice.
+      - Helper `buildCtwaMetadata` é puro e O(1) — overhead negligível.
+
+  - check: "6. Security"
+    status: PASS
+    note: >
+      - NFR-4 (não logar payload externo): código compõe `referralData` mas
+        nunca chama logEvent com o `source_url` ou `referral` cru. Log de erro
+        em linhas 352-364 só persiste `error.message` e `lead.id` —
+        compliance.
+      - JSONB injection: `referral` é typed como `WhatsAppReferral` (strings
+        opcionais). buildCtwaMetadata só faz nullish coalescing (`?? null`),
+        sem `eval` ou interpolação SQL. Supabase typed client serializa JSONB
+        seguramente via parametrized statements. Sem vetor de injection.
+      - Idempotência (R4 da story): merge não-destrutivo + `preservedAdId`
+        garante que retries do Meta com mesmo payload não destroem
+        atribuição prévia. Test "AC5.3 / AC3" valida isso explicitamente.
+        Test "idempotência" valida cenário de retry com mesmo ad_id.
+      - HMAC validation (linhas 49-64 do route.ts) preservado — todo payload
+        CTWA passa por verificação criptográfica antes de chegar no branch
+        novo. Sem nova superfície de ataque.
+
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Story file atualizada de forma exemplar:
+        - File List completa (Modified + Created + Reference only).
+        - Completion Notes detalham Pre-Flight + decisão Opção 2 + desvios da
+          story (caminho de teste, extração de pure function) com justificativa
+          técnica sólida (vitest config, testabilidade isolada).
+        - Change Log com entrada 2026-06-08 v0.3 do @dev.
+        - Status `Ready for Review`.
+        - Blockers/notas para @qa e @devops bem articuladas, incluindo tech
+          debt latente (016_meta_campaign_roas_view.sql:34 comment agora stale).
+      migration 075 tem header documentando o contexto histórico, ambos cenários
+      A/B, shape esperado do JSONB e referência à Epic 50. JSDoc no helper
+      explica regras de merge linha a linha. Tipo `WhatsAppReferral` documenta
+      cada campo com semântica de origem (Cloud API vs Business Account).
+
+ac_traceability:
+  - ac: "AC0"
+    status: PASS
+    note: "Pre-Flight documentado em Completion Notes; Opção 2 aplicada via migration 075 idempotente."
+  - ac: "AC1"
+    status: PASS
+    note: "route.ts:286-365 — `referralData` é construído e persistido (não mais `void`)."
+  - ac: "AC2"
+    status: PASS
+    note: "Shape exato em ctwa-metadata.ts:69-78 — verificado por test AC5.1."
+  - ac: "AC3"
+    status: PASS
+    note: "ctwa-metadata.ts:55-60 (preservedAdId) + test AC5.3 explícito."
+  - ac: "AC4"
+    status: PASS
+    note: "route.ts:345-348 — utm_source/medium/campaign preservados para CTWA. Comportamento bit-a-bit idêntico ao `main` (verificado via git show)."
+  - ac: "AC5"
+    status: PASS
+    note: "ctwa-metadata.test.ts — 8/8 passing, 3 cenários obrigatórios cobertos."
+  - ac: "AC6"
+    status: PASS
+    note: "Hot-fix comment removido (route.ts:288-290 substitui o `void referralData` + comentário 21.1)."
+  - ac: "AC7"
+    status: PASS
+    note: "packages/shared/src/whatsapp/types.ts criado + barrel export. Importado como `import type { WhatsAppReferral } from '@trifold/shared'`."
+  - ac: "AC8"
+    status: PASS
+    note: "type-check (web + shared) verde. Lint nos arquivos da story: zero hits. 8/8 testes do helper passing."
+  - ac: "AC9"
+    status: DEFERRED
+    note: "Validação pós-deploy (24h) — @devops executa query documentada nos Completion Notes após push."
+
+issues:
+  - id: PERF-001
+    severity: low
+    category: performance
+    description: >
+      O branch CTWA executa um round-trip extra Supabase (SELECT metadata) antes
+      do UPDATE para preservar ad_id histórico. Em fluxos de alta frequência
+      isso poderia importar, mas CTWA é minoritário no volume total de webhooks
+      WhatsApp.
+    recommendation: >
+      Não-bloqueante. Para otimização futura, considerar refactor para SQL puro
+      via `UPDATE leads SET metadata = jsonb_set(...) || jsonb_build_object('ad_id',
+      COALESCE(metadata->>'ad_id', $1::text), ...) WHERE id = $2`. Custo: perde
+      testabilidade pura do helper. Como migração 075 já cria o índice parcial,
+      essa otimização não é urgente.
+
+  - id: MNT-001
+    severity: low
+    category: maintainability
+    description: >
+      AC4 só constrai comportamento em "lead novo via CTWA" — para re-engajamento
+      (lead existente clicando em novo CTWA), os campos `source`, `utm_source`,
+      `utm_medium`, `utm_campaign` são UNCONDITIONALLY sobrescritos na linha
+      342-351. Isso DIFERE do padrão referencial do webhook Meta (meta-ads/route.ts:207
+      `...(existingUtmCampaign === null ? utmData : {})`), que preserva UTMs prévios.
+      Comportamento pre-existente em `main` (não é regressão da 50-3) mas é
+      inconsistência arquitetural notável.
+    recommendation: >
+      Não-bloqueante para esta story (AC4 não exige preservação em re-engajamento;
+      comportamento pre-existente). Documentar como tech debt para revisão futura:
+      considerar alinhar com o padrão Meta (preservar utm_campaign se já populado)
+      ou explicitar a divergência via comentário inline. Recomendar @po criar
+      backlog story tipo `tech_debt` para harmonização de UTM-preservation
+      entre webhooks WhatsApp e Meta.
+
+  - id: TEST-001
+    severity: medium
+    category: testing
+    description: >
+      6 testes de packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts
+      (Story 21.1) **continuam falhando** com erro `Cannot find package '@web/lib/supabase/admin'`.
+      Confirmado pré-existente em `main` via `git stash` + re-run — não é
+      regressão da 50-3. Causa raiz: vitest config (`vitest.config.ts` root) não
+      resolve o alias `@web/*` definido em `packages/web/tsconfig.json` paths.
+    recommendation: >
+      Não-bloqueante para 50-3 (não introduz a falha; story 50-3 declara isso em
+      Completion Notes). Mas é tech debt **médio** que afeta a confiança no
+      regression net da Story 21.1 (webhook idempotency core flow está sem
+      verificação automática local). Criar story de QA infra:
+        - Adicionar `resolve.alias` no vitest.config.ts mapeando `@web/*` →
+          `packages/web/src/*`.
+        - OU migrar route.test.ts para vitest workspaces com config local da
+          @trifold/web.
+      Prioridade: medium (cobertura crítica, mas mitigação atual é manual integration
+      testing via webhook real). Sugerir @po criar via *backlog-add.
+
+  - id: DOC-001
+    severity: low
+    category: documentation
+    description: >
+      Comentário em `supabase/migrations/016_meta_campaign_roas_view.sql:34`
+      ainda declara `leads.metadata NÃO existe — branch removido vs. proposta
+      original do epic`. Após migration 075, este comentário é incorreto e
+      potencialmente confunde futuros leitores que façam arqueologia.
+    recommendation: >
+      Não-bloqueante. Documentado em Completion Notes da 50-3 como "fora de
+      escopo, mas notável". Considerar uma micro-PR follow-up que atualize o
+      comentário para algo como "Coluna leads.metadata adicionada em migration
+      075 (Story 50-3, Epic 50). Comentário histórico mantido para contexto."
+
+  - id: OBS-001
+    severity: low
+    category: tooling
+    description: >
+      CodeRabbit CLI não executado nesta review — config aponta para WSL/Windows
+      e host de revisão é macOS. Mesmo cenário das stories 50-1 e 50-2.
+    recommendation: >
+      Não-bloqueante. Análise manual cobriu code review, security, performance,
+      regression e testing. Recomendar @devops/CI executar CodeRabbit em ambiente
+      WSL como passo opcional pós-push.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Implementação SUPERA o padrão referencial citado: enquanto o webhook Meta
+      (meta-ads/route.ts:206) faz REPLACE de metadata (`metadata: metaMetadata`),
+      a 50-3 faz MERGE real via `{...current, ...new}`. Isso significa que se
+      um lead já tem `campaign_id`, `form_id` ou `leadgen_id` populados pelo
+      Meta Lead Form webhook e depois clica em CTWA, esses campos são
+      PRESERVADOS — comportamento mais robusto que o referencial.
+
+  - id: POS-002
+    description: >
+      Extração da pure function `buildCtwaMetadata` é uma decisão exemplar de
+      testabilidade. Sem a extração, AC5 só seria atingível com stub completo
+      de `NextRequest` + Supabase admin (que falha hoje no vitest por causa do
+      alias `@web/*`). A função é totalmente testável em isolamento, sem
+      mocks. JSDoc + tipos `CtwaMetadataInput`/`CtwaMetadataResult` deixam o
+      contract explícito.
+
+  - id: POS-003
+    description: >
+      migration 075 é idempotente E documenta histórico. Header explica:
+      (1) inconsistência entre código e migrations committed,
+      (2) ambos cenários A/B (coluna ausente vs migration remote-only),
+      (3) shape esperado do JSONB com TODOS os campos atuais e futuros.
+      Padrão de migration documentation que outras stories podem espelhar.
+
+  - id: POS-004
+    description: >
+      Tests cobrem 5 cenários ALÉM dos 3 obrigatórios de AC5: string vazia
+      tratada como ausente (defensive), payload minimalista (Meta Business
+      Account vs Cloud API), janela CTWA exata 72h (matemática), branch
+      `currentMetadata=undefined` (default param), idempotência sob retry
+      Meta (R4). Cobre os 4 riscos documentados da story (R1-R4) explicitamente.
+
+  - id: POS-005
+    description: >
+      Helper `WhatsAppReferral` no @trifold/shared estabelece tipo compartilhado
+      que pode ser reusado por outras integrações WhatsApp futuras (templates,
+      campaigns, notifications). JSDoc documenta variação entre Meta Business
+      Account e Cloud API (R2 da story), com guidance para parsing defensivo.
+
+  - id: POS-006
+    description: >
+      Story 50-3 completa o ciclo Epic 50: Story 50-1 (sync de thumbnails) +
+      Story 50-2 (CreativeChip UI) já em produção. Com 50-3, leads CTWA NOVOS
+      passam a aparecer com chip de criativo no pipeline IMEDIATAMENTE após
+      deploy, sem necessidade de backfill. Stories 50-1 e 50-2 (que assumiam
+      `leads.metadata.ad_id` populado) ficam fully operacionais para o canal
+      CTWA — anteriormente só funcionavam para Lead Form.
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança bem isolada: 1 arquivo route modificado + 4 arquivos novos (helper,
+    test, fixture, migration, tipo). Try/catch envolvente garante que falha na
+    atribuição CTWA NÃO quebra o webhook (preserva idempotência core da 21.1).
+    migration 075 é idempotente — safe para ambos cenários A/B e safe para
+    reapply. Rollback via `git revert` é trivial (5 arquivos). Pior caso
+    runtime: branch CTWA falha → log `ctwa_referral_error` + lead criado sem
+    ad_id (mesmo estado de antes da story). Sem regressão funcional possível.
+
+independent_verification:
+  - check: "Test execution"
+    command: "pnpm test packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.test.ts"
+    result: "8/8 passed in 151ms"
+  - check: "Full regression suite"
+    command: "pnpm test"
+    result: "274 passed + 6 pre-existing failures (route.test.ts, alias @web/* issue from main — confirmed via git stash)"
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "clean (zero errors)"
+  - check: "Type-check shared"
+    command: "pnpm --filter @trifold/shared type-check"
+    result: "clean (zero errors)"
+  - check: "Lint touched files"
+    command: "pnpm exec eslint route.ts ctwa-metadata.ts ctwa-metadata.test.ts"
+    result: "clean (zero hits)"
+  - check: "Migration ordering"
+    command: "ls supabase/migrations/ | tail"
+    result: "075_leads_metadata.sql is next available number; follows IF NOT EXISTS pattern of 048_supremo_sync.sql"
+  - check: "UTM regression check"
+    command: "git show HEAD:packages/web/src/app/api/webhook/whatsapp/route.ts | grep utm_"
+    result: "Bit-for-bit identical UTM handling in main vs new branch — no UTM regression"
+  - check: "route.test.ts pre-existing failure"
+    command: "git stash && pnpm test packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts ; git stash pop"
+    result: "6/6 fail in main without 50-3 changes — confirmed PRE-EXISTING, not regression"
+
+gate_decision:
+  verdict: CONCERNS
+  rationale: >
+    Aprovada para push. Verdict CONCERNS alinhado com convenção do projeto
+    (gates 16.11, 50.1, 50.2) para "aprovado com observações documentadas".
+    Todas as 5 issues são LOW/MEDIUM severity e não-bloqueantes. Implementação
+    é cirúrgica, supera o padrão referencial em robustez (merge vs replace),
+    e tem 8/8 testes verdes cobrindo todos os ACs testáveis. AC9 (validação
+    pós-deploy) deferido por design — não bloqueia push. PERF-001 é tradeoff
+    deliberado documentado pela story. MNT-001 e TEST-001 são tech debt
+    pre-existentes que esta story não introduz nem agrava.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Aplicar migration 075 ANTES ou JUNTO com deploy do código (ordem segura: migration primeiro porque é idempotente; código tem try/catch)"
+    - "Pós-deploy: @devops executa queries de T6/AC9 documentadas nos Completion Notes da story (24h após push)"
+    - "Considerar quick-fix DOC-001 (atualizar comentário stale em 016_meta_campaign_roas_view.sql:34) como follow-up"
+    - "@po cria backlog para TEST-001 (vitest alias config) e MNT-001 (harmonização UTM-preservation)"
+
+complementary_work:
+  - storyId: "50.1"
+    relationship: "Prerequisite (em produção)"
+    note: >
+      Story 50-1 sincroniza `meta_ads.creative.thumbnail_url`. Necessária para
+      o CreativeChip resolver miniaturas a partir do `ad_id` que a 50-3 grava.
+  - storyId: "50.2"
+    relationship: "Prerequisite (em produção)"
+    note: >
+      Story 50-2 implementa o CreativeChip que consome `leads.metadata.ad_id`.
+      Pré-existente em produção (gate CONCERNS); 50-3 desbloqueia chip para
+      leads CTWA novos.
+  - storyId: "21.1"
+    relationship: "Substitui hot-fix"
+    note: >
+      Story 50-3 é o "follow-up" mencionado no hot-fix comment da 21.1
+      (linhas 329-335 do route.ts antes do refactor). Hot-fix removido conforme
+      AC6 — atribuição CTWA agora funciona como pretendido originalmente.
+
+files_reviewed:
+  - path: "packages/web/src/app/api/webhook/whatsapp/route.ts"
+    lines_changed: "modified"
+    verdict: PASS
+    notes: "Branch CTWA refatorado (linhas 280-365); hot-fix comment removido; comentário stale em findOrUpsertLead atualizado para refletir migration 075."
+  - path: "packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.ts"
+    lines_added: 79
+    verdict: PASS
+    notes: "Pure function `buildCtwaMetadata` — JSDoc comprehensive, tipos explícitos, zero dependências runtime."
+  - path: "packages/web/src/app/api/webhook/whatsapp/ctwa-metadata.test.ts"
+    lines_added: 184
+    verdict: PASS
+    notes: "8 cenários (3 obrigatórios AC5 + 5 extras). 8/8 passing."
+  - path: "packages/web/src/app/api/webhook/whatsapp/__fixtures__/ctwa-referral.json"
+    lines_added: 45
+    verdict: PASS
+    notes: "Payload CTWA anonimizado, shape real Meta Cloud API."
+  - path: "packages/shared/src/whatsapp/types.ts"
+    lines_added: 32
+    verdict: PASS
+    notes: "Interface WhatsAppReferral com 7 campos opcionais, JSDoc por campo."
+  - path: "packages/shared/src/index.ts"
+    lines_changed: "+1 / -0"
+    verdict: PASS
+    notes: "Barrel export `export * from './whatsapp/types'`."
+  - path: "supabase/migrations/075_leads_metadata.sql"
+    lines_added: 44
+    verdict: PASS
+    notes: "Idempotente (IF NOT EXISTS); índice parcial para CreativeChip lookup; COMMENT ON COLUMN documenta shape JSONB."
