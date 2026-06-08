@@ -79,18 +79,35 @@ export async function PATCH(
     return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
   }
 
-  // Usuário sem auth_id foi cadastrado pelo fluxo legado — não tem conta no Supabase Auth.
-  // Alterar senha ou e-mail é impossível sem auth_id; retorna erro descritivo.
-  if (hasNewPassword && !targetUserSnapshot.auth_id) {
-    return NextResponse.json(
-      { error: "Este usuário não tem conta de acesso criada. Use 'Enviar link por e-mail' para criar a senha pela primeira vez." },
-      { status: 422 }
+  // Usuário sem auth_id foi cadastrado pelo fluxo legado — cria conta no Supabase Auth agora.
+  let resolvedAuthId: string | undefined = targetUserSnapshot.auth_id as string | undefined
+  if (hasNewPassword && !resolvedAuthId) {
+    const emailForAuth = (publicUpdates.email as string | undefined) ?? (
+      (await supabase.from("users").select("email").eq("id", id).single()).data?.email as string | undefined
     )
+    if (!emailForAuth) {
+      return NextResponse.json({ error: "Usuário sem e-mail cadastrado — não é possível criar conta de acesso." }, { status: 422 })
+    }
+    const adminSupabase = createAdminClient()
+    const { data: newAuth, error: createError } = await adminSupabase.auth.admin.createUser({
+      email: emailForAuth,
+      password: body.new_password as string,
+      email_confirm: true,
+    })
+    if (createError || !newAuth?.user?.id) {
+      return NextResponse.json({ error: createError?.message ?? "Erro ao criar conta de acesso." }, { status: 500 })
+    }
+    resolvedAuthId = newAuth.user.id
+    await supabase.from("users").update({ auth_id: resolvedAuthId }).eq("id", id)
+    // Conta criada com a senha já definida — não precisa do updateUserById abaixo
+    if (hasPublicUpdates) {
+      const { error } = await supabase.from("users").update(publicUpdates).eq("id", id).eq("org_id", appUser.org_id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ data: { ok: true } })
   }
 
-  const targetAuthId: string | undefined = needsAuthUpdate
-    ? (targetUserSnapshot.auth_id as string | undefined)
-    : undefined
+  const targetAuthId: string | undefined = needsAuthUpdate ? resolvedAuthId : undefined
 
   if (hasPublicUpdates) {
     const { error } = await supabase
