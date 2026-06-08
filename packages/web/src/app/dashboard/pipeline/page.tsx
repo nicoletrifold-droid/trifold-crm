@@ -165,7 +165,7 @@ export default async function PipelinePage({
 
       {/* Filter Bar */}
       <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <form className="flex flex-wrap items-end gap-4">
+        <form key={JSON.stringify(filters)} className="flex flex-wrap items-end gap-4">
           <div className="min-w-[220px] flex-1">
             <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Buscar lead
@@ -257,13 +257,16 @@ export default async function PipelinePage({
             Filtrar
           </button>
 
+        </form>
+
+        <div className="mt-3 flex gap-2">
           {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q) && (
-            <Link
+            <a
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               Limpar
-            </Link>
+            </a>
           )}
 
           <Link
@@ -272,7 +275,7 @@ export default async function PipelinePage({
           >
             Config follow-up
           </Link>
-        </form>
+        </div>
       </div>
 
       <KanbanBoard
