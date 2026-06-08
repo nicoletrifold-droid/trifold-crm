@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
     .from("leads")
     .select("created_at, property_interest_id")
     .eq("is_active", true)
+    .is("lost_reason", null)
     .gte("created_at", from)
     .lte("created_at", to)
     .order("created_at")

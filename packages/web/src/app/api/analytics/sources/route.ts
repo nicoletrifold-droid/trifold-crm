@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     .select("source")
     .eq("org_id", appUser.org_id)
     .eq("is_active", true)
+    .is("lost_reason", null)
 
   if (from) {
     query = query.gte("created_at", from)
