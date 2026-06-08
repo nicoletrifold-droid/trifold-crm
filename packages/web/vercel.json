@@ -73,18 +73,6 @@
       "schedule": "*/30 * * * *"
     },
     {
-      "path": "/api/cron/supremo-sync",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/supremo-sync?mode=full",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/supremo-history-sync",
-      "schedule": "0 */2 * * *"
-    },
-    {
       "path": "/api/cron/appointment-email-reminders",
       "schedule": "0 12 * * *"
     },
