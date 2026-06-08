@@ -28,43 +28,66 @@ interface Props {
 export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAvailable }: Props) {
   const [fila, setFila] = useState<FilaEntry[]>(initialFila)
   const [available, setAvailable] = useState<BrokerOption[]>(initialAvailable)
-  const [selectedBroker, setSelectedBroker] = useState("")
+  const [selectedBrokers, setSelectedBrokers] = useState<Set<string>>(new Set())
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [isAdding, startAddTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  // Two-step remove confirmation
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
-  function addBroker() {
-    if (!selectedBroker) return
+  function toggleSelectBroker(brokerId: string) {
+    setSelectedBrokers((prev) => {
+      const next = new Set(prev)
+      if (next.has(brokerId)) next.delete(brokerId)
+      else next.add(brokerId)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedBrokers(new Set(available.map((b) => b.brokerId)))
+  }
+
+  function clearSelection() {
+    setSelectedBrokers(new Set())
+  }
+
+  function addBrokers() {
+    if (selectedBrokers.size === 0) return
     setError(null)
+    const toAdd = available.filter((b) => selectedBrokers.has(b.brokerId))
     startAddTransition(async () => {
-      const res = await fetch("/api/roleta/fila", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ broker_id: selectedBroker }),
-      })
-      if (res.ok) {
-        const broker = available.find((b) => b.brokerId === selectedBroker)
-        if (broker) {
-          const newPos = fila.length > 0 ? Math.max(...fila.map((f) => f.position)) + 1 : 0
-          setFila((f) => [
+      const results = await Promise.all(
+        toAdd.map((broker) =>
+          fetch("/api/roleta/fila", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ broker_id: broker.brokerId }),
+          })
+        )
+      )
+      const failures = results.filter((r) => !r.ok).length
+      const successes = toAdd.filter((_, i) => results[i]!.ok)
+      if (successes.length > 0) {
+        setFila((f) => {
+          let pos = f.length > 0 ? Math.max(...f.map((e) => e.position)) + 1 : 0
+          return [
             ...f,
-            {
+            ...successes.map((broker) => ({
               id: crypto.randomUUID(),
-              position: newPos,
+              position: pos++,
               is_active: true,
               broker_id: broker.brokerId,
               brokerName: broker.name,
               brokerEmail: broker.email,
               brokerPhone: null,
-            },
-          ])
-          setAvailable((a) => a.filter((b) => b.brokerId !== selectedBroker))
-          setSelectedBroker("")
-        }
-      } else {
-        setError("Erro ao adicionar corretor. Tente novamente.")
+            })),
+          ]
+        })
+        setAvailable((a) => a.filter((b) => !successes.some((s) => s.brokerId === b.brokerId)))
+        setSelectedBrokers(new Set())
+      }
+      if (failures > 0) {
+        setError(`${failures} corretor(es) não puderam ser adicionados. Tente novamente.`)
       }
     })
   }
@@ -209,27 +232,60 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
         <p className="text-xs text-stone-400 dark:text-stone-500 animate-pulse">Adicionando…</p>
       )}
 
+      {/* Multi-select de corretores disponíveis */}
       {available.length > 0 && (
-        <div className="flex items-center gap-2 pt-2">
-          <select
-            value={selectedBroker}
-            onChange={(e) => setSelectedBroker(e.target.value)}
-            className="flex-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
-          >
-            <option value="" disabled>Selecionar corretor…</option>
+        <div className="pt-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-stone-500 dark:text-stone-400">
+              Adicionar corretores ({available.length} disponíveis)
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={selectAll}
+                className="text-xs text-[#E8856A] hover:underline"
+              >
+                Selecionar todos
+              </button>
+              {selectedBrokers.size > 0 && (
+                <button
+                  onClick={clearSelection}
+                  className="text-xs text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 dark:border-stone-700 divide-y divide-stone-100 dark:divide-stone-800 max-h-48 overflow-y-auto">
             {available.map((b) => (
-              <option key={b.brokerId} value={b.brokerId}>
-                {b.name} — {b.email}
-              </option>
+              <label
+                key={b.brokerId}
+                className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedBrokers.has(b.brokerId)}
+                  onChange={() => toggleSelectBroker(b.brokerId)}
+                  className="h-4 w-4 rounded border-stone-300 accent-[#E8856A] dark:border-stone-700 shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-stone-100 truncate">{b.name}</p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500 truncate">{b.email}</p>
+                </div>
+              </label>
             ))}
-          </select>
+          </div>
+
           <button
-            onClick={addBroker}
-            disabled={!selectedBroker || isAdding}
-            className="flex items-center gap-1.5 rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#d4705a] disabled:opacity-40"
+            onClick={addBrokers}
+            disabled={selectedBrokers.size === 0 || isAdding}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#d4705a] disabled:opacity-40"
           >
             <Plus className="h-4 w-4" />
-            Adicionar
+            {selectedBrokers.size > 0
+              ? `Adicionar ${selectedBrokers.size} corretor${selectedBrokers.size > 1 ? "es" : ""}`
+              : "Selecione corretores acima"}
           </button>
         </div>
       )}
