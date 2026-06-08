@@ -12,6 +12,8 @@ interface CampaignMetrics {
   leads_qualificados: number
   cpl_real: number | null
   taxa_qualificacao: number | null
+  spend_yesterday: number
+  utilization_rate: number | null   // % of daily budget consumed yesterday (null = no daily budget)
 }
 
 interface CampaignWithMetrics {
@@ -23,6 +25,7 @@ interface CampaignWithMetrics {
   daily_budget: number | null
   lifetime_budget: number | null
   metrics: CampaignMetrics
+  active_alert_types: string[]      // alert_types with is_read=false fired today
   leads_crm: number
 }
 
@@ -76,13 +79,48 @@ export async function GET(request: NextRequest) {
 
   // 2. Insights do período (level=campaign)
   const { from, to } = getPeriodDates(period)
-  const { data: insights } = await supabase
-    .from("meta_insights_daily")
-    .select("entity_id, spend, impressions, clicks, leads")
-    .eq("org_id", appUser.org_id)
-    .eq("level", "campaign")
-    .gte("date", from)
-    .lte("date", to)
+  const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]! })()
+  const today = new Date().toISOString().split("T")[0]!
+
+  const [insightsRes, insightsYesterdayRes, alertsTodayRes] = await Promise.all([
+    supabase
+      .from("meta_insights_daily")
+      .select("entity_id, spend, impressions, clicks, leads")
+      .eq("org_id", appUser.org_id)
+      .eq("level", "campaign")
+      .gte("date", from)
+      .lte("date", to),
+    supabase
+      .from("meta_insights_daily")
+      .select("entity_id, spend")
+      .eq("org_id", appUser.org_id)
+      .eq("level", "campaign")
+      .eq("date", yesterday),
+    supabase
+      .from("meta_alerts")
+      .select("entity_id, alert_type")
+      .eq("org_id", appUser.org_id)
+      .eq("is_read", false)
+      .eq("fired_date", today),
+  ])
+
+  const insights = insightsRes.data
+  const insightsYesterday = insightsYesterdayRes.data ?? []
+  const alertsToday = alertsTodayRes.data ?? []
+
+  // Index yesterday spend per campaign
+  const spendYesterdayMap = new Map<string, number>()
+  for (const r of insightsYesterday) {
+    spendYesterdayMap.set(r.entity_id, Number(r.spend ?? 0))
+  }
+
+  // Index active alert types per campaign
+  const alertsByEntity = new Map<string, Set<string>>()
+  for (const a of alertsToday) {
+    const set = alertsByEntity.get(a.entity_id) ?? new Set<string>()
+    set.add(a.alert_type)
+    alertsByEntity.set(a.entity_id, set)
+  }
 
   // 3. Leads no CRM (meta_ads ou ctwa)
   const { data: leads } = await supabase
@@ -182,6 +220,13 @@ export async function GET(request: NextRequest) {
       ? Math.round((leads_qualificados / agg.leads_meta) * 10000) / 100
       : null
 
+    const spend_yesterday = spendYesterdayMap.get(c.meta_campaign_id) ?? 0
+    const utilization_rate = c.daily_budget && c.daily_budget > 0
+      ? Math.round((spend_yesterday / (c.daily_budget / 100)) * 100)
+      : null
+
+    const active_alert_types = [...(alertsByEntity.get(c.meta_campaign_id) ?? new Set())]
+
     return {
       id: c.id,
       meta_campaign_id: c.meta_campaign_id,
@@ -201,8 +246,11 @@ export async function GET(request: NextRequest) {
         leads_qualificados,
         cpl_real,
         taxa_qualificacao,
+        spend_yesterday: Math.round(spend_yesterday * 100) / 100,
+        utilization_rate,
       },
       leads_crm,
+      active_alert_types,
     }
   })
 

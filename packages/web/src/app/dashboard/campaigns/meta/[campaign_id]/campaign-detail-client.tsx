@@ -27,6 +27,11 @@ import {
 } from "@web/lib/meta-constants"
 import CampaignFunnel from "./campaign-funnel"
 import CampaignCreatives from "./campaign-creatives"
+import CampaignLpFunnel from "./campaign-lp-funnel"
+import CampaignFrequencyChart from "./campaign-frequency-chart"
+import CampaignPlacement from "./campaign-placement"
+import CampaignAlertsPanel from "./campaign-alerts-panel"
+import AgentChatPanel from "@web/components/agent/agent-chat-panel"
 
 interface Props {
   campaignId: string
@@ -494,6 +499,9 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
         </div>
       </dialog>
 
+      {/* Alertas ativos — B-1 */}
+      <CampaignAlertsPanel campaignId={campaignId} />
+
       {/* Time series chart */}
       <section className="rounded-lg bg-white p-6 shadow-sm">
         <h2 className="text-base font-semibold text-gray-900">
@@ -501,6 +509,28 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
         </h2>
         <div className="mt-4">
           <TimeSeriesChart data={timeseries} />
+        </div>
+      </section>
+
+      {/* LP Funnel — B-2 */}
+      <section className="rounded-lg bg-white p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-gray-900">Funil de Landing Page</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Impressões → Cliques → Visualizações LP → Leads gerados
+        </p>
+        <div className="mt-4">
+          <CampaignLpFunnel timeseries={timeseries} />
+        </div>
+      </section>
+
+      {/* Frequency chart — B-3 */}
+      <section className="rounded-lg bg-white p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-gray-900">Frequência Histórica</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Frequência média diária. Acima de 2.8× indica saturação de audiência.
+        </p>
+        <div className="mt-4">
+          <CampaignFrequencyChart timeseries={timeseries} />
         </div>
       </section>
 
@@ -520,6 +550,19 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
           <h2 className="text-base font-semibold text-gray-900">AdSets</h2>
         </header>
         <AdsetsTable adsets={adsets} />
+      </section>
+
+      {/* Placement breakdown — B-4 */}
+      <section className="rounded-lg bg-white shadow-sm">
+        <header className="border-b border-gray-200 px-6 py-4">
+          <h2 className="text-base font-semibold text-gray-900">Performance por Posicionamento</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Spend e leads por plataforma e posição. Sincronizado semanalmente.
+          </p>
+        </header>
+        <div className="p-6">
+          <CampaignPlacement campaignId={campaignId} />
+        </div>
       </section>
 
       {/* Criativos (Story 26.1) */}
@@ -557,6 +600,14 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
         </header>
         <LeadsTable leads={leads} />
       </section>
+
+      {/* Agent chat panel — D-1 through D-5, campaign context */}
+      <AgentChatPanel
+        isAdmin={isAdmin}
+        contextType="campaign"
+        contextId={campaignId}
+        contextLabel={campaign.name ?? null}
+      />
     </div>
   )
 }
@@ -807,6 +858,14 @@ function formatSpendAxis(value: number): string {
   return `R$ ${Math.round(value)}`
 }
 
+// ─── Quality ranking badges ────────────────────────────────────────────────
+
+const QUALITY_BADGES: Record<string, { label: string; className: string }> = {
+  ABOVE_AVERAGE: { label: "Acima da média", className: "bg-green-100 text-green-700" },
+  AVERAGE:       { label: "Médio",          className: "bg-gray-100 text-gray-600" },
+  BELOW_AVERAGE: { label: "Abaixo da média", className: "bg-red-100 text-red-700" },
+}
+
 // ─── AdSets table ──────────────────────────────────────────────────────────
 
 function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
@@ -833,6 +892,7 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
             <Th align="right">CTR</Th>
             <Th align="right">Leads</Th>
             <Th align="right">CPL</Th>
+            <Th align="left">Qualidade</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -842,6 +902,9 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
               ? (OPTIMIZATION_GOAL_LABELS[a.optimization_goal] ??
                 a.optimization_goal)
               : "—"
+            const qBadge = a.quality_ranking
+              ? QUALITY_BADGES[a.quality_ranking] ?? null
+              : null
             return (
               <tr key={a.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">
@@ -877,6 +940,18 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
                 </td>
                 <td className="px-4 py-3 text-right text-sm text-gray-700">
                   {a.cpl !== null ? formatBRL(a.cpl) : "—"}
+                </td>
+                <td className="px-4 py-3">
+                  {qBadge ? (
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${qBadge.className}`}
+                      title={`Quality ranking: ${a.quality_ranking ?? ""}`}
+                    >
+                      {qBadge.label}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
                 </td>
               </tr>
             )

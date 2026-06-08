@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
+import AgentChatPanel from "@web/components/agent/agent-chat-panel"
 
 interface CampaignMetrics {
   spend: number
@@ -15,6 +16,8 @@ interface CampaignMetrics {
   leads_qualificados: number
   cpl_real: number | null
   taxa_qualificacao: number | null
+  spend_yesterday: number
+  utilization_rate: number | null
 }
 
 interface CampaignWithMetrics {
@@ -27,6 +30,50 @@ interface CampaignWithMetrics {
   lifetime_budget: number | null
   metrics: CampaignMetrics
   leads_crm: number
+  active_alert_types: string[]
+}
+
+// ─── Health score ──────────────────────────────────────────────────────────
+
+function calcHealthScore(c: CampaignWithMetrics): number {
+  let score = 100
+  const alerts = c.active_alert_types
+  if (alerts.includes("cpl_spike"))            score -= 30
+  if (alerts.includes("zero_leads_active"))    score -= 25
+  if (alerts.includes("frequency_saturation")) score -= 15
+  if (alerts.includes("budget_underdelivery")) score -= 10
+  if (alerts.includes("creative_fatigue"))     score -= 10
+  if (alerts.includes("scale_candidate"))      score += 10
+  return Math.max(0, Math.min(100, score))
+}
+
+function HealthBadge({ score }: { score: number }) {
+  const [bg, text] =
+    score >= 80 ? ["bg-green-100 dark:bg-green-500/15", "text-green-700 dark:text-green-300"] :
+    score >= 50 ? ["bg-yellow-100 dark:bg-yellow-500/15", "text-yellow-700 dark:text-yellow-300"] :
+                  ["bg-red-100 dark:bg-red-500/15", "text-red-700 dark:text-red-300"]
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ${bg} ${text}`} title="Score de saúde da campanha">
+      {score}
+    </span>
+  )
+}
+
+function BudgetPacingBar({ utilization }: { utilization: number | null }) {
+  if (utilization === null) return <span className="text-gray-300 dark:text-stone-600 text-xs">—</span>
+  const clampedPct = Math.min(100, Math.max(0, utilization))
+  const [barColor] =
+    clampedPct >= 70 ? ["bg-green-400"] :
+    clampedPct >= 50 ? ["bg-yellow-400"] :
+                       ["bg-red-400"]
+  return (
+    <div className="flex flex-col items-end gap-0.5" title={`${utilization}% do budget diário consumido ontem`}>
+      <span className="text-xs text-gray-500 dark:text-stone-400">{utilization}%</span>
+      <div className="h-1.5 w-16 rounded-full bg-gray-200 dark:bg-stone-700">
+        <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${clampedPct}%` }} />
+      </div>
+    </div>
+  )
 }
 
 interface SyncStatus {
@@ -134,12 +181,15 @@ function CampaignsTabs({ active }: { active: "crm" | "meta" }) {
 
 // ─── Componente principal ──────────────────────────────────────────────────
 
+type HealthFilter = "ALL" | "alerts" | "risk" | "scale"
+
 export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState("30d")
   const [statusFilter, setStatusFilter] = useState("ALL")
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>("ALL")
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
@@ -240,6 +290,28 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
       {/* Tabs */}
       <CampaignsTabs active="meta" />
 
+      {/* Filtros de saúde — B-5 */}
+      <div className="flex flex-wrap gap-2">
+        {(["ALL", "alerts", "risk", "scale"] as HealthFilter[]).map((f) => {
+          const labels: Record<HealthFilter, string> = {
+            ALL: "Todas", alerts: "Com alertas", risk: "Em risco", scale: "Candidatas a escalar",
+          }
+          return (
+            <button
+              key={f}
+              onClick={() => setHealthFilter(f)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                healthFilter === f
+                  ? "bg-orange-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+              }`}
+            >
+              {labels[f]}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Filtros */}
       <div className="flex gap-3">
         <select
@@ -304,6 +376,9 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
             <thead className="bg-gray-50 dark:bg-stone-800/50">
               <tr>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400" title="Score de saúde">
+                  Saúde
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Campanha
                 </th>
@@ -346,20 +421,36 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                 >
                   Qualificação
                 </th>
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400" title="% do budget diário consumido ontem">
+                  Pacing
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Ações
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
-              {data?.campaigns.map((c) => {
+              {(data?.campaigns ?? [])
+                .filter((c) => {
+                  if (healthFilter === "ALL") return true
+                  const alerts = c.active_alert_types ?? []
+                  if (healthFilter === "alerts") return alerts.length > 0
+                  if (healthFilter === "risk") return alerts.some((a) => ["cpl_spike","zero_leads_active","frequency_saturation"].includes(a))
+                  if (healthFilter === "scale") return alerts.includes("scale_candidate")
+                  return true
+                })
+                .map((c) => {
                 const badge = STATUS_BADGES[c.status] ?? STATUS_BADGES.ARCHIVED!
                 const objective = c.objective
                   ? (OBJECTIVE_LABELS[c.objective] ?? c.objective)
                   : null
+                const healthScore = calcHealthScore(c)
 
                 return (
                   <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
+                    <td className="px-4 py-3 text-center">
+                      <HealthBadge score={healthScore} />
+                    </td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900 dark:text-stone-100">{c.name}</p>
                       {objective && (
@@ -414,6 +505,9 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                     >
                       {formatQualificacaoBadge(c.metrics.taxa_qualificacao)}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <BudgetPacingBar utilization={c.metrics.utilization_rate ?? null} />
+                    </td>
                     <td className="px-4 py-3 text-right text-sm">
                       <Link
                         href={`/dashboard/campaigns/meta/${c.meta_campaign_id}`}
@@ -429,6 +523,9 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
           </table>
         </ScrollableX>
       )}
+
+      {/* Agent chat panel — D-1 through D-5 */}
+      <AgentChatPanel isAdmin={isAdmin} contextType="global" />
     </div>
   )
 }

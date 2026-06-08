@@ -105,6 +105,9 @@ export interface MetaInsightTimeSeries {
   impressions: number
   clicks: number
   ctr: number
+  frequency: number
+  outbound_clicks: number
+  landing_page_views: number
 }
 
 export interface MetaAdSetWithMetrics {
@@ -120,6 +123,7 @@ export interface MetaAdSetWithMetrics {
   ctr: number
   leads_meta: number
   cpl: number | null
+  quality_ranking: string | null
 }
 
 export interface ConversionFunnel {
