@@ -67,9 +67,9 @@ export default async function AnalyticsPage({
     .eq("is_active", true)
     .order("name")
 
-  // Builders explícitos — todos com is_active=true AND lost_reason IS NULL
-  // para seguir o mesmo critério do Pipeline e Dashboard (uniformidade)
-  const totalQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null)
+  // Período — is_active=true AND lost_reason IS NULL (uniformidade com Pipeline/Dashboard)
+  // totalLeads é calculado após as stages serem construídas (soma das stages ativas)
+  // para garantir exatamente o mesmo número que o Dashboard "Total no pipeline"
   const todayQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", todayStart.toISOString())
   const weekQ  = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", weekStart.toISOString())
   const monthQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", monthStart.toISOString())
@@ -83,14 +83,12 @@ export default async function AnalyticsPage({
     .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
 
   const [
-    { count: totalLeads },
     { count: leadsToday },
     { count: leadsWeek },
     { count: leadsMonth },
     { count: lpYardenCount },
     { count: lpVindCount },
   ] = await Promise.all([
-    propertyId ? totalQ.eq("property_interest_id", propertyId) : totalQ,
     propertyId ? todayQ.eq("property_interest_id", propertyId) : todayQ,
     propertyId ? weekQ.eq("property_interest_id", propertyId) : weekQ,
     propertyId ? monthQ.eq("property_interest_id", propertyId) : monthQ,
@@ -213,6 +211,9 @@ export default async function AnalyticsPage({
     sourceCounts.other = Math.max(0, (sourceCounts.other ?? 0) - lpVind)
   }
   if (sourceCounts.other === 0) delete sourceCounts.other
+
+  // Total = soma das stages ativas — idêntico ao "Total no pipeline" do Dashboard
+  const totalLeads = stages.reduce((sum, s) => sum + s.count, 0)
 
   const sourceLabels = SOURCE_LABELS_SHORT
   // Escala raiz quadrada para diferenciar valores pequenos sem esmagar os grandes
