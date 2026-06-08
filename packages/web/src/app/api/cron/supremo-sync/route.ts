@@ -10,11 +10,13 @@ const SUPREMO_API_TOKEN = process.env.SUPREMO_API_TOKEN
 const SUPREMO_ORG_ID = process.env.SUPREMO_ORG_ID
 const SUPREMO_BASE = "https://api.supremocrm.com.br/v1"
 
-// Estágios que só existem no trifold ou são protegidos — nunca sobrescrever via sync
+// Estágios protegidos — sync nunca sobrescreve leads nestas colunas
+// Corretores Antigo: leads já encaminhados para corretores inativos — não mexer
+// Ação Muffato: campanha pontual gerenciada manualmente
+const CORRETORES_ANTIGOS_STAGE_ID = "62075f72-1629-4d8b-a019-0fcb35e3d302"
 const PROTECTED_STAGE_IDS = new Set<string>([
-  STAGE_IDS.acao_muffato,   // campanha pontual, não gerenciada pelo Supremo
-  STAGE_IDS.visita_agendada,// coluna exclusiva trifold
-  STAGE_IDS.negociando,     // coluna exclusiva trifold
+  STAGE_IDS.acao_muffato,
+  CORRETORES_ANTIGOS_STAGE_ID,
 ])
 
 // Mapeamento por id_situacao (IDs específicos da conta Trifold no Supremo)
@@ -152,6 +154,7 @@ interface SupremoLead {
   interesses: string | null
   data_captura: string | null
   data_ultima_interacao: string | null
+  nome_corretor: string | null
 }
 
 interface SupremoPage {
@@ -216,6 +219,16 @@ export async function GET(request: NextRequest) {
     // Buscar situações dinamicamente para completar o mapeamento (ex: IMPORTAR CRM)
     await fetchSituacoes()
 
+    // Carregar brokers ativos para validação (corretor Supremo → encaminha Corretores Antigos se inativo)
+    const { data: brokerUsers } = await supabase
+      .from("users")
+      .select("name")
+      .eq("org_id", SUPREMO_ORG_ID)
+      .in("role", ["broker", "gerente-comercial"])
+    const activeBrokerNames = new Set<string>(
+      (brokerUsers ?? []).map(u => u.name.toLowerCase().trim())
+    )
+
     // Determine which pages to fetch
     const firstPage = await fetchPage(1)
     pagesFetched++
@@ -268,11 +281,17 @@ export async function GET(request: NextRequest) {
         const phone = normalizePhone(lead.telefone_pessoa)
         if (!phone) { skipped++; continue }
 
-        const stageId = mapToStageId(lead.etapa, lead.id_situacao ?? null)
+        // Broker check: se lead tem corretor no Supremo mas corretor não está ativo no Trifold → Corretores Antigos
+        const nomeCorretor = lead.nome_corretor?.trim() ?? null
+        const brokerInativo = nomeCorretor !== null && !activeBrokerNames.has(nomeCorretor.toLowerCase())
+        const stageId = brokerInativo
+          ? CORRETORES_ANTIGOS_STAGE_ID
+          : mapToStageId(lead.etapa, lead.id_situacao ?? null)
+
         const existing = bySupremoId.get(lead.id) ?? byPhone.get(phone) ?? null
 
         if (existing) {
-          // Não sobrescrever leads em colunas protegidas (Ação Muffato, Visita Agendada, Negociando)
+          // Não sobrescrever leads em colunas protegidas (Ação Muffato, Corretores Antigos)
           if (existing.stage_id && PROTECTED_STAGE_IDS.has(existing.stage_id)) {
             skipped++
             continue
