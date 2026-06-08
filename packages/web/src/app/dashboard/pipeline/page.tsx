@@ -65,7 +65,7 @@ export default async function PipelinePage({
         .from("users")
         .select("id, name")
         .eq("org_id", user.orgId)
-        .eq("role", "broker")
+        .in("role", ["broker", "gerente-comercial"])
         .eq("is_active", true)
         .order("name"),
       supabase
@@ -103,7 +103,9 @@ export default async function PipelinePage({
       if (filters.property_id) {
         query = query.eq("property_interest_id", filters.property_id)
       }
-      if (filters.broker_id) {
+      if (filters.broker_id === "none") {
+        query = query.is("assigned_broker_id", null)
+      } else if (filters.broker_id) {
         query = query.eq("assigned_broker_id", filters.broker_id)
       }
       if (filters.q) {
@@ -205,6 +207,7 @@ export default async function PipelinePage({
               className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todos</option>
+              <option value="none">Sem corretor</option>
               {brokers?.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}

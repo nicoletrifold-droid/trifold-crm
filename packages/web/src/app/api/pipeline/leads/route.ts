@@ -88,7 +88,9 @@ export async function GET(req: NextRequest) {
   if (propertyId) {
     query = query.eq("property_interest_id", propertyId)
   }
-  if (brokerId) {
+  if (brokerId === "none") {
+    query = query.is("assigned_broker_id", null)
+  } else if (brokerId) {
     query = query.eq("assigned_broker_id", brokerId)
   }
   if (campaignLeadIds && campaignLeadIds.length > 0) {
