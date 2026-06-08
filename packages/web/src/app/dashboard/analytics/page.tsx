@@ -67,15 +67,18 @@ export default async function AnalyticsPage({
     .eq("is_active", true)
     .order("name")
 
-  // Builders explícitos para evitar inferência recursiva do tipo Supabase
-  const totalQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true)
-  const todayQ = supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", todayStart.toISOString())
-  const weekQ = supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", weekStart.toISOString())
-  const monthQ = supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", monthStart.toISOString())
+  // Builders explícitos — todos com is_active=true AND lost_reason IS NULL
+  // para seguir o mesmo critério do Pipeline e Dashboard (uniformidade)
+  const totalQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null)
+  const todayQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", todayStart.toISOString())
+  const weekQ  = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", weekStart.toISOString())
+  const monthQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", monthStart.toISOString())
   const lpYardenQ = supabase.from("leads").select("id", { count: "exact", head: true })
+    .eq("is_active", true).is("lost_reason", null)
     .gte("created_at", monthStart.toISOString())
     .ilike("utm_campaign", "%LP Yarden%")
   const lpVindQ = supabase.from("leads").select("id", { count: "exact", head: true })
+    .eq("is_active", true).is("lost_reason", null)
     .gte("created_at", monthStart.toISOString())
     .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
 
@@ -129,6 +132,7 @@ export default async function AnalyticsPage({
         .select("stage_id, assigned_broker_id, source, lost_reason, broker:users!assigned_broker_id(id, name)")
         .eq("org_id", appUser.orgId)
         .eq("is_active", true)
+        .is("lost_reason", null)
         .eq("property_interest_id", propertyId),
     ])
 
@@ -137,6 +141,8 @@ export default async function AnalyticsPage({
       .from("leads")
       .select("source")
       .eq("org_id", appUser.orgId)
+      .eq("is_active", true)
+      .is("lost_reason", null)
       .eq("property_interest_id", propertyId)
       .gte("created_at", monthStart.toISOString())
 

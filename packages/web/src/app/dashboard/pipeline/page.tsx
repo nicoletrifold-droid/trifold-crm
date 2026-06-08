@@ -152,14 +152,16 @@ export default async function PipelinePage({
   )
 
   const initialLeadsPerStage = perStageResults as unknown as InitialStageState[]
-  const totalVisible = initialLeadsPerStage.reduce((acc, s) => acc + s.leads.length, 0)
+  // Usa totalCount (contagem real do DB por stage) em vez de leads.length
+  // (leads.length é limitado por PAGE_SIZE=50 e filtro de score client-side)
+  const totalPipeline = initialLeadsPerStage.reduce((acc, s) => acc + s.totalCount, 0)
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Pipeline</h1>
         <p className="text-sm text-gray-500 dark:text-stone-400">
-          {totalVisible} leads no pipeline
+          {totalPipeline} leads no pipeline
         </p>
       </div>
 
