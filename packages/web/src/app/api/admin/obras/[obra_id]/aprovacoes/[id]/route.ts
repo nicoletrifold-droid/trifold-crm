@@ -63,6 +63,30 @@ export async function PATCH(
     )
   }
 
+  // Claim atômico: UPDATE WHERE status='pendente' — previne race condition
+  // se dois admins clicarem ao mesmo tempo. Se retornar 0 rows, outro já revisou.
+  const newStatus = acao === "aprovar" ? "aprovado" : "rejeitado"
+  const { data: claimed, error: claimErr } = await supabase
+    .from("obra_upload_aprovacoes")
+    .update({
+      status: newStatus,
+      aprovado_por: appUser.id,
+      reviewed_at: new Date().toISOString(),
+      ...(acao === "rejeitar" ? { motivo_rejeicao: motivo_rejeicao!.trim() } : {}),
+    })
+    .eq("id", id)
+    .eq("org_id", appUser.org_id)
+    .eq("status", "pendente")   // ← condição atômica
+    .select("id")
+    .maybeSingle()
+
+  if (claimErr) {
+    return NextResponse.json({ error: claimErr.message }, { status: 500 })
+  }
+  if (!claimed) {
+    return NextResponse.json({ error: "Upload já foi revisado por outro usuário" }, { status: 409 })
+  }
+
   if (acao === "aprovar") {
     // Inserir na tabela publicada correspondente
     if (aprovacao.tipo === "foto") {
@@ -105,30 +129,12 @@ export async function PATCH(
       }
     }
 
-    // Atualiza status
-    await supabase
-      .from("obra_upload_aprovacoes")
-      .update({
-        status: "aprovado",
-        aprovado_por: appUser.id,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq("id", id)
+    // Status já atualizado no claim atômico acima
   } else {
-    // Rejeição: remove arquivo do Storage
+    // Rejeição: remove arquivo do Storage (status já atualizado no claim)
     await supabase.storage
       .from(aprovacao.storage_bucket)
       .remove([aprovacao.storage_path])
-
-    await supabase
-      .from("obra_upload_aprovacoes")
-      .update({
-        status: "rejeitado",
-        aprovado_por: appUser.id,
-        reviewed_at: new Date().toISOString(),
-        motivo_rejeicao: motivo_rejeicao!.trim(),
-      })
-      .eq("id", id)
   }
 
   // Busca obra para subject do email
