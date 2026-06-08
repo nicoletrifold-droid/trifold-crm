@@ -5,6 +5,8 @@ import { now } from "@web/lib/time"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 
+import { AlertasSeenMarker } from "./_components/alertas-seen-marker"
+
 export default async function AlertasPage() {
   const user = await getServerUser()
 
@@ -123,6 +125,8 @@ export default async function AlertasPage() {
 
   return (
     <div className="space-y-6">
+      {/* Marca alertas como vistos assim que a página monta no cliente */}
+      <AlertasSeenMarker />
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Alertas</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
