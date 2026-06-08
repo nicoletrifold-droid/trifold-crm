@@ -2,9 +2,15 @@
 """
 Full sync: Supremo CRM → Trifold Supabase
 Updates stage_id for existing leads only (no inserts).
+
+Usage:
+    SUPREMO_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_KEY=... python supremo_full_sync.py
+    or set vars in .env and load with: set -a && source .env && set +a
 """
 
+import os
 import re
+import sys
 import time
 import json
 import requests
@@ -13,14 +19,19 @@ from datetime import datetime, timezone
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 SUPREMO_BASE = "https://api.supremocrm.com.br/v1"
-SUPREMO_TOKEN = (
-    "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhcGktY3JtIiwic3ViIjozNTIwLCJub21lIjoiTHVjYXMiLCJlbWFpbCI6IiIsImRkZCI6bnVsbCwicGhvbmUiOm51bGwsInNpdF9pZCI6NzMyLCJzaXRfbm9tZSI6IlRyaWZvbGQgRW5nZW5oYXJpYSBMdGRhIiwiaWRfY2hhdmUiOjE4MiwiaWF0IjoxNzc5Mjk3NzI2LCJleHAiOjIwOTQ2NTc3MjZ9.qXikcp9Nzv6fEzmJjb3ZIvDaN-5gUgp0LP-vrh_EfZY"
-)
+SUPREMO_TOKEN = os.environ.get("SUPREMO_TOKEN") or os.environ.get("SUPREMO_CRM_TOKEN")
+SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY")
 
-SUPABASE_URL = "https://dsopqkqjkmhytudaaolv.supabase.co"
-SUPABASE_SERVICE_KEY = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzb3Bxa3Fqa21oeXR1ZGFhb2x2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDk4MDkxOSwiZXhwIjoyMDkwNTU2OTE5fQ.FM6JAOfA_SkuidAQhNWU1h2QHFhXr1co4nn9MvSGEdY"
-)
+if not SUPREMO_TOKEN:
+    print("ERROR: SUPREMO_TOKEN (or SUPREMO_CRM_TOKEN) env var is required", file=sys.stderr)
+    sys.exit(1)
+if not SUPABASE_URL:
+    print("ERROR: NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) env var is required", file=sys.stderr)
+    sys.exit(1)
+if not SUPABASE_SERVICE_KEY:
+    print("ERROR: SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY) env var is required", file=sys.stderr)
+    sys.exit(1)
 
 RATE_LIMIT_SLEEP = 2.0  # seconds between Supremo API pages
 
@@ -70,22 +81,16 @@ def normalize_phone(raw):
     if not raw:
         return None
     digits = re.sub(r'\D', '', str(raw))
-    # Already 13 digits with country code
     if len(digits) == 13 and digits.startswith("55"):
         return digits
-    # 11 digits: DDD + 9 + 8 digits
     if len(digits) == 11:
         return "55" + digits
-    # 12 digits with country code but missing 9th digit: 55 + DDD + 8 digits
     if len(digits) == 12 and digits.startswith("55"):
         return digits[:4] + "9" + digits[4:]
-    # 10 digits: DDD + 8 digits (no 9th digit)
     if len(digits) == 10:
         return "55" + digits[:2] + "9" + digits[2:]
-    # 9 digits: 9 + 8 digits (assume DDD 44)
     if len(digits) == 9:
         return "5544" + digits
-    # 8 digits: just the number (assume DDD 44, add 9)
     if len(digits) == 8:
         return "55449" + digits
     return None
@@ -95,11 +100,9 @@ def target_stage(lead: dict) -> str:
     """Determine the target stage_id for a Supremo lead."""
     nome_corretor = (lead.get("nome_corretor") or "").strip().lower()
 
-    # Broker not active → Corretores Antigos
     if nome_corretor and nome_corretor not in ACTIVE_BROKERS:
         return CORRETORES_ANTIGOS_ID
 
-    # etapa takes priority over id_situacao
     etapa = lead.get("etapa")
     if etapa == 4:
         return FECHOU_ID
@@ -202,10 +205,8 @@ def patch_lead(lead_id: str, new_stage_id: str):
 def main():
     print(f"[START] Supremo → Trifold full sync — {datetime.now().isoformat()}")
 
-    # 1. Load all Supabase leads into memory
     by_supremo_id, by_phone = load_supabase_leads()
 
-    # 2. Discover total pages from Supremo
     print("[SUPREMO] Fetching page 1 to detect total pages…")
     first = fetch_supremo_page(1)
     time.sleep(RATE_LIMIT_SLEEP)
@@ -218,7 +219,6 @@ def main():
             break
 
     if leads_key is None:
-        # Try to find it by looking for the list value
         for k, v in first.items():
             if isinstance(v, list):
                 leads_key = k
@@ -227,7 +227,6 @@ def main():
     print(f"[SUPREMO] total_pages={total_pages}, leads_key='{leads_key}'")
     print(f"[SUPREMO] Page 1 keys: {list(first.keys())}")
 
-    # Stats
     stats = {
         "updated": 0,
         "skipped_unchanged": 0,
@@ -243,7 +242,6 @@ def main():
             phone_raw = lead.get("telefone") or lead.get("celular") or lead.get("phone")
             phone_norm = normalize_phone(phone_raw)
 
-            # Find matching Trifold lead
             trifold = None
             if sup_id and int(sup_id) in by_supremo_id:
                 trifold = by_supremo_id[int(sup_id)]
@@ -256,14 +254,12 @@ def main():
 
             current_stage = trifold.get("stage_id")
 
-            # Skip protected stages
             if current_stage in PROTECTED_STAGES:
                 stats["skipped_protected"] += 1
                 return
 
             new_stage = target_stage(lead)
 
-            # Skip if unchanged
             if current_stage == new_stage:
                 stats["skipped_unchanged"] += 1
                 return
@@ -272,19 +268,16 @@ def main():
                 patch_lead(trifold["id"], new_stage)
                 stats["updated"] += 1
                 stats["stage_counts"][new_stage] = stats["stage_counts"].get(new_stage, 0) + 1
-                # Update in-memory cache
                 trifold["stage_id"] = new_stage
             except Exception as e:
                 stats["errors"] += 1
                 print(f"  [ERROR] lead {trifold['id']}: {e}")
 
-    # Process page 1
     if leads_key:
         process_leads_list(first.get(leads_key, []))
     else:
         print(f"[WARN] Could not find leads list in response. Full response: {json.dumps(first)[:500]}")
 
-    # 3. Process remaining pages
     for page in range(2, total_pages + 1):
         try:
             data = fetch_supremo_page(page)
@@ -306,7 +299,6 @@ def main():
 
         time.sleep(RATE_LIMIT_SLEEP)
 
-    # ─── FINAL REPORT ────────────────────────────────────────────────────────
     STAGE_NAMES = {
         "00000000-0000-0000-0001-000000000001": "AGUARDANDO ATENDIMENTO",
         "00000000-0000-0000-0001-000000000002": "1º CONTATO",
