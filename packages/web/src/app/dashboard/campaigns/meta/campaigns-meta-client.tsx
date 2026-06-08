@@ -47,7 +47,17 @@ function calcHealthScore(c: CampaignWithMetrics): number {
   return Math.max(0, Math.min(100, score))
 }
 
-function HealthBadge({ score }: { score: number }) {
+function HealthBadge({ score, initialized }: { score: number; initialized: boolean }) {
+  if (!initialized) {
+    return (
+      <span
+        className="inline-flex rounded-full px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-400 dark:bg-stone-800 dark:text-stone-500"
+        title="Análise ainda não executada — scores disponíveis após o primeiro ciclo diário (11h BRT)"
+      >
+        —
+      </span>
+    )
+  }
   const [bg, text] =
     score >= 80 ? ["bg-green-100 dark:bg-green-500/15", "text-green-700 dark:text-green-300"] :
     score >= 50 ? ["bg-yellow-100 dark:bg-yellow-500/15", "text-yellow-700 dark:text-yellow-300"] :
@@ -85,6 +95,7 @@ interface SyncStatus {
 interface ApiResponse {
   campaigns: CampaignWithMetrics[]
   last_sync: SyncStatus | null
+  alerts_initialized: boolean
 }
 
 // ─── Formatação ────────────────────────────────────────────────────────────
@@ -290,27 +301,33 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
       {/* Tabs */}
       <CampaignsTabs active="meta" />
 
-      {/* Filtros de saúde — B-5 */}
-      <div className="flex flex-wrap gap-2">
-        {(["ALL", "alerts", "risk", "scale"] as HealthFilter[]).map((f) => {
-          const labels: Record<HealthFilter, string> = {
-            ALL: "Todas", alerts: "Com alertas", risk: "Em risco", scale: "Candidatas a escalar",
-          }
-          return (
-            <button
-              key={f}
-              onClick={() => setHealthFilter(f)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                healthFilter === f
-                  ? "bg-orange-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-              }`}
-            >
-              {labels[f]}
-            </button>
-          )
-        })}
-      </div>
+      {/* Filtros de saúde — B-5: só exibe quando análise de inteligência já rodou */}
+      {data?.alerts_initialized ? (
+        <div className="flex flex-wrap gap-2">
+          {(["ALL", "alerts", "risk", "scale"] as HealthFilter[]).map((f) => {
+            const labels: Record<HealthFilter, string> = {
+              ALL: "Todas", alerts: "Com alertas", risk: "Em risco", scale: "Candidatas a escalar",
+            }
+            return (
+              <button
+                key={f}
+                onClick={() => setHealthFilter(f)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  healthFilter === f
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                }`}
+              >
+                {labels[f]}
+              </button>
+            )
+          })}
+        </div>
+      ) : data && !loading ? (
+        <p className="text-xs text-gray-400 dark:text-stone-500 italic">
+          Análise de inteligência ainda não executada — scores disponíveis após o primeiro ciclo diário (11h BRT)
+        </p>
+      ) : null}
 
       {/* Filtros */}
       <div className="flex gap-3">
@@ -445,11 +462,12 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
                   ? (OBJECTIVE_LABELS[c.objective] ?? c.objective)
                   : null
                 const healthScore = calcHealthScore(c)
+                const alertsInitialized = data?.alerts_initialized ?? false
 
                 return (
                   <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
                     <td className="px-4 py-3 text-center">
-                      <HealthBadge score={healthScore} />
+                      <HealthBadge score={healthScore} initialized={alertsInitialized} />
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900 dark:text-stone-100">{c.name}</p>

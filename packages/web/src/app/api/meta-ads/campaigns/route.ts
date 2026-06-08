@@ -38,6 +38,7 @@ interface SyncStatus {
 interface CampaignsApiResponse {
   campaigns: CampaignWithMetrics[]
   last_sync: SyncStatus | null
+  alerts_initialized: boolean   // true quando meta_alerts tem dados dos últimos 7 dias
 }
 
 function getPeriodDates(period: string): { from: string; to: string } {
@@ -82,7 +83,9 @@ export async function GET(request: NextRequest) {
   const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]! })()
   const today = new Date().toISOString().split("T")[0]!
 
-  const [insightsRes, insightsYesterdayRes, alertsTodayRes] = await Promise.all([
+  const sevenDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split("T")[0]! })()
+
+  const [insightsRes, insightsYesterdayRes, alertsTodayRes, alertsInitRes] = await Promise.all([
     supabase
       .from("meta_insights_daily")
       .select("entity_id, spend, impressions, clicks, leads")
@@ -102,11 +105,18 @@ export async function GET(request: NextRequest) {
       .eq("org_id", appUser.org_id)
       .eq("is_read", false)
       .eq("fired_date", today),
+    supabase
+      .from("meta_alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", appUser.org_id)
+      .gte("fired_date", sevenDaysAgo)
+      .limit(1),
   ])
 
   const insights = insightsRes.data
   const insightsYesterday = insightsYesterdayRes.data ?? []
   const alertsToday = alertsTodayRes.data ?? []
+  const alertsInitialized = (alertsInitRes.count ?? 0) > 0
 
   // Index yesterday spend per campaign
   const spendYesterdayMap = new Map<string, number>()
@@ -273,6 +283,7 @@ export async function GET(request: NextRequest) {
           records_synced: lastSync.records_synced ?? 0,
         }
       : null,
+    alerts_initialized: alertsInitialized,
   }
 
   return NextResponse.json(response)
