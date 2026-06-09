@@ -150,9 +150,6 @@ export default async function BrokerHomePage() {
             <span className={`font-bold ${isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
               {isOnline ? "ONLINE" : "OFFLINE"}
             </span>
-            {isOnline && roletaPosition != null && (
-              <span className="text-gray-500 dark:text-stone-400"> · {roletaPosition}ª posição na fila</span>
-            )}
           </p>
         </div>
       )}
