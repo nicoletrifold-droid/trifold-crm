@@ -627,8 +627,11 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                           <button
                             onClick={() => handleToggleTask(task.id, false)}
                             aria-label="Marcar como concluída"
-                            className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-stone-300 hover:border-orange-500 hover:bg-orange-50 dark:border-stone-600 dark:hover:border-orange-400"
-                          />
+                            title="Concluir tarefa"
+                            className="group mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-stone-300 transition-colors hover:border-emerald-500 hover:bg-emerald-50 dark:border-stone-600 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/10"
+                          >
+                            <Check className="h-3.5 w-3.5 text-transparent transition-colors group-hover:text-emerald-500 dark:group-hover:text-emerald-400" />
+                          </button>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="text-stone-500 dark:text-stone-400">{actionIcons[task.action_type] ?? actionIcons.outro}</span>
