@@ -126,6 +126,14 @@ export default async function PipelinePage({
           }
         }
       }
+      // Filtro de período de captura (created_at) — timezone America/Sao_Paulo (UTC-3)
+      if (filters.date_from) {
+        query = query.gte("created_at", `${filters.date_from}T00:00:00-03:00`)
+      }
+      if (filters.date_to) {
+        query = query.lte("created_at", `${filters.date_to}T23:59:59-03:00`)
+      }
+
       if (campaignLeadIds !== null) {
         if (campaignLeadIds.length === 0) {
           // Force empty result while keeping a valid query shape.
@@ -195,6 +203,30 @@ export default async function PipelinePage({
               defaultValue={filters.q ?? ""}
               placeholder="Nome ou telefone..."
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Captura — De
+            </label>
+            <input
+              type="date"
+              name="date_from"
+              defaultValue={filters.date_from ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Até
+            </label>
+            <input
+              type="date"
+              name="date_to"
+              defaultValue={filters.date_to ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             />
           </div>
 
@@ -297,7 +329,7 @@ export default async function PipelinePage({
         </form>
 
         <div className="mt-3 flex gap-2">
-          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage) && (
+          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage || filters.date_from || filters.date_to) && (
             <a
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
