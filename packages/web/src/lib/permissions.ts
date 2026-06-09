@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
@@ -211,27 +212,43 @@ export async function getOrgPermissionsMatrix(
  * Retorna o mapa `{ module: canAccess }` para um usuário, com base no campo
  * `role` da tabela `public.users`.
  *
+ * Perf:
+ *  - Envolto em React `cache()`: múltiplas chamadas na mesma request (layout +
+ *    `canAccess` em vários pontos) deduplicam para 1 execução por
+ *    `(userId, orgId, knownRole)`.
+ *  - Parâmetro opcional `knownRole`: quando o caller já conhece o role
+ *    (ex.: layout tem `user.role` de `getServerUser`), passá-lo PULA o 1º
+ *    round-trip (`users.role`). Sem ele, o comportamento é idêntico ao original.
+ *
  * Fluxo:
- *  1. Busca o `role` do usuário em `public.users` por `id = userId`.
+ *  1. Usa `knownRole` se fornecido; senão busca o `role` em `public.users` por
+ *     `id = userId`.
  *  2. Resolve o `roleId` em `roles` por `name = userRole` e `org_id = orgId`.
  *  3. Chama `getRolePermissions(roleId)`.
  *  4. Se qualquer etapa falhar ou retornar vazio, usa
  *     `getHardcodedPermissions(userRole ?? "")` como fallback.
  */
-export async function getUserPermissions(
+export const getUserPermissions = cache(async (
   userId: string,
-  orgId: string
-): Promise<Record<string, boolean>> {
+  orgId: string,
+  knownRole?: string
+): Promise<Record<string, boolean>> => {
   const supabase = await createClient()
 
-  // 1. Buscar role do usuário
-  const { data: userRow, error: userError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle()
-
-  const userRole = userRow?.role as string | undefined
+  // 1. Resolver role do usuário — usa knownRole quando disponível (pula 1 RT)
+  let userRole: string | undefined
+  let userError: unknown = null
+  if (typeof knownRole === "string" && knownRole.length > 0) {
+    userRole = knownRole
+  } else {
+    const { data: userRow, error } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle()
+    userRole = userRow?.role as string | undefined
+    userError = error
+  }
 
   if (userError || !userRole) {
     return getHardcodedPermissions(userRole ?? "")
@@ -277,7 +294,7 @@ export async function getUserPermissions(
   }
 
   return finalPerms
-}
+})
 
 // ============================================================================
 // canAccess — helper booleano por módulo (Story 35-5)

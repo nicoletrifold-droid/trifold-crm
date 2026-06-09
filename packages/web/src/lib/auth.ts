@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 
@@ -12,7 +13,16 @@ export interface AppUser {
   theme: "light" | "dark" | "system"
 }
 
-export async function getServerUser(): Promise<AppUser> {
+/**
+ * Resolve o usuário autenticado e seu registro em `public.users`.
+ *
+ * Envolto em React `cache()` (perf): o layout e a page chamam `getServerUser`
+ * independentemente na mesma request — sem cache isso são 2× `auth.getUser()`
+ * (GoTrue) + 2× `users` select. `cache()` deduplica para 1× por request-render.
+ * O escopo do `cache()` do React é a própria request, então NÃO vaza entre
+ * usuários/requests distintos.
+ */
+export const getServerUser = cache(async (): Promise<AppUser> => {
   const supabase = await createClient()
 
   const {
@@ -43,7 +53,7 @@ export async function getServerUser(): Promise<AppUser> {
     avatarUrl: appUser.avatar_url,
     theme: (appUser.theme as AppUser["theme"]) ?? "system",
   }
-}
+})
 
 export function getRoleRedirect(role: string): string {
   switch (role) {
