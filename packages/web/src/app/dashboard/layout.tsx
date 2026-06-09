@@ -145,8 +145,14 @@ export default async function DashboardLayout({
         ])
       : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
 
+  const isCorretorRole = user.role === "broker"
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
-  const baseFiltered = NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!])
+  // Atividades é restrito a admin/supervisor/gerente-comercial.
+  const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
+    if (!permissions[NAV_MODULE_MAP[item.href]!]) return false
+    if (item.href === "/dashboard/atividades" && isCorretorRole) return false
+    return true
+  })
 
   const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
