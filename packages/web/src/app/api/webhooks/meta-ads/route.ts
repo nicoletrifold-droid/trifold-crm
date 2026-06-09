@@ -149,8 +149,12 @@ async function processLeadAsync(
       (leadData?.campaign_id as string | undefined) ??
       null
 
-    // AC4: Resolver nome da campanha
+    // AC4: Resolver nome da campanha; fallback para nome do formulário
     const campaignName = campaignId ? await resolveCampaignName(campaignId) : null
+    const formId = (webhookValue.form_id as string | undefined) ??
+      (leadData?.form_id as string | undefined) ?? null
+    const formName = !campaignName && formId ? await resolveFormName(formId) : null
+    const resolvedCampaign = campaignName ?? (formName ? `Formulário: ${formName}` : null)
 
     const orgId = await resolveOrgId(supabase)
     if (!orgId) {
@@ -180,7 +184,7 @@ async function processLeadAsync(
     const utmData = {
       utm_source: "meta_ads",
       utm_medium: (webhookValue.platform as string | undefined) ?? "facebook",
-      utm_campaign: campaignName ?? null,
+      utm_campaign: resolvedCampaign,
       utm_content: (webhookValue.ad_name as string | undefined) ?? null,
     }
 
@@ -335,6 +339,23 @@ async function resolveCampaignName(campaignId: string): Promise<string | null> {
       { signal: AbortSignal.timeout(10_000) }
     ).then((res) => {
       if (!res.ok) throw new Error(`Graph API campaign error ${res.status}`)
+      return res.json() as Promise<{ id: string; name: string }>
+    })
+  )
+
+  return result?.name ?? null
+}
+
+async function resolveFormName(formId: string): Promise<string | null> {
+  const token = process.env.META_PAGE_ACCESS_TOKEN
+  if (!token) return null
+
+  const result = await fetchWithRetry(() =>
+    fetch(
+      `${META_API_BASE}/${formId}?access_token=${token}&fields=name`,
+      { signal: AbortSignal.timeout(10_000) }
+    ).then((res) => {
+      if (!res.ok) throw new Error(`Graph API form error ${res.status}`)
       return res.json() as Promise<{ id: string; name: string }>
     })
   )
