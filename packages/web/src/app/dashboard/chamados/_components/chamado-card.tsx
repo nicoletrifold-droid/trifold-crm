@@ -7,6 +7,7 @@ interface ChamadoCardProps {
     description: string
     reason: string
     image_url: string | null
+    image_urls?: string[] | null
     status: string
     reporter_name: string
     created_at: string
@@ -35,25 +36,38 @@ export function ChamadoCard({ chamado, showReporter = false }: ChamadoCardProps)
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-stone-800 dark:bg-stone-900">
       <div className="flex items-start gap-4">
-        {/* Thumbnail da imagem */}
-        {chamado.image_url && (
-          <a
-            href={chamado.image_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0"
-          >
-            <div className="relative h-20 w-20 overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
-              <Image
-                src={chamado.image_url}
-                alt="Screenshot do ticket"
-                fill
-                className="object-cover"
-                sizes="80px"
-              />
+        {/* Thumbnails das imagens */}
+        {(() => {
+          const urls =
+            chamado.image_urls && chamado.image_urls.length > 0
+              ? chamado.image_urls
+              : chamado.image_url
+              ? [chamado.image_url]
+              : []
+          if (urls.length === 0) return null
+          return (
+            <div className="flex flex-shrink-0 flex-col gap-1">
+              {urls.slice(0, 3).map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
+                    <Image
+                      src={url}
+                      alt={`Screenshot ${i + 1}`}
+                      fill
+                      className="object-cover"
+                      sizes="64px"
+                    />
+                  </div>
+                </a>
+              ))}
+              {urls.length > 3 && (
+                <span className="text-center text-[10px] text-stone-400">
+                  +{urls.length - 3}
+                </span>
+              )}
             </div>
-          </a>
-        )}
+          )
+        })()}
 
         <div className="min-w-0 flex-1">
           {/* Header: data + status badge */}

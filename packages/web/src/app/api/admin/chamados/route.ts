@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
-const MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
+const MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB por arquivo
+const MAX_FILES = 5
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 
 export async function POST(request: NextRequest) {
@@ -42,48 +43,63 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // --- Upload de imagem (opcional) ---
-  let imageUrl: string | null = null
-  const file = formData.get("image")
+  // --- Upload de imagens (opcional, até MAX_FILES) ---
+  const files = formData
+    .getAll("images")
+    .filter((f): f is File => f instanceof File && f.size > 0)
 
-  if (file instanceof File && file.size > 0) {
+  if (files.length > MAX_FILES) {
+    return NextResponse.json(
+      { error: `Máximo de ${MAX_FILES} imagens por chamado` },
+      { status: 400 }
+    )
+  }
+
+  for (const file of files) {
     if (!ALLOWED_MIME.includes(file.type)) {
       return NextResponse.json(
-        { error: "Imagem deve ser JPEG, PNG, WEBP ou GIF" },
+        { error: "Imagens devem ser JPEG, PNG, WEBP ou GIF" },
         { status: 400 }
       )
     }
     if (file.size > MAX_SIZE_BYTES) {
       return NextResponse.json(
-        { error: "Imagem excede o limite de 5 MB" },
+        { error: "Cada imagem deve ter no máximo 5 MB" },
         { status: 400 }
       )
     }
+  }
 
-    const ext = file.name.includes(".")
-      ? file.name.split(".").pop()!.toLowerCase()
-      : "jpg"
+  const imageUrls: string[] = []
+
+  for (const file of files) {
+    const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "jpg"
     const storagePath = `${appUser.org_id}/${appUser.id}/${crypto.randomUUID()}.${ext}`
-
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    const buffer = Buffer.from(await file.arrayBuffer())
 
     const { error: uploadError } = await supabase.storage
       .from("chamados-attachments")
       .upload(storagePath, buffer, { contentType: file.type, upsert: false })
 
     if (uploadError) {
+      // Rollback uploads já feitos
+      if (imageUrls.length > 0) {
+        const paths = imageUrls
+          .map((u) => u.split("/storage/v1/object/public/chamados-attachments/")[1] ?? "")
+          .filter((p) => p.length > 0)
+        await supabase.storage.from("chamados-attachments").remove(paths)
+      }
       return NextResponse.json(
         { error: `Falha no upload: ${uploadError.message}` },
         { status: 500 }
       )
     }
 
-    const { data: publicUrlData } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from("chamados-attachments")
       .getPublicUrl(storagePath)
 
-    imageUrl = publicUrlData.publicUrl
+    imageUrls.push(urlData.publicUrl)
   }
 
   // --- Inserir chamado ---
@@ -95,17 +111,19 @@ export async function POST(request: NextRequest) {
       reporter_name: appUser.name,
       description,
       reason,
-      image_url: imageUrl,
+      image_url: imageUrls[0] ?? null,
+      image_urls: imageUrls,
       status: "aberto",
     })
-    .select("id, description, reason, image_url, status, created_at")
+    .select("id, description, reason, image_url, image_urls, status, created_at")
     .single()
 
   if (insertError) {
-    // Rollback: remover imagem do storage se inserção falhou
-    if (imageUrl) {
-      const path = imageUrl.split("/").slice(-3).join("/")
-      await supabase.storage.from("chamados-attachments").remove([path])
+    if (imageUrls.length > 0) {
+      const paths = imageUrls
+        .map((u) => u.split("/storage/v1/object/public/chamados-attachments/")[1] ?? "")
+        .filter((p) => p.length > 0)
+      await supabase.storage.from("chamados-attachments").remove(paths)
     }
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
@@ -121,18 +139,16 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get("status")
 
-  const isAdmin =
-    appUser.role === "admin" || appUser.role === "supervisor"
+  const isAdmin = appUser.role === "admin" || appUser.role === "supervisor"
 
   let query = supabase
     .from("chamados")
     .select(
-      "id, description, reason, image_url, status, reporter_name, created_at"
+      "id, description, reason, image_url, image_urls, status, reporter_name, created_at"
     )
     .eq("org_id", appUser.org_id)
     .order("created_at", { ascending: false })
 
-  // Non-admin: apenas os seus próprios (RLS já garante, mas filtramos explicitamente)
   if (!isAdmin) {
     query = query.eq("reporter_id", appUser.id)
   }

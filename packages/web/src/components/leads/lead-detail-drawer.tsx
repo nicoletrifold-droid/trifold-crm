@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useReducer } from "react"
+import { useEffect, useMemo, useReducer, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
 import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown } from "lucide-react"
@@ -372,8 +372,18 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
   }
 
+  const [taskTab, setTaskTab] = useState<"todas" | "atrasadas" | "para-hoje" | "futuras">("todas")
+
   const pendingTasks = tasks.filter(t => !t.completed_at)
   const doneTasks = tasks.filter(t => t.completed_at)
+
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+  const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+  const atrasadas = pendingTasks.filter(t => t.due_at && new Date(t.due_at) < todayStart)
+  const paraHoje = pendingTasks.filter(t => t.due_at && new Date(t.due_at) >= todayStart && new Date(t.due_at) < tomorrowStart)
+  const futuras = pendingTasks.filter(t => t.due_at && new Date(t.due_at) >= tomorrowStart)
+  const tabTasks = taskTab === "atrasadas" ? atrasadas : taskTab === "para-hoje" ? paraHoje : taskTab === "futuras" ? futuras : pendingTasks
+
   const visibleHistory = showAllHistory ? history : history.slice(0, 8)
 
   return (
@@ -516,7 +526,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           <div className="px-5 py-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                Tarefa Agendada{pendingTasks.length !== 1 ? "s" : ""}{pendingTasks.length > 0 && ` (${pendingTasks.length})`}
+                Tarefas
               </h3>
               {!isPerdido && !taskForm.open && (
                 <button
@@ -526,6 +536,32 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   <Plus className="h-3 w-3" /> Nova
                 </button>
               )}
+            </div>
+
+            {/* Abas de filtro */}
+            <div className="mb-3 flex gap-1 overflow-x-auto">
+              {(
+                [
+                  { key: "todas", label: "A realizar", count: pendingTasks.length },
+                  { key: "para-hoje", label: "Para hoje", count: paraHoje.length },
+                  { key: "atrasadas", label: "Atrasadas", count: atrasadas.length },
+                  { key: "futuras", label: "Futuras", count: futuras.length },
+                ] as const
+              ).map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  onClick={() => setTaskTab(key)}
+                  className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    taskTab === key
+                      ? key === "atrasadas" && count > 0
+                        ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                        : "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300"
+                      : "bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                  }`}
+                >
+                  {label}{count > 0 && ` (${count})`}
+                </button>
+              ))}
             </div>
 
             {isPerdido && pendingTasks.length === 0 ? (
@@ -580,10 +616,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   </div>
                 )}
 
-                {pendingTasks.length > 0 ? (
+                {tabTasks.length > 0 ? (
                   <div className="space-y-2">
-                    {pendingTasks.map(task => {
-                      const isOverdue = task.due_at && new Date(task.due_at) < new Date()
+                    {tabTasks.map(task => {
+                      const isOverdue = task.due_at && new Date(task.due_at) < todayStart
                       return (
                         <div key={task.id} className={`flex items-start gap-3 rounded-lg p-2.5 ${
                           isOverdue ? "bg-red-50 dark:bg-red-500/10" : "bg-stone-50 dark:bg-stone-800/50"
@@ -624,7 +660,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                     })}
                   </div>
                 ) : !taskForm.open && (
-                  <p className="text-xs text-stone-400 dark:text-stone-500">Nenhuma tarefa pendente.</p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500">Sem tarefas.</p>
                 )}
 
                 {doneTasks.length > 0 && (
