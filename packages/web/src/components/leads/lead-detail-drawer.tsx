@@ -487,7 +487,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               <div className="flex justify-between gap-3">
                 <dt className="shrink-0 text-stone-500 dark:text-stone-400">Origem</dt>
                 <dd className="break-words text-right font-medium text-stone-900 dark:text-stone-100">
-                  {lead.utm_source ?? (lead.source ? (
+                  {lead.utm_campaign ?? lead.utm_source ?? (lead.source ? (
                     {
                       meta_ads: "Meta Ads",
                       whatsapp_organic: "WhatsApp Orgânico",
@@ -502,14 +502,6 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   ) : "-")}
                 </dd>
               </div>
-              {lead.utm_campaign && (
-                <div className="flex justify-between gap-3">
-                  <dt className="shrink-0 text-stone-500 dark:text-stone-400">Campanha</dt>
-                  <dd className="break-words text-right text-stone-900 dark:text-stone-100">
-                    {lead.utm_campaign}
-                  </dd>
-                </div>
-              )}
               <div className="flex justify-between gap-3">
                 <dt className="shrink-0 text-stone-500 dark:text-stone-400">Data captura</dt>
                 <dd className="text-right font-medium text-stone-900 dark:text-stone-100">
