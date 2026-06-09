@@ -104,8 +104,8 @@ export default async function DashboardLayout({
         .then(({ data }) => (data as { alertas_notifications_seen_at: string | null } | null)?.alertas_notifications_seen_at ?? null)
     : null
 
-  const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
-    permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
+  const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }, { count: chamadosPendentesCount }] =
+    permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras || permissions["chamados"]
       ? await Promise.all([
           permissions["alertas"]
             ? (() => {
@@ -134,8 +134,16 @@ export default async function DashboardLayout({
                 .eq("org_id", user.orgId)
                 .eq("status", "pendente")
             : Promise.resolve({ count: 0 }),
+          // Badge Suporte: tickets não resolvidos (aberto + em_analise)
+          permissions["chamados"] && (user.role === "admin" || user.role === "supervisor")
+            ? supabase
+                .from("chamados")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", user.orgId)
+                .neq("status", "resolvido")
+            : Promise.resolve({ count: 0 }),
         ])
-      : [{ count: 0 }, { count: 0 }, { count: 0 }]
+      : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!])
@@ -162,7 +170,7 @@ export default async function DashboardLayout({
     // O separator é colocado no primeiro item visível do grupo (linha divisória após Mensagens)
     ...(() => {
       const bottomGroup = [
-        ...(permissions["chamados"] ? [NAV_ITEM_CHAMADOS] : []),
+        ...(permissions["chamados"] ? [{ ...NAV_ITEM_CHAMADOS, badge: chamadosPendentesCount ?? 0 }] : []),
         ...(permissions["configuracoes"] ? [NAV_ITEM_CONFIG] : []),
         ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
       ]
