@@ -4,7 +4,7 @@ import { now } from "@web/lib/time"
 import Link from "next/link"
 import {
   Users, CalendarDays, Bell, ChevronRight, MapPin, Clock,
-  AlertCircle, CheckCircle2, Calendar, UserX, Filter,
+  AlertCircle, Calendar, CheckCircle2, Filter, UserX,
 } from "lucide-react"
 import { NewAppointmentButton } from "./_components/new-appointment-modal"
 
@@ -114,6 +114,10 @@ export default async function BrokerHomePage() {
     email: "E-mail", whatsapp: "WhatsApp", call: "Ligação", manual: "Manual",
   }
 
+  // Card base classes — light + dark
+  const card = "rounded-xl border border-gray-200 bg-white p-4 transition-all dark:border-stone-800 dark:bg-stone-900"
+  const cardHover = `${card} hover:border-gray-300 dark:hover:border-stone-700`
+
   return (
     <div className="space-y-6">
 
@@ -121,9 +125,11 @@ export default async function BrokerHomePage() {
       <div className="flex items-end justify-between">
         <div>
           <p className="text-sm font-medium text-orange-500">{greeting()},</p>
-          <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-stone-100">{user.name}</h1>
+          <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-stone-100">
+            {user.name}
+          </h1>
         </div>
-        <p className="text-xs text-stone-600">
+        <p className="text-xs text-gray-400 dark:text-stone-600">
           {new Date().toLocaleDateString("pt-BR", {
             timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long",
           })}
@@ -134,18 +140,18 @@ export default async function BrokerHomePage() {
       {roletaAtiva && (
         <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
           isOnline
-            ? "border-emerald-500/30 bg-emerald-500/10"
-            : "border-red-500/30 bg-red-500/10"
+            ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+            : "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10"
         }`}>
-          <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-          <p className="text-sm text-stone-300">
-            <span className="font-semibold text-stone-100">ROLETA DE LEADS:</span>{" "}
+          <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+          <p className="text-sm text-gray-700 dark:text-stone-300">
+            <span className="font-semibold text-gray-900 dark:text-stone-100">ROLETA DE LEADS:</span>{" "}
             Você está{" "}
-            <span className={`font-bold ${isOnline ? "text-emerald-400" : "text-red-400"}`}>
+            <span className={`font-bold ${isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
               {isOnline ? "ONLINE" : "OFFLINE"}
             </span>
             {isOnline && roletaPosition != null && (
-              <span className="text-stone-400"> · {roletaPosition}ª posição na fila</span>
+              <span className="text-gray-500 dark:text-stone-400"> · {roletaPosition}ª posição na fila</span>
             )}
           </p>
         </div>
@@ -154,89 +160,71 @@ export default async function BrokerHomePage() {
       {/* ── Meus Leads Ativos ────────────────────────────────────── */}
       <div>
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-base font-semibold text-stone-200">Meus Leads Ativos</h2>
-          <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-2.5 py-0.5 text-sm font-bold text-orange-400">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-200">Meus Leads Ativos</h2>
+          <span className="flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-0.5 text-sm font-bold text-orange-600 dark:bg-orange-500/20 dark:text-orange-400">
             <Users className="h-3.5 w-3.5" />
             {counts.total}
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {/* Novos leads */}
-          <Link href="/broker/leads" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-orange-500/40 hover:bg-stone-800/80">
-            <div className="mb-2 flex items-center justify-between">
-              <Users className="h-5 w-5 text-orange-400" />
-            </div>
-            <p className="text-3xl font-bold text-orange-400">{counts.novos}</p>
-            <p className="mt-1 text-[11px] font-medium uppercase leading-tight text-stone-500">
-              Novos Leads<br /><span className="text-stone-400">Disponíveis</span>
+          <Link href="/broker/leads" className={`flex flex-col ${cardHover} hover:border-orange-300 dark:hover:border-orange-500/40`}>
+            <div className="mb-2"><Users className="h-5 w-5 text-orange-500" /></div>
+            <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">{counts.novos}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
+              Novos Leads<br /><span className="text-gray-500 dark:text-stone-400">Disponíveis</span>
             </p>
           </Link>
 
-          {/* Trabalhados */}
-          <Link href="/broker/leads" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-orange-500/40 hover:bg-stone-800/80">
-            <div className="mb-2 flex items-center justify-between">
-              <Users className="h-5 w-5 text-stone-500" />
-            </div>
-            <p className="text-3xl font-bold text-stone-100">{counts.trabalhados}</p>
-            <p className="mt-1 text-[11px] font-medium uppercase leading-tight text-stone-500">
-              Leads Já<br /><span className="text-stone-400">Trabalhados</span>
+          <Link href="/broker/leads" className={`flex flex-col ${cardHover}`}>
+            <div className="mb-2"><Users className="h-5 w-5 text-gray-400 dark:text-stone-500" /></div>
+            <p className="text-3xl font-bold text-gray-900 dark:text-stone-100">{counts.trabalhados}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
+              Leads Já<br /><span className="text-gray-500 dark:text-stone-400">Trabalhados</span>
             </p>
           </Link>
 
-          {/* Sem tarefas */}
-          <Link href="/broker/leads?tasks=sem-tarefas" className={`group flex flex-col rounded-xl border p-4 transition-all ${
+          <Link href="/broker/leads?tasks=sem-tarefas" className={`flex flex-col rounded-xl border p-4 transition-all ${
             counts.sem_tarefas > 0
-              ? "border-red-500/30 bg-red-500/10 hover:bg-red-500/15"
-              : "border-stone-800 bg-stone-900 hover:border-stone-700"
+              ? "border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:hover:bg-red-500/15"
+              : `${cardHover}`
           }`}>
-            <div className="mb-2">
-              <UserX className={`h-5 w-5 ${counts.sem_tarefas > 0 ? "text-red-400" : "text-stone-600"}`} />
-            </div>
-            <p className={`text-3xl font-bold ${counts.sem_tarefas > 0 ? "text-red-400" : "text-stone-100"}`}>
+            <div className="mb-2"><UserX className={`h-5 w-5 ${counts.sem_tarefas > 0 ? "text-red-500" : "text-gray-400 dark:text-stone-500"}`} /></div>
+            <p className={`text-3xl font-bold ${counts.sem_tarefas > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-stone-100"}`}>
               {counts.sem_tarefas}
             </p>
-            <p className="mt-1 text-[11px] font-medium uppercase leading-tight text-stone-500">
-              Total Leads<br /><span className={counts.sem_tarefas > 0 ? "text-red-400" : "text-stone-400"}>Sem Tarefas</span>
+            <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
+              Total Leads<br /><span className={counts.sem_tarefas > 0 ? "text-red-500 dark:text-red-400" : "text-gray-500 dark:text-stone-400"}>Sem Tarefas</span>
             </p>
           </Link>
 
-          {/* Atrasadas */}
-          <Link href="/broker/leads?tasks=atrasadas" className={`group flex flex-col rounded-xl border p-4 transition-all ${
+          <Link href="/broker/leads?tasks=atrasadas" className={`flex flex-col rounded-xl border p-4 transition-all ${
             counts.atrasadas > 0
-              ? "border-red-500/40 bg-red-500/10 hover:bg-red-500/15"
-              : "border-stone-800 bg-stone-900 hover:border-stone-700"
+              ? "border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:hover:bg-red-500/15"
+              : `${cardHover}`
           }`}>
-            <div className="mb-2">
-              <AlertCircle className={`h-5 w-5 ${counts.atrasadas > 0 ? "text-red-400" : "text-stone-600"}`} />
-            </div>
-            <p className={`text-3xl font-bold ${counts.atrasadas > 0 ? "text-red-400" : "text-stone-100"}`}>
+            <div className="mb-2"><AlertCircle className={`h-5 w-5 ${counts.atrasadas > 0 ? "text-red-500" : "text-gray-400 dark:text-stone-500"}`} /></div>
+            <p className={`text-3xl font-bold ${counts.atrasadas > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-stone-100"}`}>
               {counts.atrasadas}
             </p>
-            <p className="mt-1 text-[11px] font-medium uppercase leading-tight text-stone-500">
-              Com Tarefas<br /><span className={counts.atrasadas > 0 ? "text-red-400" : "text-stone-400"}>Atrasadas</span>
+            <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
+              Com Tarefas<br /><span className={counts.atrasadas > 0 ? "text-red-500 dark:text-red-400" : "text-gray-500 dark:text-stone-400"}>Atrasadas</span>
             </p>
           </Link>
 
-          {/* Para hoje */}
-          <Link href="/broker/leads?tasks=para-hoje" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-amber-500/40 hover:bg-stone-800/80">
-            <div className="mb-2">
-              <Calendar className="h-5 w-5 text-amber-400" />
-            </div>
-            <p className="text-3xl font-bold text-amber-400">{counts.para_hoje}</p>
-            <p className="mt-1 text-[11px] font-medium uppercase leading-tight text-stone-500">
-              Com Tarefas<br /><span className="text-amber-400/80">Para Hoje</span>
+          <Link href="/broker/leads?tasks=para-hoje" className={`flex flex-col ${cardHover} hover:border-amber-300 dark:hover:border-amber-500/40`}>
+            <div className="mb-2"><Calendar className="h-5 w-5 text-amber-500" /></div>
+            <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{counts.para_hoje}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
+              Com Tarefas<br /><span className="text-amber-600 dark:text-amber-400">Para Hoje</span>
             </p>
           </Link>
 
-          {/* Futuras */}
-          <Link href="/broker/leads?tasks=futuras" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-emerald-500/40 hover:bg-stone-800/80">
-            <div className="mb-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-            </div>
-            <p className="text-3xl font-bold text-emerald-400">{counts.futuras}</p>
-            <p className="mt-1 text-[11px] font-medium uppercase leading-tight text-stone-500">
-              Com Tarefas<br /><span className="text-emerald-400/80">Futuras</span>
+          <Link href="/broker/leads?tasks=futuras" className={`flex flex-col ${cardHover} hover:border-emerald-300 dark:hover:border-emerald-500/40`}>
+            <div className="mb-2"><CheckCircle2 className="h-5 w-5 text-emerald-500" /></div>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{counts.futuras}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
+              Com Tarefas<br /><span className="text-emerald-600 dark:text-emerald-400">Futuras</span>
             </p>
           </Link>
         </div>
@@ -245,8 +233,8 @@ export default async function BrokerHomePage() {
       {/* ── Meu Funil de Vendas ──────────────────────────────────── */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-stone-200">Meu Funil de Vendas</h2>
-          <Link href="/broker/pipeline" className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-200">Meu Funil de Vendas</h2>
+          <Link href="/broker/pipeline" className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400">
             Ver pipeline <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
@@ -256,44 +244,24 @@ export default async function BrokerHomePage() {
             <Link
               key={stage.stage_id}
               href={`/broker/leads?stage=${stage.stage_id}`}
-              className="relative flex flex-col overflow-hidden rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-stone-700 hover:bg-stone-800/80"
+              className="relative flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-stone-700"
             >
-              {/* Color top bar */}
-              <span
-                className="absolute inset-x-0 top-0 h-[3px]"
-                style={{ backgroundColor: stage.stage_color }}
-              />
-
+              <span className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: stage.stage_color }} />
               <div className="mb-2 flex items-start justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase leading-tight text-stone-500 mt-1">
+                <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
                   {stage.stage_name}
                 </p>
-                <Filter className="h-4 w-4 flex-shrink-0 text-stone-700" />
+                <Filter className="h-4 w-4 flex-shrink-0 text-gray-300 dark:text-stone-700" />
               </div>
-
-              <p className="text-3xl font-bold text-stone-100">{stage.total_leads}</p>
-
-              {/* Task badges */}
+              <p className="text-3xl font-bold text-gray-900 dark:text-stone-100">{stage.total_leads}</p>
               <div className="mt-3 flex gap-1.5">
-                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
-                  stage.leads_atrasadas > 0
-                    ? "bg-red-500 text-white"
-                    : "bg-stone-800 text-stone-600"
-                }`}>
+                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${stage.leads_atrasadas > 0 ? "bg-red-500 text-white" : "bg-gray-100 text-gray-400 dark:bg-stone-800 dark:text-stone-600"}`}>
                   {stage.leads_atrasadas}
                 </span>
-                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
-                  stage.leads_para_hoje > 0
-                    ? "bg-amber-500 text-white"
-                    : "bg-stone-800 text-stone-600"
-                }`}>
+                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${stage.leads_para_hoje > 0 ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-400 dark:bg-stone-800 dark:text-stone-600"}`}>
                   {stage.leads_para_hoje}
                 </span>
-                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
-                  stage.leads_futuras > 0
-                    ? "bg-emerald-600 text-white"
-                    : "bg-stone-800 text-stone-600"
-                }`}>
+                <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${stage.leads_futuras > 0 ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-400 dark:bg-stone-800 dark:text-stone-600"}`}>
                   {stage.leads_futuras}
                 </span>
               </div>
@@ -305,22 +273,22 @@ export default async function BrokerHomePage() {
       {/* ── Próximos compromissos + Follow-ups ───────────────────── */}
       <div className="grid gap-4 lg:grid-cols-2">
 
-        <div className="flex flex-col rounded-2xl border border-stone-800 bg-stone-900">
-          <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
-            <h2 className="text-sm font-semibold text-stone-300">Próximos compromissos</h2>
-            <Link href="/broker/agenda" className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-400">
+        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-stone-800">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-stone-300">Próximos compromissos</h2>
+            <Link href="/broker/agenda" className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400">
               Ver agenda <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
           {!upcomingAppointments.data || upcomingAppointments.data.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10">
-              <CalendarDays className="h-8 w-8 text-stone-700" />
-              <p className="text-sm text-stone-600">Nenhum compromisso agendado.</p>
+              <CalendarDays className="h-8 w-8 text-gray-300 dark:text-stone-700" />
+              <p className="text-sm text-gray-400 dark:text-stone-600">Nenhum compromisso agendado.</p>
               <NewAppointmentButton />
             </div>
           ) : (
             <>
-              <ul className="divide-y divide-stone-800/70">
+              <ul className="divide-y divide-gray-100 dark:divide-stone-800/70">
                 {upcomingAppointments.data.map((appt) => {
                   const lead = Array.isArray(appt.lead) ? appt.lead[0] : appt.lead
                   const property = Array.isArray(appt.property) ? appt.property[0] : appt.property
@@ -330,13 +298,13 @@ export default async function BrokerHomePage() {
                   return (
                     <li key={appt.id} className="flex items-center gap-4 px-5 py-3.5">
                       <div className="w-14 flex-shrink-0 text-center">
-                        <p className="text-xs font-medium text-blue-400">{formatDate(appt.scheduled_at)}</p>
-                        <p className="text-sm font-bold text-stone-100">{formatTime(appt.scheduled_at)}</p>
+                        <p className="text-xs font-medium text-blue-500 dark:text-blue-400">{formatDate(appt.scheduled_at)}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-stone-100">{formatTime(appt.scheduled_at)}</p>
                       </div>
-                      <div className="h-8 w-px flex-shrink-0 bg-stone-800" />
+                      <div className="h-8 w-px flex-shrink-0 bg-gray-200 dark:bg-stone-800" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-stone-200">{clientDisplay}</p>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-stone-500">
+                        <p className="truncate text-sm font-medium text-gray-800 dark:text-stone-200">{clientDisplay}</p>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-400 dark:text-stone-500">
                           <MapPin className="h-3 w-3 flex-shrink-0" />
                           <span className="truncate">
                             {appt.location ?? "Stand Trifold"}
@@ -344,7 +312,7 @@ export default async function BrokerHomePage() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex-shrink-0 flex items-center gap-1 text-xs text-stone-500">
+                      <div className="flex-shrink-0 flex items-center gap-1 text-xs text-gray-400 dark:text-stone-500">
                         <Clock className="h-3 w-3" />
                         {appt.duration_minutes}min
                       </div>
@@ -352,44 +320,44 @@ export default async function BrokerHomePage() {
                   )
                 })}
               </ul>
-              <div className="border-t border-stone-800 px-5 py-3">
+              <div className="border-t border-gray-100 px-5 py-3 dark:border-stone-800">
                 <NewAppointmentButton />
               </div>
             </>
           )}
         </div>
 
-        <div className="flex flex-col rounded-2xl border border-stone-800 bg-stone-900">
-          <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
-            <h2 className="text-sm font-semibold text-stone-300">Pendências de follow-up</h2>
+        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-stone-800">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-stone-300">Pendências de follow-up</h2>
           </div>
           {myPendingLogs.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10">
-              <Bell className="h-8 w-8 text-stone-700" />
-              <p className="text-sm text-stone-600">Nenhuma pendência. Tudo em dia!</p>
+              <Bell className="h-8 w-8 text-gray-300 dark:text-stone-700" />
+              <p className="text-sm text-gray-400 dark:text-stone-600">Nenhuma pendência. Tudo em dia!</p>
             </div>
           ) : (
-            <ul className="divide-y divide-stone-800/70">
+            <ul className="divide-y divide-gray-100 dark:divide-stone-800/70">
               {myPendingLogs.map((log) => {
                 const lead = Array.isArray(log.lead) ? log.lead[0] : log.lead
                 return (
                   <li key={log.id} className="flex items-center gap-3 px-5 py-3.5">
-                    <span className="flex-shrink-0 rounded-lg bg-yellow-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-400">
+                    <span className="flex-shrink-0 rounded-lg bg-yellow-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400">
                       {logTypeLabel[log.type] ?? log.type}
                     </span>
                     <div className="min-w-0 flex-1">
                       {lead ? (
-                        <Link href={`/broker/leads/${(lead as { id: string }).id}`} className="block truncate text-sm font-medium text-stone-200 hover:text-orange-300">
+                        <Link href={`/broker/leads/${(lead as { id: string }).id}`} className="block truncate text-sm font-medium text-gray-800 hover:text-orange-600 dark:text-stone-200 dark:hover:text-orange-300">
                           {(lead as { name?: string | null }).name || (lead as { phone?: string | null }).phone || "Lead"}
                         </Link>
                       ) : (
-                        <p className="truncate text-sm font-medium text-stone-500">Lead removido</p>
+                        <p className="truncate text-sm font-medium text-gray-400 dark:text-stone-500">Lead removido</p>
                       )}
                       {log.message && (
-                        <p className="mt-0.5 truncate text-xs text-stone-600">{log.message}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-stone-600">{log.message}</p>
                       )}
                     </div>
-                    <p className="flex-shrink-0 text-xs text-stone-600">
+                    <p className="flex-shrink-0 text-xs text-gray-400 dark:text-stone-600">
                       {new Date(log.created_at).toLocaleDateString("pt-BR")}
                     </p>
                   </li>
