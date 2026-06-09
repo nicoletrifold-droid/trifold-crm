@@ -90,7 +90,11 @@ export default async function PipelinePage({
       .filter((id): id is string => Boolean(id))
   }
 
-  const stagesList = stages ?? []
+  const allStages = stages ?? []
+  // Quando filtro de etapa está ativo, exibe só aquela coluna no kanban
+  const stagesList = filters.stage
+    ? allStages.filter((s) => s.slug === filters.stage)
+    : allStages
 
   // Promise.all: fetch top PAGE_SIZE leads per stage in parallel.
   const perStageResults = await Promise.all(
@@ -265,6 +269,24 @@ export default async function PipelinePage({
             </select>
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Etapa
+            </label>
+            <select
+              name="stage"
+              defaultValue={filters.stage ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            >
+              <option value="">Todas</option>
+              {allStages.map((s) => (
+                <option key={s.id} value={s.slug}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button
             type="submit"
             className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
@@ -275,7 +297,7 @@ export default async function PipelinePage({
         </form>
 
         <div className="mt-3 flex gap-2">
-          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q) && (
+          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage) && (
             <a
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
