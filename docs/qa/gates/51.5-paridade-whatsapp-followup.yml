@@ -1,0 +1,196 @@
+schema: 1
+storyId: "51.5"
+story: "51.5"
+title: "Paridade WhatsApp no Envio Automático de Follow-up (Nicole)"
+epic: 51
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 8 ACs estão atendidos por código com evidência path:linha e cobertos por 11 testes
+  verdes (Telegram roteia sem WhatsApp / WhatsApp na janela envia com body correto /
+  fora da janela skip sem rede / API 500 sem throw / last_message_at nulo tratado como
+  fora / config ausente sem rede / timeout). O comportamento crítico de produção é correto:
+  fora da janela de 24h NÃO há chamada de rede (route.ts:91-93), o follow_up_log grava
+  status='skipped' + metadata.reason='WHATSAPP_WINDOW_CLOSED' (282-292) e a mensagem NÃO é
+  persistida em `messages` nem bumpa last_message_at (guard `if (!skipped)` em 316/514).
+  Telegram preservado verbatim (AC2, mesmo Bot API e timeout 30s). Credenciais vêm de
+  whatsapp_config por org_id+status='active' (96-101), padrão idêntico a
+  appointment-whatsapp-reminders — nunca env vars. Helper never-throws (AC5) e ambos os
+  call-sites (nicole_takeover ~268 e post-visit ~467) tratados. is_ai_active NÃO é tocado
+  (grep zero ocorrências). type-check web 0 erros; ESLint exit 0 nos 3 arquivos; suite
+  whatsapp+broker 38/38. As 6 falhas pré-existentes do webhook 21.1 (alias @web/* no vitest)
+  permanecem inalteradas — confirmado por git stash. Uma observação LOW sobre a métrica
+  messages_sent (telemetria) não bloqueia: ground-truth correto está em follow_up_log.status.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-09"
+updated: "2026-06-09T15:10:00Z"
+iteration: 1
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC8 mapeados para código e teste. AC1 (distinção tg: vs WhatsApp — route.ts:57),
+      AC2 (Telegram verbatim: Bot API, TELEGRAM_BOT_TOKEN, timeout 30s — 57-87),
+      AC3 (WhatsApp na janela → Graph v21.0 type:text Bearer — send-whatsapp-message.ts:58-79,
+      credenciais de whatsapp_config route.ts:96-101), AC4 (fora da janela →
+      {sent:false,reason:WHATSAPP_WINDOW_CLOSED}, log status='skipped'+metadata, sem tentativa —
+      91-93 + 281-292), AC5 (API 4xx/5xx/timeout never-throws → reason API_ERROR, loop continua —
+      helper 76-82 + route 109-111), AC6 (last_message_at como fonte de verdade, nulo = fora —
+      isWithinWhatsAppWindow dispatch-broker-message.ts:59-67), AC7 (whatsapp_config por org_id,
+      nunca env vars — 96-101), AC8 (type-check/lint/11 testes verdes). Ver ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      REUSE fiel: isWithinWhatsAppWindow e WHATSAPP_WINDOW_MS reaproveitados da Story 51-1
+      (dispatch-broker-message.ts intacto, confirmado por git status) — a lógica de janela 24h
+      NÃO foi reimplementada. CREATE do helper send-whatsapp-message.ts é JUSTIFICADO: dispatchBrokerMessage
+      embute a checagem de janela e tem assinatura voltada ao chat do corretor; o cron precisa de
+      um envio simples com credenciais já resolvidas e a janela checada externamente (o status do log
+      depende do reason). Alternativa avaliada (reusar dispatchBrokerMessage) acoplaria o cron à
+      semântica do broker chat. Helper é PURO (sem @web/*, injeta fetchImpl — alias @web/* não resolve
+      no vitest, mesma decisão de 50-3/51-1). Imports absolutos. .maybeSingle() em vez de .single()
+      (101). Padrão de credenciais espelha appointment-whatsapp-reminders verbatim. Sem código morto.
+      JSDoc documenta o contrato de janela (caller checa antes de chamar o helper).
+
+  - check: "3. Security"
+    status: PASS
+    note: >
+      Credenciais WhatsApp (phone_number_id, access_token) lidas exclusivamente de whatsapp_config
+      por org_id + status='active' via createAdminClient já em uso no cron (route.ts:96-101) — NUNCA
+      env vars (AC7 confirmado; WHATSAPP_PHONE_NUMBER_ID/WHATSAPP_TOKEN não existem). O access_token
+      só transita no header Authorization do POST ao Graph API e NÃO é logado: os console.error
+      expõem apenas status HTTP e leadId, nunca o token. Isolamento por org: a config é resolvida
+      pela org do rule/appointment em escopo. Admin client adequado (token sensível por org). Sem
+      injeção (body montado via JSON.stringify de objeto tipado). Sem leak de PII além do necessário.
+
+  - check: "4. Reliability & Error Handling"
+    status: PASS
+    note: >
+      Best-effort cron-safe (AC5): o helper sendWhatsAppMessage é totalmente try/catch e NUNCA lança —
+      4xx/5xx → HTTP_{status}, timeout/abort → TIMEOUT, exceção → mensagem do erro (send-whatsapp-message.ts:76-91).
+      No cron, falha de transporte vira reason='API_ERROR' e o loop segue processando os demais leads
+      (route.ts:109-111). Timeout de 15s via AbortSignal.timeout. Ambos os call-sites tratados:
+      nicole_takeover (268-346) e post-visit (467-544), com a MESMA lógica de skip/persist. Credencial
+      ausente → WHATSAPP_CONFIG_MISSING sem chamada de rede (helper 53-55 + route 103-105). Consistência
+      de skip: no caso window-closed nada é persistido em messages (o lead não recebeu); no caso API_ERROR
+      a mensagem É gravada em messages (para retry pelo corretor) — distinção deliberada e documentada.
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      11 testes verdes cobrindo os 5 cenários obrigatórios + extras. Helper puro: envio com body
+      correto (sent:true), HTTP_500 sem throw, network reject sem throw, TIMEOUT, config null sem
+      fetch, config parcial sem fetch. Fluxo do cron replicado puro (simulateCronSend) cobrindo
+      AC1/AC2/AC3/AC4/AC6: Telegram não chama Graph API, WhatsApp na janela (2h) envia,
+      fora da janela (30h) skip SEM fetch, API 500 → API_ERROR, last_message_at null → fora da janela
+      sem fetch. Gap conhecido e aceito (TEST-001 do epic): o route real importa @web/lib/supabase/admin,
+      cujo alias não resolve no vitest, então a lógica de persistência (insert follow_up_log/messages,
+      guard !skipped) é validada por leitura de código, não por teste de integração — herdado de 50-3/51-x.
+
+  - check: "6. NFR (Performance/Maintainability)"
+    status: PASS
+    note: >
+      Janela determinada por conversations.last_message_at (AC6). A query do cron passou a selecioná-lo
+      de forma ADITIVA: nicole_takeover de "id, lead_id" → "id, lead_id, last_message_at" (route.ts:210)
+      e post-visit de "id" → "id, last_message_at" (457) — confirmado por git diff; nenhum consumidor
+      existente quebra (apenas adiciona coluna a selects já presentes). Sem N+1 novo: ambos os call-sites
+      já faziam essas queries; a busca de conversation/last_message_at acontece UMA vez por lead/appointment.
+      A leitura de whatsapp_config é por org (maybeSingle), poderia ser memoizada por org como melhoria
+      futura, mas não introduz N+1 patológico (1 query por lead WhatsApp na janela). Manutenibilidade boa:
+      helper isolado e testável, reuso da janela 51-1.
+
+  - check: "7. Regression & Documentation"
+    status: PASS
+    note: >
+      Telegram idêntico ao anterior (AC2 — mesmo endpoint, token, timeout 30s, comportamento de erro).
+      nicole_takeover e post-visit continuam funcionando: a lógica de elegibilidade, cooldown 48h,
+      brokerSentRecently, alert_broker e no-show NÃO foram alteradas. is_ai_active NÃO é tocado (grep
+      zero). As 6 falhas pré-existentes do webhook 21.1 (alias @web/* no vitest) confirmadas inalteradas
+      via git stash do route.ts. Templates WhatsApp HSM corretamente documentados como backlog explícito
+      (story seção "Backlog para Templates" + Out of Scope) — NÃO implementados, alinhado à realidade de
+      produção (maioria dos follow-ups cai fora da janela 24h). Story File List e Completion Notes precisos.
+
+top_issues:
+  - id: "REL-001"
+    severity: low
+    category: reliability
+    finding: >
+      A métrica messages_sent (resposta JSON do cron + log FOLLOWUP_EXECUTED) incrementa
+      mesmo quando a mensagem é SKIPADA por janela fechada (route.ts:346, dentro do bloco
+      nicole_takeover) ou falha por API_ERROR. No caso window-closed, NADA é enviado nem
+      persistido em messages, então a métrica conta como "enviada" algo que não foi —
+      telemetria potencialmente enganosa.
+    impact: >
+      Apenas observabilidade. NÃO afeta entrega ao lead, follow_up_log (que grava status='skipped'
+      corretamente), activities (que dizem "NAO enviou"), nem o log FOLLOWUP_MESSAGE_SKIPPED. O
+      ground-truth real está em follow_up_log.status e nos eventos de log estruturado. A semântica
+      de "contar tentativas que entraram no branch" já existia no código anterior (o messagesSent++
+      pré-existente também contava envios Telegram falhos e persistidos como "pendente"); o único
+      caso NOVO de imprecisão é o skip por janela.
+    suggested_action: >
+      Em follow-up (não bloqueante): separar contadores em messages_sent / messages_skipped /
+      messages_failed para telemetria precisa, em ambos os call-sites. NÃO aplicar um if(result.sent)
+      isolado, pois isso criaria inconsistência com a semântica histórica do contador (que inclui
+      falhas Telegram persistidas) — a correção limpa é a separação de contadores. Tracking sugerido
+      como Story 51-5b ou item de backlog de observabilidade.
+
+  - id: "TEST-001"
+    severity: low
+    category: tests
+    finding: >
+      A lógica de persistência do route (insert em follow_up_log/messages, guard if(!skipped),
+      update de last_message_at, activities) não tem teste de integração porque o route importa
+      @web/lib/supabase/admin e o alias @web/* não resolve no vitest. Validada por leitura de código.
+    impact: >
+      Risco residual baixo: a regra de skip/persist é simples e está coberta logicamente por
+      simulateCronSend (decisão de canal + janela). É a mesma limitação herdada de 50-3/51-1/51-4
+      (resolve.alias do vitest.config.ts não configurado para @web/*).
+    suggested_action: >
+      Backlog do epic: configurar resolve.alias para @web/* no vitest.config.ts e adicionar teste
+      de integração do cron route. Item transversal, não específico desta story.
+
+ac_traceability:
+  - ac: "AC1 — distingue WhatsApp de Telegram pelo prefixo tg:"
+    status: PASS
+    evidence: "route.ts:57 (phone.startsWith('tg:')); resolveChannel dispatch-broker-message.ts:51-53; teste cenário 1"
+  - ac: "AC2 — Telegram preservado (Bot API sem alterações)"
+    status: PASS
+    evidence: "route.ts:57-87 (mesmo endpoint/token/timeout 30s); teste 'lead Telegram roteia Telegram'"
+  - ac: "AC3 — WhatsApp na janela → Graph v21.0 type:text, Bearer, credenciais de whatsapp_config"
+    status: PASS
+    evidence: "send-whatsapp-message.ts:58-79; route.ts:96-107; teste 'envia texto via Graph API v21.0 com body correto'"
+  - ac: "AC4 — fora da janela → sent:false reason WHATSAPP_WINDOW_CLOSED, log skipped+metadata, sem tentativa"
+    status: PASS
+    evidence: "route.ts:91-93 (early return sem rede); 281-292 (insert status='skipped'+metadata.reason); teste cenário 3 (sem fetch)"
+  - ac: "AC5 — falha API/timeout não quebra o cron, reason API_ERROR"
+    status: PASS
+    evidence: "send-whatsapp-message.ts:76-91 (never-throws); route.ts:109-111; testes HTTP_500/network/TIMEOUT"
+  - ac: "AC6 — last_message_at como fonte de verdade; nulo = fora da janela"
+    status: PASS
+    evidence: "isWithinWhatsAppWindow dispatch-broker-message.ts:59-67 (null→false); route.ts:91; teste cenário 5 (null)"
+  - ac: "AC7 — credenciais de whatsapp_config por org_id+status='active', não env vars"
+    status: PASS
+    evidence: "route.ts:96-101 (.eq org_id .eq status active .maybeSingle); padrão idêntico a appointment-whatsapp-reminders/route.ts:51-56"
+  - ac: "AC8 — type-check + ESLint + testes (4 cenários)"
+    status: PASS
+    evidence: "type-check 0 erros; ESLint exit 0 (3 arquivos); 11 testes verdes (5 cenários + extras)"
+
+evidence:
+  type_check: "pnpm --filter @trifold/web type-check → 0 erros"
+  eslint: "npx eslint send-whatsapp-message.ts + .test.ts + cron/followup/route.ts → exit 0 (0 erros/0 warnings)"
+  tests_story: "npx vitest run packages/web/src/lib/whatsapp/ packages/web/src/lib/broker/ → 38/38 (inclui os 11 de 51-5)"
+  tests_suite: "vitest packages/web/src → 70 passed / 6 failed (as 6 falhas pré-existentes do webhook 21.1, alias @web/*; confirmado via git stash do route.ts)"
+  is_ai_active: "grep is_ai_active nos arquivos da story → 0 ocorrências (flag intocado, regra crítica do epic preservada)"
+  diff_additive: "git diff: select de conversations passou a incluir last_message_at de forma aditiva (route.ts:210, 457); nenhum consumidor quebrado"
+
+recommendation:
+  status: "Done (após push @devops)"
+  rationale: >
+    PASS sem issues high/critical. Os 8 ACs atendidos com evidência e cobertos por testes verdes.
+    Comportamento de produção correto e seguro (skip fora da janela sem rede, sem persistir mensagem
+    não-entregue; credenciais de whatsapp_config; never-throws). Duas observações LOW (telemetria
+    messages_sent e gap de teste de integração @web/*) não bloqueiam e ficam como backlog. Encaminhar
+    para @devops *push.
