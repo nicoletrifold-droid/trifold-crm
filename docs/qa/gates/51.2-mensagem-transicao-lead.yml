@@ -1,0 +1,258 @@
+schema: 1
+storyId: "51.2"
+story: "51.2"
+title: "Mensagem de Transição ao Lead (Apresentação do Corretor)"
+epic: 51
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 6 ACs estão atendidos por código com evidência path:linha e os caminhos
+  testáveis cobertos por 15 testes verdes (texto, fallback de nome,
+  idempotência da 1ª mensagem). A regra de negócio crítica é preservada: a
+  transição grava role='assistant' (não 'broker'), portanto NÃO dispara o
+  takeover sozinha NEM se repete; e o envio NÃO toca is_ai_active. Falha de
+  despacho/insert da transição é isolada em try/catch e nunca derruba a
+  mensagem do corretor (AC4). Lint exit 0, type-check sem erros nos arquivos da
+  story, e as 6 falhas pré-existentes do webhook 21.1 permanecem inalteradas.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-09"
+updated: "2026-06-09T14:15:00Z"
+iteration: 1
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC6 mapeados para código e teste/evidência. AC1 (query existingBrokerMsg
+      role='broker' antes do insert + shouldSendTransition), AC2 (buildTransitionText
+      + dispatchBrokerMessage + insert role='assistant' com metadata.is_transition
+      ANTES da mensagem do corretor), AC3 (transição grava role='assistant' →
+      idempotência estrutural), AC4 (try/catch isolado, falha silenciosa com log),
+      AC5 (role='assistant' renderiza nas views existentes, sem badge "Você" —
+      AUTO-DECISION 51-2-UI), AC6 (lint/type-check/testes). Ver tabela ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Módulo transition-message.ts é PURO (buildTransitionText, shouldSendTransition,
+      normalizeName) — sem imports @web/*/Supabase, testável no vitest, espelhando o
+      padrão validado de dispatch-broker-message.ts (51-1). REUSE fiel de
+      dispatchBrokerMessage (51-1) para o despacho pelo canal correto e de appUser.name
+      (requireAuth) para o nome do corretor (evita query extra). Imports absolutos
+      (@web/*) na route. JSDoc abrangente documentando a AUTO-DECISION de role.
+      Sem código morto. Fallback gracioso de nome (BROKER_NAME_FALLBACK) e omissão
+      de saudação com nome ausente bem isolados em normalizeName.
+
+  - check: "3. Security"
+    status: PASS
+    note: >
+      A transição roda DENTRO da route já protegida pela 51-1 — requireAuth() +
+      ownership (assigned_broker_id === appUser.id; admin/supervisor/gerente-comercial
+      liberados) executados antes do bloco de transição (route.ts:35-92, transição em
+      144-208). Nenhum bypass introduzido: a transição não adiciona endpoint nem
+      parâmetro novo. O nome do corretor vem de appUser.name (usuário autenticado) com
+      fallback — sem input não confiável. Insert via supabase (RLS) na mesma conversation
+      → passa a policy messages_insert (004) por org_id match, sem admin client. Sem leak
+      de token/credencial; waCredentials reusadas do fluxo 51-1 (server-side).
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      AC4 honrado com rigor: todo o bloco de transição está em try/catch (route.ts:160-207).
+      Falha de despacho externo apenas loga via console.error (171-175) e segue; falha do
+      insert apenas loga (195-199) e segue; qualquer erro inesperado é capturado pelo catch
+      externo (200-206). Em NENHUM caso a transição derruba a request — a mensagem do corretor
+      (211-264) é sempre alcançada. Decisão correta: a transição é gravada em messages mesmo
+      com falha de envio externo, mantendo o histórico consistente e a idempotência (o registro
+      role='assistant' não conta, mas documenta a tentativa via metadata.send_error).
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      15/15 testes verdes em transition-message.test.ts (parte de 20/20 no diretório broker,
+      5 herdados de 51-1 intactos). Cobre: shouldSendTransition (null/undefined → true;
+      objeto → false = idempotência AC3); buildTransitionText com leadName presente, null,
+      vazio e só-espaços; fallback de brokerName (null/vazio/espaços); combinação
+      lead-null + broker-fallback; trim de bordas. Asserções fortes (texto exato + not.toContain
+      "undefined"/"null"). Gap não-bloqueante herdado: a lógica de IO da route (query
+      existingBrokerMsg, ordem dos inserts, merge de metadata) não tem teste de integração —
+      mesma causa raiz do alias @web/* não resolvido no vitest (TEST-001 dos gates 50.3/51.1).
+
+  - check: "6. Idempotência (CRÍTICO desta story)"
+    status: PASS
+    note: >
+      Verificado por leitura direta do código. Ordem correta: (1) query existingBrokerMsg
+      role='broker' (route.ts:149-155) ocorre ANTES de qualquer insert; (2) transição é
+      gravada com role='assistant' (route.ts:182) — NÃO satisfaz a própria condição de
+      "1ª mensagem" em envios futuros; (3) transição é inserida ANTES da mensagem do corretor
+      role='broker' (route.ts:248-255). Na 2ª chamada, o broker message da 1ª chamada existe →
+      existingBrokerMsg truthy → shouldSendTransition=false → transição pulada. A transição
+      NUNCA se repete na mesma conversa e NÃO marca a conversa como assumida sozinha. Coberto
+      pelo teste "cenário 2" (shouldSendTransition({id}) === false).
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Mudança aditiva e bem isolada: 1 módulo puro novo + 1 bloco try/catch inserido entre a
+      resolução de credenciais e o dispatch existente na route. O fluxo da 51-1 (dispatch do
+      corretor + insert role='broker') permanece intocado — os 5 testes de dispatch-broker-message
+      continuam verdes (20/20 no diretório). Suite completa: 301 passed / 6 failed. As 6 falhas
+      são EXCLUSIVAS de webhook/whatsapp/route.test.ts (Story 21.1, alias @web/* pré-existente,
+      gate 50.3 TEST-001) — NÃO introduzidas por esta story. is_ai_active jamais escrito no send
+      path (grep: única ocorrência é comentário). Rollback trivial via git revert; sem migration.
+
+ac_traceability:
+  - ac: "AC1"
+    status: Met
+    note: "send-message/route.ts:149-157 — query messages WHERE conversation_id=X AND role='broker' LIMIT 1 (maybeSingle) ANTES de qualquer insert + shouldSendTransition(existingBrokerMsg). transition-message.ts:55-59. Teste shouldSendTransition (null/undefined → true)."
+  - ac: "AC2"
+    status: Met
+    note: "route.ts:160-208 — buildTransitionText(lead.name, appUser.name) (161) → dispatchBrokerMessage (163-169) → insert role='assistant' com metadata {is_transition:true, broker_id:appUser.id} (180-193), ANTES da mensagem do corretor (211-255). transition-message.ts:30-40. Testes de texto com/sem leadName."
+  - ac: "AC3"
+    status: Met
+    note: "route.ts:182 grava role='assistant' (não 'broker') → não satisfaz a condição de 1ª mensagem em envios futuros. Check (149-155) roda antes de inserts; broker message da 1ª chamada (248-255) é o que marca como assumida. Teste 'cenário 2': shouldSendTransition({id}) === false."
+  - ac: "AC4"
+    status: Met
+    note: "route.ts:160-207 — bloco inteiro em try/catch. Falha de dispatch loga e segue (171-175); falha de insert loga e segue (195-199); catch externo (200-206). Mensagem do corretor (211-264) sempre alcançada. Coberto por análise de fluxo (route não testável no vitest por alias @web/*)."
+  - ac: "AC5"
+    status: Met
+    note: "AUTO-DECISION 51-2-UI: role='assistant' já é renderizado pelas views existentes (broker/leads/[id]/page.tsx bolha purple; dashboard/leads/[id]/page.tsx bolha IA) com estilo distinto de 'Você'. Mudança de UI declarada out-of-scope pela story. Intenção do AC satisfeita pela escolha de role."
+  - ac: "AC6"
+    status: Met
+    note: "Type-check: zero erros nos arquivos da story (só ruído .next/types/validator.ts — dashboard/corretores stale). ESLint exit 0 nos 3 arquivos. 15 testes unitários (texto, fallback, idempotência da 1ª mensagem). Ver independent_verification."
+
+issues:
+  - id: TEST-001
+    severity: medium
+    category: testing
+    finding: >
+      A lógica de IO da route send-message para a transição (query existingBrokerMsg,
+      ordem dos dois inserts, merge de metadata, branch de falha de envio) não tem
+      cobertura de teste automatizada — apenas os helpers puros (buildTransitionText,
+      shouldSendTransition) são testados. Mesma causa raiz das stories anteriores:
+      o alias @web/* não resolve no vitest, impedindo testar routes que importam
+      @web/lib/supabase/admin. Herdado de 51-1/50-3.
+    suggested_action: >
+      Não-bloqueante para 51-2. Resolver via story de QA infra (resolve.alias @web/* →
+      packages/web/src/* no vitest.config.ts OU vitest workspaces), que destrava os
+      testes de route desta story E corrige as 6 falhas pré-existentes do webhook 21.1.
+      Validar a ordem dos inserts e a idempotência por smoke pós-deploy (SELECT role,
+      content, metadata FROM messages ORDER BY created_at).
+  - id: REL-001
+    severity: low
+    category: reliability
+    finding: >
+      A transição reusa o mesmo conversation.last_message_at para a checagem de janela
+      24h do WhatsApp. Como a transição é despachada ANTES da mensagem do corretor e
+      ambas usam o MESMO last_message_at lido uma vez (route.ts:96-102, antes de qualquer
+      insert), as duas compartilham a mesma decisão de janela — consistente. Persiste a
+      observação geral REL-001 do gate 51.1: last_message_at é bumpado por qualquer
+      insert (trigger 038), incluindo outbound, então não reflete exatamente a última
+      inbound do lead.
+    suggested_action: >
+      Não-bloqueante. Mesma recomendação do gate 51.1: medir a janela pela última mensagem
+      role='user' (inbound) junto à Story 51-5 (template fora da janela).
+  - id: REL-002
+    severity: low
+    category: reliability
+    finding: >
+      A query de conversation ainda filtra status='active' (route.ts:101). Quando o handoff
+      Nicole→corretor marcar a conversation como 'handed_off', o route não a encontrará e
+      criará uma NOVA conversation, fragmentando o histórico. Observação levantada no gate
+      51.1 (REL-002) sobre a chegada da 51-2. A 51-2 NÃO altera esse filtro — a story trata
+      apenas da mensagem de transição, não do estado da conversation no handoff.
+    suggested_action: >
+      Não-bloqueante para 51-2 (não introduz regressão; o comportamento de filtro é o mesmo
+      da 51-1). Revisar o filtro status='active' na story que implementar o estado de handoff
+      da conversation (incluir 'handed_off' ou buscar a mais recente independente do status).
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL; host de review é macOS/darwin). Mesmo
+      cenário das stories 50-x e 51-1.
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu code review, security, reliability, idempotência,
+      regressão e testing. CI pode rodar CodeRabbit pós-push em ambiente WSL.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Idempotência resolvida por DESIGN, não por flag/lock: gravar a transição com
+      role='assistant' faz com que ela jamais satisfaça a condição de "1ª mensagem do
+      corretor", garantindo que nunca se repita — sem necessidade de coluna/estado extra.
+      Solução elegante e à prova de race no caminho normal (um lead tem um broker atribuído).
+  - id: POS-002
+    description: >
+      Regra de negócio crítica do epic preservada: a transição NÃO grava role='broker',
+      logo NÃO dispara o takeover de 24h sozinha (é a mensagem real do corretor que marca
+      a conversa como assumida via brokerSentRecently). E is_ai_active permanece intocado.
+  - id: POS-003
+    description: >
+      AC4 implementado em camadas: catch específico por operação (dispatch, insert) com log
+      contextualizado + catch externo de guarda. A mensagem do corretor é estruturalmente
+      inalcançável-por-falha-da-transição, exatamente como o AC exige.
+  - id: POS-004
+    description: >
+      Helper puro reaproveita o padrão de testabilidade de 51-1 (sem @web/*), permitindo
+      15 testes determinísticos do texto e da decisão de transição sem mocks de Supabase.
+
+independent_verification:
+  - check: "Story unit tests (diretório broker)"
+    command: "npx vitest run packages/web/src/lib/broker/"
+    result: "2 files, 20/20 passed (124ms) — 15 novos (transition-message) + 5 herdados (dispatch-broker-message) intactos."
+  - check: "ESLint (3 arquivos da story)"
+    command: "pnpm --filter @trifold/web exec eslint <transition-message.ts, transition-message.test.ts, send-message/route.ts>"
+    result: "exit 0, zero hits."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "Zero erros em transition-message.ts e send-message/route.ts. Erros remanescentes apenas em .next/{dev/}types/validator.ts (módulos dashboard/corretores/*.js stale) — ruído ambiental Next, não código da story."
+  - check: "Full regression suite"
+    command: "npx vitest run"
+    result: "301 passed / 6 failed. As 6 falhas são EXCLUSIVAS de webhook/whatsapp/route.test.ts (Story 21.1, alias @web/* pré-existente — gate 50.3 TEST-001). Zero falhas em arquivos desta story."
+  - check: "is_ai_active não escrito no send path"
+    command: "grep -rn is_ai_active packages/web/src/lib/broker/ <send-message/route.ts>"
+    result: "Única ocorrência é o comentário 'NÃO desliga is_ai_active' (route.ts:26) — confirmado intocado."
+  - check: "Ordem transição (role='assistant') antes da mensagem do corretor (role='broker')"
+    command: "leitura de route.ts"
+    result: "Check existingBrokerMsg (149-155) antes de inserts; transição role='assistant' (180-193); mensagem do corretor role='broker' (248-255) depois. Idempotência confirmada."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança aditiva e isolada (1 helper puro + 1 bloco try/catch na route). A transição
+    nunca derruba a request (AC4), nunca se repete (role='assistant'), e não altera
+    is_ai_active. Reusa a infra validada da 51-1 (dispatchBrokerMessage, auth, ownership).
+    Pior caso runtime: envio da transição falha → registrada com metadata.send_error e a
+    mensagem do corretor segue normalmente. Sem migration, sem nova superfície de RLS.
+    Rollback trivial via git revert.
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 6/6 ACs atendidos por código com evidência path:linha;
+    15/15 testes verdes nos caminhos testáveis (texto, fallback, idempotência); lint exit 0
+    e type-check sem erros nos arquivos da story (resíduos ambientais/pré-existentes). O
+    invariante crítico desta story — a transição grava role='assistant', logo é idempotente
+    (nunca se repete) e não dispara o takeover sozinha — foi verificado diretamente no código,
+    assim como a preservação de is_ai_active e o isolamento de falhas (AC4). As issues
+    remanescentes (1 MEDIUM de infra de teste herdada + 3 LOW) são não-bloqueantes. Aprovada
+    para @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: corretor envia 1ª mensagem → lead recebe (1) transição + (2) mensagem do corretor; 2ª mensagem → APENAS a mensagem do corretor. SELECT role, content, metadata FROM messages WHERE conversation_id=X ORDER BY created_at — confirmar role='assistant'+is_transition aparece UMA vez."
+    - "@po manter backlog TEST-001 (vitest resolve.alias @web/*) — destrava testes de route da 51-2 e corrige as 6 falhas do webhook 21.1."
+    - "Tratar REL-002 (filtro status='active') na story que implementar o estado handed_off da conversation."
+
+files_reviewed:
+  - path: "packages/web/src/lib/broker/transition-message.ts"
+    verdict: PASS
+    notes: "Helper puro: buildTransitionText (interpolação + fallback de nome via normalizeName) e shouldSendTransition. Sem imports @web/*. JSDoc da AUTO-DECISION de role."
+  - path: "packages/web/src/lib/broker/transition-message.test.ts"
+    verdict: PASS
+    notes: "15 testes: idempotência (shouldSendTransition), texto com/sem leadName, fallback de brokerName, trim. Asserções de texto exato + not.toContain undefined/null."
+  - path: "packages/web/src/app/api/leads/[id]/send-message/route.ts"
+    verdict: PASS
+    notes: "Bloco de transição (144-208) entre credenciais e dispatch do corretor: check existingBrokerMsg role='broker' (149-155), dispatch+insert role='assistant' em try/catch (160-207) ANTES da mensagem do corretor. AC4/idempotência/segurança preservados."
