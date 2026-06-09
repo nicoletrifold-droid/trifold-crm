@@ -3,6 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js"
 import crypto from "crypto"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
+import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 
 const META_API_BASE = "https://graph.facebook.com/v21.0"
 
@@ -237,6 +238,7 @@ async function processLeadAsync(
           phone: phone ?? null,
           org_id: orgId,
         })
+        void distributeLeadToNextBroker(newLead.id, orgId)
       }
       leadId = newLead?.id ?? null
     }
