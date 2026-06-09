@@ -22,6 +22,13 @@ interface NotifyBrokerParams {
     notify_email: boolean
     notify_whatsapp: boolean
   }
+  /**
+   * Optional custom messaging context. When provided, overrides the default
+   * "Novo Lead Recebido" copy used for roulette distribution. Used by the
+   * appointment-scheduling notification (Story 51-3) and future triggers (51-4).
+   * Backward compatible: when absent, the original roulette copy is preserved.
+   */
+  context?: { title?: string; body?: string }
 }
 
 interface NotifyResult {
@@ -31,7 +38,7 @@ interface NotifyResult {
 }
 
 export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyResult> {
-  const { orgId, broker, lead, config } = params
+  const { orgId, broker, lead, config, context } = params
   const admin = createAdminClient()
   const result: NotifyResult = { push: false, email: false, whatsapp: false }
 
@@ -39,10 +46,15 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const leadUrl = `${appUrl}/broker/leads/${lead.id}`
   const leadName = lead.name ?? "Novo Lead"
 
+  // Custom context (Story 51-3) overrides the default roulette copy when present.
+  const pushTitle = context?.title ?? "Novo Lead Recebido"
+  const pushBody = context?.body ?? `${leadName} — ${lead.phone}`
+  const emailSubject = context?.title ?? `Novo lead para você: ${leadName}`
+
   const pushP = config.notify_push
     ? sendPushToUser(admin, broker.userId, {
-        title: "Novo Lead Recebido",
-        body: `${leadName} — ${lead.phone}`,
+        title: pushTitle,
+        body: pushBody,
         url: leadUrl,
       })
         .then(() => { result.push = true })
@@ -52,8 +64,8 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const emailP = config.notify_email
     ? sendEmail({
         to: broker.email,
-        subject: `Novo lead para você: ${leadName}`,
-        html: buildBrokerEmailHtml({ brokerName: broker.name, leadName, leadPhone: lead.phone, leadUrl }),
+        subject: emailSubject,
+        html: buildBrokerEmailHtml({ brokerName: broker.name, leadName, leadPhone: lead.phone, leadUrl, context }),
         orgId,
       })
         .then(() => { result.email = true })
@@ -61,7 +73,7 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
     : Promise.resolve()
 
   const waP = config.notify_whatsapp && broker.phone
-    ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl)
+    ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
         .then(() => { result.whatsapp = true })
         .catch((err: unknown) => console.error("[roleta] whatsapp error:", err))
     : Promise.resolve()
@@ -77,7 +89,8 @@ async function sendBrokerWhatsApp(
   brokerName: string,
   leadName: string,
   leadPhone: string,
-  leadUrl: string
+  leadUrl: string,
+  context?: { title?: string; body?: string }
 ): Promise<void> {
   const { data: waConfig } = await admin
     .from("whatsapp_config")
@@ -88,11 +101,13 @@ async function sendBrokerWhatsApp(
 
   if (!waConfig?.phone_number_id || !waConfig?.access_token) return
 
-  const message =
-    `Olá ${brokerName}! Você recebeu um novo lead na roleta.\n` +
-    `👤 Nome: ${leadName}\n` +
-    `📱 Telefone: ${leadPhone}\n` +
-    `🔗 Ver lead: ${leadUrl}`
+  // Custom context (Story 51-3) overrides the default roulette message.
+  const message = context?.body
+    ? `Olá ${brokerName}! ${context.body}\n🔗 Ver lead: ${leadUrl}`
+    : `Olá ${brokerName}! Você recebeu um novo lead na roleta.\n` +
+      `👤 Nome: ${leadName}\n` +
+      `📱 Telefone: ${leadPhone}\n` +
+      `🔗 Ver lead: ${leadUrl}`
 
   const res = await fetch(
     `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`,
@@ -211,10 +226,21 @@ function buildBrokerEmailHtml(p: {
   leadName: string
   leadPhone: string
   leadUrl: string
+  context?: { title?: string; body?: string }
 }): string {
   const name = escHtml(p.brokerName)
   const lead = escHtml(p.leadName)
   const phone = escHtml(p.leadPhone)
+
+  // Custom context (Story 51-3): override the roulette-specific copy/footer
+  // while keeping the same branded layout and lead details card.
+  const intro = p.context?.body
+    ? escHtml(p.context.body)
+    : "Você recebeu um novo lead pela roleta:"
+  const footer = p.context
+    ? "Notificação enviada pela Nicole."
+    : "Você recebeu este lead pois está ativo na roleta de distribuição."
+
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 24px;">
@@ -224,7 +250,7 @@ function buildBrokerEmailHtml(p: {
     </div>
     <div style="padding: 32px 24px;">
       <p style="color: #333; font-size: 16px; margin: 0 0 12px;">Olá, <strong>${name}</strong>!</p>
-      <p style="color: #555; font-size: 15px; margin: 0 0 20px;">Você recebeu um novo lead pela roleta:</p>
+      <p style="color: #555; font-size: 15px; margin: 0 0 20px;">${intro}</p>
       <div style="background: #f9f9f9; border-left: 4px solid #F27A5E; padding: 16px; border-radius: 4px; margin-bottom: 24px;">
         <p style="margin: 0 0 8px; color: #333;"><strong>Nome:</strong> ${lead}</p>
         <p style="margin: 0; color: #333;"><strong>Telefone:</strong> ${phone}</p>
@@ -237,7 +263,7 @@ function buildBrokerEmailHtml(p: {
         </a>
       </div>
       <p style="color: #999; font-size: 12px; margin: 0;">
-        Você recebeu este lead pois está ativo na roleta de distribuição.
+        ${footer}
       </p>
     </div>
   </div>

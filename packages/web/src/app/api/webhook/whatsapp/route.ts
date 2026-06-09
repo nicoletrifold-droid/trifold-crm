@@ -6,6 +6,7 @@ import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
+import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { normalizePhoneBR } from "@trifold/shared"
 
 export const maxDuration = 60
@@ -560,7 +561,7 @@ export async function POST(request: NextRequest) {
           message: asyncText,
           orgId,
           mediaBlock: asyncMediaBlock,
-          onEvent: (event) =>
+          onEvent: (event) => {
             logEvent({
               ...event,
               category: event.category as
@@ -577,7 +578,25 @@ export async function POST(request: NextRequest) {
                 conversation_id: conversation!.id,
                 lead_id: lead!.id,
               },
-            }),
+            })
+
+            // Story 51-3: notify the assigned broker when Nicole schedules a visit.
+            // Best-effort (fire-and-forget) — never blocks the pipeline response.
+            if (
+              event.event_type === "APPOINTMENT_CREATED" &&
+              event.metadata?.broker_user_id
+            ) {
+              void notifyBrokerOfAppointment({
+                orgId,
+                brokerUserId: event.metadata.broker_user_id as string,
+                leadId: (event.metadata.lead_id as string) ?? lead!.id,
+                leadName: (event.metadata.lead_name as string | null) ?? null,
+                leadPhone: (event.metadata.lead_phone as string | null) ?? null,
+              }).catch((err) =>
+                console.error("[appointment-notify] dispatch error:", err)
+              )
+            }
+          },
         })
 
         const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`

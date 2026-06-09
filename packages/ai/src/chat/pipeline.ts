@@ -258,6 +258,7 @@ export async function processMessageWithMetadata(
   let currentSummary: string | null = null
   let leadStageId: string | null = null
   let leadName: string | null = null
+  let leadPhone: string | null = null
   let leadSource: string | null = null
   let leadQualStatus: string | null = null
   let leadUtmCampaign: string | null = null
@@ -265,12 +266,13 @@ export async function processMessageWithMetadata(
   if (conversation?.lead_id) {
     const { data: leadData } = await supabase
       .from("leads")
-      .select("ai_summary, stage_id, name, source, qualification_status, utm_source, utm_campaign")
+      .select("ai_summary, stage_id, name, phone, source, qualification_status, utm_source, utm_campaign")
       .eq("id", conversation.lead_id)
       .single()
     currentSummary = leadData?.ai_summary ?? null
     leadStageId = leadData?.stage_id ?? null
     leadName = leadData?.name ?? null
+    leadPhone = leadData?.phone ?? null
     leadSource = leadData?.source ?? null
     leadQualStatus = leadData?.qualification_status ?? null
     leadUtmCampaign = leadData?.utm_campaign ?? null
@@ -625,7 +627,11 @@ export async function processMessageWithMetadata(
         description: `Nicole agendou visita. Disponibilidade: ${String(finalData.visit_availability)}${assignedBrokerId ? ". Corretor designado automaticamente." : ""}`,
       })
 
-      emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, property_id: propertyId ?? null, scheduled_at: tomorrow.toISOString() } })
+      // Story 51-3: enrich metadata so the web-side onEvent handler (in @trifold/web,
+      // where notifyBroker lives) can notify the assigned broker without @trifold/ai
+      // importing server-only code. broker_user_id is only present when a primary
+      // broker was found — its absence (AC3) means no notification is dispatched.
+      emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, broker_user_id: assignedBrokerId, lead_name: leadName, lead_phone: leadPhone, property_id: propertyId ?? null, scheduled_at: tomorrow.toISOString() } })
 
       if (!assignedBrokerId) {
         emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker assignment — no primary broker found for property", metadata: { lead_id: leadId, property_id: propertyId ?? null } })

@@ -1,0 +1,284 @@
+schema: 1
+storyId: "51.3"
+story: "51.3"
+title: "Notificar Corretor no Agendamento da Visita (Gatilho A)"
+epic: 51
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 8 ACs estão atendidos por código com evidência path:linha e os caminhos
+  testáveis cobertos por 9 testes verdes (com broker dispara / sem broker não
+  dispara / falha não propaga / context aplicado / fallbacks de email e config).
+  O boundary ai↔web é respeitado: pipeline.ts (em @trifold/ai) apenas EMITE o
+  evento APPOINTMENT_CREATED enriquecido, sem nenhum import de @trifold/web; os
+  handlers onEvent (webhooks WhatsApp e Telegram, em @trifold/web) chamam
+  notifyBrokerOfAppointment. A regra de negócio crítica (CON-1) é preservada: o
+  agendamento NÃO toca is_ai_active e NÃO vira handoff — a Nicole continua ativa.
+  A notificação é best-effort (try/catch interno + void/.catch fire-and-forget) e
+  nunca derruba o pipeline. type-check (ai e web) e ESLint exit 0, e as 6 falhas
+  pré-existentes do webhook 21.1 (alias @web/* no vitest) permanecem inalteradas.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-09"
+updated: "2026-06-09T14:45:00Z"
+iteration: 1
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC8 mapeados para código e teste/evidência. AC1 (emit enriquecido
+      pipeline.ts:634 + handler onEvent webhook whatsapp 591-604 / telegram 479-492),
+      AC2 (context title/body em push, email subject+intro+footer, whatsapp body —
+      notify-broker.ts:50-52,68,76,105-110,237-242), AC3 (sem broker_user_id → handler
+      não dispara; guard notify-appointment.ts:37; APPOINTMENT_NO_BROKER intacto
+      pipeline.ts:636-638), AC4 (context? opcional backward-compatible — teste
+      notify-broker.test.ts), AC5 (boundary via onEvent, wrapper notify-appointment.ts),
+      AC6 (best-effort try/catch + void.catch), AC7 (type-check/lint), AC8 (3 cenários
+      testados). Ver tabela ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      REUSE fiel de notifyBroker (não foi criada função paralela): a story estendeu a
+      interface com context? opcional e adicionou um wrapper fino (notifyBrokerOfAppointment)
+      que resolve broker em `users` e prefs em `roleta_config`, espelhando o padrão de
+      notifyImobiliaria. Boundary ai↔web respeitado por design: grep confirma ZERO import
+      de @web/@trifold/web em packages/ai/src (a única ocorrência é um comentário).
+      pipeline.ts só emite metadados no evento já existente — nenhum novo hop HTTP/secret.
+      Imports absolutos (@web/*) nos arquivos web. JSDoc abrangente documentando a decisão
+      de boundary. Sem código morto; fallbacks (leadName "O lead", config all-on) bem isolados.
+
+  - check: "3. Security"
+    status: PASS
+    note: >
+      A notificação reaproveita o caminho de createAdminClient já validado da roleta:
+      admin client usado APENAS para ler dados do corretor (users) e prefs (roleta_config),
+      e dentro de notifyBroker para ler whatsapp_config (token sensível por org, server-side).
+      Nenhum token/credencial é logado ou exposto ao lead. A notificação vai exclusivamente
+      ao corretor atribuído (resolvido via broker_user_id do evento), não ao lead. O webhook
+      handler só dispara quando broker_user_id está presente; nenhum input não confiável do
+      lead chega ao destinatário (apenas nome/telefone do próprio lead, já no CRM). Sem novo
+      endpoint/superfície de ataque (a decisão de boundary evitou o POST interno + secret).
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      AC6 honrado em duas camadas: (1) notifyBrokerOfAppointment envolve toda a lógica em
+      try/catch (notify-appointment.ts:39-93) e nunca lança (retorna void); (2) os handlers
+      onEvent disparam via `void notifyBrokerOfAppointment(...).catch(...)` (webhook 595-603 /
+      telegram 483-491), fire-and-forget — a notificação roda fora do caminho de resposta ao
+      lead. O appointment já está persistido (pipeline.ts:608) antes do emit (634), então uma
+      falha de notificação nunca afeta a criação do agendamento nem a resposta da Nicole. AC3:
+      broker ausente → evento sai sem broker_user_id → handler não dispara; warn
+      APPOINTMENT_NO_BROKER permanece intacto (pipeline.ts:636-638). Broker sem email → skip
+      com warn (notify-appointment.ts:49-54). Dentro de notifyBroker, cada canal tem .catch
+      individual + Promise.allSettled — uma falha de canal não derruba os outros.
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      9/9 testes verdes (2 arquivos). notify-appointment.test.ts (7): (a) com broker → chama
+      notifyBroker com context exato; (b) brokerUserId vazio → não chama; (c) notifyBroker
+      lança → resolves undefined (não propaga, AC6/AC8c); broker sem email → não notifica;
+      sem roleta_config → default all-on; respeita prefs da org (whatsapp off); lead sem nome
+      → fallback "O lead". notify-broker.test.ts (2): sem context → copy padrão de roleta
+      (backward compat AC4); com context → título/corpo customizados em push e email. Mocks de
+      server-only/admin/push/email apropriados. Gap não-bloqueante herdado (TEST-001): a lógica
+      de IO dos webhook handlers (onEvent) não tem teste de integração — mesma causa raiz do
+      alias @web/* não resolvido no vitest (gates 50.3/51.1/51.2). O risco do handler é baixo:
+      lógica trivial (guard + dispatch fire-and-forget), e o wrapper que ele chama É testado.
+
+  - check: "6. NFR (Performance / Assíncrono)"
+    status: PASS
+    note: >
+      A notificação é estritamente assíncrona e não bloqueia a resposta ao lead: o handler
+      onEvent usa fire-and-forget (void ... .catch) e o emit ocorre após o insert do
+      appointment, fora do caminho crítico de resposta. As prefs da org são resolvidas com
+      uma única query maybeSingle em roleta_config (por org_id), e o broker com uma única
+      query em users — sem N+1. Os três canais (push/email/whatsapp) disparam em paralelo via
+      Promise.allSettled dentro de notifyBroker, com timeout de 15s no fetch do WhatsApp. Sem
+      nova carga no pipeline (apenas leadPhone foi adicionado à query 6.5 já existente — sem
+      query extra, pipeline.ts:269).
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Mudança aditiva e bem isolada. pipeline.ts: apenas enriquece o emit já existente com
+      3 campos (broker_user_id/lead_name/lead_phone) e adiciona leadPhone à query 6.5 — zero
+      alteração de lógica de agendamento/handoff. notify-broker.ts: context? é OPCIONAL com
+      fallback, então a roleta e notifyImobiliaria seguem inalterados (provado pelo teste
+      backward-compat). Webhooks: bloco onEvent só adiciona um if guard + dispatch. CON-1
+      verificado: a ÚNICA escrita de is_ai_active em pipeline.ts está na linha 678, DENTRO do
+      bloco de HANDOFF (642+), NÃO no bloco de agendamento (584-639); o git diff de 51-3 não
+      altera is_ai_active em nenhum arquivo de código (só MEMORY.md docs). handoff.ts:48-50
+      confirma que visita agendada NÃO é trigger de handoff. Suite full web: 50 passed / 6 failed
+      — as 6 falhas são EXCLUSIVAS de webhook/whatsapp/route.test.ts (Story 21.1, alias @web/*
+      pré-existente, gate 50.3 TEST-001), idênticas com/sem esta story. Rollback trivial; sem migration.
+
+ac_traceability:
+  - ac: "AC1"
+    status: Met
+    note: "pipeline.ts:634 emite APPOINTMENT_CREATED com broker_user_id/lead_name/lead_phone quando assignedBrokerId truthy. Handler onEvent dispara notifyBrokerOfAppointment: webhook/whatsapp/route.ts:591-604 e telegram/webhook/route.ts:479-492. Teste (a) notify-appointment.test.ts:73-89."
+  - ac: "AC2"
+    status: Met
+    note: "Push title/body: notify-broker.ts:50-51,55-59. Email subject=context.title (52), intro=context.body + card nome/telefone + link + layout TRIFOLD reutilizado (237-242, buildBrokerEmailHtml). WhatsApp body customizado (105-110). context aplicado de notify-appointment.ts:85-88 ('Visita Agendada!' + '{lead} agendou uma visita com a Nicole.'). Teste notify-broker.test.ts:62-78."
+  - ac: "AC3"
+    status: Met
+    note: "assignedBrokerId nulo → emit sai sem broker_user_id (pipeline.ts:634, valor null). Handler exige event.metadata?.broker_user_id (webhook 592-593 / telegram 480-481) → não dispara. Guard adicional notify-appointment.ts:37 (if !brokerUserId return). APPOINTMENT_NO_BROKER intacto (pipeline.ts:636-638). Teste (b) notify-appointment.test.ts:91-94."
+  - ac: "AC4"
+    status: Met
+    note: "NotifyBrokerParams.context?: { title?; body? } (notify-broker.ts:31). Fallbacks: context?.title ?? 'Novo Lead Recebido' (50), email subject (52), body (51), whatsapp (105), email footer/intro (237-242). Backward compat coberto por notify-broker.test.ts:52-60 (sem context → 'Novo Lead Recebido' / 'Novo lead para você: Maria')."
+  - ac: "AC5"
+    status: Met
+    note: "T0=incompatível confirmado (notify-broker.ts:1 import 'server-only' + createAdminClient). Em vez de POST interno + secret, reusou-se a infra emit/onEvent existente. Wrapper notify-appointment.ts criado em @trifold/web. grep: zero import de @web/@trifold/web em packages/ai/src (só comentário). Boundary respeitado."
+  - ac: "AC6"
+    status: Met
+    note: "notify-appointment.ts:39-93 — toda a lógica em try/catch, função retorna void (nunca lança). Dispatch fire-and-forget: void notifyBrokerOfAppointment(...).catch(...) (webhook 595-603 / telegram 483-491). Appointment persistido (pipeline.ts:608) antes do emit (634). Teste (c) notify-appointment.test.ts:96-99 (mockRejectedValueOnce → resolves undefined)."
+  - ac: "AC7"
+    status: Met
+    note: "pnpm --filter @trifold/ai type-check → 0 erros. pnpm --filter @trifold/web type-check → 0 erros (artefatos stale .next/types já limpos). ESLint nos 6 arquivos web da story → exit 0, zero hits. pipeline.ts coberto por tsc --noEmit (ai). Ver independent_verification."
+  - ac: "AC8"
+    status: Met
+    note: "9 testes verdes cobrindo (a) broker presente → notifyBroker chamado com context; (b) broker ausente → não chamado; (c) notifyBroker lança → não propaga (resolves undefined). Mais email/phone/config/fallback. npx vitest run notify-appointment.test.ts notify-broker.test.ts → 9 passed."
+
+issues:
+  - id: TEST-001
+    severity: medium
+    category: testing
+    finding: >
+      A lógica de IO dos handlers onEvent dos webhooks (guard broker_user_id + dispatch
+      fire-and-forget de notifyBrokerOfAppointment) não tem cobertura de teste automatizada
+      de integração — apenas o wrapper que eles chamam (notifyBrokerOfAppointment) e o
+      context de notifyBroker são testados unitariamente. Mesma causa raiz das stories
+      anteriores: o alias @web/* não resolve no vitest root, impedindo testar routes que
+      importam @web/lib/supabase/admin. Herdado de 50-3/51-1/51-2.
+    suggested_action: >
+      Não-bloqueante para 51-3 (a lógica do handler é trivial: if guard + void.catch, e o
+      wrapper chamado É testado). Resolver via story de QA infra (resolve.alias @web/* →
+      packages/web/src/* no vitest.config.ts OU vitest workspaces), que destrava os testes
+      de route E corrige as 6 falhas pré-existentes do webhook 21.1. Validar o dispatch por
+      smoke pós-deploy.
+  - id: REL-001
+    severity: low
+    category: reliability
+    finding: >
+      Risco teórico de notificação duplicada NÃO se materializa: ambos os webhooks (WhatsApp
+      e Telegram) registram um handler onEvent, mas um dado lead chega por UM único canal,
+      logo seu processMessage roda em apenas UM webhook e o evento APPOINTMENT_CREATED é
+      emitido uma única vez por agendamento. O double-check de appointment futuro existente
+      no pipeline (pipeline.ts:575-582, visit_proposed + existingAppt) também previne
+      reprocessamento. Sem deduplicação explícita por broker/lead no dispatch, porém.
+    suggested_action: >
+      Não-bloqueante. Se no futuro um mesmo lead puder transitar entre canais ou houver
+      retries de webhook que reexecutem o pipeline, considerar idempotência por
+      (lead_id, appointment_id) no dispatch da notificação. Validar por smoke: agendar via
+      Nicole e confirmar que o corretor recebe a notificação UMA vez.
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL; host de review é macOS/darwin). Mesmo
+      cenário das stories 50-x e 51-x.
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu traceability, code quality, security, reliability,
+      NFR, test architecture e regressão. CI pode rodar CodeRabbit pós-push em ambiente WSL.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Decisão de boundary ai↔web exemplar: em vez do POST interno + secret sugerido pela story,
+      reutilizou-se a infra emit/onEvent já existente. pipeline.ts (ai) só emite metadados; os
+      handlers (web) reagem. Zero dependência invertida (grep confirma nenhum import @web em
+      packages/ai), zero novo hop HTTP, zero novo secret — Reuse > Create aplicado com rigor.
+  - id: POS-002
+    description: >
+      CON-1 preservado: a única escrita de is_ai_active em pipeline.ts (linha 678) está no bloco
+      de HANDOFF, totalmente separado do bloco de agendamento (584-639). O agendamento apenas
+      notifica; a Nicole continua ativa. handoff.ts:48-50 confirma que visita agendada não é
+      trigger de handoff. Nenhuma alteração de is_ai_active no diff de código de 51-3.
+  - id: POS-003
+    description: >
+      Backward compatibility cuidadosa: context? é opcional com fallback em TODOS os pontos
+      (push/email/whatsapp), e sendBrokerWhatsApp/buildBrokerEmailHtml ganharam o param opcional
+      sem quebrar notifyImobiliaria nem a roleta. Provado por teste (copy 'Novo Lead Recebido'
+      preservada sem context).
+  - id: POS-004
+    description: >
+      AC6 implementado em duas camadas defensivas (try/catch interno no wrapper + void.catch no
+      dispatch) e ancorado no fato de o appointment já estar persistido antes do emit. A
+      notificação é estruturalmente incapaz de derrubar o agendamento ou a resposta ao lead.
+
+independent_verification:
+  - check: "Story unit tests (arquivos da story)"
+    command: "npx vitest run packages/web/src/lib/broker/notify-appointment.test.ts packages/web/src/lib/roleta/notify-broker.test.ts"
+    result: "2 files, 9/9 passed (140ms)."
+  - check: "ESLint (6 arquivos web da story)"
+    command: "npx eslint notify-appointment.ts notify-appointment.test.ts notify-broker.ts notify-broker.test.ts webhook/whatsapp/route.ts telegram/webhook/route.ts"
+    result: "exit 0, zero hits."
+  - check: "Type-check ai"
+    command: "pnpm --filter @trifold/ai type-check"
+    result: "0 erros (tsc --noEmit; cobre pipeline.ts)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros (artefatos stale .next/types já limpos)."
+  - check: "Boundary ai↔web (sem import invertido)"
+    command: "grep -rn '@web|@trifold/web' packages/ai/src"
+    result: "Única ocorrência é um comentário em pipeline.ts:630 ('...handler in @trifold/web...'). Nenhum import real. Boundary respeitado."
+  - check: "CON-1 — is_ai_active não escrito no bloco de agendamento"
+    command: "grep -n is_ai_active packages/ai/src/chat/pipeline.ts + git diff HEAD"
+    result: "Única escrita em pipeline.ts:678 (bloco HANDOFF, 642+), fora do bloco de agendamento (584-639). git diff não altera is_ai_active em código (só MEMORY.md docs)."
+  - check: "Full regression suite (web)"
+    command: "npx vitest run packages/web"
+    result: "50 passed / 6 failed. As 6 falhas são EXCLUSIVAS de webhook/whatsapp/__tests__/route.test.ts (Story 21.1, alias @web/* pré-existente — gate 50.3 TEST-001). Zero falhas em arquivos desta story."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança aditiva e isolada: emit enriquecido + 1 wrapper best-effort + 1 if-guard nos dois
+    handlers onEvent. A notificação nunca derruba o pipeline (AC6, fire-and-forget após persistência
+    do appointment), nunca toca is_ai_active (CON-1), e a roleta/notifyImobiliaria seguem intactos
+    (context opcional). Boundary ai↔web limpo (sem import invertido). Pior caso runtime: notificação
+    falha → log de erro e o agendamento + resposta da Nicole seguem normalmente. Sem migration, sem
+    nova superfície de RLS/endpoint. Rollback trivial via git revert.
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 8/8 ACs atendidos por código com evidência path:linha; 9/9 testes
+    verdes nos caminhos testáveis (com/sem broker, falha não-propaga, context, fallbacks). O
+    invariante crítico desta story — agendamento NOTIFICA o corretor sem desligar is_ai_active nem
+    virar handoff — foi verificado diretamente no código (is_ai_active só no bloco handoff, fora do
+    agendamento; handoff.ts:48-50). O boundary ai↔web foi resolvido com elegância via emit/onEvent
+    (sem import invertido, sem endpoint/secret novo). type-check (ai+web) e ESLint exit 0. As issues
+    remanescentes (1 MEDIUM de infra de teste herdada + 2 LOW) são não-bloqueantes. Aprovada para
+    @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: simular agendamento via Nicole em staging → corretor atribuído recebe push + email + WhatsApp UMA vez; Nicole continua respondendo ao lead (is_ai_active mantido); SELECT * FROM appointments confirma insert; sem entradas espúrias em follow_up_log/messages."
+    - "@po manter backlog TEST-001 (vitest resolve.alias @web/*) — destrava testes de route/handler E corrige as 6 falhas do webhook 21.1."
+    - "Avaliar REL-001 (dedup de notificação) caso futuramente haja retries de webhook ou troca de canal por lead."
+
+files_reviewed:
+  - path: "packages/web/src/lib/broker/notify-appointment.ts"
+    verdict: PASS
+    notes: "Wrapper best-effort: resolve broker em users por brokerUserId (=user_id), prefs em roleta_config (default all-on), chama notifyBroker com context de agendamento. try/catch total, retorna void. Guards: !brokerUserId e broker sem email."
+  - path: "packages/web/src/lib/broker/notify-appointment.test.ts"
+    verdict: PASS
+    notes: "7 testes: AC8 a/b/c + email ausente + config default/override + fallback de nome. Mocks de server-only/admin/notifyBroker."
+  - path: "packages/web/src/lib/roleta/notify-broker.test.ts"
+    verdict: PASS
+    notes: "2 testes: AC4 backward-compat (sem context → copy de roleta) + context override (push + email subject/html)."
+  - path: "packages/ai/src/chat/pipeline.ts"
+    verdict: PASS
+    notes: "Enriquece emit APPOINTMENT_CREATED com broker_user_id/lead_name/lead_phone (634); leadPhone adicionado à query 6.5 (269). Sem import de @web; sem alteração de is_ai_active no bloco de agendamento."
+  - path: "packages/web/src/lib/roleta/notify-broker.ts"
+    verdict: PASS
+    notes: "context? opcional em NotifyBrokerParams (31), aplicado a push/email/whatsapp com fallback. sendBrokerWhatsApp e buildBrokerEmailHtml ganharam param context opcional sem quebrar notifyImobiliaria/roleta."
+  - path: "packages/web/src/app/api/webhook/whatsapp/route.ts"
+    verdict: PASS
+    notes: "Handler onEvent (591-604): if event_type=APPOINTMENT_CREATED && broker_user_id → void notifyBrokerOfAppointment(...).catch(...). Fire-and-forget, não bloqueia resposta."
+  - path: "packages/web/src/app/api/telegram/webhook/route.ts"
+    verdict: PASS
+    notes: "Handler onEvent (479-492): mesmo guard + dispatch fire-and-forget do canal Telegram. Simétrico ao WhatsApp."

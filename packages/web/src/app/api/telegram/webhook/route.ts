@@ -3,6 +3,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import type { MediaBlock } from "@trifold/ai"
 import { getTelegramFileUrl, downloadFileAsBase64 } from "@trifold/bot"
 import { logEvent } from "@web/lib/logger"
+import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 
 export const maxDuration = 60
 
@@ -464,13 +465,32 @@ export async function POST(request: NextRequest) {
           message: text,
           orgId,
           mediaBlock,
-          onEvent: (event) => logEvent({
-            ...event,
-            category: event.category as "bot" | "ai" | "webhook" | "auth" | "cron" | "system",
-            source: "ai/pipeline",
-            org_id: orgId,
-            metadata: { ...event.metadata, conversation_id: conversation.id, lead_id: lead.id },
-          }),
+          onEvent: (event) => {
+            logEvent({
+              ...event,
+              category: event.category as "bot" | "ai" | "webhook" | "auth" | "cron" | "system",
+              source: "ai/pipeline",
+              org_id: orgId,
+              metadata: { ...event.metadata, conversation_id: conversation.id, lead_id: lead.id },
+            })
+
+            // Story 51-3: notify the assigned broker when Nicole schedules a visit.
+            // Best-effort (fire-and-forget) — never blocks the pipeline response.
+            if (
+              event.event_type === "APPOINTMENT_CREATED" &&
+              event.metadata?.broker_user_id
+            ) {
+              void notifyBrokerOfAppointment({
+                orgId,
+                brokerUserId: event.metadata.broker_user_id as string,
+                leadId: (event.metadata.lead_id as string) ?? lead.id,
+                leadName: (event.metadata.lead_name as string | null) ?? null,
+                leadPhone: (event.metadata.lead_phone as string | null) ?? null,
+              }).catch((err) =>
+                console.error("[appointment-notify] dispatch error:", err)
+              )
+            }
+          },
         })
         const aiDuration = Date.now() - aiStart
 
