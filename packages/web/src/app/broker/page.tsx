@@ -136,24 +136,6 @@ export default async function BrokerHomePage() {
         </p>
       </div>
 
-      {/* ── Roleta bar ───────────────────────────────────────────── */}
-      {roletaAtiva && (
-        <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-          isOnline
-            ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10"
-            : "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10"
-        }`}>
-          <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-          <p className="text-sm text-gray-700 dark:text-stone-300">
-            <span className="font-semibold text-gray-900 dark:text-stone-100">ROLETA DE LEADS:</span>{" "}
-            Você está{" "}
-            <span className={`font-bold ${isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-              {isOnline ? "ONLINE" : "OFFLINE"}
-            </span>
-          </p>
-        </div>
-      )}
-
       {/* ── Meus Leads Ativos ────────────────────────────────────── */}
       <div>
         <div className="mb-3 flex items-center gap-3">
