@@ -88,12 +88,12 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
   }, [load])
 
   if (loading) {
-    return <div className="h-36 animate-pulse rounded bg-gray-100" />
+    return <div className="h-36 animate-pulse rounded bg-gray-100 dark:bg-stone-800" />
   }
 
   if (!data) {
     return (
-      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
+      <div className="rounded-md border border-dashed border-gray-300 dark:border-stone-700 bg-gray-50 dark:bg-stone-800/50 p-4 text-sm text-gray-500 dark:text-stone-400">
         Não foi possível carregar o funil de conversão.
       </div>
     )
@@ -104,7 +104,7 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
 
   if (top < 5) {
     return (
-      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+      <div className="rounded-md border border-dashed border-gray-300 dark:border-stone-700 bg-gray-50 dark:bg-stone-800/50 p-4 text-sm text-gray-600 dark:text-stone-400">
         Volume insuficiente para análise de funil neste período (mínimo 5 leads Meta).
       </div>
     )
@@ -127,7 +127,7 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
           return (
             <div
               key={key}
-              className={`relative h-9 rounded overflow-hidden bg-gray-100 ${
+              className={`relative h-9 rounded overflow-hidden bg-gray-100 dark:bg-stone-800 ${
                 isGargalo ? "ring-2 ring-yellow-400" : ""
               }`}
             >
@@ -136,11 +136,11 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
                 style={{ width: `${Math.min(pctOfTop, 100)}%` }}
               />
               <div className="absolute inset-0 flex items-center justify-between px-3">
-                <span className="text-xs font-semibold text-gray-900 truncate">
+                <span className="text-xs font-semibold text-gray-900 dark:text-stone-100 truncate">
                   {isGargalo && "⚠️ "}
                   {STAGE_LABELS[key]}: {count}
                 </span>
-                <span className="shrink-0 ml-2 text-xs text-gray-700">
+                <span className="shrink-0 ml-2 text-xs text-gray-700 dark:text-stone-300">
                   {fmt(pctOfTop)}% do topo
                   {pctOfPrev !== null && (
                     <span className="hidden sm:inline">
@@ -157,17 +157,17 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
 
       {/* Card de insight */}
       {gargalo && (
-        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+        <div className="rounded-md border border-yellow-200 dark:border-yellow-500/30 bg-yellow-50 dark:bg-yellow-500/10 p-3 text-sm text-yellow-800 dark:text-yellow-300">
           <span className="font-medium">Maior gargalo: </span>
           {GARGALO_MESSAGES[gargalo]}
         </div>
       )}
 
       {/* Métricas derivadas */}
-      <div className="flex flex-wrap gap-4 pt-1 text-sm text-gray-600">
+      <div className="flex flex-wrap gap-4 pt-1 text-sm text-gray-600 dark:text-stone-400">
         {cpl_real !== null && (
           <span>
-            <span className="font-medium text-gray-900">CPL Real:</span>{" "}
+            <span className="font-medium text-gray-900 dark:text-stone-100">CPL Real:</span>{" "}
             {new Intl.NumberFormat("pt-BR", {
               style: "currency",
               currency: "BRL",
@@ -176,13 +176,13 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
         )}
         {taxa_qualificacao !== null && (
           <span>
-            <span className="font-medium text-gray-900">Qualificação:</span>{" "}
+            <span className="font-medium text-gray-900 dark:text-stone-100">Qualificação:</span>{" "}
             {fmt(taxa_qualificacao)}%
           </span>
         )}
         {taxa_visita !== null && (
           <span>
-            <span className="font-medium text-gray-900">Taxa de Visita:</span>{" "}
+            <span className="font-medium text-gray-900 dark:text-stone-100">Taxa de Visita:</span>{" "}
             {fmt(taxa_visita)}%
           </span>
         )}
