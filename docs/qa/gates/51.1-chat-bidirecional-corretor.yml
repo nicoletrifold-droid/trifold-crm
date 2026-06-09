@@ -1,0 +1,283 @@
+schema: 1
+storyId: "51.1"
+story: "51.1"
+title: "Chat Bidirecional do Corretor na Plataforma"
+epic: 51
+gate: PASS
+verdict: PASS
+status_reason: >
+  Todos os 10 ACs atendidos por código e os caminhos críticos cobertos por
+  11 testes verdes. Regra de negócio crítica preservada: o envio NÃO altera
+  is_ai_active; o takeover de 24h vem de brokerSentRecently no cron. Lint e
+  testes da story limpos; type-check sem erros nos arquivos da story (apenas
+  ruído ambiental .next + falhas pré-existentes de alias @web/*). Issues
+  remanescentes são todas LOW/MEDIUM e não-bloqueantes.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-09"
+updated: "2026-06-09T14:05:00Z"
+iteration: 1
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC10 mapeados para código e teste/evidência. AC1/AC9 (UI gated por
+      role), AC2 (route com auth + ownership + insert role='broker'), AC3
+      (janela 24h → 409 sem enviar/gravar), AC4 (Telegram sem janela), AC5
+      (router.refresh + onSent), AC6 (apenas grava role='broker'; is_ai_active
+      intocado), AC7 (dispatch nunca lança; grava com metadata.send_error),
+      AC8 (validação string/não-vazio/<=4096 → 400), AC10 (lint/types/testes).
+      Ver tabela ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Imports absolutos (@web/*) em todos os arquivos. Helper puro
+      dispatch-broker-message.ts sem dependências runtime — testável sem o
+      alias @web/* que não resolve no vitest (padrão correto herdado de
+      buildCtwaMetadata, Story 50-3). Reuso fiel: WhatsApp Graph API v21.0 +
+      Bearer (espelha notify-broker.ts:97-100 e
+      appointment-whatsapp-reminders); Telegram tg: chatId
+      (espelha cron/followup/route.ts:23-34). JSDoc abrangente, naming
+      consistente, sem código morto. AbortSignal.timeout em ambos canais.
+
+  - check: "3. Security"
+    status: PASS
+    note: >
+      Auth via requireAuth(); ownership por assigned_broker_id === appUser.id
+      (correto — migration 085 confirma que assigned_broker_id armazena
+      brokers.user_id, e broker page filtra .eq("assigned_broker_id",
+      user.id)). Admin/supervisor/gerente-comercial liberados. Lead lido via
+      createClient() (RLS) com filtro org_id explícito → defesa em
+      profundidade. createAdminClient() usado APENAS para ler whatsapp_config
+      (token sensível por org) — token nunca retornado ao cliente, apenas
+      injetado no helper server-side. Validação de input completa (AC8). Insert
+      passa pela policy messages_insert (004) que exige apenas org_id match na
+      conversation → corretor consegue inserir sem admin client (R1 resolvido).
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      dispatchBrokerMessage nunca lança (try/catch + errorCode normalizando
+      TimeoutError/AbortError → 'TIMEOUT'). AC7 honrado: falha externa grava a
+      mensagem com metadata.send_error e retorna success:true + sent:false.
+      AC3 honrado: WHATSAPP_WINDOW_CLOSED retorna 409 ANTES de qualquer fetch
+      ou insert. Janela lida do conversation.last_message_at ANTES do insert (o
+      trigger trg_messages_update_conv bumpa só AFTER INSERT). R3 coberto:
+      conversation criada se não existir. Casos WHATSAPP_CONFIG_MISSING e
+      TELEGRAM_TOKEN_MISSING degradam graciosamente (gravam com send_error).
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      11/11 testes verdes (npx vitest run dispatch-broker-message.test.ts).
+      Cobre os 4 cenários obrigatórios (T5) + resolveChannel,
+      isWithinWhatsAppWindow (3 casos incl. null), WHATSAPP_CONFIG_MISSING e
+      TELEGRAM_TOKEN_MISSING. Asserções fortes (URL contém graph.facebook.com
+      vs api.telegram.org; fetch NÃO chamado fora da janela). Gap não-bloqueante:
+      a lógica do route (ownership, criação de conversation, merge de metadata,
+      branch de gravação em falha) não tem teste de integração — ver TEST-001.
+
+  - check: "6. NFR (Performance / Maintainability)"
+    status: PASS
+    note: >
+      Separação de responsabilidades limpa: helper puro (dispatch) × route
+      (auth/IO/persistência) × UI (client component). Queries enxutas com
+      .single()/.maybeSingle() e selects específicos; sem N+1. Round-trips
+      sequenciais (lead → conversation → waConfig → insert) aceitáveis para
+      ação interativa de baixa frequência. last_message_at delegado ao trigger
+      (sem update redundante no route).
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Mudanças aditivas: 4 arquivos novos + 2 telas que apenas renderizam o
+      input gated por role (read-only path intacto). is_ai_active NUNCA escrito
+      no caminho de envio (verificado por grep) → fluxo da Nicole preservado;
+      takeover continua vindo de brokerSentRecently (followup/route.ts:177).
+      Suite completa: 292 passed / 6 failed. As 6 falhas são EXCLUSIVAS de
+      webhook/whatsapp/__tests__/route.test.ts (Story 21.1) com root cause
+      "Cannot find package '@web/lib/supabase/admin'" — pré-existentes em main
+      (confirmado no gate 50.3 TEST-001), NÃO introduzidas por esta story.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "broker/leads/[id]/page.tsx:7,199-201 — BrokerMessageInput gated por CAN_SEND_ROLES (broker/admin/supervisor/gerente-comercial)."
+  - ac: "AC2"
+    status: PASS
+    note: "send-message/route.ts:25-205 — requireAuth, ownership (82), canal (91), insert role='broker' (178-185), org_id implícito via conversation; retorno {success, messageId}."
+  - ac: "AC3"
+    status: PASS
+    note: "dispatch-broker-message.ts:87-90 (checa janela antes do fetch) + route.ts:150-160 (409 WHATSAPP_WINDOW_CLOSED, sem gravar). Teste cenário 3."
+  - ac: "AC4"
+    status: PASS
+    note: "dispatch-broker-message.ts:83-85 — Telegram nunca passa pela checagem de janela. Teste cenário 1."
+  - ac: "AC5"
+    status: PASS
+    note: "broker-message-input.tsx:73 router.refresh() + onSent callback (64-70) para optimistic update."
+  - ac: "AC6"
+    status: PASS
+    note: "route.ts grava role='broker' (180); is_ai_active intocado (comentário 22-23). cron/followup/route.ts:177-181 detecta brokerSentRecently. Verificado por grep — nenhum write de is_ai_active no send path."
+  - ac: "AC7"
+    status: PASS
+    note: "dispatch nunca lança (try/catch + errorCode 167-173); route.ts:170-185 grava com metadata.send_error em falha externa. Teste cenário 4 (HTTP_500 sem throw)."
+  - ac: "AC8"
+    status: PASS
+    note: "route.ts:35-60 — typeof string, trim não-vazio, <=4096 → 400. UI espelha (maxLength + disabled)."
+  - ac: "AC9"
+    status: PASS
+    note: "dashboard/conversas/[id]/page.tsx:7,151-153 — gated por admin/supervisor/gerente-comercial. [AUTO-DECISION do dev] role real é 'gerente-comercial' (hyphen), não 'gerente_comercial' — confirmado em migrations 062/070/079/085 e em api-auth/RLS."
+  - ac: "AC10"
+    status: PASS
+    note: "ESLint 0 hits (6 arquivos); 11/11 testes verdes; type-check sem erros nos arquivos da story (só ruído .next validator + alias @web/* pré-existente)."
+
+issues:
+  - id: REL-001
+    severity: low
+    category: reliability
+    finding: >
+      A janela de 24h do WhatsApp é medida a partir de
+      conversations.last_message_at, que o trigger trg_messages_update_conv
+      (038) bumpa para QUALQUER mensagem inserida — incluindo as outbound
+      (assistant/broker/system). A janela freeform do WhatsApp Business,
+      porém, só reabre com mensagem INBOUND do lead. Em teoria, uma sequência
+      de mensagens outbound pode manter last_message_at "fresco" e fazer a
+      checagem AC3 passar mesmo quando a janela real já fechou (a API
+      retornaria 131047). Na prática o impacto é mitigado: AC7 garante que o
+      131047 vira metadata.send_error sem quebrar a request, e o pattern de
+      janela já é o mesmo usado em todo o projeto.
+    suggested_action: >
+      Não-bloqueante. Para precisão futura, considerar medir a janela a partir
+      da última mensagem com role='user' (inbound) em vez de
+      conversations.last_message_at. Avaliar junto à Story 51-5 (template fora
+      da janela), que já mexe nesse domínio.
+  - id: TEST-001
+    severity: medium
+    category: testing
+    finding: >
+      A lógica do route send-message (ownership por role, criação de
+      conversation quando ausente, merge de metadata, branch de gravação em
+      falha de envio, mapeamento 409/404/403) não tem cobertura de teste
+      automatizada — apenas o helper puro é testado. Causa raiz é o mesmo alias
+      @web/* não resolvido pelo vitest (TEST-001 do gate 50.3) que impede
+      testar routes que importam @web/lib/supabase/admin.
+    suggested_action: >
+      Não-bloqueante para 51-1. Resolver via story de QA infra (adicionar
+      resolve.alias @web/* → packages/web/src/* no vitest.config.ts OU migrar
+      para vitest workspaces). Isso destrava testes de route desta story E as
+      6 falhas pré-existentes do webhook 21.1. @po criar via *backlog-add.
+  - id: REL-002
+    severity: low
+    category: reliability
+    finding: >
+      A query de conversation filtra status='active' (route.ts:96). Se a
+      conversation do lead estiver em status 'handed_off' (cenário plausível
+      após handoff Nicole→corretor da Story 51-2), o route NÃO a encontra e
+      cria uma NOVA conversation 'active', podendo fragmentar o histórico em
+      duas conversations distintas para o mesmo lead.
+    suggested_action: >
+      Não-bloqueante hoje (51-2 ainda não em produção). Quando 51-2 entrar,
+      revisar o filtro para incluir 'handed_off' ou buscar a conversation mais
+      recente independente do status. Documentar como dependência de 51-2.
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL/Windows; host de review é
+      macOS). Mesmo cenário das stories 50-1/50-2/50-3.
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu code review, security, reliability,
+      regression e testing. CI pode rodar CodeRabbit pós-push em ambiente WSL.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Regra de negócio crítica do epic respeitada com rigor: is_ai_active
+      jamais é escrito no caminho de envio (verificado por grep). O takeover de
+      24h é 100% delegado ao mecanismo existente brokerSentRecently, exatamente
+      como a story prescreve — zero lógica nova, zero risco de divergência.
+  - id: POS-002
+    description: >
+      Helper puro injetando fetchImpl e now permite testes determinísticos sem
+      mocks de Supabase nem timers globais. Decisão de design que isola a
+      complexidade testável do IO — espelha o padrão validado em 50-3.
+  - id: POS-003
+    description: >
+      Defesa em profundidade no route: além da RLS, há filtro org_id explícito
+      no SELECT do lead E checagem de ownership explícita por role, cobrindo o
+      caso de RLS permissiva para admin sem vazar leads entre orgs.
+  - id: POS-004
+    description: >
+      AC7 implementado corretamente com a sutileza certa: WHATSAPP_WINDOW_CLOSED
+      é a ÚNICA falha que NÃO grava (409), porque AC3 manda não tentar enviar;
+      todas as demais falhas externas gravam com send_error. Distinção precisa
+      entre "não enviável" e "envio falhou".
+
+independent_verification:
+  - check: "Story unit tests"
+    command: "npx vitest run packages/web/src/lib/broker/dispatch-broker-message.test.ts"
+    result: "11/11 passed (121ms)"
+  - check: "ESLint (6 story files)"
+    command: "pnpm --filter @trifold/web exec eslint <6 files>"
+    result: "exit 0, zero hits"
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "Falha apenas em .next/{dev/}types/validator.ts (módulos dashboard/corretores/*.js) — ruído ambiental .next stale, NÃO arquivos da story. Zero erros nos 6 arquivos da story."
+  - check: "Full regression suite"
+    command: "npx vitest run"
+    result: "292 passed / 6 failed. 6 falhas EXCLUSIVAS em webhook/whatsapp/route.test.ts (alias @web/* — pré-existente, gate 50.3 TEST-001). Zero falhas em arquivos da story."
+  - check: "is_ai_active não escrito no send path"
+    command: "grep -rn is_ai_active <send-path files>"
+    result: "Única ocorrência é comentário 'NÃO desliga is_ai_active' — confirmado intocado."
+  - check: "Takeover mechanism intact"
+    command: "grep -n brokerSentRecently packages/web/src/app/api/cron/followup/route.ts"
+    result: "Linhas 177-181 — detecta role='broker' < 24h e pula follow-up. Acionado pelo insert role='broker' da story."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança aditiva e bem isolada (4 novos + 2 telas só com render condicional).
+    Helper puro não toca IO; route nunca derruba a request; is_ai_active
+    intocado. Rollback trivial via git revert. Pior caso runtime: envio externo
+    falha → mensagem gravada com send_error (estado recuperável e visível ao
+    corretor). Sem migration. Sem nova superfície de RLS (reusa policy 004).
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 10/10 ACs atendidos por código com evidência
+    path:linha; 11/11 testes verdes nos caminhos críticos de dispatch; lint e
+    type-check limpos nos arquivos da story (resíduos são ambientais/pré-existentes).
+    Regra de negócio crítica (Nicole continua atendendo; sem desligar is_ai_active;
+    takeover via brokerSentRecently) verificada diretamente no código. As 3 issues
+    LOW e 1 MEDIUM são não-bloqueantes (cobertura de route via infra de teste +
+    refinamentos de janela/handoff a tratar junto de 51-2/51-5). Aprovada para
+    @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: corretor envia mensagem em /broker/leads/{id}; verificar bolha 'Corretor' e SELECT messages WHERE role='broker'; confirmar Nicole pausada nas próximas 24h (brokerSentRecently)"
+    - "@po criar backlog (TEST-001): vitest resolve.alias @web/* → packages/web/src/* (destrava testes de route + corrige 6 falhas pré-existentes do webhook 21.1)"
+    - "Ao implementar 51-2 (handoff): revisar filtro status='active' em send-message/route.ts:96 (REL-002) e medição de janela 24h por última inbound (REL-001)"
+
+files_reviewed:
+  - path: "packages/web/src/lib/broker/dispatch-broker-message.ts"
+    verdict: PASS
+    notes: "Helper puro; janela 24h conservadora (null→fora); Telegram/WhatsApp; nunca lança; AbortSignal.timeout."
+  - path: "packages/web/src/lib/broker/dispatch-broker-message.test.ts"
+    verdict: PASS
+    notes: "11 cenários incl. 4 obrigatórios; asserções de URL e fetch-não-chamado fortes."
+  - path: "packages/web/src/app/api/leads/[id]/send-message/route.ts"
+    verdict: PASS
+    notes: "Auth+ownership+validação+conversation(create se ausente)+dispatch+insert role='broker'; 409 sem gravar p/ janela fechada; send_error em falha."
+  - path: "packages/web/src/app/broker/leads/[id]/_components/broker-message-input.tsx"
+    verdict: PASS
+    notes: "Client component; trata WHATSAPP_WINDOW_CLOSED; router.refresh; Ctrl/Cmd+Enter; contador de chars."
+  - path: "packages/web/src/app/broker/leads/[id]/page.tsx"
+    verdict: PASS
+    notes: "Render do input gated por CAN_SEND_ROLES; read-only path preservado."
+  - path: "packages/web/src/app/dashboard/conversas/[id]/page.tsx"
+    verdict: PASS
+    notes: "Render do input gated por admin/supervisor/gerente-comercial; reusa componente da broker page."

@@ -2,6 +2,9 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broker-message-input"
+
+const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial"]
 
 const roleConfig: Record<
   string,
@@ -35,7 +38,7 @@ export default async function ConversationDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  await getServerUser()
+  const user = await getServerUser()
   const supabase = await createClient()
 
   // Fetch conversation with lead info
@@ -143,6 +146,10 @@ export default async function ConversationDetailPage({
           </div>
         ) : (
           <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem registrada.</p>
+        )}
+
+        {lead?.id && CAN_SEND_ROLES.includes(user.role) && (
+          <BrokerMessageInput leadId={lead.id} />
         )}
       </div>
     </div>

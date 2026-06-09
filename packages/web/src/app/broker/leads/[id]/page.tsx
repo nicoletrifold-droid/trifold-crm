@@ -2,6 +2,9 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { BrokerMessageInput } from "./_components/broker-message-input"
+
+const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
 export default async function BrokerLeadDetailPage({
   params,
@@ -191,6 +194,10 @@ export default async function BrokerLeadDetailPage({
           </div>
         ) : (
           <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem ainda.</p>
+        )}
+
+        {CAN_SEND_ROLES.includes(user.role) && (
+          <BrokerMessageInput leadId={id} />
         )}
       </div>
     </div>
