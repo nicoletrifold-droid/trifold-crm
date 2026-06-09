@@ -11,9 +11,12 @@ interface Chamado {
   description: string
   reason: string
   image_url: string | null
+  image_urls?: string[] | null
   status: string
   reporter_name: string
   created_at: string
+  admin_response?: string | null
+  responded_at?: string | null
 }
 
 export default async function ChamadosPage() {
@@ -28,7 +31,7 @@ export default async function ChamadosPage() {
 
   let query = supabase
     .from("chamados")
-    .select("id, description, reason, image_url, status, reporter_name, created_at")
+    .select("id, description, reason, image_url, image_urls, status, reporter_name, created_at, admin_response, responded_at")
     .eq("org_id", user.orgId)
     .order("created_at", { ascending: false })
 
