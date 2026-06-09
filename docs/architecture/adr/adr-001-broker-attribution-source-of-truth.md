@@ -1,10 +1,10 @@
 # ADR-001: Fonte de Verdade para `leads.assigned_broker_id`
 
-- **Status:** Proposed — aguardando sign-off de produto (Gabriel) na decisão de negócio (ver "Decisão Pendente do Dono")
-- **Recomendação técnica:** @architect (Aria) — Accepted (ver "Sign-off do Architect")
-- **Data:** 2026-06-09
-- **Story:** 51-6 (spike/ADR) — Epic 51 (Handoff Nicole → Corretor)
-- **Decisores:** @architect (Aria) recomenda; dono do produto (Gabriel) aprova a política de negócio
+- **Status:** **Accepted** — sign-off de produto (Gabriel) na decisão de negócio em 2026-06-09 (opção **a**); sign-off técnico do @architect (Aria)
+- **Data:** 2026-06-09 (aceito)
+- **Story (spike/ADR):** 51-6 — Epic 51 (Handoff Nicole → Corretor)
+- **Story de implementação:** **51-7 — Guard de precedência em `assigned_broker_id`** (a ser criada pelo @sm; veículo de implementação desta decisão)
+- **Decisores:** @architect (Aria) recomendou; dono do produto (Gabriel) aprovou a política de negócio
 - **Stories afetadas:** 51-1, 51-3, 51-4
 
 ---
@@ -88,22 +88,37 @@ Hoje **não existe nenhum guard de precedência** entre os grupos. O `leadPatch.
 
 ---
 
-## Decisão (recomendada)
+## Decisão (ACEITA — 2026-06-09)
 
-**Adotar a Opção 3 (Híbrido / First-write-wins com guard), com a seguinte regra de precedência:**
+O dono do produto (Gabriel) bateu o martelo na decisão de negócio pendente, escolhendo a **opção (a) — MANTER O CORRETOR ORIGINAL**. Isso confirma a **Opção 3 (Híbrido / First-write-wins com guard)** já recomendada tecnicamente: *continuidade de relacionamento prevalece sobre especialização no imóvel*.
 
-> **Precedência de atribuição de `leads.assigned_broker_id` (do mais forte para o mais fraco):**
-> 1. **Atribuição humana explícita** (admin/supervisor manual, handoff manual, bulk, criação manual) — SEMPRE vence e SEMPRE pode sobrescrever.
-> 2. **Roleta de entrada** (round-robin / priorizar lead ativo) — define a atribuição **inicial** do lead.
-> 3. **Corretor primário do imóvel (pipeline da Nicole — agendamento/handoff)** — só atribui quando `assigned_broker_id` está **NULL**. **NUNCA sobrescreve** um corretor já atribuído.
+**Regra de negócio confirmada:** quando um lead já tem corretor atribuído (ex.: pela roleta de entrada) e a Nicole agenda visita / faz handoff para um imóvel cujo corretor primário é OUTRO, o sistema **mantém o corretor original como dono do lead** — `assigned_broker_id` **NÃO muda**. O corretor primário do imóvel é apenas **notificado** (informativo), **não vira dono**. O pipeline da Nicole só pode SETAR `assigned_broker_id` quando ele estiver **NULL** — nunca sobrescrever um corretor já atribuído.
 
-**Fonte de verdade:** `leads.assigned_broker_id` permanece a única fonte de verdade para *ownership* do lead. O **corretor primário do imóvel** (`broker_assignments.is_primary`) é fonte de verdade apenas para "quem é o especialista do imóvel" — um conceito separado de ownership, que pode ser usado para *notificação* da visita (51-3) sem alterar o dono.
+### Regra de precedência final (do mais forte para o mais fraco)
 
-**Separação de papéis (recomendação para 51-3):** quando o corretor da visita (primário do imóvel) for diferente do dono do lead, notifique **ambos** (ou, no mínimo, o dono), em vez de transferir o lead. Isso resolve o trade-off continuidade × especialização sem perda silenciosa.
+> **Precedência de atribuição de `leads.assigned_broker_id`:**
+> 1. **Ação humana explícita** (atribuição manual, handoff manual, reatribuição em massa/bulk, criação manual de lead — grupo C) — SEMPRE vence e SEMPRE pode sobrescrever. É decisão intencional.
+> 2. **Roleta de entrada** (round-robin / priorizar lead ativo — grupo A) — define a atribuição **inicial** do lead.
+> 3. **Corretor primário do imóvel** (pipeline da Nicole — agendamento/handoff, grupo B) — só atribui **quando `assigned_broker_id IS NULL`**. **NUNCA sobrescreve** um corretor já atribuído.
+
+Em outras palavras: **Ação humana > Roleta de entrada > Corretor primário do imóvel (pipeline)**, sendo que o pipeline atribui apenas em estado NULL e nunca reatribui.
+
+**Fonte de verdade:** `leads.assigned_broker_id` permanece a **única fonte de verdade para *ownership* do lead**. O **corretor primário do imóvel** (`broker_assignments.is_primary`) é fonte de verdade apenas para "quem é o especialista do imóvel" — um conceito **separado de ownership**, usado para *notificação* da visita (51-3) sem alterar o dono.
+
+**Separação de papéis (51-3):** quando o corretor da visita (primário do imóvel) for diferente do dono do lead, notifique **ambos** (ou, no mínimo, o dono), em vez de transferir o lead. Isso resolve o trade-off continuidade × especialização sem perda silenciosa de ownership.
+
+**Veículo de implementação:** esta decisão será implementada pela **Story 51-7 — Guard de precedência em `assigned_broker_id`** (a ser criada pelo @sm em paralelo). Este ADR **não** implementa o guard de código.
 
 ---
 
 ## Consequências
+
+> Consequências confirmadas para a opção aceita (a) — manter o corretor original como dono.
+
+### Resultado direto da decisão
+- **Corretor original preserva o lead e a visibilidade RLS `085`:** como `assigned_broker_id` deixa de ser sobrescrito pelo pipeline, o corretor que recebeu o lead (roleta ou ação humana) continua enxergando e editando o lead no pipeline, alertas e chat. Não há mais perda silenciosa de acesso.
+- **Corretor primário do imóvel recebe notificação informativa, mas não ownership:** ele é avisado da visita ao seu imóvel (51-3) sem virar dono do lead. Ownership e "especialista do imóvel" passam a ser papéis distintos.
+- **Continuidade de relacionamento prevalece sobre especialização no imóvel:** esse é o trade-off explicitamente escolhido pelo dono. Quando a especialização do corretor do imóvel for desejada como ownership, isso exige **ação humana** (handoff manual), que tem precedência máxima.
 
 ### Impacto nas stories do Epic 51
 - **51-1 (Chat bidirecional do corretor):** o ownership do chat (`send-message:86`) fica estável — o corretor que assumiu não perde o lead por uma ação automática da Nicole. **Comportamento esperado:** `assigned_broker_id` só muda por ação humana após a primeira atribuição.
@@ -122,28 +137,28 @@ Hoje **não existe nenhum guard de precedência** entre os grupos. O `leadPatch.
 
 ---
 
-## Decisão Pendente do Dono (produto — Gabriel)
+## Sign-off do Dono (produto — Gabriel) — 2026-06-09
 
-A decisão **técnica** (eliminar a sobrescrita silenciosa) é clara e recomendada. A decisão **de negócio** que precisa do seu aval:
+A decisão de negócio pendente foi resolvida. A pergunta era:
 
 > **Quando um lead já tem corretor (da roleta) e a Nicole agenda visita a um imóvel cujo corretor primário é OUTRO, o que deve acontecer?**
-> - (a) **Manter o corretor original como dono** e apenas **notificar** o corretor primário do imóvel sobre a visita (recomendado — Opção 3). *Continuidade > especialização.*
+> - (a) **Manter o corretor original como dono** e apenas **notificar** o corretor primário do imóvel sobre a visita (Opção 3). *Continuidade > especialização.*
 > - (b) Transferir o lead para o corretor do imóvel (comportamento atual — Opção 2). *Especialização > continuidade.*
 > - (c) Outra regra (ex.: transferir só se o corretor original estiver inativo).
 
-Enquanto não houver sign-off do dono, este ADR fica **Proposed**. A recomendação do architect é a opção **(a)**.
+**Decisão do dono: opção (a) — MANTER O CORRETOR ORIGINAL.** `assigned_broker_id` não muda quando o lead já tem corretor; o corretor primário do imóvel é apenas notificado, não vira dono. O pipeline da Nicole só seta `assigned_broker_id` quando ele está NULL. — **Gabriel (dono do produto), 2026-06-09**. Este ADR passa para **Accepted**.
 
 ---
 
-## Sign-off do Architect (Aria)
+## Sign-off do Architect (Aria) — 2026-06-09
 
-Revisei os 7 call-sites de escrita, a RLS `085`, o RPC `roleta_pick_and_advance` (069) e a interação com 51-1/51-3/51-4. **Aprovo tecnicamente a Opção 3.** O ponto crítico é que a sobrescrita em `pipeline.ts:621` e `:659` é um UPDATE cego sem guard de precedência — esse é o defeito a corrigir. A separação entre "dono do lead" (`assigned_broker_id`) e "especialista do imóvel" (`broker_assignments.is_primary`) é a peça conceitual que destrava o trade-off continuidade × especialização. — @architect (Aria), 2026-06-09
+Revisei os 7 call-sites de escrita, a RLS `085`, o RPC `roleta_pick_and_advance` (069) e a interação com 51-1/51-3/51-4. **Aprovo tecnicamente a Opção 3**, agora confirmada pela decisão de negócio do dono (opção a). O ponto crítico é que a sobrescrita em `pipeline.ts:621` e `:659` é um UPDATE cego sem guard de precedência — esse é o defeito a corrigir, e ele será endereçado pela **Story 51-7**. A separação entre "dono do lead" (`assigned_broker_id`) e "especialista do imóvel" (`broker_assignments.is_primary`) é a peça conceitual que destrava o trade-off continuidade × especialização. — @architect (Aria), 2026-06-09
 
 ---
 
-## Follow-ups de implementação (story futura — NÃO nesta story)
+## Follow-ups de implementação (Story 51-7 — NÃO nesta story)
 
-> Escopo desta story 51-6 é só o ADR. As mudanças abaixo são recomendações para uma story de implementação separada (sugestão de título: "51-7 — Guard de precedência em assigned_broker_id").
+> Escopo desta story 51-6 é só o ADR. As mudanças abaixo são o escopo da story de implementação **51-7 — Guard de precedência em `assigned_broker_id`** (a ser criada pelo @sm), que é o veículo de implementação desta decisão.
 
 1. **Guard no pipeline (B1/B2):** em `pipeline.ts:621` e `:659`, só setar `leadPatch.assigned_broker_id` quando o lead atual tiver `assigned_broker_id === null`. Carregar o valor atual de `assigned_broker_id` junto de `currentLead` (já há um fetch de lead no pipeline) e condicionar a atribuição.
 2. **Notificação sem reatribuição (51-3):** desacoplar a notificação da visita da atribuição — notificar o dono atual e (opcional) o corretor primário do imóvel, sem trocar o `assigned_broker_id`.
@@ -151,3 +166,12 @@ Revisei os 7 call-sites de escrita, a RLS `085`, o RPC `roleta_pick_and_advance`
 4. **(Opcional) Checar status do corretor** antes de atribuir o primário do imóvel quando o lead estiver NULL (cenário 5) — evitar atribuir a corretor inativo.
 5. **(Opcional) Auditoria:** registrar toda mudança de `assigned_broker_id` em `activities` (hoje só C1 registra `broker_assigned`; B1/B2 e a roleta não logam a *troca* de dono de forma uniforme) — facilita investigar reatribuições.
 6. **Bug histórico (AC4):** abrir issue para auditar leads que já sofreram reatribuição silenciosa (query em `lead_distribution_log` vs `assigned_broker_id` atual) — fora do escopo de implementação do guard.
+
+---
+
+## Change Log
+
+| Data | Versão | Mudança | Autor |
+|------|--------|---------|-------|
+| 2026-06-09 | 1.0 | Criação do ADR (spike Story 51-6): mapeamento dos 7 call-sites, 8 cenários de conflito, 4 opções consideradas, recomendação da Opção 3. Status **Proposed** com sign-off técnico do architect; decisão de negócio pendente do dono. | @architect (Aria) |
+| 2026-06-09 | 1.1 | **Decisão do dono recebida (opção a — manter corretor original).** Status **Proposed → Accepted**. Regra de precedência final fixada (Ação humana > Roleta > Pipeline, pipeline só atribui em NULL e nunca sobrescreve). Consequências confirmadas para a opção aceita. Apontado o veículo de implementação **Story 51-7**. Sign-off do dono (Gabriel) e do architect (Aria) registrados. | @architect (Aria) |

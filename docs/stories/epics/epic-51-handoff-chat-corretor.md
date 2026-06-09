@@ -3,7 +3,7 @@ epic: 51
 title: Handoff Nicole → Corretor + Chat do Corretor na Plataforma
 status: Draft
 created_at: 2026-06-09
-updated_at: 2026-06-09
+updated_at: 2026-06-09 (51-7 adicionada)
 created_by: River (@sm)
 priority: P0/P1
 objetivo_negocio:
@@ -19,7 +19,7 @@ related:
   - packages/ai/src/flows/handoff.ts (handoff existente — NÃO modificar trigger de agendamento)
   - packages/web/src/lib/roleta/notify-broker.ts (notificação de corretor — REUSAR)
   - packages/web/src/app/api/cron/followup/route.ts (follow-up engine — ESTENDER)
-stories_planned: [51.1, 51.2, 51.3, 51.4, 51.5, 51.6]
+stories_planned: [51.1, 51.2, 51.3, 51.4, 51.5, 51.6, 51.7]
 ---
 
 # Epic 51 — Handoff Nicole → Corretor + Chat do Corretor na Plataforma
@@ -145,6 +145,12 @@ Estender `sendFollowUpMessage` para WhatsApp Cloud API quando `phone` não come�
 Documentar e alinhar: roleta de entrada (assign no `whatsapp/route.ts`) vs. broker primário do imóvel (`broker_assignments`) evitando troca silenciosa de `assigned_broker_id`.
 **Depende de:** nada
 
+### Story 51-7 — Guard de Precedência em `assigned_broker_id` (P0)
+**Executor:** @dev | **QG:** @qa | **Complexity:** S (2-3h) | **Prioridade:** P0
+Implementar a Opção 3 do ADR-001: guard de first-write-wins em `pipeline.ts`. Pontos B1 (linha 621) e B2 (linha 659) só setam `leadPatch.assigned_broker_id` quando o lead atual tem `assigned_broker_id IS NULL`. Corrige bug que sobrescrevia silenciosamente o corretor da roleta e dono do chat, quebrando RLS 085 e Story 51-1.
+**Depende de:** 51-6 (ADR-001 aceito — sign-off produto Gabriel 2026-06-09)
+**Bloqueia:** estabilidade dos fluxos de 51-1, 51-3, 51-4
+
 ---
 
 ## Ordem de Execução Recomendada
@@ -159,6 +165,8 @@ Em paralelo com 51-1:
 51-4 (Notificação Follow-up) — P1, autossuficiente
 51-5 (Paridade WhatsApp) — P2, complementa 51-4
 51-6 (Atribuição Spike) — P2, decisão de design
+    ↓ depende (ADR-001 aceito)
+51-7 (Guard Precedência) — P0, corrige bug de reatribuição silenciosa
 ```
 
 ---
@@ -193,6 +201,7 @@ Em paralelo com 51-1:
 - [ ] Story 51-4 Done → corretor notificado quando cron detecta follow-ups esgotados
 - [ ] Story 51-5 Done (P2) → Nicole envia follow-up também via WhatsApp (não só Telegram)
 - [ ] Story 51-6 Done (P2) → ADR registrado sobre fonte de verdade de `assigned_broker_id`
+- [ ] Story 51-7 Done (P0) → pipeline nunca sobrescreve `assigned_broker_id` já preenchido; RLS 085 e chat 51-1 estáveis
 - [ ] Zero regressão no webhook WhatsApp (lead continua sendo processado normalmente)
 - [ ] Zero regressão no cron followup (Nicole continua funcionando para Telegram)
 
@@ -215,3 +224,4 @@ Em paralelo com 51-1:
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-06-09 | @sm (River) | Epic criado após auditoria de código + decisão de produto do PO |
+| 2026-06-09 | @sm (River) | Story 51-7 adicionada (guard ADR-001 — P0, implementação do sign-off de produto) |
