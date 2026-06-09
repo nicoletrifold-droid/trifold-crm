@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { X, ChevronLeft, ChevronRight, MessageSquare, CheckCircle2, Clock } from "lucide-react"
 import { CHAMADO_STATUS_BADGE, CHAMADO_STATUS_LABEL } from "@web/lib/status-badge"
@@ -35,6 +36,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function ChamadoCard({ chamado, isAdmin = false, onStatusChange, showReporter = false }: ChamadoCardProps) {
+  const router = useRouter()
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [responseText, setResponseText] = useState(chamado.admin_response ?? "")
@@ -71,6 +73,7 @@ export function ChamadoCard({ chamado, isAdmin = false, onStatusChange, showRepo
         admin_response: json.chamado?.admin_response ?? null,
       })
       setExpanded(false)
+      router.refresh() // revalida o layout server component → atualiza badge do menu
     } catch {
       setSaveError("Erro de conexão")
     } finally {
