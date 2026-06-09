@@ -16,13 +16,14 @@ const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_l
 
 type RawLead = Record<string, unknown>
 
-function normalizeLead(l: RawLead) {
+function normalizeLead(l: RawLead, brokerName: string) {
   return {
     ...l,
     properties: Array.isArray(l.properties)
       ? (l.properties[0] as { name: string } | undefined) ?? null
       : (l.properties as { name: string } | null) ?? null,
-    users: null,
+    // Todos os leads do pipeline do corretor são atribuídos a ele mesmo
+    users: l.assigned_broker_id ? { name: brokerName } : null,
   }
 }
 
@@ -56,7 +57,7 @@ export default async function BrokerPipelinePage() {
 
       return {
         stage_id: stage.id,
-        leads: rawLeads.map(normalizeLead),
+        leads: rawLeads.map((l) => normalizeLead(l, user.name)),
         totalCount,
         hasMore,
       }
