@@ -185,7 +185,7 @@ export default async function BrokerHomePage() {
           </Link>
 
           {/* Sem tarefas */}
-          <Link href="/broker/leads" className={`group flex flex-col rounded-xl border p-4 transition-all ${
+          <Link href="/broker/leads?tasks=sem-tarefas" className={`group flex flex-col rounded-xl border p-4 transition-all ${
             counts.sem_tarefas > 0
               ? "border-red-500/30 bg-red-500/10 hover:bg-red-500/15"
               : "border-stone-800 bg-stone-900 hover:border-stone-700"
@@ -202,7 +202,7 @@ export default async function BrokerHomePage() {
           </Link>
 
           {/* Atrasadas */}
-          <Link href="/broker/leads" className={`group flex flex-col rounded-xl border p-4 transition-all ${
+          <Link href="/broker/leads?tasks=atrasadas" className={`group flex flex-col rounded-xl border p-4 transition-all ${
             counts.atrasadas > 0
               ? "border-red-500/40 bg-red-500/10 hover:bg-red-500/15"
               : "border-stone-800 bg-stone-900 hover:border-stone-700"
@@ -219,7 +219,7 @@ export default async function BrokerHomePage() {
           </Link>
 
           {/* Para hoje */}
-          <Link href="/broker/leads" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-amber-500/40 hover:bg-stone-800/80">
+          <Link href="/broker/leads?tasks=para-hoje" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-amber-500/40 hover:bg-stone-800/80">
             <div className="mb-2">
               <Calendar className="h-5 w-5 text-amber-400" />
             </div>
@@ -230,7 +230,7 @@ export default async function BrokerHomePage() {
           </Link>
 
           {/* Futuras */}
-          <Link href="/broker/leads" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-emerald-500/40 hover:bg-stone-800/80">
+          <Link href="/broker/leads?tasks=futuras" className="group flex flex-col rounded-xl border border-stone-800 bg-stone-900 p-4 transition-all hover:border-emerald-500/40 hover:bg-stone-800/80">
             <div className="mb-2">
               <CheckCircle2 className="h-5 w-5 text-emerald-400" />
             </div>

@@ -5,36 +5,88 @@ import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
 import { LeadFilters } from "@web/components/lead-filters"
 
+const TASK_LABELS: Record<string, string> = {
+  atrasadas: "Tarefas atrasadas",
+  "para-hoje": "Tarefas para hoje",
+  futuras: "Tarefas futuras",
+  "sem-tarefas": "Sem tarefas",
+}
+
 export default async function BrokerLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string }>
+  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string; tasks?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
-  const { q, stage, property, days } = await searchParams
+  const { q, stage, property, days, tasks } = await searchParams
   const search = q?.trim().toLowerCase() ?? ""
 
-  const { data: leads } = await supabase
-    .from("leads")
-    .select(
-      `id, name, phone, email, qualification_score, interest_level,
-       stage_id, property_interest_id, created_at, updated_at,
-       kanban_stages:stage_id(name, color),
-       properties:property_interest_id(name)`
-    )
-    .eq("assigned_broker_id", user.id)
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+  const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1)
 
-  // Corte de data para filtro "parado há X dias"
+  const [{ data: leads }, { data: pendingTasks }, { data: properties }, { data: stages }] =
+    await Promise.all([
+      supabase
+        .from("leads")
+        .select(
+          `id, name, phone, email, qualification_score, interest_level,
+           stage_id, property_interest_id, created_at, updated_at,
+           kanban_stages:stage_id(name, color),
+           properties:property_interest_id(name)`
+        )
+        .eq("assigned_broker_id", user.id)
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false }),
+
+      // Tarefas pendentes do broker — para filtro por status
+      tasks
+        ? supabase
+            .from("lead_tasks")
+            .select("lead_id, due_at")
+            .eq("org_id", user.orgId)
+            .is("completed_at", null)
+        : Promise.resolve({ data: [] as { lead_id: string; due_at: string | null }[], error: null }),
+
+      supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
+      supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
+    ])
+
+  // Build sets for task-based filtering
+  const taskLeadIds = (() => {
+    if (!tasks || !pendingTasks) return null
+    const withOverdue = new Set<string>()
+    const withToday = new Set<string>()
+    const withFuture = new Set<string>()
+    const withAnyTask = new Set<string>()
+    for (const t of pendingTasks) {
+      withAnyTask.add(t.lead_id)
+      if (!t.due_at) continue
+      const d = new Date(t.due_at)
+      if (d < todayStart) withOverdue.add(t.lead_id)
+      else if (d < tomorrowStart) withToday.add(t.lead_id)
+      else withFuture.add(t.lead_id)
+    }
+    if (tasks === "atrasadas") return withOverdue
+    if (tasks === "para-hoje") return withToday
+    if (tasks === "futuras") return withFuture
+    if (tasks === "sem-tarefas") return null // handled by exclusion
+    return null
+  })()
+
   const daysAgo = days ? new Date(Date.now() - Number(days) * 86400000).toISOString() : null
 
-  // Filter client-side so search works across joined name/phone/email/stage
   const filtered = (leads ?? []).filter((lead) => {
     if (stage && lead.stage_id !== stage) return false
     if (property && lead.property_interest_id !== property) return false
     if (daysAgo && (lead.updated_at as string) >= daysAgo) return false
+    // Task filters
+    if (tasks === "sem-tarefas") {
+      const hasTask = (pendingTasks ?? []).some((t) => t.lead_id === (lead.id as string))
+      if (hasTask) return false
+    } else if (taskLeadIds) {
+      if (!taskLeadIds.has(lead.id as string)) return false
+    }
     if (!search) return true
     const name = ((lead.name as string) ?? "").toLowerCase()
     const phone = ((lead.phone as string) ?? "").toLowerCase()
@@ -46,20 +98,24 @@ export default async function BrokerLeadsPage({
     return name.includes(search) || phone.includes(search) || email.includes(search) || stageName.includes(search)
   })
 
-  // Load options for the new-lead modal
-  const [{ data: properties }, { data: stages }] = await Promise.all([
-    supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
-    supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
-  ])
+  // URL sem o filtro de tasks (para o botão ×)
+  const clearTasksUrl = (() => {
+    const params = new URLSearchParams()
+    if (q) params.set("q", q)
+    if (stage) params.set("stage", stage)
+    if (property) params.set("property", property)
+    if (days) params.set("days", days)
+    const qs = params.toString()
+    return `/broker/leads${qs ? `?${qs}` : ""}`
+  })()
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-stone-100">Meus Leads</h1>
           <p className="text-sm text-stone-500">
-            {filtered.length}{(search || stage) ? ` de ${leads?.length ?? 0}` : ""} leads
+            {filtered.length}{(search || stage || tasks) ? ` de ${leads?.length ?? 0}` : ""} leads
           </p>
         </div>
         <NewLeadModal
@@ -68,7 +124,6 @@ export default async function BrokerLeadsPage({
         />
       </div>
 
-      {/* Search + Filters */}
       <LeadSearch />
       <LeadFilters
         stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
@@ -78,25 +133,39 @@ export default async function BrokerLeadsPage({
         daysParam="days"
       />
 
+      {/* Chip de filtro por tarefa ativo */}
+      {tasks && TASK_LABELS[tasks] && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
+            {TASK_LABELS[tasks]}
+            <Link
+              href={clearTasksUrl}
+              className="ml-1 text-orange-400/60 hover:text-orange-300"
+              aria-label="Remover filtro"
+            >
+              ×
+            </Link>
+          </span>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-stone-900 p-12 text-center ring-1 ring-stone-800">
           <p className="text-stone-500">
             {search
               ? `Nenhum lead encontrado para "${q}".`
+              : tasks
+              ? `Nenhum lead com ${TASK_LABELS[tasks]?.toLowerCase()}.`
               : "Você não tem leads designados. Novos leads serão atribuídos pelo supervisor."}
           </p>
         </div>
       ) : (
         <>
-          {/* Mobile: card list */}
+          {/* Mobile */}
           <div className="space-y-2 lg:hidden">
             {filtered.map((lead: Record<string, unknown>) => {
-              const stageData = Array.isArray(lead.kanban_stages)
-                ? lead.kanban_stages[0]
-                : lead.kanban_stages
-              const property = Array.isArray(lead.properties)
-                ? lead.properties[0]
-                : lead.properties
+              const stageData = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
+              const propertyData = Array.isArray(lead.properties) ? lead.properties[0] : lead.properties
               return (
                 <Link
                   key={lead.id as string}
@@ -108,9 +177,9 @@ export default async function BrokerLeadsPage({
                       {(lead.name as string) || (lead.phone as string)}
                     </p>
                     <p className="mt-0.5 text-xs text-stone-500">{lead.phone as string}</p>
-                    {(property as { name?: string } | null)?.name && (
+                    {(propertyData as { name?: string } | null)?.name && (
                       <p className="mt-0.5 truncate text-xs text-stone-600">
-                        {(property as { name: string }).name}
+                        {(propertyData as { name: string }).name}
                       </p>
                     )}
                   </div>
@@ -135,44 +204,40 @@ export default async function BrokerLeadsPage({
             })}
           </div>
 
-          {/* Desktop: table */}
+          {/* Desktop */}
           <div className="hidden overflow-x-auto rounded-xl bg-stone-900 ring-1 ring-stone-800 lg:block">
-            <table className="min-w-full divide-y divide-stone-800">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs font-medium uppercase tracking-wider bg-stone-800/50 text-stone-400">
-                  <th className="px-6 py-3">Lead</th>
-                  <th className="px-6 py-3">Empreendimento</th>
-                  <th className="px-6 py-3">Etapa</th>
-                  <th className="px-6 py-3">Score</th>
-                  <th className="px-6 py-3">Último contato</th>
+                <tr className="border-b border-stone-800 text-left text-xs font-medium uppercase tracking-wide text-stone-500">
+                  <th className="px-4 py-3">Lead</th>
+                  <th className="px-4 py-3">Empreendimento</th>
+                  <th className="px-4 py-3">Etapa</th>
+                  <th className="px-4 py-3">Score</th>
+                  <th className="px-4 py-3">Último contato</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-800">
+              <tbody className="divide-y divide-stone-800/60">
                 {filtered.map((lead: Record<string, unknown>) => {
-                  const stageData = Array.isArray(lead.kanban_stages)
-                    ? lead.kanban_stages[0]
-                    : lead.kanban_stages
-                  const property = Array.isArray(lead.properties)
-                    ? lead.properties[0]
-                    : lead.properties
+                  const stageData = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
+                  const propertyData = Array.isArray(lead.properties) ? lead.properties[0] : lead.properties
+                  const score = lead.qualification_score as number | null
                   return (
-                    <tr key={lead.id as string} className="hover:bg-stone-800/30">
-                      <td className="px-6 py-4">
-                        <Link
-                          href={`/broker/leads/${lead.id}`}
-                          className="font-medium text-stone-100 hover:text-orange-300"
-                        >
-                          {(lead.name as string) || (lead.phone as string)}
+                    <tr key={lead.id as string} className="transition-colors hover:bg-stone-800/40">
+                      <td className="px-4 py-3">
+                        <Link href={`/broker/leads/${lead.id}`} className="block">
+                          <p className="font-medium text-stone-100">
+                            {(lead.name as string) || (lead.phone as string)}
+                          </p>
+                          <p className="text-xs text-stone-500">{lead.phone as string}</p>
                         </Link>
-                        <p className="text-xs text-stone-500">{lead.phone as string}</p>
                       </td>
-                      <td className="px-6 py-4 text-sm text-stone-400">
-                        {(property as { name?: string } | null)?.name ?? "-"}
+                      <td className="px-4 py-3 text-stone-400">
+                        {(propertyData as { name?: string } | null)?.name ?? "—"}
                       </td>
-                      <td className="px-6 py-4">
-                        {stageData && (
+                      <td className="px-4 py-3">
+                        {stageData ? (
                           <span
-                            className="rounded-full px-2 py-0.5 text-xs font-medium"
+                            className="rounded-full px-2.5 py-0.5 text-xs font-medium"
                             style={{
                               backgroundColor: `${(stageData as { color: string }).color}20`,
                               color: (stageData as { color: string }).color,
@@ -180,24 +245,22 @@ export default async function BrokerLeadsPage({
                           >
                             {(stageData as { name: string }).name}
                           </span>
-                        )}
+                        ) : "—"}
                       </td>
-                      <td className="px-6 py-4">
-                        {lead.qualification_score != null && (
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              (lead.qualification_score as number) >= 70
-                                ? "bg-green-500/15 text-green-300"
-                                : (lead.qualification_score as number) >= 40
-                                ? "bg-yellow-500/15 text-yellow-300"
-                                : "bg-stone-700/50 text-stone-400"
-                            }`}
-                          >
-                            {lead.qualification_score as number}
+                      <td className="px-4 py-3">
+                        {score != null ? (
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            score >= 70
+                              ? "bg-green-500/20 text-green-400"
+                              : score >= 40
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : "bg-stone-700 text-stone-400"
+                          }`}>
+                            {score}
                           </span>
-                        )}
+                        ) : "—"}
                       </td>
-                      <td className="px-6 py-4 text-sm text-stone-400">
+                      <td className="px-4 py-3 text-xs text-stone-500">
                         {new Date(lead.updated_at as string).toLocaleDateString("pt-BR")}
                       </td>
                     </tr>
