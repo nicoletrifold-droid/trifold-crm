@@ -3,6 +3,94 @@ import { NextResponse, type NextRequest } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 /**
+ * Minimal user shape the middleware needs for routing decisions: the auth id
+ * and `app_metadata` (which carries `role` after the backfill). This is the
+ * common denominator between `getUser()` (remote) and `getClaims()` (local JWT).
+ */
+type MiddlewareUser = { id: string; app_metadata: Record<string, unknown> }
+
+/**
+ * Resolve the request's user for ROUTING decisions only (perf optimization).
+ *
+ * Primary path: `getClaims()` — validates the JWT LOCALLY (signature via JWKS,
+ * cached) with ZERO network round-trips. The middleware runs on every navigation
+ * (Edge), so removing the GoTrue round-trip here removes ~150–250ms (cross-region
+ * today) / ~10ms (post-gru1) from EVERY request.
+ *
+ * Defensive design (auth must not break):
+ *  - The return shape of `getClaims()` differs across `@supabase/auth-js` minor
+ *    versions: some return `{ data: { claims } }`, others `{ data: claims }`.
+ *    We normalize BOTH shapes via `extractClaims`.
+ *  - On ANY error, missing `sub`, or unrecognized shape, we FALL BACK to the
+ *    original `getUser()` (remote validation). This keeps auth behavior identical
+ *    to before in every edge case — we only get the fast path on the happy path.
+ *
+ * Trade-off (documented, conscious decision — see arch report #3):
+ *  - `getClaims()` trusts the local JWT until it expires (~1h default). A token
+ *    is NOT revoked in real time here. This is acceptable because the middleware
+ *    only decides ROUTING, never authorizes a mutation. Server actions that
+ *    mutate keep using `getUser()` (remote validation) — see permissions.ts.
+ *
+ * Returns `null` when there is no valid session (caller redirects to login).
+ */
+function extractClaims(data: unknown): Record<string, unknown> | null {
+  if (data === null || typeof data !== "object") return null
+  // Shape A: { claims: {...} } (auth-js with verification metadata)
+  const maybeNested = (data as { claims?: unknown }).claims
+  if (maybeNested && typeof maybeNested === "object") {
+    return maybeNested as Record<string, unknown>
+  }
+  // Shape B: the claims object itself (has `sub`)
+  if ("sub" in (data as Record<string, unknown>)) {
+    return data as Record<string, unknown>
+  }
+  return null
+}
+
+async function getRoutingUser(
+  supabase: SupabaseClient
+): Promise<MiddlewareUser | null> {
+  // Fast path: local JWT validation, no network.
+  try {
+    const supabaseAuth = supabase.auth as unknown as {
+      getClaims?: () => Promise<{ data: unknown; error: unknown }>
+    }
+    if (typeof supabaseAuth.getClaims === "function") {
+      const { data, error } = await supabaseAuth.getClaims()
+      if (!error) {
+        const claims = extractClaims(data)
+        const sub = claims?.sub
+        if (typeof sub === "string" && sub.length > 0) {
+          const appMetadata =
+            claims && typeof claims.app_metadata === "object" && claims.app_metadata !== null
+              ? (claims.app_metadata as Record<string, unknown>)
+              : {}
+          return { id: sub, app_metadata: appMetadata }
+        }
+        // claims === null here means NO valid session → not authenticated.
+        // Only treat as "no user" if getClaims returned cleanly with no claims.
+        if (data === null) {
+          return null
+        }
+      }
+      // error OR unexpected shape → fall through to remote validation below.
+    }
+  } catch {
+    // Any unexpected runtime error → fall back to the safe remote path.
+  }
+
+  // Safe fallback: remote validation (original behavior, identical semantics).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+  return {
+    id: user.id,
+    app_metadata: (user.app_metadata ?? {}) as Record<string, unknown>,
+  }
+}
+
+/**
  * Reads the user's role.
  *
  * Primary source: `user.app_metadata.role` (set by `setClienteRoleMetadata`
@@ -68,9 +156,11 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Perf (#3): validate the session via local JWT (`getClaims`) instead of a
+  // remote GoTrue round-trip (`getUser`). Falls back to `getUser` defensively.
+  // `user` keeps the same minimal shape the routing logic below relies on:
+  // `{ id, app_metadata }`.
+  const user = await getRoutingUser(supabase)
 
   const { pathname } = request.nextUrl
 

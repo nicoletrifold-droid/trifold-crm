@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["gru1"],
   "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
   "buildCommand": "cd ../.. && pnpm turbo build --filter=@trifold/web",
   "framework": "nextjs",
@@ -26,15 +27,15 @@
   "crons": [
     {
       "path": "/api/cron/enrich-leads",
-      "schedule": "*/30 * * * *"
+      "schedule": "5,35 * * * *"
     },
     {
       "path": "/api/cron/followup",
-      "schedule": "0 */2 * * *"
+      "schedule": "22 */2 * * *"
     },
     {
       "path": "/api/cron/campaign-poll",
-      "schedule": "*/3 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/keep-alive",
@@ -42,7 +43,7 @@
     },
     {
       "path": "/api/cron/meta-sync-entities",
-      "schedule": "0 */4 * * *"
+      "schedule": "2 */6 * * *"
     },
     {
       "path": "/api/cron/meta-sync-insights",
@@ -50,11 +51,11 @@
     },
     {
       "path": "/api/cron/webhook-health",
-      "schedule": "*/30 * * * *"
+      "schedule": "15,45 * * * *"
     },
     {
       "path": "/api/cron/meta-sync-health",
-      "schedule": "0 */4 * * *"
+      "schedule": "52 */6 * * *"
     },
     {
       "path": "/api/cron/email-automations",
@@ -62,15 +63,15 @@
     },
     {
       "path": "/api/cron/email-queue",
-      "schedule": "0 * * * *"
+      "schedule": "42 * * * *"
     },
     {
       "path": "/api/cron/meta-ads-intelligence",
-      "schedule": "0 11 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/calendly-sync",
-      "schedule": "*/30 * * * *"
+      "schedule": "25,55 * * * *"
     },
     {
       "path": "/api/cron/appointment-email-reminders",
@@ -78,7 +79,7 @@
     },
     {
       "path": "/api/cron/appointment-whatsapp-reminders",
-      "schedule": "*/30 * * * *"
+      "schedule": "8,38 * * * *"
     },
     {
       "path": "/api/cron/analytics-report",

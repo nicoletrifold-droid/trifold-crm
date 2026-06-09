@@ -86,39 +86,36 @@ export default async function DashboardLayout({
   const supabase = await createClient()
 
   // Story 35-5: lê permissões do banco em vez de regras hardcoded por role.
-  const permissions = await getUserPermissions(user.id, user.orgId)
+  // Perf (#4): passa `user.role` (já conhecido via getServerUser) para pular o
+  // round-trip que rebuscaria `users.role` dentro de getUserPermissions.
+  const permissions = await getUserPermissions(user.id, user.orgId, user.role)
 
   // Contagens de alertas, mensagens e aprovações pendentes de obras — só consulta
   // o banco se os módulos correspondentes estiverem acessíveis.
   const isAdminOrSupervisorObras =
     permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
 
-  // Busca alertas_notifications_seen_at para filtrar badge — atualizado
-  // via server action quando o usuário abre a página de Alertas
-  const alertasSeenAt = permissions["alertas"]
-    ? await supabase
-        .from("users")
-        .select("alertas_notifications_seen_at")
-        .eq("id", user.id)
-        .single()
-        .then(({ data }) => (data as { alertas_notifications_seen_at: string | null } | null)?.alertas_notifications_seen_at ?? null)
-    : null
-
-  const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
+  // Perf (#6): busca `alertas_notifications_seen_at` (badge de alertas) EM
+  // PARALELO com os counts de mensagens/aprovações, que não dependem dele.
+  // O count de alertas (que SIM depende de seenAt via `.gt("created_at", ...)`)
+  // roda numa 2ª etapa, mas mensagens/aprovações/seenAt já resolveram juntos.
+  const needsAlertData = permissions["alertas"]
+  const needsBadgeData =
     permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
+
+  const [alertasSeenAt, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
+    needsBadgeData
       ? await Promise.all([
-          permissions["alertas"]
-            ? (() => {
-                let q = supabase
-                  .from("follow_up_log")
-                  .select("id", { count: "exact", head: true })
-                  .eq("org_id", user.orgId)
-                  .eq("status", "pending")
-                // Só conta alertas MAIS NOVOS que a última visita ao módulo
-                if (alertasSeenAt) q = q.gt("created_at", alertasSeenAt)
-                return q
-              })()
-            : Promise.resolve({ count: 0 }),
+          // alertas_notifications_seen_at — atualizado via server action quando o
+          // usuário abre a página de Alertas. Buscado em paralelo aqui.
+          needsAlertData
+            ? supabase
+                .from("users")
+                .select("alertas_notifications_seen_at")
+                .eq("id", user.id)
+                .single()
+                .then(({ data }) => (data as { alertas_notifications_seen_at: string | null } | null)?.alertas_notifications_seen_at ?? null)
+            : Promise.resolve(null),
           permissions["mensagens"]
             ? supabase
                 .from("obra_mensagens")
@@ -135,7 +132,21 @@ export default async function DashboardLayout({
                 .eq("status", "pendente")
             : Promise.resolve({ count: 0 }),
         ])
-      : [{ count: 0 }, { count: 0 }, { count: 0 }]
+      : [null, { count: 0 }, { count: 0 }]
+
+  // 2ª etapa: count de alertas mais novos que a última visita (depende de seenAt).
+  const { count: alertCount } = needsAlertData
+    ? await (() => {
+        let q = supabase
+          .from("follow_up_log")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", user.orgId)
+          .eq("status", "pending")
+        // Só conta alertas MAIS NOVOS que a última visita ao módulo
+        if (alertasSeenAt) q = q.gt("created_at", alertasSeenAt)
+        return q
+      })()
+    : { count: 0 }
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!])
