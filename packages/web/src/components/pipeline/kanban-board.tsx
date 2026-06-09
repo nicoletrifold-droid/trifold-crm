@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, useRef } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import {
   DndContext,
   DragOverlay,
@@ -68,6 +68,7 @@ export interface PipelineFilters {
 interface KanbanBoardProps {
   initialStages: Stage[]
   initialLeadsPerStage: InitialStageState[]
+  initialStageFocus?: string | null
   activeFilters?: PipelineFilters
 }
 
@@ -96,6 +97,7 @@ function buildInitialStageMap(initialLeadsPerStage: InitialStageState[]): Map<st
 export function KanbanBoard({
   initialStages,
   initialLeadsPerStage,
+  initialStageFocus,
   activeFilters,
 }: KanbanBoardProps) {
   const [stageMap, setStageMap] = useState<Map<string, StageState>>(() =>
@@ -114,6 +116,15 @@ export function KanbanBoard({
   // Necessário porque pointerWithin pode retornar null no momento exato do soltar
   // mesmo quando o card estava sobre uma coluna válida um instante antes.
   const lastOverId = useRef<UniqueIdentifier | null>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!initialStageFocus || !boardRef.current) return
+    const col = boardRef.current.querySelector<HTMLElement>(
+      `[data-stage-slug="${initialStageFocus}"]`
+    )
+    col?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })
+  }, [initialStageFocus])
 
   const collisionDetection: CollisionDetection = useCallback((args) => {
     const pointerHits = pointerWithin(args)
@@ -407,6 +418,7 @@ export function KanbanBoard({
         </div>
       )}
 
+      <div ref={boardRef}>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
@@ -419,8 +431,8 @@ export function KanbanBoard({
             const stageLeads = state?.leads ?? []
             const visibleLeads = stageLeads.filter(matchesSourceFilter)
             return (
+              <div key={stage.id} data-stage-slug={stage.slug}>
               <KanbanColumn
-                key={stage.id}
                 stage={stage}
                 leads={visibleLeads}
                 totalCount={state?.totalCount ?? visibleLeads.length}
@@ -429,6 +441,7 @@ export function KanbanBoard({
                 onLoadMore={() => handleLoadMore(stage.id)}
                 onSelectLead={setSelectedLeadId}
               />
+              </div>
             )
           })}
         </ScrollableX>
@@ -448,6 +461,7 @@ export function KanbanBoard({
           onClose={() => setSelectedLeadId(null)}
         />
       </DndContext>
+      </div>
     </>
   )
 }

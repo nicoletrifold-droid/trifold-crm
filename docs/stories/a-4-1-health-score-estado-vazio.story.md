@@ -1,6 +1,6 @@
 # Story A-4.1 — Health Score: estado vazio informativo no dashboard Meta Ads
 
-**Status:** InReview
+**Status:** Done
 **Epic:** A — Meta Ads Agent Data Foundation
 **Criada por:** @sm (River)
 **Data:** 2026-06-08

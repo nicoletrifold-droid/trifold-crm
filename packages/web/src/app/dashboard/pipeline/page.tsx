@@ -296,6 +296,7 @@ export default async function PipelinePage({
       <KanbanBoard
         initialStages={stagesList}
         initialLeadsPerStage={initialLeadsPerStage}
+        initialStageFocus={filters.stage ?? null}
         activeFilters={{
           property_id: filters.property_id ?? null,
           broker_id: filters.broker_id ?? null,

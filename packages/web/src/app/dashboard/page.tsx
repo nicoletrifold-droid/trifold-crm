@@ -86,9 +86,10 @@ export default async function DashboardPage() {
           {stages.map((stage) => {
             const count = stageCounts[stage.id] ?? 0
             return (
-              <div
+              <Link
                 key={stage.id}
-                className="flex-1 rounded-md p-3 text-center"
+                href={`/dashboard/pipeline?stage=${stage.slug}`}
+                className="flex-1 rounded-md p-3 text-center transition-[filter] hover:brightness-125 cursor-pointer"
                 style={{ backgroundColor: `${stage.color}15` }}
               >
                 <p
@@ -98,7 +99,7 @@ export default async function DashboardPage() {
                   {stage.name}
                 </p>
                 <p className="mt-1 text-xl font-bold text-gray-900 dark:text-stone-100">{count}</p>
-              </div>
+              </Link>
             )
           })}
         </div>
