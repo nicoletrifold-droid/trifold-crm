@@ -159,12 +159,12 @@ export async function buildAnalyticsReportData(
       .gte("created_at", twoWeeksAgo.toISOString())
       .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),
-    // Para cálculo de tempo de atendimento: leads do mês com broker
+    // Para cálculo de tempo de atendimento: leads dos últimos 7 dias com broker
     supabase.from("leads")
       .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
       .eq("org_id", orgId)
       .not("assigned_broker_id", "is", null)
-      .gte("created_at", monthStart.toISOString())
+      .gte("created_at", oneWeekAgo.toISOString())
       .limit(500),
   ])
 
@@ -249,7 +249,7 @@ export async function buildAnalyticsReportData(
     }
 
     brokerResponseTimes = [...brokerMap.values()]
-      .filter(b => b.count >= 2)
+      .filter(b => b.count >= 1)
       .map(b => ({ name: b.name, avgMinutes: Math.round(b.totalMinutes / b.count), count: b.count }))
       .sort((a, b) => a.avgMinutes - b.avgMinutes)
   }

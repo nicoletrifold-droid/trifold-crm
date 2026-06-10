@@ -270,22 +270,26 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
         {/* Tempo médio de atendimento por corretor */}
         {data.brokerResponseTimes.length > 0 && (
           <View break style={{ ...s.section, marginTop: 12 }}>
-            <Text style={s.sectionTitle}>Tempo Médio de 1º Atendimento por Corretor (últimos 30 dias)</Text>
+            <Text style={s.sectionTitle}>Tempo Médio de 1º Atendimento por Corretor (últimos 7 dias)</Text>
             <View style={{ ...s.compHeaderRow, borderRadius: 2, marginBottom: 0 }}>
-              <Text style={{ ...s.compHeaderLabel }}>Corretor</Text>
-              <Text style={{ ...s.compHeaderCell }}>Leads</Text>
-              <Text style={{ ...s.compHeaderCell }}>Tempo médio</Text>
+              <Text style={{ ...s.compHeaderLabel, flex: 1 }}>Corretor</Text>
+              <Text style={{ ...s.compHeaderCell, width: 40 }}>Leads</Text>
+              <Text style={{ ...s.compHeaderCell, width: 90 }}>Tempo médio</Text>
             </View>
             {data.brokerResponseTimes.map((b, i) => {
               const h = Math.floor(b.avgMinutes / 60)
               const m = Math.round(b.avgMinutes % 60)
               const label = h > 0 ? `${h}h ${m}min` : `${m}min`
-              const color = b.avgMinutes <= 30 ? GREEN : b.avgMinutes <= 120 ? BRAND : RED
+              const dotColor = b.avgMinutes <= 30 ? GREEN : b.avgMinutes <= 120 ? BRAND : RED
               return (
                 <View key={i} style={i === data.brokerResponseTimes.length - 1 ? s.tableRowLast : s.tableRow}>
                   <Text style={s.rowLabel}>{b.name}</Text>
-                  <Text style={{ ...s.rowValue, width: 55, textAlign: "right" }}>{b.count}</Text>
-                  <Text style={{ ...s.rowValue, width: 80, textAlign: "right", color }}>{label}</Text>
+                  <Text style={{ ...s.rowValue, width: 40, textAlign: "right" }}>{b.count}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", width: 90 }}>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dotColor, marginRight: 4 } as any} />
+                    <Text style={{ ...s.rowValue, color: dotColor }}>{label}</Text>
+                  </View>
                 </View>
               )
             })}
