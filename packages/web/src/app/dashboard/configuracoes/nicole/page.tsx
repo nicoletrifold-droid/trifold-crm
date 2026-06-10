@@ -1,23 +1,26 @@
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 
-const NICOLE_CARDS = [
+const ALL_CARDS = [
   {
     href: "/dashboard/configuracoes/personalidade",
     icon: "◬",
     title: "Personalidade",
     description: "Prompts e comportamento da IA",
+    roles: ["admin", "supervisor"],
   },
   {
     href: "/dashboard/configuracoes/nicole/treinamento",
     icon: "◎",
     title: "Treinamento",
     description: "Base de conhecimento sobre empreendimentos",
+    roles: ["admin", "supervisor", "gerente-comercial"],
   },
 ]
 
 export default async function NicolePage() {
-  await getServerUser()
+  const user = await getServerUser()
+  const NICOLE_CARDS = ALL_CARDS.filter(c => c.roles.includes(user.role))
 
   return (
     <div className="space-y-6">
