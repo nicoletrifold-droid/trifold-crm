@@ -97,6 +97,10 @@ export function QuickHistoryModal({
     setConflictError(null)
   }
 
+  // Converte data+hora local para ISO UTC (corrige timezone)
+  const localToISO = (date: string, time: string) =>
+    date ? new Date(`${date}T${time}:00`).toISOString() : null
+
   // Lógica: quando agendar visita futura
   const isFutureVisit = actionType === "visita"
     && visitHappened === "nao"
@@ -122,8 +126,8 @@ export function QuickHistoryModal({
       if (prop) metadata.property_name = prop.name
     }
 
-    // Data relevante para o registro
-    const eventAt = returnDate ? `${returnDate}T${returnTime}:00` : null
+    // Data relevante para o registro — convertida para UTC via timezone do browser
+    const eventAt = localToISO(returnDate, returnTime)
     if (eventAt) metadata.event_at = eventAt
 
     // 1. Criar nota no histórico
@@ -260,19 +264,21 @@ export function QuickHistoryModal({
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
               <div className="space-y-4">
 
+                {/* Empreendimento — todos os tipos (opcional) */}
+                {properties.length > 0 && (
+                  <div>
+                    <label className={labelClass}>Empreendimento / Imóvel <span className="font-normal text-gray-400">(opcional)</span></label>
+                    <select value={propertyId} onChange={e => setPropertyId(e.target.value)} className={inputClass}>
+                      <option value="">Selecione (opcional)</option>
+                      {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 {/* ── VISITA — fluxo bifurcado ── */}
                 {actionType === "visita" && (
                   <>
-                    {/* Empreendimento */}
-                    {properties.length > 0 && (
-                      <div>
-                        <label className={labelClass}>Empreendimento / Imóvel</label>
-                        <select value={propertyId} onChange={e => setPropertyId(e.target.value)} className={inputClass}>
-                          <option value="">Selecione (opcional)</option>
-                          {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                      </div>
-                    )}
+                    {/* Empreendimento já renderizado acima */}
 
                     {/* A visita aconteceu? */}
                     <div>
