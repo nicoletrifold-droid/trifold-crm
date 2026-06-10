@@ -35,7 +35,7 @@ const PERDIDO_STAGE_IDS = [
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -92,6 +92,11 @@ export default async function LeadsPage({
   if (params.property_id) {
     query = query.eq("property_interest_id", params.property_id)
     countQuery = countQuery.eq("property_interest_id", params.property_id)
+  }
+
+  if (params.broker_id) {
+    query = query.eq("assigned_broker_id", params.broker_id)
+    countQuery = countQuery.eq("assigned_broker_id", params.broker_id)
   }
 
   if (params.days) {
@@ -178,9 +183,13 @@ export default async function LeadsPage({
         <LeadFilters
           stages={allStages.map(s => ({ id: s.id, name: s.name, color: s.color }))}
           properties={allProperties.map(p => ({ id: p.id, name: p.name }))}
+          brokers={["admin", "supervisor", "gerente-comercial"].includes(user.role)
+            ? allBrokers.map(b => ({ id: b.id, name: b.name }))
+            : undefined}
           stageParam="stage_id"
           propertyParam="property_id"
           daysParam="days"
+          brokerParam="broker_id"
         />
       </div>
 
