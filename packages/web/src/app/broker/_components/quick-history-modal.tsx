@@ -8,10 +8,17 @@ type ActionType = "ligacao" | "email" | "whatsapp" | "visita"
 type Step = "type" | "form"
 
 interface Stage { id: string; name: string; color: string | null }
+interface Property { id: string; name: string }
 
 interface HistoryItem {
   id: string; type: string; description: string; created_at: string
   metadata: { acao?: string; corretor?: { nome: string } }
+}
+
+interface Task {
+  id: string; title: string; action_type: string; due_at: string | null
+  completed_at: string | null; source: string; created_at: string
+  assigned_to: { id: string; name: string } | null
 }
 
 interface Props {
@@ -21,6 +28,7 @@ interface Props {
   currentInterestLevel: string | null
   onClose: () => void
   onSaved: (note: HistoryItem) => void
+  onTaskAdded?: (task: Task) => void
 }
 
 const ACTION_OPTIONS: { type: ActionType; label: string; icon: React.ReactNode }[] = [
@@ -34,25 +42,38 @@ const ACTION_LABELS: Record<ActionType, string> = {
   ligacao: "Ligação", email: "E-mail", whatsapp: "WhatsApp", visita: "Visita",
 }
 
+const TASK_TITLES: Record<ActionType, string> = {
+  ligacao: "Retorno - Ligação",
+  email: "Retorno - E-mail",
+  whatsapp: "Retorno - WhatsApp",
+  visita: "Visita Agendada",
+}
+
 const INTEREST_LEVELS = [
   { value: "cold", label: "Frio" },
   { value: "warm", label: "Morno" },
   { value: "hot",  label: "Quente" },
 ]
 
-export function QuickHistoryModal({ leadId, orgId, currentStageId, currentInterestLevel, onClose, onSaved }: Props) {
+export function QuickHistoryModal({
+  leadId, orgId, currentStageId, currentInterestLevel,
+  onClose, onSaved, onTaskAdded,
+}: Props) {
   const [step, setStep] = useState<Step>("type")
   const [actionType, setActionType] = useState<ActionType | null>(null)
   const [stages, setStages] = useState<Stage[]>([])
+  const [properties, setProperties] = useState<Property[]>([])
 
   // Form fields
   const [hasReturn, setHasReturn] = useState("nao")
   const [returnDate, setReturnDate] = useState("")
-  const [returnTime, setReturnTime] = useState("07:00")
+  const [returnTime, setReturnTime] = useState("09:00")
   const [details, setDetails] = useState("")
   const [stageId, setStageId] = useState(currentStageId ?? "")
   const [interestLevel, setInterestLevel] = useState(currentInterestLevel ?? "")
+  const [propertyId, setPropertyId] = useState("")
   const [saving, setSaving] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -62,42 +83,59 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
       .eq("org_id", orgId)
       .order("position")
       .then(({ data }) => setStages(data ?? []))
+    supabase
+      .from("properties")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setProperties(data ?? []))
   }, [orgId])
 
   function selectType(type: ActionType) {
     setActionType(type)
     setStep("form")
+    // Reset form on type change
+    setHasReturn("nao")
+    setReturnDate("")
+    setReturnTime("09:00")
+    setDetails("")
+    setPropertyId("")
+    setFeedback(null)
   }
 
   async function handleSave() {
     if (!actionType || !details.trim()) return
     setSaving(true)
 
+    const returnAt = hasReturn === "sim" && returnDate
+      ? `${returnDate}T${returnTime}:00`
+      : null
+
     const metadata: Record<string, unknown> = {}
-    if (hasReturn === "sim" && returnDate) {
-      metadata.return_at = `${returnDate}T${returnTime}:00`
+    if (returnAt) {
+      metadata.return_at = returnAt
       metadata.return_by = "corretor"
+    }
+    if (actionType === "visita" && propertyId) {
+      metadata.property_id = propertyId
+      const prop = properties.find(p => p.id === propertyId)
+      if (prop) metadata.property_name = prop.name
     }
 
     // 1. Create history note
     const noteRes = await fetch(`/api/leads/${leadId}/notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        description: details.trim(),
-        action_type: actionType,
-        metadata,
-      }),
+      body: JSON.stringify({ description: details.trim(), action_type: actionType, metadata }),
     })
 
     if (!noteRes.ok) { setSaving(false); return }
     const { data: note } = await noteRes.json() as { data: HistoryItem }
 
-    // 2. Update stage if changed
+    // 2. Update stage/interest if changed
     const updates: Record<string, string> = {}
     if (stageId && stageId !== currentStageId) updates.stage_id = stageId
     if (interestLevel && interestLevel !== currentInterestLevel) updates.interest_level = interestLevel
-
     if (Object.keys(updates).length > 0) {
       await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",
@@ -106,8 +144,57 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
       })
     }
 
+    // 3. Auto-create task when return is scheduled
+    let taskCreated = false
+    if (returnAt) {
+      const taskRes = await fetch(`/api/leads/${leadId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: TASK_TITLES[actionType],
+          action_type: actionType,
+          due_at: returnAt,
+        }),
+      })
+      if (taskRes.ok) {
+        taskCreated = true
+        const { data: task } = await taskRes.json() as { data: Task }
+        onTaskAdded?.(task)
+      }
+    }
+
+    // 4. Create appointment for future visits
+    let appointmentCreated = false
+    if (actionType === "visita" && returnAt && new Date(returnAt) > new Date()) {
+      const apptRes = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: leadId,
+          scheduled_at: returnAt,
+          duration_minutes: 60,
+          property_id: propertyId || null,
+          status: "scheduled",
+        }),
+      })
+      if (apptRes.ok) appointmentCreated = true
+    }
+
+    // 5. Feedback
+    if (appointmentCreated && taskCreated) {
+      setFeedback("Histórico salvo, tarefa e compromisso criados na agenda!")
+    } else if (taskCreated) {
+      setFeedback("Histórico salvo e tarefa criada!")
+    }
+
     onSaved(note)
-    onClose()
+    setSaving(false)
+
+    if (!appointmentCreated && !taskCreated) {
+      onClose()
+    } else {
+      setTimeout(onClose, 1500)
+    }
   }
 
   const inputClass = "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
@@ -121,9 +208,7 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-stone-800">
           <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
-            {step === "type"
-              ? "Registrar ou Agendar Contato"
-              : `Registrar ${ACTION_LABELS[actionType!]}`}
+            {step === "type" ? "Registrar ou Agendar Contato" : `Registrar ${ACTION_LABELS[actionType!]}`}
           </h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:text-stone-500 dark:hover:bg-stone-800">
             <X className="h-4 w-4" />
@@ -131,11 +216,8 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
         </div>
 
         {step === "type" ? (
-          /* ── Seletor de tipo ─────────────────────── */
           <div className="px-6 py-6">
-            <p className="mb-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
-              Interação
-            </p>
+            <p className="mb-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">Interação</p>
             <div className="grid grid-cols-4 gap-3">
               {ACTION_OPTIONS.map(({ type, label, icon }) => (
                 <button
@@ -150,15 +232,32 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
             </div>
           </div>
         ) : (
-          /* ── Formulário de registro ──────────────── */
           <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+            {feedback && (
+              <div className="mb-4 rounded-lg bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700 dark:bg-green-500/10 dark:text-green-300">
+                {feedback}
+              </div>
+            )}
 
-              {/* Coluna esquerda — campos principais */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+              {/* Campos principais */}
               <div className="space-y-4">
-                {/* Agendou retorno */}
+
+                {/* Empreendimento — apenas para Visita */}
+                {actionType === "visita" && properties.length > 0 && (
+                  <div>
+                    <label className={labelClass}>Empreendimento / Imóvel</label>
+                    <select value={propertyId} onChange={e => setPropertyId(e.target.value)} className={inputClass}>
+                      <option value="">Selecione (opcional)</option>
+                      {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 <div>
-                  <label className={labelClass}>Agendou algum retorno?</label>
+                  <label className={labelClass}>
+                    {actionType === "visita" ? "A visita aconteceu?" : "Agendou algum retorno?"}
+                  </label>
                   <select value={hasReturn} onChange={e => setHasReturn(e.target.value)} className={inputClass}>
                     <option value="nao">Não</option>
                     <option value="sim">Sim</option>
@@ -168,7 +267,9 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
                 {hasReturn === "sim" && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelClass}>Data</label>
+                      <label className={labelClass}>
+                        {actionType === "visita" ? "Data da visita" : "Data do retorno"}
+                      </label>
                       <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} className={inputClass} />
                     </div>
                     <div>
@@ -178,7 +279,13 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
                   </div>
                 )}
 
-                {/* Quem retorna */}
+                {hasReturn === "sim" && actionType === "visita" && returnDate && new Date(`${returnDate}T${returnTime}:00`) > new Date() && (
+                  <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                    <span>📅</span>
+                    <span>Esta visita será criada automaticamente na agenda com lembrete.</span>
+                  </div>
+                )}
+
                 <div>
                   <label className={labelClass}>Quem deve retornar?</label>
                   <select className={inputClass} defaultValue="corretor">
@@ -186,7 +293,6 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
                   </select>
                 </div>
 
-                {/* Detalhes */}
                 <div>
                   <label className={labelClass}>Detalhes do Contato</label>
                   <textarea
@@ -199,41 +305,31 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
                 </div>
               </div>
 
-              {/* Coluna direita — ATUALIZAR LEAD */}
+              {/* ATUALIZAR LEAD */}
               <div className="w-full lg:w-52">
                 <div className="rounded-xl border-2 border-orange-300 bg-orange-50 p-4 dark:border-orange-500/40 dark:bg-orange-500/10">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">
-                    Atualizar Lead
-                  </p>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">Atualizar Lead</p>
                   <div className="space-y-3">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-orange-700 dark:text-orange-300">
-                        Situação do Lead
-                      </label>
+                      <label className="mb-1 block text-xs font-medium text-orange-700 dark:text-orange-300">Situação do Lead</label>
                       <select
                         value={stageId}
                         onChange={e => setStageId(e.target.value)}
                         className="w-full rounded-lg border border-orange-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-orange-400 focus:outline-none dark:border-orange-500/30 dark:bg-stone-800 dark:text-stone-100"
                       >
                         <option value="">— manter atual —</option>
-                        {stages.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
+                        {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-orange-700 dark:text-orange-300">
-                        Calor do Lead
-                      </label>
+                      <label className="mb-1 block text-xs font-medium text-orange-700 dark:text-orange-300">Calor do Lead</label>
                       <select
                         value={interestLevel}
                         onChange={e => setInterestLevel(e.target.value)}
                         className="w-full rounded-lg border border-orange-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-orange-400 focus:outline-none dark:border-orange-500/30 dark:bg-stone-800 dark:text-stone-100"
                       >
                         <option value="">— manter atual —</option>
-                        {INTEREST_LEVELS.map(l => (
-                          <option key={l.value} value={l.value}>{l.label}</option>
-                        ))}
+                        {INTEREST_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
                       </select>
                     </div>
                   </div>
@@ -241,7 +337,6 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
               </div>
             </div>
 
-            {/* Salvar */}
             <div className="mt-5 flex items-center gap-3">
               <button
                 onClick={handleSave}
@@ -260,7 +355,6 @@ export function QuickHistoryModal({ leadId, orgId, currentStageId, currentIntere
           </div>
         )}
 
-        {/* Footer com Cancelar */}
         <div className="flex justify-end border-t border-gray-100 px-6 py-3 dark:border-stone-800">
           <button onClick={onClose} className="text-sm text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300">
             Cancelar

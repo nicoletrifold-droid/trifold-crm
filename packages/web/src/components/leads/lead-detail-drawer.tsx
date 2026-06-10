@@ -859,6 +859,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           currentInterestLevel={lead.interest_level}
           onClose={() => dispatch({ type: "TOGGLE_QUICK_HISTORY" })}
           onSaved={(note) => dispatch({ type: "NOTE_ADDED", note })}
+          onTaskAdded={(task) => dispatch({ type: "TASK_ADDED", task })}
         />
       )}
     </>
