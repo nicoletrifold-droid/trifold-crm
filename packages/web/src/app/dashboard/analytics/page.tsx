@@ -215,6 +215,58 @@ export default async function AnalyticsPage({
   // Total = soma das stages ativas — idêntico ao "Total no pipeline" do Dashboard
   const totalLeads = stages.reduce((sum, s) => sum + s.count, 0)
 
+  // ── Tempo médio de 1º atendimento por corretor ────────────────────────────
+  const responseLeads = await supabase
+    .from("leads")
+    .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+    .eq("org_id", appUser.orgId)
+    .not("assigned_broker_id", "is", null)
+    .gte("created_at", monthStart.toISOString())
+    .limit(500)
+
+  type ResponseLead = { id: string; created_at: string; assigned_broker_id: string; broker: { id: string; name: string } | { id: string; name: string }[] | null }
+  const responseLeadList = (responseLeads.data ?? []) as ResponseLead[]
+  const responseLeadIds = responseLeadList.map(l => l.id)
+
+  let brokerResponseTimes: { id: string; name: string; avgMinutes: number; count: number }[] = []
+
+  if (responseLeadIds.length > 0) {
+    const { data: firstNotes } = await supabase
+      .from("activities")
+      .select("lead_id, created_at")
+      .eq("org_id", appUser.orgId)
+      .eq("type", "broker_note")
+      .in("lead_id", responseLeadIds)
+      .order("created_at", { ascending: true })
+
+    const firstNoteByLead = new Map<string, string>()
+    for (const note of (firstNotes ?? [])) {
+      if (!firstNoteByLead.has(note.lead_id as string)) {
+        firstNoteByLead.set(note.lead_id as string, note.created_at as string)
+      }
+    }
+
+    const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
+    for (const lead of responseLeadList) {
+      const firstNote = firstNoteByLead.get(lead.id)
+      if (!firstNote) continue
+      const bArr = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
+      if (!bArr) continue
+      if (HIDDEN_BROKER_NAMES.has(bArr.name.toLowerCase().trim())) continue
+      const diffMs = new Date(firstNote).getTime() - new Date(lead.created_at).getTime()
+      if (diffMs < 0) continue
+      const cur = brokerMap.get(bArr.id) ?? { name: bArr.name, totalMinutes: 0, count: 0 }
+      cur.totalMinutes += diffMs / 60000
+      cur.count++
+      brokerMap.set(bArr.id, cur)
+    }
+
+    brokerResponseTimes = [...brokerMap.entries()]
+      .filter(([, v]) => v.count >= 1)
+      .map(([id, v]) => ({ id, name: v.name, avgMinutes: Math.round(v.totalMinutes / v.count), count: v.count }))
+      .sort((a, b) => a.avgMinutes - b.avgMinutes)
+  }
+
   const sourceLabels = SOURCE_LABELS_SHORT
   // Escala raiz quadrada para diferenciar valores pequenos sem esmagar os grandes
   const maxFunnelSqrt = Math.max(...stages.map((s) => Math.sqrt(s.count)), 1)
@@ -383,6 +435,41 @@ export default async function AnalyticsPage({
               <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum corretor cadastrado.</p>
             )}
           </div>
+        </div>
+
+        {/* Tempo médio de 1º atendimento */}
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Tempo Médio de Atendimento</h2>
+          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o 1º contato registrado — mês atual</p>
+          {brokerResponseTimes.length > 0 ? (
+            <div className="space-y-3">
+              {brokerResponseTimes.map((b) => {
+                const h = Math.floor(b.avgMinutes / 60)
+                const m = b.avgMinutes % 60
+                const label = h > 0 ? `${h}h ${m}min` : `${m}min`
+                const color = b.avgMinutes <= 30
+                  ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                  : b.avgMinutes <= 120
+                  ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                  : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                return (
+                  <div key={b.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-sm text-gray-600 dark:text-stone-300">{b.name}</span>
+                      <span className="ml-2 text-xs text-gray-400 dark:text-stone-500">({b.count} leads)</span>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-3 py-0.5 text-sm font-semibold ${color}`}>
+                      {label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-stone-500">
+              Nenhum atendimento registrado via &quot;+ Novo Histórico&quot; este mês.
+            </p>
+          )}
         </div>
 
         {/* Lost Reasons */}
