@@ -17,7 +17,9 @@ export async function OPTIONS() {
 
 // POST — Lead vindo de landing page WordPress
 export async function POST(request: NextRequest) {
-  const secret = process.env.LANDING_PAGE_WEBHOOK_SECRET
+  // Bracket notation prevents Turbopack/Next.js from statically inlining as undefined
+  const env = process.env
+  const secret = (env["LANDING_PAGE_WEBHOOK_SECRET"] ?? "").trim()
 
   if (!secret) {
     console.error("[LP-WEBHOOK] LANDING_PAGE_WEBHOOK_SECRET não configurado")
