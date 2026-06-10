@@ -74,7 +74,7 @@ export function CreativePreviewModal({
       {/* Sheet (mobile) / Modal (desktop) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm rounded-t-2xl bg-white p-6 shadow-xl dark:bg-stone-900 sm:max-w-md sm:rounded-2xl"
+        className="relative w-full max-w-sm rounded-t-2xl bg-white p-6 shadow-xl dark:bg-stone-900 sm:max-w-xl sm:rounded-2xl"
       >
         {/* Drag handle (mobile only) */}
         <div className="mb-3 flex justify-center sm:hidden">
@@ -101,13 +101,13 @@ export function CreativePreviewModal({
 
         {/* Image */}
         {displayUrl && (
-          <div className="mb-4 overflow-hidden rounded-lg bg-stone-100 dark:bg-stone-800">
+          <div className="mb-4 flex items-center justify-center overflow-hidden rounded-lg bg-stone-100 dark:bg-stone-800">
             {/* eslint-disable-next-line @next/next/no-img-element -- Meta CDN dynamic URLs com tokens expiráveis */}
             <img
               src={displayUrl}
               alt={`${adName} — anúncio Meta`}
-              className="h-auto w-full object-contain"
-              style={{ maxHeight: "60vh" }}
+              className="h-auto object-contain"
+              style={{ maxHeight: "70vh", maxWidth: "100%", width: "auto" }}
             />
           </div>
         )}
