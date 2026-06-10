@@ -11,7 +11,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
   if (forbidden) return forbidden
 
   const body = await request.json()

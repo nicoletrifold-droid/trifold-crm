@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useReducer, useState } from "react"
+import { useEffect, useMemo, useReducer, useState, useCallback } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
-import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History } from "lucide-react"
+import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck } from "lucide-react"
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
@@ -830,6 +830,9 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             )}
           </div>
 
+          {/* ── TRANSFERIR CORRETOR (admin/supervisor/gerente-comercial) ── */}
+          <TransferBrokerSection leadId={leadId} supabase={supabase} />
+
           {/* Marcar como Perdido */}
           {!isPerdido && (
             <div className="px-5 py-4">
@@ -859,5 +862,95 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         />
       )}
     </>
+  )
+}
+
+// ── Transferir Corretor (admin / supervisor / gerente-comercial only) ─────────
+
+type SupabaseClient = ReturnType<typeof createClient>
+
+function TransferBrokerSection({ leadId, supabase }: { leadId: string; supabase: SupabaseClient }) {
+  const [canTransfer, setCanTransfer] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([])
+  const [selectedId, setSelectedId] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const role = (data.user?.app_metadata?.role as string | undefined) ?? ""
+      if (["admin", "supervisor", "gerente-comercial"].includes(role)) {
+        setCanTransfer(true)
+      }
+    })
+  }, [supabase])
+
+  const fetchBrokers = useCallback(async () => {
+    const { data } = await supabase
+      .from("brokers")
+      .select("user_id, users:user_id(id, name)")
+      .eq("is_available", true)
+    const list = (data ?? []).map((b) => {
+      const u = Array.isArray(b.users) ? b.users[0] : b.users
+      return { id: (u as { id: string })?.id ?? "", name: (u as { name: string })?.name ?? "" }
+    }).filter(b => b.id)
+    setBrokers(list)
+  }, [supabase])
+
+  function handleOpen() {
+    setOpen(true)
+    setDone(false)
+    void fetchBrokers()
+  }
+
+  async function handleConfirm() {
+    if (!selectedId) return
+    setSaving(true)
+    const res = await fetch(`/api/leads/${leadId}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ broker_id: selectedId }),
+    })
+    setSaving(false)
+    if (res.ok) { setDone(true); setOpen(false) }
+  }
+
+  if (!canTransfer) return null
+
+  return (
+    <div className="border-t border-stone-100 px-5 py-4 dark:border-stone-800">
+      {!open ? (
+        <button
+          onClick={handleOpen}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
+        >
+          <UserCheck className="h-4 w-4" />
+          {done ? "Corretor transferido ✓" : "Transferir Corretor"}
+        </button>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">Transferir para</p>
+          <select
+            value={selectedId}
+            onChange={e => setSelectedId(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-400 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+          >
+            <option value="">Selecione o corretor</option>
+            {brokers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <div className="flex gap-2">
+            <button onClick={handleConfirm} disabled={saving || !selectedId}
+              className="flex-1 rounded-lg bg-blue-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50">
+              {saving ? "Transferindo…" : "Confirmar"}
+            </button>
+            <button onClick={() => setOpen(false)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-400 dark:hover:bg-stone-800">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
