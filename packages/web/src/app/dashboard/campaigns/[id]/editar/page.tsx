@@ -14,6 +14,8 @@ export default function EditarCampanhaPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [showRawHtml, setShowRawHtml] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaign, setCampaign] = useState<any>(null)
 
@@ -152,33 +154,44 @@ export default function EditarCampanhaPage() {
                 Arraste blocos do painel direito para montar o layout. Clique em uma imagem para adicionar link clicável.
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {!showRawHtml && (
                 <button
                   type="button"
                   onClick={async () => {
+                    if (showPreview) {
+                      setShowPreview(false)
+                      return
+                    }
                     if (!editorRef.current) return
                     const { html } = await editorRef.current.getHtmlAndDesign()
-                    const blob = new Blob([html], { type: "text/html" })
-                    const url = URL.createObjectURL(blob)
-                    window.open(url, "_blank")
-                    setTimeout(() => URL.revokeObjectURL(url), 15000)
+                    setPreviewHtml(html)
+                    setShowPreview(true)
                   }}
                   className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
                 >
-                  Pré-visualizar e-mail
+                  {showPreview ? "← Voltar ao editor" : "Ver preview"}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setShowRawHtml((v) => !v)}
-                className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
-              >
-                {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
-              </button>
+              {!showPreview && (
+                <button
+                  type="button"
+                  onClick={() => setShowRawHtml((v) => !v)}
+                  className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                >
+                  {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
+                </button>
+              )}
             </div>
           </div>
-          {showRawHtml ? (
+          {showPreview && previewHtml ? (
+            <iframe
+              srcDoc={previewHtml}
+              className="w-full border-0 bg-white"
+              style={{ height: "calc(100vh - 220px)", minHeight: 700 }}
+              title="Preview do e-mail"
+            />
+          ) : showRawHtml ? (
             <div className="p-6">
               <textarea
                 name="email_body_html"
