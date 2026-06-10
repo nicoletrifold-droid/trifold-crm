@@ -43,15 +43,16 @@ export async function POST(request: NextRequest) {
   try {
     if (contentType.includes("application/json")) {
       const json = await request.json() as Record<string, unknown>
-      for (const [k, v] of Object.entries(json)) {
-        if (typeof v === "string") fields[k] = v
-        else if (v !== null && v !== undefined) fields[k] = String(v)
-      }
+      flattenIntoFields(json, fields)
     } else {
-      // form-urlencoded (padrão do WPForms / Contact Form 7 / Elementor)
+      // form-urlencoded — Elementor e outros plugins
       const text = await request.text()
       const params = new URLSearchParams(text)
-      params.forEach((v, k) => { fields[k] = v })
+      params.forEach((v, k) => {
+        // Elementor envia como "form_fields[name]" — extrair só o nome interno
+        const match = k.match(/^form_fields\[([^\]]+)\]$/)
+        fields[match ? match[1]! : k] = v
+      })
     }
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400, headers: CORS_HEADERS })
@@ -240,6 +241,30 @@ async function processLandingPageLead(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Suporta JSON plano E aninhado (Elementor envia {form_fields:{name:...}} ou array de {id,value})
+function flattenIntoFields(json: Record<string, unknown>, out: Record<string, string>) {
+  for (const [k, v] of Object.entries(json)) {
+    if (k === "form_fields" && v && typeof v === "object" && !Array.isArray(v)) {
+      // Elementor Pro: {"form_fields": {"name": "...", "email": "..."}}
+      for (const [fk, fv] of Object.entries(v as Record<string, unknown>)) {
+        if (typeof fv === "string") out[fk] = fv
+        else if (fv !== null && fv !== undefined) out[fk] = String(fv)
+      }
+    } else if (k === "fields" && Array.isArray(v)) {
+      // Elementor alternativo: {"fields": [{"id":"name","value":"..."}]}
+      for (const item of v as Array<Record<string, unknown>>) {
+        const id = item.id as string | undefined
+        const val = item.value as string | undefined
+        if (id && val !== undefined) out[id] = String(val)
+      }
+    } else if (typeof v === "string") {
+      out[k] = v
+    } else if (v !== null && v !== undefined && typeof v !== "object") {
+      out[k] = String(v)
+    }
+  }
+}
 
 function pick(obj: Record<string, string>, keys: string[]): string | null {
   for (const k of keys) {
