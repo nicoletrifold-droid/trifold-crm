@@ -144,15 +144,11 @@ export default function EditarCampanhaPage() {
           </div>
         </div>
 
-        {/* Editor de e-mail — largura total, split simultâneo */}
-        <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800 overflow-hidden">
+        {/* Editor de e-mail */}
+        <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-200 px-6 py-3 dark:border-stone-800">
-            <div>
-              <span className="text-sm font-semibold text-gray-700 dark:text-stone-300">Corpo do e-mail</span>
-              <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">
-                Editor à esquerda · Preview ao vivo à direita
-              </p>
-            </div>
+            <span className="text-sm font-semibold text-gray-700 dark:text-stone-300">Corpo do e-mail</span>
             <button
               type="button"
               onClick={() => setShowRawHtml((v) => !v)}
@@ -172,9 +168,9 @@ export default function EditarCampanhaPage() {
               />
             </div>
           ) : (
-            <div className="flex" style={{ height: "calc(100vh - 220px)", minHeight: 700 }}>
-              {/* Editor Unlayer */}
-              <div className="min-w-0 flex-1 border-r border-gray-200 dark:border-stone-800">
+            <>
+              {/* Editor — full width, altura confortável */}
+              <div style={{ height: 560 }}>
                 <CampaignVisualEditor
                   ref={editorRef}
                   campaignId={id}
@@ -182,18 +178,24 @@ export default function EditarCampanhaPage() {
                   onHtmlChange={setPreviewHtml}
                 />
               </div>
-              {/* Preview ao vivo */}
-              <div className="flex w-[420px] flex-shrink-0 flex-col bg-gray-100 dark:bg-stone-950">
-                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2 dark:border-stone-800 bg-white dark:bg-stone-900">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-stone-500">Preview</span>
-                  <span className="text-xs text-gray-300 dark:text-stone-600">600px</span>
+
+              {/* Preview inline — full width, como cliente de e-mail */}
+              <div className="border-t border-gray-200 dark:border-stone-800">
+                <div className="flex items-center justify-between bg-gray-50 px-6 py-2 dark:bg-stone-800/60">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-stone-500">
+                    Preview
+                  </span>
+                  <span className="text-xs text-gray-300 dark:text-stone-600">atualiza automaticamente</span>
                 </div>
-                <div className="flex-1 overflow-auto">
+                <div
+                  className="overflow-y-auto bg-[#f4f4f4] dark:bg-stone-950"
+                  style={{ height: 480 }}
+                >
                   {previewHtml ? (
                     <iframe
                       srcDoc={previewHtml}
-                      className="w-full border-0"
-                      style={{ height: "100%", minHeight: 600 }}
+                      className="mx-auto block border-0"
+                      style={{ width: "100%", height: 1200 }}
                       title="Preview do e-mail"
                     />
                   ) : (
@@ -203,7 +205,7 @@ export default function EditarCampanhaPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
