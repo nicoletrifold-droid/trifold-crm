@@ -461,15 +461,23 @@ export default async function AnalyticsPage({
                   : b.avgMinutes <= 120
                   ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
                   : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                const dot = b.avgMinutes <= 30
+                  ? "bg-green-500"
+                  : b.avgMinutes <= 120
+                  ? "bg-orange-500"
+                  : "bg-red-500"
                 return (
                   <div key={b.id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <span className="text-sm text-gray-600 dark:text-stone-300">{b.name}</span>
                       <span className="ml-2 text-xs text-gray-400 dark:text-stone-500">({b.count} leads)</span>
                     </div>
-                    <span className={`shrink-0 rounded-full px-3 py-0.5 text-sm font-semibold ${color}`}>
-                      {label}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
+                      <span className={`rounded-full px-3 py-0.5 text-sm font-semibold ${color}`}>
+                        {label}
+                      </span>
+                    </div>
                   </div>
                 )
               })}
