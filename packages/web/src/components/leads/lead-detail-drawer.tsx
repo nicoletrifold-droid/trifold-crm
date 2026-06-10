@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useReducer, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
-import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown } from "lucide-react"
+import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil } from "lucide-react"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
 
@@ -308,6 +308,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   }
 
   async function handleToggleTask(taskId: string, currentlyCompleted: boolean) {
+    if (!currentlyCompleted && !window.confirm("Deseja marcar esta tarefa como concluída?")) return
     dispatch({ type: "TASK_TOGGLED", taskId, completed: !currentlyCompleted })
     await fetch(`/api/leads/${leadId}/tasks/${taskId}`, {
       method: "PATCH",
@@ -317,6 +318,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   }
 
   async function handleDeleteTask(taskId: string) {
+    if (!window.confirm("Deseja excluir esta tarefa? Esta ação não pode ser desfeita.")) return
     dispatch({ type: "TASK_DELETED", taskId })
     await fetch(`/api/leads/${leadId}/tasks/${taskId}`, { method: "DELETE" })
   }
@@ -394,9 +396,18 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           {loading ? (
             <div className="h-6 w-40 animate-pulse rounded bg-stone-200 dark:bg-stone-800" />
           ) : (
-            <h2 className="truncate text-lg font-bold text-stone-900 dark:text-stone-100">
-              {lead?.name || lead?.phone || "..."}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-lg font-bold text-stone-900 dark:text-stone-100">
+                {lead?.name || lead?.phone || "..."}
+              </h2>
+              <Link
+                href={`/broker/leads/${leadId}`}
+                title="Editar lead"
+                className="shrink-0 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-orange-500 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-orange-400"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">

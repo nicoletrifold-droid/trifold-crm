@@ -147,7 +147,7 @@ export default async function BrokerHomePage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Link href="/broker/leads" className={`flex flex-col ${cardHover} hover:border-orange-300 dark:hover:border-orange-500/40`}>
+          <Link href="/broker/leads?stage=00000000-0000-0000-0001-000000000001" className={`flex flex-col ${cardHover} hover:border-orange-300 dark:hover:border-orange-500/40`}>
             <div className="mb-2"><Users className="h-5 w-5 text-orange-500" /></div>
             <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">{counts.novos}</p>
             <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">
@@ -155,7 +155,7 @@ export default async function BrokerHomePage() {
             </p>
           </Link>
 
-          <Link href="/broker/leads" className={`flex flex-col ${cardHover}`}>
+          <Link href="/broker/leads?filter=trabalhados" className={`flex flex-col ${cardHover}`}>
             <div className="mb-2"><Users className="h-5 w-5 text-gray-400 dark:text-stone-500" /></div>
             <p className="text-3xl font-bold text-gray-900 dark:text-stone-100">{counts.trabalhados}</p>
             <p className="mt-1 text-[11px] font-semibold uppercase leading-tight text-gray-400 dark:text-stone-500">

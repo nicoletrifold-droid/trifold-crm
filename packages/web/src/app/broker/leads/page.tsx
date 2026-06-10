@@ -12,14 +12,20 @@ const TASK_LABELS: Record<string, string> = {
   "sem-tarefas": "Sem tarefas",
 }
 
+const FILTER_LABELS: Record<string, string> = {
+  trabalhados: "Leads já trabalhados",
+}
+
+const AGUARDANDO_STAGE_ID = "00000000-0000-0000-0001-000000000001"
+
 export default async function BrokerLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string; tasks?: string }>
+  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string; tasks?: string; filter?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
-  const { q, stage, property, days, tasks } = await searchParams
+  const { q, stage, property, days, tasks, filter } = await searchParams
   const search = q?.trim().toLowerCase() ?? ""
 
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -80,6 +86,7 @@ export default async function BrokerLeadsPage({
     if (stage && lead.stage_id !== stage) return false
     if (property && lead.property_interest_id !== property) return false
     if (daysAgo && (lead.updated_at as string) >= daysAgo) return false
+    if (filter === "trabalhados" && lead.stage_id === AGUARDANDO_STAGE_ID) return false
     // Task filters
     if (tasks === "sem-tarefas") {
       const hasTask = (pendingTasks ?? []).some((t) => t.lead_id === (lead.id as string))
@@ -105,6 +112,19 @@ export default async function BrokerLeadsPage({
     if (stage) params.set("stage", stage)
     if (property) params.set("property", property)
     if (days) params.set("days", days)
+    if (filter) params.set("filter", filter)
+    const qs = params.toString()
+    return `/broker/leads${qs ? `?${qs}` : ""}`
+  })()
+
+  // URL sem o filtro named (para o botão ×)
+  const clearFilterUrl = (() => {
+    const params = new URLSearchParams()
+    if (q) params.set("q", q)
+    if (stage) params.set("stage", stage)
+    if (property) params.set("property", property)
+    if (days) params.set("days", days)
+    if (tasks) params.set("tasks", tasks)
     const qs = params.toString()
     return `/broker/leads${qs ? `?${qs}` : ""}`
   })()
@@ -115,7 +135,7 @@ export default async function BrokerLeadsPage({
         <div>
           <h1 className="text-2xl font-bold text-stone-100">Meus Leads</h1>
           <p className="text-sm text-stone-500">
-            {filtered.length}{(search || stage || tasks) ? ` de ${leads?.length ?? 0}` : ""} leads
+            {filtered.length}{(search || stage || tasks || filter) ? ` de ${leads?.length ?? 0}` : ""} leads
           </p>
         </div>
         <NewLeadModal
@@ -134,20 +154,34 @@ export default async function BrokerLeadsPage({
       />
 
       {/* Chip de filtro por tarefa ativo */}
-      {tasks && TASK_LABELS[tasks] && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
-            {TASK_LABELS[tasks]}
-            <Link
-              href={clearTasksUrl}
-              className="ml-1 text-orange-400/60 hover:text-orange-300"
-              aria-label="Remover filtro"
-            >
-              ×
-            </Link>
-          </span>
+      {(tasks && TASK_LABELS[tasks]) || (filter && FILTER_LABELS[filter]) ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {tasks && TASK_LABELS[tasks] && (
+            <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
+              {TASK_LABELS[tasks]}
+              <Link
+                href={clearTasksUrl}
+                className="ml-1 text-orange-400/60 hover:text-orange-300"
+                aria-label="Remover filtro"
+              >
+                ×
+              </Link>
+            </span>
+          )}
+          {filter && FILTER_LABELS[filter] && (
+            <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
+              {FILTER_LABELS[filter]}
+              <Link
+                href={clearFilterUrl}
+                className="ml-1 text-orange-400/60 hover:text-orange-300"
+                aria-label="Remover filtro"
+              >
+                ×
+              </Link>
+            </span>
+          )}
         </div>
-      )}
+      ) : null}
 
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-stone-900 p-12 text-center ring-1 ring-stone-800">
@@ -156,6 +190,8 @@ export default async function BrokerLeadsPage({
               ? `Nenhum lead encontrado para "${q}".`
               : tasks
               ? `Nenhum lead com ${TASK_LABELS[tasks]?.toLowerCase()}.`
+              : filter
+              ? `Nenhum lead com filtro "${FILTER_LABELS[filter]?.toLowerCase()}".`
               : "Você não tem leads designados. Novos leads serão atribuídos pelo supervisor."}
           </p>
         </div>
