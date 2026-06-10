@@ -297,6 +297,8 @@ export default async function AnalyticsPage({
           </h1>
           <a
             href="/dashboard/analytics/report"
+            target="_blank"
+            rel="noopener noreferrer"
             className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
             Relatório PDF
