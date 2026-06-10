@@ -14,7 +14,6 @@ export default function EditarCampanhaPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [showRawHtml, setShowRawHtml] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaign, setCampaign] = useState<any>(null)
@@ -145,53 +144,25 @@ export default function EditarCampanhaPage() {
           </div>
         </div>
 
-        {/* Editor de e-mail — largura total */}
-        <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-stone-800">
+        {/* Editor de e-mail — largura total, split simultâneo */}
+        <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-3 dark:border-stone-800">
             <div>
               <span className="text-sm font-semibold text-gray-700 dark:text-stone-300">Corpo do e-mail</span>
               <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">
-                Arraste blocos do painel direito para montar o layout. Clique em uma imagem para adicionar link clicável.
+                Editor à esquerda · Preview ao vivo à direita
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              {!showRawHtml && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (showPreview) {
-                      setShowPreview(false)
-                      return
-                    }
-                    if (!editorRef.current) return
-                    const { html } = await editorRef.current.getHtmlAndDesign()
-                    setPreviewHtml(html)
-                    setShowPreview(true)
-                  }}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-                >
-                  {showPreview ? "← Voltar ao editor" : "Ver preview"}
-                </button>
-              )}
-              {!showPreview && (
-                <button
-                  type="button"
-                  onClick={() => setShowRawHtml((v) => !v)}
-                  className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
-                >
-                  {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowRawHtml((v) => !v)}
+              className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+            >
+              {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
+            </button>
           </div>
-          {showPreview && previewHtml ? (
-            <iframe
-              srcDoc={previewHtml}
-              className="w-full border-0 bg-white"
-              style={{ height: "calc(100vh - 220px)", minHeight: 700 }}
-              title="Preview do e-mail"
-            />
-          ) : showRawHtml ? (
+
+          {showRawHtml ? (
             <div className="p-6">
               <textarea
                 name="email_body_html"
@@ -201,11 +172,38 @@ export default function EditarCampanhaPage() {
               />
             </div>
           ) : (
-            <CampaignVisualEditor
-              ref={editorRef}
-              campaignId={id}
-              initialDesign={campaign.email_body_json ?? null}
-            />
+            <div className="flex" style={{ height: "calc(100vh - 220px)", minHeight: 700 }}>
+              {/* Editor Unlayer */}
+              <div className="min-w-0 flex-1 border-r border-gray-200 dark:border-stone-800">
+                <CampaignVisualEditor
+                  ref={editorRef}
+                  campaignId={id}
+                  initialDesign={campaign.email_body_json ?? null}
+                  onHtmlChange={setPreviewHtml}
+                />
+              </div>
+              {/* Preview ao vivo */}
+              <div className="flex w-[420px] flex-shrink-0 flex-col bg-gray-100 dark:bg-stone-950">
+                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2 dark:border-stone-800 bg-white dark:bg-stone-900">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-stone-500">Preview</span>
+                  <span className="text-xs text-gray-300 dark:text-stone-600">600px</span>
+                </div>
+                <div className="flex-1 overflow-auto">
+                  {previewHtml ? (
+                    <iframe
+                      srcDoc={previewHtml}
+                      className="w-full border-0"
+                      style={{ height: "100%", minHeight: 600 }}
+                      title="Preview do e-mail"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <p className="text-xs text-gray-400 dark:text-stone-600">Carregando preview...</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
 

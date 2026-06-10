@@ -24,10 +24,11 @@ interface Props {
   campaignId: string
   initialDesign?: object | null
   onReady?: () => void
+  onHtmlChange?: (html: string) => void
 }
 
 export const CampaignVisualEditor = forwardRef<CampaignEditorRef, Props>(
-  function CampaignVisualEditor({ campaignId, initialDesign, onReady }, ref) {
+  function CampaignVisualEditor({ campaignId, initialDesign, onReady, onHtmlChange }, ref) {
     const editorRef = useRef<VisualEditorRef>(null)
     const imagesRef = useRef<ImageVariantSession[]>([])
     const [uploading, setUploading] = useState(false)
@@ -104,9 +105,9 @@ export const CampaignVisualEditor = forwardRef<CampaignEditorRef, Props>(
     }))
 
     return (
-      <div className="relative">
+      <div className="relative h-full">
         {uploading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/40">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
             <span className="text-sm text-white">Enviando imagem...</span>
           </div>
         )}
@@ -114,6 +115,7 @@ export const CampaignVisualEditor = forwardRef<CampaignEditorRef, Props>(
           ref={editorRef}
           initialDesign={initialDesign}
           onReady={handleReady}
+          onHtmlChange={onHtmlChange}
         />
       </div>
     )

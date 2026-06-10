@@ -329,13 +329,16 @@ export interface VisualEditorRef {
 interface Props {
   initialDesign?: object | null
   onReady?: () => void
+  onHtmlChange?: (html: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
 
 export const VisualEditor = forwardRef<VisualEditorRef, Props>(
-  function VisualEditor({ initialDesign, onReady }, ref) {
+  function VisualEditor({ initialDesign, onReady, onHtmlChange }, ref) {
     const editorRef = useRef<EditorRef>(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const debounceRef = useRef<any>(null)
 
     useImperativeHandle(ref, () => ({
       exportHtml: () =>
@@ -356,18 +359,33 @@ export const VisualEditor = forwardRef<VisualEditorRef, Props>(
       (unlayer: any) => {
         const design = initialDesign ?? DEFAULT_DESIGN
         unlayer.loadDesign(design)
+
+        if (onHtmlChange) {
+          // Exporta HTML inicial após carregar o design
+          unlayer.exportHtml((data: { html: string }) => onHtmlChange(data.html))
+
+          // Atualiza preview a cada alteração (debounce 600ms)
+          unlayer.addEventListener("design:updated", () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current)
+            debounceRef.current = setTimeout(() => {
+              unlayer.exportHtml((data: { html: string }) => onHtmlChange(data.html))
+            }, 600)
+          })
+        }
+
         onReady?.()
       },
-      [initialDesign, onReady]
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [initialDesign, onReady, onHtmlChange]
     )
 
     return (
-      <div style={{ height: "calc(100vh - 220px)", minHeight: 700 }}>
+      <div className="h-full" style={{ minHeight: 640 }}>
         <EmailEditor
           ref={editorRef}
           onReady={handleReady}
           options={EDITOR_OPTIONS}
-          style={{ height: "100%", minHeight: 700 }}
+          style={{ height: "100%", minHeight: 640 }}
         />
       </div>
     )
