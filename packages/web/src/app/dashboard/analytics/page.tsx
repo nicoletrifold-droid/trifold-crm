@@ -67,6 +67,13 @@ export default async function AnalyticsPage({
     .eq("is_active", true)
     .order("name")
 
+  // IDs dos corretores ativos (têm entrada na tabela brokers)
+  const { data: activeBrokersData } = await supabase
+    .from("brokers")
+    .select("user_id")
+    .eq("org_id", appUser.orgId)
+  const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
+
   // Período — is_active=true AND lost_reason IS NULL (uniformidade com Pipeline/Dashboard)
   // totalLeads é calculado após as stages serem construídas (soma das stages ativas)
   // para garantir exatamente o mesmo número que o Dashboard "Total no pipeline"
@@ -117,7 +124,7 @@ export default async function AnalyticsPage({
     }))
     properties = (summary?.by_property ?? []).map((p) => ({ id: p.property_id, name: p.name, count: toCount(p.count) }))
     brokers = (summary?.by_broker ?? [])
-      .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()))
+      .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()) && activeBrokerIds.has(b.user_id))
       .map((b) => ({ id: b.user_id, name: b.name, count: toCount(b.count), avgScore: b.avg_score ?? 0 }))
     for (const [k, v] of Object.entries(summary?.source_counts ?? {})) sourceCounts[k] = toCount(v)
     for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) lostReasons[k] = toCount(v)
@@ -170,7 +177,9 @@ export default async function AnalyticsPage({
       cur.count++
       brokerAgg.set(l.assigned_broker_id, cur)
     }
-    brokers = Array.from(brokerAgg.entries()).map(([id, v]) => ({ id, name: v.name, count: v.count, avgScore: 0 }))
+    brokers = Array.from(brokerAgg.entries())
+      .filter(([id]) => activeBrokerIds.has(id))
+      .map(([id, v]) => ({ id, name: v.name, count: v.count, avgScore: 0 }))
 
     // Sources (do mês)
     for (const l of (monthSourcesData.data ?? []) as { source: string | null }[]) {
@@ -262,7 +271,7 @@ export default async function AnalyticsPage({
     }
 
     brokerResponseTimes = [...brokerMap.entries()]
-      .filter(([, v]) => v.count >= 1)
+      .filter(([id, v]) => v.count >= 1 && activeBrokerIds.has(id))
       .map(([id, v]) => ({ id, name: v.name, avgMinutes: Math.round(v.totalMinutes / v.count), count: v.count }))
       .sort((a, b) => a.avgMinutes - b.avgMinutes)
   }

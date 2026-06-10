@@ -134,6 +134,13 @@ export async function buildAnalyticsReportData(
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
+  // IDs dos corretores ativos
+  const { data: activeBrokersData } = await supabase
+    .from("brokers")
+    .select("user_id")
+    .eq("org_id", orgId)
+  const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
+
   const [
     { count: totalLeads },
     { count: leadsToday },
@@ -182,7 +189,7 @@ export async function buildAnalyticsReportData(
   }))
 
   const brokers = (summary?.by_broker ?? [])
-    .filter((b) => !HIDDEN_BROKERS.has((b.name ?? "").toLowerCase().trim()))
+    .filter((b) => !HIDDEN_BROKERS.has((b.name ?? "").toLowerCase().trim()) && activeBrokerIds.has(b.user_id))
     .map((b) => ({ name: b.name, count: toN(b.count) }))
 
   const sourceCounts: Record<string, number> = {}
@@ -248,9 +255,9 @@ export async function buildAnalyticsReportData(
       brokerMap.set(bArr.id, cur)
     }
 
-    brokerResponseTimes = [...brokerMap.values()]
-      .filter(b => b.count >= 1)
-      .map(b => ({ name: b.name, avgMinutes: Math.round(b.totalMinutes / b.count), count: b.count }))
+    brokerResponseTimes = [...brokerMap.entries()]
+      .filter(([id, b]) => b.count >= 1 && activeBrokerIds.has(id))
+      .map(([, b]) => ({ name: b.name, avgMinutes: Math.round(b.totalMinutes / b.count), count: b.count }))
       .sort((a, b) => a.avgMinutes - b.avgMinutes)
   }
 
