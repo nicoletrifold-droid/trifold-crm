@@ -101,13 +101,13 @@ export function CreativePreviewModal({
 
         {/* Image */}
         {displayUrl && (
-          <div className="mb-4 flex items-center justify-center overflow-hidden rounded-lg bg-stone-100 dark:bg-stone-800">
+          <div className="mb-4 overflow-hidden rounded-lg bg-stone-100 dark:bg-stone-800" style={{ minHeight: "280px" }}>
             {/* eslint-disable-next-line @next/next/no-img-element -- Meta CDN dynamic URLs com tokens expiráveis */}
             <img
               src={displayUrl}
               alt={`${adName} — anúncio Meta`}
-              className="h-auto object-contain"
-              style={{ maxHeight: "70vh", maxWidth: "100%", width: "auto" }}
+              className="h-auto w-full object-contain"
+              style={{ maxHeight: "70vh", minHeight: "280px", imageRendering: "auto" }}
             />
           </div>
         )}
