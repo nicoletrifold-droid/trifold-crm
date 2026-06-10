@@ -119,7 +119,7 @@ async function processLandingPageLead(
     const email = pick(fields, ["email", "your-email", "e-mail", "field_email"]) ?? null
     const rawPhone = pick(fields, ["telefone", "phone", "celular", "whatsapp", "your-phone", "field_phone", "fone"]) ?? null
     const phone = rawPhone ? normalizePhone(rawPhone) : null
-    const message = pick(fields, ["mensagem", "message", "your-message", "texto", "assunto"]) ?? null
+    const message = pick(fields, ["mensagem", "message", "your-message", "texto", "assunto", "resposta"]) ?? null
 
     if (!name && !email && !phone) {
       console.warn("[LP-WEBHOOK] Lead sem nome, email ou telefone — ignorado", { fields })
