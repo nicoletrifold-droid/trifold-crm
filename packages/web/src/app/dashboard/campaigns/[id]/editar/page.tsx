@@ -1,16 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { CampaignVisualEditor, type CampaignEditorRef } from "../../_components/campaign-visual-editor"
 
 export default function EditarCampanhaPage() {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
+  const editorRef = useRef<CampaignEditorRef>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [showRawHtml, setShowRawHtml] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaign, setCampaign] = useState<any>(null)
 
@@ -31,6 +34,15 @@ export default function EditarCampanhaPage() {
     const form = new FormData(e.currentTarget)
 
     try {
+      let emailBodyHtml: string | null = form.get("email_body_html") as string | null
+      let emailBodyJson: object | null = null
+
+      if (!showRawHtml && editorRef.current) {
+        const { html, design } = await editorRef.current.getHtmlAndDesign()
+        emailBodyHtml = html || null
+        emailBodyJson = design
+      }
+
       const res = await fetch(`/api/campaigns/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -42,7 +54,8 @@ export default function EditarCampanhaPage() {
           whatsapp_template_name: form.get("whatsapp_template_name") || null,
           email_enabled: form.get("email_enabled") === "on",
           email_subject: form.get("email_subject") || null,
-          email_body_html: form.get("email_body_html") || null,
+          email_body_html: emailBodyHtml || null,
+          email_body_json: emailBodyJson,
         }),
       })
 
@@ -132,8 +145,30 @@ export default function EditarCampanhaPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo HTML</label>
-            <textarea name="email_body_html" defaultValue={campaign.email_body_html ?? ""} rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo do e-mail</label>
+              <button
+                type="button"
+                onClick={() => setShowRawHtml((v) => !v)}
+                className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+              >
+                {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
+              </button>
+            </div>
+            {showRawHtml ? (
+              <textarea
+                name="email_body_html"
+                defaultValue={campaign.email_body_html ?? ""}
+                rows={5}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+              />
+            ) : (
+              <CampaignVisualEditor
+                ref={editorRef}
+                campaignId={id}
+                initialDesign={campaign.email_body_json ?? null}
+              />
+            )}
           </div>
         </div>
 

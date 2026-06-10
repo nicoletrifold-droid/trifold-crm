@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { CampaignVisualEditor, type CampaignEditorRef } from "../_components/campaign-visual-editor"
 
 interface DiscoveredField {
   questionId: string
@@ -11,6 +12,10 @@ interface DiscoveredField {
 
 export default function NovaCampanhaPage() {
   const router = useRouter()
+  const editorRef = useRef<CampaignEditorRef>(null)
+  // UUID pré-gerado para uploads antes da campanha existir no banco
+  const [pendingId] = useState(() => crypto.randomUUID())
+  const [showRawHtml, setShowRawHtml] = useState(false)
   const [loading, setLoading] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [fields, setFields] = useState<DiscoveredField[]>([])
@@ -64,10 +69,20 @@ export default function NovaCampanhaPage() {
     const form = new FormData(e.currentTarget)
 
     try {
+      let emailBodyHtml: string | null = form.get("email_body_html") as string | null
+      let emailBodyJson: object | null = null
+
+      if (!showRawHtml && editorRef.current) {
+        const { html, design } = await editorRef.current.getHtmlAndDesign()
+        emailBodyHtml = html || null
+        emailBodyJson = design
+      }
+
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          campaign_id: pendingId,
           name: form.get("name"),
           description: form.get("description"),
           property_id: form.get("property_id") || null,
@@ -77,7 +92,8 @@ export default function NovaCampanhaPage() {
           whatsapp_template_name: form.get("whatsapp_template_name") || null,
           email_enabled: form.get("email_enabled") === "on",
           email_subject: form.get("email_subject") || null,
-          email_body_html: form.get("email_body_html") || null,
+          email_body_html: emailBodyHtml || null,
+          email_body_json: emailBodyJson,
           field_mapping: fieldMapping,
         }),
       })
@@ -220,8 +236,29 @@ export default function NovaCampanhaPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo do e-mail (HTML)</label>
-            <textarea name="email_body_html" rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="<p>Ola, {{nome}}! Seu cadastro foi confirmado...</p>" />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo do e-mail</label>
+              <button
+                type="button"
+                onClick={() => setShowRawHtml((v) => !v)}
+                className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+              >
+                {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
+              </button>
+            </div>
+            {showRawHtml ? (
+              <textarea
+                name="email_body_html"
+                rows={5}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+                placeholder="<p>Ola, {{nome}}! Seu cadastro foi confirmado...</p>"
+              />
+            ) : (
+              <CampaignVisualEditor
+                ref={editorRef}
+                campaignId={pendingId}
+              />
+            )}
           </div>
         </div>
 
