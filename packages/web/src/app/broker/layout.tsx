@@ -31,7 +31,7 @@ export default async function BrokerLayout({
   }
 
   return (
-    <div className="dark min-h-screen bg-stone-950">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 hidden lg:flex" />
       <SidebarNav
         items={NAV_ITEMS}

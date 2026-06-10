@@ -133,7 +133,7 @@ export default async function BrokerLeadsPage({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-stone-100">Meus Leads</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meus Leads</h1>
           <p className="text-sm text-stone-500">
             {filtered.length}{(search || stage || tasks || filter) ? ` de ${leads?.length ?? 0}` : ""} leads
           </p>
@@ -184,7 +184,7 @@ export default async function BrokerLeadsPage({
       ) : null}
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl bg-stone-900 p-12 text-center ring-1 ring-stone-800">
+        <div className="rounded-xl bg-white p-12 text-center ring-1 ring-gray-200 dark:bg-stone-900 dark:ring-stone-800">
           <p className="text-stone-500">
             {search
               ? `Nenhum lead encontrado para "${q}".`
@@ -206,10 +206,10 @@ export default async function BrokerLeadsPage({
                 <Link
                   key={lead.id as string}
                   href={`/broker/leads/${lead.id}`}
-                  className="flex items-center gap-3 rounded-xl bg-stone-900 px-4 py-3.5 ring-1 ring-stone-800 active:bg-stone-800"
+                  className="flex items-center gap-3 rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200 active:bg-gray-50 dark:bg-stone-900 dark:ring-stone-800 dark:active:bg-stone-800"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-stone-100">
+                    <p className="truncate font-semibold text-gray-900 dark:text-stone-100">
                       {(lead.name as string) || (lead.phone as string)}
                     </p>
                     <p className="mt-0.5 text-xs text-stone-500">{lead.phone as string}</p>
@@ -241,10 +241,10 @@ export default async function BrokerLeadsPage({
           </div>
 
           {/* Desktop */}
-          <div className="hidden overflow-x-auto rounded-xl bg-stone-900 ring-1 ring-stone-800 lg:block">
+          <div className="hidden overflow-x-auto rounded-xl bg-white ring-1 ring-gray-200 dark:bg-stone-900 dark:ring-stone-800 lg:block">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-stone-800 text-left text-xs font-medium uppercase tracking-wide text-stone-500">
+                <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-stone-800 dark:text-stone-500">
                   <th className="px-4 py-3">Lead</th>
                   <th className="px-4 py-3">Empreendimento</th>
                   <th className="px-4 py-3">Etapa</th>
@@ -252,13 +252,13 @@ export default async function BrokerLeadsPage({
                   <th className="px-4 py-3">Último contato</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-800/60">
+              <tbody className="divide-y divide-gray-200 dark:divide-stone-800/60">
                 {filtered.map((lead: Record<string, unknown>) => {
                   const stageData = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
                   const propertyData = Array.isArray(lead.properties) ? lead.properties[0] : lead.properties
                   const score = lead.qualification_score as number | null
                   return (
-                    <tr key={lead.id as string} className="transition-colors hover:bg-stone-800/40">
+                    <tr key={lead.id as string} className="transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/40">
                       <td className="px-4 py-3">
                         <Link href={`/broker/leads/${lead.id}`} className="block">
                           <p className="font-medium text-stone-100">
@@ -267,7 +267,7 @@ export default async function BrokerLeadsPage({
                           <p className="text-xs text-stone-500">{lead.phone as string}</p>
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-stone-400">
+                      <td className="px-4 py-3 text-gray-500 dark:text-stone-400">
                         {(propertyData as { name?: string } | null)?.name ?? "—"}
                       </td>
                       <td className="px-4 py-3">
@@ -290,7 +290,7 @@ export default async function BrokerLeadsPage({
                               ? "bg-green-500/20 text-green-400"
                               : score >= 40
                               ? "bg-yellow-500/20 text-yellow-400"
-                              : "bg-stone-700 text-stone-400"
+                              : "bg-gray-200 text-gray-600 dark:bg-stone-700 dark:text-stone-400"
                           }`}>
                             {score}
                           </span>
