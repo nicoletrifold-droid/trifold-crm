@@ -261,7 +261,7 @@ export default async function BrokerLeadsPage({
                     <tr key={lead.id as string} className="transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/40">
                       <td className="px-4 py-3">
                         <Link href={`/broker/leads/${lead.id}`} className="block">
-                          <p className="font-medium text-stone-100">
+                          <p className="font-medium text-gray-900 dark:text-stone-100">
                             {(lead.name as string) || (lead.phone as string)}
                           </p>
                           <p className="text-xs text-stone-500">{lead.phone as string}</p>
