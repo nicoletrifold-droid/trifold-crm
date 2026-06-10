@@ -295,14 +295,23 @@ export default async function AnalyticsPage({
               </span>
             )}
           </h1>
-          <a
-            href="/dashboard/analytics/report"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-          >
-            Relatório PDF
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href="/api/analytics/report"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+            >
+              Relatório PDF
+            </a>
+            <a
+              href="/api/analytics/report"
+              download
+              className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600"
+            >
+              Baixar PDF
+            </a>
+          </div>
         </div>
         {/* Seletor de empreendimento */}
         <ScrollableX>
