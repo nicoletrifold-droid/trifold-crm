@@ -49,7 +49,7 @@ export function LeadFilters({
   )
 
   const selectClass =
-    "h-8 rounded-lg border border-stone-700 bg-stone-800 px-2.5 py-0 text-xs text-stone-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 border-gray-300 bg-white text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+    "h-8 rounded-lg border border-gray-300 bg-white px-2.5 py-0 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:focus:border-orange-500 dark:focus:ring-orange-500"
 
   const hasFilters = activeStage || activeProperty || activeDays
 

@@ -134,7 +134,7 @@ export default async function BrokerLeadsPage({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meus Leads</h1>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-gray-500 dark:text-stone-500">
             {filtered.length}{(search || stage || tasks || filter) ? ` de ${leads?.length ?? 0}` : ""} leads
           </p>
         </div>
@@ -212,7 +212,7 @@ export default async function BrokerLeadsPage({
                     <p className="truncate font-semibold text-gray-900 dark:text-stone-100">
                       {(lead.name as string) || (lead.phone as string)}
                     </p>
-                    <p className="mt-0.5 text-xs text-stone-500">{lead.phone as string}</p>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-500">{lead.phone as string}</p>
                     {(propertyData as { name?: string } | null)?.name && (
                       <p className="mt-0.5 truncate text-xs text-stone-600">
                         {(propertyData as { name: string }).name}
@@ -296,7 +296,7 @@ export default async function BrokerLeadsPage({
                           </span>
                         ) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-xs text-stone-500">
+                      <td className="px-4 py-3 text-xs text-gray-500 dark:text-stone-500">
                         {new Date(lead.updated_at as string).toLocaleDateString("pt-BR")}
                       </td>
                     </tr>
