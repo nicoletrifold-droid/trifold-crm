@@ -252,8 +252,8 @@ export default function NovaCampanhaPage() {
             </div>
           ) : (
             <>
-              {/* Editor — full width, altura confortável */}
-              <div style={{ height: 560 }}>
+              {/* Editor — full width, altura viewport */}
+              <div style={{ height: "calc(100vh - 200px)", minHeight: 560 }}>
                 <CampaignVisualEditor
                   ref={editorRef}
                   campaignId={pendingId}
