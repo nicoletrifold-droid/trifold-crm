@@ -362,7 +362,7 @@ export const VisualEditor = forwardRef<VisualEditorRef, Props>(
     )
 
     return (
-      <div className="overflow-hidden" style={{ height: 700 }}>
+      <div style={{ height: "calc(100vh - 220px)", minHeight: 700 }}>
         <EmailEditor
           ref={editorRef}
           onReady={handleReady}
