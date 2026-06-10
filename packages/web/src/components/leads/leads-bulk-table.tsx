@@ -141,8 +141,14 @@ export function LeadsBulkTable({
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                   {lead.phone}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                  {lead.property_interest?.name ?? "-"}
+                <td className="px-6 py-4">
+                  {lead.property_interest?.name ? (
+                    <span className="inline-flex items-center rounded-md bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-300">
+                      {lead.property_interest.name}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-300 dark:text-stone-600">—</span>
+                  )}
                 </td>
                 <td className="px-6 py-4">
                   {lead.stage ? (
@@ -164,8 +170,19 @@ export function LeadsBulkTable({
                 <td className="px-6 py-4">
                   <SourceBadge source={lead.source} />
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                  {lead.broker?.name ?? "-"}
+                <td className="px-6 py-4">
+                  {lead.broker?.name ? (
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
+                        {lead.broker.name.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-stone-300">
+                        {lead.broker.name.split(" ")[0]}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-300 dark:text-stone-600">—</span>
+                  )}
                 </td>
                 <td className="px-6 py-4">
                   {lead.qualification_score != null ? (
