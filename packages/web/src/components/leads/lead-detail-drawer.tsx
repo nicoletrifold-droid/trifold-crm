@@ -304,7 +304,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
       body: JSON.stringify({
         title: taskForm.title.trim(),
         action_type: taskForm.action_type,
-        due_at: taskForm.due_at || null,
+        due_at: taskForm.due_at ? new Date(taskForm.due_at).toISOString() : null,
       }),
     })
     if (res.ok) {
@@ -376,10 +376,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   }
 
   function fmtDate(iso: string) {
-    return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+    return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
   }
   function fmtDateShort(iso: string) {
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+    return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short" })
   }
 
   const [taskTab, setTaskTab] = useState<"todas" | "atrasadas" | "para-hoje" | "futuras">("todas")
