@@ -4,6 +4,7 @@ import Link from "next/link"
 import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
 import { LeadFilters } from "@web/components/lead-filters"
+import { LeadsListWithDrawer } from "./_components/leads-list-with-drawer"
 
 const TASK_LABELS: Record<string, string> = {
   atrasadas: "Tarefas atrasadas",
@@ -196,116 +197,11 @@ export default async function BrokerLeadsPage({
           </p>
         </div>
       ) : (
-        <>
-          {/* Mobile */}
-          <div className="space-y-2 lg:hidden">
-            {filtered.map((lead: Record<string, unknown>) => {
-              const stageData = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
-              const propertyData = Array.isArray(lead.properties) ? lead.properties[0] : lead.properties
-              return (
-                <Link
-                  key={lead.id as string}
-                  href={`/broker/leads/${lead.id}`}
-                  className="flex items-center gap-3 rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200 active:bg-gray-50 dark:bg-stone-900 dark:ring-stone-800 dark:active:bg-stone-800"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-900 dark:text-stone-100">
-                      {(lead.name as string) || (lead.phone as string)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-500">{lead.phone as string}</p>
-                    {(propertyData as { name?: string } | null)?.name && (
-                      <p className="mt-0.5 truncate text-xs text-stone-600">
-                        {(propertyData as { name: string }).name}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    {stageData && (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
-                        style={{
-                          backgroundColor: `${(stageData as { color: string }).color}20`,
-                          color: (stageData as { color: string }).color,
-                        }}
-                      >
-                        {(stageData as { name: string }).name}
-                      </span>
-                    )}
-                    <p className="text-[11px] text-stone-600">
-                      {new Date(lead.updated_at as string).toLocaleDateString("pt-BR")}
-                    </p>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-
-          {/* Desktop */}
-          <div className="hidden overflow-x-auto rounded-xl bg-white ring-1 ring-gray-200 dark:bg-stone-900 dark:ring-stone-800 lg:block">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-stone-800 dark:text-stone-500">
-                  <th className="px-4 py-3">Lead</th>
-                  <th className="px-4 py-3">Empreendimento</th>
-                  <th className="px-4 py-3">Etapa</th>
-                  <th className="px-4 py-3">Score</th>
-                  <th className="px-4 py-3">Último contato</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-stone-800/60">
-                {filtered.map((lead: Record<string, unknown>) => {
-                  const stageData = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
-                  const propertyData = Array.isArray(lead.properties) ? lead.properties[0] : lead.properties
-                  const score = lead.qualification_score as number | null
-                  return (
-                    <tr key={lead.id as string} className="transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/40">
-                      <td className="px-4 py-3">
-                        <Link href={`/broker/leads/${lead.id}`} className="block">
-                          <p className="font-medium text-gray-900 dark:text-stone-100">
-                            {(lead.name as string) || (lead.phone as string)}
-                          </p>
-                          <p className="text-xs text-stone-500">{lead.phone as string}</p>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-stone-400">
-                        {(propertyData as { name?: string } | null)?.name ?? "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {stageData ? (
-                          <span
-                            className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                            style={{
-                              backgroundColor: `${(stageData as { color: string }).color}20`,
-                              color: (stageData as { color: string }).color,
-                            }}
-                          >
-                            {(stageData as { name: string }).name}
-                          </span>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {score != null ? (
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            score >= 70
-                              ? "bg-green-500/20 text-green-400"
-                              : score >= 40
-                              ? "bg-yellow-500/20 text-yellow-400"
-                              : "bg-gray-200 text-gray-600 dark:bg-stone-700 dark:text-stone-400"
-                          }`}>
-                            {score}
-                          </span>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 dark:text-stone-500">
-                        {new Date(lead.updated_at as string).toLocaleDateString("pt-BR")}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <LeadsListWithDrawer
+          leads={filtered as Parameters<typeof LeadsListWithDrawer>[0]["leads"]}
+          stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
+          properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}
+        />
       )}
     </div>
   )
