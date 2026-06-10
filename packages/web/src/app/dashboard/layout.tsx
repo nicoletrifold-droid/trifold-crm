@@ -1,6 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { getUserPermissions } from "@web/lib/permissions"
+import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { WeatherWidget } from "@web/components/weather-widget"
 import {
@@ -83,6 +84,11 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   const user = await getServerUser()
+
+  if (user.role === "broker") {
+    redirect("/broker")
+  }
+
   const supabase = await createClient()
 
   // Story 35-5: lê permissões do banco em vez de regras hardcoded por role.
@@ -145,12 +151,9 @@ export default async function DashboardLayout({
         ])
       : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
 
-  const isCorretorRole = user.role === "broker"
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
-  // Atividades é restrito a admin/supervisor/gerente-comercial.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
     if (!permissions[NAV_MODULE_MAP[item.href]!]) return false
-    if (item.href === "/dashboard/atividades" && isCorretorRole) return false
     return true
   })
 
