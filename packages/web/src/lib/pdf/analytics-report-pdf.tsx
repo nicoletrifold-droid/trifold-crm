@@ -30,6 +30,7 @@ export interface AnalyticsReportData {
   properties: { name: string; count: number }[]
   sources: { label: string; count: number }[]
   brokers: { name: string; count: number }[]
+  brokerResponseTimes: { name: string; avgMinutes: number; count: number }[]
   comparison: WeekComparisonGroup[]
 }
 
@@ -235,9 +236,9 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           {data.brokers.length === 0 && <Text style={s.noData}>Nenhum corretor</Text>}
         </View>
 
-        {/* Week-over-week comparison table */}
+        {/* Week-over-week comparison table — break antes para não cortar título */}
         {data.comparison.length > 0 && (
-          <View style={s.compSection}>
+          <View break style={s.compSection}>
             <Text style={s.compSectionTitle}>Comparativo Semanal — últimos 7 dias vs semana anterior</Text>
             {/* Column headers */}
             <View style={s.compHeaderRow}>
@@ -263,6 +264,31 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
                 ))}
               </View>
             ))}
+          </View>
+        )}
+
+        {/* Tempo médio de atendimento por corretor */}
+        {data.brokerResponseTimes.length > 0 && (
+          <View break style={{ ...s.section, marginTop: 12 }}>
+            <Text style={s.sectionTitle}>Tempo Médio de 1º Atendimento por Corretor (últimos 30 dias)</Text>
+            <View style={{ ...s.compHeaderRow, borderRadius: 2, marginBottom: 0 }}>
+              <Text style={{ ...s.compHeaderLabel }}>Corretor</Text>
+              <Text style={{ ...s.compHeaderCell }}>Leads</Text>
+              <Text style={{ ...s.compHeaderCell }}>Tempo médio</Text>
+            </View>
+            {data.brokerResponseTimes.map((b, i) => {
+              const h = Math.floor(b.avgMinutes / 60)
+              const m = Math.round(b.avgMinutes % 60)
+              const label = h > 0 ? `${h}h ${m}min` : `${m}min`
+              const color = b.avgMinutes <= 30 ? GREEN : b.avgMinutes <= 120 ? BRAND : RED
+              return (
+                <View key={i} style={i === data.brokerResponseTimes.length - 1 ? s.tableRowLast : s.tableRow}>
+                  <Text style={s.rowLabel}>{b.name}</Text>
+                  <Text style={{ ...s.rowValue, width: 55, textAlign: "right" }}>{b.count}</Text>
+                  <Text style={{ ...s.rowValue, width: 80, textAlign: "right", color }}>{label}</Text>
+                </View>
+              )
+            })}
           </View>
         )}
       </Page>

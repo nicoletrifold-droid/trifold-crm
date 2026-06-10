@@ -144,6 +144,7 @@ export async function buildAnalyticsReportData(
     { count: lpVindCount },
     { data: recentLeadsRaw },
     { data: propertiesRaw },
+    { data: responseLeadsRaw },
   ] = await Promise.all([
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).eq("org_id", orgId),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", todayStart.toISOString()),
@@ -158,6 +159,13 @@ export async function buildAnalyticsReportData(
       .gte("created_at", twoWeeksAgo.toISOString())
       .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),
+    // Para cálculo de tempo de atendimento: leads do mês com broker
+    supabase.from("leads")
+      .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+      .eq("org_id", orgId)
+      .not("assigned_broker_id", "is", null)
+      .gte("created_at", monthStart.toISOString())
+      .limit(500),
   ])
 
   const summary = (analytics as AnalyticsSummary | null) ?? null
@@ -198,6 +206,54 @@ export async function buildAnalyticsReportData(
     .sort(([, a], [, b]) => b - a)
     .map(([key, count]) => ({ label: SOURCE_LABELS_SHORT[key] ?? key, count }))
 
+  // ── Tempo médio de 1º atendimento por corretor ───────────────────────────
+  type ResponseLead = { id: string; created_at: string; assigned_broker_id: string | null; broker: { id: string; name: string } | { id: string; name: string }[] | null }
+  const responseLeads = (responseLeadsRaw ?? []) as ResponseLead[]
+  const leadIds = responseLeads.map(l => l.id)
+
+  let brokerResponseTimes: { name: string; avgMinutes: number; count: number }[] = []
+
+  if (leadIds.length > 0) {
+    const { data: firstNotes } = await supabase
+      .from("activities")
+      .select("lead_id, created_at")
+      .eq("org_id", orgId)
+      .eq("type", "broker_note")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: true })
+
+    // First note per lead
+    const firstNoteByLead = new Map<string, string>()
+    for (const note of (firstNotes ?? [])) {
+      if (!firstNoteByLead.has(note.lead_id as string)) {
+        firstNoteByLead.set(note.lead_id as string, note.created_at as string)
+      }
+    }
+
+    // Group by broker and calculate avg
+    const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
+    for (const lead of responseLeads) {
+      const firstNote = firstNoteByLead.get(lead.id)
+      if (!firstNote) continue
+      const bArr = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
+      if (!bArr) continue
+      const bName = bArr.name
+      if (HIDDEN_BROKERS.has(bName.toLowerCase().trim())) continue
+      const diffMs = new Date(firstNote).getTime() - new Date(lead.created_at).getTime()
+      if (diffMs < 0) continue
+      const diffMin = diffMs / 60000
+      const cur = brokerMap.get(bArr.id) ?? { name: bName, totalMinutes: 0, count: 0 }
+      cur.totalMinutes += diffMin
+      cur.count++
+      brokerMap.set(bArr.id, cur)
+    }
+
+    brokerResponseTimes = [...brokerMap.values()]
+      .filter(b => b.count >= 2)
+      .map(b => ({ name: b.name, avgMinutes: Math.round(b.totalMinutes / b.count), count: b.count }))
+      .sort((a, b) => a.avgMinutes - b.avgMinutes)
+  }
+
   // ── Week-over-week comparison ─────────────────────────────────────────────
   const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
 
@@ -236,6 +292,7 @@ export async function buildAnalyticsReportData(
     properties,
     sources,
     brokers,
+    brokerResponseTimes,
     comparison,
   }
 }
