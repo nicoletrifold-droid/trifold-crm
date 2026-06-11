@@ -233,6 +233,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             channel: (raw.channel as string | null) ?? null,
             utm_source: (raw.utm_source as string | null) ?? null,
             utm_campaign: (raw.utm_campaign as string | null) ?? null,
+            utm_content: (raw.utm_content as string | null) ?? null,
             ai_summary: (raw.ai_summary as string | null) ?? null,
             lost_reason: (raw.lost_reason as string | null) ?? null,
             created_at: raw.created_at as string,
