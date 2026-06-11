@@ -24,6 +24,7 @@ interface LeadCardProps {
     ai_summary?: string | null
     source?: string | null
     utm_campaign?: string | null
+    utm_content?: string | null
     // Story 50-2 (Epic 50): criativo Meta resolvido server-side via fetchCreativesForLeads
     creative?: CreativeData | null
   }
@@ -160,7 +161,13 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
             />
           ) : (
             <>
-              {lead.source && <SourceBadge source={lead.source} size="xs" />}
+              {lead.source && (
+                <SourceBadge
+                  source={lead.source}
+                  label={lead.source === "website" && lead.utm_content ? lead.utm_content : undefined}
+                  size="xs"
+                />
+              )}
               {lead.source === "whatsapp_click_to_ad" && lead.utm_campaign && (
                 <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-medium text-green-600 dark:bg-green-500/15 dark:text-green-300">
                   {lead.utm_campaign.length > 16 ? lead.utm_campaign.slice(0, 16) + "…" : lead.utm_campaign}

@@ -45,6 +45,7 @@ interface Lead {
   ai_summary?: string | null
   source?: string | null
   utm_campaign?: string | null
+  utm_content?: string | null
   properties?: { name: string } | null
   users?: { name: string } | null
   // Story 50-2 (Epic 50): criativo Meta resolvido server-side

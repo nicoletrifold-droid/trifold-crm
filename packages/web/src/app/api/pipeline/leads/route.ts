@@ -8,7 +8,7 @@ const MAX_LIMIT = 100
 // Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
        property_interest_id, assigned_broker_id, created_at, updated_at,
-       ai_summary, source, utm_campaign, metadata,
+       ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
 
@@ -116,7 +116,11 @@ export async function GET(req: NextRequest) {
   const hasMore = totalCount > offset + rawLeads.length
 
   // Story 50-2 (Epic 50): batched lookup de criativos Meta para os leads paginados (AC7)
-  const creativesMap = await fetchCreativesForLeads(supabase, filtered, appUser.org_id)
+  // Post-50-3 scope adjustment: CreativeChip restrito a admin.
+  const isAdmin = appUser.role === "admin"
+  const creativesMap = isAdmin
+    ? await fetchCreativesForLeads(supabase, filtered, appUser.org_id)
+    : new Map()
 
   const enrichedLeads = filtered.map((l) => ({
     ...normalizeLead(l),

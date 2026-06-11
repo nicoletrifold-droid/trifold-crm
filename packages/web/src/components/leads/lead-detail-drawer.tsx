@@ -22,6 +22,7 @@ interface LeadQuickData {
   channel: string | null
   utm_source: string | null
   utm_campaign: string | null
+  utm_content: string | null
   ai_summary: string | null
   lost_reason: string | null
   created_at: string
@@ -480,7 +481,12 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   {interestLevelLabels[lead.interest_level] ?? lead.interest_level}
                 </span>
               )}
-              {lead.source && <SourceBadge source={lead.source} />}
+              {lead.source && (
+                <SourceBadge
+                  source={lead.source}
+                  label={lead.source === "website" && lead.utm_content ? lead.utm_content : undefined}
+                />
+              )}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-600 dark:text-stone-400">
               <span className="font-medium">{lead.phone}</span>

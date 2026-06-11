@@ -9,7 +9,7 @@ const PAGE_SIZE = 50
 // Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
        property_interest_id, assigned_broker_id, created_at, updated_at,
-       ai_summary, source, utm_campaign, metadata,
+       ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
 
@@ -166,9 +166,13 @@ export default async function PipelinePage({
   )
 
   // Story 50-2 (Epic 50): batched lookup de criativos Meta (máx +1 query Supabase / AC7)
-  // Flatten leads across stages, build distinct ad_ids, attach creative back to each lead
+  // Post-50-3 scope adjustment: CreativeChip restrito a admin (gerente-comercial/supervisor
+  // voltam ao SourceBadge genérico — comportamento pré-Epic-50).
+  const isAdmin = user.role === "admin"
   const allLeads = perStageResults.flatMap((s) => s.leads as RawLead[])
-  const creativesMap = await fetchCreativesForLeads(supabase, allLeads, user.orgId)
+  const creativesMap = isAdmin
+    ? await fetchCreativesForLeads(supabase, allLeads, user.orgId)
+    : new Map()
 
   const initialLeadsPerStage = perStageResults.map((s) => ({
     ...s,
