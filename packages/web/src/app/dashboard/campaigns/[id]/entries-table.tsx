@@ -100,12 +100,12 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
   }
 
   async function handleSendEmails() {
-    const pendingWithEmail = entries.filter((e) => e.email_status === "pending" && e.email)
+    const pendingWithEmail = entries.filter((e) => ["pending", "failed"].includes(e.email_status) && e.email)
     if (pendingWithEmail.length === 0) {
-      setSendError("Nenhum cadastro com e-mail pendente para disparar.")
+      setSendError("Nenhum cadastro com e-mail pendente ou com falha para disparar.")
       return
     }
-    if (!window.confirm(`Disparar e-mail para ${pendingWithEmail.length} cadastro(s) com status pendente?`)) return
+    if (!window.confirm(`Disparar e-mail para ${pendingWithEmail.length} cadastro(s) (pendentes + falhas anteriores)?`)) return
     setSending(true)
     setSendResult(null)
     setSendError(null)

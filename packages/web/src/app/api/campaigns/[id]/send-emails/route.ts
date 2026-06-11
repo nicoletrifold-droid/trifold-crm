@@ -43,7 +43,7 @@ export async function POST(
     .select("id, name, email, custom_data")
     .eq("campaign_id", id)
     .eq("org_id", appUser.org_id)
-    .eq("email_status", "pending")
+    .in("email_status", ["pending", "failed"])
     .neq("email", "")
     .not("email", "is", null)
 
