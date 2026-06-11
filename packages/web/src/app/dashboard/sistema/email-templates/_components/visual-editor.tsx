@@ -11,7 +11,7 @@ const SPACE_GROTESK_URL =
 
 const EDITOR_OPTIONS: EmailEditorProps["options"] = {
   appearance: {
-    theme: "dark",
+    theme: "modern_light",
     panels: {
       tools: { dock: "right" },
     },
