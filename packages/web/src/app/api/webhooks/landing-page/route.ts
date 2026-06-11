@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
       params.forEach((v, k) => {
         // Elementor envia como "form_fields[name]" — extrair só o nome interno
         const match = k.match(/^form_fields\[([^\]]+)\]$/)
-        fields[match ? match[1]! : k] = v
+        const key = (match ? match[1]! : k).toLowerCase()
+        fields[key] = v
       })
     }
   } catch {
@@ -250,20 +251,20 @@ function flattenIntoFields(json: Record<string, unknown>, out: Record<string, st
     if (k === "form_fields" && v && typeof v === "object" && !Array.isArray(v)) {
       // Elementor Pro: {"form_fields": {"name": "...", "email": "..."}}
       for (const [fk, fv] of Object.entries(v as Record<string, unknown>)) {
-        if (typeof fv === "string") out[fk] = fv
-        else if (fv !== null && fv !== undefined) out[fk] = String(fv)
+        if (typeof fv === "string") out[fk.toLowerCase()] = fv
+        else if (fv !== null && fv !== undefined) out[fk.toLowerCase()] = String(fv)
       }
     } else if (k === "fields" && Array.isArray(v)) {
       // Elementor alternativo: {"fields": [{"id":"name","value":"..."}]}
       for (const item of v as Array<Record<string, unknown>>) {
         const id = item.id as string | undefined
         const val = item.value as string | undefined
-        if (id && val !== undefined) out[id] = String(val)
+        if (id && val !== undefined) out[id.toLowerCase()] = String(val)
       }
     } else if (typeof v === "string") {
-      out[k] = v
+      out[k.toLowerCase()] = v
     } else if (v !== null && v !== undefined && typeof v !== "object") {
-      out[k] = String(v)
+      out[k.toLowerCase()] = String(v)
     }
   }
 }
