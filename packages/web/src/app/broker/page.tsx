@@ -4,7 +4,7 @@ import { now } from "@web/lib/time"
 import Link from "next/link"
 import {
   Users, CalendarDays, Bell, ChevronRight, MapPin, Clock,
-  AlertCircle, Calendar, CheckCircle2, Filter, UserX,
+  AlertCircle, Calendar, CheckCircle2, Filter, UserX, AlarmClock,
 } from "lucide-react"
 import { NewAppointmentButton } from "./_components/new-appointment-modal"
 
@@ -47,6 +47,10 @@ export default async function BrokerHomePage() {
   const supabase = await createClient()
   const nowIso = new Date(now()).toISOString()
 
+  const todayStart = new Date(new Date().toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" }))
+  const todayEnd = new Date(todayStart)
+  todayEnd.setDate(todayEnd.getDate() + 1)
+
   const [
     countsResult,
     funnelResult,
@@ -54,6 +58,8 @@ export default async function BrokerHomePage() {
     brokerResult,
     upcomingAppointments,
     pendingLogs,
+    tasksAtrasadas,
+    tasksHoje,
   ] = await Promise.all([
     supabase.rpc("get_broker_dashboard_counts", {
       p_org_id: user.orgId, p_broker_id: user.id,
@@ -85,7 +91,40 @@ export default async function BrokerHomePage() {
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(50),
+    // Tarefas atrasadas: vencidas antes de hoje, não concluídas
+    supabase
+      .from("lead_tasks")
+      .select("id, title, action_type, due_at, lead:leads!lead_id(id, name, phone)")
+      .eq("org_id", user.orgId)
+      .eq("assigned_to", user.id)
+      .is("completed_at", null)
+      .lt("due_at", todayStart.toISOString())
+      .order("due_at", { ascending: true })
+      .limit(5),
+    // Tarefas para hoje: vencem hoje, não concluídas
+    supabase
+      .from("lead_tasks")
+      .select("id, title, action_type, due_at, lead:leads!lead_id(id, name, phone)")
+      .eq("org_id", user.orgId)
+      .eq("assigned_to", user.id)
+      .is("completed_at", null)
+      .gte("due_at", todayStart.toISOString())
+      .lt("due_at", todayEnd.toISOString())
+      .order("due_at", { ascending: true })
+      .limit(5),
   ])
+
+  type TaskItem = {
+    id: string; title: string; action_type: string; due_at: string | null
+    lead: { id: string; name: string | null; phone: string } | Array<{ id: string; name: string | null; phone: string }> | null
+  }
+  const atrasadasList = (tasksAtrasadas.data ?? []) as TaskItem[]
+  const hojeList = (tasksHoje.data ?? []) as TaskItem[]
+
+  const actionTypeLabel: Record<string, string> = {
+    ligacao: "Ligação", whatsapp: "WhatsApp", email: "E-mail",
+    visita: "Visita", reuniao: "Reunião", outro: "Outro",
+  }
 
   const counts = (countsResult.data ?? {
     total: 0, novos: 0, trabalhados: 0, sem_tarefas: 0, atrasadas: 0, para_hoje: 0, futuras: 0,
@@ -208,6 +247,117 @@ export default async function BrokerHomePage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Tarefas Atrasadas + Para Hoje ────────────────────────── */}
+      {(atrasadasList.length > 0 || hojeList.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+
+          {/* Atrasadas */}
+          <div className="flex flex-col rounded-2xl border-l-4 border-red-500 bg-stone-900 ring-1 ring-red-500/20">
+            <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <h2 className="text-sm font-semibold text-stone-200">Tarefas Atrasadas</h2>
+                {atrasadasList.length > 0 && (
+                  <span className="rounded-full bg-red-900/40 px-2 py-0.5 text-xs font-bold text-red-400">
+                    {counts.atrasadas}
+                  </span>
+                )}
+              </div>
+              <Link href="/broker/leads?tasks=atrasadas" className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
+                Ver todas <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {atrasadasList.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center gap-2 px-6 py-8">
+                <CheckCircle2 className="h-5 w-5 text-stone-700" />
+                <p className="text-sm text-stone-600">Nenhuma tarefa atrasada!</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-stone-800/70">
+                {atrasadasList.map((task) => {
+                  const lead = Array.isArray(task.lead) ? task.lead[0] : task.lead
+                  return (
+                    <li key={task.id} className="flex items-center gap-3 px-5 py-3">
+                      <span className="flex-shrink-0 rounded bg-red-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-400">
+                        {actionTypeLabel[task.action_type] ?? task.action_type}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        {lead ? (
+                          <Link href={`/broker/leads/${(lead as { id: string }).id}`} className="block truncate text-sm font-medium text-stone-200 hover:text-orange-400">
+                            {(lead as { name?: string | null }).name || (lead as { phone: string }).phone}
+                          </Link>
+                        ) : (
+                          <p className="truncate text-sm text-stone-500">Lead removido</p>
+                        )}
+                        <p className="truncate text-xs text-stone-500">{task.title}</p>
+                      </div>
+                      {task.due_at && (
+                        <p className="flex-shrink-0 text-xs font-medium text-red-400">
+                          {new Date(task.due_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short" })}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Para Hoje */}
+          <div className="flex flex-col rounded-2xl border-l-4 border-amber-500 bg-stone-900 ring-1 ring-amber-500/20">
+            <div className="flex items-center justify-between border-b border-stone-800 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <AlarmClock className="h-4 w-4 text-amber-400" />
+                <h2 className="text-sm font-semibold text-stone-200">Tarefas para Hoje</h2>
+                {hojeList.length > 0 && (
+                  <span className="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-bold text-amber-400">
+                    {counts.para_hoje}
+                  </span>
+                )}
+              </div>
+              <Link href="/broker/leads?tasks=para-hoje" className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300">
+                Ver todas <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {hojeList.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center gap-2 px-6 py-8">
+                <CheckCircle2 className="h-5 w-5 text-stone-700" />
+                <p className="text-sm text-stone-600">Nenhuma tarefa para hoje.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-stone-800/70">
+                {hojeList.map((task) => {
+                  const lead = Array.isArray(task.lead) ? task.lead[0] : task.lead
+                  return (
+                    <li key={task.id} className="flex items-center gap-3 px-5 py-3">
+                      <span className="flex-shrink-0 rounded bg-amber-900/40 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-400">
+                        {actionTypeLabel[task.action_type] ?? task.action_type}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        {lead ? (
+                          <Link href={`/broker/leads/${(lead as { id: string }).id}`} className="block truncate text-sm font-medium text-stone-200 hover:text-orange-400">
+                            {(lead as { name?: string | null }).name || (lead as { phone: string }).phone}
+                          </Link>
+                        ) : (
+                          <p className="truncate text-sm text-stone-500">Lead removido</p>
+                        )}
+                        <p className="truncate text-xs text-stone-500">{task.title}</p>
+                      </div>
+                      {task.due_at && (
+                        <p className="flex-shrink-0 text-xs font-medium text-amber-400">
+                          {new Date(task.due_at).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+        </div>
+      )}
 
       {/* ── Meu Funil de Vendas ──────────────────────────────────── */}
       <div>
