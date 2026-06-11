@@ -44,6 +44,7 @@ export default async function BrokerLeadsPage({
         )
         .eq("assigned_broker_id", user.id)
         .eq("is_active", true)
+        .is("lost_reason", null)
         .order("updated_at", { ascending: false }),
 
       // Tarefas pendentes do broker — para filtro por status
