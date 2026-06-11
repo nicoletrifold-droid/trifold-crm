@@ -164,7 +164,7 @@ export default async function CampaignDetailPage({
           totalSent={e.filter((x) => x.email_status !== "pending").length}
         />
       ) : (
-        <EntriesTable entries={e} />
+        <EntriesTable entries={e} campaignId={id} />
       )}
     </div>
   )
