@@ -39,6 +39,10 @@ export default async function TreinamentoPage({
     query = query.eq("source_id", filters.source_id)
   }
 
+  if (filters.search) {
+    query = query.or(`title.ilike.%${filters.search}%,content.ilike.%${filters.search}%`)
+  }
+
   const { data: entries } = await query
 
   const propertyMap = new Map(
@@ -80,6 +84,23 @@ export default async function TreinamentoPage({
         <form className="flex items-end gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Pesquisar
+            </label>
+            <div className="relative mt-1">
+              <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-gray-400 dark:text-stone-500">
+                🔍
+              </span>
+              <input
+                type="text"
+                name="search"
+                defaultValue={filters.search ?? ""}
+                placeholder="Título ou conteúdo..."
+                className="rounded-md border border-gray-300 py-1.5 pl-7 pr-3 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Empreendimento
             </label>
             <select
@@ -99,7 +120,7 @@ export default async function TreinamentoPage({
           >
             Filtrar
           </button>
-          {filters.source_id && (
+          {(filters.source_id || filters.search) && (
             <Link
               href={BASE}
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
