@@ -86,8 +86,9 @@ export async function POST(
     return NextResponse.json({ error: "CSV vazio ou sem dados" }, { status: 400 })
   }
 
-  const delimiter = detectDelimiter(lines[0])
-  const headers = parseCSVLine(lines[0], delimiter)
+  const firstLine = lines[0]!
+  const delimiter = detectDelimiter(firstLine)
+  const headers = parseCSVLine(firstLine, delimiter)
   const fieldMap = headers.map(mapHeader)
 
   if (!fieldMap.includes("name") || !fieldMap.includes("phone")) {
