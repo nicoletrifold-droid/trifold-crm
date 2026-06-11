@@ -238,7 +238,13 @@ async function processLeadAsync(
           phone: phone ?? null,
           org_id: orgId,
         })
-        void distributeLeadToNextBroker(newLead.id, orgId)
+        // Story 46-2: lead BRAND-NEW (assigned_broker_id NULL por construção) →
+        // aciona a roleta. ADR-001 (Ação humana > Roleta > Pipeline): a chamada
+        // fica EXCLUSIVAMENTE no caminho de lead novo; nunca no de lead existente
+        // (linha de update acima só toca metadata/utm). Best-effort: fire-and-forget.
+        void distributeLeadToNextBroker(newLead.id, orgId).catch((err) =>
+          console.error("[roleta] meta distribution error:", err)
+        )
       }
       leadId = newLead?.id ?? null
     }

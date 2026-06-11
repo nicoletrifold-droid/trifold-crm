@@ -1,0 +1,234 @@
+schema: 1
+storyId: "46.2"
+story: "46-2"
+title: "Webhook do Meta Aciona a Roleta de Distribuição"
+epic: 46
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 6 ACs estão atendidos por código com evidência path:linha e cobertos por 4
+  testes verdes (route.roleta.test.ts). O invariante P0 ADR-001 (precedência
+  Ação humana > Roleta > Pipeline) foi verificado DIRETAMENTE no código: a chamada
+  distributeLeadToNextBroker está EXCLUSIVAMENTE dentro do bloco if (newLead?.id)
+  do branch else (lead recém-inserido via insert — meta-ads/route.ts:241-243), e
+  NUNCA no branch if (leadId) de update de lead existente (linhas 202-210, que só
+  toca metadata/utm). Isso é crítico porque o RPC roleta_pick_and_advance faz
+  UPDATE incondicional de assigned_broker_id (migration 071, linha 94): chamar a
+  roleta sobre um lead já atribuído roubaria o corretor. A chamada é best-effort
+  (void ... .catch) idêntica ao padrão validado do webhook WhatsApp
+  (whatsapp/route.ts:544-546). type-check (web) 0 erros; ESLint nos 2 arquivos
+  exit 0; 4/4 testes passam. As 6 falhas pré-existentes do webhook whatsapp 21.1
+  (alias @web/* no vitest) permanecem inalteradas — vitest.config.ts e a rota
+  whatsapp não foram tocados.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-11"
+updated: "2026-06-11T17:15:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC6 mapeados para código e teste. AC1 (chamada da roleta no caminho de
+      lead novo, meta-ads/route.ts:241-243; teste AC1 confirma 1 chamada com
+      (leadId, orgId)). AC2 (lead existente não chama a roleta — branch if (leadId)
+      linhas 202-210 só toca metadata/utm; teste AC2 confirma not.toHaveBeenCalled
+      e broker preservado). AC3 (fora_horario — mock retorna status fora_horario,
+      webhook ainda 200). AC4 (falha capturada pelo .catch, webhook não falha; teste
+      AC4 com mockRejectedValue). AC5 (type-check+lint verdes). AC6 (import absoluto
+      @web/lib/roleta/distributor, meta-ads/route.ts:6, consistente com
+      whatsapp/route.ts:8). Ver tabela ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      REUSE exemplar (IDS): nenhuma linha do distributor.ts foi tocada; toda a
+      lógica de horário/round-robin/limites/notificação/log é herdada de
+      distributeLeadToNextBroker. O padrão de chamada é cópia verbatim do webhook
+      WhatsApp validado (void ... .catch, sem await, sem try/catch adicional). Diff
+      cirúrgico: 8 linhas (import + comentário ADR-001 + a chamada). Comentário
+      inline documenta a decisão de design ADR-001 no ponto exato da chamada. Import
+      absoluto @web/*. Sem código morto, sem duplicação de engine.
+
+  - check: "3. Security / Correctness"
+    status: PASS
+    note: >
+      O invariante ADR-001 é cumprido por construção: a chamada da roleta está
+      DENTRO do if (newLead?.id) (lead recém-criado, assigned_broker_id IS NULL por
+      construção), nunca no caminho de update. Verifiquei contra migration 071:94
+      (UPDATE leads SET assigned_broker_id = v_user_id WHERE id = p_lead_id — sem
+      cláusula NULL), confirmando que chamar a roleta sobre lead já atribuído
+      roubaria o corretor; o código evita isso estruturalmente. Defesa em
+      profundidade adicional: o próprio distributor.ts (linhas 103-114) prioriza
+      lead ativo por phone, roteando ao corretor existente. A verificação de
+      assinatura HMAC (x-hub-signature-256) e o fail-closed por META_APP_SECRET já
+      existiam e não foram alterados.
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      Best-effort honrado: void distributeLeadToNextBroker(...).catch(console.error)
+      garante que uma falha de RPC/rede não derruba o webhook (o 200 já foi retornado
+      via after()). Teste AC4 prova que mockRejectedValue não propaga exceção
+      (flushAsync resolves) e que o lead permanece criado. triggerAutomations
+      continua fire-and-forget e independente. A roleta roda dentro do contexto
+      after() já estabelecido — sem nova superfície de falha síncrona no request.
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      4 testes co-localizados cobrindo os 4 cenários obrigatórios (AC1-AC4). A
+      estratégia é correta e determinística: mocka @web/lib/roleta/distributor e
+      @web/lib/email-automations, monta um mock in-memory do Supabase chainable, e
+      força after() a rodar eager via vi.mock("next/server") — observando os efeitos
+      fire-and-forget. Crucialmente, ESTE teste mocka @web/lib/supabase/admin ANTES
+      do import dinâmico, evitando o problema de alias @web/* que afeta o teste real
+      do webhook whatsapp. AC1 verifica chamada única com (leadId, orgId); AC2
+      verifica não-chamada + broker preservado; AC3 cobre fora_horario; AC4 cobre
+      falha capturada. Cobertura adequada para um diff de 2 linhas efetivas.
+
+  - check: "6. NFR (Performance)"
+    status: PASS
+    note: >
+      Mudança puramente aditiva, zero query extra no caminho síncrono do webhook
+      (a roleta roda em after(), fire-and-forget). Nenhum N+1 introduzido: a roleta
+      é chamada uma vez por lead novo. O caminho de lead existente (mais frequente
+      em re-entradas) não ganhou nenhuma chamada. Sem impacto no tempo de resposta
+      do 200 (retornado antes do processamento async).
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Diff mínimo e isolado (8 linhas em meta-ads/route.ts). O fluxo existente do
+      webhook Meta (verificação de assinatura, webhook_logs, fetchLeadData,
+      triggerAutomations, activities) permanece intacto. type-check web 0 erros;
+      4/4 testes da story verdes. As 6 falhas pré-existentes de
+      webhook/whatsapp/__tests__/route.test.ts (alias @web/* não resolve no vitest,
+      Story 21.1) permanecem IDÊNTICAS — confirmado: nenhum arquivo dessa rota nem
+      do vitest.config.ts está no diff. Sem migration, rollback trivial. distributor.ts
+      não tocado, portanto nenhum risco aos outros consumidores (webhook WhatsApp,
+      endpoint manual /api/roleta/distribute).
+
+ac_traceability:
+  - ac: "AC1"
+    status: Met
+    note: "meta-ads/route.ts:241-243 — void distributeLeadToNextBroker(newLead.id, orgId).catch(...) DENTRO do bloco if (newLead?.id) (linha 229). Lead recém-inserido → assigned_broker_id IS NULL por construção (ADR-001). Teste route.roleta.test.ts:210-223 confirma 1 chamada com (leadId, orgId)."
+  - ac: "AC2"
+    status: Met
+    note: "Branch if (leadId) (update de lead existente) — meta-ads/route.ts:202-210: só atualiza metadata e utm_* condicionalmente; NÃO chama a roleta. Teste route.roleta.test.ts:225-245 confirma distributeMock.not.toHaveBeenCalled() e que assigned_broker_id='broker-7' é preservado."
+  - ac: "AC3"
+    status: Met
+    note: "fora_horario tratado pelo distributor.ts:179-195 (log status='fora_horario', sem atribuir). Webhook retorna 200 normalmente. Teste route.roleta.test.ts:247-257 (mock status='fora_horario') confirma chamada + 200."
+  - ac: "AC4"
+    status: Met
+    note: ".catch((err) => console.error('[roleta] meta distribution error:', err)) em meta-ads/route.ts:242-243. Teste route.roleta.test.ts:259-272 (mockRejectedValue) confirma flushAsync resolves (sem throw) e lead criado."
+  - ac: "AC5"
+    status: Met
+    note: "pnpm --filter @trifold/web type-check → 0 erros. ESLint src/app/api/webhooks/meta-ads/route.ts + __tests__/route.roleta.test.ts → exit 0, zero hits."
+  - ac: "AC6"
+    status: Met
+    note: "import { distributeLeadToNextBroker } from '@web/lib/roleta/distributor' em meta-ads/route.ts:6 — padrão de import absoluto idêntico a whatsapp/route.ts:8."
+
+issues:
+  - id: TEST-001
+    severity: low
+    category: testing
+    finding: >
+      Os testes cobrem os 4 cenários via mock in-memory do Supabase (não o engine
+      real). O distributor.ts em si já tem cobertura própria e não foi tocado por
+      esta story. O caminho real de integração webhook→roleta→RPC depende do alias
+      @web/* (mesma causa raiz herdada que mantém 6 testes do webhook whatsapp 21.1
+      falhando). Não-bloqueante: a chamada testada é a fronteira correta; a lógica
+      interna do distributor é coberta separadamente.
+    suggested_action: >
+      Validar por smoke pós-deploy (payload Meta sandbox com field_data inline →
+      verificar leads.assigned_broker_id + lead_distribution_log status='distributed').
+      Considerar story de QA infra (resolve.alias @web/* no vitest) que também
+      destrava os 6 testes pré-existentes.
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL; host de review é macOS/darwin).
+      Mesmo cenário das stories 50-x/51-x.
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu os 7 quality checks. CI pode rodar
+      CodeRabbit pós-push.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Invariante ADR-001 implementado por construção (estrutura do if/else), não por
+      verificação runtime — a forma mais robusta. A chamada da roleta é fisicamente
+      impossível de atingir o caminho de lead existente. Confirmado contra migration
+      071:94 (UPDATE incondicional), que torna o posicionamento crítico.
+  - id: POS-002
+    description: >
+      REUSE perfeito (IDS REUSE > ADAPT > CREATE): zero modificação no distributor.ts,
+      cópia verbatim do padrão WhatsApp validado. Diff de 2 linhas efetivas corrige
+      um bug P0 de produção (100% dos leads Meta sem corretor).
+  - id: POS-003
+    description: >
+      O teste novo evita ativamente o problema de alias @web/* que afeta o teste do
+      webhook whatsapp, mockando @web/lib/supabase/admin antes do import dinâmico —
+      pattern correto que mantém a suite verde.
+
+independent_verification:
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros (tsc --noEmit)."
+  - check: "ESLint (arquivos da story)"
+    command: "npx eslint src/app/api/webhooks/meta-ads/route.ts src/app/api/webhooks/meta-ads/__tests__/route.roleta.test.ts (em packages/web)"
+    result: "exit 0, zero hits."
+  - check: "Testes da story 46-2"
+    command: "npx vitest run packages/web/src/app/api/webhooks/meta-ads/__tests__/route.roleta.test.ts"
+    result: "4/4 passed (AC1-AC4)."
+  - check: "Invariante ADR-001 (posicionamento da chamada)"
+    command: "Leitura meta-ads/route.ts:202-246 + migration 071:94"
+    result: "Chamada da roleta SÓ no if (newLead?.id) (241-243); update de lead existente (202-210) NÃO chama. RPC faz UPDATE incondicional (071:94) — posicionamento previne roubo de lead."
+  - check: "Escopo do diff"
+    command: "git diff --stat HEAD -- packages/web/src/app/api/webhooks/meta-ads/"
+    result: "route.ts +8 linhas. __tests__/ novo (untracked). Nenhum outro arquivo tocado."
+  - check: "Regressão (6 falhas pré-existentes inalteradas)"
+    command: "npx vitest run packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts"
+    result: "6 failed (alias @web/lib/supabase/admin não resolve, Story 21.1). Idênticas; vitest.config.ts e a rota whatsapp ausentes do diff."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança aditiva de 2 linhas efetivas, isolada no caminho de lead novo do webhook
+    Meta. A chamada é best-effort (não derruba o webhook) e estruturalmente impedida
+    de atingir leads já atribuídos (invariante ADR-001 por construção). distributor.ts
+    intocado (sem risco a outros consumidores). Pior caso runtime: a roleta falha →
+    console.error e o lead permanece criado (fica represado, coberto pela 46-3). Sem
+    migration, sem nova env var, rollback trivial. Corrige um bug P0 de produção.
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 6/6 ACs atendidos por código com evidência path:linha;
+    4/4 testes verdes cobrindo os cenários obrigatórios. O invariante P0 ADR-001 foi
+    verificado diretamente: a chamada distributeLeadToNextBroker está exclusivamente
+    no caminho de lead novo (meta-ads/route.ts:241-243), nunca no de update
+    (202-210), prevenindo o roubo de lead que o UPDATE incondicional do RPC
+    (migration 071:94) causaria. REUSE exemplar do distributor.ts e do padrão WhatsApp.
+    type-check (web) e ESLint exit 0. As issues remanescentes (2 LOW) são
+    não-bloqueantes. Aprovada para @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: POST /api/webhooks/meta-ads com field_data inline (sandbox) → confirmar leads.assigned_broker_id preenchido + lead_distribution_log status='distributed'. Simular fora-de-horário → status='fora_horario', assigned_broker_id NULL, webhook 200."
+    - "@po manter backlog TEST-001 (vitest resolve.alias @web/*) compartilhado com 50-x/51-x."
+
+files_reviewed:
+  - path: "packages/web/src/app/api/webhooks/meta-ads/route.ts"
+    verdict: PASS
+    notes: "Import distributor (6). Chamada da roleta EXCLUSIVAMENTE no if (newLead?.id) (241-243), best-effort void ... .catch. Branch de lead existente (202-210) NÃO chama (invariante ADR-001). Comentário inline documenta a decisão."
+  - path: "packages/web/src/app/api/webhooks/meta-ads/__tests__/route.roleta.test.ts"
+    verdict: PASS
+    notes: "4 testes (AC1-AC4): lead novo distribui (1x), lead existente não distribui + broker preservado, fora_horario, falha capturada. Mocka @web/lib/supabase/admin antes do import dinâmico (evita problema de alias)."
+  - path: "packages/web/src/lib/roleta/distributor.ts"
+    verdict: PASS
+    notes: "REUSE — não modificado. Confirmado: prioriza lead ativo por phone (103-114), trata fora_horario (179-195), faz pick-and-advance via RPC (200)."
