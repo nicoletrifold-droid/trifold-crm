@@ -5,6 +5,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { MessageSquarePlus } from "lucide-react"
 import { ChamadoForm } from "./_components/chamado-form"
 import { ChamadosClientWrapper } from "./_components/chamados-client-wrapper"
+import { ChamadosSeenMarker } from "./_components/chamados-seen-marker"
 
 interface Chamado {
   id: string
@@ -53,6 +54,7 @@ export default async function ChamadosPage() {
 
   return (
     <div>
+      {!isAdmin && <ChamadosSeenMarker />}
       {/* Page header */}
       <div className="mb-8">
         <div className="flex items-center gap-3">

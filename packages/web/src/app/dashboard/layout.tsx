@@ -140,13 +140,23 @@ export default async function DashboardLayout({
                 .eq("org_id", user.orgId)
                 .eq("status", "pendente")
             : Promise.resolve({ count: 0 }),
-          // Badge Suporte: tickets não resolvidos (aberto + em_analise)
-          permissions["chamados"] && (user.role === "admin" || user.role === "supervisor")
-            ? supabase
-                .from("chamados")
-                .select("id", { count: "exact", head: true })
-                .eq("org_id", user.orgId)
-                .neq("status", "resolvido")
+          // Badge Suporte:
+          // - admin/supervisor: tickets não resolvidos
+          // - outros: respostas do admin ainda não lidas pelo reporter
+          permissions["chamados"]
+            ? (user.role === "admin" || user.role === "supervisor")
+              ? supabase
+                  .from("chamados")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .neq("status", "resolvido")
+              : supabase
+                  .from("chamados")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .eq("reporter_id", user.id)
+                  .not("admin_response", "is", null)
+                  .is("reporter_seen_response_at", null)
             : Promise.resolve({ count: 0 }),
         ])
       : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
