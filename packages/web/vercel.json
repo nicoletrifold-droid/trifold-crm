@@ -91,6 +91,10 @@
     {
       "path": "/api/cron/roleta-retry",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/obras-approval-reminder",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
