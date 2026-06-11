@@ -1,20 +1,20 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { CampaignVisualEditor, type CampaignEditorRef } from "../../_components/campaign-visual-editor"
+import { EmailEditorModal } from "../../_components/email-editor-modal"
 
 export default function EditarCampanhaPage() {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
-  const editorRef = useRef<CampaignEditorRef>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const [showRawHtml, setShowRawHtml] = useState(false)
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [emailBodyHtml, setEmailBodyHtml] = useState<string | null>(null)
+  const [emailBodyJson, setEmailBodyJson] = useState<object | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaign, setCampaign] = useState<any>(null)
 
@@ -23,6 +23,8 @@ export default function EditarCampanhaPage() {
       .then((r) => r.json())
       .then((d) => {
         setCampaign(d.data)
+        setEmailBodyHtml(d.data?.email_body_html ?? null)
+        setEmailBodyJson(d.data?.email_body_json ?? null)
         setLoading(false)
       })
   }, [id])
@@ -33,13 +35,6 @@ export default function EditarCampanhaPage() {
     setError("")
     const form = new FormData(e.currentTarget)
     try {
-      let emailBodyHtml: string | null = form.get("email_body_html") as string | null
-      let emailBodyJson: object | null = null
-      if (!showRawHtml && editorRef.current) {
-        const { html, design } = await editorRef.current.getHtmlAndDesign()
-        emailBodyHtml = html || null
-        emailBodyJson = design
-      }
       const res = await fetch(`/api/campaigns/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -145,68 +140,24 @@ export default function EditarCampanhaPage() {
         </div>
 
         {/* Editor de e-mail */}
-        <div className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-3 dark:border-stone-800">
-            <span className="text-sm font-semibold text-gray-700 dark:text-stone-300">Corpo do e-mail</span>
+        <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm font-semibold text-gray-700 dark:text-stone-300">Corpo do e-mail</span>
+              {emailBodyHtml ? (
+                <p className="mt-0.5 text-xs text-green-600 dark:text-green-400">Template configurado</p>
+              ) : (
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">Nenhum template configurado</p>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setShowRawHtml((v) => !v)}
-              className="text-xs text-gray-500 underline hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+              onClick={() => setIsEditorOpen(true)}
+              className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 dark:bg-stone-700 dark:hover:bg-stone-600"
             >
-              {showRawHtml ? "Usar editor visual" : "Modo avançado (HTML)"}
+              {emailBodyHtml ? "Editar template" : "Criar template"}
             </button>
           </div>
-
-          {showRawHtml ? (
-            <div className="p-6">
-              <textarea
-                name="email_body_html"
-                defaultValue={campaign.email_body_html ?? ""}
-                rows={10}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
-              />
-            </div>
-          ) : (
-            <>
-              {/* Editor — full width, altura viewport */}
-              <div style={{ height: "calc(100vh - 200px)", minHeight: 560 }}>
-                <CampaignVisualEditor
-                  ref={editorRef}
-                  campaignId={id}
-                  initialDesign={campaign.email_body_json ?? null}
-                  onHtmlChange={setPreviewHtml}
-                />
-              </div>
-
-              {/* Preview inline — full width, como cliente de e-mail */}
-              <div className="border-t border-gray-200 dark:border-stone-800">
-                <div className="flex items-center justify-between bg-gray-50 px-6 py-2 dark:bg-stone-800/60">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-stone-500">
-                    Preview
-                  </span>
-                  <span className="text-xs text-gray-300 dark:text-stone-600">atualiza automaticamente</span>
-                </div>
-                <div
-                  className="overflow-y-auto bg-[#f4f4f4] dark:bg-stone-950"
-                  style={{ height: 480 }}
-                >
-                  {previewHtml ? (
-                    <iframe
-                      srcDoc={previewHtml}
-                      className="mx-auto block border-0"
-                      style={{ width: "100%", height: 1200 }}
-                      title="Preview do e-mail"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <p className="text-xs text-gray-400 dark:text-stone-600">Carregando preview...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Ações */}
@@ -219,6 +170,19 @@ export default function EditarCampanhaPage() {
           </button>
         </div>
       </form>
+
+      <EmailEditorModal
+        isOpen={isEditorOpen}
+        campaignId={id}
+        campaignName={campaign?.name}
+        initialDesign={emailBodyJson}
+        onClose={() => setIsEditorOpen(false)}
+        onSave={(html, design) => {
+          setEmailBodyHtml(html)
+          setEmailBodyJson(design)
+          setIsEditorOpen(false)
+        }}
+      />
     </div>
   )
 }

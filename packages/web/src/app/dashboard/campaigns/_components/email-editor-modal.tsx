@@ -1,0 +1,106 @@
+"use client"
+
+import { useRef, useState } from "react"
+import { CampaignVisualEditor, type CampaignEditorRef, type ImageVariantSession } from "./campaign-visual-editor"
+
+interface Props {
+  isOpen: boolean
+  campaignId: string
+  campaignName?: string
+  initialDesign?: object | null
+  onClose: () => void
+  onSave: (html: string, design: object, images: ImageVariantSession[]) => void
+}
+
+export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesign, onClose, onSave }: Props) {
+  const editorRef = useRef<CampaignEditorRef>(null)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  if (!isOpen) return null
+
+  async function handleSave() {
+    if (!editorRef.current) return
+    setSaving(true)
+    try {
+      const { html, design, images } = await editorRef.current.getHtmlAndDesign()
+      onSave(html, design, images)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-stone-900">
+      {/* Barra superior */}
+      <div className="flex h-[52px] flex-shrink-0 items-center justify-between border-b border-gray-200 px-4 dark:border-stone-800">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Voltar
+          </button>
+          <span className="text-sm font-semibold text-gray-700 dark:text-stone-200">
+            {campaignName ? `E-mail — ${campaignName}` : "Editor de E-mail"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="hidden text-xs text-gray-400 dark:text-stone-500 sm:block">
+            Preview atualiza automaticamente
+          </span>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar design"}
+          </button>
+        </div>
+      </div>
+
+      {/* Corpo: editor + preview */}
+      <div className="flex min-h-0 flex-1">
+        {/* Editor Unlayer — 65% */}
+        <div className="min-w-0 flex-[65]">
+          <CampaignVisualEditor
+            ref={editorRef}
+            campaignId={campaignId}
+            initialDesign={initialDesign}
+            onHtmlChange={setPreviewHtml}
+          />
+        </div>
+
+        {/* Preview ao vivo — 35% */}
+        <div className="flex flex-[35] flex-col border-l border-gray-200 dark:border-stone-800">
+          <div className="flex flex-shrink-0 items-center justify-between bg-gray-50 px-4 py-2 dark:bg-stone-800/60">
+            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-stone-500">
+              Preview
+            </span>
+            <span className="text-xs text-gray-300 dark:text-stone-600">600px</span>
+          </div>
+          <div className="flex-1 overflow-y-auto bg-[#f0f0f0] dark:bg-stone-950">
+            {previewHtml ? (
+              <iframe
+                srcDoc={previewHtml}
+                className="block border-0"
+                style={{ width: "100%", height: 1400 }}
+                title="Preview do e-mail"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-xs text-gray-400 dark:text-stone-600">Carregando preview...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
