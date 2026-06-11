@@ -119,7 +119,7 @@ export function LeadsBulkTable({
             return (
               <tr
                 key={lead.id}
-                onClick={() => toggleOne(lead.id)}
+                onClick={() => router.push(`/dashboard/leads/${lead.id}`)}
                 className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-stone-800/30 ${
                   isChecked ? "bg-orange-50 dark:bg-orange-900/10" : ""
                 }`}
