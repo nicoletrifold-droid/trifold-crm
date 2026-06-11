@@ -230,7 +230,7 @@ export default async function AnalyticsPage({
     .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
     .eq("org_id", appUser.orgId)
     .not("assigned_broker_id", "is", null)
-    .gte("created_at", monthStart.toISOString())
+    .gte("created_at", new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
     .limit(500)
 
   type ResponseLead = { id: string; created_at: string; assigned_broker_id: string; broker: { id: string; name: string } | { id: string; name: string }[] | null }
@@ -460,7 +460,7 @@ export default async function AnalyticsPage({
         {/* Tempo médio de 1º atendimento */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Tempo Médio de Atendimento</h2>
-          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o 1º contato registrado — mês atual</p>
+          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o 1º contato registrado — últimos 7 dias</p>
           {brokerResponseTimes.length > 0 ? (
             <div className="space-y-3">
               {brokerResponseTimes.map((b) => {
@@ -495,7 +495,7 @@ export default async function AnalyticsPage({
             </div>
           ) : (
             <p className="text-sm text-gray-400 dark:text-stone-500">
-              Nenhum atendimento registrado via &quot;+ Novo Histórico&quot; este mês.
+              Nenhum atendimento registrado via &quot;+ Novo Histórico&quot; nos últimos 7 dias.
             </p>
           )}
         </div>
