@@ -143,25 +143,25 @@ export default async function BrokerHomePage() {
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(50),
-    // Tarefas atrasadas: vencidas antes de hoje, não concluídas
+    // Tarefas atrasadas: vencidas antes de hoje, não concluídas, de leads do corretor
     supabase
       .from("lead_tasks")
-      .select("id, title, action_type, due_at, lead:leads!lead_id(id, name, phone)")
+      .select("id, title, action_type, due_at, lead:leads!inner(id, name, phone, assigned_broker_id)")
       .eq("org_id", user.orgId)
-      .eq("assigned_to", user.id)
       .is("completed_at", null)
       .lt("due_at", todayStart.toISOString())
+      .eq("leads.assigned_broker_id", user.id)
       .order("due_at", { ascending: true })
       .limit(5),
-    // Tarefas para hoje: vencem hoje, não concluídas
+    // Tarefas para hoje: vencem hoje, não concluídas, de leads do corretor
     supabase
       .from("lead_tasks")
-      .select("id, title, action_type, due_at, lead:leads!lead_id(id, name, phone)")
+      .select("id, title, action_type, due_at, lead:leads!inner(id, name, phone, assigned_broker_id)")
       .eq("org_id", user.orgId)
-      .eq("assigned_to", user.id)
       .is("completed_at", null)
       .gte("due_at", todayStart.toISOString())
       .lt("due_at", todayEnd.toISOString())
+      .eq("leads.assigned_broker_id", user.id)
       .order("due_at", { ascending: true })
       .limit(5),
   ])
