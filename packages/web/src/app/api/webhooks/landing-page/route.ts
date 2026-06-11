@@ -123,6 +123,8 @@ async function processLandingPageLead(
     const rawPhone = pick(fields, ["telefone", "phone", "celular", "whatsapp", "your-phone", "field_phone", "fone"]) ?? null
     const phone = rawPhone ? normalizePhone(rawPhone) : null
     const message = pick(fields, ["mensagem", "message", "your-message", "texto", "assunto", "resposta"]) ?? null
+    // Nome do formulário Elementor (form_name) — usado como source para identificar a LP
+    const formName = fields.form_name?.trim() || null
 
     if (!name && !email && !phone) {
       console.warn("[LP-WEBHOOK] Lead sem nome, email ou telefone — ignorado", { fields })
@@ -170,14 +172,14 @@ async function processLandingPageLead(
           email,
           phone,
           channel: "website",
-          source: "website",
+          source: formName ?? "website",
           stage_id: defaultStageId,
           utm_source: ctx.utmSource,
           utm_medium: ctx.utmMedium,
           utm_campaign: ctx.utmCampaign,
           utm_content: ctx.utmContent,
           metadata: {
-            landing_page: ctx.pageName,
+            landing_page: formName ?? ctx.pageName,
             message: message ?? null,
             raw_fields: fields,
           },
