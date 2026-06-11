@@ -8,6 +8,58 @@ import {
 } from "lucide-react"
 import { NewAppointmentButton } from "./_components/new-appointment-modal"
 
+const MOTIVATIONAL_PHRASES = [
+  "Cada lead é uma porta. Você decide qual abre hoje.",
+  "O corretor que liga primeiro, vende primeiro.",
+  "Persistência transforma interessados em compradores.",
+  "Uma ligação a mais hoje pode ser a venda do mês.",
+  "Bons corretores esperam oportunidades. Grandes corretores as criam.",
+  "O não de hoje é o sim de amanhã. Continue.",
+  "Seu próximo cliente está esperando o seu contato.",
+  "Foco, consistência e atendimento: a fórmula da venda.",
+  "Quem atende rápido, atende melhor.",
+  "Cada objeção superada é um passo mais perto do fechamento.",
+  "O mercado imobiliário premia quem não desiste.",
+  "Hoje é um ótimo dia para fechar um negócio.",
+  "A diferença entre tentar e conseguir é a persistência.",
+  "Um sorriso no atendimento vale mais que qualquer desconto.",
+  "O cliente não compra um imóvel, compra um sonho. Ajude-o a realizá-lo.",
+  "Pequenas ações todos os dias constroem grandes resultados.",
+  "Seu pipeline cheio hoje é sua renda garantida amanhã.",
+  "Cada follow-up é uma demonstração de comprometimento.",
+  "Conhecimento do produto mais empatia com o cliente: venda garantida.",
+  "O melhor horário para ligar para um lead é agora.",
+  "Quem organiza o dia, domina os resultados.",
+  "Tarefas em dia, mente tranquila, vendas fluindo.",
+  "Cada imóvel tem o comprador certo. Seja o corretor certo para encontrá-lo.",
+  "Sucesso em vendas é 10% inspiração e 90% follow-up.",
+  "Um atendimento excepcional gera indicações para sempre.",
+  "Não espere o lead perfeito. Trabalhe o lead que você tem.",
+  "A venda começa antes do primeiro contato: começa no preparo.",
+  "Cada dia de trabalho focado é um investimento no seu futuro.",
+  "Leads bem atendidos se tornam clientes fiéis e indicadores.",
+  "Você não está vendendo imóveis, está transformando vidas.",
+  "O segredo do sucesso em vendas? Aparecer todos os dias.",
+  "Cada tarefa concluída hoje é um obstáculo a menos amanhã.",
+  "Grandes vendedores ouvem mais do que falam.",
+  "A motivação te faz começar. O hábito te faz continuar.",
+  "Corra atrás do seu pipeline como se cada lead fosse o último.",
+  "Resultados extraordinários vêm de esforços ordinários feitos de forma consistente.",
+  "O cliente lembra de como você o fez sentir. Faça-o sentir especial.",
+  "Quem domina o follow-up, domina as vendas.",
+  "Hoje é o dia certo para retomar aquele lead que ficou parado.",
+  "Cada não te aproxima do próximo sim.",
+]
+
+function getDailyPhrase(): string {
+  const today = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+  let hash = 0
+  for (let i = 0; i < today.length; i++) {
+    hash = (hash * 31 + today.charCodeAt(i)) & 0xffffffff
+  }
+  return MOTIVATIONAL_PHRASES[Math.abs(hash) % MOTIVATIONAL_PHRASES.length]!
+}
+
 function greeting() {
   const h = parseInt(
     new Date().toLocaleString("pt-BR", {
@@ -167,6 +219,9 @@ export default async function BrokerHomePage() {
           <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-stone-100">
             {user.name}
           </h1>
+          <p className="mt-1 text-xs italic text-stone-500 dark:text-stone-500">
+            &ldquo;{getDailyPhrase()}&rdquo;
+          </p>
         </div>
         <p className="text-xs text-gray-400 dark:text-stone-600">
           {new Date().toLocaleDateString("pt-BR", {
