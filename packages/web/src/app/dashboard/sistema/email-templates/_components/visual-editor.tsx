@@ -380,7 +380,10 @@ export const VisualEditor = forwardRef<VisualEditorRef, Props>(
     )
 
     return (
-      <div className="h-full" style={{ minHeight: 640 }}>
+      {/* flex-col faz o wrapper interno do react-email-editor (flex:1 1 0%)
+          crescer e o iframe preencher 100% da altura — sem isso o editor
+          trava em ~500px e o fundo do modal vaza como faixa escura */}
+      <div className="flex h-full flex-col" style={{ minHeight: 640 }}>
         <EmailEditor
           ref={editorRef}
           onReady={handleReady}
