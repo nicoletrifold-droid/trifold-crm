@@ -194,20 +194,18 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
 
       {/* Corpo */}
       <div className="flex" style={{ height: bodyHeight }}>
-        {/* Editor — scrollável verticalmente; canvas fixo em 1920px de altura */}
+        {/* Editor — ocupa toda a viewport; o Unlayer gerencia seu próprio scroll interno */}
         <div
-          className="overflow-y-auto overflow-x-hidden"
+          className="overflow-hidden"
           style={{ height: bodyHeight, width: showPreview ? "calc(100% - 440px)" : "100%" }}
         >
-          <div style={{ height: 1920 }}>
-            <CampaignVisualEditor
-              ref={editorRef}
-              campaignId={campaignId}
-              initialDesign={initialDesign}
-              onReady={() => setEditorReady(true)}
-              onHtmlChange={handleHtmlChange}
-            />
-          </div>
+          <CampaignVisualEditor
+            ref={editorRef}
+            campaignId={campaignId}
+            initialDesign={initialDesign}
+            onReady={() => setEditorReady(true)}
+            onHtmlChange={handleHtmlChange}
+          />
         </div>
 
         {/* Painel de preview — 440px fixos, só montado quando aberto */}
