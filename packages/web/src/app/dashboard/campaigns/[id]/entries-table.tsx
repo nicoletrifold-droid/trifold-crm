@@ -75,6 +75,9 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [sendingWa, setSendingWa] = useState(false)
+  const [sendWaResult, setSendWaResult] = useState<{ sent: number; failed: number; total: number } | null>(null)
+  const [sendWaError, setSendWaError] = useState<string | null>(null)
 
   const filtered = entries.filter((e) => {
     switch (filter) {
@@ -97,6 +100,32 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
   function handleFilterChange(f: Filter) {
     setFilter(f)
     setPage(1)
+  }
+
+  async function handleSendWhatsApp() {
+    const pendingWa = entries.filter((e) => ["pending", "failed"].includes(e.whatsapp_status))
+    if (pendingWa.length === 0) {
+      setSendWaError("Nenhum cadastro com WhatsApp pendente ou com falha para disparar.")
+      return
+    }
+    if (!window.confirm(`Disparar WhatsApp para ${pendingWa.length} cadastro(s) (pendentes + falhas anteriores)?`)) return
+    setSendingWa(true)
+    setSendWaResult(null)
+    setSendWaError(null)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/send-whatsapp`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) {
+        setSendWaError(data.error ?? "Erro ao disparar WhatsApp")
+        return
+      }
+      setSendWaResult(data)
+      router.refresh()
+    } catch {
+      setSendWaError("Erro de conexão ao disparar WhatsApp")
+    } finally {
+      setSendingWa(false)
+    }
   }
 
   async function handleSendEmails() {
@@ -237,6 +266,13 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
             onChange={handleImportCSV}
           />
           <button
+            onClick={handleSendWhatsApp}
+            disabled={sendingWa}
+            className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            {sendingWa ? "Disparando..." : "Disparar WhatsApp"}
+          </button>
+          <button
             onClick={handleSendEmails}
             disabled={sending}
             className="rounded-md bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
@@ -258,6 +294,25 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
           </button>
         </div>
       </div>
+
+      {/* Send WhatsApp banners */}
+      {sendWaError && (
+        <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+          <p className="text-xs text-red-700 dark:text-red-300">{sendWaError}</p>
+          <button onClick={() => setSendWaError(null)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+      {sendWaResult && (
+        <div className="flex items-center justify-between border-b border-green-200 bg-green-50 px-4 py-2 dark:border-green-500/20 dark:bg-green-500/10">
+          <p className="text-xs text-green-800 dark:text-green-300">
+            <span className="font-semibold">WhatsApp: {sendWaResult.sent} enviado(s)</span>
+            {sendWaResult.failed > 0 && (
+              <span className="ml-2 text-red-600 dark:text-red-400">· {sendWaResult.failed} falharam</span>
+            )}
+          </p>
+          <button onClick={() => setSendWaResult(null)} className="text-xs text-green-600 hover:text-green-800 dark:text-green-400">✕</button>
+        </div>
+      )}
 
       {/* Send emails banners */}
       {sendError && (
