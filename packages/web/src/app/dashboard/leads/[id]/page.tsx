@@ -250,7 +250,7 @@ export default async function LeadDetailPage({
               collectedData.has_down_payment === true ? "Sim" :
               collectedData.has_down_payment === false ? "Não" : null
             } />
-            <InfoRow label="Origem" value={lead.source ? (sourceLabels[lead.source] ?? lead.source) : null} />
+            <InfoRow label="Origem" value={lead.source ? (lead.source === "website" && lead.utm_content ? lead.utm_content : (sourceLabels[lead.source] ?? lead.source)) : null} />
             <InfoRow label="Canal" value={lead.channel} />
             <InfoRow label="Etapa qualificação" value={convState?.qualification_step} />
             <InfoRow label="Visita proposta" value={convState?.visit_proposed ? "Sim" : "Não"} />
