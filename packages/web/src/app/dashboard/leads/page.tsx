@@ -197,9 +197,12 @@ export default async function LeadsPage({
         <ScrollableX>
           <LeadsBulkTable
             leads={(leads ?? []).map((lead) => {
-              const stageArr = lead.stage as unknown as Array<{ id: string; name: string; color: string | null }> | null
-              const propertyArr = lead.property_interest as unknown as Array<{ id: string; name: string }> | null
-              const brokerArr = lead.broker as unknown as Array<{ id: string; name: string }> | null
+              type StageItem = { id: string; name: string; color: string | null }
+              type PropItem = { id: string; name: string }
+              type BrokerItem = { id: string; name: string }
+              const stageRaw = lead.stage as unknown as StageItem[] | StageItem | null
+              const propertyRaw = lead.property_interest as unknown as PropItem[] | PropItem | null
+              const brokerRaw = lead.broker as unknown as BrokerItem[] | BrokerItem | null
               return {
                 id: lead.id,
                 name: lead.name ?? null,
@@ -207,9 +210,9 @@ export default async function LeadsPage({
                 qualification_score: lead.qualification_score ?? null,
                 updated_at: lead.updated_at ?? null,
                 source: (lead as unknown as Record<string, unknown>).source as string | null,
-                stage: stageArr?.[0] ?? null,
-                property_interest: propertyArr?.[0] ?? null,
-                broker: brokerArr?.[0] ?? null,
+                stage: Array.isArray(stageRaw) ? stageRaw[0] ?? null : stageRaw ?? null,
+                property_interest: Array.isArray(propertyRaw) ? propertyRaw[0] ?? null : propertyRaw ?? null,
+                broker: Array.isArray(brokerRaw) ? brokerRaw[0] ?? null : brokerRaw ?? null,
               }
             })}
             brokers={allBrokers}

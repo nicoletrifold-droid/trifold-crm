@@ -181,7 +181,9 @@ export function LeadsBulkTable({
                       </span>
                     </div>
                   ) : (
-                    <span className="text-sm text-gray-300 dark:text-stone-600">—</span>
+                    <span className="inline-flex items-center rounded-md bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500 dark:bg-stone-700/50 dark:text-stone-400">
+                      Sem corretor
+                    </span>
                   )}
                 </td>
                 <td className="px-6 py-4">
