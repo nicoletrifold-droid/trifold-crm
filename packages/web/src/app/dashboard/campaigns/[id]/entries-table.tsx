@@ -72,6 +72,9 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   const filtered = entries.filter((e) => {
     switch (filter) {
@@ -94,6 +97,32 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
   function handleFilterChange(f: Filter) {
     setFilter(f)
     setPage(1)
+  }
+
+  async function handleSendEmails() {
+    const pendingWithEmail = entries.filter((e) => e.email_status === "pending" && e.email)
+    if (pendingWithEmail.length === 0) {
+      setSendError("Nenhum cadastro com e-mail pendente para disparar.")
+      return
+    }
+    if (!window.confirm(`Disparar e-mail para ${pendingWithEmail.length} cadastro(s) com status pendente?`)) return
+    setSending(true)
+    setSendResult(null)
+    setSendError(null)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/send-emails`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) {
+        setSendError(data.error ?? "Erro ao disparar e-mails")
+        return
+      }
+      setSendResult(data)
+      router.refresh()
+    } catch {
+      setSendError("Erro de conexão ao disparar e-mails")
+    } finally {
+      setSending(false)
+    }
   }
 
   async function handleImportCSV(e: React.ChangeEvent<HTMLInputElement>) {
@@ -208,6 +237,13 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
             onChange={handleImportCSV}
           />
           <button
+            onClick={handleSendEmails}
+            disabled={sending}
+            className="rounded-md bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+          >
+            {sending ? "Disparando..." : "Disparar e-mails"}
+          </button>
+          <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
             className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -222,6 +258,25 @@ export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campai
           </button>
         </div>
       </div>
+
+      {/* Send emails banners */}
+      {sendError && (
+        <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+          <p className="text-xs text-red-700 dark:text-red-300">{sendError}</p>
+          <button onClick={() => setSendError(null)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+      {sendResult && (
+        <div className="flex items-center justify-between border-b border-green-200 bg-green-50 px-4 py-2 dark:border-green-500/20 dark:bg-green-500/10">
+          <p className="text-xs text-green-800 dark:text-green-300">
+            <span className="font-semibold">{sendResult.sent} e-mail(s) enviados</span>
+            {sendResult.failed > 0 && (
+              <span className="ml-2 text-red-600 dark:text-red-400">· {sendResult.failed} falharam</span>
+            )}
+          </p>
+          <button onClick={() => setSendResult(null)} className="text-xs text-green-600 hover:text-green-800 dark:text-green-400">✕</button>
+        </div>
+      )}
 
       {/* Import result banner */}
       {importError && (

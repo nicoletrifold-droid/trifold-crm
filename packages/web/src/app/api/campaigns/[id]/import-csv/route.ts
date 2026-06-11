@@ -163,7 +163,7 @@ export async function POST(
     const batch = rows.slice(i, i + BATCH)
     const { error, count } = await supabase
       .from("campaign_entries")
-      .insert(batch, { count: "exact" })
+      .upsert(batch, { onConflict: "campaign_id,phone", ignoreDuplicates: true, count: "exact" })
 
     if (error) {
       errors.push(`Lote ${Math.floor(i / BATCH) + 1}: ${error.message}`)
