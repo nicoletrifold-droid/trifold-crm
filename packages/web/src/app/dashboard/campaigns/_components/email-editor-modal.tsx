@@ -28,6 +28,8 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
   const editorRef = useRef<CampaignEditorRef>(null)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [editorReady, setEditorReady] = useState(false)
   const [iframeHeight, setIframeHeight] = useState(800)
   const [showPreview, setShowPreview] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -46,6 +48,8 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
     if (isOpen) {
       setIsDirty(false)
       setSyncing(false)
+      setSaveError(null)
+      setEditorReady(false)
       setPreviewHtml(null)
       setIframeHeight(800)
       initialHtmlRef.current = false
@@ -86,12 +90,24 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
   }
 
   async function handleSave() {
-    if (!editorRef.current) return
+    setSaveError(null)
+    if (!editorRef.current) {
+      setSaveError("Editor ainda carregando — aguarde e tente novamente.")
+      return
+    }
     setSaving(true)
     try {
-      const { html, design, images } = await editorRef.current.getHtmlAndDesign()
-      onSave(html, design, images)
+      // Timeout de 15s para o Unlayer não travar silenciosamente
+      const result = await Promise.race([
+        editorRef.current.getHtmlAndDesign(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout ao exportar design (15s)")), 15000)
+        ),
+      ])
+      onSave(result.html, result.design, result.images)
       setIsDirty(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Erro ao salvar design.")
     } finally {
       setSaving(false)
     }
@@ -158,14 +174,20 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
             Preview
           </button>
 
+          {saveError && (
+            <span className="max-w-xs truncate text-xs text-red-500 dark:text-red-400" title={saveError}>
+              ⚠ {saveError}
+            </span>
+          )}
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !editorReady}
+            title={!editorReady ? "Aguarde o editor carregar..." : undefined}
             className="rounded-md px-4 py-1.5 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
             style={{ backgroundColor: "#F27A5E" }}
           >
-            {saving ? "Salvando..." : "Salvar design"}
+            {saving ? "Salvando..." : !editorReady ? "Carregando..." : "Salvar design"}
           </button>
         </div>
       </div>
@@ -182,6 +204,7 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
               ref={editorRef}
               campaignId={campaignId}
               initialDesign={initialDesign}
+              onReady={() => setEditorReady(true)}
               onHtmlChange={handleHtmlChange}
             />
           </div>
