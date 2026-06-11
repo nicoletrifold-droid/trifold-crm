@@ -16,6 +16,7 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
   const editorRef = useRef<CampaignEditorRef>(null)
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [iframeHeight, setIframeHeight] = useState(1400)
 
   if (!isOpen) return null
 
@@ -73,7 +74,7 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
             ref={editorRef}
             campaignId={campaignId}
             initialDesign={initialDesign}
-            onHtmlChange={setPreviewHtml}
+            onHtmlChange={(html) => { setPreviewHtml(html); setIframeHeight(1400) }}
           />
         </div>
 
@@ -90,7 +91,13 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
               <iframe
                 srcDoc={previewHtml}
                 className="block border-0"
-                style={{ width: "100%", height: 1400 }}
+                style={{ width: "100%", height: iframeHeight }}
+                onLoad={(e) => {
+                  const doc = e.currentTarget.contentDocument
+                  if (doc?.body) {
+                    setIframeHeight(doc.body.scrollHeight || 1400)
+                  }
+                }}
                 title="Preview do e-mail"
               />
             ) : (
