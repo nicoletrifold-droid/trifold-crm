@@ -1,0 +1,262 @@
+schema: 1
+storyId: "46.3"
+story: "46-3"
+title: "Cron de Abertura Redistribui Leads Represados da Roleta"
+epic: 46
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 8 ACs estão atendidos por código com evidência path:linha e cobertos por 8
+  testes verdes (route.test.ts). Os pontos críticos foram verificados diretamente:
+  (1) Schedule UTC correto — vercel.json:96-97 usa "0 11 * * *" (11h UTC = 8h SP
+  UTC-3), confirmado igual a email-automations/meta-ads-intelligence e NÃO "0 8"
+  (erro do keep-alive = 5h SP). (2) Auth CRON_SECRET fail-closed — 503 sem secret,
+  401 Bearer inválido (route.ts:60-67), cópia verbatim do followup cron. (3) Filtro
+  multi-org seguro — resolve o stage default POR org via .maybeSingle() escopado
+  por org_id (route.ts:24-47), filtra leads por org_id + is_active + assigned_broker_id
+  IS NULL + stage_id default (102-109); stages "Corretores Antigos" (62075f72-) e
+  "Ação Muffato" (dab590c7-) são excluídos por construção (não são is_default).
+  (4) Idempotência via .is("assigned_broker_id", null). (5) Limite .limit(50) por
+  org com flag limited. REUSE total do distributor.ts (não tocado). type-check (web)
+  0 erros; ESLint nos 2 arquivos exit 0; 8/8 testes passam. As 6 falhas
+  pré-existentes do webhook whatsapp 21.1 permanecem inalteradas.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-11"
+updated: "2026-06-11T17:15:00Z"
+iteration: 1
+quality_score: 95
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC8 mapeados para código e teste. AC1 (auth fail-closed 503/401,
+      route.ts:60-67; testes 133-147). AC2 (lead elegível no stage default → chama
+      distribuir, route.ts:121-128; teste 149-166). AC3 (stages históricos excluídos
+      pelo filtro stage_id default, route.ts:108; teste 168-180 usa ids fictícios
+      62075f72-/dab590c7-). AC4 (filtro IS NULL, route.ts:107; teste 182-194). AC5
+      (try/catch por lead, route.ts:123-132; teste 196-212). AC6 (limited quando
+      length===50, route.ts:119; teste 214-231). AC7 (vercel.json:96-97 "0 11 * * *").
+      AC8 (type-check+lint verdes). Ver tabela ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      ADAPT correto (IDS): resolveDefaultStageId replica a estratégia de
+      getDefaultStageId do meta webhook (is_default por org + fallback por position)
+      mas troca .single() por .maybeSingle() — decisão defensiva multi-org bem
+      justificada no JSDoc (is_default não tem unique constraint global). REUSE total
+      de distributeLeadToNextBroker (engine não tocada). Auth fail-closed copiado
+      verbatim do followup cron. maxDuration=60 declarado. Constantes nomeadas
+      (MAX_LEADS_PER_ORG). Imports absolutos @web/*. JSDoc abrangente documentando
+      o gotcha UTC e a estratégia de stage. Sem código morto.
+
+  - check: "3. Security / Correctness"
+    status: PASS
+    note: >
+      Auth fail-closed verificado: 503 se CRON_SECRET ausente (route.ts:61-64) ANTES
+      de qualquer query — não vaza estado; 401 se Bearer não bate (65-67). Padrão
+      idêntico ao followup cron. createAdminClient() usado conscientemente (cron não
+      tem sessão; bypassa RLS por design, igual followup). O endpoint não é exposto
+      indevidamente: GET autenticado por secret, sem parâmetros de usuário (sem
+      IDOR). O filtro por stage default da org garante isolamento multi-org — leads
+      de uma org nunca são distribuídos no contexto de outra (org_id propagado de
+      lead.org_id para distributeLeadToNextBroker, route.ts:124-127).
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      Best-effort em duas camadas: (a) erro ao carregar roleta_config → 500 com
+      mensagem (route.ts:78-81); (b) erro ao resolver stage ou query de leads de uma
+      org → console.error + continue (pula a org, não derruba o cron, 94-97/111-114);
+      (c) try/catch individual por lead (123-132) — uma falha de RPC incrementa
+      failed e o loop continua. O endpoint sempre retorna 200 com contadores parciais
+      quando passou da auth (exceto o 500 de config). Teste AC5 confirma
+      distributed:1/failed:1 com 2 leads (um rejeita). Idempotência natural via
+      filtro IS NULL: reexecução não reprocessa.
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      8 testes cobrindo os 7 cenários obrigatórios + auth duplo (503 e 401
+      separados). Mock in-memory do Supabase chainable suportando eq/is/order/limit/
+      maybeSingle + thenable terminal para list queries — fiel à API usada pela rota.
+      AC3 usa stage ids fictícios prefixados 62075f72-/dab590c7- (alinhado aos UUIDs
+      reais documentados no Dev Agent Record) para provar a exclusão por stage
+      default. vi.resetModules() no beforeEach garante que o module-scope CRON_SECRET
+      é relido (crítico para o teste 503 que deleta a env). Mocka @web/lib/roleta/
+      distributor e @web/lib/supabase/admin — evita o problema de alias que afeta o
+      teste real do webhook whatsapp. Cobertura excelente para um endpoint novo.
+
+  - check: "6. NFR (Performance)"
+    status: PASS
+    note: >
+      Sem N+1 problemático: 1 query de roleta_config + por org [1 resolução de stage
+      (até 2 queries com fallback) + 1 query de leads com .limit(50)] + N chamadas a
+      distributeLeadToNextBroker (loop sequencial intencional para respeitar o
+      advisory lock por org do RPC). Limite .limit(50) por org previne timeout
+      (Vercel 60s; estimativa ~25s para 50 leads, margem segura). maxDuration=60
+      declarado. limited:true alerta o admin quando há overflow. A sequencialidade
+      do loop é correta — paralelizar quebraria a serialização round-robin do RPC.
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Endpoint NOVO + 1 entrada aditiva no vercel.json (as 18 entradas existentes
+      preservadas — confirmado no diff: +4 linhas = um objeto cron). Nenhum cron
+      existente alterado. distributor.ts intocado (sem risco a webhook WhatsApp/Meta
+      nem ao endpoint manual). type-check web 0 erros; 8/8 testes verdes. As 6 falhas
+      pré-existentes de webhook/whatsapp/__tests__/route.test.ts (alias @web/*, Story
+      21.1) permanecem IDÊNTICAS — vitest.config.ts não tocado. Sem migration,
+      rollback trivial (remover o endpoint + a entrada do vercel.json).
+
+ac_traceability:
+  - ac: "AC1"
+    status: Met
+    note: "route.ts:61-64 (503 se !CRON_SECRET) + 65-67 (401 se authHeader !== Bearer). Testes route.test.ts:133-140 (503) e 142-147 (401), ambos com distributeMock.not.toHaveBeenCalled()."
+  - ac: "AC2"
+    status: Met
+    note: "Stage default por org (resolveDefaultStageId, route.ts:24-47) + filtro leads (102-109) + chamada distributeLeadToNextBroker(lead.id, lead.org_id) (124-127). Teste route.test.ts:149-166 confirma chamada com ('lead-1','org-1') e body processed:1/distributed:1."
+  - ac: "AC3"
+    status: Met
+    note: "Filtro .eq('stage_id', stageId) (route.ts:108) onde stageId = stage is_default da org. Leads em '62075f72-old'/'dab590c7-muffato' não estão no default → excluídos. Teste route.test.ts:168-180 confirma not.toHaveBeenCalled + processed:0."
+  - ac: "AC4"
+    status: Met
+    note: ".is('assigned_broker_id', null) (route.ts:107). Teste route.test.ts:182-194 (lead com assigned_broker_id='broker-9') confirma not.toHaveBeenCalled."
+  - ac: "AC5"
+    status: Met
+    note: "try/catch por lead (route.ts:123-132): catch → console.error + failed++; loop continua. Teste route.test.ts:196-212 (mockRejectedValueOnce) confirma 200 com processed:2/distributed:1/failed:1."
+  - ac: "AC6"
+    status: Met
+    note: "if (leads.length === MAX_LEADS_PER_ORG) limited = true (route.ts:119). Response { processed, distributed, failed, limited } (136). Teste route.test.ts:214-231 (60 leads) confirma 50 chamadas + limited:true."
+  - ac: "AC7"
+    status: Met
+    note: "vercel.json:95-98 — { path: '/api/cron/roleta-redistribute', schedule: '0 11 * * *' }. 11h UTC = 8h SP (UTC-3). Confirmado igual a email-automations (61) e meta-ads-intelligence (69); NÃO '0 8' (= 5h SP, erro do keep-alive linha 41). As 18 entradas existentes preservadas."
+  - ac: "AC8"
+    status: Met
+    note: "pnpm --filter @trifold/web type-check → 0 erros. ESLint route.ts + __tests__/route.test.ts → exit 0, zero hits."
+
+issues:
+  - id: PERF-001
+    severity: low
+    category: performance
+    finding: >
+      O limite .limit(50) é por org e a flag limited é global. Numa instância
+      futura com muitas orgs, uma única execução poderia processar 50*N leads e
+      aproximar do timeout de 60s (estimativa ~25s para 50 leads). A instância atual
+      tem 1 org, então não é risco hoje. O loop por org é sequencial (correto para o
+      advisory lock do RPC), o que agrava o tempo total em multi-org de alto volume.
+    suggested_action: >
+      Não-bloqueante hoje (1 org). Em cenário multi-org de alto volume, considerar um
+      teto global de leads por execução além do teto por org, ou paginação com cursor
+      entre execuções. Monitorar duração via logs do Vercel Cron.
+  - id: TEST-001
+    severity: low
+    category: testing
+    finding: >
+      Testes via mock in-memory do Supabase (não banco real). O caminho de
+      integração real cron→distributor→RPC depende do alias @web/* (mesma causa raiz
+      herdada das stories 21.1/50-x/51-x). distributor.ts tem cobertura própria e não
+      foi tocado.
+    suggested_action: >
+      Validar por smoke pós-deploy (GET com Authorization: Bearer <CRON_SECRET> →
+      confirmar contadores; sem header → 401). Compartilhar backlog do resolve.alias
+      @web/* no vitest.
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL; host de review é macOS/darwin).
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu os 7 quality checks. CI pode rodar
+      CodeRabbit pós-push.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Schedule UTC correto (0 11 = 8h SP) com o gotcha documentado no JSDoc e no Dev
+      Agent Record, evitando ativamente o erro do keep-alive (0 8 = 5h SP). Verificado
+      contra os crons de referência email-automations/meta-ads-intelligence.
+  - id: POS-002
+    description: >
+      Resolução de stage default escopada por org com .maybeSingle() (não .single())
+      é a decisão correta: is_default não tem unique constraint global, e .maybeSingle()
+      degrada graciosamente (null → pula a org) em vez de lançar. ADAPT consciente do
+      getDefaultStageId, com JSDoc explicando o porquê da divergência.
+  - id: POS-003
+    description: >
+      Estratégia de exclusão de stages históricos por construção (filtro por stage
+      default) em vez de hardcodar UUIDs — mais robusta e auto-mantida. Os UUIDs reais
+      ficam documentados no Dev Agent Record sem acoplar o código a eles.
+  - id: POS-004
+    description: >
+      Idempotência natural via .is('assigned_broker_id', null): reexecuções (retry do
+      Vercel) não reprocessam leads já distribuídos. Best-effort em camadas (config,
+      por-org, por-lead) garante que o cron nunca derruba por uma falha isolada.
+
+independent_verification:
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros (tsc --noEmit)."
+  - check: "ESLint (arquivos da story)"
+    command: "npx eslint src/app/api/cron/roleta-redistribute/route.ts + __tests__/route.test.ts (em packages/web)"
+    result: "exit 0, zero hits."
+  - check: "Testes da story 46-3"
+    command: "npx vitest run packages/web/src/app/api/cron/roleta-redistribute/"
+    result: "8/8 passed (AC1 503, AC1 401, AC2, AC3, AC4, AC5, AC6, caso vazio)."
+  - check: "Schedule UTC"
+    command: "Leitura vercel.json:95-98 vs linhas 41/61/69"
+    result: "'0 11 * * *' (8h SP). Igual a email-automations/meta-ads-intelligence. NÃO '0 8' (keep-alive = 5h SP). 18 entradas existentes preservadas."
+  - check: "Filtro multi-org + stages históricos"
+    command: "Leitura route.ts:24-47, 92-119"
+    result: "resolveDefaultStageId por org (.maybeSingle); filtro org_id + is_active + assigned_broker_id IS NULL + stage_id default. Stages 62075f72-/dab590c7- excluídos por não serem is_default."
+  - check: "Escopo do diff"
+    command: "git diff --stat HEAD -- packages/web/src/app/api/cron/roleta-redistribute/ packages/web/vercel.json"
+    result: "vercel.json +4 linhas (um cron). roleta-redistribute/ novo (untracked). Nenhum outro arquivo tocado."
+  - check: "Regressão (6 falhas pré-existentes inalteradas)"
+    command: "npx vitest run packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts"
+    result: "6 failed (alias @web/lib/supabase/admin não resolve, Story 21.1). Idênticas; vitest.config.ts não tocado."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Endpoint novo, isolado, autenticado fail-closed, sem parâmetros de usuário. REUSE
+    total do distributor.ts (sem risco a outros consumidores). Best-effort em camadas
+    impede que uma falha derrube o cron. Idempotência natural via filtro IS NULL. Sem
+    migration, sem nova env var (CRON_SECRET já existe). 1 entrada aditiva no vercel.json
+    com schedule UTC verificado. Pior caso runtime: timeout em cenário multi-org de alto
+    volume (PERF-001) — não aplicável hoje (1 org), mitigado por .limit(50) e
+    maxDuration=60. Rollback trivial.
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 8/8 ACs atendidos por código com evidência path:linha;
+    8/8 testes verdes cobrindo os 7 cenários obrigatórios + auth duplo. Os pontos
+    críticos foram verificados: schedule UTC correto (0 11 = 8h SP, vercel.json:96-97),
+    auth CRON_SECRET fail-closed verbatim do followup, filtro multi-org seguro por
+    stage default com .maybeSingle() (exclui stages históricos por construção),
+    idempotência via IS NULL e limite .limit(50) por org. REUSE total do distributor.ts.
+    type-check (web) e ESLint exit 0. As issues remanescentes (3 LOW) são
+    não-bloqueantes. Aprovada para @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: GET /api/cron/roleta-redistribute com Authorization: Bearer <CRON_SECRET> → confirmar JSON com contadores e leads do default stage distribuídos; sem header → 401. Confirmar a nova entrada no Vercel Cron dashboard."
+    - "Próximo dia útil: verificar disparo automático às 8h SP via Vercel Cron dashboard."
+    - "@po manter backlog TEST-001 (vitest resolve.alias @web/*) e PERF-001 (teto global em multi-org de alto volume)."
+
+files_reviewed:
+  - path: "packages/web/src/app/api/cron/roleta-redistribute/route.ts"
+    verdict: PASS
+    notes: "Auth fail-closed (60-67). resolveDefaultStageId por org com .maybeSingle (24-47). Loop por org: resolve stage → query leads (org_id+is_active+IS NULL+stage default+limit 50) → loop best-effort por lead. limited quando length===50. maxDuration=60. REUSE de distributeLeadToNextBroker."
+  - path: "packages/web/src/app/api/cron/roleta-redistribute/__tests__/route.test.ts"
+    verdict: PASS
+    notes: "8 testes (AC1 503/401, AC2, AC3 stages históricos, AC4 IS NULL, AC5 best-effort, AC6 limited, caso vazio). Mock chainable do Supabase + vi.resetModules para reler CRON_SECRET module-scope. Mocka @web/lib/supabase/admin (evita problema de alias)."
+  - path: "packages/web/vercel.json"
+    verdict: PASS
+    notes: "Entrada roleta-redistribute com '0 11 * * *' (95-98). 18 entradas existentes preservadas. Schedule UTC verificado contra crons de referência."
+  - path: "packages/web/src/lib/roleta/distributor.ts"
+    verdict: PASS
+    notes: "REUSE — não modificado. Como o cron roda 8h (dentro de 08-20h), isWithinBusinessHours passa e a distribuição efetiva ocorre."
