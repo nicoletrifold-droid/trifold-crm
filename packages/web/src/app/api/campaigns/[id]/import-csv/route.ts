@@ -114,7 +114,7 @@ export async function POST(
   const skipped: string[] = []
 
   for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i], delimiter)
+    const values = parseCSVLine(lines[i]!, delimiter)
     if (values.every((v) => !v)) continue
 
     const record: Record<string, string> = {}
