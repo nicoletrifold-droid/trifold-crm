@@ -3,6 +3,17 @@
 import { useRef, useState } from "react"
 import { CampaignVisualEditor, type CampaignEditorRef, type ImageVariantSession } from "./campaign-visual-editor"
 
+// Altura do header fixo — usada para cálculo explícito do Unlayer
+const HEADER_H = 52
+
+// Substitui merge tags por dados de amostra no preview
+function injectSampleData(html: string): string {
+  return html
+    .replace(/\{\{nome\}\}/g, "João Silva")
+    .replace(/\{\{email\}\}/g, "joao@exemplo.com")
+    .replace(/\{\{telefone\}\}/g, "(44) 9 9999-9999")
+}
+
 interface Props {
   isOpen: boolean
   campaignId: string
@@ -20,6 +31,8 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
 
   if (!isOpen) return null
 
+  const bodyHeight = `calc(100vh - ${HEADER_H}px)`
+
   async function handleSave() {
     if (!editorRef.current) return
     setSaving(true)
@@ -34,7 +47,10 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-stone-900">
       {/* Barra superior */}
-      <div className="flex h-[52px] flex-shrink-0 items-center justify-between border-b border-gray-200 px-4 dark:border-stone-800">
+      <div
+        className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-4 dark:border-stone-800"
+        style={{ height: HEADER_H }}
+      >
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -67,9 +83,9 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
       </div>
 
       {/* Corpo: editor + preview */}
-      <div className="flex min-h-0 flex-1">
-        {/* Editor Unlayer — 65% */}
-        <div className="min-w-0 flex-[65]">
+      <div className="flex" style={{ height: bodyHeight }}>
+        {/* Editor Unlayer — 65% — altura explícita garante que o canvas não fica preto */}
+        <div className="min-w-0 flex-[65] overflow-hidden" style={{ height: bodyHeight }}>
           <CampaignVisualEditor
             ref={editorRef}
             campaignId={campaignId}
@@ -79,17 +95,19 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
         </div>
 
         {/* Preview ao vivo — 35% */}
-        <div className="flex flex-[35] flex-col border-l border-gray-200 dark:border-stone-800">
+        <div className="flex flex-[35] flex-col border-l border-gray-200 dark:border-stone-800" style={{ height: bodyHeight }}>
           <div className="flex flex-shrink-0 items-center justify-between bg-gray-50 px-4 py-2 dark:bg-stone-800/60">
             <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-stone-500">
               Preview
             </span>
-            <span className="text-xs text-gray-300 dark:text-stone-600">600px</span>
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-400 dark:bg-stone-800 dark:text-stone-500">
+              dados de amostra
+            </span>
           </div>
           <div className="flex-1 overflow-y-auto bg-[#f0f0f0] dark:bg-stone-950">
             {previewHtml ? (
               <iframe
-                srcDoc={previewHtml}
+                srcDoc={injectSampleData(previewHtml)}
                 className="block border-0"
                 style={{ width: "100%", height: iframeHeight }}
                 onLoad={(e) => {
