@@ -67,6 +67,7 @@ const CONFIG_CARDS = [
 // Cards visíveis para gerente-comercial
 const GERENTE_ALLOWED: string[] = [
   "/dashboard/configuracoes/corretores",
+  "/dashboard/configuracoes/nicole",
   "/dashboard/pipeline/config",
 ]
 
