@@ -426,7 +426,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             Editar Lead
           </Link>
           <Link
-            href={`/dashboard/leads/${leadId}`}
+            href={`/broker/leads/${leadId}`}
             className="rounded-md bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-100 transition-colors dark:bg-orange-500/15 dark:text-orange-300 dark:hover:bg-orange-500/20"
           >
             Ver completo
