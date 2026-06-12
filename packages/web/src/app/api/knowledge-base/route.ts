@@ -54,14 +54,14 @@ export async function POST(request: NextRequest) {
     body = Object.fromEntries(formData.entries())
   }
 
-  if (!body.title?.trim()) {
+  if (!(body.title as string | undefined)?.trim()) {
     return NextResponse.json(
       { error: "title is required" },
       { status: 400 }
     )
   }
 
-  if (!body.content?.trim()) {
+  if (!(body.content as string | undefined)?.trim()) {
     return NextResponse.json(
       { error: "content is required" },
       { status: 400 }
