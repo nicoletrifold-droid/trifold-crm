@@ -306,7 +306,6 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       const enrichUpdates: Record<string, unknown> = {
-        source: "whatsapp_campaign",
         utm_campaign: campaignName,
       }
       if (!currentLead?.name) {
