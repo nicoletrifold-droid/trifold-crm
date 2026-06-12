@@ -92,15 +92,13 @@ export async function POST(
 
   for (const entry of entries) {
     try {
-      const customValues = Object.values((entry.custom_data ?? {}) as Record<string, string>)
       const components: { type: string; parameters: { type: string; text: string }[] }[] = []
 
-      if (entry.name || customValues.length > 0) {
+      if (entry.name) {
         components.push({
           type: "body",
           parameters: [
-            { type: "text", text: entry.name ?? "" },
-            ...customValues.map((v) => ({ type: "text", text: String(v) })),
+            { type: "text", text: entry.name },
           ],
         })
       }
