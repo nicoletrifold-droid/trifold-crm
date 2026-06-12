@@ -187,6 +187,16 @@ export function LeadDetailDrawer({ leadId, onClose }: LeadDetailDrawerProps) {
 function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () => void }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const supabase = useMemo(() => createClient(), [])
+  const [leadBasePath, setLeadBasePath] = useState("/broker/leads")
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const role = (data.user?.app_metadata?.role as string | undefined) ?? ""
+      if (["admin", "supervisor", "gerente-comercial"].includes(role)) {
+        setLeadBasePath("/dashboard/leads")
+      }
+    })
+  }, [supabase])
 
   useEffect(() => {
     let cancelled = false
@@ -411,7 +421,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 {lead?.name || lead?.phone || "..."}
               </h2>
               <Link
-                href={`/broker/leads/${leadId}`}
+                href={`${leadBasePath}/${leadId}`}
                 title="Editar lead"
                 className="shrink-0 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-orange-500 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-orange-400"
               >
@@ -422,13 +432,13 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/broker/leads/${leadId}`}
+            href={`${leadBasePath}/${leadId}`}
             className="rounded-md bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
           >
             Editar Lead
           </Link>
           <Link
-            href={`/broker/leads/${leadId}`}
+            href={`${leadBasePath}/${leadId}`}
             className="rounded-md bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-100 transition-colors dark:bg-orange-500/15 dark:text-orange-300 dark:hover:bg-orange-500/20"
           >
             Ver completo
