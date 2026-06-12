@@ -277,6 +277,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" })
   }
 
+  // ---- Enrich lead from campaign_entries (name + campaign context) ------
+  // When a campaign participant replies, populate their registered name and
+  // campaign origin so brokers see proper info in the pipeline card.
+  try {
+    const phoneForLookup =
+      phoneNormalized.startsWith("55") && phoneNormalized.length === 13
+        ? phoneNormalized.slice(2)
+        : phoneNormalized
+
+    const { data: campaignEntry } = await supabase
+      .from("campaign_entries")
+      .select("name, campaigns!campaign_id(name)")
+      .eq("phone", phoneForLookup)
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (campaignEntry?.name) {
+      const campaignName =
+        (campaignEntry.campaigns as { name?: string } | null)?.name ?? null
+
+      const { data: currentLead } = await supabase
+        .from("leads")
+        .select("name")
+        .eq("id", lead.id)
+        .maybeSingle()
+
+      const enrichUpdates: Record<string, unknown> = {
+        source: "whatsapp_campaign",
+        utm_campaign: campaignName,
+      }
+      if (!currentLead?.name) {
+        enrichUpdates.name = campaignEntry.name
+      }
+
+      await supabase.from("leads").update(enrichUpdates).eq("id", lead.id)
+    }
+  } catch {
+    // Non-fatal — don't block message processing
+  }
+
   // ---- CTWA referral metadata (sync, lightweight) -----------------------
   // Preserve existing logic but skip the Graph-API-style lookups here.
   // It's already only DB-local lookups; cheap enough to keep sync.
