@@ -28,7 +28,8 @@ import {
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
-import { buildSystemPrompt as buildPromptFromCode } from "../prompts"
+import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
+import type { DbPromptOverrides } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
 import { STAGE_IDS } from "@trifold/shared"
 
@@ -112,6 +113,23 @@ interface AgentConfig {
   temperature: number
   max_tokens: number
   business_hours?: Record<string, { start: string; end: string }>
+  // Story 53-1 — campos configuráveis via banco (com fallback no código):
+  greeting_message?: string | null // selecionado do banco; disponível mas sem ponto de uso nesta story
+  out_of_hours_message?: string | null // usado no bloco de off-hours
+  prompt_overrides?: DbPromptOverrides // de agent_prompts, por slug
+}
+
+/**
+ * Story 53-1 — resolve a resposta de off-hours com estratégia banco-com-fallback.
+ * Usa `out_of_hours_message` do banco quando preenchido (não-vazio após trim);
+ * caso contrário, cai no `OFF_HOURS_PROMPT` hard-coded (default seguro).
+ *
+ * Helper puro e exportado para permitir teste unitário sem mockar todo o pipeline.
+ */
+export function resolveOffHoursResponse(
+  agentConfig: Pick<AgentConfig, "out_of_hours_message">
+): string {
+  return agentConfig.out_of_hours_message?.trim() || OFF_HOURS_PROMPT
 }
 
 interface Property {
@@ -223,9 +241,9 @@ export async function processMessageWithMetadata(
       business_hours: agentConfig.business_hours,
     })
     if (!withinHours) {
-      const offHoursResponse =
-        "Oi! Obrigada pelo contato. No momento estou fora do horario de atendimento. " +
-        "Vou guardar sua mensagem e retorno assim que possivel. Ate breve!"
+      // Story 53-1 — banco com fallback: usa out_of_hours_message do banco
+      // quando preenchido; caso contrário, OFF_HOURS_PROMPT hard-coded.
+      const offHoursResponse = resolveOffHoursResponse(agentConfig)
 
       await saveMessages(supabase, conversationId, message, offHoursResponse)
       await updateConversationTimestamp(supabase, conversationId)
@@ -913,7 +931,7 @@ async function loadAgentConfig(
   const { data, error } = await supabase
     .from("agent_config")
     .select(
-      "personality_prompt, guardrails, model_primary, temperature, max_tokens, business_hours"
+      "personality_prompt, guardrails, model_primary, temperature, max_tokens, business_hours, greeting_message, out_of_hours_message"
     )
     .eq("org_id", orgId)
     .eq("is_active", true)
@@ -926,6 +944,26 @@ async function loadAgentConfig(
       model_primary: "claude-sonnet-4-6",
       temperature: 0.7,
       max_tokens: 1024,
+      greeting_message: null,
+      out_of_hours_message: null,
+      prompt_overrides: {},
+    }
+  }
+
+  // Story 53-1 — segunda query: overrides de prompt por slug (tabela agent_prompts).
+  // Retorna array (0..N linhas) → NÃO usar .single()/.maybeSingle().
+  const { data: promptRows } = await supabase
+    .from("agent_prompts")
+    .select("slug, content")
+    .eq("org_id", orgId)
+    .eq("is_active", true)
+
+  const prompt_overrides: DbPromptOverrides = {}
+  for (const row of (promptRows ?? []) as Array<{ slug: string; content: string | null }>) {
+    // Apenas slugs com conteúdo não-vazio entram nos overrides; o resto
+    // cai no fallback hard-coded em buildStaticSystemContent.
+    if (row.content?.trim()) {
+      prompt_overrides[row.slug as keyof DbPromptOverrides] = row.content
     }
   }
 
@@ -938,6 +976,9 @@ async function loadAgentConfig(
     business_hours: data.business_hours as
       | Record<string, { start: string; end: string }>
       | undefined,
+    greeting_message: data.greeting_message ?? null,
+    out_of_hours_message: data.out_of_hours_message ?? null,
+    prompt_overrides,
   }
 }
 
@@ -988,23 +1029,29 @@ async function loadProperties(
  * (date/time, property data, memory, no-show, flow, yarden gate).
  */
 function buildSystemPrompt(
-  _config: AgentConfig,
+  config: AgentConfig,
   ragContext: string,
   state: ConversationState | null,
   emit: (event: PipelineEvent) => void
 ): Anthropic.Messages.TextBlockParam[] {
   // Static blocks (cacheable) + optional RAG block (uncached) come from buildPromptFromCode.
-  const promptBlocks = buildPromptFromCode(ragContext, {
-    onWarning: (warning) => {
-      emit({
-        level: "warn",
-        category: "ai",
-        event_type: warning.code,
-        message: warning.message,
-        metadata: warning.metadata,
-      })
+  // Story 53-1 — passa os overrides do banco (config.prompt_overrides) como 3º arg;
+  // buildPromptFromCode aplica fallback hard-coded onde não há override.
+  const promptBlocks = buildPromptFromCode(
+    ragContext,
+    {
+      onWarning: (warning) => {
+        emit({
+          level: "warn",
+          category: "ai",
+          event_type: warning.code,
+          message: warning.message,
+          metadata: warning.metadata,
+        })
+      },
     },
-  })
+    config.prompt_overrides
+  )
 
   // Build CONVERSATION CONTEXT (dynamic — varies per turn).
   const convoLines: string[] = []

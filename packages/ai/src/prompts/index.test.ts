@@ -6,6 +6,9 @@ import {
   isPromptCacheEnabled,
   PROMPT_CACHE_MIN_TOKENS,
   SEDE_ADDRESS,
+  PERSONALITY_PROMPT,
+  GUARDRAILS_PROMPT,
+  type DbPromptOverrides,
 } from "./index"
 
 describe("buildSystemPrompt — Anthropic prompt caching (Story 21.3)", () => {
@@ -111,6 +114,81 @@ describe("buildSystemPrompt — Anthropic prompt caching (Story 21.3)", () => {
       expect(text).toContain(block.text)
     }
     expect(text).toContain(ctx)
+  })
+})
+
+describe("buildSystemPrompt — DB overrides (Story 53-1)", () => {
+  beforeEach(() => {
+    delete process.env.ANTHROPIC_PROMPT_CACHE_ENABLED
+  })
+
+  afterEach(() => {
+    delete process.env.ANTHROPIC_PROMPT_CACHE_ENABLED
+  })
+
+  const OVERRIDE_PERSONALITY =
+    "OVERRIDE: Você é a Nicole versão banco de dados. Esta é a personalidade customizada vinda da tabela agent_prompts."
+
+  it("uses the DB override for system-personality when it is a non-empty string", () => {
+    const overrides: DbPromptOverrides = { "system-personality": OVERRIDE_PERSONALITY }
+    const blocks = buildSystemPrompt(undefined, undefined, overrides)
+    const text = blocks[0].text
+
+    expect(text).toContain(OVERRIDE_PERSONALITY)
+    // Original PERSONALITY_PROMPT must NOT appear when overridden.
+    expect(text).not.toContain(PERSONALITY_PROMPT)
+  })
+
+  it("falls back to PERSONALITY_PROMPT when the system-personality override is null", () => {
+    const overrides: DbPromptOverrides = { "system-personality": null }
+    const blocks = buildSystemPrompt(undefined, undefined, overrides)
+    const text = blocks[0].text
+
+    expect(text).toContain(PERSONALITY_PROMPT)
+    expect(text).not.toContain(OVERRIDE_PERSONALITY)
+  })
+
+  it("falls back to GUARDRAILS_PROMPT when the guardrails override is an empty string", () => {
+    const overrides: DbPromptOverrides = { guardrails: "" }
+    const blocks = buildSystemPrompt(undefined, undefined, overrides)
+    const text = blocks[0].text
+
+    expect(text).toContain(GUARDRAILS_PROMPT)
+  })
+
+  it("applies overrides only where present and falls back elsewhere (partial overrides)", () => {
+    const overrides: DbPromptOverrides = {
+      "system-personality": OVERRIDE_PERSONALITY,
+      // guardrails intentionally omitted → must fall back to GUARDRAILS_PROMPT
+    }
+    const blocks = buildSystemPrompt(undefined, undefined, overrides)
+    const text = blocks[0].text
+
+    // Overridden slug uses the DB value.
+    expect(text).toContain(OVERRIDE_PERSONALITY)
+    expect(text).not.toContain(PERSONALITY_PROMPT)
+    // Non-overridden slug keeps the hard-coded constant.
+    expect(text).toContain(GUARDRAILS_PROMPT)
+  })
+
+  it("safety sections (IDIOMA, SEDE, LEMBRETE FINAL) are never overridable", () => {
+    const overrides: DbPromptOverrides = { "system-personality": OVERRIDE_PERSONALITY }
+    const blocks = buildSystemPrompt(undefined, undefined, overrides)
+    const text = blocks[0].text
+
+    expect(text).toContain("IDIOMA: Responda EXCLUSIVAMENTE em português brasileiro")
+    expect(text).toContain("ENDERECO DA SEDE TRIFOLD")
+    expect(text).toContain(SEDE_ADDRESS)
+    expect(text).toContain("LEMBRETE FINAL")
+  })
+
+  it("is backward-compatible: calling without overrides matches calling with empty overrides", () => {
+    const withoutOverrides = buildSystemPrompt()[0].text
+    const withEmptyOverrides = buildSystemPrompt(undefined, undefined, {})[0].text
+    expect(withoutOverrides).toBe(withEmptyOverrides)
+    // And it must equal the original hard-coded content.
+    expect(withoutOverrides).toContain(PERSONALITY_PROMPT)
+    expect(withoutOverrides).toContain(GUARDRAILS_PROMPT)
   })
 })
 
