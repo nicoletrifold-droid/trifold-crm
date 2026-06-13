@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     .select("utm_campaign, stage:kanban_stages(slug)")
     .eq("org_id", appUser.org_id)
     .eq("is_active", true)
+    .is("lost_reason", null)
     .not("utm_campaign", "is", null)
 
   if (from) {

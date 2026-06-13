@@ -4,23 +4,28 @@ import {
   KanbanBoard,
   type InitialStageState,
 } from "@web/components/pipeline/kanban-board"
+// Story 50-2 + admin-only gate (pós-50-3): corretor não vê CreativeChip.
+// fetchCreativesForLeads/resolveCreativeForLead removidos deste arquivo a propósito —
+// LeadCard cai no fallback SourceBadge quando `creative` é ausente/null.
 
 const PAGE_SIZE = 50
 
+// Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
          property_interest_id, assigned_broker_id, created_at, updated_at,
-         ai_summary, source, utm_campaign,
+         ai_summary, source, utm_campaign, utm_content, metadata,
          properties:property_interest_id(name)`
 
 type RawLead = Record<string, unknown>
 
-function normalizeLead(l: RawLead) {
+function normalizeLead(l: RawLead, brokerName: string) {
   return {
     ...l,
     properties: Array.isArray(l.properties)
       ? (l.properties[0] as { name: string } | undefined) ?? null
       : (l.properties as { name: string } | null) ?? null,
-    users: null,
+    // Todos os leads do pipeline do corretor são atribuídos a ele mesmo
+    users: l.assigned_broker_id ? { name: brokerName } : null,
   }
 }
 
@@ -54,13 +59,14 @@ export default async function BrokerPipelinePage() {
 
       return {
         stage_id: stage.id,
-        leads: rawLeads.map(normalizeLead),
+        leads: rawLeads.map((l) => normalizeLead(l, user.name)),
         totalCount,
         hasMore,
       }
     })
   )
 
+  // Admin-only gate (pós-50-3): corretor sempre cai no fallback SourceBadge (creative ausente).
   const initialLeadsPerStage = perStageResults as unknown as InitialStageState[]
   const totalVisible = initialLeadsPerStage.reduce((acc, s) => acc + s.leads.length, 0)
 

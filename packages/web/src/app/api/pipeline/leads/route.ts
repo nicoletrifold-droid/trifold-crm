@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
 
+// Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
        property_interest_id, assigned_broker_id, created_at, updated_at,
-       ai_summary, source, utm_campaign,
+       ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
 
@@ -42,7 +44,7 @@ function passesScoreFilter(score: number | null | undefined, filter: string | nu
 export async function GET(req: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { supabase } = auth
+  const { supabase, appUser } = auth
 
   const searchParams = req.nextUrl.searchParams
   const stageId = searchParams.get("stage_id")
@@ -88,7 +90,9 @@ export async function GET(req: NextRequest) {
   if (propertyId) {
     query = query.eq("property_interest_id", propertyId)
   }
-  if (brokerId) {
+  if (brokerId === "none") {
+    query = query.is("assigned_broker_id", null)
+  } else if (brokerId) {
     query = query.eq("assigned_broker_id", brokerId)
   }
   if (campaignLeadIds && campaignLeadIds.length > 0) {
@@ -111,8 +115,20 @@ export async function GET(req: NextRequest) {
   const totalCount = count ?? rawLeads.length
   const hasMore = totalCount > offset + rawLeads.length
 
+  // Story 50-2 (Epic 50): batched lookup de criativos Meta para os leads paginados (AC7)
+  // Post-50-3 scope adjustment: CreativeChip restrito a admin.
+  const isAdmin = appUser.role === "admin"
+  const creativesMap = isAdmin
+    ? await fetchCreativesForLeads(supabase, filtered, appUser.org_id)
+    : new Map()
+
+  const enrichedLeads = filtered.map((l) => ({
+    ...normalizeLead(l),
+    creative: resolveCreativeForLead(l, creativesMap),
+  }))
+
   return NextResponse.json({
-    leads: filtered.map(normalizeLead),
+    leads: enrichedLeads,
     totalCount,
     hasMore,
   })

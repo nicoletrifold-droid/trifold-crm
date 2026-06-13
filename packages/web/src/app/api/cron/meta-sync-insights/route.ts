@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { metaFetch, MetaOAuthException } from "@trifold/shared"
 import type { MetaPagedResponse } from "@trifold/shared"
-import { sendTelegramAdminAlert } from "@web/lib/telegram"
-
 const CRON_SECRET = process.env.CRON_SECRET
 
 interface MetaAction {
@@ -24,6 +22,7 @@ interface InsightBase {
   date_stop: string
   actions?: MetaAction[]
   cost_per_action_type?: MetaAction[]
+  outbound_clicks?: MetaAction[]
 }
 
 interface InsightWithCampaignId extends InsightBase {
@@ -36,9 +35,19 @@ interface InsightWithAdsetId extends InsightBase {
 
 interface InsightWithAdId extends InsightBase {
   ad_id: string
+  quality_ranking?: string
+  engagement_rate_ranking?: string
+  conversion_rate_ranking?: string
+  video_30_sec_watched_actions?: MetaAction[]
+  video_thruplay_watched_actions?: MetaAction[]
+  video_p25_watched_actions?: MetaAction[]
+  video_p50_watched_actions?: MetaAction[]
+  video_p75_watched_actions?: MetaAction[]
+  video_p100_watched_actions?: MetaAction[]
 }
 
-const INSIGHT_FIELDS = [
+// Base fields for campaign and adset levels
+const INSIGHT_FIELDS_BASE = [
   "spend",
   "impressions",
   "reach",
@@ -49,9 +58,45 @@ const INSIGHT_FIELDS = [
   "frequency",
   "actions",
   "cost_per_action_type",
+  "outbound_clicks",
   "date_start",
   "date_stop",
 ].join(",")
+
+// Ad-level fields: base + quality rankings + video engagement
+const INSIGHT_FIELDS_AD = [
+  ...INSIGHT_FIELDS_BASE.split(","),
+  "quality_ranking",
+  "engagement_rate_ranking",
+  "conversion_rate_ranking",
+  "video_30_sec_watched_actions",
+  "video_thruplay_watched_actions",
+  "video_p25_watched_actions",
+  "video_p50_watched_actions",
+  "video_p75_watched_actions",
+  "video_p100_watched_actions",
+].join(",")
+
+function buildVideoMetrics(i: InsightWithAdId): Record<string, number> | null {
+  const sec30    = extractActionValue(i.video_30_sec_watched_actions,   "video_30_sec_watched_actions")
+  const thruplay = extractActionValue(i.video_thruplay_watched_actions, "video_thruplay_watched_actions")
+  const p25      = extractActionValue(i.video_p25_watched_actions,      "video_p25_watched_actions")
+  const p50      = extractActionValue(i.video_p50_watched_actions,      "video_p50_watched_actions")
+  const p75      = extractActionValue(i.video_p75_watched_actions,      "video_p75_watched_actions")
+  const p100     = extractActionValue(i.video_p100_watched_actions,     "video_p100_watched_actions")
+  if (!sec30 && !thruplay && !p25 && !p50 && !p75 && !p100) return null
+  const impressions = parseInt(i.impressions, 10) || 1
+  return {
+    sec30,
+    thruplay,
+    p25,
+    p50,
+    p75,
+    p100,
+    hook_rate:       Math.round((sec30    / impressions) * 10000) / 100,
+    completion_rate: Math.round((thruplay / impressions) * 10000) / 100,
+  }
+}
 
 function extractActionValue(arr: MetaAction[] | undefined, type: string): number {
   return Math.round(parseFloat(arr?.find((a) => a.action_type === type)?.value ?? "0"))
@@ -142,7 +187,7 @@ export async function GET(request: NextRequest) {
         await fetchAllPages<InsightWithCampaignId>(insightsPath, token, {
           level: "campaign",
           date_preset: "yesterday",
-          fields: `campaign_id,${INSIGHT_FIELDS}`,
+          fields: `campaign_id,${INSIGHT_FIELDS_BASE}`,
         })
       totalApiCalls += campaignCalls
 
@@ -166,6 +211,8 @@ export async function GET(request: NextRequest) {
             "onsite_conversion.messaging_conversation_started_7d",
           ),
           cost_per_lead: extractCostValue(i.cost_per_action_type, "lead"),
+          outbound_clicks: extractActionValue(i.outbound_clicks, "outbound_click"),
+          landing_page_views: extractActionValue(i.actions, "landing_page_view"),
           actions: i.actions ?? null,
           synced_at: new Date().toISOString(),
         }))
@@ -183,7 +230,7 @@ export async function GET(request: NextRequest) {
         await fetchAllPages<InsightWithAdsetId>(insightsPath, token, {
           level: "adset",
           date_preset: "yesterday",
-          fields: `adset_id,${INSIGHT_FIELDS}`,
+          fields: `adset_id,${INSIGHT_FIELDS_BASE}`,
         })
       totalApiCalls += adsetCalls
 
@@ -207,6 +254,8 @@ export async function GET(request: NextRequest) {
             "onsite_conversion.messaging_conversation_started_7d",
           ),
           cost_per_lead: extractCostValue(i.cost_per_action_type, "lead"),
+          outbound_clicks: extractActionValue(i.outbound_clicks, "outbound_click"),
+          landing_page_views: extractActionValue(i.actions, "landing_page_view"),
           actions: i.actions ?? null,
           synced_at: new Date().toISOString(),
         }))
@@ -226,7 +275,7 @@ export async function GET(request: NextRequest) {
         {
           level: "ad",
           date_preset: "yesterday",
-          fields: `ad_id,${INSIGHT_FIELDS}`,
+          fields: `ad_id,${INSIGHT_FIELDS_AD}`,
         },
       )
       totalApiCalls += adCalls
@@ -251,6 +300,12 @@ export async function GET(request: NextRequest) {
             "onsite_conversion.messaging_conversation_started_7d",
           ),
           cost_per_lead: extractCostValue(i.cost_per_action_type, "lead"),
+          outbound_clicks: extractActionValue(i.outbound_clicks, "outbound_click"),
+          landing_page_views: extractActionValue(i.actions, "landing_page_view"),
+          quality_ranking: i.quality_ranking ?? null,
+          engagement_rate_ranking: i.engagement_rate_ranking ?? null,
+          conversion_rate_ranking: i.conversion_rate_ranking ?? null,
+          video_metrics: buildVideoMetrics(i),
           actions: i.actions ?? null,
           synced_at: new Date().toISOString(),
         }))
@@ -298,9 +353,15 @@ export async function GET(request: NextRequest) {
         }
 
         console.error(`[META_INSIGHTS] Token invalid for account ${account.id}`)
-        await sendTelegramAdminAlert(
-          `🔴 *[Meta Sync] Token inválido*\n\nConta: \`${account.meta_account_id}\`\n\nO sync de insights foi interrompido. Acesse as configurações para renovar o token.`
-        )
+        await supabase.from("meta_alerts").upsert({
+          org_id: account.org_id,
+          alert_type: "token_invalid",
+          level: "account",
+          entity_id: account.meta_account_id,
+          severity: "critical",
+          message: `Token Meta inválido ou expirado para a conta ${account.meta_account_id}. Acesse as configurações para renovar.`,
+          fired_date: new Date().toISOString().split("T")[0],
+        }, { onConflict: "org_id,alert_type,entity_id,fired_date", ignoreDuplicates: true })
         results.push({ account_id: account.id, status: "token_invalid" })
         continue
       }

@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
@@ -18,8 +19,11 @@ const typeLabels: Record<string, string> = {
   broker_assigned: "Corretor atribuído",
 }
 
+const ALLOWED_ROLES = ["admin", "supervisor", "gerente-comercial"]
+
 export default async function AtividadesPage() {
   const user = await getServerUser()
+  if (!ALLOWED_ROLES.includes(user.role)) redirect("/dashboard")
   const supabase = await createClient()
 
   const { data: activities } = await supabase
@@ -55,16 +59,12 @@ export default async function AtividadesPage() {
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
             {activities?.map((activity) => {
-              const leadArr = activity.leads as unknown as Array<{
-                name: string | null
-                phone: string | null
-              }> | null
-              const lead = leadArr?.[0] ?? null
+              // PostgREST retorna objeto direto (FK singular) — normaliza para ambos os casos
+              const leadRaw = activity.leads as unknown
+              const lead = (Array.isArray(leadRaw) ? leadRaw[0] : leadRaw) as { name: string | null; phone: string | null } | null
 
-              const userArr = activity.users as unknown as Array<{
-                name: string
-              }> | null
-              const activityUser = userArr?.[0] ?? null
+              const userRaw = activity.users as unknown
+              const activityUser = (Array.isArray(userRaw) ? userRaw[0] : userRaw) as { name: string } | null
 
               const badgeStyle =
                 typeBadgeStyles[activity.type] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
@@ -109,7 +109,9 @@ export default async function AtividadesPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                    {activityUser?.name ?? "-"}
+                    {activityUser?.name ?? (
+                      <span className="italic text-gray-400 dark:text-stone-600">Sistema</span>
+                    )}
                   </td>
                 </tr>
               )

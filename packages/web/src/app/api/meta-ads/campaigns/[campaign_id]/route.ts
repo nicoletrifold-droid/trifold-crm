@@ -31,6 +31,9 @@ interface CampaignInsightRow {
   clicks: number | null
   ctr: number | string | null
   leads: number | null
+  frequency: number | string | null
+  outbound_clicks: number | null
+  landing_page_views: number | null
 }
 
 interface AdsetRow {
@@ -49,6 +52,7 @@ interface AdsetInsightRow {
   clicks: number | null
   ctr: number | string | null
   leads: number | null
+  quality_ranking: string | null
 }
 
 interface LeadRow {
@@ -138,6 +142,9 @@ function buildTimeseries(
       impressions: row?.impressions ?? 0,
       clicks: row?.clicks ?? 0,
       ctr: row ? Math.round(toNumber(row.ctr) * 100) / 100 : 0,
+      frequency: row ? Math.round(toNumber(row.frequency) * 100) / 100 : 0,
+      outbound_clicks: row?.outbound_clicks ?? 0,
+      landing_page_views: row?.landing_page_views ?? 0,
     })
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
@@ -150,19 +157,18 @@ function buildAdsetMetrics(
 ): MetaAdSetWithMetrics[] {
   const insightMap = new Map<
     string,
-    { spend: number; impressions: number; clicks: number; leads: number }
+    { spend: number; impressions: number; clicks: number; leads: number; quality_ranking: string | null }
   >()
   for (const ins of insights) {
     const acc = insightMap.get(ins.entity_id) ?? {
-      spend: 0,
-      impressions: 0,
-      clicks: 0,
-      leads: 0,
+      spend: 0, impressions: 0, clicks: 0, leads: 0, quality_ranking: null,
     }
     acc.spend += toNumber(ins.spend)
     acc.impressions += ins.impressions ?? 0
     acc.clicks += ins.clicks ?? 0
     acc.leads += ins.leads ?? 0
+    // Use first non-null quality_ranking seen
+    if (!acc.quality_ranking && ins.quality_ranking) acc.quality_ranking = ins.quality_ranking
     insightMap.set(ins.entity_id, acc)
   }
 
@@ -173,7 +179,6 @@ function buildAdsetMetrics(
       const impressions = m?.impressions ?? 0
       const clicks = m?.clicks ?? 0
       const leads = m?.leads ?? 0
-      // CTR derived from aggregated totals (not averaged) — more accurate
       const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0
       const cpl = leads > 0 ? spend / leads : null
 
@@ -190,6 +195,7 @@ function buildAdsetMetrics(
         ctr: Math.round(ctr * 100) / 100,
         leads_meta: leads,
         cpl: cpl !== null ? Math.round(cpl * 100) / 100 : null,
+        quality_ranking: m?.quality_ranking ?? null,
       }
     })
     .sort((a, b) => b.spend - a.spend)
@@ -295,7 +301,7 @@ export async function GET(
   const { from, to } = getPeriodDates(days)
   const { data: rawCampaignInsights } = await supabase
     .from("meta_insights_daily")
-    .select("date, spend, impressions, clicks, ctr, leads")
+    .select("date, spend, impressions, clicks, ctr, leads, frequency, outbound_clicks, landing_page_views")
     .eq("org_id", appUser.org_id)
     .eq("level", "campaign")
     .eq("entity_id", metaCampaignId)
@@ -320,7 +326,7 @@ export async function GET(
   if (adsetMetaIds.length > 0) {
     const { data: rawAdsetInsights } = await supabase
       .from("meta_insights_daily")
-      .select("entity_id, spend, impressions, clicks, ctr, leads")
+      .select("entity_id, spend, impressions, clicks, ctr, leads, quality_ranking")
       .eq("org_id", appUser.org_id)
       .eq("level", "adset")
       .in("entity_id", adsetMetaIds)

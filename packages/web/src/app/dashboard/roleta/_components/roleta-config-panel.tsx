@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react"
+import { useState } from "react"
 import { Clock, SlidersHorizontal, Bell, Users, ShieldCheck } from "lucide-react"
 import type { GestorUser } from "../page"
 
@@ -47,69 +47,77 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
   }
 
   const [config, setConfig] = useState<RoletaConfig>(initialConfig ?? defaults)
-  const [isPending, startTransition] = useTransition()
-  const [saved, setSaved] = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [saved, setSaved]       = useState(false)
   const [saveError, setSaveError] = useState(false)
 
-  useEffect(() => {
-    if (!saved) return
-    const t = setTimeout(() => setSaved(false), 3000)
-    return () => clearTimeout(t)
-  }, [saved])
-
-  function toggleDay(day: number) {
-    setConfig((c) => ({
-      ...c,
-      business_days: c.business_days.includes(day)
-        ? c.business_days.filter((d) => d !== day)
-        : [...c.business_days, day].sort(),
-    }))
+  async function persist(patch: Partial<RoletaConfig>) {
+    const next = { ...config, ...patch }
+    setConfig(next)
+    setSaving(true)
     setSaved(false)
-  }
-
-  function save() {
     setSaveError(false)
-    startTransition(async () => {
+    try {
       const res = await fetch("/api/roleta/config", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        body: JSON.stringify(next),
       })
       if (res.ok) {
         setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
       } else {
         setSaveError(true)
+        // revert on error
+        setConfig(config)
       }
-    })
+    } catch {
+      setSaveError(true)
+      setConfig(config)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function toggleDay(day: number) {
+    const newDays = config.business_days.includes(day)
+      ? config.business_days.filter((d) => d !== day)
+      : [...config.business_days, day].sort()
+    void persist({ business_days: newDays })
   }
 
   const selectCls =
     "w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-900 dark:text-white"
-
   const sectionLabel = "text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-500"
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-5 dark:border-stone-800 dark:bg-stone-900">
 
-      {/* ── Header — toggle ativo/pausado ── */}
+      {/* ── Header — toggle ativo/pausado — auto-salva ── */}
       <div>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <SlidersHorizontal className={`h-4 w-4 ${config.is_active ? "text-emerald-600 dark:text-emerald-400" : "text-stone-400 dark:text-stone-500"}`} />
             Configuração da Roleta
           </h2>
-          <button
-            onClick={() => { setConfig((c) => ({ ...c, is_active: !c.is_active })); setSaved(false) }}
-            aria-label={config.is_active ? "Desativar roleta" : "Ativar roleta"}
-            aria-pressed={config.is_active}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              config.is_active ? "bg-emerald-500" : "bg-stone-300 dark:bg-stone-700"
-            }`}
-          >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              config.is_active ? "translate-x-6" : "translate-x-1"
-            }`} />
-          </button>
+          <div className="flex items-center gap-2">
+            {saving && <span className="text-xs text-stone-400 dark:text-stone-500 animate-pulse">Salvando…</span>}
+            {saved  && <span className="text-xs text-emerald-500">Salvo ✓</span>}
+            {saveError && <span className="text-xs text-red-400">Erro ao salvar</span>}
+            <button
+              onClick={() => void persist({ is_active: !config.is_active })}
+              disabled={saving}
+              aria-label={config.is_active ? "Desativar roleta" : "Ativar roleta"}
+              aria-pressed={config.is_active}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+                config.is_active ? "bg-emerald-500" : "bg-stone-300 dark:bg-stone-700"
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                config.is_active ? "translate-x-6" : "translate-x-1"
+              }`} />
+            </button>
+          </div>
         </div>
         <p className={`mt-1.5 text-xs font-medium ${config.is_active ? "text-emerald-600 dark:text-emerald-400" : "text-stone-500"}`}>
           {config.is_active
@@ -127,7 +135,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
         </p>
 
         <div className="space-y-3">
-          {/* Day buttons */}
+          {/* Day buttons — auto-salvam ao clicar */}
           <fieldset>
             <legend className="sr-only">Dias de atendimento</legend>
             <div className="grid grid-cols-7 gap-1.5">
@@ -135,9 +143,10 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                 <button
                   key={idx}
                   onClick={() => toggleDay(idx)}
+                  disabled={saving}
                   aria-pressed={config.business_days.includes(idx)}
                   aria-label={`${label} — ${config.business_days.includes(idx) ? "selecionado" : "não selecionado"}`}
-                  className={`h-8 rounded-lg text-xs font-semibold transition-colors ${
+                  className={`h-8 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
                     config.business_days.includes(idx)
                       ? "bg-[#E8856A] text-white"
                       : "bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
@@ -149,7 +158,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             </div>
           </fieldset>
 
-          {/* Time range */}
+          {/* Time range — salva ao sair do campo */}
           <fieldset>
             <legend className="sr-only">Horário de atendimento</legend>
             <div className="flex flex-wrap items-end gap-3">
@@ -159,7 +168,8 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                   id="hour-start"
                   type="time"
                   value={config.business_hour_start}
-                  onChange={(e) => { setConfig((c) => ({ ...c, business_hour_start: e.target.value })); setSaved(false) }}
+                  onChange={(e) => setConfig((c) => ({ ...c, business_hour_start: e.target.value }))}
+                  onBlur={(e) => void persist({ business_hour_start: e.target.value })}
                   className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                 />
               </div>
@@ -170,7 +180,8 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                   id="hour-end"
                   type="time"
                   value={config.business_hour_end}
-                  onChange={(e) => { setConfig((c) => ({ ...c, business_hour_end: e.target.value })); setSaved(false) }}
+                  onChange={(e) => setConfig((c) => ({ ...c, business_hour_end: e.target.value }))}
+                  onBlur={(e) => void persist({ business_hour_end: e.target.value })}
                   className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                 />
               </div>
@@ -178,7 +189,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             <p className="mt-2 text-xs text-stone-400 dark:text-stone-600">Fuso horário: {config.timezone}</p>
           </fieldset>
 
-          {/* Horário de fim de semana — visível somente se Dom ou Sáb estiver selecionado */}
+          {/* Horário de fim de semana */}
           {(config.business_days.includes(0) || config.business_days.includes(6)) && (
             <fieldset className="mt-4 pt-4 border-t border-stone-100 dark:border-stone-800">
               <legend className="text-xs font-semibold text-stone-500 dark:text-stone-500 mb-2">
@@ -194,7 +205,8 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                     id="weekend-hour-start"
                     type="time"
                     value={config.weekend_hour_start ?? ""}
-                    onChange={(e) => { setConfig((c) => ({ ...c, weekend_hour_start: e.target.value || null })); setSaved(false) }}
+                    onChange={(e) => setConfig((c) => ({ ...c, weekend_hour_start: e.target.value || null }))}
+                    onBlur={(e) => void persist({ weekend_hour_start: e.target.value || null })}
                     className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                   />
                 </div>
@@ -205,14 +217,15 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                     id="weekend-hour-end"
                     type="time"
                     value={config.weekend_hour_end ?? ""}
-                    onChange={(e) => { setConfig((c) => ({ ...c, weekend_hour_end: e.target.value || null })); setSaved(false) }}
+                    onChange={(e) => setConfig((c) => ({ ...c, weekend_hour_end: e.target.value || null }))}
+                    onBlur={(e) => void persist({ weekend_hour_end: e.target.value || null })}
                     className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
                   />
                 </div>
                 {(config.weekend_hour_start || config.weekend_hour_end) && (
                   <button
                     type="button"
-                    onClick={() => { setConfig((c) => ({ ...c, weekend_hour_start: null, weekend_hour_end: null })); setSaved(false) }}
+                    onClick={() => void persist({ weekend_hour_start: null, weekend_hour_end: null })}
                     className="text-xs text-stone-400 hover:text-red-500 transition-colors pb-2 dark:text-stone-500 dark:hover:text-red-400"
                   >
                     Limpar
@@ -232,7 +245,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
 
         <div className="rounded-lg border border-stone-200 bg-stone-50 divide-y divide-stone-200 dark:border-stone-800 dark:bg-stone-800/30 dark:divide-stone-800">
 
-          {/* Priorizar lead ativo */}
+          {/* Priorizar lead ativo — auto-salva */}
           <div className="p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-2.5 min-w-0">
@@ -247,10 +260,11 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
                 </div>
               </div>
               <button
-                onClick={() => { setConfig((c) => ({ ...c, priorizar_lead_ativo: !c.priorizar_lead_ativo })); setSaved(false) }}
+                onClick={() => void persist({ priorizar_lead_ativo: !config.priorizar_lead_ativo })}
+                disabled={saving}
                 aria-label={config.priorizar_lead_ativo ? "Desativar priorização" : "Ativar priorização"}
                 aria-pressed={config.priorizar_lead_ativo}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
                   config.priorizar_lead_ativo ? "bg-[#E8856A]" : "bg-stone-300 dark:bg-stone-700"
                 }`}
               >
@@ -261,7 +275,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             </div>
           </div>
 
-          {/* Limite diário */}
+          {/* Limite diário — salva ao sair do campo */}
           <div className="p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <label htmlFor="max-leads-day" className="text-sm font-semibold text-gray-900 dark:text-white block leading-snug">
@@ -279,10 +293,11 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
               value={config.max_leads_per_day}
               onChange={(e) => {
                 const v = parseInt(e.target.value)
-                if (!isNaN(v) && v > 0) {
-                  setConfig((c) => ({ ...c, max_leads_per_day: v }))
-                  setSaved(false)
-                }
+                if (!isNaN(v) && v > 0) setConfig((c) => ({ ...c, max_leads_per_day: v }))
+              }}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value)
+                if (!isNaN(v) && v > 0) void persist({ max_leads_per_day: v })
               }}
               className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 text-center focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-900 dark:text-white"
             />
@@ -300,22 +315,22 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
 
         <div className="rounded-lg border border-stone-200 bg-stone-50 divide-y divide-stone-200 dark:border-stone-800 dark:bg-stone-800/30 dark:divide-stone-800">
 
-          {/* Notificações ao corretor */}
+          {/* Notificações ao corretor — auto-salvam */}
           <div className="p-4">
             <p className="text-xs font-semibold text-stone-600 dark:text-stone-300 mb-2.5">Ao corretor</p>
             <div className="flex flex-wrap gap-4">
               {(
                 [
-                  { key: "notify_push", label: "Push" },
-                  { key: "notify_email", label: "E-mail" },
-                  { key: "notify_whatsapp", label: "WhatsApp" },
+                  { key: "notify_push",      label: "Push" },
+                  { key: "notify_email",     label: "E-mail" },
+                  { key: "notify_whatsapp",  label: "WhatsApp" },
                 ] as const
               ).map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={config[key]}
-                    onChange={(e) => { setConfig((c) => ({ ...c, [key]: e.target.checked })); setSaved(false) }}
+                    onChange={(e) => void persist({ [key]: e.target.checked })}
                     className="h-4 w-4 rounded border-stone-300 accent-[#E8856A] dark:border-stone-700"
                   />
                   <span className="text-sm text-stone-700 dark:text-stone-300">{label}</span>
@@ -324,7 +339,7 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
             </div>
           </div>
 
-          {/* Notificações à imobiliária */}
+          {/* Notificações à imobiliária — auto-salvam */}
           <div className="p-4 space-y-3">
             <div className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5 text-stone-400 dark:text-stone-500" />
@@ -338,14 +353,12 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
               <select
                 id="notify-dist"
                 value={config.notify_user_on_distribution ?? ""}
-                onChange={(e) => { setConfig((c) => ({ ...c, notify_user_on_distribution: e.target.value || null })); setSaved(false) }}
+                onChange={(e) => void persist({ notify_user_on_distribution: e.target.value || null })}
                 className={selectCls}
               >
                 <option value="">Não notificar</option>
                 {gestores.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} — {g.email}
-                  </option>
+                  <option key={g.id} value={g.id}>{g.name} — {g.email}</option>
                 ))}
               </select>
             </div>
@@ -357,14 +370,12 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
               <select
                 id="notify-fora"
                 value={config.notify_user_on_fora_horario ?? ""}
-                onChange={(e) => { setConfig((c) => ({ ...c, notify_user_on_fora_horario: e.target.value || null })); setSaved(false) }}
+                onChange={(e) => void persist({ notify_user_on_fora_horario: e.target.value || null })}
                 className={selectCls}
               >
                 <option value="">Não notificar</option>
                 {gestores.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} — {g.email}
-                  </option>
+                  <option key={g.id} value={g.id}>{g.name} — {g.email}</option>
                 ))}
               </select>
             </div>
@@ -372,21 +383,6 @@ export function RoletaConfigPanel({ initialConfig, gestores }: Props) {
 
         </div>
       </section>
-
-      {/* ── Save ── */}
-      <div className="flex items-center gap-3 pt-1">
-        <button
-          onClick={save}
-          disabled={isPending}
-          className="rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#d4705a] disabled:opacity-50"
-        >
-          {isPending ? "Salvando…" : "Salvar configuração"}
-        </button>
-        <span role="status" aria-live="polite" className="text-xs">
-          {saved && <span className="text-emerald-400">Salvo!</span>}
-          {saveError && <span className="text-red-400">Erro ao salvar. Tente novamente.</span>}
-        </span>
-      </div>
 
     </div>
   )

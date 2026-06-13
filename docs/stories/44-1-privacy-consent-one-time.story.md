@@ -1,6 +1,6 @@
 # Story 44.1 — Aceite de privacidade único com log de auditoria (LGPD)
 
-**Status:** Ready  
+**Status:** Done  
 **Epic:** 44 — Conformidade Legal / LGPD  
 **Criada por:** @sm (River)  
 **Data:** 2026-05-26  
@@ -71,9 +71,9 @@ o server action roda exclusivamente no servidor.
 
 ## Tarefas
 
-- [ ] T1: Migration `067_privacy_consents.sql` — criar tabela `privacy_consents` + RLS
-- [ ] T2: Corrigir `acceptPrivacy()` em `actions.ts` — usar `createAdminClient()` + inserir em `privacy_consents`
-- [ ] T3: QA gate — TypeScript: 0 erros, ESLint: 0 erros, testar fluxo no local
+- [x] T1: Migration `067_privacy_consents.sql` — criar tabela `privacy_consents` + RLS
+- [x] T2: Corrigir `acceptPrivacy()` em `actions.ts` — usar `createAdminClient()` + inserir em `privacy_consents`
+- [x] T3: QA gate — TypeScript: 0 erros, ESLint: 0 erros, testar fluxo no local
 
 ---
 

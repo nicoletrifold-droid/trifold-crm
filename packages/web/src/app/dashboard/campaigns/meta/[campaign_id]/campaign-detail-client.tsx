@@ -27,6 +27,11 @@ import {
 } from "@web/lib/meta-constants"
 import CampaignFunnel from "./campaign-funnel"
 import CampaignCreatives from "./campaign-creatives"
+import CampaignLpFunnel from "./campaign-lp-funnel"
+import CampaignFrequencyChart from "./campaign-frequency-chart"
+import CampaignPlacement from "./campaign-placement"
+import CampaignAlertsPanel from "./campaign-alerts-panel"
+import AgentChatPanel from "@web/components/agent/agent-chat-panel"
 
 interface Props {
   campaignId: string
@@ -206,11 +211,11 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
   // ─── Error 404 ───────────────────────────────────────────────────────────
   if (error === "not_found") {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg bg-white p-12 shadow-sm text-center">
-        <p className="text-lg font-medium text-gray-700">
+      <div className="flex flex-col items-center justify-center rounded-lg bg-white dark:bg-stone-900 p-12 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none text-center">
+        <p className="text-lg font-medium text-gray-700 dark:text-stone-300">
           Campanha não encontrada
         </p>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           A campanha pode ter sido removida ou pertencer a outra organização.
         </p>
         <Link
@@ -254,7 +259,7 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500">
+      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-stone-400">
         <Link
           href="/dashboard/campaigns/meta"
           className="hover:text-orange-600"
@@ -262,15 +267,15 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
           Campanhas Meta
         </Link>
         <span>›</span>
-        <span className="text-gray-900 font-medium">{campaign.name || "—"}</span>
+        <span className="text-gray-900 dark:text-stone-100 font-medium">{campaign.name || "—"}</span>
       </nav>
 
       {/* Header */}
-      <header className="rounded-lg bg-white p-6 shadow-sm">
+      <header className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
                 {campaign.name || "Sem nome"}
               </h1>
               <span
@@ -281,14 +286,14 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
             </div>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
               <div>
-                <dt className="inline text-gray-500">Objetivo: </dt>
-                <dd className="inline text-gray-900">
+                <dt className="inline text-gray-500 dark:text-stone-400">Objetivo: </dt>
+                <dd className="inline text-gray-900 dark:text-stone-100">
                   {objectiveLabel ?? "—"}
                 </dd>
               </div>
               <div>
-                <dt className="inline text-gray-500">Orçamento: </dt>
-                <dd className="inline text-gray-900">
+                <dt className="inline text-gray-500 dark:text-stone-400">Orçamento: </dt>
+                <dd className="inline text-gray-900 dark:text-stone-100">
                   {formatBudget(
                     optimisticBudget ?? campaign.daily_budget,
                     campaign.lifetime_budget,
@@ -296,8 +301,8 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
                 </dd>
               </div>
               <div>
-                <dt className="inline text-gray-500">Período: </dt>
-                <dd className="inline text-gray-900">
+                <dt className="inline text-gray-500 dark:text-stone-400">Período: </dt>
+                <dd className="inline text-gray-900 dark:text-stone-100">
                   {formatPeriod(campaign.start_time, campaign.stop_time)}
                 </dd>
               </div>
@@ -306,7 +311,7 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
 
           {/* Period selector */}
           <div
-            className="inline-flex rounded-md border border-gray-300 bg-white p-0.5"
+            className="inline-flex rounded-md border border-gray-300 dark:border-stone-700 bg-white dark:bg-stone-900 p-0.5"
             role="group"
             aria-label="Selecionar período"
           >
@@ -318,7 +323,7 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
                 className={`px-3 py-1 text-sm font-medium rounded ${
                   days === opt.value
                     ? "bg-orange-600 text-white"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "text-gray-600 dark:text-stone-400 hover:bg-gray-50 dark:hover:bg-stone-800/40"
                 }`}
               >
                 {opt.label}
@@ -332,9 +337,9 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
       {isAdmin && displayStatus !== "ARCHIVED" && (
         <section
           aria-label="Ações da campanha"
-          className="rounded-lg bg-white p-6 shadow-sm"
+          className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none"
         >
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Ações</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100 mb-4">Ações</h2>
           <div className="flex flex-wrap items-center gap-3">
             {displayStatus === "ACTIVE" && (
               <button
@@ -382,41 +387,41 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
 
           {/* Histórico de ações */}
           <div className="mt-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-stone-300 mb-2">
               Histórico de ações
             </h3>
             {actionLogLoading ? (
-              <p className="text-sm text-gray-400">Carregando...</p>
+              <p className="text-sm text-gray-400 dark:text-stone-500">Carregando...</p>
             ) : actionLog.length === 0 ? (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-stone-400">
                 Nenhuma ação registrada ainda.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800 text-sm">
+                  <thead className="bg-gray-50 dark:bg-stone-800/50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                         Data/Hora
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                         Ação
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                         Executado por
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
                     {actionLog.map((entry, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 text-gray-700">
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-stone-800/40">
+                        <td className="px-4 py-2 text-gray-700 dark:text-stone-300">
                           {formatDateTime(entry.executed_at)}
                         </td>
-                        <td className="px-4 py-2 text-gray-900 font-medium">
+                        <td className="px-4 py-2 text-gray-900 dark:text-stone-100 font-medium">
                           {entry.action}
                         </td>
-                        <td className="px-4 py-2 text-gray-700">
+                        <td className="px-4 py-2 text-gray-700 dark:text-stone-300">
                           {entry.executed_by_name ?? "Sistema"}
                         </td>
                       </tr>
@@ -438,17 +443,17 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
         onClose={() => setIsBudgetModalOpen(false)}
         className="backdrop:bg-black/50 rounded-lg p-0 shadow-xl"
       >
-        <div className="bg-white rounded-lg p-6 w-80">
-          <h3 id="budget-modal-title" className="font-semibold text-gray-900 mb-2">
+        <div className="bg-white dark:bg-stone-900 rounded-lg p-6 w-80">
+          <h3 id="budget-modal-title" className="font-semibold text-gray-900 dark:text-stone-100 mb-2">
             Ajustar Budget Diário
           </h3>
           {optimisticBudget !== null && optimisticBudget > 0 ? (
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-gray-500 dark:text-stone-400 mb-3">
               Budget atual: R${" "}
               {(optimisticBudget / 100).toFixed(2)}
             </p>
           ) : (
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-gray-500 dark:text-stone-400 mb-3">
               Budget atual: Não definido
             </p>
           )}
@@ -458,7 +463,7 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
             min="1"
             step="0.01"
             placeholder="Ex: 50.00"
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="w-full border border-gray-300 dark:border-stone-700 rounded px-3 py-2 text-sm text-gray-900 dark:text-stone-100 bg-white dark:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
             value={budgetInput}
             onChange={(e) => setBudgetInput(e.target.value)}
           />
@@ -469,7 +474,7 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
             <button
               type="button"
               onClick={() => setIsBudgetModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-stone-300 border border-gray-300 dark:border-stone-700 rounded-md hover:bg-gray-50 dark:hover:bg-stone-800/40"
             >
               Cancelar
             </button>
@@ -494,9 +499,12 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
         </div>
       </dialog>
 
+      {/* Alertas ativos — B-1 */}
+      <CampaignAlertsPanel campaignId={campaignId} />
+
       {/* Time series chart */}
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-900">
+      <section className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
           Performance por Dia — últimos {days} dias
         </h2>
         <div className="mt-4">
@@ -504,9 +512,31 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
         </div>
       </section>
 
+      {/* LP Funnel — B-2 */}
+      <section className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Funil de Landing Page</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
+          Impressões → Cliques → Visualizações LP → Leads gerados
+        </p>
+        <div className="mt-4">
+          <CampaignLpFunnel timeseries={timeseries} />
+        </div>
+      </section>
+
+      {/* Frequency chart — B-3 */}
+      <section className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Frequência Histórica</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
+          Frequência média diária. Acima de 2.8× indica saturação de audiência.
+        </p>
+        <div className="mt-4">
+          <CampaignFrequencyChart timeseries={timeseries} />
+        </div>
+      </section>
+
       {/* Funil de Conversão (Story 19.2) */}
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-900">
+      <section className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
           Funil de Conversão
         </h2>
         <div className="mt-4">
@@ -515,17 +545,30 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
       </section>
 
       {/* AdSets table */}
-      <section className="rounded-lg bg-white shadow-sm">
-        <header className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">AdSets</h2>
+      <section className="rounded-lg bg-white dark:bg-stone-900 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <header className="border-b border-gray-200 dark:border-stone-800 px-6 py-4">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">AdSets</h2>
         </header>
         <AdsetsTable adsets={adsets} />
       </section>
 
+      {/* Placement breakdown — B-4 */}
+      <section className="rounded-lg bg-white dark:bg-stone-900 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <header className="border-b border-gray-200 dark:border-stone-800 px-6 py-4">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Performance por Posicionamento</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
+            Spend e leads por plataforma e posição. Sincronizado semanalmente.
+          </p>
+        </header>
+        <div className="p-6">
+          <CampaignPlacement campaignId={campaignId} />
+        </div>
+      </section>
+
       {/* Criativos (Story 26.1) */}
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-900">Criativos</h2>
-        <p className="mt-1 text-sm text-gray-500">
+      <section className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Criativos</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           Performance individual de cada anúncio. Criativos com sinal de
           fadiga aparecem no topo.
         </p>
@@ -535,8 +578,8 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
       </section>
 
       {/* ROAS */}
-      <section className="rounded-lg bg-white p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-900">
+      <section className="rounded-lg bg-white dark:bg-stone-900 p-6 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
           ROAS &amp; Conversão
         </h2>
         <div className="mt-4">
@@ -545,18 +588,26 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
       </section>
 
       {/* Leads table */}
-      <section className="rounded-lg bg-white shadow-sm">
-        <header className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">
+      <section className="rounded-lg bg-white dark:bg-stone-900 shadow-sm dark:ring-1 dark:ring-stone-800 dark:shadow-none">
+        <header className="border-b border-gray-200 dark:border-stone-800 px-6 py-4">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
             Leads Associados
           </h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
             Últimos {leads.length} leads vinculados a esta campanha via{" "}
             <code className="text-xs">utm_campaign</code>.
           </p>
         </header>
         <LeadsTable leads={leads} />
       </section>
+
+      {/* Agent chat panel — D-1 through D-5, campaign context */}
+      <AgentChatPanel
+        isAdmin={isAdmin}
+        contextType="campaign"
+        contextId={campaignId}
+        contextLabel={campaign.name ?? null}
+      />
     </div>
   )
 }
@@ -566,10 +617,10 @@ export default function CampaignDetailClient({ campaignId, isAdmin }: Props) {
 function LoadingSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="h-4 w-48 animate-pulse rounded bg-gray-200" />
-      <div className="h-32 animate-pulse rounded-lg bg-gray-100" />
-      <div className="h-72 animate-pulse rounded-lg bg-gray-100" />
-      <div className="h-64 animate-pulse rounded-lg bg-gray-100" />
+      <div className="h-4 w-48 animate-pulse rounded bg-gray-200 dark:bg-stone-800" />
+      <div className="h-32 animate-pulse rounded-lg bg-gray-100 dark:bg-stone-800" />
+      <div className="h-72 animate-pulse rounded-lg bg-gray-100 dark:bg-stone-800" />
+      <div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-stone-800" />
     </div>
   )
 }
@@ -591,7 +642,7 @@ function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
   if (data.length === 0 || allZero) {
     return (
-      <div className="flex h-64 items-center justify-center rounded border border-dashed border-gray-200 text-sm text-gray-500">
+      <div className="flex h-64 items-center justify-center rounded border border-dashed border-gray-200 dark:border-stone-800 text-sm text-gray-500 dark:text-stone-400">
         Sem dados de performance no período selecionado
       </div>
     )
@@ -637,7 +688,7 @@ function TimeSeriesChart({ data }: TimeSeriesChartProps) {
   return (
     <div className="relative">
       {/* Legend */}
-      <div className="mb-2 flex items-center gap-4 text-xs text-gray-600">
+      <div className="mb-2 flex items-center gap-4 text-xs text-gray-600 dark:text-stone-400">
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2 w-3 rounded-sm bg-blue-500" />
           Spend (R$)
@@ -788,8 +839,8 @@ function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
       {/* Tooltip */}
       {hover !== null && data[hover] && (
-        <div className="pointer-events-none absolute top-2 right-2 rounded border border-gray-200 bg-white p-3 text-sm shadow">
-          <p className="font-medium text-gray-900">
+        <div className="pointer-events-none absolute top-2 right-2 rounded border border-gray-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-3 text-sm shadow dark:shadow-none dark:ring-1 dark:ring-stone-800">
+          <p className="font-medium text-gray-900 dark:text-stone-100">
             {formatDayMonth(data[hover].date)}
           </p>
           <p className="text-blue-600">
@@ -807,12 +858,20 @@ function formatSpendAxis(value: number): string {
   return `R$ ${Math.round(value)}`
 }
 
+// ─── Quality ranking badges ────────────────────────────────────────────────
+
+const QUALITY_BADGES: Record<string, { label: string; className: string }> = {
+  ABOVE_AVERAGE: { label: "Acima da média", className: "bg-green-100 text-green-700" },
+  AVERAGE:       { label: "Médio",          className: "bg-gray-100 dark:bg-stone-800 text-gray-600 dark:text-stone-400" },
+  BELOW_AVERAGE: { label: "Abaixo da média", className: "bg-red-100 text-red-700" },
+}
+
 // ─── AdSets table ──────────────────────────────────────────────────────────
 
 function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
   if (adsets.length === 0) {
     return (
-      <div className="p-12 text-center text-sm text-gray-500">
+      <div className="p-12 text-center text-sm text-gray-500 dark:text-stone-400">
         Nenhum AdSet encontrado para esta campanha
       </div>
     )
@@ -820,8 +879,8 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
+        <thead className="bg-gray-50 dark:bg-stone-800/50">
           <tr>
             <Th align="left">AdSet</Th>
             <Th align="left">Status</Th>
@@ -833,18 +892,22 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
             <Th align="right">CTR</Th>
             <Th align="right">Leads</Th>
             <Th align="right">CPL</Th>
+            <Th align="left">Qualidade</Th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
           {adsets.map((a) => {
             const badge = STATUS_BADGES[a.status] ?? STATUS_BADGES.ARCHIVED!
             const goalLabel = a.optimization_goal
               ? (OPTIMIZATION_GOAL_LABELS[a.optimization_goal] ??
                 a.optimization_goal)
               : "—"
+            const qBadge = a.quality_ranking
+              ? QUALITY_BADGES[a.quality_ranking] ?? null
+              : null
             return (
-              <tr key={a.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm font-medium text-gray-900">
+              <tr key={a.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/40">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-stone-100">
                   {a.name || "Sem nome"}
                 </td>
                 <td className="px-4 py-3">
@@ -854,29 +917,41 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
                     {badge.label}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700">
+                <td className="px-4 py-3 text-sm text-gray-700 dark:text-stone-300">
                   {goalLabel}
                 </td>
-                <td className="px-4 py-3 text-right text-sm text-gray-700">
+                <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                   {formatBudget(a.daily_budget, null)}
                 </td>
-                <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-stone-100">
                   {formatBRL(a.spend)}
                 </td>
-                <td className="px-4 py-3 text-right text-sm text-gray-700">
+                <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                   {formatNumber(a.impressions)}
                 </td>
-                <td className="px-4 py-3 text-right text-sm text-gray-700">
+                <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                   {formatNumber(a.clicks)}
                 </td>
-                <td className="px-4 py-3 text-right text-sm text-gray-700">
+                <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                   {formatPercent(a.ctr)}
                 </td>
-                <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-stone-100">
                   {a.leads_meta}
                 </td>
-                <td className="px-4 py-3 text-right text-sm text-gray-700">
+                <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-stone-300">
                   {a.cpl !== null ? formatBRL(a.cpl) : "—"}
+                </td>
+                <td className="px-4 py-3">
+                  {qBadge ? (
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${qBadge.className}`}
+                      title={`Quality ranking: ${a.quality_ranking ?? ""}`}
+                    >
+                      {qBadge.label}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 dark:text-stone-600">—</span>
+                  )}
                 </td>
               </tr>
             )
@@ -896,7 +971,7 @@ function Th({
 }) {
   return (
     <th
-      className={`px-4 py-3 text-${align} text-xs font-medium uppercase tracking-wide text-gray-500`}
+      className={`px-4 py-3 text-${align} text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400`}
     >
       {children}
     </th>
@@ -957,22 +1032,22 @@ function ConversionFunnelView({ funnel }: { funnel: ConversionFunnel }) {
         const rate = formatRate(stage.value, stage.prev)
         return (
           <div key={stage.key} className="relative">
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            <div className="rounded-md border border-gray-200 dark:border-stone-800 bg-gray-50 dark:bg-stone-800/50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                 {stage.label}
               </p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
+              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-stone-100">
                 {formatNumber(stage.value)}
               </p>
               {stage.prev !== null && (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-stone-400">
                   {rate === "—" ? "—" : `Conversão: ${rate}`}
                 </p>
               )}
             </div>
             {i < stages.length - 1 && (
               <div
-                className="hidden md:flex absolute top-1/2 -right-3 -translate-y-1/2 z-10 text-gray-400"
+                className="hidden md:flex absolute top-1/2 -right-3 -translate-y-1/2 z-10 text-gray-400 dark:text-stone-500"
                 aria-hidden="true"
               >
                 <span className="text-xl">›</span>
@@ -990,7 +1065,7 @@ function ConversionFunnelView({ funnel }: { funnel: ConversionFunnel }) {
 function RoasCard({ roas }: { roas: RoasSummary | null }) {
   if (roas === null) {
     return (
-      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+      <div className="rounded-md border border-dashed border-gray-300 dark:border-stone-700 bg-gray-50 dark:bg-stone-800/50 p-4 text-sm text-gray-600 dark:text-stone-400">
         ROAS disponível após configurar vendas (Story 16.10)
       </div>
     )
@@ -998,7 +1073,7 @@ function RoasCard({ roas }: { roas: RoasSummary | null }) {
 
   const roasColor =
     roas.roas === null
-      ? "text-gray-700"
+      ? "text-gray-700 dark:text-stone-300"
       : roas.roas >= 3
         ? "text-green-700"
         : roas.roas >= 1
@@ -1041,12 +1116,12 @@ function RoasMetric({
   valueClassName?: string
 }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+    <div className="rounded-md border border-gray-200 dark:border-stone-800 bg-white dark:bg-stone-800/50 p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
         {label}
       </p>
       <p
-        className={`mt-1 text-xl font-bold ${valueClassName ?? "text-gray-900"}`}
+        className={`mt-1 text-xl font-bold ${valueClassName ?? "text-gray-900 dark:text-stone-100"}`}
       >
         {value}
       </p>
@@ -1059,7 +1134,7 @@ function RoasMetric({
 function LeadsTable({ leads }: { leads: AssociatedLead[] }) {
   if (leads.length === 0) {
     return (
-      <div className="p-12 text-center text-sm text-gray-500">
+      <div className="p-12 text-center text-sm text-gray-500 dark:text-stone-400">
         Nenhum lead associado a esta campanha encontrado no CRM
       </div>
     )
@@ -1067,8 +1142,8 @@ function LeadsTable({ leads }: { leads: AssociatedLead[] }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">
+        <thead className="bg-gray-50 dark:bg-stone-800/50">
           <tr>
             <Th align="left">Nome</Th>
             <Th align="left">Telefone</Th>
@@ -1078,13 +1153,13 @@ function LeadsTable({ leads }: { leads: AssociatedLead[] }) {
             <Th align="left">Data</Th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
           {leads.map((lead) => {
             const badge =
               LEAD_STATUS_BADGES[lead.status] ??
-              ({ label: lead.status || "—", className: "bg-gray-100 text-gray-600" } as const)
+              ({ label: lead.status || "—", className: "bg-gray-100 dark:bg-stone-800 text-gray-600 dark:text-stone-400" } as const)
             return (
-              <tr key={lead.id} className="hover:bg-gray-50">
+              <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/40">
                 <td className="px-4 py-3 text-sm">
                   <Link
                     href={`/dashboard/leads/${lead.id}`}
@@ -1093,7 +1168,7 @@ function LeadsTable({ leads }: { leads: AssociatedLead[] }) {
                     {lead.name || "Sem nome"}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700">
+                <td className="px-4 py-3 text-sm text-gray-700 dark:text-stone-300">
                   {lead.phone ?? "—"}
                 </td>
                 <td className="px-4 py-3">
@@ -1103,13 +1178,13 @@ function LeadsTable({ leads }: { leads: AssociatedLead[] }) {
                     {badge.label}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700">
+                <td className="px-4 py-3 text-sm text-gray-700 dark:text-stone-300">
                   {lead.source || "—"}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700">
+                <td className="px-4 py-3 text-sm text-gray-700 dark:text-stone-300">
                   {lead.utm_campaign ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700">
+                <td className="px-4 py-3 text-sm text-gray-700 dark:text-stone-300">
                   {formatDateTime(lead.created_at)}
                 </td>
               </tr>

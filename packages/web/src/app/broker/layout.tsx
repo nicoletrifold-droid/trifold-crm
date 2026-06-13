@@ -1,9 +1,11 @@
 import { getServerUser } from "@web/lib/auth"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone, CreditCard } from "lucide-react"
+import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone, CreditCard, MessageSquarePlus } from "lucide-react"
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
+import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
+import { WeatherWidget } from "@web/components/weather-widget"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -14,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/broker/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
   { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true },
   { href: "/broker/instalar", label: "Instalar app", icon: <Smartphone className={ICON_SIZE} /> },
+  { href: "/broker/suporte", label: "Suporte", icon: <MessageSquarePlus className={ICON_SIZE} /> },
 ]
 
 export default async function BrokerLayout({
@@ -29,6 +32,7 @@ export default async function BrokerLayout({
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 hidden lg:flex" />
       <SidebarNav
         items={NAV_ITEMS}
         userName={user.name}
@@ -44,6 +48,7 @@ export default async function BrokerLayout({
 
       <NewLeadNotification userId={user.id} orgId={user.orgId} />
       <BrokerPushPrompt />
+      <BrokerInstallPrompt />
     </div>
   )
 }

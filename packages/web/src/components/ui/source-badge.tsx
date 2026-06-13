@@ -14,12 +14,14 @@ const FALLBACK_STYLE = { bg: "bg-stone-50 dark:bg-stone-800", text: "text-stone-
 
 interface SourceBadgeProps {
   source: string | null
+  label?: string
   size?: "xs" | "sm"
 }
 
-export function SourceBadge({ source, size = "sm" }: SourceBadgeProps) {
+export function SourceBadge({ source, label: labelOverride, size = "sm" }: SourceBadgeProps) {
   const style = (source && SOURCE_STYLE[source]) ? SOURCE_STYLE[source] : FALLBACK_STYLE
-  const label = (source && SOURCE_LABELS_SHORT[source]) ? SOURCE_LABELS_SHORT[source] : "Outro"
+  const defaultLabel = (source && SOURCE_LABELS_SHORT[source]) ? SOURCE_LABELS_SHORT[source] : "Outro"
+  const label = labelOverride ?? defaultLabel
   const textSize = size === "xs" ? "text-[10px]" : "text-xs"
   const dotSize = size === "xs" ? "h-1.5 w-1.5" : "h-2 w-2"
 

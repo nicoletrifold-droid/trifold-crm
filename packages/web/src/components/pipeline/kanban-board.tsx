@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, useRef } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import {
   DndContext,
   DragOverlay,
@@ -21,6 +21,7 @@ import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { createClient } from "@web/lib/supabase/client"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
+import type { CreativeData } from "@web/lib/pipeline/types"
 
 interface Stage {
   id: string
@@ -44,8 +45,11 @@ interface Lead {
   ai_summary?: string | null
   source?: string | null
   utm_campaign?: string | null
+  utm_content?: string | null
   properties?: { name: string } | null
   users?: { name: string } | null
+  // Story 50-2 (Epic 50): criativo Meta resolvido server-side
+  creative?: CreativeData | null
 }
 
 export interface InitialStageState {
@@ -65,6 +69,7 @@ export interface PipelineFilters {
 interface KanbanBoardProps {
   initialStages: Stage[]
   initialLeadsPerStage: InitialStageState[]
+  initialStageFocus?: string | null
   activeFilters?: PipelineFilters
 }
 
@@ -93,6 +98,7 @@ function buildInitialStageMap(initialLeadsPerStage: InitialStageState[]): Map<st
 export function KanbanBoard({
   initialStages,
   initialLeadsPerStage,
+  initialStageFocus,
   activeFilters,
 }: KanbanBoardProps) {
   const [stageMap, setStageMap] = useState<Map<string, StageState>>(() =>
@@ -102,6 +108,8 @@ export function KanbanBoard({
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [showSourceFilter, setShowSourceFilter] = useState(false)
+  const [selectedCreatives, setSelectedCreatives] = useState<string[]>([])
+  const [showCreativeFilter, setShowCreativeFilter] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -111,6 +119,15 @@ export function KanbanBoard({
   // Necessário porque pointerWithin pode retornar null no momento exato do soltar
   // mesmo quando o card estava sobre uma coluna válida um instante antes.
   const lastOverId = useRef<UniqueIdentifier | null>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!initialStageFocus || !boardRef.current) return
+    const col = boardRef.current.querySelector<HTMLElement>(
+      `[data-stage-slug="${initialStageFocus}"]`
+    )
+    col?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })
+  }, [initialStageFocus])
 
   const collisionDetection: CollisionDetection = useCallback((args) => {
     const pointerHits = pointerWithin(args)
@@ -144,6 +161,22 @@ export function KanbanBoard({
     return Object.entries(counts).sort((a, b) => b[1] - a[1])
   }, [allLeads])
 
+  // Compute unique creatives with counts
+  const creativeCounts = useMemo(() => {
+    const map = new Map<string, { adName: string; thumbnailUrl: string | null; count: number }>()
+    for (const lead of allLeads) {
+      if (!lead.creative) continue
+      const { adId, adName, thumbnailUrl } = lead.creative
+      const existing = map.get(adId)
+      if (existing) {
+        existing.count++
+      } else {
+        map.set(adId, { adName, thumbnailUrl: thumbnailUrl ?? null, count: 1 })
+      }
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count)
+  }, [allLeads])
+
   const matchesSourceFilter = useCallback(
     (lead: Lead) => {
       if (selectedSources.length === 0) return true
@@ -152,18 +185,32 @@ export function KanbanBoard({
     [selectedSources]
   )
 
+  const matchesCreativeFilter = useCallback(
+    (lead: Lead) => {
+      if (selectedCreatives.length === 0) return true
+      return selectedCreatives.includes(lead.creative?.adId ?? "")
+    },
+    [selectedCreatives]
+  )
+
   const activeLead = useMemo(() => {
     if (!activeId) return null
     for (const state of stageMap.values()) {
       const found = state.leads.find((l) => l.id === activeId)
-      if (found && matchesSourceFilter(found)) return found
+      if (found && matchesSourceFilter(found) && matchesCreativeFilter(found)) return found
     }
     return null
-  }, [activeId, stageMap, matchesSourceFilter])
+  }, [activeId, stageMap, matchesSourceFilter, matchesCreativeFilter])
 
   const toggleSource = useCallback((source: string) => {
     setSelectedSources((prev) =>
       prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]
+    )
+  }, [])
+
+  const toggleCreative = useCallback((adId: string) => {
+    setSelectedCreatives((prev) =>
+      prev.includes(adId) ? prev.filter((c) => c !== adId) : [...prev, adId]
     )
   }, [])
 
@@ -362,48 +409,108 @@ export function KanbanBoard({
 
   return (
     <>
-      {/* Source filter bar */}
-      {sourceCounts.length > 0 && (
+      {/* Filter bar — Origem + Criativo */}
+      {(sourceCounts.length > 0 || creativeCounts.length > 0) && (
         <div className="mb-3 flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setShowSourceFilter((v) => !v)}
-            className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
-          >
-            Origem {selectedSources.length > 0 && `(${selectedSources.length})`}
-          </button>
 
-          {showSourceFilter && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {selectedSources.length > 0 && (
-                <button
-                  onClick={() => setSelectedSources([])}
-                  className="rounded-md bg-stone-100 px-2 py-1 text-xs text-stone-500 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
-                >
-                  Todos
-                </button>
+          {/* Origem filter */}
+          {sourceCounts.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowSourceFilter((v) => !v)}
+                className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                Origem {selectedSources.length > 0 && `(${selectedSources.length})`}
+              </button>
+
+              {showSourceFilter && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {selectedSources.length > 0 && (
+                    <button
+                      onClick={() => setSelectedSources([])}
+                      className="rounded-md bg-stone-100 px-2 py-1 text-xs text-stone-500 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                    >
+                      Todos
+                    </button>
+                  )}
+                  {sourceCounts.map(([source, count]) => {
+                    const active = selectedSources.includes(source)
+                    return (
+                      <button
+                        key={source}
+                        onClick={() => toggleSource(source)}
+                        className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+                          active
+                            ? "border-orange-300 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/15"
+                            : "border-stone-200 bg-white hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800"
+                        }`}
+                      >
+                        <SourceBadge source={source === "other" ? null : source} size="xs" />
+                        <span className="text-stone-400 dark:text-stone-500">({count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
               )}
-              {sourceCounts.map(([source, count]) => {
-                const active = selectedSources.includes(source)
-                return (
-                  <button
-                    key={source}
-                    onClick={() => toggleSource(source)}
-                    className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
-                      active
-                        ? "border-orange-300 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/15"
-                        : "border-stone-200 bg-white hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800"
-                    }`}
-                  >
-                    <SourceBadge source={source === "other" ? null : source} size="xs" />
-                    <span className="text-stone-400 dark:text-stone-500">({count})</span>
-                  </button>
-                )
-              })}
-            </div>
+            </>
           )}
+
+          {/* Criativo filter (admin only — só aparece quando há leads com creative) */}
+          {creativeCounts.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowCreativeFilter((v) => !v)}
+                className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                Criativo {selectedCreatives.length > 0 && `(${selectedCreatives.length})`}
+              </button>
+
+              {showCreativeFilter && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {selectedCreatives.length > 0 && (
+                    <button
+                      onClick={() => setSelectedCreatives([])}
+                      className="rounded-md bg-stone-100 px-2 py-1 text-xs text-stone-500 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                    >
+                      Todos
+                    </button>
+                  )}
+                  {creativeCounts.map(([adId, { adName, thumbnailUrl, count }]) => {
+                    const active = selectedCreatives.includes(adId)
+                    return (
+                      <button
+                        key={adId}
+                        onClick={() => toggleCreative(adId)}
+                        title={adName}
+                        className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+                          active
+                            ? "border-orange-300 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/15"
+                            : "border-stone-200 bg-white hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800"
+                        }`}
+                      >
+                        {thumbnailUrl && (
+                          <img
+                            src={thumbnailUrl}
+                            alt=""
+                            className="h-4 w-4 rounded object-cover"
+                          />
+                        )}
+                        <span className="max-w-[120px] truncate text-stone-700 dark:text-stone-300">
+                          {adName}
+                        </span>
+                        <span className="text-stone-400 dark:text-stone-500">({count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
         </div>
       )}
 
+      <div ref={boardRef}>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
@@ -414,10 +521,10 @@ export function KanbanBoard({
           {initialStages.map((stage) => {
             const state = stageMap.get(stage.id)
             const stageLeads = state?.leads ?? []
-            const visibleLeads = stageLeads.filter(matchesSourceFilter)
+            const visibleLeads = stageLeads.filter((l) => matchesSourceFilter(l) && matchesCreativeFilter(l))
             return (
+              <div key={stage.id} data-stage-slug={stage.slug}>
               <KanbanColumn
-                key={stage.id}
                 stage={stage}
                 leads={visibleLeads}
                 totalCount={state?.totalCount ?? visibleLeads.length}
@@ -426,6 +533,7 @@ export function KanbanBoard({
                 onLoadMore={() => handleLoadMore(stage.id)}
                 onSelectLead={setSelectedLeadId}
               />
+              </div>
             )
           })}
         </ScrollableX>
@@ -445,6 +553,7 @@ export function KanbanBoard({
           onClose={() => setSelectedLeadId(null)}
         />
       </DndContext>
+      </div>
     </>
   )
 }

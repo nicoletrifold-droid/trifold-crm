@@ -98,6 +98,7 @@ export async function PATCH(
     "email_enabled",
     "email_subject",
     "email_body_html",
+    "email_body_json",
     "field_mapping",
     "property_id",
   ]

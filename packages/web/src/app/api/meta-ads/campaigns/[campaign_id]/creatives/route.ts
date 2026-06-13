@@ -83,6 +83,10 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
+  if (appUser.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
   const { campaign_id: metaCampaignId } = await params
   const period = request.nextUrl.searchParams.get("period") ?? "30d"
   const { from, to, days } = getPeriodDates(period)

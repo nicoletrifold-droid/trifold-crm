@@ -1,6 +1,6 @@
 # Story 45.1 — PWA: prompt de instalação para Android igual ao do iOS
 
-**Status:** Ready  
+**Status:** Done  
 **Epic:** 45 — PWA & Mobile  
 **Criada por:** @sm (River) / @po (Pax)  
 **Data:** 2026-05-26  
@@ -30,11 +30,11 @@ O iOS já tem um bottom sheet educativo (IosInstallPrompt) que ensina como adici
 
 ## Tarefas
 
-- [ ] T1: Criar `src/components/android-install-prompt.tsx`
-- [ ] T2: Adicionar em `app/layout.tsx` com `variant="crm"` (excluindo rotas `/cliente/*`)
-- [ ] T3: Adicionar em `cliente/[obra_id]/layout.tsx` com `variant="portal"`
-- [ ] T4: Remover `PwaInstallPrompt` de `dashboard/layout.tsx`
-- [ ] T5: QA gate
+- [x] T1: Criar `src/components/android-install-prompt.tsx`
+- [x] T2: Adicionar em `app/layout.tsx` com `variant="crm"` (excluindo rotas `/cliente/*`)
+- [x] T3: Adicionar em `cliente/[obra_id]/layout.tsx` com `variant="portal"`
+- [x] T4: Remover `PwaInstallPrompt` de `dashboard/layout.tsx`
+- [x] T5: QA gate
 
 ---
 

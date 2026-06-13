@@ -130,6 +130,13 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Broker role: can only access /broker — never /dashboard
+  if (role === "broker" && pathname.startsWith("/dashboard")) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/broker"
+    return NextResponse.redirect(url)
+  }
+
   // Obras role: restricted to /dashboard/obras, /dashboard/brindes,
   // /dashboard/mensagens, /dashboard/chamados e /dashboard/configuracoes/clientes
   if (

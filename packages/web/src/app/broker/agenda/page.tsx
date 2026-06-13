@@ -158,7 +158,7 @@ export default async function BrokerAgendaPage({
       property:properties!property_id(id, name)
     `
     )
-    .eq("broker_id", user.id)
+    .eq("org_id", user.orgId)
     .gte("scheduled_at", queryStart.toISOString())
     .lte("scheduled_at", queryEnd.toISOString())
     .order("scheduled_at", { ascending: true })
@@ -288,8 +288,9 @@ export default async function BrokerAgendaPage({
                 const time = new Date(apt.scheduled_at)
                 const isPastScheduled = apt.status === "scheduled" && time.getTime() < nowMs
 
+                const isOwn = apt.broker_id === user.id
                 return (
-                  <div key={apt.id} className={`rounded-lg border p-4 ${s.border} ${s.bg}`}>
+                  <div key={apt.id} className={`rounded-lg border p-4 ${isOwn ? `${s.border} ${s.bg}` : "border-gray-200 bg-gray-100 opacity-75 dark:border-stone-700 dark:bg-stone-800/40"}`}>
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
@@ -306,6 +307,9 @@ export default async function BrokerAgendaPage({
                         {apt.notes && <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">{apt.notes}</p>}
                       </div>
                       <div className="flex items-center gap-2">
+                        {!isOwn && (
+                          <span className="rounded-full border border-stone-600 px-2 py-0.5 text-[10px] font-medium text-stone-400">Equipe</span>
+                        )}
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.bg} ${s.color}`}>{s.label}</span>
                         {apt.status === "completed" && (
                           <Link
@@ -347,7 +351,7 @@ export default async function BrokerAgendaPage({
         const nextMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1)
 
         return (
-          <div className="overflow-x-auto rounded-xl bg-white p-4 shadow-sm">
+          <div className="overflow-x-auto rounded-xl bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
             <div className="mb-4 flex items-center justify-between">
               <Link
                 href={`/broker/agenda?view=month&date=${formatDateISO(prevMonth)}`}
@@ -481,17 +485,18 @@ export default async function BrokerAgendaPage({
                   const lead = extractRelation<RelatedLead>(apt.lead)
                   const isSelected = params.apt === apt.id
 
+                  const isOwn = apt.broker_id === user.id
                   return (
                     <Link
                       key={apt.id}
                       href={buildUrl({
                         apt: isSelected ? undefined : apt.id,
                       })}
-                      className={`block rounded border px-1.5 py-1 text-[11px] leading-tight transition-all ${s.bg} ${s.border} ${s.color} ${
-                        isSelected
-                          ? "ring-2 ring-orange-400"
-                          : "hover:brightness-95"
-                      }`}
+                      className={`block rounded border px-1.5 py-1 text-[11px] leading-tight transition-all ${
+                        isOwn
+                          ? `${s.bg} ${s.border} ${s.color}`
+                          : "border-gray-300 bg-gray-100 text-gray-400 dark:border-stone-700 dark:bg-stone-800/50 dark:text-stone-400"
+                      } ${isSelected ? "ring-2 ring-orange-400" : "hover:brightness-95"}`}
                     >
                       <p className="font-semibold">
                         {time.toLocaleTimeString("pt-BR", {

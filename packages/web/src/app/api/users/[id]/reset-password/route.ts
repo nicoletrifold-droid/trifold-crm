@@ -14,7 +14,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = requireRole(appUser, ["admin", "gerente-comercial"])
   if (forbidden) return forbidden
 
   const { data: targetUser, error: fetchError } = await supabase
@@ -28,15 +28,25 @@ export async function POST(
     return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
   }
 
-  if (!targetUser.auth_id) {
-    return NextResponse.json(
-      { error: "Este usuário não tem conta de acesso criada. Entre em contato com o suporte para criá-la manualmente." },
-      { status: 422 }
-    )
-  }
-
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
   const adminSupabase = createAdminClient()
+
+  // Usuário sem auth_id (fluxo legado) — cria conta no Supabase Auth antes de gerar o link.
+  if (!targetUser.auth_id) {
+    if (!targetUser.email) {
+      return NextResponse.json({ error: "Usuário sem e-mail cadastrado — não é possível criar conta de acesso." }, { status: 422 })
+    }
+    const { data: newAuth, error: createError } = await adminSupabase.auth.admin.createUser({
+      email: targetUser.email as string,
+      email_confirm: true,
+      password: crypto.randomUUID(), // senha temporária — será sobrescrita pelo link de recovery
+    })
+    if (createError || !newAuth?.user?.id) {
+      return NextResponse.json({ error: createError?.message ?? "Erro ao criar conta de acesso." }, { status: 500 })
+    }
+    await supabase.from("users").update({ auth_id: newAuth.user.id }).eq("id", id)
+    targetUser.auth_id = newAuth.user.id
+  }
 
   const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
     type: "recovery",

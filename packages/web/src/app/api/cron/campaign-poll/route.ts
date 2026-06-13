@@ -7,6 +7,7 @@ import {
   type OAuthTokens,
 } from "@web/lib/google"
 import { sendEmail } from "@web/lib/email"
+import { injectUtmToHtml } from "@web/lib/campaign-utm"
 import { STAGE_IDS } from "@trifold/shared"
 
 async function sendWhatsAppTemplate(
@@ -457,6 +458,13 @@ export async function GET(request: NextRequest) {
                   String(value)
                 )
               }
+
+              // Inject UTM params for A/B image tracking (no-op for campaigns without images)
+              const { data: emailImages } = await supabase
+                .from("campaign_email_images")
+                .select("variant_id, image_url, link_url")
+                .eq("campaign_id", campaign.id)
+              html = injectUtmToHtml(html, emailImages ?? [])
 
               const result = await sendEmail({
                 to: fields.email,

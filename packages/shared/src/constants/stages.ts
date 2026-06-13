@@ -14,6 +14,8 @@ export const STAGE_IDS = {
   fechou:         "00000000-0000-0000-0001-000000000007",
   represamento:   "00000000-0000-0000-0001-000000000010", // Supremo id_situacao=10688
   perdido:        "00000000-0000-0000-0001-000000000008",
+  acao_muffato:   "dab590c7-ffc5-4086-be9a-4914f94fa3ba", // coluna exclusiva trifold
+  importar_crm:   "dfc0f7d1-4484-4cc2-917c-4ac15a561e42", // entrada leads Supremo CRM
 } as const
 
 export type StageSlug = keyof typeof STAGE_IDS

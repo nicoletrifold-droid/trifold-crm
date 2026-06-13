@@ -1,0 +1,189 @@
+storyId: "50.1"
+title: "Sync Expandido de meta_ads.creative com Thumbnail"
+epic: 50
+verdict: CONCERNS
+reviewedAt: "2026-06-03"
+reviewer: "Quinn (@qa)"
+iteration: 1
+
+summary: >
+  Mudança cirúrgica de +34/-2 linhas em 2 arquivos. Implementação correta da
+  expansão de subfields do `creative` na Graph API. Type refinement seguro
+  (consumer único — refinement internal ao cron sync). Type-check + lint
+  passing (verificado independentemente). 6/7 ACs atendidos pelo código;
+  AC5 (validação pós-deploy ≥80% thumbnail populated) deferido por design
+  ao ambiente de produção. Aprovada para @devops push com 3 observações
+  não-bloqueantes documentadas abaixo.
+
+quality_checks:
+  - check: "1. Code Review"
+    status: PASS
+    note: >
+      Comentário multi-linha no route.ts referencia Epic/Story e shape esperado.
+      JSDoc comprehensive em MetaAdCreative com guidance para consumidores
+      (optional chaining obrigatório). Naming consistente (`MetaAdCreative` ao
+      lado de `MetaAd`, `MetaAdSet`). Sintaxe `creative{...}` correta para
+      field expansion da Graph API v21.0.
+
+  - check: "2. Unit Tests"
+    status: CONCERNS
+    note: >
+      Nenhum teste automatizado adicionado. Para mudança de 3 linhas
+      (field expansion + type refinement), o ROI de unit test é marginal.
+      AC5 (validação SQL pós-deploy) é o teste de facto, mas é environmental
+      (requer produção). Aceitável dada a natureza da mudança, mas registrado
+      como concern para visibilidade.
+
+  - check: "3. Acceptance Criteria"
+    status: PASS
+    note: "6/7 ACs atendidos pelo código (AC1, AC2, AC3, AC4, AC6, AC7). AC5 deferido por design — ver observation OBS-001."
+
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      Consumer impact mapeado independentemente via grep no monorepo:
+      - `MetaAd` type tem 1 consumer único (cron sync — o próprio arquivo editado)
+      - `meta_ads.creative` JSONB é lido por `/api/meta-ads/campaigns/[id]/creatives/route.ts:236`
+        via interface LOCAL `CreativeJson { thumbnail_url, body }` com cast defensivo
+      - Antes da Story 50-1: `creative` armazenado era shallow `{id}` → thumbnail_url SEMPRE null no panel
+      - Após Story 50-1: thumbnail_url populado → panel de creatives passa a exibir miniaturas (IMPROVEMENT IMPLÍCITO)
+      - Campo `body` continua null no panel (não está na expansão atual) → SAME-AS-BEFORE, nenhuma regressão
+      Zero regressão. Mudança tem side-effect positivo no panel de campaigns.
+
+  - check: "5. Performance"
+    status: PASS
+    note: >
+      Expansão de subfields em Graph API normalmente NÃO conta como request extra
+      (documentado na story Dev Notes). Payload por ad cresce ~200-500 bytes
+      (thumbnail_url + image_url URLs típicas). `fetchAllPages` mantém limit=100
+      e paginação inalterada. Impacto desprezível no `meta_sync_log.api_calls_made`.
+
+  - check: "6. Security"
+    status: PASS
+    note: >
+      Nenhuma nova superfície de ataque. Sem SQL injection (Supabase typed client).
+      `thumbnail_url`/`image_url` são URLs de CDN público da Meta — mesmo padrão
+      que aparece no Ads Manager. Story orienta corretamente a NÃO logar essas URLs
+      em sistemas externos (tokens transitórios). CSP para renderização das thumbs
+      é responsabilidade da Story 50-2 (onde URLs vão para o browser).
+
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Inline comments no route.ts e JSDoc na interface MetaAdCreative
+      explicam intenção, shape esperado, política de persistência e referência
+      à Graph API v21.0. Story file Completion Notes detalhados.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "Field expansion correta em route.ts:177-178."
+  - ac: "AC2"
+    status: PASS
+    note: "creative persistido as-is via `a.creative ?? null` em route.ts:194 (linha preservada)."
+  - ac: "AC3"
+    status: PASS
+    note: "onConflict 'org_id,meta_ad_id' inalterado em route.ts:198."
+  - ac: "AC4"
+    status: PASS
+    note: "Todos os subfields opcionais no tipo MetaAdCreative; persistência defensiva via nullish coalescing."
+  - ac: "AC5"
+    status: DEFERRED
+    note: >
+      Validação SQL ≥80% pós-sync requer execução em produção. Documentada
+      em Completion Notes para execução pelo @devops após push.
+      Query: SELECT COUNT(*) FILTER (WHERE creative->>'thumbnail_url' IS NOT NULL)
+             * 100.0 / COUNT(*) FROM meta_ads WHERE status='ACTIVE';
+  - ac: "AC6"
+    status: PASS
+    note: "Instrumentação `apiCalls = totalApiCalls += adCalls` em route.ts:181 inalterada."
+  - ac: "AC7"
+    status: PASS
+    note: "Type-check e lint verificados independentemente pelo @qa — clean exit."
+
+issues:
+  - id: OBS-001
+    severity: low
+    category: validation
+    description: >
+      AC5 (≥80% creative.thumbnail_url IS NOT NULL pós-sync) é environmentally
+      deferred. Requer execução pelo @devops após push em produção, com $CRON_SECRET
+      e org_id apropriado.
+    recommendation: >
+      @devops deve executar a query SQL documentada nos Completion Notes da story
+      após primeira execução do cron. Documentar resultado antes de Story 50-2
+      iniciar (50-2 depende desse pré-requisito).
+
+  - id: OBS-002
+    severity: low
+    category: tooling
+    description: >
+      CodeRabbit CLI não foi executado nesta review — config aponta para WSL/Windows
+      (~/.local/bin/coderabbit) e o host de revisão é macOS (binary não disponível).
+    recommendation: >
+      Não-bloqueante. Para mudanças desta dimensão (3 linhas + 1 tipo refinado), a
+      análise manual cobriu code review, security, performance e regressão. Recomendar
+      @devops/CI executar CodeRabbit em ambiente WSL como passo opcional pós-push.
+
+  - id: OBS-003
+    severity: low
+    category: testing
+    description: >
+      Nenhum teste unitário adicionado. Não há fixture ou snapshot assertando que
+      o novo shape de creative percorre `fetchAllPages` → upsert sem perda.
+    recommendation: >
+      Aceitável para esta story (ROI baixo dado o tamanho da mudança). Para
+      mudanças futuras envolvendo `MetaAdCreative`, considerar test fixture
+      com payload anonimizado de Meta API.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Story 50-1 tem side-effect positivo no painel `/dashboard/campaigns/meta/[id]/creatives`:
+      esse panel já consultava `creative.thumbnail_url` no DB, mas o campo estava sempre null
+      devido ao sync shallow anterior. Após Story 50-1 em produção, thumbnails passam a aparecer
+      no panel automaticamente — sem code change necessário no panel.
+
+  - id: POS-002
+    description: >
+      JSDoc comprehensive na nova interface MetaAdCreative incluindo política de
+      persistência, guidance para consumidores e referência à versão da Graph API.
+      Padrão exemplar para outras interfaces compartilhadas.
+
+risk_assessment:
+  probability: very_low
+  impact: low
+  rationale: >
+    Mudança aditiva (não removeu campos; refinement de tipo é compatível
+    estruturalmente). Single endpoint afetado. Reversibilidade alta (git revert
+    de 2 arquivos). Consumer único do tipo (cron sync). Outro consumer (panel
+    creatives) só se beneficia.
+
+gate_decision:
+  verdict: CONCERNS
+  rationale: >
+    Aprovada para push. Concerns são todos LOW severity e não-bloqueantes.
+    Convenção do projeto (ver gate 16.11) usa CONCERNS para "aprovado com
+    observações documentadas" — alinhado.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Após deploy: @devops executar AC5 validation SQL e documentar % pós-sync"
+    - "Confirmar Story 50-2 readiness baseada no resultado de AC5"
+    - "Story 50-3 pode iniciar em paralelo (não depende de 50-1)"
+
+complementary_work:
+  - storyId: "16.11"
+    relationship: "Complementar"
+    note: >
+      Gate 16.11 (Badge de Origem + Filtro Pipeline) é o badge genérico de source
+      no card. Story 50-1 prepara dados para o CreativeChip da Story 50-2, que
+      é mais específico (mostra qual ad, não apenas qual source). Os dois trabalhos
+      coexistem.
+
+files_reviewed:
+  - path: "packages/web/src/app/api/cron/meta-sync-entities/route.ts"
+    lines_changed: "+10 / -1"
+    verdict: PASS
+  - path: "packages/shared/src/meta/types.ts"
+    lines_changed: "+24 / -1"
+    verdict: PASS

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 
 interface Entry {
   id: string
@@ -56,9 +57,27 @@ type Filter = "all" | "valid" | "invalid" | "responded" | "no_response"
 
 const PAGE_SIZE = 30
 
-export function EntriesTable({ entries }: { entries: Entry[] }) {
+interface ImportResult {
+  imported: number
+  skipped: number
+  skipped_details: string[]
+  errors: string[]
+}
+
+export function EntriesTable({ entries, campaignId }: { entries: Entry[]; campaignId: string }) {
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState<Filter>("all")
   const [page, setPage] = useState(1)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [sendingWa, setSendingWa] = useState(false)
+  const [sendWaResult, setSendWaResult] = useState<{ sent: number; failed: number; total: number } | null>(null)
+  const [sendWaError, setSendWaError] = useState<string | null>(null)
 
   const filtered = entries.filter((e) => {
     switch (filter) {
@@ -81,6 +100,86 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
   function handleFilterChange(f: Filter) {
     setFilter(f)
     setPage(1)
+  }
+
+  async function handleSendWhatsApp() {
+    const pendingWa = entries.filter((e) => ["pending", "failed"].includes(e.whatsapp_status))
+    if (pendingWa.length === 0) {
+      setSendWaError("Nenhum cadastro com WhatsApp pendente ou com falha para disparar.")
+      return
+    }
+    if (!window.confirm(`Disparar WhatsApp para ${pendingWa.length} cadastro(s) (pendentes + falhas anteriores)?`)) return
+    setSendingWa(true)
+    setSendWaResult(null)
+    setSendWaError(null)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/send-whatsapp`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) {
+        setSendWaError(data.error ?? "Erro ao disparar WhatsApp")
+        return
+      }
+      setSendWaResult(data)
+      router.refresh()
+    } catch {
+      setSendWaError("Erro de conexão ao disparar WhatsApp")
+    } finally {
+      setSendingWa(false)
+    }
+  }
+
+  async function handleSendEmails() {
+    const pendingWithEmail = entries.filter((e) => ["pending", "failed"].includes(e.email_status) && e.email)
+    if (pendingWithEmail.length === 0) {
+      setSendError("Nenhum cadastro com e-mail pendente ou com falha para disparar.")
+      return
+    }
+    if (!window.confirm(`Disparar e-mail para ${pendingWithEmail.length} cadastro(s) (pendentes + falhas anteriores)?`)) return
+    setSending(true)
+    setSendResult(null)
+    setSendError(null)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/send-emails`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) {
+        setSendError(data.error ?? "Erro ao disparar e-mails")
+        return
+      }
+      setSendResult(data)
+      router.refresh()
+    } catch {
+      setSendError("Erro de conexão ao disparar e-mails")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleImportCSV(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    setImporting(true)
+    setImportResult(null)
+    setImportError(null)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      const res = await fetch(`/api/campaigns/${campaignId}/import-csv`, {
+        method: "POST",
+        body: form,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setImportError(data.error ?? "Erro ao importar CSV")
+        return
+      }
+      setImportResult(data)
+      if (data.imported > 0) router.refresh()
+    } catch {
+      setImportError("Erro de conexão ao importar")
+    } finally {
+      setImporting(false)
+    }
   }
 
   function downloadCSV() {
@@ -158,13 +257,132 @@ export function EntriesTable({ entries }: { entries: Entry[] }) {
             </button>
           ))}
         </div>
-        <button
-          onClick={downloadCSV}
-          className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-        >
-          Exportar CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleImportCSV}
+          />
+          <button
+            onClick={handleSendWhatsApp}
+            disabled={sendingWa}
+            className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            {sendingWa ? "Disparando..." : "Disparar WhatsApp"}
+          </button>
+          <button
+            onClick={handleSendEmails}
+            disabled={sending}
+            className="rounded-md bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+          >
+            {sending ? "Disparando..." : "Disparar e-mails"}
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            {importing ? "Importando..." : "Importar CSV"}
+          </button>
+          <button
+            onClick={downloadCSV}
+            className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            Exportar CSV
+          </button>
+        </div>
       </div>
+
+      {/* Send WhatsApp banners */}
+      {sendWaError && (
+        <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+          <p className="text-xs text-red-700 dark:text-red-300">{sendWaError}</p>
+          <button onClick={() => setSendWaError(null)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+      {sendWaResult && (
+        <div className="flex items-center justify-between border-b border-green-200 bg-green-50 px-4 py-2 dark:border-green-500/20 dark:bg-green-500/10">
+          <p className="text-xs text-green-800 dark:text-green-300">
+            <span className="font-semibold">WhatsApp: {sendWaResult.sent} enviado(s)</span>
+            {sendWaResult.failed > 0 && (
+              <span className="ml-2 text-red-600 dark:text-red-400">· {sendWaResult.failed} falharam</span>
+            )}
+          </p>
+          <button onClick={() => setSendWaResult(null)} className="text-xs text-green-600 hover:text-green-800 dark:text-green-400">✕</button>
+        </div>
+      )}
+
+      {/* Send emails banners */}
+      {sendError && (
+        <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+          <p className="text-xs text-red-700 dark:text-red-300">{sendError}</p>
+          <button onClick={() => setSendError(null)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+      {sendResult && (
+        <div className="flex items-center justify-between border-b border-green-200 bg-green-50 px-4 py-2 dark:border-green-500/20 dark:bg-green-500/10">
+          <p className="text-xs text-green-800 dark:text-green-300">
+            <span className="font-semibold">{sendResult.sent} e-mail(s) enviados</span>
+            {sendResult.failed > 0 && (
+              <span className="ml-2 text-red-600 dark:text-red-400">· {sendResult.failed} falharam</span>
+            )}
+          </p>
+          <button onClick={() => setSendResult(null)} className="text-xs text-green-600 hover:text-green-800 dark:text-green-400">✕</button>
+        </div>
+      )}
+
+      {/* Import result banner */}
+      {importError && (
+        <div className="flex items-center justify-between border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+          <p className="text-xs text-red-700 dark:text-red-300">{importError}</p>
+          <button onClick={() => setImportError(null)} className="text-xs text-red-400 hover:text-red-600">
+            ✕
+          </button>
+        </div>
+      )}
+      {importResult && (
+        <div className={`border-b px-4 py-2 ${importResult.imported > 0 ? "border-green-200 bg-green-50 dark:border-green-500/20 dark:bg-green-500/10" : "border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10"}`}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs">
+              <span className={`font-semibold ${importResult.imported > 0 ? "text-green-800 dark:text-green-300" : "text-amber-800 dark:text-amber-300"}`}>
+                {importResult.imported} importados
+              </span>
+              {importResult.skipped > 0 && (
+                <span className="ml-2 text-amber-600 dark:text-amber-400">
+                  · {importResult.skipped} ignorados
+                </span>
+              )}
+              {importResult.errors.length > 0 && (
+                <span className="ml-2 text-red-600 dark:text-red-400">
+                  · {importResult.errors.length} erro(s)
+                </span>
+              )}
+              {importResult.errors.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {importResult.errors.map((e, i) => (
+                    <p key={i} className="text-red-600 dark:text-red-400">{e}</p>
+                  ))}
+                </div>
+              )}
+              {importResult.skipped_details.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {importResult.skipped_details.slice(0, 5).map((d, i) => (
+                    <p key={i} className="text-amber-600 dark:text-amber-400">{d}</p>
+                  ))}
+                  {importResult.skipped_details.length > 5 && (
+                    <p className="text-amber-500">...e mais {importResult.skipped_details.length - 5}</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setImportResult(null)} className="shrink-0 text-xs text-gray-400 hover:text-gray-600 dark:text-stone-500">
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-stone-800">

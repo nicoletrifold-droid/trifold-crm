@@ -70,16 +70,16 @@ export default function CampaignCreatives({ campaignId, period }: Props) {
   if (loading && !data) {
     return (
       <div className="space-y-3">
-        <div className="h-24 animate-pulse rounded-md bg-gray-100" />
-        <div className="h-24 animate-pulse rounded-md bg-gray-100" />
-        <div className="h-24 animate-pulse rounded-md bg-gray-100" />
+        <div className="h-24 animate-pulse rounded-md bg-gray-100 dark:bg-stone-800" />
+        <div className="h-24 animate-pulse rounded-md bg-gray-100 dark:bg-stone-800" />
+        <div className="h-24 animate-pulse rounded-md bg-gray-100 dark:bg-stone-800" />
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
+      <div className="rounded-md border border-dashed border-gray-300 dark:border-stone-700 bg-gray-50 dark:bg-stone-800/50 p-4 text-sm text-gray-500 dark:text-stone-400">
         Não foi possível carregar os criativos.
       </div>
     )
@@ -87,7 +87,7 @@ export default function CampaignCreatives({ campaignId, period }: Props) {
 
   if (data.ads.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-600">
+      <div className="rounded-md border border-dashed border-gray-300 dark:border-stone-700 bg-gray-50 dark:bg-stone-800/50 p-6 text-center text-sm text-gray-600 dark:text-stone-400">
         Nenhum dado de criativo disponível. Aguarde o próximo sync (máx. 4h).
       </div>
     )
@@ -119,8 +119,8 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
 
   return (
     <div
-      className={`flex flex-col lg:flex-row gap-4 rounded-lg border bg-white p-4 shadow-sm ${
-        ad.is_fatigued ? "border-red-300" : "border-gray-200"
+      className={`flex flex-col lg:flex-row gap-4 rounded-lg border bg-white dark:bg-stone-900 p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-800 ${
+        ad.is_fatigued ? "border-red-300 dark:border-red-500/30" : "border-gray-200 dark:border-stone-800"
       }`}
     >
       {/* Thumbnail — hidden on mobile (< lg) to preserve metric legibility */}
@@ -132,7 +132,7 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
             alt={ad.ad_name || "Criativo"}
             width={64}
             height={64}
-            className="h-16 w-16 rounded object-cover bg-gray-100"
+            className="h-16 w-16 rounded object-cover bg-gray-100 dark:bg-stone-800"
             onError={() => setThumbBroken(true)}
           />
         ) : (
@@ -144,7 +144,7 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3
-            className="text-sm font-semibold text-gray-900 truncate"
+            className="text-sm font-semibold text-gray-900 dark:text-stone-100 truncate"
             title={ad.ad_name}
           >
             {ad.ad_name || "Sem nome"}
@@ -169,7 +169,7 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
 
         {ad.ad_body && (
           <p
-            className="mt-1 text-xs text-gray-500 line-clamp-2"
+            className="mt-1 text-xs text-gray-500 dark:text-stone-400 line-clamp-2"
             title={ad.ad_body}
           >
             {ad.ad_body}
@@ -196,10 +196,10 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+      <dt className="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
         {label}
       </dt>
-      <dd className="text-sm font-medium text-gray-900">{value}</dd>
+      <dd className="text-sm font-medium text-gray-900 dark:text-stone-100">{value}</dd>
     </div>
   )
 }
@@ -212,7 +212,7 @@ function ThumbnailPlaceholder() {
       viewBox="0 0 64 64"
       role="img"
       aria-label="Sem prévia do criativo"
-      className="h-16 w-16 rounded bg-gray-100 text-gray-400"
+      className="h-16 w-16 rounded bg-gray-100 dark:bg-stone-800 text-gray-400 dark:text-stone-500"
     >
       <rect width="64" height="64" rx="6" fill="currentColor" opacity="0.15" />
       <path

@@ -3,6 +3,7 @@ import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
+import { EditLeadToggle } from "./_components/edit-lead-toggle"
 
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, SOURCE_LABELS as sourceLabels } from "@web/lib/constants"
 
@@ -30,8 +31,9 @@ export default async function LeadDetailPage({
     ? (rawTab as TabKey)
     : "info"
 
-  await getServerUser()
+  const user = await getServerUser()
   const supabase = await createClient()
+  const canEdit = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
 
   // Fetch lead with relations
   const { data: lead, error } = await supabase
@@ -51,6 +53,10 @@ export default async function LeadDetailPage({
   if (error || !lead) {
     notFound()
   }
+
+  const { data: properties } = canEdit
+    ? await supabase.from("properties").select("id, name").eq("is_active", true).order("name")
+    : { data: [] as { id: string; name: string }[] }
 
   const stageArr = lead.stage as unknown as Array<{
     id: string
@@ -139,9 +145,17 @@ export default async function LeadDetailPage({
       <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
-              {lead.name || "Sem nome"}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
+                {lead.name || "Sem nome"}
+              </h1>
+              {canEdit && (
+                <EditLeadToggle
+                  lead={lead as Record<string, unknown>}
+                  properties={(properties ?? []).map(p => ({ id: p.id as string, name: p.name as string }))}
+                />
+              )}
+            </div>
             <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-stone-400">
               <span>{lead.phone}</span>
               {lead.email && <span>{lead.email}</span>}
@@ -236,7 +250,7 @@ export default async function LeadDetailPage({
               collectedData.has_down_payment === true ? "Sim" :
               collectedData.has_down_payment === false ? "Não" : null
             } />
-            <InfoRow label="Origem" value={lead.source ? (sourceLabels[lead.source] ?? lead.source) : null} />
+            <InfoRow label="Origem" value={lead.source ? (lead.source === "website" && lead.utm_content ? lead.utm_content : (sourceLabels[lead.source] ?? lead.source)) : null} />
             <InfoRow label="Canal" value={lead.channel} />
             <InfoRow label="Etapa qualificação" value={convState?.qualification_step} />
             <InfoRow label="Visita proposta" value={convState?.visit_proposed ? "Sim" : "Não"} />

@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest) {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  if (!["admin", "supervisor"].includes(appUser.role)) {
+  if (!["admin", "supervisor", "gerente-comercial"].includes(appUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

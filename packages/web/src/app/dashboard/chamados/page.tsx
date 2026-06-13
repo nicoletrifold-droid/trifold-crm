@@ -5,15 +5,19 @@ import { createClient } from "@web/lib/supabase/server"
 import { MessageSquarePlus } from "lucide-react"
 import { ChamadoForm } from "./_components/chamado-form"
 import { ChamadosClientWrapper } from "./_components/chamados-client-wrapper"
+import { ChamadosSeenMarker } from "./_components/chamados-seen-marker"
 
 interface Chamado {
   id: string
   description: string
   reason: string
   image_url: string | null
+  image_urls?: string[] | null
   status: string
   reporter_name: string
   created_at: string
+  admin_response?: string | null
+  responded_at?: string | null
 }
 
 export default async function ChamadosPage() {
@@ -28,7 +32,7 @@ export default async function ChamadosPage() {
 
   let query = supabase
     .from("chamados")
-    .select("id, description, reason, image_url, status, reporter_name, created_at")
+    .select("id, description, reason, image_url, image_urls, status, reporter_name, created_at, admin_response, responded_at")
     .eq("org_id", user.orgId)
     .order("created_at", { ascending: false })
 
@@ -50,6 +54,7 @@ export default async function ChamadosPage() {
 
   return (
     <div>
+      {!isAdmin && <ChamadosSeenMarker />}
       {/* Page header */}
       <div className="mb-8">
         <div className="flex items-center gap-3">

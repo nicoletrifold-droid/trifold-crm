@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Upload, X, Send, CheckCircle } from "lucide-react"
 
+const MAX_FILES = 5
+const MAX_SIZE = 5 * 1024 * 1024
+const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
 interface ChamadoFormProps {
   userName: string
   onSubmitSuccess?: () => void
@@ -13,15 +17,19 @@ interface ChamadoFormProps {
 interface FieldErrors {
   description?: string
   reason?: string
-  image?: string
+  images?: string
+}
+
+interface ImageEntry {
+  file: File
+  preview: string
 }
 
 export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
   const router = useRouter()
   const [description, setDescription] = useState("")
   const [reason, setReason] = useState("")
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [images, setImages] = useState<ImageEntry[]>([])
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -40,44 +48,54 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
     return undefined
   }
 
-  const handleImageChange = useCallback((file: File | null) => {
-    if (!file) {
-      setImageFile(null)
-      setImagePreview(null)
-      setFieldErrors((e) => ({ ...e, image: undefined }))
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const files = Array.from(incoming)
+    const remaining = MAX_FILES - images.length
+
+    if (remaining <= 0) {
+      setFieldErrors((e) => ({ ...e, images: `Máximo de ${MAX_FILES} imagens` }))
       return
     }
 
-    const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-    if (!ALLOWED.includes(file.type)) {
-      setFieldErrors((e) => ({ ...e, image: "Formato inválido. Use JPEG, PNG, WEBP ou GIF" }))
-      return
+    const toAdd = files.slice(0, remaining)
+    const errors: string[] = []
+
+    const entries: ImageEntry[] = []
+    for (const file of toAdd) {
+      if (!ALLOWED_MIME.includes(file.type)) {
+        errors.push(`${file.name}: formato inválido`)
+        continue
+      }
+      if (file.size > MAX_SIZE) {
+        errors.push(`${file.name}: excede 5 MB`)
+        continue
+      }
+      entries.push({ file, preview: URL.createObjectURL(file) })
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setFieldErrors((e) => ({ ...e, image: "Imagem excede 5 MB" }))
+
+    if (errors.length > 0) {
+      setFieldErrors((e) => ({ ...e, images: errors.join(" · ") }))
       return
     }
 
-    setFieldErrors((e) => ({ ...e, image: undefined }))
-    setImageFile(file)
-    const url = URL.createObjectURL(file)
-    setImagePreview(url)
-  }, [])
+    setFieldErrors((e) => ({ ...e, images: undefined }))
+    setImages((prev) => [...prev, ...entries])
+  }, [images.length])
 
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
-      const file = e.dataTransfer.files[0] ?? null
-      handleImageChange(file)
+      addFiles(e.dataTransfer.files)
     },
-    [handleImageChange]
+    [addFiles]
   )
 
-  const handleRemoveImage = () => {
-    setImageFile(null)
-    if (imagePreview) URL.revokeObjectURL(imagePreview)
-    setImagePreview(null)
-    if (fileInputRef.current) fileInputRef.current.value = ""
+  const removeImage = (idx: number) => {
+    setImages((prev) => {
+      const entry = prev[idx]
+      if (entry) URL.revokeObjectURL(entry.preview)
+      return prev.filter((_, i) => i !== idx)
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +114,9 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
     const fd = new FormData()
     fd.append("description", description.trim())
     fd.append("reason", reason.trim())
-    if (imageFile) fd.append("image", imageFile)
+    for (const { file } of images) {
+      fd.append("images", file)
+    }
 
     try {
       const res = await fetch("/api/admin/chamados", { method: "POST", body: fd })
@@ -107,14 +127,15 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
         return
       }
 
-      // Sucesso
       setDescription("")
       setReason("")
-      handleRemoveImage()
+      images.forEach(({ preview }) => URL.revokeObjectURL(preview))
+      setImages([])
+      if (fileInputRef.current) fileInputRef.current.value = ""
       setFieldErrors({})
       setSubmitted(true)
       setTimeout(() => setSubmitted(false), 4000)
-      router.refresh() // revalida a listagem no server component
+      router.refresh()
       onSubmitSuccess?.()
     } catch {
       setGlobalError("Erro de conexão. Tente novamente.")
@@ -134,7 +155,6 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Success banner */}
       {submitted && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 dark:bg-green-500/10 dark:text-green-300">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
@@ -142,14 +162,12 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
         </div>
       )}
 
-      {/* Global error */}
       {globalError && (
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
           {globalError}
         </div>
       )}
 
-      {/* Reporter info (readonly) */}
       <div className="flex gap-4 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 dark:border-stone-700 dark:bg-stone-800/50">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-stone-500 dark:text-stone-400">Solicitante</p>
@@ -164,45 +182,50 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
       {/* Image upload */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">
-          Screenshot / Imagem{" "}
-          <span className="font-normal text-stone-400">(opcional)</span>
+          Screenshots / Imagens{" "}
+          <span className="font-normal text-stone-400">(opcional · até {MAX_FILES})</span>
         </label>
 
-        {imagePreview ? (
-          <div className="relative inline-block">
-            <div className="relative h-40 w-64 overflow-hidden rounded-xl border border-stone-200 dark:border-stone-700">
-              <Image
-                src={imagePreview}
-                alt="Preview"
-                fill
-                className="object-cover"
-                sizes="256px"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleRemoveImage}
-              className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md hover:bg-red-600"
-              aria-label="Remover imagem"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+        {/* Previews */}
+        {images.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {images.map(({ preview }, idx) => (
+              <div key={idx} className="relative">
+                <div className="relative h-24 w-32 overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
+                  <Image src={preview} alt={`Imagem ${idx + 1}`} fill className="object-cover" sizes="128px" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeImage(idx)}
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600"
+                  aria-label="Remover imagem"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
           </div>
-        ) : (
+        )}
+
+        {/* Drop zone — oculta quando atingiu o limite */}
+        {images.length < MAX_FILES && (
           <div
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 px-6 py-8 transition-colors hover:border-stone-400 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-800/30 dark:hover:border-stone-600 dark:hover:bg-stone-800/50"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 px-6 py-6 transition-colors hover:border-stone-400 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-800/30 dark:hover:border-stone-600 dark:hover:bg-stone-800/50"
           >
-            <Upload className="h-7 w-7 text-stone-400" />
+            <Upload className="h-6 w-6 text-stone-400" />
             <p className="text-sm text-stone-500 dark:text-stone-400">
-              Arraste uma imagem ou{" "}
+              Arraste imagens ou{" "}
               <span className="font-semibold text-stone-700 underline dark:text-stone-300">
                 clique para selecionar
               </span>
             </p>
-            <p className="text-xs text-stone-400">JPEG, PNG, WEBP ou GIF · máx. 5 MB</p>
+            <p className="text-xs text-stone-400">
+              JPEG, PNG, WEBP ou GIF · máx. 5 MB por imagem
+              {images.length > 0 && ` · ${images.length}/${MAX_FILES} adicionadas`}
+            </p>
           </div>
         )}
 
@@ -210,11 +233,12 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
           ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
+          multiple
           className="hidden"
-          onChange={(e) => handleImageChange(e.target.files?.[0] ?? null)}
+          onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files) }}
         />
-        {fieldErrors.image && (
-          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.image}</p>
+        {fieldErrors.images && (
+          <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.images}</p>
         )}
       </div>
 
@@ -231,10 +255,7 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onBlur={() =>
-            setFieldErrors((prev) => ({
-              ...prev,
-              description: validateDescription(description),
-            }))
+            setFieldErrors((prev) => ({ ...prev, description: validateDescription(description) }))
           }
           rows={4}
           placeholder="Descreva detalhadamente o erro encontrado ou a melhoria desejada..."
@@ -269,10 +290,7 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           onBlur={() =>
-            setFieldErrors((prev) => ({
-              ...prev,
-              reason: validateReason(reason),
-            }))
+            setFieldErrors((prev) => ({ ...prev, reason: validateReason(reason) }))
           }
           rows={3}
           placeholder="Por que esta mudança é necessária? Qual impacto no seu trabalho?"
@@ -294,7 +312,6 @@ export function ChamadoForm({ userName, onSubmitSuccess }: ChamadoFormProps) {
         </div>
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         disabled={submitting}

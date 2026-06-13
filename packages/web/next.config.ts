@@ -62,6 +62,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "*.fbcdn.net",
       },
+      // Story 50-2 (Epic 50): permite thumbnails de criativos Meta servidos pelo CDN do Instagram
+      {
+        protocol: "https",
+        hostname: "*.cdninstagram.com",
+      },
     ],
     minimumCacheTTL: 60 * 60 * 24, // 24h
   },

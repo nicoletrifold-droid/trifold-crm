@@ -12,8 +12,29 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  // admin/supervisor/gerente-comercial podem editar — mas website só admin
+  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
   if (roleError) return roleError
+
+  // Fetch current entry to check source
+  const { data: current } = await supabase
+    .from("knowledge_base")
+    .select("source")
+    .eq("id", id)
+    .eq("org_id", appUser.org_id)
+    .single()
+
+  if (!current) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 })
+  }
+
+  // Entradas de website: somente admin pode editar
+  if (current.source === "website" && appUser.role !== "admin") {
+    return NextResponse.json(
+      { error: "Entradas de website só podem ser editadas por admin." },
+      { status: 403 }
+    )
+  }
 
   const body = await request.json()
 
@@ -53,7 +74,8 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { appUser, supabase } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  // Exclusão: somente admin
+  const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
 
   const result = await softDelete(supabase, "knowledge_base", id, appUser.org_id)

@@ -1,6 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { getUserPermissions } from "@web/lib/permissions"
+import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { WeatherWidget } from "@web/components/weather-widget"
 import {
@@ -83,6 +84,11 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   const user = await getServerUser()
+
+  if (user.role === "broker") {
+    redirect("/broker")
+  }
+
   const supabase = await createClient()
 
   // Story 35-5: lê permissões do banco em vez de regras hardcoded por role.
@@ -93,15 +99,31 @@ export default async function DashboardLayout({
   const isAdminOrSupervisorObras =
     permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
 
-  const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }] =
-    permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras
+  // Busca alertas_notifications_seen_at para filtrar badge — atualizado
+  // via server action quando o usuário abre a página de Alertas
+  const alertasSeenAt = permissions["alertas"]
+    ? await supabase
+        .from("users")
+        .select("alertas_notifications_seen_at")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => (data as { alertas_notifications_seen_at: string | null } | null)?.alertas_notifications_seen_at ?? null)
+    : null
+
+  const [{ count: alertCount }, { count: mensagensCount }, { count: aprovacoesPendentesCount }, { count: chamadosPendentesCount }] =
+    permissions["alertas"] || permissions["mensagens"] || isAdminOrSupervisorObras || permissions["chamados"]
       ? await Promise.all([
           permissions["alertas"]
-            ? supabase
-                .from("follow_up_log")
-                .select("id", { count: "exact", head: true })
-                .eq("org_id", user.orgId)
-                .eq("status", "pending")
+            ? (() => {
+                let q = supabase
+                  .from("follow_up_log")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .eq("status", "pending")
+                // Só conta alertas MAIS NOVOS que a última visita ao módulo
+                if (alertasSeenAt) q = q.gt("created_at", alertasSeenAt)
+                return q
+              })()
             : Promise.resolve({ count: 0 }),
           permissions["mensagens"]
             ? supabase
@@ -118,11 +140,32 @@ export default async function DashboardLayout({
                 .eq("org_id", user.orgId)
                 .eq("status", "pendente")
             : Promise.resolve({ count: 0 }),
+          // Badge Suporte:
+          // - admin/supervisor: tickets não resolvidos
+          // - outros: respostas do admin ainda não lidas pelo reporter
+          permissions["chamados"]
+            ? (user.role === "admin" || user.role === "supervisor")
+              ? supabase
+                  .from("chamados")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .neq("status", "resolvido")
+              : supabase
+                  .from("chamados")
+                  .select("id", { count: "exact", head: true })
+                  .eq("org_id", user.orgId)
+                  .eq("reporter_id", user.id)
+                  .not("admin_response", "is", null)
+                  .is("reporter_seen_response_at", null)
+            : Promise.resolve({ count: 0 }),
         ])
-      : [{ count: 0 }, { count: 0 }, { count: 0 }]
+      : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
-  const baseFiltered = NAV_ITEMS_BASE.filter((item) => permissions[NAV_MODULE_MAP[item.href]!])
+  const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
+    if (!permissions[NAV_MODULE_MAP[item.href]!]) return false
+    return true
+  })
 
   const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
@@ -146,7 +189,7 @@ export default async function DashboardLayout({
     // O separator é colocado no primeiro item visível do grupo (linha divisória após Mensagens)
     ...(() => {
       const bottomGroup = [
-        ...(permissions["chamados"] ? [NAV_ITEM_CHAMADOS] : []),
+        ...(permissions["chamados"] ? [{ ...NAV_ITEM_CHAMADOS, badge: chamadosPendentesCount ?? 0 }] : []),
         ...(permissions["configuracoes"] ? [NAV_ITEM_CONFIG] : []),
         ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
       ]

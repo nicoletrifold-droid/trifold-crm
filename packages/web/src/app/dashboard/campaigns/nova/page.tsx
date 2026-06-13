@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { EmailEditorModal } from "../_components/email-editor-modal"
 
 interface DiscoveredField {
   questionId: string
@@ -11,7 +12,11 @@ interface DiscoveredField {
 
 export default function NovaCampanhaPage() {
   const router = useRouter()
+  const [pendingId] = useState(() => crypto.randomUUID())
   const [loading, setLoading] = useState(false)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [emailBodyHtml, setEmailBodyHtml] = useState<string | null>(null)
+  const [emailBodyJson, setEmailBodyJson] = useState<object | null>(null)
   const [discovering, setDiscovering] = useState(false)
   const [fields, setFields] = useState<DiscoveredField[]>([])
   const [fieldMapping, setFieldMapping] = useState<Record<string, { target: string; label: string }>>({})
@@ -22,7 +27,6 @@ export default function NovaCampanhaPage() {
     if (!formUrl) return
     setDiscovering(true)
     setError("")
-
     try {
       const res = await fetch("/api/campaigns/discover-fields", {
         method: "POST",
@@ -30,12 +34,10 @@ export default function NovaCampanhaPage() {
         body: JSON.stringify({ form_url: formUrl }),
       })
       const data = await res.json()
-
       if (!res.ok) {
         setError(data.error ?? "Erro ao detectar campos")
         return
       }
-
       setFields(data.data.fields)
       const mapping: Record<string, { target: string; label: string }> = {}
       for (const f of data.data.fields) {
@@ -60,14 +62,13 @@ export default function NovaCampanhaPage() {
     e.preventDefault()
     setLoading(true)
     setError("")
-
     const form = new FormData(e.currentTarget)
-
     try {
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          campaign_id: pendingId,
           name: form.get("name"),
           description: form.get("description"),
           property_id: form.get("property_id") || null,
@@ -77,17 +78,16 @@ export default function NovaCampanhaPage() {
           whatsapp_template_name: form.get("whatsapp_template_name") || null,
           email_enabled: form.get("email_enabled") === "on",
           email_subject: form.get("email_subject") || null,
-          email_body_html: form.get("email_body_html") || null,
+          email_body_html: emailBodyHtml || null,
+          email_body_json: emailBodyJson,
           field_mapping: fieldMapping,
         }),
       })
-
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? "Erro ao criar campanha")
         return
       }
-
       router.push(`/dashboard/campaigns/${data.data.id}`)
     } catch {
       setError("Erro de conexao")
@@ -97,8 +97,8 @@ export default function NovaCampanhaPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
+    <div className="space-y-6">
+      <div className="mx-auto max-w-2xl">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Nova Campanha</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
           Configure uma nova acao de marketing
@@ -106,14 +106,14 @@ export default function NovaCampanhaPage() {
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">
+        <div className="mx-auto max-w-2xl rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-300">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Info */}
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Informacoes basicas</h2>
 
           <div>
@@ -139,7 +139,7 @@ export default function NovaCampanhaPage() {
         </div>
 
         {/* Google Forms */}
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Google Forms</h2>
 
           <div>
@@ -200,8 +200,8 @@ export default function NovaCampanhaPage() {
           )}
         </div>
 
-        {/* Confirmations */}
-        <div className="rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        {/* Confirmações (WhatsApp + email config — sem o editor) */}
+        <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow-sm space-y-4 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="text-sm font-semibold text-gray-700 uppercase dark:text-stone-300">Confirmacoes automaticas</h2>
 
           <div>
@@ -218,14 +218,31 @@ export default function NovaCampanhaPage() {
             <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Assunto do e-mail</label>
             <input name="email_subject" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="Ex: Cadastro confirmado — Concurso Vind Residence" />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-stone-300">Corpo do e-mail (HTML)</label>
-            <textarea name="email_body_html" rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500" placeholder="<p>Ola, {{nome}}! Seu cadastro foi confirmado...</p>" />
+        {/* Editor de e-mail */}
+        <div className="mx-auto max-w-2xl rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm font-semibold text-gray-700 dark:text-stone-300">Corpo do e-mail</span>
+              {emailBodyHtml ? (
+                <p className="mt-0.5 text-xs text-green-600 dark:text-green-400">Template configurado</p>
+              ) : (
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-stone-500">Nenhum template configurado</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditorOpen(true)}
+              className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 dark:bg-stone-700 dark:hover:bg-stone-600"
+            >
+              {emailBodyHtml ? "Editar template" : "Criar template"}
+            </button>
           </div>
         </div>
 
-        <div className="flex gap-3">
+        {/* Ações */}
+        <div className="mx-auto max-w-2xl flex gap-3">
           <button
             type="submit"
             disabled={loading}
@@ -242,6 +259,17 @@ export default function NovaCampanhaPage() {
           </button>
         </div>
       </form>
+
+      <EmailEditorModal
+        isOpen={isEditorOpen}
+        campaignId={pendingId}
+        onClose={() => setIsEditorOpen(false)}
+        onSave={(html, design) => {
+          setEmailBodyHtml(html)
+          setEmailBodyJson(design)
+          setIsEditorOpen(false)
+        }}
+      />
     </div>
   )
 }

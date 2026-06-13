@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
   if (roleError) return roleError
 
   const sp = request.nextUrl.searchParams
@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
     .from("leads")
     .select("created_at, property_interest_id")
     .eq("is_active", true)
+    .is("lost_reason", null)
     .gte("created_at", from)
     .lte("created_at", to)
     .order("created_at")

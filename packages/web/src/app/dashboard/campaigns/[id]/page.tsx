@@ -4,6 +4,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { CampaignActions } from "./campaign-actions"
 import { EntriesTable } from "./entries-table"
+import { PerformanceTab } from "./_components/performance-tab"
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
   draft: { label: "Rascunho", className: "bg-gray-100 text-gray-600 dark:bg-stone-700/50 dark:text-stone-300" },
@@ -24,10 +25,13 @@ function MetricCard({ label, value, sub }: { label: string; value: string | numb
 
 export default async function CampaignDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ tab?: string }>
 }) {
   const { id } = await params
+  const { tab = "entries" } = await searchParams
   await getServerUser()
   const supabase = await createClient()
 
@@ -128,8 +132,40 @@ export default async function CampaignDetailPage({
         </div>
       </div>
 
-      {/* Entries Table */}
-      <EntriesTable entries={e} />
+      {/* Tabs */}
+      <div className="border-b border-gray-200 dark:border-stone-800">
+        <nav className="-mb-px flex gap-6">
+          <Link
+            href={`/dashboard/campaigns/${id}`}
+            className={`border-b-2 px-1 pb-3 text-sm font-medium ${
+              tab === "entries"
+                ? "border-orange-500 text-orange-600 dark:border-orange-400 dark:text-orange-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+            }`}
+          >
+            Cadastros
+          </Link>
+          <Link
+            href={`/dashboard/campaigns/${id}?tab=performance`}
+            className={`border-b-2 px-1 pb-3 text-sm font-medium ${
+              tab === "performance"
+                ? "border-orange-500 text-orange-600 dark:border-orange-400 dark:text-orange-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+            }`}
+          >
+            Performance
+          </Link>
+        </nav>
+      </div>
+
+      {tab === "performance" ? (
+        <PerformanceTab
+          campaignId={id}
+          totalSent={e.filter((x) => x.email_status !== "pending").length}
+        />
+      ) : (
+        <EntriesTable entries={e} campaignId={id} />
+      )}
     </div>
   )
 }

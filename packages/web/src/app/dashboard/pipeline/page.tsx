@@ -1,13 +1,15 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
+import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
 import Link from "next/link"
 
 const PAGE_SIZE = 50
 
+// Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
        property_interest_id, assigned_broker_id, created_at, updated_at,
-       ai_summary, source, utm_campaign,
+       ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
 
@@ -65,7 +67,7 @@ export default async function PipelinePage({
         .from("users")
         .select("id, name")
         .eq("org_id", user.orgId)
-        .eq("role", "broker")
+        .in("role", ["broker", "gerente-comercial"])
         .eq("is_active", true)
         .order("name"),
       supabase
@@ -88,7 +90,11 @@ export default async function PipelinePage({
       .filter((id): id is string => Boolean(id))
   }
 
-  const stagesList = stages ?? []
+  const allStages = stages ?? []
+  // Quando filtro de etapa está ativo, exibe só aquela coluna no kanban
+  const stagesList = filters.stage
+    ? allStages.filter((s) => s.slug === filters.stage)
+    : allStages
 
   // Promise.all: fetch top PAGE_SIZE leads per stage in parallel.
   const perStageResults = await Promise.all(
@@ -103,7 +109,9 @@ export default async function PipelinePage({
       if (filters.property_id) {
         query = query.eq("property_interest_id", filters.property_id)
       }
-      if (filters.broker_id) {
+      if (filters.broker_id === "none") {
+        query = query.is("assigned_broker_id", null)
+      } else if (filters.broker_id) {
         query = query.eq("assigned_broker_id", filters.broker_id)
       }
       if (filters.q) {
@@ -118,6 +126,14 @@ export default async function PipelinePage({
           }
         }
       }
+      // Filtro de período de captura (created_at) — timezone America/Sao_Paulo (UTC-3)
+      if (filters.date_from) {
+        query = query.gte("created_at", `${filters.date_from}T00:00:00-03:00`)
+      }
+      if (filters.date_to) {
+        query = query.lte("created_at", `${filters.date_to}T23:59:59-03:00`)
+      }
+
       if (campaignLeadIds !== null) {
         if (campaignLeadIds.length === 0) {
           // Force empty result while keeping a valid query shape.
@@ -149,21 +165,38 @@ export default async function PipelinePage({
     })
   )
 
-  const initialLeadsPerStage = perStageResults as unknown as InitialStageState[]
-  const totalVisible = initialLeadsPerStage.reduce((acc, s) => acc + s.leads.length, 0)
+  // Story 50-2 (Epic 50): batched lookup de criativos Meta (máx +1 query Supabase / AC7)
+  // Post-50-3 scope adjustment: CreativeChip restrito a admin (gerente-comercial/supervisor
+  // voltam ao SourceBadge genérico — comportamento pré-Epic-50).
+  const isAdmin = user.role === "admin"
+  const allLeads = perStageResults.flatMap((s) => s.leads as RawLead[])
+  const creativesMap = isAdmin
+    ? await fetchCreativesForLeads(supabase, allLeads, user.orgId)
+    : new Map()
+
+  const initialLeadsPerStage = perStageResults.map((s) => ({
+    ...s,
+    leads: (s.leads as RawLead[]).map((l) => ({
+      ...l,
+      creative: resolveCreativeForLead(l, creativesMap),
+    })),
+  })) as unknown as InitialStageState[]
+  // Usa totalCount (contagem real do DB por stage) em vez de leads.length
+  // (leads.length é limitado por PAGE_SIZE=50 e filtro de score client-side)
+  const totalPipeline = initialLeadsPerStage.reduce((acc, s) => acc + s.totalCount, 0)
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Pipeline</h1>
         <p className="text-sm text-gray-500 dark:text-stone-400">
-          {totalVisible} leads no pipeline
+          {totalPipeline} leads no pipeline
         </p>
       </div>
 
       {/* Filter Bar */}
       <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <form className="flex flex-wrap items-end gap-4">
+        <form key={JSON.stringify(filters)} className="flex flex-wrap items-end gap-4">
           <div className="min-w-[220px] flex-1">
             <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Buscar lead
@@ -174,6 +207,30 @@ export default async function PipelinePage({
               defaultValue={filters.q ?? ""}
               placeholder="Nome ou telefone..."
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Captura — De
+            </label>
+            <input
+              type="date"
+              name="date_from"
+              defaultValue={filters.date_from ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Até
+            </label>
+            <input
+              type="date"
+              name="date_to"
+              defaultValue={filters.date_to ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             />
           </div>
 
@@ -205,6 +262,7 @@ export default async function PipelinePage({
               className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
             >
               <option value="">Todos</option>
+              <option value="none">Sem corretor</option>
               {brokers?.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -247,6 +305,24 @@ export default async function PipelinePage({
             </select>
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Etapa
+            </label>
+            <select
+              name="stage"
+              defaultValue={filters.stage ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            >
+              <option value="">Todas</option>
+              {allStages.map((s) => (
+                <option key={s.id} value={s.slug}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <button
             type="submit"
             className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
@@ -254,13 +330,16 @@ export default async function PipelinePage({
             Filtrar
           </button>
 
-          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q) && (
-            <Link
+        </form>
+
+        <div className="mt-3 flex gap-2">
+          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage || filters.date_from || filters.date_to) && (
+            <a
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               Limpar
-            </Link>
+            </a>
           )}
 
           <Link
@@ -269,12 +348,13 @@ export default async function PipelinePage({
           >
             Config follow-up
           </Link>
-        </form>
+        </div>
       </div>
 
       <KanbanBoard
         initialStages={stagesList}
         initialLeadsPerStage={initialLeadsPerStage}
+        initialStageFocus={filters.stage ?? null}
         activeFilters={{
           property_id: filters.property_id ?? null,
           broker_id: filters.broker_id ?? null,

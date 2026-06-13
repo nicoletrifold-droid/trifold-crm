@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
   const {
+    campaign_id,
     name,
     description,
     property_id,
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
     email_enabled,
     email_subject,
     email_body_html,
+    email_body_json,
     field_mapping,
   } = body
 
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
+      ...(campaign_id ? { id: campaign_id } : {}),
       org_id: appUser.org_id,
       name,
       slug,
@@ -95,6 +98,7 @@ export async function POST(request: NextRequest) {
       email_enabled: email_enabled ?? true,
       email_subject: email_subject ?? null,
       email_body_html: email_body_html ?? null,
+      email_body_json: email_body_json ?? null,
       field_mapping: field_mapping ?? {},
       status: "draft",
     })

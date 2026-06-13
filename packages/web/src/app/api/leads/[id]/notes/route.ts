@@ -69,9 +69,9 @@ export async function POST(
     )
   }
 
-  // admin/supervisor sempre podem; corretor só se atribuído ao lead
+  // admin/supervisor/gerente-comercial sempre podem; corretor só se atribuído ao lead
   if (
-    !["admin", "supervisor"].includes(appUser.role) &&
+    !["admin", "supervisor", "gerente-comercial"].includes(appUser.role) &&
     lead.assigned_broker_id !== appUser.id
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
