@@ -1,0 +1,282 @@
+schema: 1
+storyId: "51.7"
+story: "51.7"
+title: "Guard de Precedência em assigned_broker_id (ADR-001, Opção 3)"
+epic: 51
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 8 ACs estão atendidos por código com evidência path:linha e cobertos por 34
+  testes verdes (22 novos do guard + 12 do pipeline pré-existente). O invariante
+  P0 da story — o pipeline da Nicole nunca sobrescreve um assigned_broker_id já
+  definido (roleta/humano) — foi verificado diretamente no código: B1 (pipeline.ts:662)
+  e B2 (pipeline.ts:728) só setam leadPatch.assigned_broker_id quando
+  shouldAssignPipelineBroker retorna true, e o helper exige !currentOwnerId. A
+  separação dono/especialista é preservada: appointments.broker_id e broker_user_id
+  no emit continuam usando o corretor do IMÓVEL (pipeline.ts:645,701), enquanto a
+  notificação (notification_broker_user_id) vai ao dono atual quando o guard bloqueia.
+  is_ai_active NÃO é tocado por esta story (confirmado por git diff). A auditoria
+  broker_assignment_skipped é best-effort (try/catch). type-check (ai+web) e ESLint
+  (web routes) exit 0; as 6 falhas pré-existentes do webhook 21.1 (alias @web/* no
+  vitest) permanecem inalteradas.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-09"
+updated: "2026-06-09T16:15:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC8 mapeados para código e teste. AC1 (assigned_broker_id no select de
+      currentLead, pipeline.ts:562, tipado string|null pela inferência do client).
+      AC2/AC3 (guards B1/B2 via shouldAssignPipelineBroker, pipeline.ts:662 e 728).
+      AC4 (lead NULL → atribui, helper retorna true — teste pipeline-broker-guard.test.ts:24).
+      AC5 (resolveNotificationBrokerUserId, pipeline.ts:700 + ambos handlers webhook
+      481-486/588-592). AC6 (call-sites humanos C1-C4 não tocados — confirmado por
+      diff). AC7 (auditoria broker_assignment_skipped em B1/B2, try/catch). AC8
+      (type-check+lint+34 testes). Ver tabela ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Excelente extração de helpers puros (shouldAssignPipelineBroker,
+      resolveNotificationBrokerUserId) logo após hasConfirmedDay, seguindo fielmente
+      o padrão de lógica pura testável co-localizada do projeto. DRY: B1 e B2
+      compartilham os mesmos helpers, garantindo comportamento idêntico. JSDoc
+      abrangente documentando a decisão do ADR-001 e a separação dono/especialista.
+      Imports absolutos (@web/*) nos dois handlers web. Boundary ai↔web respeitado:
+      pipeline.ts apenas enriquece o metadata do evento com notification_broker_user_id;
+      nenhum import invertido. Sem código morto. Diff mínimo e cirúrgico nos webhooks
+      (de "if (type && broker_user_id)" para "if (type) { resolve + if (recipient) }").
+
+  - check: "3. Security / Correctness"
+    status: PASS
+    note: >
+      O guard de fato impede a sobrescrita. shouldAssignPipelineBroker(propertyBrokerId,
+      currentOwnerId) = Boolean(propertyBrokerId) && !currentOwnerId (pipeline.ts:74):
+      retorna false sempre que currentOwnerId é truthy, portanto leadPatch.assigned_broker_id
+      NUNCA é setado quando o lead já tem dono — em B1 (pipeline.ts:662) e B2 (728).
+      Separação dono/especialista intacta: appointments.broker_id = assignedBrokerId do
+      imóvel (pipeline.ts:645) e o emit mantém broker_user_id = assignedBrokerId (701) para
+      contexto/observabilidade. O consumidor crítico send-message/route.ts:86
+      (lead.assigned_broker_id !== appUser.id) é protegido por design: o pipeline deixa de
+      mover o valor sob os pés desse check. RLS 085 (corretor vê só leads próprios) preservada.
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      AC7 honrado: a auditoria broker_assignment_skipped está envolvida em try/catch com
+      console.error no catch em B1 (pipeline.ts:666-681) e B2 (731-746) — best-effort, nunca
+      derruba o pipeline. Resolução do destinatário backward-compatible: os handlers usam
+      notification_broker_user_id ?? broker_user_id (whatsapp 589-591 / telegram 483-485);
+      eventos antigos sem notification_broker_user_id caem para broker_user_id (comportamento
+      51-3). O dispatch continua fire-and-forget (void ... .catch). currentLead reflete o
+      estado persistido ANTES do UPDATE único (leadPatch aplicado depois dos blocos), que é o
+      comportamento correto para o guard.
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      22 testes no novo pipeline-broker-guard.test.ts cobrindo todos os 5 cenários
+      obrigatórios do T6: Cenário 1 (NULL → atribui, true), Cenário 2 (lead com dono →
+      bloqueia, false, mesmo broker e broker diferente), Cenário 3 (notify = dono quando
+      bloqueia), Cenário 4 (notify = imóvel quando NULL), Cenário 5 (B1/B2 compartilham
+      helpers → comportamento idêntico). Edges adicionais cobertos: propertyBroker null,
+      string vazia (falsy), owner undefined. A decisão de testar os helpers puros (em vez de
+      mockar processMessage inteiro com Supabase/Anthropic) é pragmática e determinística, e
+      mantém B1/B2 idênticos por construção. Gap não-bloqueante (TEST-001): os call-sites
+      onEvent dos webhooks (resolução notification_broker_user_id ?? broker_user_id) não têm
+      teste de integração — mesma causa raiz do alias @web/* não resolvido no vitest
+      (herdado de 50-3/51-1/51-2/51-3). Risco baixo: lógica trivial de coalescência.
+
+  - check: "6. NFR (Performance)"
+    status: PASS
+    note: >
+      Zero query extra para o guard: assigned_broker_id foi adicionado ao select de currentLead
+      JÁ existente (pipeline.ts:562) — sem novo round-trip. A auditoria
+      broker_assignment_skipped só insere quando o guard bloqueia ativamente (lead já tem dono
+      E pipeline achou primário), caso de exceção, não no caminho comum. Sem regressão de
+      comportamento quando lead é NULL: shouldAssignPipelineBroker retorna true, atribuição
+      ocorre como antes. Mudança puramente aditiva em termos de carga.
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Mudança aditiva e isolada. Pipeline e webhooks continuam funcionando: type-check ai+web
+      0 erros, 34/34 testes do pipeline verdes (12 existentes + 22 novos). A 51-3 (notificação
+      no agendamento) continua disparando — o handler agora resolve o destinatário em vez de
+      gatear no broker_user_id, mantendo backward-compat para eventos sem o novo campo. As 6
+      falhas pré-existentes de alias @web/* (webhook/whatsapp/__tests__/route.test.ts, Story
+      21.1) permanecem idênticas com/sem esta story (62 passed / 6 failed na suite web full).
+      is_ai_active NÃO está no diff de pipeline.ts (grep + git diff confirmam). notify-appointment.ts
+      NÃO foi alterado (confirmado: ausente do git diff). Rollback trivial; sem migration.
+
+ac_traceability:
+  - ac: "AC1"
+    status: Met
+    note: "pipeline.ts:562 — .select('stage_id, property_interest_id, assigned_broker_id'). Sem query adicional; tipo string|null inferido pelo client. Acesso via currentLead?.assigned_broker_id em B1/B2."
+  - ac: "AC2"
+    status: Met
+    note: "Guard B1 — pipeline.ts:662: if (shouldAssignPipelineBroker(assignedBrokerId, currentLead?.assigned_broker_id)) leadPatch.assigned_broker_id = assignedBrokerId. appointments.broker_id (645) e emit broker_user_id (701) inalterados (corretor do imóvel). Teste pipeline-broker-guard.test.ts:33-39."
+  - ac: "AC3"
+    status: Met
+    note: "Guard B2 (handoff) — pipeline.ts:728: mesmo helper, só atribui se !currentOwnerId. Teste compartilhado (Cenário 5) pipeline-broker-guard.test.ts:79-97 confirma comportamento idêntico ao B1."
+  - ac: "AC4"
+    status: Met
+    note: "shouldAssignPipelineBroker('user-B', null) === true (pipeline.ts:74). Cenário Telegram NULL preservado. Teste pipeline-broker-guard.test.ts:24-30."
+  - ac: "AC5"
+    status: Met
+    note: "resolveNotificationBrokerUserId = currentOwnerId ?? propertyBrokerId ?? null (pipeline.ts:89). Emitido como notification_broker_user_id (pipeline.ts:700-701). Ambos handlers: notification_broker_user_id ?? broker_user_id (whatsapp:589-591, telegram:483-485). Testes pipeline-broker-guard.test.ts:55-77."
+  - ac: "AC6"
+    status: Met
+    note: "git diff HEAD não inclui assign/route.ts, handoff/route.ts, bulk/route.ts nem leads/route.ts. Call-sites humanos C1-C4 intocados; atribuições humanas continuam sobrescrevendo por design."
+  - ac: "AC7"
+    status: Met
+    note: "Auditoria broker_assignment_skipped implementada (não waived) em B1 (pipeline.ts:666-681, trigger pipeline_b1) e B2 (731-746, trigger pipeline_b2), no branch else-if (propertyBroker && currentOwner). try/catch + console.error — best-effort. metadata = { existing_broker_id, attempted_broker_id, trigger }."
+  - ac: "AC8"
+    status: Met
+    note: "pnpm --filter @trifold/ai type-check → 0 erros. pnpm --filter @trifold/web type-check → 0 erros. ESLint web routes → exit 0. npx vitest run packages/ai → 241 passed; suite do pipeline 34/34 (22 guard + 12 existentes)."
+
+issues:
+  - id: TEST-001
+    severity: medium
+    category: testing
+    finding: >
+      A resolução do destinatário nos call-sites onEvent dos webhooks
+      (notification_broker_user_id ?? broker_user_id) não tem cobertura de teste de
+      integração — apenas o helper resolveNotificationBrokerUserId (que produz o valor
+      emitido) é testado unitariamente. Mesma causa raiz herdada: o alias @web/* não
+      resolve no vitest root (impede testar routes que importam @web/lib/supabase/admin).
+      Gate 50.3/51.1/51.2/51.3 já rastreiam.
+    suggested_action: >
+      Não-bloqueante (a lógica do call-site é coalescência trivial e o helper é testado).
+      Resolver via story de QA infra (resolve.alias @web/* → packages/web/src/* no
+      vitest.config.ts OU vitest workspaces), que destrava os testes de route E corrige as
+      6 falhas pré-existentes do webhook 21.1. Validar o destinatário por smoke pós-deploy.
+  - id: MNT-001
+    severity: low
+    category: maintainability
+    finding: >
+      O fetch de currentLead em pipeline.ts:564 usa .single() (lança em 0 rows), enquanto
+      a convenção do projeto prefere .maybeSingle(). É comportamento PRÉ-EXISTENTE, fora do
+      escopo desta story (o @dev corretamente não o alterou). Não é risco desta story: o
+      guard usa optional chaining (currentLead?.assigned_broker_id), então mesmo que o fetch
+      retornasse null, o guard degradaria para "lead sem dono" (permite atribuição) — não há
+      sobrescrita indevida. O .single() só lançaria se o lead não existisse, cenário que já
+      seria erro upstream.
+    suggested_action: >
+      Não-bloqueante. Considerar trocar .single() → .maybeSingle() em pipeline.ts:564 numa
+      story de hardening futura, alinhando à convenção do projeto.
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL; host de review é macOS/darwin). Mesmo
+      cenário das stories 50-x e 51-x.
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu traceability, code quality, security/correção,
+      reliability, NFR, test architecture e regressão. CI pode rodar CodeRabbit pós-push.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      Extração de helpers puros (shouldAssignPipelineBroker / resolveNotificationBrokerUserId)
+      é a decisão de design correta: encapsula a regra do ADR-001 num único lugar, garante que
+      B1 e B2 sejam idênticos por construção (DRY), e torna a decisão do guard testável de forma
+      determinística sem mockar a integração inteira. Segue o padrão estabelecido de hasConfirmedDay.
+  - id: POS-002
+    description: >
+      Separação dono/especialista implementada com rigor: o corretor do IMÓVEL continua em
+      appointments.broker_id e em broker_user_id (contexto/observabilidade), enquanto o
+      notification_broker_user_id resolve corretamente o destinatário — dono atual quando o
+      guard bloqueia, corretor do imóvel quando o lead era NULL. Exatamente o que o AC5 pede.
+  - id: POS-003
+    description: >
+      Backward compatibility cuidadosa nos handlers: notification_broker_user_id ?? broker_user_id
+      garante que eventos antigos (51-3) sem o novo campo continuam notificando via broker_user_id.
+      A mudança da condição (de gatear em broker_user_id para gatear em event_type + recipient
+      resolvido) é necessária e correta para AC5 sem regredir o caminho NULL.
+  - id: POS-004
+    description: >
+      Anti-hallucination disciplinado: o @dev respeitou os gotchas da story (RLS 085 unversioned,
+      .single() pré-existente intocado, is_ai_active não tocado, notify-appointment.ts inalterado)
+      e documentou tudo nas Completion Notes. git diff confirma cada uma dessas afirmações.
+
+independent_verification:
+  - check: "Type-check ai"
+    command: "pnpm --filter @trifold/ai type-check"
+    result: "0 erros (tsc --noEmit; cobre pipeline.ts e helpers)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros."
+  - check: "Testes do pipeline (story + existentes)"
+    command: "npx vitest run packages/ai/src/chat/pipeline-broker-guard.test.ts packages/ai/src/chat/pipeline.test.ts"
+    result: "2 files, 34/34 passed (22 guard + 12 pipeline)."
+  - check: "Suite ai completa"
+    command: "npx vitest run packages/ai/"
+    result: "14 files, 241/241 passed."
+  - check: "ESLint (web routes modificados)"
+    command: "npx eslint webhook/whatsapp/route.ts telegram/webhook/route.ts (em packages/web)"
+    result: "exit 0, zero hits. (@trifold/ai lint = tsc --noEmit, já verde.)"
+  - check: "is_ai_active não tocado"
+    command: "git diff HEAD -- packages/ai/src/chat/pipeline.ts | grep is_ai_active"
+    result: "Nenhuma ocorrência no diff. Flag intocada (CON-1 preservado)."
+  - check: "notify-appointment.ts inalterado"
+    command: "git diff --stat HEAD -- packages/web/src/lib/broker/notify-appointment.ts"
+    result: "Ausente do diff. Confirmado sem alteração (recebe brokerUserId já resolvido)."
+  - check: "Consumidor crítico 51-1 protegido"
+    command: "grep assigned_broker_id send-message/route.ts"
+    result: "send-message/route.ts:86 (lead.assigned_broker_id !== appUser.id) intacto — o guard impede que o pipeline mova esse valor sob o check."
+  - check: "Regressão web full (6 falhas pré-existentes)"
+    command: "npx vitest run packages/web"
+    result: "62 passed / 6 failed. As 6 falhas são EXCLUSIVAS de webhook/whatsapp/__tests__/route.test.ts (alias @web/lib/supabase/admin não resolve, Story 21.1). Idênticas com/sem esta story."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança aditiva e isolada: 2 helpers puros + 1 campo no select existente + guards em B1/B2
+    + auditoria best-effort + coalescência de destinatário nos handlers. O guard só PODE deixar
+    de atribuir (nunca atribui errado), e usa optional chaining defensivo. Pior caso runtime:
+    auditoria broker_assignment_skipped falha → console.error e pipeline segue. Sem migration,
+    sem nova superfície de RLS/endpoint, sem alteração de is_ai_active. Corrige um bug P0 (perda
+    silenciosa de visibilidade do corretor) com superfície de risco mínima. Rollback trivial.
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 8/8 ACs atendidos por código com evidência path:linha; 34/34
+    testes verdes (22 novos cobrindo os 5 cenários obrigatórios + edges, 12 do pipeline
+    intactos). O invariante P0 — o pipeline da Nicole NUNCA sobrescreve um assigned_broker_id
+    já definido — foi verificado diretamente: shouldAssignPipelineBroker exige !currentOwnerId,
+    aplicado em B1 (pipeline.ts:662) e B2 (728). A separação dono/especialista está correta
+    (appointments.broker_id e broker_user_id seguem o corretor do imóvel; a notificação vai ao
+    dono quando o guard bloqueia). is_ai_active intocado; notify-appointment.ts inalterado;
+    call-sites humanos C1-C4 não tocados. type-check (ai+web) e ESLint (web) exit 0. As issues
+    remanescentes (1 MEDIUM de infra de teste herdada + 2 LOW) são não-bloqueantes. Aprovada
+    para @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: criar lead via WhatsApp → roleta atribui Corretor A; simular agendamento Nicole (imóvel primário = Corretor B) → assigned_broker_id PERMANECE A; appointments.broker_id = B; Corretor A recebe a notificação (não B); Corretor A ainda enxerga o lead (RLS 085); SELECT broker_assignment_skipped confirma auditoria."
+    - "Smoke cenário Telegram: lead sem roleta (NULL) → pipeline agenda → assigned_broker_id preenchido pelo pipeline (guard não bloqueou)."
+    - "@po manter backlog TEST-001 (vitest resolve.alias @web/*) e considerar MNT-001 (.single()→.maybeSingle() em pipeline.ts:564) + versionar RLS 085 (follow-up @data-engineer)."
+
+files_reviewed:
+  - path: "packages/ai/src/chat/pipeline.ts"
+    verdict: PASS
+    notes: "Helpers puros shouldAssignPipelineBroker (70-75) + resolveNotificationBrokerUserId (85-90). assigned_broker_id no select (562). Guard B1 (662) + auditoria (666-681). Guard B2 (728) + auditoria (731-746). Emit com notification_broker_user_id (700-701). is_ai_active intocado."
+  - path: "packages/ai/src/chat/pipeline-broker-guard.test.ts"
+    verdict: PASS
+    notes: "22 testes (5 cenários obrigatórios + edges): guard true/false por presença de dono; resolveNotificationBrokerUserId dono vs imóvel vs null; consistência B1/B2. Helpers puros importados de ./pipeline."
+  - path: "packages/web/src/app/api/webhook/whatsapp/route.ts"
+    verdict: PASS
+    notes: "Handler onEvent (588-602): if event_type=APPOINTMENT_CREATED → notifyBrokerUserId = notification_broker_user_id ?? broker_user_id → if (recipient) dispatch fire-and-forget. Backward-compatible."
+  - path: "packages/web/src/app/api/telegram/webhook/route.ts"
+    verdict: PASS
+    notes: "Handler onEvent (482-496): mesmo ajuste simétrico ao WhatsApp. Backward-compatible."
+  - path: "packages/web/src/lib/broker/notify-appointment.ts"
+    verdict: PASS
+    notes: "Confirmado SEM alteração (ausente do git diff). Recebe brokerUserId já resolvido; a escolha do destinatário ocorre no call-site, como previsto."

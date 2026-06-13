@@ -1,0 +1,55 @@
+schema: 1
+story: '53.1'
+gate: PASS
+status_reason: 'Todos os 11 AC implementados e rastreados; 252/252 testes passam, typecheck/lint limpos; piso de segurança (IDIOMA/SEDE/LEMBRETE FINAL) imutável e fallback verificado.'
+reviewer: 'Quinn'
+updated: '2026-06-13T11:30:00Z'
+
+quality_checks:
+  requirements_traceability: PASS   # AC1-11 todos mapeados ao código real
+  code_quality: PASS                # helper puro testável, naming claro, sem dead code
+  test_architecture: PASS           # 6 testes index.test.ts + 5 pipeline.test.ts; edge cases (null/empty/whitespace/partial) cobertos
+  nfr_security: PASS                # piso de segurança imutável; slug desconhecido nunca é lido; read path org-scoped
+  nfr_performance: PASS             # 1 query extra indexada por mensagem; cache_control preservado
+  nfr_reliability: PASS             # fallback banco-vazio idêntico ao legado; falha de query degrada para hard-coded
+  standards_compliance: PASS        # backward-compat confirmado por typecheck; padrões do projeto seguidos
+  regression_risk: PASS             # 252/252; assinatura pública preservada
+  edge_cases: CONCERNS              # slug inexistente e override gigante não têm teste/guard (analisados seguros)
+
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'OFF_HOURS_PROMPT (novo fallback de off-hours) contém emojis (😊 📅 💛), contrariando a regra "ZERO emojis" do LEMBRETE FINAL. É intencional pelo AC8 (mensagem canned, não output do LLM), mas representa mudança visível de comportamento em produção: a auto-resposta fora de horário passa a ter emojis.'
+    suggested_action: 'Confirmar com produto que a auto-resposta de off-hours com emojis é desejada. Sem ação de código necessária.'
+  - id: 'SEC-001'
+    severity: low
+    finding: 'Conteúdo de override (agent_prompts.content) é concatenado no system prompt sem sanitização nem limite de tamanho. A autorização de quem pode escrever em agent_prompts está fora do escopo (Story 53-2).'
+    suggested_action: 'Garantir authz + validação de tamanho no write-side da Story 53-2. O piso de segurança (LEMBRETE FINAL reafirmado por último) já mitiga prompt-injection neste read path.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Edge case de slug inexistente em agent_prompts e override de conteúdo gigante não têm teste unitário (foram analisados como seguros: slug desconhecido nunca é lido por buildStaticSystemContent; conteúdo gigante apenas consome tokens).'
+    suggested_action: 'Opcional: adicionar teste assertando que um slug fora dos 5 conhecidos não altera o prompt.'
+  - id: 'PERF-001'
+    severity: low
+    finding: 'Segunda query (agent_prompts) é sequencial à query de agent_config em loadAgentConfig; ambas usam apenas orgId e poderiam ser paralelizadas.'
+    suggested_action: 'Opcional: Promise.all das duas queries quando agent_config tem dado (micro-otimização).'
+
+waiver: { active: false }
+
+notes: |
+  Verificação independente executada (não confiei só no relatório do @dev):
+  - pnpm vitest run packages/ai/src → 252/252 passam (14 arquivos)
+  - pnpm --filter @trifold/ai type-check → 0 erros (exit 0)
+
+  Segurança (foco da review): o tipo DbPromptOverrides expõe APENAS os 5 slugs
+  editáveis. IDIOMA, ENDEREÇO DA SEDE e LEMBRETE FINAL são literais hard-coded em
+  buildStaticSystemContent e NÃO são indexados por chave de override — portanto um
+  row malicioso em agent_prompts com slug="lembrete-final"/"idioma" é armazenado em
+  prompt_overrides mas NUNCA lido, não conseguindo desativar guardrails de segurança.
+  O LEMBRETE FINAL é reafirmado por último (last-instruction-wins), mitigando injeção
+  via override de personality/guardrails. Read path org-scoped (.eq("org_id", orgId)).
+
+  Reliability: banco vazio → prompt_overrides {} → comportamento idêntico ao legado.
+  Falha na query de agent_prompts → promptRows null → {} → fallback hard-coded
+  (degradação graciosa). Única mudança intencional: off-hours passa a usar
+  OFF_HOURS_PROMPT (AC8).

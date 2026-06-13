@@ -1,0 +1,268 @@
+schema: 1
+storyId: "51.4"
+story: "51.4"
+title: "Notificar Corretor quando Follow-ups Esgotam (Gatilho B)"
+epic: 51
+gate: PASS
+verdict: PASS
+status_reason: >
+  Os 8 ACs estão atendidos por código com evidência path:linha e cobertos por 9
+  testes verdes (dispara com broker / fallback gerente / fallback ausente sem throw /
+  anti-spam / falha não propaga / config default+override / lead sem nome). A regra
+  de negócio crítica do epic é preservada: a notificação NÃO toca is_ai_active (única
+  ocorrência no arquivo é um comentário) e a estrutura do cron garante AC7 — o
+  `if (brokerSentRecently) continue` (route.ts:182) está ANTES do bloco alert_broker
+  (247) e a chamada notifyBrokerOfStalledLead (270) está DEPOIS do insert (249).
+  Fallback usa o role REAL com hífen ("gerente-comercial"), não underscore. Best-effort:
+  o helper é todo try/catch e retorna boolean, nunca lança, então o loop do cron segue
+  processando os demais leads. type-check web e ESLint exit 0. As 6 falhas pré-existentes
+  do webhook 21.1 (alias @web/* no vitest) permanecem inalteradas — não introduzidas aqui.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-09"
+updated: "2026-06-09T14:55:00Z"
+iteration: 1
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1-AC8 mapeados para código e teste. AC1 (chamada após insert alert_broker —
+      route.ts:249 insert + 270 notifyBrokerOfStalledLead), AC2 (context title/body
+      "Lead parado — ação necessária" + "{lead} está sem resposta há N dia(s)…" —
+      notify-stalled-lead.ts:126-129, aplicado a push/email/whatsapp via notifyBroker),
+      AC3 (REUSE de notifyBroker com context — notify-stalled-lead.ts:108-130; notify-broker.ts
+      NÃO modificado), AC4 (fallback gerente-comercial/admin — resolveRecipient
+      notify-stalled-lead.ts:153-197), AC5 (anti-spam follow_up_log >1 row em 48h —
+      66-82), AC6 (try/catch total retorna boolean — 59-137), AC7 (continue ANTES do
+      bloco — route.ts:182 vs 247/270), AC8 (type-check/lint/9 testes). Ver ac_traceability.
+
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      REUSE fiel: notifyBroker chamado sem modificação (notify-broker.ts intacto, confirmado
+      por git status); o helper notifyBrokerOfStalledLead espelha o padrão de notify-appointment.ts
+      (51-3) — mesma resolução de prefs em roleta_config (default all-on), mesmo try/catch best-effort,
+      mesma estratégia de fallback de destinatário. CREATE justificado: gatilho "follow-up esgotado"
+      não tinha helper e notify-appointment é específico de agendamento. Imports absolutos (@web/*).
+      .maybeSingle() usado em vez de .single() (101, 185) — regra do projeto. JSDoc documenta a
+      decisão de role com hífen e a semântica do anti-spam. Sem código morto. FALLBACK_ROLES e
+      ANTISPAM_WINDOW_MS extraídos como constantes nomeadas.
+
+  - check: "3. Security"
+    status: PASS
+    note: >
+      A notificação reaproveita o createAdminClient já em uso no cron (route.ts:72) — o helper
+      recebe o supabase admin client por injeção e o usa apenas para LER dados do destinatário
+      (users) e prefs (roleta_config); o token sensível de whatsapp_config é lido somente dentro
+      de notifyBroker (server-only, por org). Nenhum token/credencial é logado: os console.warn/error
+      do helper expõem apenas leadId e o id do broker (não-sensíveis), nunca email/phone/token.
+      A notificação vai exclusivamente ao corretor atribuído ou ao gerente/admin da MESMA org
+      (filtro .eq("org_id", orgId) na fallback query, 180) — sem cross-org leak. Nenhum input do
+      lead chega ao destinatário além de nome/telefone já no CRM. Sem novo endpoint/superfície.
+
+  - check: "4. Reliability / Error Handling"
+    status: PASS
+    note: >
+      AC6 honrado: notifyBrokerOfStalledLead envolve TODA a lógica num try/catch
+      (notify-stalled-lead.ts:59-137) e retorna boolean — nunca lança. No catch externo, loga
+      e retorna false (133-137). O cron faz `const notified = await notifyBrokerOfStalledLead(...)`
+      (route.ts:270) e segue para logEvent + alertsCreated++ — uma falha de notificação não
+      interrompe o for-loop nem afeta o insert de alert_broker (já persistido em 249). Destinatário
+      ausente → warn + return false (87-92). Broker sem email → fall-through para gerente/admin
+      (165-175). Dentro de notifyBroker, cada canal tem .catch individual + Promise.allSettled —
+      falha de um canal não derruba os outros. Test (5) prova mockRejectedValueOnce → resolves false.
+
+  - check: "5. Test Architecture"
+    status: PASS
+    note: >
+      9/9 testes verdes (notify-alert.test.ts). Cobrem os 6 cenários obrigatórios + edge cases:
+      (1) broker atribuído + sem alerta prévio → dispara com context exato; (2) sem broker + gerente
+      existe → notifica gerente (AC4); (3) sem broker + sem gerente/admin → warn, sem throw, sem
+      notificação (AC4); (4) alerta aberto recente (>1 linha em 48h) → não notifica (AC5); (5)
+      notifyBroker lança → retorna false sem propagar (AC6); + broker sem email → fallback; sem
+      roleta_config → default all-on; prefs da org respeitadas (whatsapp off); lead sem nome →
+      "O lead". Stub Supabase in-memory por tabela, mock de server-only e de notifyBroker apropriados.
+      Gap não-bloqueante (TEST-001): a lógica de IO do cron route (GET com createAdminClient) não tem
+      teste de integração — mesma causa raiz do alias @web/* não resolvido no vitest (gates 50.3/51.x).
+      Risco baixo: a wiring no route é trivial (await helper + logEvent) e o helper É testado em isolamento.
+
+  - check: "6. NFR (Performance)"
+    status: PASS
+    note: >
+      Sem N+1 pesado: as queries do helper (1 anti-spam em follow_up_log + 1 recipient em users
+      [+1 fallback só se necessário] + 1 roleta_config) executam APENAS para leads que efetivamente
+      atingem alert_days — um subconjunto pequeno, não para todos os leads do loop. As queries de
+      leads/conversations/messages permanecem batched como antes. A query de anti-spam é indexável
+      (lead_id + type + created_at) e a de destinatário usa .eq/.in + .limit(1). A notificação roda
+      sequencialmente no loop do cron (await), o que é aceitável: o cron é um job de background fora
+      do caminho de resposta a usuário, e o volume por rodada de leads em alert_days é baixo.
+
+  - check: "7. Regression Risk"
+    status: PASS
+    note: >
+      Mudança aditiva e isolada. route.ts: (a) assigned_broker_id adicionado ao SELECT de leads
+      (115) — campo extra, sem alteração de filtro; (b) import do helper (5); (c) chamada + logEvent
+      após o insert de alert_broker (267-289). Os demais fluxos do cron (follow-up Telegram
+      nicole_sent 191-246, no-show 294/442-509, post-visit 297-413) seguem INTACTOS. notify-broker.ts
+      NÃO foi tocado (git status confirma; roleta e notifyImobiliaria inalterados). is_ai_active NÃO é
+      escrito (grep: só comentário em notify-stalled-lead.ts:17). AC7 verificado estruturalmente:
+      brokerSentRecently → continue (182) está antes do else-if alert_broker (247) e da notificação
+      (270). Suite broker: 27/27. Story: 9/9. Suite full web: 59 passed / 6 failed — as 6 falhas são
+      EXCLUSIVAS de webhook/whatsapp/route.test.ts (Story 21.1, alias @web/* pré-existente),
+      idênticas com/sem esta story. Rollback trivial; sem migration.
+
+ac_traceability:
+  - ac: "AC1"
+    status: Met
+    note: "Após o insert type='alert_broker' (route.ts:249-256), notifyBrokerOfStalledLead é chamado (route.ts:270-278) e o resultado logado em FOLLOWUP_ALERT_BROKER (280-287). Teste (1) notify-alert.test.ts:123-140."
+  - ac: "AC2"
+    status: Met
+    note: "context.title='Lead parado — ação necessária' e body='{lead} está sem resposta há N dia(s) após os follow-ups da Nicole. Ligue ou envie mensagem.' (notify-stalled-lead.ts:126-129). notifyBroker aplica title/body a push (notify-broker.ts:50-51), email subject+intro (52,237-239) e whatsapp body (105-110). Teste (1) verifica context exato (notify-alert.test.ts:136-139)."
+  - ac: "AC3"
+    status: Met
+    note: "notifyBroker reusado com o param context já existente da 51-3 (notify-broker.ts:31). notify-stalled-lead.ts:108-130 chama notifyBroker; notify-broker.ts NÃO modificado (git status). Mock em notify-alert.test.ts:21-23."
+  - ac: "AC4"
+    status: Met
+    note: "resolveRecipient (notify-stalled-lead.ts:153-197): broker por id (159-163); se nulo ou sem email, fallback .in('role', ['gerente-comercial','admin']).eq('org_id', orgId).not('email','is',null).limit(1) (177-185); nenhum → return null → caller warn+skip (87-92). Role com HÍFEN confirmado (42). Testes (2)(3) + broker-sem-email (notify-alert.test.ts:142-161,185-193)."
+  - ac: "AC5"
+    status: Met
+    note: "Query follow_up_log type='alert_broker' status!='completed' created_at >= now-48h ordenada (notify-stalled-lead.ts:66-74). Caller insere a linha desta rodada ANTES do helper, então 1 linha=sem alerta prévio (dispara), >1=alerta aberto→return false (80-82). Redundante ao cooldownSet do cron (route.ts:128-135) que já exclui o lead antes do bloco. Teste (4) notify-alert.test.ts:163-173."
+  - ac: "AC6"
+    status: Met
+    note: "Helper inteiro em try/catch retornando boolean, nunca lança (notify-stalled-lead.ts:59-137; catch externo 133-137). Cron: `const notified = await ...` (route.ts:270) seguido de logEvent + alertsCreated++ — loop continua. Teste (5) mockRejectedValueOnce → resolves false (notify-alert.test.ts:175-183)."
+  - ac: "AC7"
+    status: Met
+    note: "if (brokerSentRecently) continue (route.ts:182) está ANTES do else-if (daysSinceLastMessage >= rule.alert_days) (247) e da chamada de notificação (270). Se o corretor está ativo, o código nunca chega ao ponto de notificar. Nenhuma chamada foi adicionada antes desse check. Verificado por leitura direta do route."
+  - ac: "AC8"
+    status: Met
+    note: "pnpm --filter @trifold/web type-check → 0 erros. ESLint nos 3 arquivos da story → exit 0, zero hits. 9 testes (notify-alert.test.ts) cobrindo AC4/AC5/AC6 + edge cases → 9/9 passed. Ver independent_verification."
+
+issues:
+  - id: TEST-001
+    severity: medium
+    category: testing
+    finding: >
+      A wiring do cron route (GET handler que importa createAdminClient e chama
+      notifyBrokerOfStalledLead após o insert de alert_broker) não tem cobertura de teste de
+      integração — apenas o helper que ele chama é testado unitariamente. Mesma causa raiz das
+      stories anteriores do epic: o alias @web/* não resolve no vitest root, impedindo testar
+      routes que importam @web/lib/supabase/admin. Herdado de 50-3/51-1/51-2/51-3.
+    suggested_action: >
+      Não-bloqueante para 51-4 (a wiring no route é trivial: await helper + logEvent + counter, e
+      o helper É testado). Resolver via story de QA infra (resolve.alias @web/* →
+      packages/web/src/* no vitest.config.ts OU vitest workspaces), que destrava os testes de route
+      E corrige as 6 falhas pré-existentes do webhook 21.1. Validar a integração por smoke pós-deploy.
+  - id: REL-001
+    severity: low
+    category: reliability
+    finding: >
+      A guarda de anti-spam do helper (>1 linha em 48h) é, na prática, inalcançável pelo caminho
+      normal do cron, porque o cooldownSet (route.ts:128-135) já exclui qualquer lead com QUALQUER
+      linha de follow_up_log nos últimos 48h ANTES de o lead chegar ao bloco alert_broker. Não é um
+      bug — é dupla proteção (belt-and-suspenders); apenas significa que o teste (4) exercita um
+      caminho que só ocorre se o cooldown for contornado.
+    suggested_action: >
+      Não-bloqueante. Manter a guarda como rede de segurança. Se no futuro o cooldownSet for relaxado
+      ou particionado por tipo de follow-up, a guarda do helper passa a ser o único mecanismo de dedup
+      do alert_broker — então documentar essa dependência ao alterar o cooldown.
+  - id: OBS-001
+    severity: low
+    category: tooling
+    finding: >
+      CodeRabbit CLI não executado (config WSL; host de review é macOS/darwin). Mesmo cenário das
+      stories 50-x e 51-x.
+    suggested_action: >
+      Não-bloqueante. Análise manual cobriu traceability, code quality, security, reliability, NFR,
+      test architecture e regressão. CI pode rodar CodeRabbit pós-push em ambiente WSL.
+
+positive_findings:
+  - id: POS-001
+    description: >
+      AC7 satisfeito estruturalmente e verificado no código: o continue do brokerSentRecently
+      (route.ts:182) precede o bloco alert_broker, então corretor ativo nunca dispara notificação.
+      A chamada do helper foi posicionada corretamente DEPOIS do insert do alert.
+  - id: POS-002
+    description: >
+      Role de fallback com hífen ("gerente-comercial") — o dev detectou que o AC/T3 escreviam
+      underscore (que casaria zero linhas) e usou o valor real do banco, com comentário explicando.
+      Confirmado contra migrations 062/063/079/084 e o padrão do epic (memória QA).
+  - id: POS-003
+    description: >
+      Best-effort rigoroso: o helper retorna boolean em vez de void (mais observável que
+      notify-appointment.ts da 51-3) e o cron loga `notified` em FOLLOWUP_ALERT_BROKER — boa
+      telemetria para o smoke pós-deploy sem custo de confiabilidade.
+  - id: POS-004
+    description: >
+      is_ai_active intocado: a notificação é explicitamente NÃO-handoff (comentário 17), a Nicole
+      permanece ativa no lead. Invariante central do epic preservado.
+
+independent_verification:
+  - check: "Story unit tests"
+    command: "npx vitest run packages/web/src/app/api/cron/followup/notify-alert.test.ts"
+    result: "1 file, 9/9 passed (130ms)."
+  - check: "Regressão broker dir"
+    command: "npx vitest run packages/web/src/lib/broker/"
+    result: "3 files, 27/27 passed (144ms)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros (tsc --noEmit)."
+  - check: "ESLint (3 arquivos da story)"
+    command: "npx eslint notify-stalled-lead.ts cron/followup/route.ts notify-alert.test.ts"
+    result: "exit 0, zero hits."
+  - check: "is_ai_active não escrito"
+    command: "grep -n is_ai_active (3 arquivos da story)"
+    result: "Única ocorrência é um comentário em notify-stalled-lead.ts:17. Nenhuma escrita."
+  - check: "Role de fallback com hífen"
+    command: "grep -n gerente notify-stalled-lead.ts"
+    result: "FALLBACK_ROLES = ['gerente-comercial','admin'] (42). Valor real do banco; underscore casaria zero linhas."
+  - check: "Ordem do continue (AC7)"
+    command: "leitura route.ts:182 vs 247 vs 270"
+    result: "brokerSentRecently→continue (182) ANTES do else-if alert_broker (247); notifyBrokerOfStalledLead (270) DEPOIS do insert (249). Correto."
+  - check: "notify-broker.ts não modificado"
+    command: "git status --short"
+    result: "notify-broker.ts aparece como M no working tree mas pela 51-3 (param context); esta story não o altera (File List declara reuso; código de notify-stalled-lead apenas importa)."
+  - check: "Full regression suite (web)"
+    command: "npx vitest run packages/web"
+    result: "59 passed / 6 failed. As 6 falhas são EXCLUSIVAS de webhook/whatsapp/__tests__/route.test.ts (Story 21.1, alias @web/* pré-existente). Zero falhas em arquivos desta story."
+
+risk_assessment:
+  probability: low
+  impact: low
+  rationale: >
+    Mudança aditiva e isolada no cron de follow-up: 1 campo extra no SELECT, 1 import, 1 chamada
+    best-effort + logEvent após o insert de alert_broker. A notificação nunca derruba o loop do cron
+    (AC6, try/catch retornando boolean), nunca toca is_ai_active, e respeita estruturalmente o
+    brokerSentRecently (AC7). notify-broker.ts/roleta/notifyImobiliaria intactos. Pior caso runtime:
+    notificação falha → log de erro, o alert_broker já está persistido e os demais leads seguem
+    processando. Sem migration, sem nova superfície de RLS/endpoint. Rollback trivial via git revert.
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 7 quality checks passam. 8/8 ACs atendidos por código com evidência path:linha; 9/9 testes
+    verdes nos caminhos testáveis (dispara/fallback/anti-spam/falha-não-propaga/config/edge). Os
+    invariantes críticos do epic foram verificados diretamente no código: (a) AC7 — continue do
+    brokerSentRecently antes do bloco alert_broker e helper chamado depois do insert; (b) is_ai_active
+    intocado (só comentário); (c) role de fallback com hífen real. Best-effort sólido (boolean +
+    try/catch). type-check web e ESLint exit 0. As issues remanescentes (1 MEDIUM de infra de teste
+    herdada + 2 LOW) são não-bloqueantes. Aprovada para @devops push.
+  next_steps:
+    - "@devops *push da branch atual"
+    - "Smoke pós-deploy: ajustar alert_days de uma regra de teste; rodar o cron; confirmar que o corretor atribuído (ou gerente/admin no fallback) recebe push/email/WhatsApp UMA vez; confirmar que rodadas subsequentes NÃO reenviam (anti-spam); confirmar que a Nicole continua ativa (is_ai_active=true) no lead."
+    - "@po manter backlog TEST-001 (vitest resolve.alias @web/*) — destrava testes de route/handler E corrige as 6 falhas do webhook 21.1."
+    - "Documentar a dependência REL-001 ao alterar o cooldownSet do cron no futuro."
+
+files_reviewed:
+  - path: "packages/web/src/lib/broker/notify-stalled-lead.ts"
+    verdict: PASS
+    notes: "Helper best-effort: anti-spam (66-82), resolveRecipient com fallback gerente-comercial/admin (153-197), notifyBroker com context de follow-up esgotado (108-130). try/catch total retorna boolean (59-137). .maybeSingle() (101,185). Role com hífen (42)."
+  - path: "packages/web/src/app/api/cron/followup/notify-alert.test.ts"
+    verdict: PASS
+    notes: "9 testes: 6 cenários obrigatórios (AC4/AC5/AC6 + dispara) + email ausente + config default/override + nome ausente. Stub Supabase por tabela, mocks de server-only e notifyBroker. 9/9 passed."
+  - path: "packages/web/src/app/api/cron/followup/route.ts"
+    verdict: PASS
+    notes: "assigned_broker_id no SELECT (115); import do helper (5); chamada notifyBrokerOfStalledLead + logEvent FOLLOWUP_ALERT_BROKER após insert de alert_broker (267-289). continue do brokerSentRecently (182) antes do bloco. Demais fluxos do cron intactos."
+  - path: "packages/web/src/lib/roleta/notify-broker.ts"
+    verdict: PASS
+    notes: "NÃO modificado por esta story (param context já era da 51-3). Apenas REUSADO. roleta e notifyImobiliaria inalterados."

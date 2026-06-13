@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { hasConfirmedDay } from "./pipeline"
+import { hasConfirmedDay, resolveOffHoursResponse } from "./pipeline"
+import { OFF_HOURS_PROMPT } from "../prompts"
 
 describe("hasConfirmedDay", () => {
   // Day names — should return true
@@ -85,5 +86,28 @@ describe("hasConfirmedDay", () => {
 
   it("returns false for number", () => {
     expect(hasConfirmedDay(123)).toBe(false)
+  })
+})
+
+describe("resolveOffHoursResponse — off-hours message (Story 53-1)", () => {
+  it("uses the DB out_of_hours_message when it is filled", () => {
+    const custom = "Estamos fechados, mas deixe seu recado que retornamos amanhã!"
+    expect(resolveOffHoursResponse({ out_of_hours_message: custom })).toBe(custom)
+  })
+
+  it("falls back to OFF_HOURS_PROMPT when out_of_hours_message is null", () => {
+    expect(resolveOffHoursResponse({ out_of_hours_message: null })).toBe(OFF_HOURS_PROMPT)
+  })
+
+  it("falls back to OFF_HOURS_PROMPT when out_of_hours_message is undefined", () => {
+    expect(resolveOffHoursResponse({})).toBe(OFF_HOURS_PROMPT)
+  })
+
+  it("falls back to OFF_HOURS_PROMPT when out_of_hours_message is empty/whitespace", () => {
+    expect(resolveOffHoursResponse({ out_of_hours_message: "   " })).toBe(OFF_HOURS_PROMPT)
+  })
+
+  it("trims the DB value before returning", () => {
+    expect(resolveOffHoursResponse({ out_of_hours_message: "  Olá!  " })).toBe("Olá!")
   })
 })

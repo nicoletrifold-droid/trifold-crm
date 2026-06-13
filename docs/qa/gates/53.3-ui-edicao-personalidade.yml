@@ -1,0 +1,65 @@
+schema: 1
+story: '53.3'
+slug: ui-edicao-personalidade
+gate: CONCERNS
+status_reason: 'UI editável via Server Actions com defesa em profundidade correta (role admin checado ANTES de cada write, allowlist de campos, guard de vazio, org-scoped). Atende a essência dos ACs. Gaps menores: feedback de erro do AC4 não implementado e desvios documentados (escrita direta em vez de fetch à API; system-personality fora do loop dos 7 cards).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-06-13T00:00:00Z'
+
+quality_checks:
+  code_review: PASS
+  unit_tests: N/A   # UI server component; story define teste manual de navegação
+  acceptance_criteria: CONCERNS   # AC4 (mensagem de erro) não implementado; AC3 desvio documentado
+  regressions: PASS
+  performance: PASS
+  security: PASS   # role==admin antes de todo write; allowlist; org-scoped; getServerUser redireciona não-auth
+  documentation: PASS
+
+requirements_traceability:
+  - ac: 1
+    desc: 'Campo personalidade exibe agent_prompts(system-personality); admin editável+Salvar; não-admin readOnly'
+    status: PASS_WITH_DEVIATION
+    evidence: 'Seção dedicada lê personalityPrompt (slug=system-personality); textarea disabled={!isAdmin}; botão só se isAdmin. DESVIO documentado: salva via Server Action (Supabase direto), não via PUT /api/admin/agent-prompts/system-personality (AUTO-DECISION aprovado em Dev Notes). Funcionalmente equivalente.'
+  - ac: 2
+    desc: 'greeting_message e out_of_hours_message editáveis p/ admin, botão próprio; não-admin readOnly'
+    status: PASS
+    evidence: 'saveAgentConfigAction com allowlist; disabled={!isAdmin}; botão só se isAdmin. Usa disabled (melhor que readOnly p/ não-admin: impede edição e submit).'
+  - ac: 3
+    desc: '7 cards expansíveis e editáveis; não-admin leitura'
+    status: PASS_WITH_DEVIATION
+    evidence: 'Cards via <details>/<summary> nativos (zero JS). DESVIO documentado: system-personality movido p/ seção dedicada (AC1) e excluído do loop → "Prompts do agente (6)". AUTO-DECISION para evitar editor duplicado do mesmo registro. Aceitável.'
+  - ac: 4
+    desc: 'Feedback de sucesso após salvar; mensagem de erro após falha'
+    status: PARTIAL
+    evidence: 'Sucesso via revalidatePath (AC permite "OU via revalidatePath"). FALTA: ramo de erro — Server Actions não checam o resultado de .update() nem exibem mensagem de erro. Ver UX-001.'
+  - ac: 5
+    desc: 'Remover "Somente leitura. Edição disponível em breve."'
+    status: PASS
+    evidence: 'Texto ausente no arquivo; bloco antigo de agent_config.personality_prompt removido (AUTO-DECISION).'
+  - ac: 6
+    desc: 'Não salvar campo vazio'
+    status: PASS
+    evidence: 'Ambas actions: if (!content?.trim()) return. savePromptAction também exige slug; saveAgentConfigAction valida field na allowlist.'
+  - ac: 7
+    desc: 'Typecheck e lint passam'
+    status: PASS
+    evidence: 'type-check: só os 4 erros PRÉ-EXISTENTES (email-editor-modal.tsx / visual-editor.tsx / react-email-editor), nenhum do arquivo da story. eslint nos 3 arquivos: exit 0.'
+
+security_assessment:
+  role_before_write: 'PASS — savePromptAction e saveAgentConfigAction fazem "if (user.role !== \"admin\") return" ANTES de qualquer .update(). Supervisor logado NÃO consegue salvar via UI (botões ocultos) nem via formData forjado (action retorna cedo).'
+  field_allowlist: 'PASS — saveAgentConfigAction valida field contra AGENT_CONFIG_FIELDS=[greeting_message,out_of_hours_message] antes do update. Impede injeção de coluna arbitrária (role, model_primary, personality_prompt) via formData forjado.'
+  unauth_protection: 'PASS — getServerUser() faz redirect("/login") se não autenticado; ação nunca alcança o write sem usuário válido.'
+  org_scoping: 'PASS — updates filtram .eq("org_id", user.orgId) (e is_active p/ agent_config). slug forjado sem match → 0 rows, inofensivo.'
+  intermediate_state: 'ACEITÁVEL — migration 096 (Story 53-2) ainda não aplicada; guarda efetiva hoje é a checagem app-layer nas Server Actions, que está presente e correta. RLS admin-only completará a defesa quando aplicada.'
+
+top_issues:
+  - id: 'UX-001'
+    severity: low
+    finding: 'AC4 (ramo de erro): as Server Actions não verificam o resultado de .update() e não exibem mensagem de erro ao usuário. Em falha (ex: RLS pós-096 bloqueando, ou erro de rede), o usuário não recebe feedback de erro — a página apenas revalida. Consistente com o padrão de horario/page.tsx, mas o AC4 pede mensagem de erro explícita.'
+    suggested_action: 'Backlog: tratar o erro de .update() e surfacing via search param / estado (ex: useFormState em client component ou redirect com ?error=). Não bloqueante para a primeira versão.'
+  - id: 'DOC-002'
+    severity: low
+    finding: 'Desvio de AC3 (6 cards em vez de 7) e de AC1/AC3 (escrita direta no Supabase em vez de fetch à API de 53-2). Ambos são AUTO-DECISIONs documentados e razoáveis, mas divergem da letra dos ACs.'
+    suggested_action: 'Nenhuma ação de código. Garantir que @po endosse os desvios no fechamento da story (já registrados no Dev Agent Record).'
+
+waiver: { active: false }

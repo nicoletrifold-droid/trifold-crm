@@ -3,6 +3,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import type { MediaBlock } from "@trifold/ai"
 import { getTelegramFileUrl, downloadFileAsBase64 } from "@trifold/bot"
 import { logEvent } from "@web/lib/logger"
+import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 
 export const maxDuration = 60
 
@@ -464,13 +465,37 @@ export async function POST(request: NextRequest) {
           message: text,
           orgId,
           mediaBlock,
-          onEvent: (event) => logEvent({
-            ...event,
-            category: event.category as "bot" | "ai" | "webhook" | "auth" | "cron" | "system",
-            source: "ai/pipeline",
-            org_id: orgId,
-            metadata: { ...event.metadata, conversation_id: conversation.id, lead_id: lead.id },
-          }),
+          onEvent: (event) => {
+            logEvent({
+              ...event,
+              category: event.category as "bot" | "ai" | "webhook" | "auth" | "cron" | "system",
+              source: "ai/pipeline",
+              org_id: orgId,
+              metadata: { ...event.metadata, conversation_id: conversation.id, lead_id: lead.id },
+            })
+
+            // Story 51-3: notify the assigned broker when Nicole schedules a visit.
+            // Best-effort (fire-and-forget) — never blocks the pipeline response.
+            // Story 51-7 (AC5): the notification recipient is decoupled from lead
+            // ownership. Prefer notification_broker_user_id (the lead owner kept by
+            // the guard); fall back to broker_user_id for backward compatibility.
+            if (event.event_type === "APPOINTMENT_CREATED") {
+              const notifyBrokerUserId =
+                (event.metadata?.notification_broker_user_id as string | null) ??
+                (event.metadata?.broker_user_id as string | null)
+              if (notifyBrokerUserId) {
+                void notifyBrokerOfAppointment({
+                  orgId,
+                  brokerUserId: notifyBrokerUserId,
+                  leadId: (event.metadata?.lead_id as string) ?? lead.id,
+                  leadName: (event.metadata?.lead_name as string | null) ?? null,
+                  leadPhone: (event.metadata?.lead_phone as string | null) ?? null,
+                }).catch((err) =>
+                  console.error("[appointment-notify] dispatch error:", err)
+                )
+              }
+            }
+          },
         })
         const aiDuration = Date.now() - aiStart
 

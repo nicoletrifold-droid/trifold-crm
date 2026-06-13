@@ -28,7 +28,8 @@ import {
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
-import { buildSystemPrompt as buildPromptFromCode } from "../prompts"
+import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
+import type { DbPromptOverrides } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
 import { STAGE_IDS } from "@trifold/shared"
 
@@ -55,6 +56,40 @@ export function hasConfirmedDay(availability: unknown): boolean {
   return patterns.some((p) => p.test(lower))
 }
 
+/**
+ * Story 51-7 (ADR-001) — broker-attribution precedence guard.
+ *
+ * The lead owner (`leads.assigned_broker_id`) takes precedence over the
+ * property's primary broker (`broker_assignments.is_primary`). The Nicole
+ * pipeline (B1 scheduling / B2 handoff) may only assign the property broker as
+ * the lead owner when the lead has NO owner yet (null/undefined).
+ *
+ * @param propertyBrokerId  the property's primary broker (user_id) found by the pipeline
+ * @param currentOwnerId    the lead's current owner (leads.assigned_broker_id) before the update
+ * @returns true when the pipeline is allowed to set the lead owner to the property broker
+ */
+export function shouldAssignPipelineBroker(
+  propertyBrokerId: string | null | undefined,
+  currentOwnerId: string | null | undefined
+): boolean {
+  return Boolean(propertyBrokerId) && !currentOwnerId
+}
+
+/**
+ * Story 51-7 (AC5) — resolve the notification recipient for APPOINTMENT_CREATED.
+ *
+ * The notification is decoupled from lead ownership: when the lead already has
+ * an owner (the guard kept it), the OWNER is notified — not the property
+ * specialist. When the lead had no owner, the property broker (who just became
+ * the owner) is the recipient. Returns null when neither exists (no notification).
+ */
+export function resolveNotificationBrokerUserId(
+  propertyBrokerId: string | null | undefined,
+  currentOwnerId: string | null | undefined
+): string | null {
+  return currentOwnerId ?? propertyBrokerId ?? null
+}
+
 interface ConversationState {
   id: string
   conversation_id: string
@@ -78,6 +113,23 @@ interface AgentConfig {
   temperature: number
   max_tokens: number
   business_hours?: Record<string, { start: string; end: string }>
+  // Story 53-1 — campos configuráveis via banco (com fallback no código):
+  greeting_message?: string | null // selecionado do banco; disponível mas sem ponto de uso nesta story
+  out_of_hours_message?: string | null // usado no bloco de off-hours
+  prompt_overrides?: DbPromptOverrides // de agent_prompts, por slug
+}
+
+/**
+ * Story 53-1 — resolve a resposta de off-hours com estratégia banco-com-fallback.
+ * Usa `out_of_hours_message` do banco quando preenchido (não-vazio após trim);
+ * caso contrário, cai no `OFF_HOURS_PROMPT` hard-coded (default seguro).
+ *
+ * Helper puro e exportado para permitir teste unitário sem mockar todo o pipeline.
+ */
+export function resolveOffHoursResponse(
+  agentConfig: Pick<AgentConfig, "out_of_hours_message">
+): string {
+  return agentConfig.out_of_hours_message?.trim() || OFF_HOURS_PROMPT
 }
 
 interface Property {
@@ -189,9 +241,9 @@ export async function processMessageWithMetadata(
       business_hours: agentConfig.business_hours,
     })
     if (!withinHours) {
-      const offHoursResponse =
-        "Oi! Obrigada pelo contato. No momento estou fora do horario de atendimento. " +
-        "Vou guardar sua mensagem e retorno assim que possivel. Ate breve!"
+      // Story 53-1 — banco com fallback: usa out_of_hours_message do banco
+      // quando preenchido; caso contrário, OFF_HOURS_PROMPT hard-coded.
+      const offHoursResponse = resolveOffHoursResponse(agentConfig)
 
       await saveMessages(supabase, conversationId, message, offHoursResponse)
       await updateConversationTimestamp(supabase, conversationId)
@@ -258,6 +310,7 @@ export async function processMessageWithMetadata(
   let currentSummary: string | null = null
   let leadStageId: string | null = null
   let leadName: string | null = null
+  let leadPhone: string | null = null
   let leadSource: string | null = null
   let leadQualStatus: string | null = null
   let leadUtmCampaign: string | null = null
@@ -265,12 +318,13 @@ export async function processMessageWithMetadata(
   if (conversation?.lead_id) {
     const { data: leadData } = await supabase
       .from("leads")
-      .select("ai_summary, stage_id, name, source, qualification_status, utm_source, utm_campaign")
+      .select("ai_summary, stage_id, name, phone, source, qualification_status, utm_source, utm_campaign")
       .eq("id", conversation.lead_id)
       .single()
     currentSummary = leadData?.ai_summary ?? null
     leadStageId = leadData?.stage_id ?? null
     leadName = leadData?.name ?? null
+    leadPhone = leadData?.phone ?? null
     leadSource = leadData?.source ?? null
     leadQualStatus = leadData?.qualification_status ?? null
     leadUtmCampaign = leadData?.utm_campaign ?? null
@@ -523,7 +577,7 @@ export async function processMessageWithMetadata(
     // Fetch current lead state for conditional logic
     const { data: currentLead } = await supabase
       .from("leads")
-      .select("stage_id, property_interest_id")
+      .select("stage_id, property_interest_id, assigned_broker_id")
       .eq("id", leadId)
       .single()
 
@@ -616,7 +670,34 @@ export async function processMessageWithMetadata(
 
       leadPatch.visit_scheduled_at = tomorrow.toISOString()
       leadPatch.stage_id = STAGE_IDS.visita_agendada
-      if (assignedBrokerId) leadPatch.assigned_broker_id = assignedBrokerId
+
+      // Story 51-7 (ADR-001 guard B1): the lead owner (assigned_broker_id) takes
+      // precedence over the property's primary broker. The pipeline only assigns
+      // the property broker as lead owner when the lead has no owner yet (NULL).
+      // If the lead already has an owner (roleta or human assignment), we keep it —
+      // the property broker (assignedBrokerId) is still recorded in appointments
+      // and notified, but does NOT become the lead owner.
+      if (shouldAssignPipelineBroker(assignedBrokerId, currentLead?.assigned_broker_id)) {
+        leadPatch.assigned_broker_id = assignedBrokerId
+      } else if (assignedBrokerId && currentLead?.assigned_broker_id) {
+        // Guard active: pipeline tried to reassign an already-owned lead. Audit it.
+        try {
+          await supabase.from("activities").insert({
+            org_id: conversation.org_id,
+            lead_id: leadId,
+            type: "broker_assignment_skipped",
+            description:
+              "Pipeline tentou atribuir corretor do imóvel, mas lead já tem corretor (guard ADR-001).",
+            metadata: {
+              existing_broker_id: currentLead.assigned_broker_id,
+              attempted_broker_id: assignedBrokerId,
+              trigger: "pipeline_b1",
+            },
+          })
+        } catch (auditErr) {
+          console.error("[broker-guard-b1] audit insert failed:", auditErr)
+        }
+      }
 
       await supabase.from("activities").insert({
         org_id: conversation.org_id,
@@ -625,7 +706,17 @@ export async function processMessageWithMetadata(
         description: `Nicole agendou visita. Disponibilidade: ${String(finalData.visit_availability)}${assignedBrokerId ? ". Corretor designado automaticamente." : ""}`,
       })
 
-      emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, property_id: propertyId ?? null, scheduled_at: tomorrow.toISOString() } })
+      // Story 51-3: enrich metadata so the web-side onEvent handler (in @trifold/web,
+      // where notifyBroker lives) can notify the assigned broker without @trifold/ai
+      // importing server-only code. broker_user_id is only present when a primary
+      // broker was found — its absence (AC3) means no notification is dispatched.
+      // Story 51-7 (AC5): decouple notification recipient from lead ownership.
+      // broker_user_id stays the property specialist (for context/observability).
+      // notification_broker_user_id is who actually receives the notification:
+      // when the guard kept the existing owner, notify the OWNER, not the property
+      // broker. Falls back to the property broker when the lead had no owner.
+      const notificationBrokerUserId = resolveNotificationBrokerUserId(assignedBrokerId, currentLead?.assigned_broker_id)
+      emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, broker_user_id: assignedBrokerId, notification_broker_user_id: notificationBrokerUserId, lead_name: leadName, lead_phone: leadPhone, property_id: propertyId ?? null, scheduled_at: tomorrow.toISOString() } })
 
       if (!assignedBrokerId) {
         emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker assignment — no primary broker found for property", metadata: { lead_id: leadId, property_id: propertyId ?? null } })
@@ -650,7 +741,28 @@ export async function processMessageWithMetadata(
         if (assignment) {
           const brokers = assignment.brokers as unknown as { user_id: string } | { user_id: string }[]
           const brokerId = Array.isArray(brokers) ? brokers[0]?.user_id : brokers?.user_id
-          if (brokerId) leadPatch.assigned_broker_id = brokerId
+          // Story 51-7 (ADR-001 guard B2): same precedence rule as B1 — only assign
+          // the property's primary broker as lead owner when the lead has no owner.
+          if (shouldAssignPipelineBroker(brokerId, currentLead?.assigned_broker_id)) {
+            leadPatch.assigned_broker_id = brokerId
+          } else if (brokerId && currentLead?.assigned_broker_id) {
+            try {
+              await supabase.from("activities").insert({
+                org_id: conversation.org_id,
+                lead_id: leadId,
+                type: "broker_assignment_skipped",
+                description:
+                  "Pipeline (handoff) tentou atribuir corretor do imóvel, mas lead já tem corretor (guard ADR-001).",
+                metadata: {
+                  existing_broker_id: currentLead.assigned_broker_id,
+                  attempted_broker_id: brokerId,
+                  trigger: "pipeline_b2",
+                },
+              })
+            } catch (auditErr) {
+              console.error("[broker-guard-b2] audit insert failed:", auditErr)
+            }
+          }
         }
       }
 
@@ -819,7 +931,7 @@ async function loadAgentConfig(
   const { data, error } = await supabase
     .from("agent_config")
     .select(
-      "personality_prompt, guardrails, model_primary, temperature, max_tokens, business_hours"
+      "personality_prompt, guardrails, model_primary, temperature, max_tokens, business_hours, greeting_message, out_of_hours_message"
     )
     .eq("org_id", orgId)
     .eq("is_active", true)
@@ -832,6 +944,26 @@ async function loadAgentConfig(
       model_primary: "claude-sonnet-4-6",
       temperature: 0.7,
       max_tokens: 1024,
+      greeting_message: null,
+      out_of_hours_message: null,
+      prompt_overrides: {},
+    }
+  }
+
+  // Story 53-1 — segunda query: overrides de prompt por slug (tabela agent_prompts).
+  // Retorna array (0..N linhas) → NÃO usar .single()/.maybeSingle().
+  const { data: promptRows } = await supabase
+    .from("agent_prompts")
+    .select("slug, content")
+    .eq("org_id", orgId)
+    .eq("is_active", true)
+
+  const prompt_overrides: DbPromptOverrides = {}
+  for (const row of (promptRows ?? []) as Array<{ slug: string; content: string | null }>) {
+    // Apenas slugs com conteúdo não-vazio entram nos overrides; o resto
+    // cai no fallback hard-coded em buildStaticSystemContent.
+    if (row.content?.trim()) {
+      prompt_overrides[row.slug as keyof DbPromptOverrides] = row.content
     }
   }
 
@@ -844,6 +976,9 @@ async function loadAgentConfig(
     business_hours: data.business_hours as
       | Record<string, { start: string; end: string }>
       | undefined,
+    greeting_message: data.greeting_message ?? null,
+    out_of_hours_message: data.out_of_hours_message ?? null,
+    prompt_overrides,
   }
 }
 
@@ -894,23 +1029,29 @@ async function loadProperties(
  * (date/time, property data, memory, no-show, flow, yarden gate).
  */
 function buildSystemPrompt(
-  _config: AgentConfig,
+  config: AgentConfig,
   ragContext: string,
   state: ConversationState | null,
   emit: (event: PipelineEvent) => void
 ): Anthropic.Messages.TextBlockParam[] {
   // Static blocks (cacheable) + optional RAG block (uncached) come from buildPromptFromCode.
-  const promptBlocks = buildPromptFromCode(ragContext, {
-    onWarning: (warning) => {
-      emit({
-        level: "warn",
-        category: "ai",
-        event_type: warning.code,
-        message: warning.message,
-        metadata: warning.metadata,
-      })
+  // Story 53-1 — passa os overrides do banco (config.prompt_overrides) como 3º arg;
+  // buildPromptFromCode aplica fallback hard-coded onde não há override.
+  const promptBlocks = buildPromptFromCode(
+    ragContext,
+    {
+      onWarning: (warning) => {
+        emit({
+          level: "warn",
+          category: "ai",
+          event_type: warning.code,
+          message: warning.message,
+          metadata: warning.metadata,
+        })
+      },
     },
-  })
+    config.prompt_overrides
+  )
 
   // Build CONVERSATION CONTEXT (dynamic — varies per turn).
   const convoLines: string[] = []

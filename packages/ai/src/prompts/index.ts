@@ -29,6 +29,24 @@ export const SEDE_ADDRESS = "Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby, Mar
 export const PROMPT_CACHE_MIN_TOKENS = 1024
 
 /**
+ * Overrides de prompt carregados do banco (tabela `agent_prompts`), indexados
+ * por slug. Mapeia os 5 slugs editáveis que compõem o bloco estático do system
+ * prompt. Story 53-1 — estratégia banco-com-fallback:
+ *  - valor string não-vazio  → usa o conteúdo do banco
+ *  - null / undefined / ""    → fallback para a constante hard-coded do código
+ *
+ * As seções de SEGURANÇA (IDIOMA, ENDEREÇO DA SEDE, LEMBRETE FINAL) NÃO fazem
+ * parte deste tipo e nunca são sobrescrevíveis por override do banco.
+ */
+export type DbPromptOverrides = {
+  "system-personality"?: string | null
+  guardrails?: string | null
+  "qualification-flow"?: string | null
+  "property-presentation"?: string | null
+  "visit-scheduling"?: string | null
+}
+
+/**
  * Toggle para o prompt caching. Default: true (recomendado em produção).
  * Para rollback rápido sem redeploy, definir `ANTHROPIC_PROMPT_CACHE_ENABLED=false`.
  */
@@ -53,16 +71,21 @@ export function estimateTokens(text: string): number {
  * candidato natural para Anthropic prompt caching (cache_control: ephemeral).
  *
  * NÃO inclui propertyContext (dinâmico, vai em bloco separado).
+ *
+ * Story 53-1 — banco com fallback: as 5 seções editáveis usam o override do
+ * banco quando ele é uma string não-vazia; caso contrário, caem na constante
+ * hard-coded. As seções de segurança (IDIOMA, SEDE, LEMBRETE FINAL) são fixas
+ * e NUNCA recebem override.
  */
-function buildStaticSystemContent(): string {
+function buildStaticSystemContent(overrides?: DbPromptOverrides): string {
   const sections = [
     `IDIOMA: Responda EXCLUSIVAMENTE em português brasileiro com acentuação correta. Use é, á, ã, õ, ç, ú, í, ê, ô em todas as palavras que exigem. Exemplo: "você", "não", "também", "está", "será", "imóvel", "próximo". NUNCA escreva sem acentos. Isso é obrigatório e inegociável.`,
     `ENDERECO DA SEDE TRIFOLD (referencia unica — use este endereco sempre que mencionar a sede, o decorado ou agendar visitas):\n${SEDE_ADDRESS}\nTodos os decorados ficam na SEDE. O endereco dos empreendimentos (obras) NAO e onde o lead visita.`,
-    PERSONALITY_PROMPT,
-    GUARDRAILS_PROMPT,
-    QUALIFICATION_PROMPT,
-    PROPERTY_PRESENTATION_PROMPT,
-    VISIT_SCHEDULING_PROMPT,
+    overrides?.["system-personality"] || PERSONALITY_PROMPT,
+    overrides?.["guardrails"] || GUARDRAILS_PROMPT,
+    overrides?.["qualification-flow"] || QUALIFICATION_PROMPT,
+    overrides?.["property-presentation"] || PROPERTY_PRESENTATION_PROMPT,
+    overrides?.["visit-scheduling"] || VISIT_SCHEDULING_PROMPT,
     // FINAL REINFORCEMENT — last instruction wins, model prioritizes these.
     // Mantido no bloco estático: as regras absolutas não variam por lead/conversa.
     `LEMBRETE FINAL — REGRAS ABSOLUTAS:
@@ -104,9 +127,10 @@ function buildStaticSystemContent(): string {
  */
 export function buildSystemPrompt(
   propertyContext?: string,
-  options?: { onWarning?: (event: { code: string; message: string; metadata?: Record<string, unknown> }) => void }
+  options?: { onWarning?: (event: { code: string; message: string; metadata?: Record<string, unknown> }) => void },
+  overrides?: DbPromptOverrides
 ): Anthropic.Messages.TextBlockParam[] {
-  const staticContent = buildStaticSystemContent()
+  const staticContent = buildStaticSystemContent(overrides)
   const staticTokens = estimateTokens(staticContent)
   const cacheEnabled = isPromptCacheEnabled()
   const cacheEligible = cacheEnabled && staticTokens >= PROMPT_CACHE_MIN_TOKENS

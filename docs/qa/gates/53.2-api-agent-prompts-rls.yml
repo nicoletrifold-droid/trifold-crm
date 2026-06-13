@@ -1,0 +1,59 @@
+schema: 1
+story: '53.2'
+slug: api-agent-prompts-rls
+gate: CONCERNS
+status_reason: 'Rotas admin-only, org-scoped e content-only estão corretas e atendem todos os ACs; a migration 096 é tecnicamente correta mas endurece o WRITE de TODA a tabela agent_config (que também guarda business_hours editado por permissão configuracoes.horario) — risco de regressão silenciosa a verificar antes de aplicar em prod.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-06-13T00:00:00Z'
+
+quality_checks:
+  code_review: PASS
+  unit_tests: N/A   # CRUD direto sem lógica de negócio; story define teste manual via curl
+  acceptance_criteria: PASS   # AC1-6 atendidos no código entregue
+  regressions: CONCERNS   # migration 096 acopla write de business_hours ao role admin
+  performance: PASS
+  security: PASS   # admin-only (requireRole), org-scoped, content-only, sem escalada
+  documentation: PASS
+
+requirements_traceability:
+  - ac: 1
+    desc: 'GET list 200 / 403 não-admin / 401 não-auth, campos id,slug,name,type,content,is_active'
+    status: PASS
+    evidence: 'route.ts: requireAuth()→401, requireRole(["admin"])→403, .select(campos).eq(org_id).order(slug)'
+  - ac: 2
+    desc: 'GET [slug] 200 / 404 inexistente / 403 não-admin'
+    status: PASS
+    evidence: '[slug]/route.ts: maybeSingle()→404; requireRole admin'
+  - ac: 3
+    desc: 'PUT {content} valida string>=10, atualiza só content, 200/404/400/403'
+    status: PASS
+    evidence: 'try/catch json→400; typeof/trim>=10→400; .update({content}) only; maybeSingle→404'
+  - ac: 4
+    desc: 'POST/DELETE → 405'
+    status: PASS
+    evidence: 'handlers não exportados; Next.js App Router responde 405 automaticamente'
+  - ac: 5
+    desc: 'Migration 096 troca is_admin_or_supervisor→is_admin nas policies de WRITE, SELECT intactas'
+    status: PASS
+    evidence: 'SQL correto; is_admin() existe (047_roles_permissions.sql:28); DROP IF EXISTS idempotente; rollback documentado; SELECT policies não tocadas'
+  - ac: 6
+    desc: 'Pós-migration supervisor não escreve, ainda lê'
+    status: PASS_BY_DESIGN   # não verificável ao vivo (migration não aplicada); SQL correto
+
+security_assessment:
+  put_field_scope: 'PASS — .update({content}) altera APENAS content. slug vem da URL (filtro), org_id da sessão (filtro). Impossível alterar slug/type/is_active/org_id via body.'
+  org_scoping: 'PASS — GET e PUT filtram .eq("org_id", appUser.org_id) derivado da sessão autenticada, nunca do input. Impossível editar prompt de outra org.'
+  role_enforcement: 'PASS — requireRole(appUser,["admin"]) em GET list, GET [slug] e PUT. Supervisor recebe 403 antes de tocar o banco.'
+  reliability_input: 'PASS — JSON malformado → 400 (try/catch); content vazio/curto → 400; erro de DB → 500.'
+
+top_issues:
+  - id: 'REG-001'
+    severity: medium
+    finding: 'Migration 096 aplica admin-only a TODA a tabela agent_config via FOR ALL USING. Mas agent_config também guarda business_hours, editado pela página /dashboard/configuracoes/horario cujo guard é canAccess("configuracoes.horario"), NÃO role==admin. Em orgs com role_permissions customizado (Epic 35) que concedam configuracoes.horario a não-admin, aplicar 096 quebraria silenciosamente o salvamento de horário (a Server Action de horario não checa o erro de .update(), então a RLS rejeitaria sem feedback ao usuário).'
+    suggested_action: 'ANTES de aplicar 096 em prod: consultar role_permissions de produção para confirmar que nenhum role não-admin tem configuracoes/configuracoes.horario concedido. No default hardcoded supervisor tem configuracoes:false (seguro). Se algum role customizado tiver, ou (a) restringir a migration a alvos mais granulares (apenas agent_prompts + endurecer agent_config apenas para os campos de prompt/mensagens), ou (b) elevar o guard da página horario para role==admin, ou (c) aceitar explicitamente que horário comercial passa a ser admin-only.'
+  - id: 'SEC-002'
+    severity: low
+    finding: 'Estado intermediário: migration 096 NÃO aplicada em prod, então a RLS do banco ainda permite supervisor escrever em agent_config/agent_prompts. A guarda efetiva hoje é a checagem app-layer (requireRole nas rotas + role check nas Server Actions de 53-3). Defense-in-depth incompleta até aplicar 096.'
+    suggested_action: 'Aceitável como estado intermediário pois nenhum caminho de app expõe write a não-admin. Aplicar 096 (após REG-001) para completar a camada de banco.'
+
+waiver: { active: false }

@@ -2,48 +2,115 @@ import { NextRequest, NextResponse } from "next/server"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logEvent } from "@web/lib/logger"
+import { notifyBrokerOfStalledLead } from "@web/lib/broker/notify-stalled-lead"
+import { isWithinWhatsAppWindow } from "@web/lib/broker/dispatch-broker-message"
+import { sendWhatsAppMessage } from "@web/lib/whatsapp/send-whatsapp-message"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
 /**
- * Send a follow-up message to the lead via Telegram.
- * Skips silently if lead is not a Telegram user (phone doesn't start with "tg:").
+ * Result of a follow-up send attempt.
+ * - `sent`   → whether the message reached the channel
+ * - `channel`→ "telegram" | "whatsapp" (for logging / activity copy)
+ * - `reason` → stable skip/error code when `sent=false`
+ *              (WHATSAPP_WINDOW_CLOSED | WHATSAPP_CONFIG_MISSING | TELEGRAM_TOKEN_MISSING | API_ERROR | UNSUPPORTED_CHANNEL)
  */
-async function sendFollowUpMessage(phone: string, message: string): Promise<boolean> {
-  if (!phone.startsWith("tg:")) {
-    return false // Not a Telegram lead — skip
-  }
+interface FollowUpSendResult {
+  sent: boolean
+  channel: "telegram" | "whatsapp"
+  reason?: string
+  /** Original transport error string when reason === "API_ERROR". */
+  error?: string
+}
 
-  if (!TELEGRAM_BOT_TOKEN) {
-    console.error("[FOLLOWUP] TELEGRAM_BOT_TOKEN not configured — message not sent")
-    return false
-  }
-
-  const chatId = phone.replace("tg:", "")
-
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text: message }),
-        signal: AbortSignal.timeout(30000),
-      }
-    )
-
-    if (!res.ok) {
-      const errText = await res.text()
-      console.error(`[FOLLOWUP] Telegram API error ${res.status}: ${errText}`)
-      return false
+/**
+ * Send a follow-up message to the lead via the correct channel.
+ *
+ * Channel detection (AC1):
+ *  - phone starts with "tg:" → Telegram (Bot API) — behaviour PRESERVED (AC2)
+ *  - otherwise               → WhatsApp Cloud API (AC3)
+ *
+ * WhatsApp 24h freeform window (AC3/AC4): freeform text can only be sent within
+ * 24h of the lead's last message. The window is checked via
+ * `conversations.last_message_at` (AC6) using `isWithinWhatsAppWindow` (reused
+ * from Story 51-1). Outside the window, NO message is attempted and the result
+ * is `{ sent: false, reason: 'WHATSAPP_WINDOW_CLOSED' }` so the caller can mark
+ * the `follow_up_log` as `status='skipped'`. Approved templates (HSM) for the
+ * out-of-window case are explicit backlog (see story "Backlog para Templates").
+ *
+ * Credentials come from the `whatsapp_config` table (org_id + status='active'),
+ * NOT env vars (AC7) — same pattern as appointment-whatsapp-reminders / notify-broker.
+ *
+ * Never throws: any transport failure returns `{ sent: false, reason: 'API_ERROR' }`
+ * so the cron loop is best-effort and a single lead cannot break the run (AC5).
+ */
+async function sendFollowUpMessage(
+  supabase: SupabaseClient,
+  orgId: string,
+  phone: string,
+  message: string,
+  conversationLastMessageAt: Date | string | null,
+  now: Date = new Date()
+): Promise<FollowUpSendResult> {
+  // --- Telegram branch (AC2): preserved verbatim ---
+  if (phone.startsWith("tg:")) {
+    if (!TELEGRAM_BOT_TOKEN) {
+      console.error("[FOLLOWUP] TELEGRAM_BOT_TOKEN not configured — message not sent")
+      return { sent: false, channel: "telegram", reason: "TELEGRAM_TOKEN_MISSING" }
     }
 
-    return true
-  } catch (err) {
-    console.error("[FOLLOWUP] Telegram send failed:", err)
-    return false
+    const chatId = phone.replace("tg:", "")
+
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text: message }),
+          signal: AbortSignal.timeout(30000),
+        }
+      )
+
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error(`[FOLLOWUP] Telegram API error ${res.status}: ${errText}`)
+        return { sent: false, channel: "telegram", reason: "API_ERROR", error: `HTTP_${res.status}` }
+      }
+
+      return { sent: true, channel: "telegram" }
+    } catch (err) {
+      console.error("[FOLLOWUP] Telegram send failed:", err)
+      return { sent: false, channel: "telegram", reason: "API_ERROR", error: String(err) }
+    }
   }
+
+  // --- WhatsApp branch (AC3/AC4) ---
+  // Check the 24h freeform window BEFORE attempting any send (AC4/AC6).
+  if (!isWithinWhatsAppWindow(conversationLastMessageAt, now)) {
+    return { sent: false, channel: "whatsapp", reason: "WHATSAPP_WINDOW_CLOSED" }
+  }
+
+  // Resolve credentials from whatsapp_config by org (AC7) — NOT env vars.
+  const { data: waConfig } = await supabase
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (!waConfig?.phone_number_id || !waConfig?.access_token) {
+    return { sent: false, channel: "whatsapp", reason: "WHATSAPP_CONFIG_MISSING" }
+  }
+
+  const result = await sendWhatsAppMessage(waConfig, phone, message)
+
+  if (!result.sent) {
+    return { sent: false, channel: "whatsapp", reason: "API_ERROR", error: result.error }
+  }
+
+  return { sent: true, channel: "whatsapp" }
 }
 
 /**
@@ -111,7 +178,7 @@ export async function GET(request: NextRequest) {
     const { data: leads } = await supabase
       .from("leads")
       .select(
-        `id, name, phone, org_id, property_interest_id,
+        `id, name, phone, org_id, assigned_broker_id, property_interest_id,
          properties:property_interest_id(name)`
       )
       .eq("org_id", rule.org_id)
@@ -135,25 +202,28 @@ export async function GET(request: NextRequest) {
 
     if (eligibleLeads.length === 0) continue
 
-    // Batch: fetch latest conversation per eligible lead in one query
+    // Batch: fetch latest conversation per eligible lead in one query.
+    // last_message_at is the source of truth for the WhatsApp 24h window (AC6).
     const eligibleIds = eligibleLeads.map((l) => l.id)
     const { data: allConversations } = await supabase
       .from("conversations")
-      .select("id, lead_id")
+      .select("id, lead_id, last_message_at")
       .in("lead_id", eligibleIds)
       .order("last_message_at", { ascending: false })
 
-    const latestConvByLead = new Map<string, string>()
+    const latestConvByLead = new Map<string, { id: string; last_message_at: string | null }>()
     for (const conv of allConversations ?? []) {
       if (!latestConvByLead.has(conv.lead_id)) {
-        latestConvByLead.set(conv.lead_id, conv.id)
+        latestConvByLead.set(conv.lead_id, { id: conv.id, last_message_at: conv.last_message_at })
       }
     }
 
     for (const lead of eligibleLeads) {
       processed++
 
-      const conversationId = latestConvByLead.get(lead.id)
+      const latestConv = latestConvByLead.get(lead.id)
+      const conversationId = latestConv?.id
+      const conversationLastMessageAt = latestConv?.last_message_at ?? null
 
       if (!conversationId) continue
 
@@ -193,53 +263,84 @@ export async function GET(request: NextRequest) {
           .replace(/\{nome\}/g, lead.name || "")
           .replace(/\{empreendimento\}/g, propertyName)
 
-        // Create follow_up_log entry
+        // Send via the correct channel (Telegram or WhatsApp). The 24h WhatsApp
+        // window is checked inside; outside it, nothing is sent (AC4).
+        const result = await sendFollowUpMessage(
+          supabase,
+          rule.org_id,
+          lead.phone,
+          message,
+          conversationLastMessageAt,
+          now
+        )
+
+        // follow_up_log status reflects the send outcome (AC4/T3):
+        //  - sent ok                  → status='sent'
+        //  - WhatsApp window closed   → status='skipped' + metadata.reason
+        //  - other failure (best-effort) → status='sent' (message stored, retry by broker)
+        const skipped = !result.sent && result.reason === "WHATSAPP_WINDOW_CLOSED"
         await supabase.from("follow_up_log").insert({
           org_id: rule.org_id,
           lead_id: lead.id,
           rule_id: rule.id,
           type: "nicole_sent",
-          status: "sent",
+          status: skipped ? "skipped" : "sent",
           scheduled_at: now.toISOString(),
-          sent_at: now.toISOString(),
+          sent_at: result.sent ? now.toISOString() : null,
           message,
+          metadata: skipped ? { reason: result.reason, channel: result.channel } : { channel: result.channel },
         })
 
-        // Send the message via Telegram
-        const sent = await sendFollowUpMessage(lead.phone, message)
-
-        if (sent) {
+        if (result.sent) {
           logEvent({
             level: "info",
             category: "cron",
-            event_type: "FOLLOWUP_TELEGRAM_SENT",
-            message: `Follow-up sent to lead ${lead.id} via Telegram`,
-            metadata: { lead_id: lead.id, type: "nicole_sent", stage: stage.name },
+            event_type: "FOLLOWUP_MESSAGE_SENT",
+            message: `Follow-up sent to lead ${lead.id} via ${result.channel}`,
+            metadata: { lead_id: lead.id, type: "nicole_sent", stage: stage.name, channel: result.channel },
+            source: "api/cron/followup",
+          })
+        } else {
+          logEvent({
+            level: "info",
+            category: "cron",
+            event_type: "FOLLOWUP_MESSAGE_SKIPPED",
+            message: `Follow-up NOT sent to lead ${lead.id} via ${result.channel}: ${result.reason}`,
+            metadata: { lead_id: lead.id, type: "nicole_sent", stage: stage.name, channel: result.channel, reason: result.reason },
             source: "api/cron/followup",
           })
         }
 
-        // Save message to conversation history (regardless of Telegram send status)
-        await supabase.from("messages").insert({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: message,
-          metadata: { source: "followup_cron", rule_id: rule.id, telegram_sent: sent },
-        })
+        // For the WhatsApp window-closed case the lead never received freeform
+        // text, so we must NOT persist it as a delivered assistant message.
+        if (!skipped) {
+          // Save message to conversation history (regardless of transport send status)
+          await supabase.from("messages").insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: message,
+            metadata: { source: "followup_cron", rule_id: rule.id, channel: result.channel, sent: result.sent },
+          })
 
-        // Update conversation timestamp
-        await supabase
-          .from("conversations")
-          .update({ last_message_at: now.toISOString() })
-          .eq("id", conversationId)
+          // Update conversation timestamp
+          await supabase
+            .from("conversations")
+            .update({ last_message_at: now.toISOString() })
+            .eq("id", conversationId)
+        }
 
         // Create activity log
+        const activityDesc = result.sent
+          ? `Nicole enviou follow-up automatico na etapa "${stage.name}" (${result.channel})`
+          : skipped
+            ? `Nicole NAO enviou follow-up (WhatsApp fora da janela de 24h) na etapa "${stage.name}"`
+            : `Nicole tentou follow-up na etapa "${stage.name}" (${result.channel}, envio pendente)`
         await supabase.from("activities").insert({
           org_id: rule.org_id,
           lead_id: lead.id,
           type: "followup_nicole_sent",
-          description: `Nicole enviou follow-up automatico na etapa "${stage.name}"${sent ? " (Telegram)" : " (salvo, envio pendente)"}`,
-          metadata: { rule_id: rule.id, stage_id: rule.stage_id, telegram_sent: sent },
+          description: activityDesc,
+          metadata: { rule_id: rule.id, stage_id: rule.stage_id, channel: result.channel, sent: result.sent, reason: result.reason },
         })
 
         messagesSent++
@@ -261,6 +362,28 @@ export async function GET(request: NextRequest) {
           type: "followup_alert_broker",
           description: `Alerta de follow-up: lead sem contato ha ${Math.floor(daysSinceLastMessage)} dia(s) na etapa "${stage.name}"`,
           metadata: { rule_id: rule.id, stage_id: rule.stage_id },
+        })
+
+        // Story 51-4 (Gatilho B): notify the responsible broker that Nicole's
+        // follow-ups are exhausted and the lead is not responding. Best-effort —
+        // helper never throws, so a notification failure cannot break this loop.
+        const notified = await notifyBrokerOfStalledLead({
+          supabase,
+          orgId: rule.org_id,
+          assignedBrokerId: (lead as { assigned_broker_id?: string | null }).assigned_broker_id ?? null,
+          leadId: lead.id,
+          leadName: lead.name,
+          leadPhone: lead.phone,
+          daysSinceLastMessage,
+        })
+
+        logEvent({
+          level: "info",
+          category: "cron",
+          event_type: "FOLLOWUP_ALERT_BROKER",
+          message: `alert_broker for lead ${lead.id} — broker notified: ${notified}`,
+          metadata: { lead_id: lead.id, notified, stage: stage.name },
+          source: "api/cron/followup",
         })
 
         alertsCreated++
@@ -326,48 +449,76 @@ export async function GET(request: NextRequest) {
         aiSummary: (leadData as { ai_summary?: string }).ai_summary || undefined,
       })
 
-      // Create follow_up_log entry
-      await supabase.from("follow_up_log").insert({
-        org_id: appt.org_id,
-        lead_id: appt.lead_id,
-        type: "post_visit",
-        status: "sent",
-        scheduled_at: now.toISOString(),
-        sent_at: now.toISOString(),
-        message,
-      })
-
-      // Send via Telegram
-      const leadPhone = (leadData as { phone?: string }).phone || ""
-      const postVisitTgSent = await sendFollowUpMessage(leadPhone, message)
-
-      if (postVisitTgSent) {
-        logEvent({
-          level: "info",
-          category: "cron",
-          event_type: "FOLLOWUP_TELEGRAM_SENT",
-          message: `Post-visit follow-up sent to lead ${appt.lead_id} via Telegram`,
-          metadata: { lead_id: appt.lead_id, type: "post_visit", appointment_id: appt.id },
-          source: "api/cron/followup",
-        })
-      }
-
-      // Save to conversation history
+      // Fetch the latest conversation BEFORE sending so we can check the
+      // WhatsApp 24h window via conversations.last_message_at (AC6).
       const { data: conversations } = await supabase
         .from("conversations")
-        .select("id")
+        .select("id, last_message_at")
         .eq("lead_id", appt.lead_id)
         .order("last_message_at", { ascending: false })
         .limit(1)
 
-      if (conversations && conversations.length > 0) {
-        const conversationId = conversations[0]!.id
+      const postVisitConv = conversations && conversations.length > 0 ? conversations[0]! : null
+      const postVisitLastMessageAt = postVisitConv?.last_message_at ?? null
+
+      // Send via the correct channel (Telegram or WhatsApp). The 24h WhatsApp
+      // window is checked inside; outside it, nothing is sent (AC4).
+      const leadPhone = (leadData as { phone?: string }).phone || ""
+      const result = await sendFollowUpMessage(
+        supabase,
+        appt.org_id,
+        leadPhone,
+        message,
+        postVisitLastMessageAt,
+        now
+      )
+
+      const skipped = !result.sent && result.reason === "WHATSAPP_WINDOW_CLOSED"
+
+      // Create follow_up_log entry reflecting the send outcome (AC4/T3)
+      await supabase.from("follow_up_log").insert({
+        org_id: appt.org_id,
+        lead_id: appt.lead_id,
+        type: "post_visit",
+        status: skipped ? "skipped" : "sent",
+        scheduled_at: now.toISOString(),
+        sent_at: result.sent ? now.toISOString() : null,
+        message,
+        metadata: skipped
+          ? { reason: result.reason, channel: result.channel, appointment_id: appt.id }
+          : { channel: result.channel, appointment_id: appt.id },
+      })
+
+      if (result.sent) {
+        logEvent({
+          level: "info",
+          category: "cron",
+          event_type: "FOLLOWUP_MESSAGE_SENT",
+          message: `Post-visit follow-up sent to lead ${appt.lead_id} via ${result.channel}`,
+          metadata: { lead_id: appt.lead_id, type: "post_visit", appointment_id: appt.id, channel: result.channel },
+          source: "api/cron/followup",
+        })
+      } else {
+        logEvent({
+          level: "info",
+          category: "cron",
+          event_type: "FOLLOWUP_MESSAGE_SKIPPED",
+          message: `Post-visit follow-up NOT sent to lead ${appt.lead_id} via ${result.channel}: ${result.reason}`,
+          metadata: { lead_id: appt.lead_id, type: "post_visit", appointment_id: appt.id, channel: result.channel, reason: result.reason },
+          source: "api/cron/followup",
+        })
+      }
+
+      // For the WhatsApp window-closed case the lead never received freeform
+      // text, so we must NOT persist it as a delivered assistant message.
+      if (!skipped && postVisitConv) {
+        const conversationId = postVisitConv.id
 
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
           content: message,
-          metadata: { source: "post_visit_followup", appointment_id: appt.id, telegram_sent: postVisitTgSent },
+          metadata: { source: "post_visit_followup", appointment_id: appt.id, channel: result.channel, sent: result.sent },
         })
 
         await supabase
@@ -377,12 +528,17 @@ export async function GET(request: NextRequest) {
       }
 
       // Activity log
+      const postVisitDesc = result.sent
+        ? `Nicole enviou follow-up pos-visita (interesse: ${interestLevel || "nao informado"}) (${result.channel})`
+        : skipped
+          ? `Nicole NAO enviou follow-up pos-visita (WhatsApp fora da janela de 24h, interesse: ${interestLevel || "nao informado"})`
+          : `Nicole tentou follow-up pos-visita (${result.channel}, envio pendente)`
       await supabase.from("activities").insert({
         org_id: appt.org_id,
         lead_id: appt.lead_id,
         type: "followup_post_visit",
-        description: `Nicole enviou follow-up pos-visita (interesse: ${interestLevel || "nao informado"})${postVisitTgSent ? " (Telegram)" : ""}`,
-        metadata: { appointment_id: appt.id, telegram_sent: postVisitTgSent },
+        description: postVisitDesc,
+        metadata: { appointment_id: appt.id, channel: result.channel, sent: result.sent, reason: result.reason },
       })
 
       postVisitSent++
