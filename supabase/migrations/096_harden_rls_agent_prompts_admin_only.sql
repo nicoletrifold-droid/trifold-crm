@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Migration: 096_harden_rls_agent_prompts_admin_only.sql
--- Story: 53-2 — RLS Hardening de agent_config e agent_prompts (admin-only WRITE)
+-- Story: 53-2 — RLS Hardening de agent_prompts (admin-only WRITE)
 -- ============================================================================
 --
 -- SLOT ESCOLHIDO: 096
@@ -13,15 +13,38 @@
 --
 -- OBJETIVO:
 --   Endurecer o RLS para que apenas usuários com role `admin` possam ESCREVER
---   (INSERT/UPDATE/DELETE) em `agent_config` e `agent_prompts`. As policies de
---   SELECT NÃO são alteradas — supervisores continuam podendo LER.
+--   (INSERT/UPDATE/DELETE) em `agent_prompts`. A policy de SELECT NÃO é alterada
+--   — supervisores continuam podendo LER.
 --   Antes: `public.is_admin_or_supervisor()` (criada em 004_rls_policies.sql).
 --   Depois: `public.is_admin()` (criada em 047_roles_permissions.sql).
 --
+-- ESCOPO REDUZIDO (BLAST RADIUS) — POR QUE agent_config NÃO é tocado:
+--   A versão original desta migration também endurecia `agent_config_manage`
+--   (FOR ALL). Isso foi REMOVIDO de propósito. A policy FOR ALL de `agent_config`
+--   cobre TODA a tabela, incluindo a coluna `business_hours` (REG-001), editada
+--   pela tela /dashboard/configuracoes/horario por usuários NÃO-admin que têm
+--   exceção de permissão `configuracoes=true`.
+--   Verificado em PRODUÇÃO: 2 usuárias ativas não-admin (Samara/role=obras e
+--   Fernanda/role=gerente-comercial) têm essa exceção e salvam horário hoje.
+--   Trocar `agent_config_manage` para is_admin() QUEBRARIA o save de horário
+--   delas silenciosamente (RLS nega UPDATE sem erro de aplicação).
+--
+--   Os campos de personalidade em `agent_config` (greeting_message,
+--   out_of_hours_message) já são protegidos admin-only na CAMADA DE APLICAÇÃO:
+--     - Server Action checa role==admin + allowlist de campos;
+--     - PATCH /api/agent-config usa requireRole(["admin"]).
+--   Não há rota de escrita exposta a não-admin para esses campos. Logo, endurecer
+--   `agent_config` no banco é desnecessário e tem efeito colateral indesejado em
+--   business_hours. `agent_prompts` é onde a RLS admin-only agrega proteção sem
+--   colateral (não há fluxo legítimo de escrita não-admin nessa tabela).
+--
 -- SEGURANÇA:
 --   - Idempotente: usa DROP POLICY IF EXISTS antes de recriar.
---   - Não-destrutivo: não altera dados, apenas substitui policies de WRITE.
---   - `public.is_admin()` já existe no remote (047_roles_permissions.sql).
+--   - Não-destrutivo: não altera dados, apenas substitui a policy de WRITE.
+--   - `public.is_admin()` já existe no remote (047_roles_permissions.sql, SQL
+--     SECURITY DEFINER STABLE).
+--   - Mantém o filtro org (org_id = public.user_org_id()) idêntico ao original
+--     de 004, sem introduzir drift.
 --
 -- APLICAÇÃO:
 --   NÃO aplicada automaticamente. Este projeto aplica migrations MANUALMENTE
@@ -29,29 +52,22 @@
 --   numeração entre branches). Aguardar autorização explícita do usuário.
 -- ============================================================================
 
--- Drop das policies permissivas atuais (is_admin_or_supervisor)
-DROP POLICY IF EXISTS "agent_config_manage" ON agent_config;
+-- Drop da policy de WRITE permissiva atual (is_admin_or_supervisor)
 DROP POLICY IF EXISTS "agent_prompts_manage" ON agent_prompts;
 
--- Recriação com WRITE restrito a admin
-CREATE POLICY "agent_config_manage" ON agent_config
-  FOR ALL USING (org_id = public.user_org_id() AND public.is_admin());
-
+-- Recriação com WRITE restrito a admin (assinatura idêntica à de 004, exceto a
+-- troca is_admin_or_supervisor() → is_admin())
 CREATE POLICY "agent_prompts_manage" ON agent_prompts
   FOR ALL USING (org_id = public.user_org_id() AND public.is_admin());
 
--- NOTA: as policies de SELECT (agent_config_select, agent_prompts_select)
--- definidas em 004_rls_policies.sql NÃO são tocadas. Supervisores continuam
--- com leitura via `org_id = public.user_org_id()`.
+-- NOTA: a policy de SELECT (agent_prompts_select) definida em 004_rls_policies.sql
+-- NÃO é tocada. Supervisores continuam com leitura via org_id = public.user_org_id().
+-- NOTA: NENHUMA policy de agent_config é alterada (ver "ESCOPO REDUZIDO" acima).
 
 -- ============================================================================
 -- ROLLBACK (executar manualmente se a restrição admin-only causar problema)
 -- ============================================================================
--- DROP POLICY IF EXISTS "agent_config_manage" ON agent_config;
 -- DROP POLICY IF EXISTS "agent_prompts_manage" ON agent_prompts;
---
--- CREATE POLICY "agent_config_manage" ON agent_config
---   FOR ALL USING (org_id = public.user_org_id() AND public.is_admin_or_supervisor());
 --
 -- CREATE POLICY "agent_prompts_manage" ON agent_prompts
 --   FOR ALL USING (org_id = public.user_org_id() AND public.is_admin_or_supervisor());
