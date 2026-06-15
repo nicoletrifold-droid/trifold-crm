@@ -57,16 +57,11 @@ export function hasConfirmedDay(availability: unknown): boolean {
 }
 
 /**
- * Story 51-7 (ADR-001) — broker-attribution precedence guard.
+ * ADR-001 guard — pipeline may only set the lead owner when the lead has no owner yet.
  *
- * The lead owner (`leads.assigned_broker_id`) takes precedence over the
- * property's primary broker (`broker_assignments.is_primary`). The Nicole
- * pipeline (B1 scheduling / B2 handoff) may only assign the property broker as
- * the lead owner when the lead has NO owner yet (null/undefined).
- *
- * @param propertyBrokerId  the property's primary broker (user_id) found by the pipeline
- * @param currentOwnerId    the lead's current owner (leads.assigned_broker_id) before the update
- * @returns true when the pipeline is allowed to set the lead owner to the property broker
+ * @param brokerId      broker the pipeline intends to assign
+ * @param currentOwnerId  the lead's current owner (leads.assigned_broker_id) before the update
+ * @returns true when the pipeline is allowed to set the lead owner
  */
 export function shouldAssignPipelineBroker(
   propertyBrokerId: string | null | undefined,
@@ -644,23 +639,7 @@ export async function processMessageWithMetadata(
 
       const propertyId = identifiedPropertyId ?? state?.current_property_id
 
-      // Prefer lead's already-assigned broker (from roleta) over property's primary broker
-      let assignedBrokerId: string | null = currentLead?.assigned_broker_id ?? null
-
-      if (!assignedBrokerId && propertyId) {
-        const { data: assignment } = await supabase
-          .from("broker_assignments")
-          .select("broker_id, brokers(user_id)")
-          .eq("property_id", propertyId)
-          .eq("is_primary", true)
-          .limit(1)
-          .maybeSingle()
-
-        if (assignment) {
-          const brokers = assignment.brokers as unknown as { user_id: string } | { user_id: string }[]
-          assignedBrokerId = (Array.isArray(brokers) ? brokers[0]?.user_id : brokers?.user_id) ?? null
-        }
-      }
+      const assignedBrokerId: string | null = currentLead?.assigned_broker_id ?? null
 
       // Find a free slot for the broker (avoid double-booking)
       let scheduledAt: Date = new Date(base)
@@ -704,32 +683,9 @@ export async function processMessageWithMetadata(
       leadPatch.visit_scheduled_at = scheduledAt.toISOString()
       leadPatch.stage_id = STAGE_IDS.visita_agendada
 
-      // Story 51-7 (ADR-001 guard B1): the lead owner (assigned_broker_id) takes
-      // precedence over the property's primary broker. The pipeline only assigns
-      // the property broker as lead owner when the lead has no owner yet (NULL).
-      // If the lead already has an owner (roleta or human assignment), we keep it —
-      // the property broker (assignedBrokerId) is still recorded in appointments
-      // and notified, but does NOT become the lead owner.
+      // ADR-001: pipeline only sets lead owner when lead has no owner yet (roleta not yet run).
       if (shouldAssignPipelineBroker(assignedBrokerId, currentLead?.assigned_broker_id)) {
         leadPatch.assigned_broker_id = assignedBrokerId
-      } else if (assignedBrokerId && currentLead?.assigned_broker_id) {
-        // Guard active: pipeline tried to reassign an already-owned lead. Audit it.
-        try {
-          await supabase.from("activities").insert({
-            org_id: conversation.org_id,
-            lead_id: leadId,
-            type: "broker_assignment_skipped",
-            description:
-              "Pipeline tentou atribuir corretor do imóvel, mas lead já tem corretor (guard ADR-001).",
-            metadata: {
-              existing_broker_id: currentLead.assigned_broker_id,
-              attempted_broker_id: assignedBrokerId,
-              trigger: "pipeline_b1",
-            },
-          })
-        } catch (auditErr) {
-          console.error("[broker-guard-b1] audit insert failed:", auditErr)
-        }
       }
 
       await supabase.from("activities").insert({
@@ -739,20 +695,11 @@ export async function processMessageWithMetadata(
         description: `Nicole agendou visita. Disponibilidade: ${String(finalData.visit_availability)}${assignedBrokerId ? ". Corretor designado automaticamente." : ""}`,
       })
 
-      // Story 51-3: enrich metadata so the web-side onEvent handler (in @trifold/web,
-      // where notifyBroker lives) can notify the assigned broker without @trifold/ai
-      // importing server-only code. broker_user_id is only present when a primary
-      // broker was found — its absence (AC3) means no notification is dispatched.
-      // Story 51-7 (AC5): decouple notification recipient from lead ownership.
-      // broker_user_id stays the property specialist (for context/observability).
-      // notification_broker_user_id is who actually receives the notification:
-      // when the guard kept the existing owner, notify the OWNER, not the property
-      // broker. Falls back to the property broker when the lead had no owner.
-      const notificationBrokerUserId = resolveNotificationBrokerUserId(assignedBrokerId, currentLead?.assigned_broker_id)
+      const notificationBrokerUserId = assignedBrokerId
       emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, broker_user_id: assignedBrokerId, notification_broker_user_id: notificationBrokerUserId, lead_name: leadName, lead_phone: leadPhone, property_id: propertyId ?? null, scheduled_at: scheduledAt.toISOString() } })
 
       if (!assignedBrokerId) {
-        emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker assignment — no primary broker found for property", metadata: { lead_id: leadId, property_id: propertyId ?? null } })
+        emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker — lead not yet assigned by roleta", metadata: { lead_id: leadId, property_id: propertyId ?? null } })
       }
     }
 
@@ -763,41 +710,6 @@ export async function processMessageWithMetadata(
         : STAGE_IDS.qualificado
       leadPatch.ai_summary = handoffSummary
 
-      if (identifiedPropertyId) {
-        const { data: assignment } = await supabase
-          .from("broker_assignments")
-          .select("broker_id, brokers(user_id)")
-          .eq("property_id", identifiedPropertyId)
-          .eq("is_primary", true)
-          .maybeSingle()
-
-        if (assignment) {
-          const brokers = assignment.brokers as unknown as { user_id: string } | { user_id: string }[]
-          const brokerId = Array.isArray(brokers) ? brokers[0]?.user_id : brokers?.user_id
-          // Story 51-7 (ADR-001 guard B2): same precedence rule as B1 — only assign
-          // the property's primary broker as lead owner when the lead has no owner.
-          if (shouldAssignPipelineBroker(brokerId, currentLead?.assigned_broker_id)) {
-            leadPatch.assigned_broker_id = brokerId
-          } else if (brokerId && currentLead?.assigned_broker_id) {
-            try {
-              await supabase.from("activities").insert({
-                org_id: conversation.org_id,
-                lead_id: leadId,
-                type: "broker_assignment_skipped",
-                description:
-                  "Pipeline (handoff) tentou atribuir corretor do imóvel, mas lead já tem corretor (guard ADR-001).",
-                metadata: {
-                  existing_broker_id: currentLead.assigned_broker_id,
-                  attempted_broker_id: brokerId,
-                  trigger: "pipeline_b2",
-                },
-              })
-            } catch (auditErr) {
-              console.error("[broker-guard-b2] audit insert failed:", auditErr)
-            }
-          }
-        }
-      }
 
       await supabase.from("activities").insert({
         org_id: conversation.org_id,
