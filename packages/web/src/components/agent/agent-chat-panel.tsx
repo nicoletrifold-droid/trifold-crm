@@ -30,6 +30,14 @@ interface Session {
   updated_at: string
 }
 
+interface LogEntry {
+  id: string
+  title: string | null
+  context_type: "global" | "campaign"
+  updated_at: string
+  users: { name: string; role: string } | null
+}
+
 // ─── Inline markdown renderer ───────────────────────────────────────────────
 
 function renderMarkdown(text: string): React.ReactNode[] {
@@ -244,6 +252,9 @@ export default function AgentChatPanel({
   const [contextType, setContextType]       = useState<"global" | "campaign">(initialContextType)
   const [contextId, setContextId]           = useState<string | null>(initialContextId)
   const [contextName, setContextName]       = useState<string | null>(contextLabel)
+  const [showLog, setShowLog]               = useState(false)
+  const [logEntries, setLogEntries]         = useState<LogEntry[]>([])
+  const [loadingLog, setLoadingLog]         = useState(false)
 
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   const inputRef        = useRef<HTMLTextAreaElement>(null)
@@ -261,6 +272,26 @@ export default function AgentChatPanel({
       void loadSessions()
     }
   }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadLog = useCallback(async () => {
+    setLoadingLog(true)
+    try {
+      const res = await fetch("/api/agent/chat/sessions/log")
+      if (res.ok) {
+        const data = (await res.json()) as { sessions: LogEntry[] }
+        setLogEntries(data.sessions)
+      }
+    } finally {
+      setLoadingLog(false)
+    }
+  }, [])
+
+  const toggleLog = useCallback(() => {
+    setShowLog((v) => {
+      if (!v) void loadLog()
+      return !v
+    })
+  }, [loadLog])
 
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true)
@@ -487,14 +518,93 @@ export default function AgentChatPanel({
               <p className="text-xs text-gray-500 dark:text-stone-400">Análise sênior de tráfego</p>
             </div>
           </div>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="rounded p-1 text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
-            aria-label="Fechar"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-          </button>
+          <div className="flex items-center gap-1">
+            {isAdmin && (
+              <button
+                onClick={toggleLog}
+                title="Log de uso do agente"
+                className={`rounded p-1.5 text-xs font-medium transition-colors ${
+                  showLog
+                    ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400"
+                    : "text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
+                }`}
+                aria-label="Log de uso"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={() => setIsOpen(false)}
+              className="rounded p-1 text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
+              aria-label="Fechar"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
         </div>
+
+        {/* Log view (admin only) */}
+        {showLog && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-stone-800 bg-gray-50 dark:bg-stone-800/50">
+              <span className="text-xs font-semibold text-gray-600 dark:text-stone-300">Log de uso — todas as conversas</span>
+              <button
+                onClick={() => void loadLog()}
+                className="text-xs text-orange-600 dark:text-orange-400 hover:underline"
+              >
+                Atualizar
+              </button>
+            </div>
+            {loadingLog ? (
+              <div className="flex justify-center py-10">
+                <svg className="h-5 w-5 animate-spin text-gray-300 dark:text-stone-600" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            ) : logEntries.length === 0 ? (
+              <p className="px-4 py-8 text-center text-xs text-gray-400 dark:text-stone-500 italic">Nenhuma conversa registrada</p>
+            ) : (
+              <div className="divide-y divide-gray-100 dark:divide-stone-800">
+                {logEntries.map((entry) => {
+                  const name = entry.users?.name ?? "Desconhecido"
+                  const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+                  const date = new Date(entry.updated_at)
+                  const dateStr = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                  const timeStr = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                  return (
+                    <button
+                      key={entry.id}
+                      onClick={() => { setShowLog(false); void loadSession(entry.id) }}
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-stone-800/50 transition-colors"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 text-xs font-bold">
+                        {initials}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 dark:text-stone-200 truncate">
+                          {name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-stone-400 truncate mt-0.5">
+                          {entry.title ?? "Conversa sem título"}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-400 dark:text-stone-500 shrink-0 text-right">
+                        <span className="block">{dateStr}</span>
+                        <span className="block">{timeStr}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Chat view: context bar + sessions + messages + input */}
+        {!showLog && <>
 
         {/* Context bar */}
         <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2 dark:border-stone-800 dark:bg-stone-800/50">
@@ -668,6 +778,8 @@ export default function AgentChatPanel({
             Enter para enviar · Shift+Enter nova linha
           </p>
         </div>
+
+        </>}
       </div>
     </>
   )
