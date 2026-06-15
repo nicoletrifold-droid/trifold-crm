@@ -236,9 +236,9 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           {data.brokers.length === 0 && <Text style={s.noData}>Nenhum corretor</Text>}
         </View>
 
-        {/* Week-over-week comparison table — break antes para não cortar título */}
+        {/* Week-over-week comparison table */}
         {data.comparison.length > 0 && (
-          <View break style={s.compSection}>
+          <View style={s.compSection}>
             <Text style={s.compSectionTitle}>Comparativo Semanal — últimos 7 dias vs semana anterior</Text>
             {/* Column headers */}
             <View style={s.compHeaderRow}>
@@ -269,7 +269,7 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
 
         {/* Tempo médio de atendimento por corretor */}
         {data.brokerResponseTimes.length > 0 && (
-          <View break style={{ ...s.section, marginTop: 12 }}>
+          <View style={{ ...s.section, marginTop: 12 }}>
             <Text style={s.sectionTitle}>Tempo Médio de 1º Atendimento por Corretor (últimos 7 dias)</Text>
             <View style={{ ...s.compHeaderRow, borderRadius: 2, marginBottom: 0 }}>
               <Text style={{ ...s.compHeaderLabel, flex: 1 }}>Corretor</Text>
