@@ -45,8 +45,8 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  // Check permission: admin/supervisor or assigned broker
-  if (!["admin", "supervisor"].includes(appUser.role)) {
+  // Check permission: admin/supervisor/gerente-comercial or assigned broker
+  if (!["admin", "supervisor", "gerente-comercial"].includes(appUser.role)) {
     const { data: lead } = await supabase
       .from("leads")
       .select("assigned_broker_id")

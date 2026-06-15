@@ -633,16 +633,21 @@ export async function processMessageWithMetadata(
       .limit(1)
       .maybeSingle()
 
-    if (finalData.visit_availability && hasConfirmedDay(finalData.visit_availability) && !state?.visit_proposed && !existingAppt && conversation.org_id) {
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1)
-      tomorrow.setUTCHours(13, 0, 0, 0) // 10h Maringá = 13h UTC
+    // Skip automatic scheduling when the client explicitly asked for a human (handoff takes priority)
+    if (finalData.visit_availability && hasConfirmedDay(finalData.visit_availability) && !state?.visit_proposed && !existingAppt && conversation.org_id && !handoffResult.trigger) {
+      // Find a free 1-hour slot starting from tomorrow 10h Maringá (13h UTC),
+      // checking that the broker doesn't already have an appointment at that time.
+      const SLOT_HOURS_UTC = [13, 14, 15, 16, 17] // 10h–14h Maringá
+      const base = new Date()
+      base.setDate(base.getDate() + 1)
+      if (base.getDay() === 0) base.setDate(base.getDate() + 1) // skip Sunday
 
       const propertyId = identifiedPropertyId ?? state?.current_property_id
-      let assignedBrokerId: string | null = null
 
-      if (propertyId) {
+      // Prefer lead's already-assigned broker (from roleta) over property's primary broker
+      let assignedBrokerId: string | null = currentLead?.assigned_broker_id ?? null
+
+      if (!assignedBrokerId && propertyId) {
         const { data: assignment } = await supabase
           .from("broker_assignments")
           .select("broker_id, brokers(user_id)")
@@ -657,18 +662,46 @@ export async function processMessageWithMetadata(
         }
       }
 
+      // Find a free slot for the broker (avoid double-booking)
+      let scheduledAt: Date = new Date(base)
+      scheduledAt.setUTCHours(SLOT_HOURS_UTC[0]!, 0, 0, 0)
+
+      if (assignedBrokerId) {
+        for (const utcHour of SLOT_HOURS_UTC) {
+          const candidate = new Date(base)
+          candidate.setUTCHours(utcHour, 0, 0, 0)
+          const slotStart = candidate.toISOString()
+          const slotEnd = new Date(candidate.getTime() + 60 * 60 * 1000).toISOString()
+
+          const { data: clash } = await supabase
+            .from("appointments")
+            .select("id")
+            .eq("broker_id", assignedBrokerId)
+            .in("status", ["scheduled", "confirmed"])
+            .gte("scheduled_at", slotStart)
+            .lt("scheduled_at", slotEnd)
+            .limit(1)
+            .maybeSingle()
+
+          if (!clash) {
+            scheduledAt = candidate
+            break
+          }
+        }
+      }
+
       await supabase.from("appointments").insert({
         org_id: conversation.org_id,
         lead_id: leadId,
         broker_id: assignedBrokerId,
-        scheduled_at: tomorrow.toISOString(),
+        scheduled_at: scheduledAt.toISOString(),
         location: "Sede Trifold - Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby",
         status: "scheduled",
         created_by: "nicole",
         notes: `Visita sugerida pela Nicole. Disponibilidade informada: ${String(finalData.visit_availability)}`,
       })
 
-      leadPatch.visit_scheduled_at = tomorrow.toISOString()
+      leadPatch.visit_scheduled_at = scheduledAt.toISOString()
       leadPatch.stage_id = STAGE_IDS.visita_agendada
 
       // Story 51-7 (ADR-001 guard B1): the lead owner (assigned_broker_id) takes
@@ -716,7 +749,7 @@ export async function processMessageWithMetadata(
       // when the guard kept the existing owner, notify the OWNER, not the property
       // broker. Falls back to the property broker when the lead had no owner.
       const notificationBrokerUserId = resolveNotificationBrokerUserId(assignedBrokerId, currentLead?.assigned_broker_id)
-      emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, broker_user_id: assignedBrokerId, notification_broker_user_id: notificationBrokerUserId, lead_name: leadName, lead_phone: leadPhone, property_id: propertyId ?? null, scheduled_at: tomorrow.toISOString() } })
+      emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CREATED", message: `Visit scheduled for lead${assignedBrokerId ? " with broker" : " WITHOUT broker"}`, metadata: { lead_id: leadId, broker_assigned: !!assignedBrokerId, broker_user_id: assignedBrokerId, notification_broker_user_id: notificationBrokerUserId, lead_name: leadName, lead_phone: leadPhone, property_id: propertyId ?? null, scheduled_at: scheduledAt.toISOString() } })
 
       if (!assignedBrokerId) {
         emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker assignment — no primary broker found for property", metadata: { lead_id: leadId, property_id: propertyId ?? null } })
