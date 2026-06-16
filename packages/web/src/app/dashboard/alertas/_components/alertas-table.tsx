@@ -118,7 +118,7 @@ export function AlertasTable({ alerts: initialAlerts }: Props) {
   const [alerts, setAlerts] = useState(initialAlerts)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [sortKey, setSortKey] = useState<SortKey>("daysSinceContact")
-  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [sortDir, setSortDir] = useState<SortDir>("asc")
 
   const brokerOptions = useMemo(
     () => [...new Set(alerts.map((a) => a.brokerName))].sort(),
