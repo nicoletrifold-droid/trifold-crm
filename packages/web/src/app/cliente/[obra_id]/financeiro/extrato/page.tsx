@@ -1,63 +1,20 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ChevronLeft, FileDown } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getFinancialStatement } from "@web/lib/integrations/sienge/client"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
+import { ExtratoClient } from "./_components/extrato-client"
 
 interface PageProps {
   params: Promise<{ obra_id: string }>
-  searchParams: Promise<{ de?: string; ate?: string }>
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
-}
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value)
-}
-
-const CONDITION_LABEL: Record<string, string> = {
-  AT: "À Vista",
-  PI: "Entrada",
-  PM: "Parcela",
-  CH: "Chave",
-}
-
-function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
-  if (status === "PAGO") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
-        Pago
-      </span>
-    )
-  }
-  if (status === "BOLETO_GERADO") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
-        Boleto gerado
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center rounded-full bg-stone-700/60 px-2.5 py-0.5 text-xs font-semibold text-stone-400">
-      Em aberto
-    </span>
-  )
+  searchParams: Promise<{ de?: string; ate?: string; unidade?: string }>
 }
 
 export default async function ExtratoPage({ params, searchParams }: PageProps) {
   const { obra_id } = await params
-  const { de, ate } = await searchParams
+  const { de, ate, unidade } = await searchParams
 
   const supabase = await createClient()
 
@@ -164,13 +121,6 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
     }
   }
 
-  // Monta query string para o PDF (com os mesmos filtros)
-  const pdfParams = new URLSearchParams()
-  if (de) pdfParams.set("de", de)
-  if (ate) pdfParams.set("ate", ate)
-  const pdfQs = pdfParams.toString()
-  const pdfHref = `/api/cliente/obras/${obra_id}/financeiro/extrato/pdf${pdfQs ? `?${pdfQs}` : ""}`
-
   return (
     <div className="min-h-screen bg-stone-950">
       {/* Mobile header */}
@@ -190,21 +140,7 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
           Voltar
         </Link>
 
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <h1 className="text-xl font-bold text-white lg:text-2xl">Extrato</h1>
-
-          {siengeConfigured && !siengeUnavailable && (
-            <a
-              href={pdfHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-shrink-0 inline-flex items-center gap-2 rounded-lg bg-[#E8856A] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#d4705a] active:scale-95"
-            >
-              <FileDown className="h-4 w-4" />
-              Gerar PDF
-            </a>
-          )}
-        </div>
+        <h1 className="mb-6 text-xl font-bold text-white lg:text-2xl">Extrato</h1>
 
         {/* Filtro de período */}
         {siengeConfigured && !siengeUnavailable && (
@@ -265,98 +201,14 @@ export default async function ExtratoPage({ params, searchParams }: PageProps) {
           </div>
         )}
 
-        {siengeConfigured && !siengeUnavailable && installments.length === 0 && (
-          <div className="rounded-xl border border-stone-800 bg-stone-900 px-6 py-12 text-center">
-            <p className="text-sm text-stone-500">
-              {de || ate ? "Nenhuma parcela no período selecionado." : "Nenhuma parcela encontrada."}
-            </p>
-          </div>
-        )}
-
-        {siengeConfigured && !siengeUnavailable && installments.length > 0 && (
-          <>
-            {/* Resumo rápido */}
-            {(() => {
-              const pagas = installments.filter((i) => i.status === "PAGO")
-              const pendentes = installments.filter((i) => i.status !== "PAGO")
-              const totalPago = pagas.reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
-              const totalPendente = pendentes.reduce(
-                (sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue),
-                0
-              )
-              return (
-                <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {pagas.length > 0 && (
-                    <div className="rounded-xl border border-stone-800 bg-stone-900 p-3 text-center">
-                      <p className="text-xs font-semibold text-emerald-400">Pago</p>
-                      <p className="mt-1 text-sm font-bold text-white">{formatCurrency(totalPago)}</p>
-                      <p className="text-xs text-stone-500">{pagas.length} parcela{pagas.length !== 1 ? "s" : ""}</p>
-                    </div>
-                  )}
-                  {pendentes.length > 0 && (
-                    <div className="rounded-xl border border-stone-800 bg-stone-900 p-3 text-center">
-                      <p className="text-xs font-semibold text-stone-400">Em aberto</p>
-                      <p className="mt-1 text-sm font-bold text-white">{formatCurrency(totalPendente)}</p>
-                      <p className="text-xs text-stone-500">{pendentes.length} parcela{pendentes.length !== 1 ? "s" : ""}</p>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* Lista de parcelas */}
-            <div className="space-y-3">
-              {installments.map((inst) => (
-                <div
-                  key={`${inst.billReceivableId}-${inst.installmentId}`}
-                  className="rounded-xl border border-stone-800 bg-stone-900 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-white">
-                          {CONDITION_LABEL[inst.conditionType] ?? inst.conditionType}{" "}
-                          {inst.installmentNumber}
-                        </span>
-                        <StatusBadge status={inst.status} />
-                      </div>
-                      <p className="mt-1 text-xs text-stone-500">
-                        Vencimento: {formatDate(inst.dueDate)}
-                        {inst.receiptDate && (
-                          <span className="ml-3 text-emerald-400">
-                            Pago em: {formatDate(inst.receiptDate)}
-                          </span>
-                        )}
-                        {inst.documentId && (
-                          <span className="ml-3 text-stone-400">Doc: {inst.documentId}</span>
-                        )}
-                      </p>
-                      <p className="mt-2 text-base font-bold text-white">
-                        {formatCurrency(
-                          inst.status === "PAGO"
-                            ? (inst.receiptValue ?? inst.originalValue)
-                            : inst.currentBalance > 0
-                              ? inst.currentBalance
-                              : inst.originalValue
-                        )}
-                      </p>
-                    </div>
-
-                    {inst.hasBoleto && inst.status !== "PAGO" && (
-                      <a
-                        href={`/api/cliente/obras/${obra_id}/financeiro/boleto?billReceivableId=${inst.billReceivableId}&installmentId=${inst.installmentId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-shrink-0 rounded-lg bg-[#F27A5E] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#d4705a] active:scale-95"
-                      >
-                        Ver boleto
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+        {siengeConfigured && !siengeUnavailable && (
+          <ExtratoClient
+            obraId={obra_id}
+            installments={installments}
+            unidadeInicial={unidade}
+            de={de}
+            ate={ate}
+          />
         )}
       </main>
     </div>
