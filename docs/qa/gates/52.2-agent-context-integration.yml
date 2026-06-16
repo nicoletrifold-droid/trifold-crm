@@ -1,0 +1,37 @@
+schema: 1
+story: '52.2'
+gate: CONCERNS
+status_reason: 'SEC-002 RESOLVIDO/GREEN (client authenticated anon+JWT end-to-end, zero service_role), fail-closed e gate isAdmin corretos, CON-5 preservado. CONCERNS por 2 limitacoes nao-bloqueantes: AC5 so resolve conversa via UUID explicito (nao por nome) e AC12 estoura budget no caso extremo (~2.400 tokens com 20 campanhas x todos stages). Validado estaticamente + contrato de banco; E2E autenticado pendente (follow-up manual como nas 52-1/52-3/52-4).'
+reviewer: 'Quinn'
+updated: '2026-06-16T20:00:00Z'
+sec_002_forward_gate:
+  origin: 'Forward-gate herdado da 52-4 (SEC-002).'
+  verdict: RESOLVED_GREEN
+  evidence:
+    - 'chat/route.ts:80 destructura { supabase, appUser } de requireAuth(). Esse mesmo supabase eh passado a fetchPipelineAggregates/fetchLeadDrill/fetchLeadConversations e a log_pii_access.'
+    - 'Cadeia: requireAuth() (api-auth.ts:29) -> createClient() (server.ts:4) -> createServerClient(@supabase/ssr) com SUPABASE_ANON_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY + cookies do usuario (JWT). Role efetivo = authenticated.'
+    - 'grep por service_role/SERVICE_ROLE/serviceRole em packages/web/src/lib/agent/ e chat/route.ts = 0 ocorrencias. Nenhum bypass de RLS no caminho do agente.'
+    - 'Consequencia: RLS admin-only + isolamento por org das views (52-1) e public.user_role()=admin + anti cross-tenant de log_pii_access (52-4) aplicam-se. Defesa em profundidade preservada (gate isAdmin na app + RLS no banco).'
+verified_green:
+  - 'Fail-closed (AC6): fetchLeadDrill (context-builder.ts:559-574) e fetchLeadConversations (623-637) chamam log_pii_access ANTES de qualquer SELECT na view; if (auditOk !== true || auditErr !== null) -> console.error + return null. Nenhuma leitura de PII antes da confirmacao true. Caller (route.ts:175-176, 184-185) injeta string de indisponibilidade quando null.'
+  - 'Gate isAdmin (AC13/AC14): bloco if (admin) (route.ts:168) eh o UNICO ponto de decisao de CRM; nenhum helper de pipeline eh alcancavel fora dele. Non-admin (route.ts:188-191) nao acrescenta nada e apenas loga "[52-2] pipeline CRM ignorado". isAdmin = user.role === "admin" estrito (auth-helpers.ts:26-28); nao usa canAccess() nem is_admin_or_supervisor().'
+  - 'CON-5 (sem regressao): mediaContext = buildContext(...) sempre construido (route.ts:159) independente do role; pipelineContext eh puramente aditivo (route.ts:194 mediaContext + pipelineContext). buildGlobalContext/buildCampaignContext intactos. system-prompt: secoes "Suas capacidades", "Como responder", "Acoes executaveis" e bloco <action_card> preservadas; nova secao "## Acesso ao pipeline comercial" adicionada (apenas aditiva).'
+  - 'Cache (AC8): agregados cacheados em pipeline_agg:{orgId} apenas para janela 30d (context-builder.ts:478-483, 538); drill e conversas NUNCA cacheados. Cache separado do global:{orgId} (nao polui cache de midia compartilhado por todos os roles).'
+  - 'Isolamento multi-tenant (AC11): .eq("org_id", orgId) presente em v_pipeline_stage_distribution, v_lead_drill, v_lead_conversations; RPC recebe p_days e filtra por org via RLS. Defesa em profundidade alem da RLS.'
+  - 'NULL=sem midia (REL-001): fmtBRLNullable (context-builder.ts:459-461) -> "—" para null/undefined, nunca "R$0,00"; nota explicita na tabela (linha 507) + instrucao obrigatoria no AGENT_SYSTEM_PROMPT (system-prompt.ts:29).'
+  - 'aggregated_metrics nao logado: dentro do contrato. AC7 exige que agregados NAO sejam fail-closed; logging de agregados eh explicitamente opcional na story (Dev Notes AUTO-DECISION). Decisao documentada no Dev Agent Record item 5.'
+  - 'Type-check 0 erros; lint 0 erros/warnings NOVOS. Warning context-builder.ts:160 ('today' unused em buildCampaignContext) confirmado PRE-EXISTENTE via git show HEAD (presente no commit anterior; funcao nao tocada por esta story).'
+top_issues:
+  - id: 'REQ-001'
+    severity: medium
+    finding: 'AC5 parcial: extractLeadId (route.ts:31-34) so resolve conversa quando ha UUID explicito na mensagem. A pergunta-exemplo da propria AC5 ("o que foi dito na conversa do lead Joao?") NAO dispara fetchLeadConversations (sem UUID), apesar de requiresConversation=true. O usuario precisaria colar o UUID do lead.'
+    suggested_action: 'Aceito como limitacao conservadora (decisao de produto), NAO como falha bloqueante: (a) o comportamento eh seguro — prefere nao buscar PII a buscar o lead errado por match de nome ambiguo; (b) resolver por nome exigiria query extra de resolucao nome->lead_id, fora do escopo declarado da story (T6.3 explicita "melhor esforco, pode retornar null"). Registrar como follow-up para 52-5 (UX): UI pode oferecer selecao de lead -> injeta lead_id, ou backend resolve nome->id via v_lead_drill quando match unico. Documentar a limitacao na UX da 52-5 para o usuario saber referenciar por id.'
+  - id: 'PERF-001'
+    severity: low
+    finding: 'AC12 (token budget): caso extremo (20 campanhas x 7 stage_types = 140 rows de distribuicao + 20 rows de funil) estimado em ~2.400 tokens, acima do alvo de 2.000. O caso TIPICO da AC12 (<=20 campanhas, <=10 stages, ex.: 5x5) passa folgado (~635 tokens). Sem cap de rows na distribuicao por stage.'
+    suggested_action: 'Aceito como nao-bloqueante: (a) AC12 dimensiona o budget contra dataset "tipico" e o tipico passa; (b) o limite real de contexto do claude-sonnet-4-6 (200K) nao corre risco; 2.400 vs 2.000 eh estouro de um alvo conservador, nao de um limite tecnico. Follow-up: se orgs com 20 campanhas ativas x todos os stages forem comuns em producao, adicionar cap top-N por lead_count na distribuicao por stage (Dev Notes item 6 ja sinaliza o one-liner). Nao implementar agora para nao alterar a semantica de AC3 sem decisao de produto.'
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'E2E funcional autenticado nao executado nesta sessao (requer app Next apontando p/ DEV xnxvygyfyyyzwhiuoehz + chave Anthropic + login real com JWT dos usuarios seedados na org 52000000-...-a1). @dev fez apenas smoke-test de contrato via anon (RPC+3 views existem e bloqueiam anon com 42501; log_pii_access -> 200 false confirmando fail-closed no nivel do banco).'
+    suggested_action: 'Spot-check manual obrigatorio antes de confiar em producao (T9 da story): (1) admin envia as 3 driving questions -> tabela com leads_fechado/cpl_real_visitou/cpl_real_fechado + "—" para campanha sem midia; (2) admin drill com campanha entre aspas -> row lead_drill em agent_pii_access_log; (3) fail-closed: REVOKE EXECUTE de log_pii_access no DEV -> resposta sem PII + aviso + console.error [52-2] (reverter REVOKE depois); (4) regressao: "Qual campanha tem melhor CTR?" / "Pause a pior campanha" -> action_card sem regressao e requiresDrill=false; (5) cenario 12: supervisor e broker -> sem chamada a fetchPipelineAggregates, contexto sem PIPELINE COMERCIAL, midia normal. Mesmo padrao de honestidade das gates 52-1/52-3/52-4 (Done = estatico+contrato; E2E pendente).'
+waiver: { active: false }
