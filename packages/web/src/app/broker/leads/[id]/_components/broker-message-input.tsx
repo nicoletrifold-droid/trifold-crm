@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { MediaPickerModal } from "./media-picker-modal"
 
 const MAX_MESSAGE_LENGTH = 4096
 
@@ -32,6 +33,7 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
   const [text, setText] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showMediaPicker, setShowMediaPicker] = useState(false)
 
   const trimmed = text.trim()
   const disabled = loading || trimmed.length === 0 || trimmed.length > MAX_MESSAGE_LENGTH
@@ -86,38 +88,55 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
   }
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4 dark:border-stone-800">
-      {error && (
-        <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-          {error}
-        </p>
-      )}
-      <div className="flex items-end gap-2">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          maxLength={MAX_MESSAGE_LENGTH}
-          rows={2}
-          placeholder="Digite sua mensagem para o lead…"
-          disabled={loading}
-          className="min-h-[44px] flex-1 resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+    <>
+      <div className="mt-4 border-t border-gray-100 pt-4 dark:border-stone-800">
+        {error && (
+          <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+            {error}
+          </p>
+        )}
+        <div className="flex items-end gap-2">
+          <button
+            type="button"
+            title="Enviar arquivo da biblioteca"
+            onClick={() => setShowMediaPicker(true)}
+            className="flex-shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-gray-500 hover:border-orange-400 hover:text-orange-600 dark:border-stone-700 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400"
+          >
+            📎
+          </button>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            maxLength={MAX_MESSAGE_LENGTH}
+            rows={2}
+            placeholder="Digite sua mensagem para o lead…"
+            disabled={loading}
+            className="min-h-[44px] flex-1 resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+          />
+          <button
+            type="button"
+            onClick={() => void handleSend()}
+            disabled={disabled}
+            className="flex-shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Enviando…" : "Enviar"}
+          </button>
+        </div>
+        <div className="mt-1 flex justify-between text-[11px] text-gray-400 dark:text-stone-500">
+          <span>Ctrl/Cmd + Enter para enviar</span>
+          <span>
+            {trimmed.length}/{MAX_MESSAGE_LENGTH}
+          </span>
+        </div>
+      </div>
+
+      {showMediaPicker && (
+        <MediaPickerModal
+          leadId={leadId}
+          onClose={() => setShowMediaPicker(false)}
         />
-        <button
-          type="button"
-          onClick={() => void handleSend()}
-          disabled={disabled}
-          className="flex-shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Enviando…" : "Enviar"}
-        </button>
-      </div>
-      <div className="mt-1 flex justify-between text-[11px] text-gray-400 dark:text-stone-500">
-        <span>Ctrl/Cmd + Enter para enviar</span>
-        <span>
-          {trimmed.length}/{MAX_MESSAGE_LENGTH}
-        </span>
-      </div>
-    </div>
+      )}
+    </>
   )
 }

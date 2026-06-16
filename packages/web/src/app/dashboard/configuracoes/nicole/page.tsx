@@ -16,6 +16,13 @@ const ALL_CARDS = [
     description: "Base de conhecimento sobre empreendimentos",
     roles: ["admin", "supervisor", "gerente-comercial"],
   },
+  {
+    href: "/dashboard/configuracoes/nicole/midia",
+    icon: "▦",
+    title: "Mídia",
+    description: "Imagens e PDFs para enviar nas conversas",
+    roles: ["admin", "supervisor", "gerente-comercial"],
+  },
 ]
 
 export default async function NicolePage() {
