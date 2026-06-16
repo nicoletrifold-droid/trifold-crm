@@ -1,8 +1,50 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAnthropicClient } from "@trifold/ai"
-import { buildContext } from "@web/lib/agent/context-builder"
+import {
+  buildContext,
+  fetchPipelineAggregates,
+  fetchLeadDrill,
+  fetchLeadConversations,
+  requiresDrill,
+  requiresConversation,
+} from "@web/lib/agent/context-builder"
+import { isAdmin } from "@web/lib/agent/auth-helpers"
 import { AGENT_SYSTEM_PROMPT } from "@web/lib/agent/system-prompt"
+
+// ─── On-demand extraction helpers (Story 52-2) ────────────────────────────────
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+const STAGE_TYPES = [
+  "novo",
+  "qualificado",
+  "agendado",
+  "visitou",
+  "proposta",
+  "fechado",
+  "perdido",
+]
+
+// Extrai um lead_id (UUID) da mensagem como melhor esforço. Retorna null se não
+// houver UUID identificável — nesse caso a busca de conversa NÃO é disparada
+// (Story 52-2 T6.3). O nome do lead não basta para resolver lead_id sem uma
+// query adicional; mantemos o contrato conservador (UUID explícito).
+function extractLeadId(userMessage: string): string | null {
+  const m = UUID_RE.exec(userMessage)
+  return m ? m[0] : null
+}
+
+// Extrai filtros de drill (campanha e stage_type) da mensagem — melhor esforço,
+// sem inventar campos. Campanha entre aspas tem prioridade; stage_type é casado
+// contra o enum conhecido.
+function extractDrillFilters(userMessage: string): { campaign?: string; stageType?: string } {
+  const filters: { campaign?: string; stageType?: string } = {}
+  const quoted = /["'“”]([^"'“”]{2,80})["'“”]/.exec(userMessage)
+  if (quoted) filters.campaign = quoted[1]!.trim()
+  const lower = userMessage.toLowerCase()
+  const stage = STAGE_TYPES.find((s) => lower.includes(s))
+  if (stage) filters.stageType = stage
+  return filters
+}
 
 // ─── Rate limiting (in-memory, per user, 20 msg/min) ──────────────────────────
 const rateLimitMap = new Map<string, number[]>()
@@ -113,8 +155,43 @@ export async function POST(request: NextRequest) {
     content: message,
   })
 
-  // ── Build context ──────────────────────────────────────────────────────────
-  const contextText = await buildContext(supabase, appUser.org_id, context_type, context_id)
+  // ── Build context (mídia — sempre, para todos os roles; CON-5) ──────────────
+  const mediaContext = await buildContext(supabase, appUser.org_id, context_type, context_id)
+
+  // ── Gate de CRM (Story 52-2) — decisão de produto: SOMENTE admin ─────────────
+  // Único ponto de decisão para acesso a dados de pipeline/CRM. Verificação
+  // estrita via isAdmin (appUser.role === 'admin'); NUNCA canAccess() nem
+  // is_admin_or_supervisor(). A RLS das views/RPC (Story 52-1) é a 2ª camada.
+  const admin = isAdmin(appUser)
+  let pipelineContext = ""
+
+  if (admin) {
+    // Agregados (sem PII) — sempre para admin, cacheáveis (AC1, AC2, AC3, AC8)
+    pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id))
+
+    // Drill on-demand (PII) — disparado por heurística; fail-closed (AC4, AC6)
+    if (requiresDrill(message)) {
+      const drill = await fetchLeadDrill(supabase, appUser.org_id, sessionId ?? null, extractDrillFilters(message))
+      pipelineContext += "\n\n" + (drill ??
+        "[DADOS SENSÍVEIS INDISPONÍVEIS — acesso de auditoria não pôde ser registrado neste momento. Informe o usuário que o detalhamento de lead não está disponível temporariamente.]")
+    }
+
+    // Conversa on-demand (PII) — disparado por heurística; fail-closed (AC5, AC6)
+    if (requiresConversation(message)) {
+      const leadId = extractLeadId(message)
+      if (leadId) {
+        const conv = await fetchLeadConversations(supabase, appUser.org_id, sessionId ?? null, leadId)
+        pipelineContext += "\n\n" + (conv ??
+          "[DADOS SENSÍVEIS INDISPONÍVEIS — acesso de auditoria não pôde ser registrado neste momento. Informe o usuário que o conteúdo da conversa não está disponível temporariamente.]")
+      }
+    }
+  } else {
+    // Non-admin: nenhum dado de CRM buscado nem injetado (AC13, CON-5).
+    console.log("[52-2] pipeline CRM ignorado para request non-admin")
+  }
+
+  // Contexto final: mídia sempre + pipeline somente para admin (aditivo)
+  const contextText = mediaContext + pipelineContext
 
   // ── Stream from Claude ─────────────────────────────────────────────────────
   const anthropic = createAnthropicClient()

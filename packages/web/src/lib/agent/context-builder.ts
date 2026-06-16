@@ -336,3 +336,331 @@ export function buildContext(
   }
   return buildGlobalContext(supabase, orgId)
 }
+
+// ─── Pipeline CRM (Story 52-2) ──────────────────────────────────────────────
+// Helpers de integração mídia × funil comercial. Consumidos APENAS quando
+// isAdmin === true (gate aplicado em chat/route.ts). Os agregados são
+// cacheáveis; drill e conversas (PII) NUNCA são cacheados (AC8).
+
+// Heurística on-demand — palavras-chave que indicam necessidade de drill
+// de lead individual. Lista documentada no Dev Agent Record (T2.3).
+const DRILL_KEYWORDS = [
+  "lead",
+  "leads",
+  "contato",
+  "quem é",
+  "quem e",
+  "me mostra",
+  "mostra os",
+  "detalhe",
+  "detalhes do",
+  "proposta de",
+  "histórico de",
+  "historico de",
+  "score",
+  "qualification",
+  "qualificação do",
+  "qualificacao do",
+]
+
+// Heurística on-demand — palavras-chave que indicam necessidade de conteúdo
+// de conversa. Lista documentada no Dev Agent Record (T2.3).
+const CONVERSATION_KEYWORDS = [
+  "conversa",
+  "conversas",
+  "mensagem",
+  "mensagens",
+  "o que foi dito",
+  "o que falaram",
+  "histórico da conversa",
+  "historico da conversa",
+  "nicole",
+  "chat com",
+  "diálogo",
+  "dialogo",
+]
+
+/**
+ * Heurística: a query do usuário pede detalhamento de lead individual?
+ * Baseada em palavras-chave (case-insensitive). Determina quando PII de
+ * `v_lead_drill` flui ao modelo — por isso a lista é auditável.
+ */
+export function requiresDrill(userMessage: string): boolean {
+  const msg = userMessage.toLowerCase()
+  return DRILL_KEYWORDS.some((kw) => msg.includes(kw))
+}
+
+/**
+ * Heurística: a query do usuário pede conteúdo de conversa?
+ * Baseada em palavras-chave (case-insensitive). Determina quando o conteúdo
+ * sensível de `v_lead_conversations` flui ao modelo.
+ */
+export function requiresConversation(userMessage: string): boolean {
+  const msg = userMessage.toLowerCase()
+  return CONVERSATION_KEYWORDS.some((kw) => msg.includes(kw))
+}
+
+// Tipos das linhas retornadas pelas views/função RPC da Story 52-1.
+interface FunnelRow {
+  org_id: string
+  utm_source: string | null
+  utm_campaign: string | null
+  utm_medium: string | null
+  total_leads: number
+  leads_qualificado: number
+  leads_agendado: number
+  leads_visitou: number
+  leads_proposta: number
+  leads_fechado: number
+  total_spend: number | null
+  cpl_real_visitou: number | null
+  cpl_real_fechado: number | null
+}
+
+interface StageDistRow {
+  org_id: string
+  utm_source: string | null
+  utm_campaign: string | null
+  stage_type: string | null
+  lead_count: number
+  pct_of_total: number | null
+}
+
+interface LeadDrillRow {
+  id: string
+  org_id: string
+  name: string | null
+  qualification_score: number | null
+  stage_type: string | null
+  stage_position: number | null
+  source: string | null
+  utm_source: string | null
+  utm_campaign: string | null
+  utm_medium: string | null
+  utm_content: string | null
+  ai_summary: string | null
+  created_at: string
+}
+
+interface ConversationRow {
+  org_id: string
+  lead_id: string
+  conversation_id: string
+  channel: string | null
+  is_ai_active: boolean | null
+  message_id: string
+  role: string | null
+  content: string | null
+  message_created_at: string
+}
+
+// Formata um valor monetário NULL-aware: NULL = "—" (sem mídia correlacionada),
+// NUNCA "R$0,00" (REL-001 da Story 52-1).
+function fmtBRLNullable(n: number | null): string {
+  return n !== null && n !== undefined ? `R$${fmtBRL(Number(n))}` : "—"
+}
+
+/**
+ * fetchPipelineAggregates — agregados de funil (RPC) + distribuição por stage (view).
+ * Sem PII. Cacheável na chave `pipeline_agg:{orgId}` (TTL 5 min, AC8).
+ *
+ * @param pDays Janela de tempo do spend/CPL (default 30, AC1/AC2).
+ * @returns Seção de texto `=== PIPELINE COMERCIAL ===`, ou "" se sem dados.
+ */
+export async function fetchPipelineAggregates(
+  supabase: SupabaseClient,
+  orgId: string,
+  pDays?: number,
+): Promise<string> {
+  const days = pDays ?? 30
+  // Cache apenas para a janela default (30d); janelas customizadas não cacheadas
+  // para não poluir a chave com múltiplas variações.
+  const cacheable = days === 30
+  const key = `pipeline_agg:${orgId}`
+  if (cacheable) {
+    const cached = getCached(key)
+    if (cached !== null) return cached
+  }
+
+  const [funnelRes, stageRes] = await Promise.all([
+    supabase.rpc("pipeline_funnel_by_campaign", { p_days: days }),
+    supabase
+      .from("v_pipeline_stage_distribution")
+      .select("*")
+      .eq("org_id", orgId),
+  ])
+
+  const funnel = (funnelRes.data ?? []) as FunnelRow[]
+  const stages = (stageRes.data ?? []) as StageDistRow[]
+
+  if (funnel.length === 0 && stages.length === 0) {
+    return ""
+  }
+
+  const lines: string[] = []
+  lines.push(`=== PIPELINE COMERCIAL (integração mídia × funil) ===`)
+  lines.push("")
+
+  if (funnel.length > 0) {
+    lines.push(`--- Funil por Campanha/UTM (últimos ${days} dias) ---`)
+    lines.push(
+      `[Nota: CPL Visitou/CPL Fechado = "—" quando não há dados de mídia correlacionados por nome de campanha — NÃO interprete como R$0,00]`,
+    )
+    lines.push(
+      "| Campanha/UTM | Source | Total Leads | Qualif. | Agend. | Visitou | Proposta | Fechou | CPL Visitou | CPL Fechado |",
+    )
+    lines.push(
+      "|--------------|--------|-------------|---------|--------|---------|----------|--------|-------------|-------------|",
+    )
+    for (const f of funnel) {
+      const camp = f.utm_campaign ?? "(sem campanha)"
+      const src = f.utm_source ?? "—"
+      lines.push(
+        `| ${camp} | ${src} | ${f.total_leads} | ${f.leads_qualificado} | ${f.leads_agendado} | ${f.leads_visitou} | ${f.leads_proposta} | ${f.leads_fechado} | ${fmtBRLNullable(f.cpl_real_visitou)} | ${fmtBRLNullable(f.cpl_real_fechado)} |`,
+      )
+    }
+    lines.push("")
+  }
+
+  if (stages.length > 0) {
+    lines.push("--- Distribuição por Stage ---")
+    lines.push("| Campanha/UTM | Stage | Leads | % do Total |")
+    lines.push("|--------------|-------|-------|------------|")
+    for (const s of stages) {
+      const camp = s.utm_campaign ?? "(sem campanha)"
+      const stage = s.stage_type ?? "(sem stage)"
+      const pctStr = s.pct_of_total !== null ? fmtPct(Number(s.pct_of_total)) : "—"
+      lines.push(`| ${camp} | ${stage} | ${s.lead_count} | ${pctStr} |`)
+    }
+  }
+
+  const text = lines.join("\n")
+  if (cacheable) setCached(key, text)
+  return text
+}
+
+/**
+ * fetchLeadDrill — drill on-demand de leads individuais (v_lead_drill, contém PII).
+ * Fail-closed (AC4, AC6): chama `log_pii_access` ANTES de consultar a view.
+ * Se a auditoria retornar `false`/erro → retorna `null` (caller injeta aviso).
+ * NUNCA cacheado.
+ *
+ * @param sessionId Sessão de chat ativa (NULL permitido — Story 52-4 AC2).
+ * @param filters Filtros de campanha/stage extraídos da query (melhor esforço).
+ * @returns Seção `=== DRILL DE LEADS ===` ou `null` em fail-closed.
+ */
+export async function fetchLeadDrill(
+  supabase: SupabaseClient,
+  orgId: string,
+  sessionId: string | null,
+  filters: { campaign?: string; stageType?: string; limit?: number },
+): Promise<string | null> {
+  // ── Fail-closed: auditoria ANTES de qualquer leitura de PII ──────────────
+  const { data: auditOk, error: auditErr } = await supabase.rpc("log_pii_access", {
+    p_org_id: orgId,
+    p_session_id: sessionId ?? null,
+    p_data_type: "lead_drill",
+    p_scope: { filters },
+    p_view_or_source: "v_lead_drill",
+  })
+
+  if (auditOk !== true || auditErr !== null) {
+    console.error("[52-2] log_pii_access falhou — acesso a v_lead_drill negado", {
+      error: auditErr,
+      data: auditOk,
+      orgId,
+    })
+    return null
+  }
+
+  // ── Somente após auditoria OK: consultar a view sensível ─────────────────
+  let query = supabase.from("v_lead_drill").select("*").eq("org_id", orgId)
+  if (filters.campaign) query = query.eq("utm_campaign", filters.campaign)
+  if (filters.stageType) query = query.eq("stage_type", filters.stageType)
+  const { data, error } = await query.limit(filters.limit ?? 10)
+
+  if (error) {
+    console.error("[52-2] erro ao consultar v_lead_drill", { error, orgId })
+    return null
+  }
+
+  const rows = (data ?? []) as LeadDrillRow[]
+  if (rows.length === 0) {
+    return "=== DRILL DE LEADS ===\n(nenhum lead encontrado para os filtros informados)"
+  }
+
+  const lines: string[] = []
+  lines.push("=== DRILL DE LEADS ===")
+  lines.push("| Nome | Score | Stage | Campanha/UTM | Resumo IA |")
+  lines.push("|------|-------|-------|--------------|-----------|")
+  for (const r of rows) {
+    const name = r.name ?? "(sem nome)"
+    const score = r.qualification_score ?? "—"
+    const stage = r.stage_type ?? "—"
+    const camp = r.utm_campaign ?? "—"
+    const summary = (r.ai_summary ?? "—").replace(/\n/g, " ").slice(0, 200)
+    lines.push(`| ${name} | ${score} | ${stage} | ${camp} | ${summary} |`)
+  }
+  return lines.join("\n")
+}
+
+/**
+ * fetchLeadConversations — conteúdo de conversa on-demand (v_lead_conversations, PII).
+ * Fail-closed (AC5, AC6): chama `log_pii_access` ANTES de consultar a view.
+ * NUNCA cacheado.
+ *
+ * @param sessionId Sessão de chat ativa (NULL permitido).
+ * @param leadId Lead alvo da conversa.
+ * @returns Seção `=== CONVERSA DO LEAD ===` ou `null` em fail-closed.
+ */
+export async function fetchLeadConversations(
+  supabase: SupabaseClient,
+  orgId: string,
+  sessionId: string | null,
+  leadId: string,
+): Promise<string | null> {
+  // ── Fail-closed: auditoria ANTES de qualquer leitura de PII ──────────────
+  const { data: auditOk, error: auditErr } = await supabase.rpc("log_pii_access", {
+    p_org_id: orgId,
+    p_session_id: sessionId ?? null,
+    p_data_type: "conversation_content",
+    p_scope: { lead_id: leadId },
+    p_view_or_source: "v_lead_conversations",
+  })
+
+  if (auditOk !== true || auditErr !== null) {
+    console.error(
+      "[52-2] log_pii_access falhou — acesso a v_lead_conversations negado",
+      { error: auditErr, data: auditOk, orgId },
+    )
+    return null
+  }
+
+  // ── Somente após auditoria OK: consultar a view sensível ─────────────────
+  const { data, error } = await supabase
+    .from("v_lead_conversations")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("lead_id", leadId)
+    .order("message_created_at", { ascending: true })
+    .limit(50)
+
+  if (error) {
+    console.error("[52-2] erro ao consultar v_lead_conversations", { error, orgId })
+    return null
+  }
+
+  const rows = (data ?? []) as ConversationRow[]
+  if (rows.length === 0) {
+    return "=== CONVERSA DO LEAD ===\n(nenhuma mensagem encontrada para este lead)"
+  }
+
+  const lines: string[] = []
+  lines.push("=== CONVERSA DO LEAD ===")
+  for (const m of rows) {
+    const role = m.role ?? "?"
+    const content = (m.content ?? "").replace(/\n/g, " ")
+    lines.push(`[${role}] ${content}`)
+  }
+  return lines.join("\n")
+}
