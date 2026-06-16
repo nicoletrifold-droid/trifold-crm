@@ -317,15 +317,15 @@ export default function AuditLogsPage() {
       <div>
         <Link
           href="/dashboard/sistema"
-          className="text-sm text-stone-500 hover:text-stone-700"
+          className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
         >
           &larr; Sistema
         </Link>
         <div className="mt-1 flex items-center gap-2">
           <History className="h-5 w-5 text-orange-600" />
-          <h1 className="text-xl font-semibold text-stone-900">Log de Atividades</h1>
+          <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">Log de Atividades</h1>
         </div>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Auditoria completa de ações realizadas no sistema.
         </p>
       </div>
@@ -339,7 +339,7 @@ export default function AuditLogsPage() {
         <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 lg:grid-cols-3">
           {/* Usuário */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">Usuário</label>
+            <label className="mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400">Usuário</label>
             <select
               value={draftFilters.user_id}
               onChange={(e) =>
@@ -358,7 +358,7 @@ export default function AuditLogsPage() {
 
           {/* Tipo de ação */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">
+            <label className="mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400">
               Tipo de ação
             </label>
             <select
@@ -377,7 +377,7 @@ export default function AuditLogsPage() {
 
           {/* Ação específica (depende do tipo) */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">
+            <label className="mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400">
               Ação específica
             </label>
             <select
@@ -386,7 +386,7 @@ export default function AuditLogsPage() {
                 setDraftFilters((p) => ({ ...p, action: e.target.value }))
               }
               disabled={!draftFilters.type}
-              className="w-full rounded border border-stone-200 px-3 py-2 text-sm text-stone-700 disabled:bg-stone-50 disabled:text-stone-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:disabled:bg-stone-800 dark:disabled:text-stone-600"
+              className="w-full rounded border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
             >
               <option value="">Todas do tipo</option>
               {specificActions.map((a) => (
@@ -399,7 +399,7 @@ export default function AuditLogsPage() {
 
           {/* Obra ID */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">Obra ID</label>
+            <label className="mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400">Obra ID</label>
             <input
               type="text"
               value={draftFilters.obra_id}
@@ -413,7 +413,7 @@ export default function AuditLogsPage() {
 
           {/* Data de */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">De</label>
+            <label className="mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400">De</label>
             <input
               type="date"
               value={draftFilters.date_from}
@@ -426,7 +426,7 @@ export default function AuditLogsPage() {
 
           {/* Data até */}
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-600">Até</label>
+            <label className="mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400">Até</label>
             <input
               type="date"
               value={draftFilters.date_to}
@@ -441,7 +441,7 @@ export default function AuditLogsPage() {
           <button
             type="button"
             onClick={handleResetFilters}
-            className="inline-flex items-center gap-1.5 rounded border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+            className="inline-flex items-center gap-1.5 rounded border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-400 dark:hover:bg-stone-800"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Limpar
@@ -459,12 +459,12 @@ export default function AuditLogsPage() {
 
       {/* Toolbar: total + exportar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-stone-600">
+        <p className="text-sm text-stone-600 dark:text-stone-400">
           {loading ? (
             "Carregando…"
           ) : (
             <>
-              <span className="font-medium text-stone-900">{total}</span>{" "}
+              <span className="font-medium text-stone-900 dark:text-stone-100">{total}</span>{" "}
               {total === 1 ? "registro encontrado" : "registros encontrados"}
             </>
           )}
@@ -535,16 +535,16 @@ export default function AuditLogsPage() {
       {/* Paginação */}
       {total > PAGE_SIZE && (
         <div className="flex items-center justify-between">
-          <p className="text-xs text-stone-500">
-            Página <span className="font-medium text-stone-700">{page + 1}</span> de{" "}
-            <span className="font-medium text-stone-700">{totalPages}</span>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            Página <span className="font-medium text-stone-700 dark:text-stone-300">{page + 1}</span> de{" "}
+            <span className="font-medium text-stone-700 dark:text-stone-300">{totalPages}</span>
           </p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={!hasPrev || loading}
-              className="rounded border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               Anterior
             </button>
@@ -552,7 +552,7 @@ export default function AuditLogsPage() {
               type="button"
               onClick={() => setPage((p) => p + 1)}
               disabled={!hasNext || loading}
-              className="rounded border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
             >
               Próxima
             </button>
