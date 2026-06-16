@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { metaFetch, MetaOAuthException, MetaPermissionError } from "@trifold/shared"
 
+// Whitelist of action types the agent is allowed to execute.
+// Confined exclusively to media (Meta Ads) actions — the agent has NO write
+// access to CRM entities (read-only enforcement, NFR-SEC-2). Adding a new type
+// here without a matching case in the switch below produces a compile error.
+const ALLOWED_ACTION_TYPES = ["pause_campaign", "resume_campaign", "set_daily_budget"] as const
+
 interface ActionCard {
-  type: "pause_campaign" | "resume_campaign" | "set_daily_budget"
+  type: typeof ALLOWED_ACTION_TYPES[number]
   entity_id: string
   entity_name?: string
   description?: string
@@ -57,10 +63,11 @@ export async function POST(request: NextRequest) {
 
   const card = message.action_card as ActionCard
 
-  // Validate action types
-  const validTypes = ["pause_campaign", "resume_campaign", "set_daily_budget"]
-  if (!validTypes.includes(card.type)) {
-    return NextResponse.json({ error: "INVALID_ACTION_TYPE" }, { status: 400 })
+  // Enforce the media-only action whitelist. Any type outside ALLOWED_ACTION_TYPES
+  // (e.g. an attempt to reach a CRM entity) is a security-whitelist violation, not a
+  // format error — so it returns 403, not 400. Applies to ALL roles (NFR-SEC-2).
+  if (!ALLOWED_ACTION_TYPES.includes(card.type)) {
+    return NextResponse.json({ error: "ACTION_TYPE_NOT_ALLOWED" }, { status: 403 })
   }
 
   // Verify campaign belongs to org (anti-IDOR)
