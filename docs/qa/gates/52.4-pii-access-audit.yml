@@ -1,0 +1,43 @@
+schema: 1
+story: '52.4'
+gate: PASS
+status_reason: 'Migration 097 aplicada e VALIDADA EM RUNTIME no Supabase DEV (xnxvygyfyyyzwhiuoehz). Admin -> log_pii_access TRUE com admin_user_id derivado de auth.uid() (SEC-003 infalsificavel, provado sem passar id); supervisor mesma org -> FALSE. Grants efetivos = SELECT+INSERT only (UPDATE/DELETE/TRUNCATE REVOGADOS), append-only deterministico via REVOKE + RLS default-deny. SEC-001/SEC-003 RESOLVIDOS. SEC-002 (service_role) permanece como gate FORWARD da 52-2 (nao bloqueia 52-4).'
+reviewer: 'Quinn'
+updated: '2026-06-16T18:00:00Z'
+history:
+  - at: '2026-06-16T00:00:00Z'
+    gate: CONCERNS
+    note: 'Design de seguranca solido; verdito condicionado a validacao runtime (SEC-001) + SEC-002 (service_role nao mitigavel aqui) + SEC-003 (trilha falsificavel).'
+  - at: '2026-06-16T18:00:00Z'
+    gate: PASS
+    note: 'Runtime validado no DEV: append-only deterministico (grants SELECT+INSERT only, TRUNCATE revogado), FALSE para non-admin, admin_user_id infalsificavel via auth.uid(). SEC-003 resolvido. SEC-002 movido para forward-gate da 52-2.'
+runtime_evidence:
+  environment: 'Supabase DEV xnxvygyfyyyzwhiuoehz (Management API)'
+  seed: 'org 52000000-...-a1; admin (role=admin) + supervisor (role=supervisor) mesma org.'
+  admin_results:
+    - 'log_pii_access(org, NULL, lead_drill, {...}, v_lead_drill) -> TRUE; gravou 1 row com admin_user_id = id do admin derivado de auth.uid(). Provado infalsificavel: chamada sem passar id gravou o usuario autenticado correto (SEC-003).'
+  supervisor_results:
+    - 'log_pii_access(...) -> FALSE (mesma org, role supervisor). Admin-only enforcement provado.'
+  effective_grants:
+    - 'agent_pii_access_log: authenticated = {INSERT, SELECT} apenas (sem UPDATE/DELETE/TRUNCATE); anon = nada. Append-only deterministico (TRUNCATE revogado do baseline GRANT ALL do Supabase).'
+    - 'RLS habilitada; policies apenas INSERT(with check) + SELECT(using) -> UPDATE/DELETE de linha bloqueados por default-deny.'
+top_issues:
+  - id: 'SEC-001'
+    severity: medium
+    status: resolved
+    finding: 'Append-only (UPDATE/DELETE/TRUNCATE bloqueados), FALSE para non-admin e isolamento por org agora VALIDADOS em runtime. Grants efetivos confirmados via information_schema = SELECT+INSERT only para authenticated.'
+  - id: 'SEC-003'
+    severity: low
+    status: resolved
+    finding: 'p_admin_user_id REMOVIDO da assinatura; admin_user_id derivado de public.public_user_id() (auth.uid()). Runtime provou que sem passar id a row grava o usuario autenticado correto — trilha infalsificavel.'
+  - id: 'SEC-002'
+    severity: medium
+    status: forward-gate
+    finding: 'service_role bypassa RLS por design no Supabase — NAO mitigavel nesta migration. A migration faz o que pode (append-only + RLS admin + REVOKE deterministico). Garantia de que o caminho do agente usa APENAS authenticated (nunca service_role) e responsabilidade de runtime da 52-2/52-3. NAO bloqueia 52-4.'
+    suggested_action: 'Carregar como GATE BLOQUEANTE da Story 52-2: validar que /api/agent/chat usa client authenticated para ler views e chamar log_pii_access.'
+  - id: 'REL-001'
+    severity: low
+    status: follow-up
+    finding: 'EXCEPTION WHEN OTHERS THEN RETURN FALSE garante fail-safe mas mascara causa raiz (falha de INSERT indistinguivel de role invalido).'
+    suggested_action: 'Opcional: RAISE WARNING antes do RETURN FALSE para observabilidade, sem quebrar o fail-closed.'
+waiver: { active: false }

@@ -1,0 +1,44 @@
+schema: 1
+story: '52.1'
+gate: PASS
+status_reason: 'Migration 096 aplicada e VALIDADA EM RUNTIME no Supabase DEV (xnxvygyfyyyzwhiuoehz). Admin ve dados (funil/views corretos, CPL com janela), supervisor da mesma org ve 0 rows em tudo, grants efetivos = SELECT-only nas views + EXECUTE-only na funcao (REVOKE de TRUNCATE/escrita confirmado via information_schema). SEC-001/PERF-001 RESOLVIDOS; REL-001 mantido como follow-up de baixa severidade (limitacao conhecida, nao bloqueante).'
+reviewer: 'Quinn'
+updated: '2026-06-16T18:00:00Z'
+history:
+  - at: '2026-06-16T00:00:00Z'
+    gate: CONCERNS
+    note: 'Migration estaticamente solida; verdito condicionado a validacao runtime (SEC-001) + concerns de CPL (PERF-001, REL-001).'
+  - at: '2026-06-16T18:00:00Z'
+    gate: PASS
+    note: 'Runtime validado no DEV: enforcement admin-strict + isolamento por org + grants read-only deterministicos confirmados. Concerns bloqueantes resolvidos.'
+runtime_evidence:
+  environment: 'Supabase DEV xnxvygyfyyyzwhiuoehz (Management API)'
+  seed: 'org 52000000-...-a1; admin (role=admin) + supervisor (role=supervisor) mesma org; 6 stages (novo->fechado pos 1-6); 3 leads (1 fechado/1 visitou/1 novo, utm_campaign=Camp Teste); campanha Camp Teste R$1000 spend (level=campaign, <30d); 1 conversa 2 mensagens.'
+  admin_results:
+    - 'pipeline_funnel_by_campaign(30) -> 1 row: total_leads=3, leads_visitou=2, leads_fechado=1, total_spend=1000, cpl_real_visitou=500, cpl_real_fechado=1000 (conversao cumulativa por position + CPL com janela corretos).'
+    - 'v_pipeline_stage_distribution: 3 rows; v_lead_drill: 3 rows (name/stage/score, SEM phone/email); v_lead_conversations: 2 mensagens.'
+  supervisor_results:
+    - 'pipeline_funnel_by_campaign(30) -> 0 rows; v_pipeline_stage_distribution -> 0; v_lead_drill -> 0; v_lead_conversations -> 0. Admin-only enforcement provado (mesma org, role diferente, acesso zero).'
+  effective_grants:
+    - 'views (v_lead_drill, v_lead_conversations, v_pipeline_stage_distribution): authenticated = {SELECT}; anon = nada.'
+    - 'pipeline_funnel_by_campaign: EXECUTE so authenticated (+postgres/service_role). TRUNCATE/escrita REVOGADOS do baseline GRANT ALL do Supabase.'
+top_issues:
+  - id: 'PERF-001'
+    severity: low
+    status: resolved
+    finding: 'CPL era lifetime (spend sem filtro de data). RESOLVIDO: funil virou funcao com janela p_days; total_spend soma so date >= current_date - p_days. Runtime confirmou CPL=500 (visitou) e 1000 (fechado) com janela 30d.'
+  - id: 'SEC-001'
+    severity: medium
+    status: resolved
+    finding: 'Enforcement admin-strict e isolamento multi-tenant agora VALIDADOS em runtime (admin ve dados, supervisor da mesma org ve 0 rows; grants efetivos SELECT-only nas views, EXECUTE-only na funcao).'
+  - id: 'REL-001'
+    severity: low
+    status: follow-up
+    finding: 'Join de spend por meta_campaigns.name = leads.utm_campaign continua sendo correspondencia por nome (normalizada lower/trim). Mitigado mas nao eliminado: campanhas cujo nome no Meta nao espelhe o utm_campaign resultam em total_spend NULL (documentado como "sem midia correlacionada", nao zero). Limitacao conhecida, baixa severidade, nao bloqueante.'
+    suggested_action: 'A 52-2 deve instruir o modelo a interpretar total_spend/CPL NULL como ausencia de dados; opcionalmente expor metrica de cobertura de match.'
+  - id: 'DOC-001'
+    severity: low
+    status: open
+    finding: 'Contrato marca v_lead_drill.name como nullable; leads.name e NOT NULL no schema base. Divergencia de doc sem impacto funcional.'
+    suggested_action: 'Ajustar nota do contrato na proxima revisao.'
+waiver: { active: false }

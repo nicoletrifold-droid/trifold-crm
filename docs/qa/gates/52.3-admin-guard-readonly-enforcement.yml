@@ -1,0 +1,43 @@
+schema: 1
+story: '52.3'
+gate: PASS
+status_reason: 'Helper isAdmin estrito (role === admin), guard de cancel simetrico ao confirm, whitelist allowlist 403 e zero regressao nas rotas de chat/FAB. type-check e lint limpos. Testes HTTP por role pendentes como spot-check nao-bloqueante.'
+reviewer: 'Quinn'
+updated: '2026-06-16T00:00:00Z'
+
+# 7-dimension assessment summary
+review_dimensions:
+  code_review: PASS         # isAdmin strict role===admin, no canAccess/is_admin_or_supervisor; cancel mirrors confirm exactly; whitelist as const + derived type + 403
+  ac_mapping: PASS          # AC1-AC5 + AC8 met & statically verified; AC6/AC7 (runtime regression) covered by code inspection, manual spot-check recommended
+  no_regression: PASS       # CON-5 critical: chat/sessions/[session_id] routes use only requireAuth (no role guard); FAB/panel not gated; pages-server untouched
+  performance: PASS         # N/A material — trivial in-memory changes, no new I/O or cost
+  security: PASS            # 400->403 semantically correct; whitelist is allowlist (default-deny); cancel asymmetry closed; isAdmin narrower than 4-role is_admin_or_supervisor()
+  docs: PASS                # JSDoc contract complete for 52-2; Dev Agent Record & File List accurate
+  tests: CONCERNS_NONBLOCKING # logic statically verifiable w/ high confidence; HTTP-by-role tests not run (need app + seeded users)
+
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Cenarios HTTP por role (T6/AC6/AC7) nao executados — exigem app Next.js rodando + usuarios por role no Supabase DEV (xnxvygyfyyyzwhiuoehz).'
+    suggested_action: 'Spot-check manual quando o app rodar: cancel admin=200 / non-admin=403; confirm type fora da whitelist=403 ACTION_TYPE_NOT_ALLOWED; supervisor/gerente-comercial veem FAB e chat de midia respondendo sem 403. Nao-bloqueante: a logica e trivial e verificada estaticamente.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'type-check padrao (npm run type-check) sofre OOM no V8 neste ambiente; exige NODE_OPTIONS=--max-old-space-size=8192. Limitacao de ambiente, nao erro de codigo.'
+    suggested_action: 'Considerar elevar o heap no script type-check do package.json (ou no CI) para evitar falso-negativo de gate. Independente desta story.'
+
+evidence:
+  static_verification:
+    - 'isAdmin: return user.role === "admin" — sem delegacao a canAccess/is_admin_or_supervisor (grep confirmou ausencia).'
+    - 'is_admin_or_supervisor() (migration 084) aceita admin/supervisor/obras/gerente-comercial — 4 roles; isAdmin e estritamente mais restrito (correto p/ gate CRM da 52-2).'
+    - 'cancel/route.ts: requireRole(appUser,["admin"]) apos requireAuth e ANTES do parse do body — espelha confirm/route.ts exatamente.'
+    - 'confirm/route.ts: ALLOWED_ACTION_TYPES as const; ActionCard.type = typeof ALLOWED_ACTION_TYPES[number]; type fora da lista -> 403 ACTION_TYPE_NOT_ALLOWED (allowlist).'
+    - 'requireRole (api-auth.ts) retorna 403 {error:"Forbidden"} — body identico em ambas as rotas.'
+    - 'chat/route.ts, chat/sessions/route.ts, chat/[session_id]/route.ts: import apenas requireAuth, sem requireRole/isAdmin (CON-5 preservado).'
+    - 'agent-chat-panel.tsx execute(): so checa res.ok; nao inspeciona codigo/body de erro -> mudanca 400->403 e no-op no componente (T4.5 confirmado).'
+    - 'agent-chat-panel.tsx: isAdmin gate apenas botoes confirm/cancel (linha 182), FAB/painel NAO gated.'
+    - 'git status: 2 modified + 1 created, exatamente o File List. Sem scope creep.'
+  gates_run:
+    - 'npx eslint (3 arquivos tocados): zero erros/warnings (exit 0).'
+    - 'npx tsc --noEmit (heap 8192MB): zero diagnosticos.'
+
+waiver: { active: false }
