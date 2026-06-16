@@ -2,7 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Bell, FileText, Camera } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
-import { logout } from "@web/app/login/actions"
+import { logoutCliente } from "@web/app/cliente/actions"
 import { AnimatedProgressBar } from "./_components/animated-progress-bar"
 import { ServicosSection } from "./_components/servicos-section"
 
@@ -172,7 +172,7 @@ export default async function ObraPage({
             >
               <Bell className="h-5 w-5" />
             </Link>
-            <form action={logout}>
+            <form action={logoutCliente}>
               <button
                 type="submit"
                 className="text-sm text-stone-500 transition-colors hover:text-[#F27A5E]"

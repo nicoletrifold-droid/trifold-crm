@@ -3,7 +3,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@web/lib/supabase/server"
 import { Building2, ChevronRight } from "lucide-react"
-import { logout } from "@web/app/login/actions"
+import { logoutCliente } from "@web/app/cliente/actions"
 
 type ObraRow = {
   id: string
@@ -85,11 +85,11 @@ export default async function SelecionarObraPage() {
 
           const progressPct = obra.progress_pct ?? 0
           const statusLabel =
-            obra.status === "in_progress"
+            obra.status === "in_progress" || obra.status === "em_andamento"
               ? "Em construção"
-              : obra.status === "delivered"
+              : obra.status === "delivered" || obra.status === "entregue"
               ? "Entregue"
-              : obra.status === "planned"
+              : obra.status === "planned" || obra.status === "planejado"
               ? "Planejado"
               : (obra.status ?? "—")
 
@@ -134,7 +134,7 @@ export default async function SelecionarObraPage() {
 
       {/* Logout */}
       <div className="mt-8 flex justify-center">
-        <form action={logout}>
+        <form action={logoutCliente}>
           <button
             type="submit"
             className="text-xs text-stone-600 underline-offset-2 hover:text-stone-400 hover:underline"

@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Home, Layers, Camera, FileText, MessageSquare, Bell, ChevronDown, Wallet, ArrowLeftRight } from "lucide-react"
-import { logout } from "@web/app/login/actions"
+import { logoutCliente } from "@web/app/cliente/actions"
 import { useUnreadBadge } from "./unread-badge-provider"
 
 const NAV_ITEMS = [
@@ -147,7 +147,7 @@ export function Sidebar({ obraId, userName, userEmail, obraName, numeroUnidade, 
 
       {/* User / logout */}
       <div className="border-t border-stone-800/40 px-5 py-4">
-        <form action={logout}>
+        <form action={logoutCliente}>
           <button
             type="submit"
             title="Clique para sair"

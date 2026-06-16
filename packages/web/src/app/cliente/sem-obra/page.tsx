@@ -1,4 +1,4 @@
-import { logout } from "@web/app/login/actions"
+import { logoutCliente } from "@web/app/cliente/actions"
 
 /**
  * Server Component shown when a logged-in `cliente` has no obra vinculada.
@@ -16,7 +16,7 @@ export default function SemObraPage() {
           Sua conta ainda não possui obras associadas. Entre em contato com a
           equipe Trifold para solicitar acesso ao acompanhamento da sua obra.
         </p>
-        <form action={logout}>
+        <form action={logoutCliente}>
           <button
             type="submit"
             className="text-sm text-stone-500 underline transition-colors hover:text-[#F27A5E]"
