@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, Layers, Camera, FileText, MessageSquare, Bell, ChevronDown, Wallet } from "lucide-react"
+import { Home, Layers, Camera, FileText, MessageSquare, Bell, ChevronDown, Wallet, ArrowLeftRight } from "lucide-react"
 import { logout } from "@web/app/login/actions"
 import { useUnreadBadge } from "./unread-badge-provider"
 
@@ -56,11 +56,14 @@ interface SidebarProps {
   obraId: string
   userName: string
   userEmail: string
+  obraName?: string
+  numeroUnidade?: string | null
+  hasMultipleObras?: boolean
   /** @deprecated — use UnreadBadgeProvider context instead; kept for SSR initial render */
   unreadMensagens?: number
 }
 
-export function Sidebar({ obraId, userName, userEmail, unreadMensagens = 0 }: SidebarProps) {
+export function Sidebar({ obraId, userName, userEmail, obraName, numeroUnidade, hasMultipleObras = false, unreadMensagens = 0 }: SidebarProps) {
   const pathname = usePathname()
   const { unread: realtimeUnread } = useUnreadBadge()
   const effectiveUnread = realtimeUnread !== 0 ? realtimeUnread : unreadMensagens
@@ -84,6 +87,33 @@ export function Sidebar({ obraId, userName, userEmail, unreadMensagens = 0 }: Si
           className="brightness-0 invert"
         />
       </div>
+
+      {/* Obra switcher chip (desktop only, only when 2+ obras) */}
+      {obraName && (
+        <div className="border-b border-stone-800/30 px-4 py-3">
+          {hasMultipleObras ? (
+            <Link
+              href="/cliente/selecionar"
+              className="flex items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-stone-800/60"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-stone-200">{obraName}</p>
+                {numeroUnidade && (
+                  <p className="text-[11px] text-stone-500">{numeroUnidade}</p>
+                )}
+              </div>
+              <ArrowLeftRight className="h-3.5 w-3.5 flex-shrink-0 text-stone-500" />
+            </Link>
+          ) : (
+            <div className="px-2 py-2">
+              <p className="truncate text-[13px] font-semibold text-stone-200">{obraName}</p>
+              {numeroUnidade && (
+                <p className="text-[11px] text-stone-500">{numeroUnidade}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="mt-3 flex-1 space-y-0.5 px-3">

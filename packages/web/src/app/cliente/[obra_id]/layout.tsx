@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { ObraTabNav } from "./_components/obra-tab-nav"
 import { Sidebar } from "./_components/sidebar"
+import { ObraSwitcherBar } from "./_components/obra-switcher-bar"
 import { PrivacyButton } from "./_components/privacy-button"
 import { PrivacyConsentModal } from "./_components/privacy-consent-modal"
 import { PushPrompt } from "@web/components/portal/push-prompt"
@@ -62,6 +63,9 @@ export default async function ObraLayout({
   } = await supabase.auth.getUser()
 
   let unreadMensagens = 0
+  let obraName = ""
+  let numeroUnidade: string | null = null
+  let hasMultipleObras = false
 
   if (user) {
     const { data: userData } = await supabase
@@ -75,14 +79,37 @@ export default async function ObraLayout({
       userEmail = userData.email ?? user.email ?? ""
       privacyAccepted = !!userData.privacy_accepted_at
 
-      const { count } = await supabase
-        .from("obra_mensagens")
-        .select("id", { count: "exact", head: true })
-        .eq("obra_id", obra_id)
-        .eq("cliente_id", userData.id)
-        .eq("sender_type", "equipe")
-        .is("read_at", null)
-      unreadMensagens = count ?? 0
+      const [mensagensResult, vinculosResult, obraResult] = await Promise.all([
+        supabase
+          .from("obra_mensagens")
+          .select("id", { count: "exact", head: true })
+          .eq("obra_id", obra_id)
+          .eq("cliente_id", userData.id)
+          .eq("sender_type", "equipe")
+          .is("read_at", null),
+        supabase
+          .from("cliente_obras")
+          .select("obra_id, numero_unidade")
+          .eq("user_id", userData.id)
+          .limit(2),
+        supabase
+          .from("obras")
+          .select("name, properties!property_id(name)")
+          .eq("id", obra_id)
+          .maybeSingle(),
+      ])
+
+      unreadMensagens = mensagensResult.count ?? 0
+      hasMultipleObras = (vinculosResult.data?.length ?? 0) > 1
+
+      const vinculoAtual = vinculosResult.data?.find((v) => v.obra_id === obra_id)
+      numeroUnidade = vinculoAtual?.numero_unidade ?? null
+
+      if (obraResult.data) {
+        const props = obraResult.data.properties as { name: string }[] | null
+        const propName = Array.isArray(props) ? (props[0]?.name ?? null) : null
+        obraName = propName ?? obraResult.data.name ?? ""
+      }
     } else {
       userEmail = user.email ?? ""
     }
@@ -91,8 +118,21 @@ export default async function ObraLayout({
   return (
     <UnreadBadgeProvider obraId={obra_id} userId={userId} initialUnread={unreadMensagens}>
       <div className="flex min-h-screen bg-stone-950">
-        <Sidebar obraId={obra_id} userName={userName} userEmail={userEmail} unreadMensagens={unreadMensagens} />
+        <Sidebar
+          obraId={obra_id}
+          userName={userName}
+          userEmail={userEmail}
+          unreadMensagens={unreadMensagens}
+          obraName={obraName}
+          numeroUnidade={numeroUnidade}
+          hasMultipleObras={hasMultipleObras}
+        />
         <div className="flex flex-1 flex-col pb-16 lg:pl-[260px] lg:pb-0">
+          <ObraSwitcherBar
+            obraName={obraName}
+            numeroUnidade={numeroUnidade}
+            hasMultipleObras={hasMultipleObras}
+          />
           {children}
         </div>
         <ObraTabNav obraId={obra_id} unreadMensagens={unreadMensagens} />

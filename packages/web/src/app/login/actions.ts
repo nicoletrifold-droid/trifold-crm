@@ -60,20 +60,22 @@ export async function login(formData: FormData) {
   if (appUser?.role === "broker") {
     destination = "/broker"
   } else if (appUser?.role === "cliente") {
-    // Resolve the cliente's primary obra (or first available one).
-    // Ordering by `is_primary DESC` puts the flagged primary obra first;
-    // ties fall back to insertion order, which is acceptable for MVP.
-    const { data: vinculo } = await supabase
+    // Fetch up to 2 obras to decide: 1 → go directly, 2+ → selection screen.
+    const { data: vinculos } = await supabase
       .from("cliente_obras")
       .select("obra_id")
       .eq("user_id", appUser.id)
       .order("is_primary", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(2)
 
-    destination = vinculo?.obra_id
-      ? `/cliente/${vinculo.obra_id}`
-      : "/cliente/sem-obra"
+    const firstObra = vinculos?.[0]?.obra_id
+    if (!vinculos || vinculos.length === 0 || !firstObra) {
+      destination = "/cliente/sem-obra"
+    } else if (vinculos.length === 1) {
+      destination = `/cliente/${firstObra}`
+    } else {
+      destination = "/cliente/selecionar"
+    }
   } else if (appUser?.role === "obras") {
     destination = "/dashboard/obras"
   } else {
