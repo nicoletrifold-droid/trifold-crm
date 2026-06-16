@@ -65,6 +65,13 @@ export default async function DashboardPage() {
     .filter(([id]) => activeStageIds.has(id))
     .reduce((a, [, b]) => a + b, 0)
 
+  // Leads ativos = pipeline total excluindo represamento e banco histórico
+  const excludedSlugs = new Set(["represamento", "corretores-antigo"])
+  const excludedCount = stages
+    .filter((s) => excludedSlugs.has(s.slug))
+    .reduce((a, s) => a + (stageCounts[s.id] ?? 0), 0)
+  const activeLeads = totalLeads - excludedCount
+
   const gerenteCounts = (gerenteCountsResult.data ?? null) as Counts | null
   const gerenteFunnel = (gerenteFunnelResult.data ?? []) as FunnelRow[]
 
@@ -152,12 +159,16 @@ export default async function DashboardPage() {
       )}
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads hoje</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
             {leadsToday.count ?? 0}
           </p>
+        </div>
+        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+          <p className="text-sm text-gray-500 dark:text-stone-400">Leads ativos</p>
+          <p className="mt-1 text-3xl font-bold text-orange-600 dark:text-orange-400">{activeLeads}</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Total no pipeline</p>
