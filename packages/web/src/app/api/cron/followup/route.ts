@@ -114,6 +114,28 @@ async function sendFollowUpMessage(
 }
 
 /**
+ * Resolve the display name of the broker assigned to a lead (Story 59-1).
+ * Returns the broker's name or "" when no broker is assigned or the query fails.
+ * Never throws — a missing name must not break the follow-up loop.
+ */
+export async function resolveBrokerName(
+  supabase: SupabaseClient,
+  assignedBrokerId: string | null
+): Promise<string> {
+  if (!assignedBrokerId) return ""
+  try {
+    const { data } = await supabase
+      .from("users")
+      .select("name")
+      .eq("id", assignedBrokerId)
+      .maybeSingle()
+    return (data as { name?: string | null } | null)?.name ?? ""
+  } catch {
+    return ""
+  }
+}
+
+/**
  * Follow-up cron engine.
  * GET /api/cron/followup (Vercel Cron sends GET requests)
  *
@@ -256,12 +278,19 @@ export async function GET(request: NextRequest) {
         ? propertyArr[0]?.name ?? "seu imovel"
         : (propertyArr as { name: string } | null)?.name ?? "seu imovel"
 
+      // Resolve broker name for template — Story 59-1 (AC3)
+      const brokerName = await resolveBrokerName(
+        supabase,
+        (lead as { assigned_broker_id?: string | null }).assigned_broker_id ?? null
+      )
+
       // Check nicole_takeover_days first (more severe)
       if (daysSinceLastMessage >= rule.nicole_takeover_days) {
         // Render template
         const message = (rule.message_template || "")
           .replace(/\{nome\}/g, lead.name || "")
           .replace(/\{empreendimento\}/g, propertyName)
+          .replace(/\{corretor\}/g, brokerName)
 
         // Send via the correct channel (Telegram or WhatsApp). The 24h WhatsApp
         // window is checked inside; outside it, nothing is sent (AC4).

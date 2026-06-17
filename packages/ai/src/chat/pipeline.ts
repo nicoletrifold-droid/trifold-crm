@@ -85,6 +85,20 @@ export function resolveNotificationBrokerUserId(
   return currentOwnerId ?? propertyBrokerId ?? null
 }
 
+/**
+ * Story 59-1 (AC1, AC4, AC5) — build the no-reintro context block.
+ * When the conversation already has at least one assistant message, Nicole must
+ * not introduce herself again. Returned string goes into `dynamicSuffix` only —
+ * never into the static cached block.
+ */
+export function buildNoReintroContext(
+  history: Array<{ role: string }>
+): string {
+  return history.some((m) => m.role === "assistant")
+    ? "\nIMPORTANTE: Voce JA se apresentou a este lead anteriormente. NAO diga 'Sou a Nicole' ou qualquer variacao de apresentacao. Continue a conversa naturalmente, sem introducao.\n"
+    : ""
+}
+
 interface ConversationState {
   id: string
   conversation_id: string
@@ -372,6 +386,9 @@ export async function processMessageWithMetadata(
     ? "\n=== NO-SHOW CONTEXT ===\nEste lead faltou a uma visita agendada anteriormente. Seja empatica, NAO culpe e NAO mencione \"falta\" ou \"nao compareceu\". Pergunte naturalmente se quer remarcar: algo como \"Vi que nao conseguimos nos encontrar, quer marcar outro dia?\". Se o lead mencionar um dia, agende normalmente.\n=== END NO-SHOW CONTEXT ===\n"
     : ""
 
+  // No-reintro context — Story 59-1 (AC1, AC4, AC5)
+  const noReintroContext = buildNoReintroContext(history)
+
   // Build the system prompt as Anthropic block array.
   //
   // - `staticBlocks` = blocos cacheáveis (8 segmentos estáticos com cache_control: ephemeral)
@@ -386,6 +403,7 @@ export async function processMessageWithMetadata(
     leadContext +
     memoryContext +
     noShowContext +
+    noReintroContext +
     buildFlowContext(qualificationStep, qualificationScore, identifiedPropertyId) +
     yardenGateContext
 

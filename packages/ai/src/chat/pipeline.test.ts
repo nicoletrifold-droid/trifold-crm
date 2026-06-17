@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { hasConfirmedDay, resolveOffHoursResponse } from "./pipeline"
+import { hasConfirmedDay, resolveOffHoursResponse, buildNoReintroContext } from "./pipeline"
 import { OFF_HOURS_PROMPT } from "../prompts"
 
 describe("hasConfirmedDay", () => {
@@ -109,5 +109,32 @@ describe("resolveOffHoursResponse — off-hours message (Story 53-1)", () => {
 
   it("trims the DB value before returning", () => {
     expect(resolveOffHoursResponse({ out_of_hours_message: "  Olá!  " })).toBe("Olá!")
+  })
+})
+
+// Story 59-1 — buildNoReintroContext
+describe("buildNoReintroContext", () => {
+  it("returns instruction when history has at least one assistant message", () => {
+    const history = [
+      { role: "user", content: "oi" },
+      { role: "assistant", content: "Sou a Nicole..." },
+    ]
+    const result = buildNoReintroContext(history)
+    expect(result).toContain("NAO diga 'Sou a Nicole'")
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it("returns empty string when history has no assistant messages", () => {
+    const history = [{ role: "user", content: "oi" }]
+    expect(buildNoReintroContext(history)).toBe("")
+  })
+
+  it("returns empty string for empty history", () => {
+    expect(buildNoReintroContext([])).toBe("")
+  })
+
+  it("returns instruction when first message is from assistant", () => {
+    const history = [{ role: "assistant", content: "Olá!" }]
+    expect(buildNoReintroContext(history)).toContain("JA se apresentou")
   })
 })
