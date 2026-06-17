@@ -2,29 +2,32 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 
-const CRON_SECRET = process.env.CRON_SECRET
 const MAX_PER_RUN = 50
-// Stage fixo "Aguardando atendimento" (slug: novo)
-const NOVO_STAGE_ID = "00000000-0000-0000-0001-000000000001"
+const RETRY_WINDOW_DAYS = 30
 
 export async function GET(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get("authorization")
-  if (!CRON_SECRET) {
+  if (!cronSecret) {
     return NextResponse.json({ error: "Cron not configured" }, { status: 503 })
   }
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const admin = createAdminClient()
 
-  // Busca leads sem corretor na fase inicial, de todos os orgs ativos
+  const thirtyDaysAgo = new Date(
+    Date.now() - RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString()
+
+  // Busca todos os leads ativos sem corretor dos últimos 30 dias, em qualquer stage
   const { data: leads, error } = await admin
     .from("leads")
     .select("id, org_id, name")
     .eq("is_active", true)
-    .eq("stage_id", NOVO_STAGE_ID)
     .is("assigned_broker_id", null)
+    .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: true })
     .limit(MAX_PER_RUN)
 

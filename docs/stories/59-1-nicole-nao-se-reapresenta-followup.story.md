@@ -1,7 +1,7 @@
 # Story 59-1 — Nicole não se reapresenta em follow-ups
 
 ## Metadata
-- **Status:** InProgress
+- **Status:** Done
 - **Epic:** 59 — Nicole: Comportamento de Apresentação em Follow-ups
 - **Branch:** feature/59-1-nicole-no-reintro-followup
 
