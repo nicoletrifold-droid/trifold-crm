@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Integração de Status de Unidades — Trifold CRM</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #1a1a1a;
+      background: #fff;
+      padding: 40px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Cover */
+    .cover {
+      text-align: center;
+      padding: 60px 0 40px;
+      border-bottom: 3px solid #E97320;
+      margin-bottom: 40px;
+    }
+    .cover .logo {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #E97320;
+    }
+    .cover h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin: 16px 0 8px;
+      color: #111;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 24px;
+    }
+    .cover .meta {
+      display: inline-flex;
+      gap: 32px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 12px;
+      color: #555;
+    }
+    .cover .meta span strong { color: #111; }
+
+    /* Section headers */
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #E97320;
+      border-bottom: 2px solid #f0e0d0;
+      padding-bottom: 6px;
+      margin: 36px 0 16px;
+    }
+    h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+      margin: 20px 0 8px;
+    }
+
+    p { margin-bottom: 10px; color: #333; }
+
+    /* Info boxes */
+    .box {
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    .box.info { background: #f0f7ff; border-left: 4px solid #3b82f6; }
+    .box.warning { background: #fffbeb; border-left: 4px solid #f59e0b; }
+    .box.success { background: #f0fdf4; border-left: 4px solid #22c55e; }
+    .box.danger { background: #fff1f2; border-left: 4px solid #ef4444; }
+    .box p { margin: 0; }
+
+    /* Code blocks */
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      margin: 12px 0;
+    }
+    code {
+      background: #f3f4f6;
+      color: #be185d;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 12px;
+    }
+    th {
+      background: #E97320;
+      color: #fff;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    tr:nth-child(even) td { background: #f9fafb; }
+    tr:hover td { background: #fef9f5; }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.green { background: #dcfce7; color: #16a34a; }
+    .badge.yellow { background: #fef9c3; color: #ca8a04; }
+    .badge.blue { background: #dbeafe; color: #2563eb; }
+    .badge.gray { background: #f3f4f6; color: #6b7280; }
+    .badge.orange { background: #fff7ed; color: #ea580c; }
+
+    /* Checklist */
+    .checklist { list-style: none; padding: 0; }
+    .checklist li {
+      padding: 6px 0 6px 28px;
+      position: relative;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .checklist li::before {
+      content: '☐';
+      position: absolute;
+      left: 4px;
+      color: #E97320;
+      font-size: 14px;
+    }
+
+    /* Steps */
+    .steps { counter-reset: step; }
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      align-items: flex-start;
+    }
+    .step-num {
+      counter-increment: step;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      border-radius: 50%;
+      background: #E97320;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .step-body { flex: 1; }
+
+    /* Divider */
+    hr {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+      margin: 32px 0;
+    }
+
+    /* Secret placeholder */
+    .secret-box {
+      background: #1e1e2e;
+      color: #a6e3a1;
+      border-radius: 8px;
+      padding: 14px 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .secret-box .label {
+      color: #89b4fa;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 8px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 2px solid #f0e0d0;
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+    }
+
+    /* Print */
+    @media print {
+      body { padding: 20px; font-size: 12px; }
+      .cover { padding: 30px 0 24px; }
+      h2 { page-break-after: avoid; }
+      pre, table, .box { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- CAPA -->
+  <div class="cover">
+    <div class="logo">TRIFOLD</div>
+    <h1>Integração de Status de Unidades</h1>
+    <p class="subtitle">Documento técnico para sincronização via Webhook HTTP</p>
+    <div class="meta">
+      <span><strong>Versão:</strong> 1.0</span>
+      <span><strong>Data:</strong> 17/06/2026</span>
+      <span><strong>Protocolo:</strong> Webhook HMAC-SHA256</span>
+      <span><strong>Direção:</strong> Sistema externo → Trifold CRM</span>
+    </div>
+  </div>
+
+  <!-- 1. OBJETIVO -->
+  <h2>1. Objetivo</h2>
+  <p>
+    Este documento descreve a integração entre o <strong>sistema externo</strong> de gestão de unidades
+    e o <strong>Trifold CRM</strong>. O objetivo é manter o status das unidades (disponível, reservada, vendida)
+    sincronizado em tempo real: quando uma unidade muda de status no sistema externo, o Trifold é notificado
+    automaticamente via <strong>webhook HTTP</strong>.
+  </p>
+  <div class="box info">
+    <p><strong>Direção do fluxo:</strong> Sistema externo <strong>→</strong> Trifold CRM.<br/>
+    O Trifold <em>não</em> consulta o sistema externo periodicamente — ele aguarda ser notificado.</p>
+  </div>
+
+  <!-- 2. O QUE O SISTEMA EXTERNO PRECISA FAZER -->
+  <h2>2. O que o sistema externo precisa fazer</h2>
+  <p>Sempre que o status de uma unidade mudar, o sistema externo deve enviar uma requisição HTTP:</p>
+
+  <table>
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Método</td><td><code>POST</code></td></tr>
+    <tr><td>URL</td><td><code>https://crm.trifold.eng.br/api/webhooks/imoveis-sync</code></td></tr>
+    <tr><td>Content-Type</td><td><code>application/json</code></td></tr>
+    <tr><td>Header de autenticação</td><td><code>X-Signature-256: sha256=&lt;assinatura&gt;</code></td></tr>
+  </table>
+
+  <h3>Corpo da requisição (JSON)</h3>
+  <pre><code>{
+  "event": "unit.status_changed",
+  "timestamp": "2026-06-17T15:00:00Z",
+  "data": {
+    "unit_code": "301",
+    "property_slug": "vind-residence",
+    "status": "vendido",
+    "changed_at": "2026-06-17T14:58:00Z"
+  }
+}</code></pre>
+
+  <h3>Descrição dos campos</h3>
+  <table>
+    <tr><th>Campo</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr>
+    <tr>
+      <td><code>event</code></td>
+      <td>string</td>
+      <td><span class="badge green">Sim</span></td>
+      <td>Sempre <code>"unit.status_changed"</code></td>
+    </tr>
+    <tr>
+      <td><code>timestamp</code></td>
+      <td>ISO 8601</td>
+      <td><span class="badge green">Sim</span></td>
+      <td>Momento em que o webhook foi gerado</td>
+    </tr>
+    <tr>
+      <td><code>data.unit_code</code></td>
+      <td>string</td>
+      <td><span class="badge green">Sim</span></td>
+      <td>Código/identificador da unidade (ex: "301", "102-A")</td>
+    </tr>
+    <tr>
+      <td><code>data.property_slug</code></td>
+      <td>string</td>
+      <td><span class="badge green">Sim</span></td>
+      <td>Slug do empreendimento no Trifold (ver Seção 5)</td>
+    </tr>
+    <tr>
+      <td><code>data.status</code></td>
+      <td>string</td>
+      <td><span class="badge green">Sim</span></td>
+      <td>Novo status da unidade (ver Seção 4)</td>
+    </tr>
+    <tr>
+      <td><code>data.changed_at</code></td>
+      <td>ISO 8601</td>
+      <td><span class="badge gray">Não</span></td>
+      <td>Momento real da mudança (se diferente do envio)</td>
+    </tr>
+  </table>
+
+  <!-- 3. AUTENTICAÇÃO -->
+  <h2>3. Autenticação — HMAC-SHA256</h2>
+  <p>
+    Cada requisição deve incluir uma assinatura digital no header <code>X-Signature-256</code>.
+    Isso garante que apenas o sistema autorizado pode enviar notificações.
+  </p>
+
+  <div class="box warning">
+    <p><strong>O secret será compartilhado separadamente</strong> por canal seguro (não incluso neste documento).
+    Nunca transmita o secret por e-mail ou chat aberto.</p>
+  </div>
+
+  <h3>Como calcular a assinatura</h3>
+  <p>A assinatura é um HMAC-SHA256 do <strong>corpo bruto (raw body)</strong> da requisição, usando o secret compartilhado:</p>
+
+  <pre><code># Pseudocódigo
+assinatura = HMAC_SHA256(secret, raw_body_string)
+header = "X-Signature-256: sha256=" + hex(assinatura)</code></pre>
+
+  <h3>Exemplos por linguagem</h3>
+
+  <p><strong>Node.js / JavaScript:</strong></p>
+  <pre><code>const crypto = require('crypto')
+
+const secret = process.env.TRIFOLD_WEBHOOK_SECRET
+const body = JSON.stringify(payload)
+
+const signature = crypto
+  .createHmac('sha256', secret)
+  .update(body)
+  .digest('hex')
+
+fetch('https://crm.trifold.eng.br/api/webhooks/imoveis-sync', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Signature-256': `sha256=${signature}`,
+  },
+  body: body,
+})</code></pre>
+
+  <p><strong>Python:</strong></p>
+  <pre><code>import hmac, hashlib, json, os, requests
+
+secret = os.environ['TRIFOLD_WEBHOOK_SECRET'].encode()
+body = json.dumps(payload).encode()
+
+signature = hmac.new(secret, body, hashlib.sha256).hexdigest()
+
+requests.post(
+    'https://crm.trifold.eng.br/api/webhooks/imoveis-sync',
+    headers={
+        'Content-Type': 'application/json',
+        'X-Signature-256': f'sha256={signature}',
+    },
+    data=body,
+)</code></pre>
+
+  <p><strong>PHP:</strong></p>
+  <pre><code>$secret = getenv('TRIFOLD_WEBHOOK_SECRET');
+$body   = json_encode($payload);
+$sig    = 'sha256=' . hash_hmac('sha256', $body, $secret);
+
+$ch = curl_init('https://crm.trifold.eng.br/api/webhooks/imoveis-sync');
+curl_setopt_array($ch, [
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => $body,
+    CURLOPT_HTTPHEADER     => [
+        'Content-Type: application/json',
+        "X-Signature-256: $sig",
+    ],
+    CURLOPT_RETURNTRANSFER => true,
+]);
+curl_exec($ch);</code></pre>
+
+  <!-- 4. STATUS -->
+  <h2>4. Valores de Status Aceitos</h2>
+  <p>O campo <code>data.status</code> aceita os seguintes valores (case-insensitive):</p>
+
+  <table>
+    <tr><th>Valores aceitos</th><th>Status no Trifold</th><th>Exibição no painel</th></tr>
+    <tr>
+      <td><code>disponivel</code> · <code>disponível</code> · <code>available</code></td>
+      <td><code>available</code></td>
+      <td><span class="badge green">Disponível</span></td>
+    </tr>
+    <tr>
+      <td><code>reservado</code> · <code>reservada</code> · <code>reserved</code></td>
+      <td><code>reserved</code></td>
+      <td><span class="badge yellow">Reservada</span></td>
+    </tr>
+    <tr>
+      <td><code>vendido</code> · <code>vendida</code> · <code>sold</code></td>
+      <td><code>sold</code></td>
+      <td><span class="badge blue">Vendida</span></td>
+    </tr>
+    <tr>
+      <td><code>indisponivel</code> · <code>indisponível</code> · <code>unavailable</code></td>
+      <td><code>unavailable</code></td>
+      <td><span class="badge gray">Indisponível</span></td>
+    </tr>
+  </table>
+
+  <!-- 5. EMPREENDIMENTOS -->
+  <h2>5. Slugs dos Empreendimentos</h2>
+  <p>O campo <code>data.property_slug</code> deve corresponder ao identificador do empreendimento no Trifold:</p>
+
+  <table>
+    <tr><th>Empreendimento</th><th>Slug a usar</th><th>Status atual</th></tr>
+    <tr>
+      <td>Vind Residence</td>
+      <td><code>vind-residence</code></td>
+      <td><span class="badge green">Em venda</span></td>
+    </tr>
+    <tr>
+      <td>Yarden</td>
+      <td><code>yarden</code></td>
+      <td><span class="badge orange">Lançamento</span></td>
+    </tr>
+  </table>
+
+  <div class="box info">
+    <p>Se um novo empreendimento for adicionado no futuro, o Trifold informará o slug correspondente.</p>
+  </div>
+
+  <!-- 6. RESPOSTAS HTTP -->
+  <h2>6. Respostas HTTP</h2>
+  <table>
+    <tr><th>Código</th><th>Situação</th><th>Ação recomendada</th></tr>
+    <tr>
+      <td><span class="badge green">200</span></td>
+      <td>Webhook recebido e processado com sucesso</td>
+      <td>Nenhuma — operação concluída</td>
+    </tr>
+    <tr>
+      <td><span class="badge yellow">400</span></td>
+      <td>JSON inválido no corpo da requisição</td>
+      <td>Verificar serialização do payload</td>
+    </tr>
+    <tr>
+      <td><span class="badge yellow">401</span></td>
+      <td>Assinatura inválida ou ausente</td>
+      <td>Verificar o secret e o cálculo do HMAC</td>
+    </tr>
+    <tr>
+      <td><span class="badge yellow">404</span></td>
+      <td>Empreendimento ou unidade não encontrada</td>
+      <td>Verificar <code>property_slug</code> e <code>unit_code</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge yellow">422</span></td>
+      <td>Campos obrigatórios ausentes ou status inválido</td>
+      <td>Verificar payload conforme Seção 2</td>
+    </tr>
+    <tr>
+      <td><span class="badge gray">500</span></td>
+      <td>Erro interno no Trifold</td>
+      <td>Reenviar após 60 segundos (retry)</td>
+    </tr>
+  </table>
+
+  <div class="box warning">
+    <p><strong>Retry recomendado:</strong> Em caso de erro 5xx ou timeout, o sistema externo deve tentar reenviar
+    com backoff exponencial: 1min → 5min → 15min → 30min. Após 4 tentativas sem sucesso, notificar manualmente.</p>
+  </div>
+
+  <!-- 7. CHECKLIST IMPLEMENTAÇÃO -->
+  <h2>7. Checklist — Para o sistema externo implementar</h2>
+  <ul class="checklist">
+    <li>Armazenar o secret em variável de ambiente (nunca hardcoded no código)</li>
+    <li>Implementar o cálculo HMAC-SHA256 conforme Seção 3</li>
+    <li>Enviar o header <code>X-Signature-256: sha256=&lt;assinatura&gt;</code> em toda requisição</li>
+    <li>Usar o slug correto do empreendimento (Seção 5)</li>
+    <li>Mapear os status do seu sistema para os valores da Seção 4</li>
+    <li>Implementar retry com backoff exponencial para erros 5xx</li>
+    <li>Testar com o endpoint de teste (Seção 8) antes de ativar em produção</li>
+  </ul>
+
+  <!-- 8. TESTE -->
+  <h2>8. Como Testar</h2>
+  <p>Use o comando <code>curl</code> abaixo para verificar se a integração está funcionando.
+  Substitua <code>SEU_SECRET</code> pelo secret fornecido separadamente:</p>
+
+  <pre><code># Gerar assinatura (terminal Linux/Mac)
+BODY='{"event":"unit.status_changed","timestamp":"2026-06-17T12:00:00Z","data":{"unit_code":"301","property_slug":"vind-residence","status":"reservado","changed_at":"2026-06-17T12:00:00Z"}}'
+SECRET="SEU_SECRET"
+SIG="sha256=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')"
+
+# Enviar webhook
+curl -X POST https://crm.trifold.eng.br/api/webhooks/imoveis-sync \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $SIG" \
+  -d "$BODY"</code></pre>
+
+  <p><strong>Resposta esperada (sucesso):</strong></p>
+  <pre><code>{
+  "received": true,
+  "property": "vind-residence",
+  "unit": "301",
+  "status": "reserved",
+  "available_units": 47
+}</code></pre>
+
+  <!-- 9. O QUE O TRIFOLD ENTREGA -->
+  <h2>9. O que o Trifold fornece</h2>
+  <table>
+    <tr><th>Item</th><th>Valor</th></tr>
+    <tr>
+      <td>URL do Webhook</td>
+      <td><code>https://crm.trifold.eng.br/api/webhooks/imoveis-sync</code></td>
+    </tr>
+    <tr>
+      <td>Método</td>
+      <td><code>POST</code></td>
+    </tr>
+    <tr>
+      <td>Algoritmo de assinatura</td>
+      <td>HMAC-SHA256 via header <code>X-Signature-256</code></td>
+    </tr>
+    <tr>
+      <td>Webhook Secret</td>
+      <td><em>Compartilhado separadamente por canal seguro</em></td>
+    </tr>
+    <tr>
+      <td>Slugs dos empreendimentos</td>
+      <td>Listados na Seção 5 deste documento</td>
+    </tr>
+    <tr>
+      <td>Contato técnico</td>
+      <td>marcos@trifold.eng.br</td>
+    </tr>
+  </table>
+
+  <!-- 10. SEGURANÇA -->
+  <h2>10. Observações de Segurança</h2>
+  <div class="box danger">
+    <p><strong>Não expor o secret:</strong> O webhook secret não deve aparecer em logs, commits, issues do GitHub,
+    e-mails ou qualquer canal não criptografado. Compartilhá-lo exclusivamente via mensagem privada ou gerenciador de senhas.</p>
+  </div>
+  <div class="box info">
+    <p><strong>O endpoint é somente-escrita:</strong> O webhook apenas atualiza status de unidades.
+    Nenhum dado sensível do Trifold (leads, clientes, dados financeiros) é exposto nesta integração.</p>
+  </div>
+  <div class="box success">
+    <p><strong>Validação timing-safe:</strong> A verificação da assinatura usa comparação resistente a timing attacks,
+    impedindo ataques de força bruta por análise de tempo de resposta.</p>
+  </div>
+
+  <hr />
+  <footer>
+    Trifold CRM · Documento de Integração v1.0 · 17/06/2026 · marcos@trifold.eng.br
+  </footer>
+
+</body>
+</html>
