@@ -1,0 +1,8 @@
+- [Vercel project setup](project_vercel_setup.md) — rootDirectory is `packages/web`, not repo root; affects .vercelignore placement
+- [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` is canonical; lint/tsc standalone produce false positives in Next 16
+- [Meta subscription state (prod)](project_meta_subscription.md) — leadgen subscription validada 2026-06-08; verify token sufixo `...a387d2f`
+- [Migration 074 — leads.metadata JSONB](project_leads_metadata_migration_074.md) — bloqueio root-cause attribution Meta; PR #5 (draft) com idempotencia
+- [Vercel env source of truth](reference_vercel_env_source_of_truth.md) — `vercel env pull` para producao; `.env.local` locais podem divergir
+- [Main divergence 2026-06-08](project_main_divergence_2026-06-08.md) — main local ficou ~30 commits atras de origin/main durante merge PRs #5/#6; sempre fetch antes de mergear
+- [Force-push vs merge em main](feedback_force_push_vs_merge_main.md) — regra `-f origin main` NAO autoriza sobrescrever commits de terceiros; behind>0 com arquivos disjuntos = merge, nao force
+- [creative_performance fn signature](project_creative_performance_fn_signature.md) — RETURNS TABLE que muda colunas OUT precisa DROP FUNCTION antes do CREATE OR REPLACE (Postgres 42P13)

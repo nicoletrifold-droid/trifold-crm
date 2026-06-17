@@ -1,5 +1,9 @@
 # SM Agent Memory — River
 
+## Memory Index (structured files)
+- [Epic 51 — Google Ads Marketing API](project_epic51.md) — 5 stories criadas; PM review aplicado; decisões técnicas cravadas; pronto para @po validar
+- [Epic 52 — Agente CRM Read-Only](project_epic52.md) — 52-1/52-4 em Review (QA CONCERNS, runtime pendente); 52-2 v0.5 Ready (contrato sincronizado: funil=RPC p_days, log_pii_access 5 args, NULL spend=sem midia)
+
 ## Project Context
 - Platform: Trifold CRM — AI-powered real estate lead management (Maringá-PR, Brazil)
 - Stack: Next.js 16+ / Supabase (PostgreSQL + pgvector) / Anthropic Claude / Vercel / Resend
@@ -53,6 +57,12 @@
 - Story 36-2 (Draft 2026-05-20): Progresso geral automático de obras. Migration 051 = `recalculate_obra_progress()` + trigger `trigger_obra_fases_progress` em `obra_fases`. Remoção do input "Progresso (%)" em `obra-edit-modal.tsx` e do bloco `progress_pct` no PATCH handler. Executor: @data-engineer.
 - Story 36-3 (InReview 2026-05-22): Soft delete de obras. Migration 058 = `deleted_at timestamptz` em `obras`. DELETE handler admin-only. Modal de confirmação destrutiva com digitação do nome da obra. Filtro `deleted_at IS NULL` em listagem + detalhe (admin + portal). ObraDeleteButton renderizado apenas para role admin.
 - Story 36-4 (Draft 2026-05-22): Visibilidade de obras arquivadas + reativação admin. Sem migration. Listagem busca todas as obras (sem filtro deleted_at), separa em ativas/arquivadas em JS. Arquivadas aparecem com opacity-50 + badge "Arquivada". Botão Reativar (admin only) chama PATCH com { deleted_at: null }. Componente ObraReativarButton em `obras/_components/` (não em `[obra_id]/_components/`). router.refresh() no sucesso.
+- Story 52-1 (Review 2026-06-16): Migration 096 criada. Funil convertido de view para FUNCAO table-valued `public.pipeline_funnel_by_campaign(p_days INTEGER DEFAULT 30)` (v0.4 fix PERF-001 + REL-001). As outras 3 permanecem views: `v_pipeline_stage_distribution`, `v_lead_drill`, `v_lead_conversations`. RLS via `user_role()='admin'` no WHERE (nao CREATE POLICY — views nao suportam). `total_spend`/CPL NULL = sem midia correlacionada por nome, NAO zero. Aplicacao DEV pendente (QA CONCERNS runtime).
+- Story 52-4 (Review 2026-06-16): Migration 097 criada. `log_pii_access` v0.4 fix SEC-003: `p_admin_user_id` REMOVIDO — 5 args agora (`p_org_id, p_session_id, p_data_type, p_scope, p_view_or_source`). `admin_user_id` derivado de `public.public_user_id()` (auth.uid()) internamente — trilha infalsificavel. Aplicacao DEV pendente (QA CONCERNS runtime).
+- Story 52-3 (v0.2 Draft 2026-06-15): Guard Admin-Only + Read-Only Enforcement — REVISADA. Decisao PO travada: painel de midia continua para todos os roles (sem regressao). Entrega: (1) utilitario `isAdmin(user): boolean` exportado de `auth-helpers.ts` com JSDoc de contrato para 52-2; (2) guard `requireRole` em POST /api/agent/action/cancel (simetria com confirm); (3) `ALLOWED_ACTION_TYPES` constante em confirm/route.ts (400→403). NAO modifica: rotas de chat, pages-server, AgentChatPanel. 3 arquivos previstos (era 9). Sem migration.
+- Story 52-2 (Ready v0.5 2026-06-16): Sincronizacao contrato pos-QA. Funil = `supabase.rpc('pipeline_funnel_by_campaign', { p_days: 30 })` (NAO select-from-view). `log_pii_access` sem `p_admin_user_id` (5 args). NULL spend/CPL = sem midia, NAO zero — instrucao obrigatoria no AGENT_SYSTEM_PROMPT. Assinaturas: `fetchLeadDrill(supabase, orgId, sessionId, filters)` e `fetchLeadConversations(supabase, orgId, sessionId, leadId)` — sem adminUserId. Executor: @dev.
+- Story 52-6 (Draft 2026-06-17): Contexto de performance por criativo no agente. Migration 100 = `public.creative_performance(p_days INTEGER DEFAULT 30)` SECURITY INVOKER, filtra por `user_org_id()` + `is_admin_or_supervisor()`. Helper TS `isAdminOrSupervisor` em `auth-helpers.ts` (admin+supervisor+gerente-comercial; exclui 'obras' diferente do SQL). `requiresCreative` + `fetchCreativePerformance` em `context-builder.ts` (cache creative_perf:{orgId} 5min). Gate em `chat/route.ts` INDEPENDENTE do bloco `if (admin)` de pipeline CRM (52-2 nao tocado). Sem log_pii_access (dados de criativo sao agregados, sem PII). Proxima migration: 101.
+- Story 55-1 (Draft 2026-06-10): Campaign Email Visual Editor + A/B Creative Performance. Reutiliza `visual-editor.tsx` (react-email-editor/Unlayer). Migration 092 = `campaigns.email_body_json JSONB` + `campaign_email_images` table + bucket `campaign-assets`. Helper `injectUtmToHtml()` no cron campaign-poll. Aba "Performance" em `/dashboard/campaigns/[id]/`. Compatibilidade retroativa via email_body_json nullable. Precisa de @data-engineer para RLS policy de `campaign_email_images`.
 
 ## Story Numbering Tracker
 - Next story after 21.3: 21.4 or novo epic
@@ -60,6 +70,8 @@
 - Epic 33: 33.1 (schema) → 33.2 (API) → 33.3/33.4/33.5 (UI em paralelo). Migration 041 = clientes + vinculos; migration 042 = brindes_destinatarios.cliente_id (FK ON DELETE SET NULL).
 - Epic 35: stories 35-1 → 35-7 (Draft criada 2026-05-20). Próxima seria 35-8. Latest migration: 051_obra_progress_auto.sql (Story 36-2).
 - Epic 36: stories 36-1 (Done) + 36-2 (Draft) + 36-3 (InReview) + 36-4 (Draft criada 2026-05-22). Próxima seria 36-5.
+- Epic 52: 52-1=Review (096: funcao RPC pipeline_funnel_by_campaign + 3 views; runtime pendente); 52-4=Review (097: agent_pii_access_log + log_pii_access 5 args; runtime pendente); 52-3=Ready (guards TS/React); 52-2=Done (context-builder + system-prompt + fail-closed; QA CONCERNS aceitas); 52-5=Ready (FunnelBar + parser UX); 52-6=Draft (criada 2026-06-17: criativo performance RPC — is_admin_or_supervisor, migration 100, fetchCreativePerformance, requiresCreative). Proxima: 52-7.
+- Epic 55: stories 55-1 (Draft criada 2026-06-10). Campaign Email Visual Editor + A/B Creative Performance. Próxima seria 55-2. Latest confirmed migration: 091_fix_broker_novos_leads.sql → próxima é 092.
 
 ## Epic 35 — Permissões: Padrões Críticos (2026-05-20)
 - Server actions de permissão ficam em `permissions-exceptions-actions.ts` (NÃO em `permissions.ts`) para evitar conflito `"use server"` no arquivo principal.

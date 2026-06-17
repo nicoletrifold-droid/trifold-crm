@@ -430,6 +430,7 @@ packages/web/src/components/ui/source-badge.tsx                 ← apenas refer
 | 2026-06-03 | 0.2 | Validation @po: GO (8/10). Complexity revisado para M-L (6-10h); definição precisa de "50-1 deployed"; baseline TTFB obrigatório para AC14. Status: Draft → Ready | @po (Pax) |
 | 2026-06-03 | 0.3 | Design Spec entregue: docs/assets/design-specs/50-2-creative-chip-design-spec.md (Variante A — Inline Replace; tokens sistêmicos; modal responsivo drawer/popover). GR-2 mitigado | @ux-design-expert (Uma) |
 | 2026-06-03 | 0.4 | Implementation YOLO mode. T1-T6 + T8-T9 done (8/10 tasks). T7 (unit tests) + T10 (post-deploy) deferred com justificativa. AC1-AC11 + AC13 atendidos por código; AC12 + AC14 deferred. Type-check + lint clean. Status: Ready → InProgress → Ready for Review | @dev (Dex) |
+| 2026-06-08 | 0.5 | Scope adjustment pré-push Epic 50: CreativeChip restrito a `user.role === 'admin'`. Gerente-comercial/supervisor/corretor voltam ao SourceBadge genérico (comportamento pré-Epic-50). Enrichment gates aplicados em 3 pontos: `dashboard/pipeline/page.tsx` (admin-only branch), `broker/pipeline/page.tsx` (enrichment removido — corretor nunca é admin), `api/pipeline/leads/route.ts` (admin-only branch via `appUser.role`). Type-check clean. | @dev (Dex) |
 
 ---
 

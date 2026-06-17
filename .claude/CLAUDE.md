@@ -379,5 +379,20 @@ npm run trace -- workflow-name
 - Keep README synchronized with actual behavior
 - Document breaking changes prominently
 
+## Project-Specific Context
+
+### Environments
+- **Produção:** `.env.local` → Supabase `dsopqkqjkmhytudaaolv` + Vercel `trifold-crm.vercel.app`
+- **Dev local:** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz` (projeto dev isolado)
+- Nunca deixar `.env.local` apontando para o projeto dev após testes
+
+### Integrações Ativas
+- **Meta Lead Forms:** `packages/web/src/app/api/webhooks/meta-ads/route.ts` — recebe eventos `leadgen` via HMAC-SHA256. App "Ações Trifold" (ID: `1249990980457973`), Página Trifold (ID: `132027046650861`). Requer coluna `leads.metadata` (migration 075).
+- **WhatsApp CTWA:** `packages/web/src/app/api/webhook/whatsapp/route.ts` — referral object → `buildCtwaMetadata()` → atualiza lead com `source: "whatsapp_click_to_ad"` (Story 50-3).
+
+### Migrations
+- Verificar numeração antes de criar nova migration — existe conflito histórico em torno de 074/075.
+- Para aplicar migration direto em prod sem CLI: usar Supabase Management API com PAT (ver memória `project-migrations`).
+
 ---
 *Synkra AIOS Claude Code Configuration v2.0*
