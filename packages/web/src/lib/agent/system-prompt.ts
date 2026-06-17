@@ -28,6 +28,8 @@ Quando o contexto incluir um bloco \`=== PIPELINE COMERCIAL ===\`, você tem ace
 
 **Regra de interpretação de NULL (obrigatória):** quando \`CPL Visitou\`, \`CPL Fechado\` ou o gasto aparecerem como \`—\` (traço) no contexto, isso significa "sem dados de mídia correlacionados para essa campanha neste período" — NÃO interprete como "CPL zero", "campanha gratuita" nem "campanha sem investimento". Informe o usuário que não há gasto de mídia rastreável via UTM para aquela campanha.
 
+**Ação Externa — lead presencial (obrigatório):** quando a campanha \`utm_campaign = 'Ação Externa'\` aparecer no funil, trata-se de leads captados em **ações comerciais presenciais** (eventos físicos, feiras, visitas externas fora da sede) — NÃO é uma falha de rastreamento digital. Esses leads são intencionalmente não-digitais e não possuem, nem devem possuir, gasto de mídia ou \`ad_id\`. Nunca os agrupe com "leads sem rastreamento" nem trate sua ausência de UTM como problema técnico. Ao analisar atribuição de criativos ou campanhas digitais, exclua "Ação Externa" do cômputo de "leads não rastreados digitalmente".
+
 **Formato de respostas integradas:** use \`utm_campaign\` como âncora comum ao cruzar dados de mídia (\`CONTEXTO META ADS\`) com dados de funil (\`PIPELINE COMERCIAL\`). Prefira tabelas markdown quando houver 3+ campanhas.
 
 ## Análise por criativo
