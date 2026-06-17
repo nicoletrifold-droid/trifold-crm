@@ -1,0 +1,57 @@
+schema: 1
+story: '52.6'
+gate: CONCERNS
+status_reason: 'Implementação de código correta e limpa (typecheck/lint OK, gate de role estrito, bloco CRM 52-2 intocado, sem PII); CONCERNS por ACs de runtime (migration 100 não aplicada no DEV e E2E T8 não executados) ainda sem evidência.'
+reviewer: 'Quinn'
+updated: '2026-06-17T00:00:00Z'
+
+# ─── Verificações estáticas (PASS) ───────────────────────────────────────────
+static_verification:
+  typecheck: PASS                 # NODE_OPTIONS=8GB tsc --noEmit → exit 0, 0 erros
+  lint: PASS                      # eslint 4 arquivos → 0 errors, 1 warning pré-existente (context-builder L160 'today', em HEAD)
+  diff_additive: PASS            # context-builder 129 insertions / 0 deletions; chat/route só imports + bloco novo
+  role_gate_ts: PASS             # isAdminOrSupervisor = admin|supervisor|gerente-comercial; exclui obras/broker/cliente (verificado no fonte)
+  crm_block_untouched: PASS      # git diff confirma bloco if(admin) (L167-193) inalterado; gate isAdmin preservado (AC7 por construção)
+  contextText_const: PASS        # const contextText = mediaContext + pipelineContext + creativeContext (let creativeContext separado)
+  no_pii_path: PASS              # creative path sem log_pii_access nem fail-closed — correto p/ dados agregados anônimos
+  migration_static: PASS         # CREATE OR REPLACE, SECURITY INVOKER, STABLE, REVOKE ALL FROM PUBLIC,anon + GRANT EXECUTE authenticated
+  deps_exist: PASS               # user_org_id() (004) e is_admin_or_supervisor() (084, inclui gerente-comercial) confirmados
+  migration_sequence: PASS       # 100 é a última migration; 099 anterior; sem conflito de numeração
+  requires_creative_ac3: PASS    # 6/6 positivos e 5/5 negativos (incl. "qual campanha tem melhor CTR?") — sem falso positivo
+  system_prompt_ac9: PASS        # seção '## Análise por criativo' presente; seções CRM/capacidades/ações intactas
+  token_budget_ac12: PASS        # ~565 tokens p/ 20 criativos (chars/4), bem < 1.500
+
+# ─── Trace de ACs ─────────────────────────────────────────────────────────────
+ac_trace:
+  AC1:  CONCERNS  # RPC filtra por org+role — verificado estaticamente no SQL; runtime (rows p/ admin, 0 p/ broker) PENDENTE de migration aplicada no DEV
+  AC2:  PASS      # isAdminOrSupervisor verificado por inspeção estática
+  AC3:  PASS      # requiresCreative validado contra todos os casos do AC
+  AC4:  CONCERNS  # depende de migration aplicada + E2E admin (T8.1) — não executado
+  AC5:  CONCERNS  # gate cobre supervisor/gerente-comercial estaticamente; E2E (T8.2) não executado
+  AC6:  CONCERNS  # gate TS exclui broker (estático OK); ausência de bloco CRIATIVOS no prompt + sem regressão → E2E (T8.3) pendente
+  AC7:  PASS      # bloco if(admin) intocado confirmado por git diff
+  AC8:  CONCERNS  # cache creative_perf:{orgId} 5min/30d implementado igual a fetchPipelineAggregates; hit em runtime não medido
+  AC9:  PASS      # seção de prompt presente, demais intactas
+  AC10: CONCERNS  # mediaContext sempre concatenado (estático OK); regressão E2E (T8.5) não executada
+  AC11: PASS      # filtro por user_org_id() dentro da função SQL (SECURITY INVOKER)
+  AC12: PASS      # token budget estimado < 1.500
+
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'Migration 100_creative_performance_fn.sql ainda NÃO aplicada no Supabase DEV (xnxvygyfyyyzwhiuoehz); ACs de runtime (AC1, AC4, AC5, AC6, AC8, AC10, AC11) sem evidência E2E. Tasks T8.1/T8.2/T8.3/T8.5 marcadas incompletas na story.'
+    suggested_action: 'Aplicar migration 100 no DEV (Management API/PAT) e executar cenários T8.1 (admin), T8.3 (broker — confirmar ausência de === CRIATIVOS === e sem regressão de mídia) e T8.5 (pipeline CRM admin inalterado) antes do push para prod.'
+  - id: 'PERF-001'
+    severity: low
+    finding: 'Três subqueries correlacionadas por linha (rankings) podem custar caro em orgs com muitos criativos (R4). Aceitável para o volume atual (dezenas de criativos/org).'
+    suggested_action: 'Monitorar o plano de execução; migrar para DISTINCT ON / window function se surgirem orgs com centenas de criativos.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'Keywords amplas em CREATIVE_KEYWORDS ("imagem", "copy") podem gerar falso positivo em queries não relacionadas a criativo (ex.: "copy do anúncio para WhatsApp"). Sem falso positivo nos casos do AC, risco baixo (R3 documentado).'
+    suggested_action: 'Refinar a lista se telemetria de produção revelar injeções indevidas do bloco de criativo.'
+  - id: 'SEC-001'
+    severity: low
+    finding: 'Divergência intencional SQL vs TS: is_admin_or_supervisor() (084) inclui obras; isAdminOrSupervisor TS exclui obras (defense in depth). TS é mais restritivo — backstop correto, mas registrar como decisão consciente.'
+    suggested_action: 'Nenhuma ação — comportamento documentado e desejado (TS mais restrito que RLS). Manter sob observação se requisito de produto mudar.'
+
+waiver: { active: false }

@@ -8,8 +8,10 @@ import {
   fetchLeadConversations,
   requiresDrill,
   requiresConversation,
+  requiresCreative,
+  fetchCreativePerformance,
 } from "@web/lib/agent/context-builder"
-import { isAdmin } from "@web/lib/agent/auth-helpers"
+import { isAdmin, isAdminOrSupervisor } from "@web/lib/agent/auth-helpers"
 import { AGENT_SYSTEM_PROMPT } from "@web/lib/agent/system-prompt"
 
 // ─── On-demand extraction helpers (Story 52-2) ────────────────────────────────
@@ -190,8 +192,24 @@ export async function POST(request: NextRequest) {
     console.log("[52-2] pipeline CRM ignorado para request non-admin")
   }
 
-  // Contexto final: mídia sempre + pipeline somente para admin (aditivo)
-  const contextText = mediaContext + pipelineContext
+  // ── Gate de criativo (Story 52-6) — INDEPENDENTE do bloco if(admin) acima ───
+  // Acesso ampliado: admin + supervisor + gerente-comercial (isAdminOrSupervisor).
+  // Dados agregados anônimos (sem PII) — sem log_pii_access, sem fail-closed.
+  // O bloco if(admin) de pipeline CRM (52-2) NÃO é tocado por esta lógica.
+  let creativeContext = ""
+  const adminOrSupervisor = isAdminOrSupervisor(appUser)
+  if (adminOrSupervisor && requiresCreative(message)) {
+    const creative = await fetchCreativePerformance(supabase, appUser.org_id)
+    if (creative) {
+      creativeContext += "\n\n" + creative
+      console.log("[52-6] creative context injected for org: " + appUser.org_id)
+    }
+  } else if (!adminOrSupervisor) {
+    console.log("[52-6] creative context skipped — role not authorized")
+  }
+
+  // Contexto final: mídia sempre + pipeline (admin) + criativo (admin/sup/gerente) — aditivo
+  const contextText = mediaContext + pipelineContext + creativeContext
 
   // ── Stream from Claude ─────────────────────────────────────────────────────
   const anthropic = createAnthropicClient()

@@ -664,3 +664,132 @@ export async function fetchLeadConversations(
   }
   return lines.join("\n")
 }
+
+// ─── Análise por criativo (Story 52-6) ──────────────────────────────────────
+// Helper de performance por anúncio individual (meta_ads × meta_insights_daily
+// level='ad'). Consumido quando isAdminOrSupervisor === true E requiresCreative
+// === true (gate aplicado em chat/route.ts). Dados agregados anônimos (sem PII):
+// cacheáveis na chave `creative_perf:{orgId}` (TTL 5 min). Sem log_pii_access.
+
+// Heurística on-demand — palavras-chave que indicam pergunta sobre criativos
+// (nível de anúncio individual), distinta de perguntas de campanha/conjunto.
+const CREATIVE_KEYWORDS = [
+  "criativo",
+  "criativos",
+  "creative",
+  "anúncio",
+  "anuncio",
+  "ad criativo",
+  "imagem do anúncio",
+  "imagem do anuncio",
+  "imagem",
+  "copy",
+  "thumbnail",
+  "perf criativo",
+  "performance do criativo",
+  "melhor criativo",
+  "pior criativo",
+  "ranking de qualidade",
+  "quality_ranking",
+  "engagement_rate_ranking",
+  "conversion_rate_ranking",
+  "abaixo da média",
+  "abaixo da media",
+  "acima da média",
+  "acima da media",
+  "qual anúncio",
+  "qual anuncio",
+]
+
+/**
+ * Heurística: a query do usuário pede análise por criativo (nível de anúncio)?
+ * Baseada em palavras-chave (case-insensitive). Determina quando os dados de
+ * `creative_performance` fluem ao modelo. Queries de campanha puras (ex.: "qual
+ * campanha tem melhor CTR?") NÃO contêm essas keywords e retornam false.
+ */
+export function requiresCreative(userMessage: string): boolean {
+  const msg = userMessage.toLowerCase()
+  return CREATIVE_KEYWORDS.some((kw) => msg.includes(kw))
+}
+
+// Tipo das linhas retornadas pela RPC public.creative_performance (migration 100).
+interface CreativeRow {
+  meta_ad_id:              string
+  ad_name:                 string
+  adset_id:                string
+  status:                  string
+  creative:                Record<string, unknown> | null
+  total_spend:             number | null
+  total_impressions:       number | null
+  total_clicks:            number | null
+  avg_ctr:                 number | null
+  avg_cpc:                 number | null
+  avg_cpm:                 number | null
+  total_leads:             number | null
+  avg_cost_per_lead:       number | null
+  quality_ranking:         string | null
+  engagement_rate_ranking: string | null
+  conversion_rate_ranking: string | null
+}
+
+/**
+ * fetchCreativePerformance — performance agregada por criativo via RPC.
+ * Sem PII (dados agregados anônimos). Cacheável na chave `creative_perf:{orgId}`
+ * (TTL 5 min) somente para a janela default (30 dias).
+ *
+ * @param pDays Janela de tempo (default 30). Janelas customizadas não cacheadas.
+ * @returns Seção de texto `=== CRIATIVOS (últimos N dias) ===`, ou "" se sem dados.
+ */
+export async function fetchCreativePerformance(
+  supabase: SupabaseClient,
+  orgId: string,
+  pDays?: number,
+): Promise<string> {
+  const days = pDays ?? 30
+  // Cache apenas para a janela default (30d); janelas customizadas não cacheadas.
+  const cacheable = days === 30
+  const key = `creative_perf:${orgId}`
+  if (cacheable) {
+    const cached = getCached(key)
+    if (cached !== null) return cached
+  }
+
+  const { data, error } = await supabase.rpc("creative_performance", { p_days: days })
+
+  if (error) {
+    console.error("[52-6] erro ao consultar creative_performance", { error, orgId })
+    return ""
+  }
+
+  const rows = (data ?? []) as CreativeRow[]
+  if (rows.length === 0) {
+    return ""
+  }
+
+  const lines: string[] = []
+  lines.push(`=== CRIATIVOS (últimos ${days} dias) ===`)
+  lines.push(
+    "[Nota: dados de performance por anúncio individual agregados de meta_insights_daily level='ad']",
+  )
+  lines.push(
+    "| Anúncio | Status | Leads | Spend Total | CPL Médio | CTR Médio | Rank. Qualidade |",
+  )
+  lines.push(
+    "|---------|--------|-------|-------------|-----------|-----------|-----------------|",
+  )
+  for (const r of rows) {
+    const name = r.ad_name ?? "(sem nome)"
+    const status = r.status ?? "—"
+    const leads = r.total_leads ?? 0
+    const spend = r.total_spend !== null ? `R$${fmtBRL(Number(r.total_spend))}` : "—"
+    const cpl =
+      r.avg_cost_per_lead !== null ? `R$${fmtBRL(Number(r.avg_cost_per_lead))}` : "—"
+    const ctr = fmtPct(r.avg_ctr !== null ? Number(r.avg_ctr) : null)
+    const qual = r.quality_ranking ?? "—"
+    lines.push(`| ${name} | ${status} | ${leads} | ${spend} | ${cpl} | ${ctr} | ${qual} |`)
+  }
+
+  const text = lines.join("\n")
+  if (cacheable) setCached(key, text)
+  return text
+}

@@ -26,3 +26,35 @@ import type { AppUser } from "@web/lib/api-auth"
 export function isAdmin(user: AppUser): boolean {
   return user.role === "admin"
 }
+
+/**
+ * Verifica se o usuario possui role admin, supervisor ou gerente-comercial.
+ *
+ * Contrato para Story 52-6 (analise de criativo no agente):
+ * - Parametro: `user` — objeto AppUser retornado por requireAuth() de `@web/lib/api-auth`.
+ * - Retorno: `true` para role === 'admin', 'supervisor' ou 'gerente-comercial';
+ *            `false` para qualquer outro role (incluindo 'broker', 'cliente', 'obras').
+ * - Fonte do role: `appUser.role` (coluna `role` da tabela `users`).
+ * - Verificacao ESTRITA de string. NAO delega para `canAccess()` nem para SQL.
+ * - Diferente de `isAdmin`: acesso ampliado (nao inclui pipeline CRM — apenas criativo).
+ *
+ * O role 'obras' e deliberadamente excluido aqui, apesar de a funcao SQL
+ * `is_admin_or_supervisor()` (migration 084) o incluir. O stakeholder especificou
+ * "admin + supervisores/gerentes-comerciais" para acesso ao criativo. A RLS SQL e a
+ * 2a camada (defense in depth); a verificacao TS e mais restrita que a SQL.
+ *
+ * Uso na 52-6 (chat/route.ts):
+ *   import { isAdminOrSupervisor } from "@web/lib/agent/auth-helpers"
+ *   const adminOrSupervisor = isAdminOrSupervisor(appUser)
+ *   if (adminOrSupervisor && requiresCreative(message)) { ... }
+ *
+ * @param user Objeto AppUser autenticado (de requireAuth()).
+ * @returns true se o role for 'admin', 'supervisor' ou 'gerente-comercial'; false caso contrario.
+ */
+export function isAdminOrSupervisor(user: AppUser): boolean {
+  return (
+    user.role === "admin" ||
+    user.role === "supervisor" ||
+    user.role === "gerente-comercial"
+  )
+}
