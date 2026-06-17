@@ -267,3 +267,53 @@ export function extractCollectedData(
 
   return updated
 }
+
+const VISIT_DAY_PATTERNS = [
+  /\bs[aá]bado\b/, /\bdomingo\b/,
+  /\bsegunda[-\s]?feira/,
+  /\bter[cç]a(?:[-\s]?feira)?\b/, /\bquarta(?:[-\s]?feira)?\b/,
+  /\bquinta(?:[-\s]?feira)?\b/, /\bsexta(?:[-\s]?feira)?\b/,
+  /\bamanh[aã]/, /\bhoje\b/, /\bdepois de amanh/,
+  /\bsemana que vem\b/,
+  /\bpr[oó]xim[oa]\s+(?:semana|s[aá]bado|domingo|segunda|ter[cç]a|quarta|quinta|sexta)/,
+  /\b\d{1,2}\/\d{1,2}\b/,
+]
+
+function hasDayRef(text: string): boolean {
+  const lower = text.toLowerCase()
+  return VISIT_DAY_PATTERNS.some((p) => p.test(lower))
+}
+
+/**
+ * Extracts explicit visit confirmation from the client's message.
+ * Called ONLY when visit_proposed === true (Nicole already asked about a date).
+ * Requires both a day reference AND a positive/affirmative signal.
+ * Returns the user message text if confirmed, null otherwise.
+ */
+export function extractVisitConfirmation(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase()
+
+  // Explicit refusals → not a confirmation
+  const refusals = [
+    "não posso", "nao posso", "não consigo", "nao consigo",
+    "não quero", "nao quero", "não vou", "nao vou",
+    "talvez", "não sei", "nao sei", "preciso ver", "preciso pensar",
+    "deixa eu ver", "ainda nao", "ainda não",
+  ]
+  if (refusals.some((r) => lower.includes(r))) return null
+
+  // Must have a day reference
+  if (!hasDayRef(userMessage)) return null
+
+  // Must have a positive/affirmative signal
+  const positiveSignals = [
+    /^(sim|claro|ótimo|otimo|perfeito|tudo\s*bem|pode\s*ser|pode|ok|tá\s*bom|ta\s*bom|combinado|certo)\b/i,
+    /\b(quero|vou|posso|consigo|dá|da|terei|topo|gostaria)\b/i,
+    /\b(pode marcar|pode agendar|marque|agende|confirmo|confirmado|fechado)\b/i,
+    /\b(vou\s+(?:estar|aparecer|lá|la|aí|ai))\b/i,
+    /\b(me\s+encaixa|encaixa\s*bem|fica\s*bom|fica\s*ótimo)\b/i,
+  ]
+  if (!positiveSignals.some((p) => p.test(lower))) return null
+
+  return userMessage.trim()
+}

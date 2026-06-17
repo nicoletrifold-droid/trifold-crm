@@ -20,6 +20,7 @@ import {
   calculateQualificationScore,
   getNextQualificationStep,
   extractCollectedData,
+  extractVisitConfirmation,
   checkYardenGate,
   shouldHandoff,
   generateHandoffSummary,
@@ -440,35 +441,40 @@ export async function processMessageWithMetadata(
   // Inject visit context directly into the message — only if relevant
   let messageWithContext = message
   if (state?.visit_proposed && conversation?.lead_id) {
-    // Check if there's an active future appointment
-    const { data: activeAppointment } = await supabase
-      .from("appointments")
-      .select("scheduled_at, status")
-      .eq("lead_id", conversation.lead_id)
-      .in("status", ["scheduled", "confirmed"])
-      .gte("scheduled_at", new Date().toISOString())
-      .order("scheduled_at", { ascending: true })
-      .limit(1)
-      .maybeSingle()
+    // Check if there's an active future appointment (only relevant after explicit confirmation)
+    const clientConfirmed = Boolean((collectedData as Record<string, unknown>).visit_explicitly_confirmed)
 
-    if (activeAppointment) {
-      // Visita futura agendada — lembrar o modelo
-      const visitDate = new Date(activeAppointment.scheduled_at)
-      const formatted = visitDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" })
-      const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
-      messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
-    } else {
-      // Visita passou ou foi cancelada — resetar visit_proposed E limpar visit_availability
-      // para evitar que o pipeline crie um novo agendamento com dados antigos
-      const cleanedData = { ...collectedData }
-      delete cleanedData.visit_availability
-      await supabase
-        .from("conversation_state")
-        .update({ visit_proposed: false, collected_data: cleanedData })
-        .eq("conversation_id", conversationId)
-      // Sync local state
-      delete collectedData.visit_availability
+    if (clientConfirmed) {
+      const { data: activeAppointment } = await supabase
+        .from("appointments")
+        .select("scheduled_at, status")
+        .eq("lead_id", conversation.lead_id)
+        .in("status", ["scheduled", "confirmed"])
+        .gte("scheduled_at", new Date().toISOString())
+        .order("scheduled_at", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (activeAppointment) {
+        // Visita futura agendada — lembrar o modelo
+        const visitDate = new Date(activeAppointment.scheduled_at)
+        const formatted = visitDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" })
+        const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+        messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
+      } else {
+        // Visita confirmada pelo cliente mas passou/foi cancelada — resetar estado
+        const cleanedData = { ...collectedData }
+        delete cleanedData.visit_availability
+        delete (cleanedData as Record<string, unknown>).visit_explicitly_confirmed
+        await supabase
+          .from("conversation_state")
+          .update({ visit_proposed: false, collected_data: cleanedData })
+          .eq("conversation_id", conversationId)
+        delete collectedData.visit_availability
+        delete (collectedData as Record<string, unknown>).visit_explicitly_confirmed
+      }
     }
+    // If visit_proposed=true but no visit_explicitly_confirmed yet: Nicole asked, awaiting client reply — keep state
   }
 
   userContent.push({ type: "text", text: messageWithContext })
@@ -546,13 +552,40 @@ export async function processMessageWithMetadata(
   const assistantMessage =
     firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
 
+  // Detect if Nicole invited the client to pick a visit date in this response.
+  // Used to set visit_proposed = true so the next message can capture the confirmation.
+  const VISIT_INVITE_PATTERNS = [
+    /qual dia ser[ia]+\s*melhor/i,
+    /que dia ser[ia]+\s*bom/i,
+    /qual.*dia.*melhor pra voc/i,
+    /link da nossa agenda/i,
+    /posso te enviar o link/i,
+    /calendly\.com/i,
+  ]
+  const nicoleInvitedVisit =
+    !state?.visit_proposed &&
+    VISIT_INVITE_PATTERNS.some((p) => p.test(assistantMessage))
+
   // 9. Extract collected data from user message FIRST (name comes from user, not AI)
   const updatedData = extractCollectedData(message, collectedData)
+
+  // If Nicole already asked about a visit date, check if the client is now confirming one.
+  // extractVisitConfirmation requires a day reference AND a positive signal — not just any mention.
+  if (state?.visit_proposed && !updatedData.visit_explicitly_confirmed) {
+    const confirmed = extractVisitConfirmation(message)
+    if (confirmed) {
+      ;(updatedData as Record<string, unknown>).visit_explicitly_confirmed = confirmed
+    }
+  }
 
   // Then extract non-name data from AI response (property mentions, etc — but NOT name)
   const aiExtracted = extractCollectedData(assistantMessage, updatedData)
   // Preserve the name from user message only (AI response might say "Nicole" which is the bot name)
   const finalData: Record<string, unknown> = { ...aiExtracted, name: updatedData.name ?? collectedData.name }
+  // Preserve visit_explicitly_confirmed from user message (extractCollectedData doesn't know about it)
+  if ((updatedData as Record<string, unknown>).visit_explicitly_confirmed) {
+    finalData.visit_explicitly_confirmed = (updatedData as Record<string, unknown>).visit_explicitly_confirmed
+  }
 
   // 10. Calculate updated score and check handoff
   const updatedScore = calculateQualificationScore(finalData)
@@ -635,7 +668,7 @@ export async function processMessageWithMetadata(
       emit({ level: "info", category: "ai", event_type: "STAGE_CHANGE", message: `Lead moved: em_qualificacao → qualificado (score=${updatedScore})`, metadata: { lead_id: leadId, from: "em_qualificacao", to: "qualificado", score: updatedScore } })
     }
 
-    // Visit scheduling — overrides qualification stage
+    // Visit scheduling — requires explicit confirmation from the client (Story 61-1)
     // Double-check: no existing future appointment for this lead (prevents duplicates)
     const { data: existingAppt } = await supabase
       .from("appointments")
@@ -646,8 +679,9 @@ export async function processMessageWithMetadata(
       .limit(1)
       .maybeSingle()
 
-    // Skip automatic scheduling when the client explicitly asked for a human (handoff takes priority)
-    if (finalData.visit_availability && hasConfirmedDay(finalData.visit_availability) && !state?.visit_proposed && !existingAppt && conversation.org_id && !handoffResult.trigger) {
+    // Only schedule when the client explicitly confirmed a date (visit_explicitly_confirmed)
+    // after Nicole already asked (visit_proposed = true). Handoff takes priority.
+    if (finalData.visit_explicitly_confirmed && !existingAppt && conversation.org_id && !handoffResult.trigger) {
       // Find a free 1-hour slot starting from tomorrow 10h Maringá (13h UTC),
       // checking that the broker doesn't already have an appointment at that time.
       const SLOT_HOURS_UTC = [13, 14, 15, 16, 17] // 10h–14h Maringá
@@ -695,7 +729,7 @@ export async function processMessageWithMetadata(
         location: "Sede Trifold - Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby",
         status: "scheduled",
         created_by: "nicole",
-        notes: `Visita sugerida pela Nicole. Disponibilidade informada: ${String(finalData.visit_availability)}`,
+        notes: `Visita confirmada pelo cliente. Data informada: ${String(finalData.visit_explicitly_confirmed)}`,
       })
 
       leadPatch.visit_scheduled_at = scheduledAt.toISOString()
@@ -710,7 +744,7 @@ export async function processMessageWithMetadata(
         org_id: conversation.org_id,
         lead_id: leadId,
         type: "visit_scheduled",
-        description: `Nicole agendou visita. Disponibilidade: ${String(finalData.visit_availability)}${assignedBrokerId ? ". Corretor designado automaticamente." : ""}`,
+        description: `Nicole agendou visita com confirmação do cliente. Data: ${String(finalData.visit_explicitly_confirmed)}${assignedBrokerId ? ". Corretor designado automaticamente." : ""}`,
       })
 
       const notificationBrokerUserId = assignedBrokerId
@@ -723,7 +757,7 @@ export async function processMessageWithMetadata(
 
     // Handoff — highest priority, overrides visit and qualification stage
     if (handoffResult.trigger && conversation.org_id) {
-      leadPatch.stage_id = finalData.visit_availability
+      leadPatch.stage_id = finalData.visit_explicitly_confirmed
         ? STAGE_IDS.visita_agendada
         : STAGE_IDS.qualificado
       leadPatch.ai_summary = handoffSummary
@@ -762,6 +796,7 @@ export async function processMessageWithMetadata(
     collected_data: finalData,
     qualification_step: updatedStep,
     current_property_id: identifiedPropertyId ?? state?.current_property_id ?? null,
+    ...(nicoleInvitedVisit ? { visit_proposed: true } : {}),
   })
 
   // 12.5 Memory system — regex extraction + lead_facts + Haiku batch (MemPalace-inspired)
@@ -1029,12 +1064,16 @@ function buildSystemPrompt(
       )
     }
     if (state.visit_proposed) {
-      convoLines.push(
-        "VISITA JA AGENDADA! O lead JA confirmou dia e horario. NAO pergunte novamente quando ele quer ir. NAO pergunte dia, NAO pergunte horario. A visita esta marcada. Se ele perguntar algo, responda normalmente sem mencionar agendamento."
-      )
       const collected = state.collected_data as Record<string, unknown> | undefined
-      if (collected && collected.visit_availability) {
-        convoLines.push(`Visita confirmada: ${collected.visit_availability}`)
+      if (collected?.visit_explicitly_confirmed) {
+        convoLines.push(
+          "VISITA CONFIRMADA PELO CLIENTE! O lead confirmou dia e horario. NAO pergunte novamente quando ele quer ir. A visita esta marcada. Se ele perguntar algo, responda normalmente."
+        )
+        convoLines.push(`Data confirmada pelo cliente: ${String(collected.visit_explicitly_confirmed)}`)
+      } else {
+        convoLines.push(
+          "VOCE JA PERGUNTOU AO CLIENTE SOBRE A VISITA. Aguarde a resposta. NAO pergunte novamente sobre interesse em visitar — voce ja perguntou. Se o cliente der um dia especifico com confirmacao positiva, anote e confirme o agendamento."
+        )
       }
     }
     convoLines.push("=== END CONVERSATION CONTEXT ===")
@@ -1154,20 +1193,23 @@ async function updateConversationState(
     collected_data: Record<string, unknown>
     qualification_step: string
     current_property_id: string | null
+    visit_proposed?: boolean
   }
 ): Promise<void> {
+  const upsertPayload: Record<string, unknown> = {
+    conversation_id: conversationId,
+    collected_data: updates.collected_data,
+    qualification_step: updates.qualification_step,
+    current_property_id: updates.current_property_id,
+    updated_at: new Date().toISOString(),
+  }
+  if (updates.visit_proposed !== undefined) {
+    upsertPayload.visit_proposed = updates.visit_proposed
+  }
+
   const { error } = await supabase
     .from("conversation_state")
-    .upsert(
-      {
-        conversation_id: conversationId,
-        collected_data: updates.collected_data,
-        qualification_step: updates.qualification_step,
-        current_property_id: updates.current_property_id,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "conversation_id" }
-    )
+    .upsert(upsertPayload, { onConflict: "conversation_id" })
 
   if (error) {
     console.error("Error updating conversation state:", error)

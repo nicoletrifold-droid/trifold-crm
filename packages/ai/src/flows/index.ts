@@ -3,6 +3,7 @@ export {
   calculateQualificationScore,
   getNextQualificationStep,
   extractCollectedData,
+  extractVisitConfirmation,
 } from "./qualification"
 export { checkYardenGate } from "./yarden-gate"
 export { shouldHandoff, generateHandoffSummary } from "./handoff"

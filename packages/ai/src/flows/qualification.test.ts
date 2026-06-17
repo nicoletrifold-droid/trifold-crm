@@ -3,6 +3,7 @@ import {
   calculateQualificationScore,
   getNextQualificationStep,
   extractCollectedData,
+  extractVisitConfirmation,
 } from "./qualification"
 
 describe("calculateQualificationScore", () => {
@@ -370,5 +371,67 @@ describe("extractCollectedData", () => {
     const current = { name: "Ana" }
     const result = extractCollectedData("Bom dia!", current)
     expect(result).toEqual({ name: "Ana" })
+  })
+})
+
+// Story 61-1 — extractVisitConfirmation
+describe("extractVisitConfirmation", () => {
+  // Positive confirmations — should return the message
+  it("returns message when client says 'sim, pode marcar pra sábado'", () => {
+    expect(extractVisitConfirmation("sim, pode marcar pra sábado")).not.toBeNull()
+  })
+
+  it("returns message when client says 'pode ser sexta-feira'", () => {
+    expect(extractVisitConfirmation("pode ser sexta-feira")).not.toBeNull()
+  })
+
+  it("returns message when client says 'vou na sexta'", () => {
+    expect(extractVisitConfirmation("vou na sexta")).not.toBeNull()
+  })
+
+  it("returns message when client says 'quero ir sábado às 10h'", () => {
+    expect(extractVisitConfirmation("quero ir sábado às 10h")).not.toBeNull()
+  })
+
+  it("returns message when client confirms with 'claro, pode marcar pra semana que vem'", () => {
+    expect(extractVisitConfirmation("claro, pode marcar pra semana que vem")).not.toBeNull()
+  })
+
+  it("returns message when client says 'pode agendar pra sexta-feira'", () => {
+    expect(extractVisitConfirmation("pode agendar pra sexta-feira")).not.toBeNull()
+  })
+
+  // Refusals — should return null
+  it("returns null when client says 'não posso sábado'", () => {
+    expect(extractVisitConfirmation("não posso sábado")).toBeNull()
+  })
+
+  it("returns null when client says 'talvez sábado'", () => {
+    expect(extractVisitConfirmation("talvez sábado")).toBeNull()
+  })
+
+  it("returns null when client says 'não sei ainda'", () => {
+    expect(extractVisitConfirmation("não sei ainda")).toBeNull()
+  })
+
+  it("returns null when client says 'nao consigo segunda'", () => {
+    expect(extractVisitConfirmation("nao consigo segunda-feira")).toBeNull()
+  })
+
+  // Day without positive signal — should return null (Story 61-1 AC7)
+  it("returns null for 'sábado' alone (no positive signal)", () => {
+    expect(extractVisitConfirmation("sábado")).toBeNull()
+  })
+
+  it("returns null for 'semana que vem fico mais livre' (no positive signal)", () => {
+    expect(extractVisitConfirmation("semana que vem fico mais livre")).toBeNull()
+  })
+
+  it("returns null for message without any day reference", () => {
+    expect(extractVisitConfirmation("sim, quero ir")).toBeNull()
+  })
+
+  it("returns null for empty message", () => {
+    expect(extractVisitConfirmation("")).toBeNull()
   })
 })
