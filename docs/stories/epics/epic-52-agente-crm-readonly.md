@@ -5,6 +5,7 @@ status: Draft
 created_at: 2026-06-15
 updated_at: 2026-06-15
 created_by: Morgan (@pm)
+updated_by: Pax (@po)
 priority: High
 sub_epics:
   - 52A: Camada de Leitura Read-Only do Pipeline (views + RLS admin)
@@ -12,7 +13,10 @@ sub_epics:
   - 52C: Guard Admin-Only (UI + API) + Read-Only Enforcement
   - 52D: Auditoria de Acesso a PII
   - 52E: UX da Resposta Integrada
+  - 52F: Contexto de Performance por Criativo (extensão aditiva — admin+supervisor+gerente-comercial)
 stories_planned: [52-1, 52-2, 52-3, 52-4, 52-5]
+stories_added: [52-6]
+stories_done: [52-6]
 ---
 
 # Epic 52 — Agente de Tráfego com Acesso Read-Only ao Pipeline do CRM
@@ -184,3 +188,18 @@ Adicionar esse dado é sensível: o pipeline contém **PII** (nome, telefone, e-
 - [ ] Respostas integradas renderizadas de forma legível no painel (FR-9).
 - [ ] Sem regressão nas ações de mídia existentes e no comportamento atual do agente (CON-5).
 - [ ] QA gate PASS em todas as stories técnicas; @devops fez push após cada QA gate.
+
+## Stories Aditivas (pós-planejamento original)
+
+> Stories adicionadas após o draft inicial do epic, fora da lista `stories_planned` original. São extensões aditivas que reusam o padrão técnico do epic sem reabrir as Decisões de Produto travadas.
+
+| ID | Sub-epic | Título | Status | Notas |
+|---|---|---|---|---|
+| **52-6** | 52F | Contexto de Performance por Criativo no Agente | ✅ Done | **Extensão aditiva, não estava no plano original.** Adiciona análise por criativo (CTR/CPL/rankings por anúncio) ao agente via função SQL `creative_performance(p_days)` + `requiresCreative`/`fetchCreativePerformance` em `context-builder.ts`. **Diferença-chave vs. Decisão de Produto 1 (admin-only):** dados de criativo são **agregados anônimos** (sem PII) — por isso acesso ampliado `is_admin_or_supervisor()` (admin+supervisor+gerente-comercial), distinto do admin-only do pipeline CRM (52-1/52-2). O bloco `if (admin)` de pipeline CRM permanece intocado (AC7 / CON-5). Sem `log_pii_access` (sem PII). |
+
+## Change Log do Epic
+
+| Data | Versão | Descrição | Autor |
+|------|--------|-----------|-------|
+| 2026-06-15 | 0.1 | Epic criado: agente de tráfego com acesso read-only ao pipeline. Stories planejadas 52-1 a 52-5; decisões de produto travadas (admin-only, read-only absoluto, profundidade = todo o pipeline). | Morgan (@pm) |
+| 2026-06-17 | 0.2 | **Story 52-6 adicionada e encerrada (Done) — extensão aditiva.** Capacidade de análise por criativo no agente (não constava do plano original 52-1..52-5). Acesso ampliado `is_admin_or_supervisor()` justificado por dados agregados anônimos (sem PII), distinto do admin-only do pipeline CRM. Migration `100_creative_performance_fn.sql` aplicada em **produção** `dsopqkqjkmhytudaaolv` (commit `aba06bc`). QA gate CONCERNS (`docs/qa/gates/52.6-creative-performance.yml`) **aceito pelo stakeholder** lucas@trifold.eng.br — único gap = E2E com app não executado (TEST-001 medium); validação de runtime feita a nível de banco (admin/supervisor veem dados, não-autorizado 0 linhas). Mesmo padrão de aceitação da 52-2. Stories planejadas originais (52-1..52-5) permanecem em andamento — epic **não** está completo. | Pax (@po) |
