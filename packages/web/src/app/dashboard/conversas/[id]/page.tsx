@@ -93,7 +93,7 @@ export default async function ConversationDetailPage({
       .select("id, name")
       .in("id", brokerUserIds)
     brokerUsers?.forEach((u) => {
-      brokerNames[u.id] = (u.name as string).split(" ")[0]
+      if (u.id) brokerNames[u.id] = ((u.name as string) ?? "").split(" ")[0] ?? (u.name as string)
     })
   }
 
