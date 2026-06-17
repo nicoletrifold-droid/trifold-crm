@@ -1,15 +1,13 @@
 -- ============================================================================
--- Migration: 096_harden_rls_agent_prompts_admin_only.sql
+-- Migration: 098_harden_rls_agent_prompts_admin_only.sql
 -- Story: 53-2 — RLS Hardening de agent_prompts (admin-only WRITE)
 -- ============================================================================
 --
--- SLOT ESCOLHIDO: 096
---   Motivo: a Story/PO estimou 095, mas a verificação obrigatória mostrou que
---   095 JÁ ESTÁ OCUPADO. O arquivo `095_knowledge_base_null_empreendimento_global.sql`
---   existe em `origin/main` (commit e3ca5bc). Verificações realizadas:
---     - `git log --all --name-only | grep 'migrations/0'` → maior slot = 095 (ocupado)
---     - `git log --all --name-only | grep -E 'migrations/09[6-9]'` → nenhum 096+ existe
---   Portanto o próximo slot livre real é 096.
+-- SLOT: 098
+--   Renomeado de 096 → 098 (jun/2026) para resolver conflito de numeração:
+--   096_crm_pipeline_readonly_layer.sql (Epic 52) e 097_agent_pii_access_log.sql
+--   (Epic 52) já ocupavam os slots 096/097 na branch feat/epic-52-agente-crm-readonly.
+--   Slots 098/099 confirmados livres em main antes do renome.
 --
 -- OBJETIVO:
 --   Endurecer o RLS para que apenas usuários com role `admin` possam ESCREVER

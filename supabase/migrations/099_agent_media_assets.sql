@@ -1,4 +1,5 @@
--- Migration 097: Biblioteca de Mídia da Nicole (Story 56-1)
+-- Migration 099: Biblioteca de Mídia da Nicole (Story 56-1)
+-- Renomeado de 097 → 099 (jun/2026): conflito com 097_agent_pii_access_log.sql (Epic 52).
 -- Storage bucket nicole-media + tabela agent_media_assets
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
