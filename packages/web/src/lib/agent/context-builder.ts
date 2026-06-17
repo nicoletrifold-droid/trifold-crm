@@ -730,6 +730,27 @@ interface CreativeRow {
   quality_ranking:         string | null
   engagement_rate_ranking: string | null
   conversion_rate_ranking: string | null
+  crm_leads_total:         number | null
+  crm_leads_agendado:      number | null
+  crm_leads_visitou:       number | null
+  crm_leads_proposta:      number | null
+  crm_leads_fechado:       number | null
+}
+
+/**
+ * fmtCrmFunnel — formata o funil CRM de um criativo numa única célula da tabela.
+ * Quando o criativo não tem nenhum lead vinculado ao CRM (total 0/null), retorna
+ * "sem rastreamento CRM" em vez de "0 visitaram" — a ausência de vínculo via
+ * ad_id é semanticamente diferente de "ninguém visitou".
+ */
+function fmtCrmFunnel(r: CreativeRow): string {
+  const total = r.crm_leads_total ?? 0
+  if (total === 0) return "sem rastreamento CRM"
+  const agendado = r.crm_leads_agendado ?? 0
+  const visitou = r.crm_leads_visitou ?? 0
+  const proposta = r.crm_leads_proposta ?? 0
+  const fechado = r.crm_leads_fechado ?? 0
+  return `${total} total → ${agendado} agendaram → ${visitou} visitaram → ${proposta} proposta → ${fechado} fechados`
 }
 
 /**
@@ -769,13 +790,16 @@ export async function fetchCreativePerformance(
   const lines: string[] = []
   lines.push(`=== CRIATIVOS (últimos ${days} dias) ===`)
   lines.push(
-    "[Nota: dados de performance por anúncio individual agregados de meta_insights_daily level='ad']",
+    "[Nota: dados de performance por anúncio individual agregados de meta_insights_daily level='ad', cruzados com o funil do CRM via metadata->>'ad_id' → kanban_stages]",
   )
   lines.push(
-    "| Anúncio | Status | Leads | Spend Total | CPL Médio | CTR Médio | Rank. Qualidade |",
+    "[Funil CRM: 'total' = leads vinculados ao criativo no CRM; depois agendaram → visitaram → proposta → fecharam. 'sem rastreamento CRM' = nenhum lead deste criativo foi vinculado ao CRM via ad_id — NÃO interprete como '0 visitaram']",
   )
   lines.push(
-    "|---------|--------|-------|-------------|-----------|-----------|-----------------|",
+    "| Anúncio | Status | Leads | Spend Total | CPL Médio | CTR Médio | Rank. Qualidade | Funil CRM |",
+  )
+  lines.push(
+    "|---------|--------|-------|-------------|-----------|-----------|-----------------|-----------|",
   )
   for (const r of rows) {
     const name = r.ad_name ?? "(sem nome)"
@@ -786,7 +810,10 @@ export async function fetchCreativePerformance(
       r.avg_cost_per_lead !== null ? `R$${fmtBRL(Number(r.avg_cost_per_lead))}` : "—"
     const ctr = fmtPct(r.avg_ctr !== null ? Number(r.avg_ctr) : null)
     const qual = r.quality_ranking ?? "—"
-    lines.push(`| ${name} | ${status} | ${leads} | ${spend} | ${cpl} | ${ctr} | ${qual} |`)
+    const crm = fmtCrmFunnel(r)
+    lines.push(
+      `| ${name} | ${status} | ${leads} | ${spend} | ${cpl} | ${ctr} | ${qual} | ${crm} |`,
+    )
   }
 
   const text = lines.join("\n")
