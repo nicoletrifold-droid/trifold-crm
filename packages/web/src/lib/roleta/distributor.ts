@@ -1,5 +1,6 @@
 import "server-only"
 
+import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { notifyBroker, notifyImobiliaria } from "./notify-broker"
 
@@ -132,7 +133,10 @@ export async function distributeLeadToNextBroker(
           phone: (u as { phone?: string | null })?.phone ?? null,
         }
 
-        await admin.from("leads").update({ assigned_broker_id: assignedUserId }).eq("id", leadId)
+        await admin.from("leads").update({
+          assigned_broker_id: assignedUserId,
+          stage_id: STAGE_IDS.novo,
+        }).eq("id", leadId)
 
         const notifyResult = await notifyBroker({
           orgId,
@@ -247,7 +251,10 @@ export async function distributeLeadToNextBroker(
     notified_whatsapp: notifyResult.whatsapp,
   })
 
-  // 8. Notificar imobiliária sobre distribuição
+  // 8. Mover lead para "Aguardando atendimento" ao ser atribuído via roleta
+  await admin.from("leads").update({ stage_id: STAGE_IDS.novo }).eq("id", leadId)
+
+  // 9. Notificar imobiliária sobre distribuição
   if (cfg.notify_user_on_distribution) {
     void notifyImobiliaria({
       orgId,
