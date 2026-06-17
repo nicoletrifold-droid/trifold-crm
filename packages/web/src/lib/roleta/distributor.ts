@@ -86,7 +86,7 @@ export async function distributeLeadToNextBroker(
   // 2. Fetch lead — must belong to this org
   const { data: lead } = await admin
     .from("leads")
-    .select("property_interest_id, name, phone")
+    .select("property_interest_id, name, phone, assigned_broker_id")
     .eq("id", leadId)
     .eq("org_id", orgId)
     .maybeSingle()
@@ -95,6 +95,11 @@ export async function distributeLeadToNextBroker(
     await admin.from("lead_distribution_log").insert({
       org_id: orgId, lead_id: leadId, status: "sem_corretor_disponivel", skipped_brokers: [],
     })
+    return { status: "sem_corretor_disponivel" }
+  }
+
+  // Guard: lead já foi atribuído por execução concorrente — não redistribuir
+  if (lead.assigned_broker_id !== null) {
     return { status: "sem_corretor_disponivel" }
   }
 
@@ -133,10 +138,12 @@ export async function distributeLeadToNextBroker(
           phone: (u as { phone?: string | null })?.phone ?? null,
         }
 
-        await admin.from("leads").update({
+        const { data: claimed } = await admin.from("leads").update({
           assigned_broker_id: assignedUserId,
           stage_id: STAGE_IDS.novo,
-        }).eq("id", leadId)
+        }).eq("id", leadId).is("assigned_broker_id", null).select("id").maybeSingle()
+
+        if (!claimed) return { status: "sem_corretor_disponivel" }
 
         const notifyResult = await notifyBroker({
           orgId,

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     Date.now() - RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000
   ).toISOString()
 
-  // Busca todos os leads ativos sem corretor dos últimos 30 dias, em qualquer stage
+  // Busca leads ativos sem corretor dos últimos 30 dias
   const { data: leads, error } = await admin
     .from("leads")
     .select("id, org_id, name")
@@ -36,9 +36,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "DB error" }, { status: 500 })
   }
 
-  const results = { distributed: 0, fora_horario: 0, sem_corretor: 0, outros: 0 }
+  const results = { distributed: 0, fora_horario: 0, sem_corretor: 0, skipped: 0, outros: 0 }
 
   for (const lead of leads ?? []) {
+    // Guard de idempotência: re-verifica no banco antes de distribuir.
+    // Protege contra execuções concorrentes do cron (duas instâncias Vercel
+    // podem buscar o mesmo batch e processar o mesmo lead em paralelo).
+    const { data: current } = await admin
+      .from("leads")
+      .select("assigned_broker_id")
+      .eq("id", lead.id)
+      .maybeSingle()
+
+    if (!current || current.assigned_broker_id !== null) {
+      results.skipped++
+      continue
+    }
+
     const result = await distributeLeadToNextBroker(lead.id, lead.org_id)
     if (result.status === "distributed") results.distributed++
     else if (result.status === "fora_horario") results.fora_horario++
