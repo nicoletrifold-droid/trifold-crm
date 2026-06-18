@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { Paperclip, Send, Loader2 } from "lucide-react"
 import { MediaPickerModal } from "./media-picker-modal"
 
 const MAX_MESSAGE_LENGTH = 4096
@@ -98,11 +99,12 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
         <div className="flex items-end gap-2">
           <button
             type="button"
-            title="Enviar arquivo da biblioteca"
+            title="Anexar arquivo"
+            aria-label="Anexar arquivo"
             onClick={() => setShowMediaPicker(true)}
-            className="flex-shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-gray-500 hover:border-orange-400 hover:text-orange-600 dark:border-stone-700 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400"
+            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-orange-400 hover:text-orange-600 dark:border-stone-700 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400"
           >
-            📎
+            <Paperclip className="h-5 w-5" />
           </button>
           <textarea
             value={text}
@@ -118,13 +120,18 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
             type="button"
             onClick={() => void handleSend()}
             disabled={disabled}
-            className="flex-shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Enviar mensagem"
+            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Enviando…" : "Enviar"}
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
           </button>
         </div>
-        <div className="mt-1 flex justify-between text-[11px] text-gray-400 dark:text-stone-500">
-          <span>Ctrl/Cmd + Enter para enviar</span>
+        <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-gray-400 lg:justify-between dark:text-stone-500">
+          <span className="hidden lg:inline">Ctrl/Cmd + Enter para enviar</span>
           <span>
             {trimmed.length}/{MAX_MESSAGE_LENGTH}
           </span>
