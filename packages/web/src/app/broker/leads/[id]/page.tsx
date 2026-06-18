@@ -2,7 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { LeadEditForm } from "./_components/lead-edit-form"
+import { LeadDetailsPanel } from "./_components/lead-details-panel"
 import { ConversationThread } from "./_components/conversation-thread"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
@@ -115,83 +115,31 @@ export default async function BrokerLeadDetailPage({
               Score: {lead.qualification_score}
             </span>
           )}
-        </div>
-      </div>
-
-      {/* Edit Form */}
-      <LeadEditForm
-        lead={{
-          id: lead.id as string,
-          name: lead.name as string | null,
-          phone: lead.phone as string,
-          email: lead.email as string | null,
-          interest_level: lead.interest_level as string | null,
-          property_interest_id: lead.property_interest_id as string | null,
-          preferred_bedrooms: lead.preferred_bedrooms as number | null,
-          preferred_floor: lead.preferred_floor as string | null,
-          preferred_view: lead.preferred_view as string | null,
-          preferred_garage_count: lead.preferred_garage_count as number | null,
-          has_down_payment: lead.has_down_payment as boolean | null,
-        }}
-        properties={(properties ?? []).map(p => ({ id: p.id as string, name: p.name as string }))}
-      />
-
-      {/* Info Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">Dados do Lead</h2>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-gray-500 dark:text-stone-400">Empreendimento</dt>
-              <dd className="font-medium">{property?.name ?? "Não definido"}</dd>
-            </div>
-            {lead.preferred_bedrooms && (
-              <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-stone-400">Quartos</dt>
-                <dd className="font-medium dark:text-stone-100">{lead.preferred_bedrooms}</dd>
-              </div>
-            )}
-            {lead.preferred_floor && (
-              <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-stone-400">Andar</dt>
-                <dd className="font-medium dark:text-stone-100">{lead.preferred_floor}</dd>
-              </div>
-            )}
-            {lead.preferred_view && (
-              <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-stone-400">Vista</dt>
-                <dd className="font-medium dark:text-stone-100">{lead.preferred_view}</dd>
-              </div>
-            )}
-            {lead.preferred_garage_count != null && (
-              <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-stone-400">Vagas</dt>
-                <dd className="font-medium dark:text-stone-100">{lead.preferred_garage_count}</dd>
-              </div>
-            )}
-            {lead.has_down_payment != null && (
-              <div className="flex justify-between">
-                <dt className="text-gray-500 dark:text-stone-400">Tem entrada</dt>
-                <dd className="font-medium dark:text-stone-100">
-                  {lead.has_down_payment ? "Sim" : "Não"}
-                </dd>
-              </div>
-            )}
-          </dl>
-        </div>
-
-        {/* AI Summary */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <h2 className="mb-3 text-lg font-semibold dark:text-stone-100">Resumo IA</h2>
-          {lead.ai_summary ? (
-            <p className="text-sm text-gray-600 whitespace-pre-line dark:text-stone-300">
-              {lead.ai_summary}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-400 dark:text-stone-500">
-              O resumo será gerado automaticamente após a conversa com a Nicole.
-            </p>
-          )}
+          {/*
+            Story 63-7 — detalhes/edição do lead movidos para slide-over,
+            acionado pelo botão ⋯ no header, fora do caminho de resposta do chat.
+          */}
+          <LeadDetailsPanel
+            lead={{
+              id: lead.id as string,
+              name: lead.name as string | null,
+              phone: lead.phone as string,
+              email: lead.email as string | null,
+              interest_level: lead.interest_level as string | null,
+              property_interest_id: lead.property_interest_id as string | null,
+              preferred_bedrooms: lead.preferred_bedrooms as number | null,
+              preferred_floor: lead.preferred_floor as string | null,
+              preferred_view: lead.preferred_view as string | null,
+              preferred_garage_count: lead.preferred_garage_count as number | null,
+              has_down_payment: lead.has_down_payment as boolean | null,
+            }}
+            properties={(properties ?? []).map((p) => ({
+              id: p.id as string,
+              name: p.name as string,
+            }))}
+            propertyName={(property?.name as string | undefined) ?? null}
+            aiSummary={lead.ai_summary as string | null}
+          />
         </div>
       </div>
 
