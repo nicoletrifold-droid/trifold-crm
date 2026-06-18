@@ -1,7 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { LayoutDashboard, Users, Kanban, CalendarDays, Smartphone, CreditCard, MessageSquarePlus } from "lucide-react"
+import { LayoutDashboard, Users, Kanban, CalendarDays, Building2, Smartphone, CreditCard, MessageSquarePlus } from "lucide-react"
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/broker/leads", label: "Meus Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/broker/pipeline", label: "Pipeline", icon: <Kanban className={ICON_SIZE} /> },
   { href: "/broker/agenda", label: "Agenda", icon: <CalendarDays className={ICON_SIZE} /> },
+  { href: "/broker/properties", label: "Imóveis", icon: <Building2 className={ICON_SIZE} /> },
   { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true },
   { href: "/broker/instalar", label: "Instalar app", icon: <Smartphone className={ICON_SIZE} /> },
   { href: "/broker/suporte", label: "Suporte", icon: <MessageSquarePlus className={ICON_SIZE} /> },

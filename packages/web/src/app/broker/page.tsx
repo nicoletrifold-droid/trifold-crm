@@ -112,6 +112,7 @@ export default async function BrokerHomePage() {
     pendingLogs,
     tasksAtrasadas,
     tasksHoje,
+    propertiesResult,
   ] = await Promise.all([
     supabase.rpc("get_broker_dashboard_counts", {
       p_org_id: user.orgId, p_broker_id: user.id,
@@ -164,6 +165,12 @@ export default async function BrokerHomePage() {
       .eq("leads.assigned_broker_id", user.id)
       .order("due_at", { ascending: true })
       .limit(5),
+    // Empreendimentos (somente leitura) — disponibilidade e % vendido
+    supabase
+      .from("properties")
+      .select("id, name, status, total_units, available_units, city")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false }),
   ])
 
   type TaskItem = {
@@ -183,6 +190,13 @@ export default async function BrokerHomePage() {
   }) as Counts
 
   const funnel = (funnelResult.data ?? []) as FunnelRow[]
+
+  const properties = (propertiesResult.data ?? []) as Array<{
+    id: string; name: string; status: string
+    total_units: number | null; available_units: number | null; city: string | null
+  }>
+  const statusLabel = (s: string) =>
+    s === "selling" ? "Em venda" : s === "launching" ? "Lançamento" : s
 
   const roletaAtiva = roletaConfigResult.data?.is_active ?? false
   const broker = brokerResult.data
@@ -302,6 +316,77 @@ export default async function BrokerHomePage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Empreendimentos ──────────────────────────────────────── */}
+      {properties.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-stone-200">Empreendimentos</h2>
+            <Link href="/broker/properties" className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400">
+              Ver todos <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {properties.map((property) => {
+              const soldPct =
+                property.total_units && property.available_units != null
+                  ? Math.round(
+                      ((property.total_units - property.available_units) / property.total_units) * 100
+                    )
+                  : null
+              return (
+                <Link
+                  key={property.id}
+                  href={`/broker/properties/${property.id}`}
+                  className="rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-stone-700"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-stone-400">
+                        {property.city ?? "-"}
+                        {property.total_units != null && <> &middot; {property.total_units} unidades</>}
+                        {property.available_units != null && (
+                          <>
+                            {" · "}
+                            <span className="font-medium text-emerald-600 dark:text-emerald-300">
+                              {property.available_units} disponíveis
+                            </span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        property.status === "selling"
+                          ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                          : property.status === "launching"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                          : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
+                      }`}
+                    >
+                      {statusLabel(property.status)}
+                    </span>
+                  </div>
+                  {soldPct != null && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-stone-800">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 dark:bg-emerald-400"
+                          style={{ width: `${soldPct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium tabular-nums text-gray-400 dark:text-stone-500">
+                        {soldPct}% vendido
+                      </span>
+                    </div>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Tarefas Atrasadas + Para Hoje ────────────────────────── */}
       {(atrasadasList.length > 0 || hojeList.length > 0) && (

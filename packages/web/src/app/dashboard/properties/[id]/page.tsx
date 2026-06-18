@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { canEditImoveis } from "@web/lib/permissions-imoveis"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ObraVinculadaSection } from "./_components/obra-vinculada-section"
@@ -64,7 +64,7 @@ export default async function PropertyDetailPage({
   const reservedCount = units?.filter((u) => u.status === "reserved").length ?? 0
   const soldCount = units?.filter((u) => u.status === "sold").length ?? 0
 
-  const isAdminOrSupervisor = await canAccess(appUser.id, appUser.orgId, "sistema") || appUser.role === "obras"
+  const canEdit = canEditImoveis(appUser.role)
 
   const paymentMethodLabels: Record<string, string> = {
     financiamento_bancario: "Financiamento bancário",
@@ -101,7 +101,7 @@ export default async function PropertyDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {isAdminOrSupervisor && (
+          {canEdit && (
             <Link
               href={`/dashboard/properties/${id}/edit`}
               className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
@@ -200,7 +200,7 @@ export default async function PropertyDetailPage({
           <h2 className="text-lg font-semibold dark:text-stone-100">
             Unidades ({units?.length ?? 0})
           </h2>
-          {isAdminOrSupervisor && (
+          {canEdit && (
             <Link
               href={`/dashboard/properties/${id}/units`}
               className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
@@ -263,7 +263,7 @@ export default async function PropertyDetailPage({
                     </span>
                   </td>
                   <td className="px-4 py-2 text-right">
-                    {isAdminOrSupervisor && (
+                    {canEdit && (
                       <Link
                         href={`/dashboard/properties/${id}/units/${u.id}`}
                         className="rounded-md bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-200 dark:hover:bg-stone-600"
@@ -280,7 +280,7 @@ export default async function PropertyDetailPage({
       </div>
 
       {/* Obra Vinculada */}
-      {isAdminOrSupervisor && (
+      {canEdit && (
         <ObraVinculadaSection
           propertyId={id}
           obraVinculada={obraVinculada ?? null}

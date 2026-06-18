@@ -1,35 +1,23 @@
 import { createClient } from "@web/lib/supabase/server"
-import { getServerUser } from "@web/lib/auth"
-import { canEditImoveis, canCreateImoveis } from "@web/lib/permissions-imoveis"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
-export default async function PropertiesPage() {
-  const user = await getServerUser()
+export default async function BrokerPropertiesPage() {
   const supabase = await createClient()
 
   const { data: properties } = await supabase
     .from("properties")
-    .select("id, name, slug, status, address, city, state, total_units, delivery_date, is_active")
+    .select("id, name, status, city, state, total_units, available_units, delivery_date")
     .eq("is_active", true)
     .order("created_at", { ascending: false })
 
-  // Editar: admin/supervisor/obras. Criar: admin/supervisor (fonte única).
-  const canEdit = canEditImoveis(user.role)
-  const canCreate = canCreateImoveis(user.role)
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Empreendimentos</h1>
-        {canCreate && (
-          <Link
-            href="/dashboard/properties/new"
-            className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
-          >
-            Novo empreendimento
-          </Link>
-        )}
+        <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
+          Disponibilidade e detalhes dos empreendimentos.
+        </p>
       </div>
 
       <ScrollableX className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
@@ -39,7 +27,7 @@ export default async function PropertiesPage() {
               <th className="px-6 py-3">Nome</th>
               <th className="px-6 py-3">Status</th>
               <th className="px-6 py-3">Cidade</th>
-              <th className="px-6 py-3">Unidades</th>
+              <th className="px-6 py-3">Disponíveis</th>
               <th className="px-6 py-3">Entrega</th>
               <th className="px-6 py-3"></th>
             </tr>
@@ -70,8 +58,13 @@ export default async function PropertiesPage() {
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                   {p.city}/{p.state}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                  {p.total_units ?? "-"}
+                <td className="px-6 py-4 text-sm">
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                    {p.available_units ?? "-"}
+                  </span>
+                  {p.total_units != null && (
+                    <span className="text-gray-400 dark:text-stone-500"> / {p.total_units}</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                   {p.delivery_date
@@ -83,10 +76,10 @@ export default async function PropertiesPage() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <Link
-                    href={`/dashboard/properties/${p.id}`}
+                    href={`/broker/properties/${p.id}`}
                     className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                   >
-                    {canEdit ? "Editar" : "Ver"}
+                    Ver
                   </Link>
                 </td>
               </tr>
