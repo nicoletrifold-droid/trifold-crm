@@ -1,68 +1,72 @@
-import { describe, it, expect, beforeAll } from "vitest"
+import { describe, it, expect } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { classifyLeadFirstMessage } from "./classify-lead"
+import { loadLeadInboundForClassification } from "./classify-lead"
 
-// Chave dummy: o fast-path de keyword de classifyContactIntent não faz
-// chamada real à API, então uma chave não-vazia basta para o teste rodar.
-beforeAll(() => {
-  process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "sk-test-dummy"
-})
-
-/** Mock encadeável do Supabase: conversations resolve via await, messages via maybeSingle(). */
+/** Mock encadeável: conversations e messages resolvem via `then` (await direto). */
 function makeSupabase(opts: {
   conversations: { data: Array<{ id: string }> | null }
-  message?: { data: { content: string; metadata: Record<string, unknown> | null } | null }
+  messages?: {
+    data: Array<{ content: string | null; metadata: Record<string, unknown> | null; created_at: string }> | null
+  }
 }): SupabaseClient {
   return {
     from(table: string) {
       const result =
-        table === "conversations" ? opts.conversations : (opts.message ?? { data: null })
+        table === "conversations" ? opts.conversations : (opts.messages ?? { data: [] })
       const builder: Record<string, unknown> = {}
       const chain = () => builder
       builder.select = chain
       builder.eq = chain
       builder.in = chain
       builder.order = chain
-      builder.limit = chain
-      builder.maybeSingle = () => Promise.resolve(result)
       builder.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve)
       return builder
     },
   } as unknown as SupabaseClient
 }
 
-describe("classifyLeadFirstMessage", () => {
-  it("AC3: sem conversa → default seguro isLead=true", async () => {
-    const supabase = makeSupabase({ conversations: { data: [] } })
-    const r = await classifyLeadFirstMessage(supabase, "lead-1")
-    expect(r.isLead).toBe(true)
+describe("loadLeadInboundForClassification", () => {
+  it("sem conversa → vazio", async () => {
+    const r = await loadLeadInboundForClassification(makeSupabase({ conversations: { data: [] } }), "l1")
+    expect(r).toEqual({ lastInboundAt: null, text: "", hasDocument: false })
   })
 
-  it("sem mensagem inbound → default seguro isLead=true", async () => {
+  it("concatena todas as mensagens do lead e pega a última data", async () => {
     const supabase = makeSupabase({
       conversations: { data: [{ id: "c1" }] },
-      message: { data: null },
-    })
-    const r = await classifyLeadFirstMessage(supabase, "lead-1")
-    expect(r.isLead).toBe(true)
-  })
-
-  it("1ª mensagem com keyword de não-lead → isLead=false (fast-path, sem API)", async () => {
-    const supabase = makeSupabase({
-      conversations: { data: [{ id: "c1" }] },
-      message: { data: { content: "quero enviar meu currículo para vaga de emprego", metadata: null } },
-    })
-    const r = await classifyLeadFirstMessage(supabase, "lead-1")
-    expect(r.isLead).toBe(false)
-  })
-
-  it("AC5: erro na query → default seguro isLead=true (nunca lança)", async () => {
-    const broken = {
-      from() {
-        throw new Error("db down")
+      messages: {
+        data: [
+          { content: "Olá", metadata: null, created_at: "2026-06-18T13:00:00Z" },
+          { content: "Sobre vaga de emprego", metadata: null, created_at: "2026-06-18T13:01:00Z" },
+        ],
       },
-    } as unknown as SupabaseClient
-    const r = await classifyLeadFirstMessage(broken, "lead-1")
-    expect(r.isLead).toBe(true)
+    })
+    const r = await loadLeadInboundForClassification(supabase, "l1")
+    expect(r.text).toBe("Olá | Sobre vaga de emprego")
+    expect(r.lastInboundAt).toBe("2026-06-18T13:01:00Z")
+    expect(r.hasDocument).toBe(false)
+  })
+
+  it("detecta hasDocument quando alguma mensagem tem media_type=document", async () => {
+    const supabase = makeSupabase({
+      conversations: { data: [{ id: "c1" }] },
+      messages: {
+        data: [{ content: "segue anexo", metadata: { media_type: "document" }, created_at: "2026-06-18T13:00:00Z" }],
+      },
+    })
+    const r = await loadLeadInboundForClassification(supabase, "l1")
+    expect(r.hasDocument).toBe(true)
+  })
+
+  it("sem mensagens inbound → vazio", async () => {
+    const supabase = makeSupabase({ conversations: { data: [{ id: "c1" }] }, messages: { data: [] } })
+    const r = await loadLeadInboundForClassification(supabase, "l1")
+    expect(r.lastInboundAt).toBeNull()
+  })
+
+  it("erro na query → vazio (nunca lança)", async () => {
+    const broken = { from() { throw new Error("db down") } } as unknown as SupabaseClient
+    const r = await loadLeadInboundForClassification(broken, "l1")
+    expect(r).toEqual({ lastInboundAt: null, text: "", hasDocument: false })
   })
 })

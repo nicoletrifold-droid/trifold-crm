@@ -5,7 +5,6 @@ import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
-import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
@@ -605,47 +604,10 @@ export async function POST(request: NextRequest) {
           org_id: orgId,
         })
 
-        // Classificar o contato ANTES de distribuir — nunca enviar um não-lead
-        // (candidato a emprego, parceria, fornecedor, mídia) para a roleta.
-        // Camada 1: fast-path de keyword (dentro de classifyContactIntent).
-        // Camada 2: classificação por IA (Haiku) para casos sutis.
-        // Default seguro: qualquer falha → trata como lead e distribui.
-        void (async () => {
-          try {
-            const { classifyContactIntent, createAnthropicClient } =
-              await import("@trifold/ai")
-            const classification = await classifyContactIntent(
-              createAnthropicClient(),
-              asyncText,
-              { hasDocument: asyncMediaBlock?.type === "document" }
-            )
-
-            if (!classification.isLead) {
-              // Arquiva o não-lead (is_active=false): sai das listas de leads
-              // ativos e o cron de retry (filtro is_active=true) nunca o pega.
-              await supabase.from("leads").update({ is_active: false }).eq("id", lead.id)
-              logEvent({
-                level: "info",
-                category: "system",
-                event_type: "roleta_skip_non_lead",
-                message: `Distribuição ignorada + lead arquivado — ${classification.category}: ${classification.reason}`,
-                metadata: {
-                  lead_id: lead.id,
-                  conversation_id: conversation!.id,
-                  category: classification.category,
-                  reason: classification.reason,
-                },
-                source: "api/webhook/whatsapp",
-                org_id: orgId,
-              })
-              return
-            }
-
-            await distributeLeadToNextBroker(lead.id, orgId)
-          } catch (err) {
-            console.error("[roleta] classify/distribution error:", err)
-          }
-        })()
+        // NÃO distribuímos na primeira mensagem (Story 71-1). A Nicole conduz a
+        // conversa; o cron `roleta-retry` distribui só depois que a conversa
+        // esfria (≥5 min sem nova mensagem do lead), classificando o diálogo
+        // inteiro — evita distribuir um "Olá" que vira "vaga de emprego".
       }
 
       // Nicole pipeline

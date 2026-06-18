@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
-import { classifyLeadFirstMessage } from "@web/lib/roleta/classify-lead"
+import { loadLeadInboundForClassification } from "@web/lib/roleta/classify-lead"
+import { classifyContactIntent, createAnthropicClient } from "@trifold/ai"
 
 const MAX_PER_RUN = 50
 const RETRY_WINDOW_DAYS = 30
+// A conversa precisa estar parada há pelo menos isto para decidir (Story 71-1).
+const IDLE_MINUTES = 5
 
+/**
+ * Motor único de distribuição (Story 71-1). A distribuição NÃO acontece mais
+ * na primeira mensagem do WhatsApp. Este cron roda com frequência e, para cada
+ * lead ativo sem corretor:
+ *  - se a conversa ainda está "quente" (última mensagem do lead há < 5 min) → espera.
+ *  - quando esfria (≥ 5 min sem nova mensagem), classifica o DIÁLOGO INTEIRO:
+ *      lead real → distribui pela roleta; não-lead → arquiva (is_active=false).
+ *  - lead sem nenhuma mensagem inbound → distribui (default seguro; ex.: importados).
+ */
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
   const authHeader = request.headers.get("authorization")
@@ -21,8 +33,9 @@ export async function GET(request: NextRequest) {
   const thirtyDaysAgo = new Date(
     Date.now() - RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000
   ).toISOString()
+  const idleCutoffMs = IDLE_MINUTES * 60 * 1000
 
-  // Busca leads ativos sem corretor dos últimos 30 dias
+  // Leads ativos sem corretor dos últimos 30 dias.
   const { data: leads, error } = await admin
     .from("leads")
     .select("id, org_id, name")
@@ -37,12 +50,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "DB error" }, { status: 500 })
   }
 
-  const results = { distributed: 0, fora_horario: 0, sem_corretor: 0, skipped: 0, nao_lead: 0, outros: 0 }
+  const results = {
+    distributed: 0,
+    fora_horario: 0,
+    sem_corretor: 0,
+    skipped: 0,
+    aguardando: 0,
+    nao_lead: 0,
+    outros: 0,
+  }
 
   for (const lead of leads ?? []) {
-    // Guard de idempotência: re-verifica no banco antes de distribuir.
-    // Protege contra execuções concorrentes do cron (duas instâncias Vercel
-    // podem buscar o mesmo batch e processar o mesmo lead em paralelo).
+    // Guard de idempotência: re-verifica antes de distribuir (execuções concorrentes).
     const { data: current } = await admin
       .from("leads")
       .select("assigned_broker_id")
@@ -54,18 +73,34 @@ export async function GET(request: NextRequest) {
       continue
     }
 
-    // Triagem não-lead (Story 67-1): o cron é um caminho de distribuição
-    // automática e DEVE aplicar a mesma classificação do webhook. Não-lead
-    // (candidato a emprego, parceria, fornecedor, mídia) é arquivado
-    // (is_active=false) e NÃO distribuído — sai do batch e não retorna.
-    const classification = await classifyLeadFirstMessage(admin, lead.id)
-    if (!classification.isLead) {
-      await admin.from("leads").update({ is_active: false }).eq("id", lead.id)
-      console.log(
-        `[roleta-retry] não-lead arquivado (${classification.category}): ${lead.id} — ${classification.reason}`
+    // Carrega o diálogo inteiro do lead.
+    const convo = await loadLeadInboundForClassification(admin, lead.id)
+
+    // Conversa ainda quente? última mensagem do lead há < IDLE_MINUTES → espera.
+    if (convo.lastInboundAt) {
+      const idleMs = Date.now() - new Date(convo.lastInboundAt).getTime()
+      if (idleMs < idleCutoffMs) {
+        results.aguardando++
+        continue
+      }
+    }
+
+    // Conversa esfriou (ou não há mensagem) → classifica o diálogo inteiro.
+    // Sem texto inbound → default seguro: trata como lead e distribui.
+    if (convo.text) {
+      const classification = await classifyContactIntent(
+        createAnthropicClient(),
+        convo.text,
+        { hasDocument: convo.hasDocument }
       )
-      results.nao_lead++
-      continue
+      if (!classification.isLead) {
+        await admin.from("leads").update({ is_active: false }).eq("id", lead.id)
+        console.log(
+          `[roleta-retry] não-lead arquivado (${classification.category}): ${lead.id} — ${classification.reason}`
+        )
+        results.nao_lead++
+        continue
+      }
     }
 
     const result = await distributeLeadToNextBroker(lead.id, lead.org_id)
