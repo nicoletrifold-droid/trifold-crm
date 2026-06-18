@@ -25,6 +25,7 @@ import {
   shouldHandoff,
   generateHandoffSummary,
   updateLeadMemory,
+  guardStageForAssignedLead,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { loadMemoryContext } from "../memory/loader"
@@ -781,6 +782,11 @@ export async function processMessageWithMetadata(
         .update({ is_ai_active: false, handoff_at: new Date().toISOString(), handoff_reason: handoffResult.reason })
         .eq("id", conversationId)
     }
+
+    // Regra interna (Story 65-1): lead já distribuído a um corretor permanece
+    // em "Aguardando atendimento". A Nicole não reposiciona no kanban um lead
+    // que já tem dono — remove qualquer mudança de stage do patch.
+    guardStageForAssignedLead(leadPatch, currentLead?.assigned_broker_id)
 
     // ONE single update with all accumulated changes
     if (Object.keys(leadPatch).length > 0) {
