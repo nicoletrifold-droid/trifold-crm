@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Pencil } from "lucide-react"
+import { MessageCircle } from "lucide-react"
 import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 
 interface Stage { id: string; name: string; color: string | null }
@@ -80,10 +80,10 @@ export function LeadsListWithDrawer({ leads }: Props) {
               </Link>
               <button
                 onClick={() => setSelectedLeadId(lead.id)}
-                aria-label="Atender lead"
-                className="shrink-0 rounded-xl bg-orange-50 p-3 text-orange-500 ring-1 ring-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:ring-orange-500/30 dark:hover:bg-orange-500/20"
+                aria-label="Responder"
+                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl bg-orange-50 p-3 text-orange-500 ring-1 ring-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:ring-orange-500/30 dark:hover:bg-orange-500/20"
               >
-                <Pencil className="h-4 w-4" />
+                <MessageCircle className="h-5 w-5" />
               </button>
             </div>
           )
@@ -153,10 +153,10 @@ export function LeadsListWithDrawer({ leads }: Props) {
                   <td className="px-4 py-3">
                     <button
                       onClick={() => setSelectedLeadId(lead.id)}
-                      aria-label="Atender lead"
-                      className="rounded-lg p-1.5 text-stone-400 hover:bg-orange-50 hover:text-orange-500 transition-colors dark:text-stone-600 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
+                      aria-label="Responder"
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 text-stone-400 hover:bg-orange-50 hover:text-orange-500 transition-colors dark:text-stone-600 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <MessageCircle className="h-4 w-4" />
                     </button>
                   </td>
                 </tr>
