@@ -7,6 +7,7 @@ import { BrokerMessageInput } from "./_components/broker-message-input"
 import { LeadEditForm } from "./_components/lead-edit-form"
 import { getBubbleStyle } from "./_components/bubble-styles"
 import { WindowStatusBadge } from "./_components/window-status-badge"
+import { ChatScrollArea } from "./_components/chat-scroll-area"
 import { getWindowStatus } from "@web/lib/broker/window-status"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
@@ -199,69 +200,87 @@ export default async function BrokerLeadDetailPage({
         </div>
       </div>
 
-      {/* Conversation */}
-      <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      {/*
+        Conversation — Story 63-6: painel de chat full-height no mobile com
+        compositor fixo no rodapé da área de chat.
+        - Container: flex flex-col com altura útil da tela (100dvh) no mobile e
+          altura limitada no desktop (não ocupa a tela inteira — AC4).
+        - Histórico: flex-1 overflow-y-auto (sem max-h-96 — AC1), rolável.
+        - Compositor: shrink-0, fora do scroll de mensagens, sempre visível no
+          rodapé do painel (AC2), acima da bottom tab bar (AC3).
+      */}
+      <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-lg bg-white shadow-sm lg:h-[34rem] dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-4 dark:border-stone-800">
           <h2 className="text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
           <WindowStatusBadge lastMessageAt={lastMessageAt} isWhatsApp={isWhatsApp} />
         </div>
+
         {messages && messages.length > 0 ? (
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {messages.map((msg) => {
-              const style = getBubbleStyle(msg.role)
-              const time = new Date(msg.created_at).toLocaleTimeString("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+          <ChatScrollArea
+            messageCount={messages.length}
+            className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
+          >
+            <div className="space-y-3">
+              {messages.map((msg) => {
+                const style = getBubbleStyle(msg.role)
+                const time = new Date(msg.created_at).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
 
-              if (style.side === "center") {
+                if (style.side === "center") {
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <p className={`max-w-[85%] text-center ${style.bubbleClass}`}>
+                        {msg.content}
+                      </p>
+                    </div>
+                  )
+                }
+
                 return (
-                  <div key={msg.id} className="flex justify-center">
-                    <p className={`max-w-[85%] text-center ${style.bubbleClass}`}>
-                      {msg.content}
-                    </p>
-                  </div>
-                )
-              }
-
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col ${
-                    style.side === "right" ? "items-end" : "items-start"
-                  }`}
-                >
-                  {style.label && (
-                    <span className="mb-0.5 px-1 text-xs text-stone-500 dark:text-stone-400">
-                      {style.label}
-                    </span>
-                  )}
                   <div
-                    className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${style.bubbleClass}`}
+                    key={msg.id}
+                    className={`flex flex-col ${
+                      style.side === "right" ? "items-end" : "items-start"
+                    }`}
                   >
-                    <p className="whitespace-pre-line">{msg.content}</p>
-                    <div className="mt-1 flex items-center justify-end gap-1">
-                      <span className="text-[10px] text-stone-500 dark:text-stone-400">
-                        {time}
+                    {style.label && (
+                      <span className="mb-0.5 px-1 text-xs text-stone-500 dark:text-stone-400">
+                        {style.label}
                       </span>
-                      {msg.role === "broker" && (
-                        <Check
-                          className="h-3 w-3 text-stone-500 dark:text-stone-400"
-                          aria-label="Enviado"
-                        />
-                      )}
+                    )}
+                    <div
+                      className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${style.bubbleClass}`}
+                    >
+                      <p className="whitespace-pre-line">{msg.content}</p>
+                      <div className="mt-1 flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                          {time}
+                        </span>
+                        {msg.role === "broker" && (
+                          <Check
+                            className="h-3 w-3 text-stone-500 dark:text-stone-400"
+                            aria-label="Enviado"
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          </ChatScrollArea>
         ) : (
-          <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem ainda.</p>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem ainda.</p>
+          </div>
         )}
 
         {CAN_SEND_ROLES.includes(user.role) && (
-          <BrokerMessageInput leadId={id} disabledByWindow={windowClosed} />
+          <div className="shrink-0 px-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <BrokerMessageInput leadId={id} disabledByWindow={windowClosed} />
+          </div>
         )}
       </div>
     </div>
