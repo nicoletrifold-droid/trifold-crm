@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 import Link from "next/link"
 import { AlertCircle, Calendar, CheckCircle2, Filter, Users, UserX } from "lucide-react"
 
@@ -26,12 +27,18 @@ export default async function DashboardPage() {
   monday.setDate(monday.getDate() - monday.getDay() + 1)
 
 
-  const [leadsToday, pipeline, properties, stageTotalsResult, gerenteCountsResult, gerenteFunnelResult] = await Promise.all([
+  const [leadsToday, activeLeadsResult, pipeline, properties, stageTotalsResult, gerenteCountsResult, gerenteFunnelResult] = await Promise.all([
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
       .gte("created_at", today.toISOString()),
+    // Leads ativos = MESMA regra da lista "Em atendimento" (fonte única)
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .not("stage_id", "in", `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`),
     supabase
       .from("kanban_stages")
       .select("id, name, slug, color, position")
@@ -66,12 +73,9 @@ export default async function DashboardPage() {
     .filter(([id]) => activeStageIds.has(id))
     .reduce((a, [, b]) => a + b, 0)
 
-  // Leads ativos = pipeline total excluindo represamento e banco histórico
-  const excludedSlugs = new Set(["represamento", "corretores-antigo"])
-  const excludedCount = stages
-    .filter((s) => excludedSlugs.has(s.slug))
-    .reduce((a, s) => a + (stageCounts[s.id] ?? 0), 0)
-  const activeLeads = totalLeads - excludedCount
+  // Leads ativos = contagem direta com a MESMA regra da lista "Em atendimento"
+  // (is_active=true + exclusão de perdidos/acervo). Fonte única → números batem.
+  const activeLeads = activeLeadsResult.count ?? 0
 
   const gerenteCounts = (gerenteCountsResult.data ?? null) as Counts | null
   const gerenteFunnel = (gerenteFunnelResult.data ?? []) as FunnelRow[]

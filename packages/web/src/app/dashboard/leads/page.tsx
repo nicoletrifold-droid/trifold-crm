@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
+import { PERDIDO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 
 const PAGE_SIZE = 50
 
@@ -26,22 +27,6 @@ function buildPageHref(
   if (days) p.set("days", days)
   return `?${p.toString()}`
 }
-
-const PERDIDO_STAGE_IDS = [
-  "00000000-0000-0000-0001-000000000008", // Perdido
-  "95327bd7-3e88-4038-aa16-250a74ab085c", // Não Qualificado
-]
-
-// Acervo/legado — fora do fluxo de atendimento (e não são "perdidos").
-// Excluídos da view "ativos" para bater com o card "Leads ativos" do dashboard.
-// Continuam visíveis no Pipeline kanban.
-const ACERVO_STAGE_IDS = [
-  "62075f72-1629-4d8b-a019-0fcb35e3d302", // Corretores Antigos
-  "00000000-0000-0000-0001-000000000010", // Represamento
-]
-
-// Stages ocultos na view "Em atendimento" (perdidos + acervo).
-const EM_ATENDIMENTO_EXCLUDED_IDS = [...PERDIDO_STAGE_IDS, ...ACERVO_STAGE_IDS]
 
 export default async function LeadsPage({
   searchParams,
