@@ -422,7 +422,7 @@ export async function POST(request: NextRequest) {
   // will enrich the row's metadata if media is downloaded. Worst case: text
   // is empty for media-only messages — Nicole still has the conversation.
   if (text || mediaMetadata.media_type) {
-    await supabase.from("messages").insert({
+    const { error: insertErr } = await supabase.from("messages").insert({
       conversation_id: conversation.id,
       role: "user",
       content: text || "",
@@ -431,6 +431,22 @@ export async function POST(request: NextRequest) {
         ...mediaMetadata,
       },
     })
+
+    // Unique constraint violation (PG 23505) = duplicate wamid that slipped
+    // past the application-level check due to a race condition. Discard
+    // silently — returning here prevents the after() block (Nicole) from
+    // being scheduled for this duplicate request.
+    if (insertErr?.code === "23505") {
+      logEvent({
+        level: "info",
+        category: "webhook",
+        event_type: "duplicate_wamid_skipped",
+        message: `Duplicate wamid ${messageId} caught at INSERT — race condition discarded`,
+        metadata: { wamid: messageId, conversation_id: conversation.id },
+        source: "api/webhook/whatsapp",
+      })
+      return NextResponse.json({ status: "ok" })
+    }
   }
 
   // ---- ASYNC: media download, Nicole, outbound, automations -------------
