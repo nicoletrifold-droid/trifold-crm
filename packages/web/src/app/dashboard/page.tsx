@@ -198,9 +198,9 @@ export default async function DashboardPage() {
           </p>
         </Link>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Unidades totais</p>
-          <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
-            {properties.data?.reduce((a, p) => a + (p.total_units ?? 0), 0) ?? 0}
+          <p className="text-sm text-gray-500 dark:text-stone-400">Unidades disponíveis</p>
+          <p className="mt-1 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+            {properties.data?.reduce((a, p) => a + (p.available_units ?? 0), 0) ?? 0}
           </p>
         </div>
       </div>
