@@ -30,6 +30,7 @@ export default async function DashboardPage() {
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
       .gte("created_at", today.toISOString()),
     supabase
       .from("kanban_stages")
