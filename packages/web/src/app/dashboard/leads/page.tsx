@@ -28,9 +28,20 @@ function buildPageHref(
 }
 
 const PERDIDO_STAGE_IDS = [
-  "00000000-0000-0000-0001-000000000008", // Represamento
+  "00000000-0000-0000-0001-000000000008", // Perdido
   "95327bd7-3e88-4038-aa16-250a74ab085c", // Não Qualificado
 ]
+
+// Acervo/legado — fora do fluxo de atendimento (e não são "perdidos").
+// Excluídos da view "ativos" para bater com o card "Leads ativos" do dashboard.
+// Continuam visíveis no Pipeline kanban.
+const ACERVO_STAGE_IDS = [
+  "62075f72-1629-4d8b-a019-0fcb35e3d302", // Corretores Antigos
+  "00000000-0000-0000-0001-000000000010", // Represamento
+]
+
+// Stages ocultos na view "Em atendimento" (perdidos + acervo).
+const EM_ATENDIMENTO_EXCLUDED_IDS = [...PERDIDO_STAGE_IDS, ...ACERVO_STAGE_IDS]
 
 export default async function LeadsPage({
   searchParams,
@@ -74,8 +85,9 @@ export default async function LeadsPage({
     countQuery = countQuery.in("stage_id", PERDIDO_STAGE_IDS)
     void inList
   } else {
-    query = query.not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
-    countQuery = countQuery.not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
+    const excluded = `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`
+    query = query.not("stage_id", "in", excluded)
+    countQuery = countQuery.not("stage_id", "in", excluded)
   }
 
   if (params.search) {
