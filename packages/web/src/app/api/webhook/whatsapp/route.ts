@@ -3,7 +3,6 @@ import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
-import { isNonLeadContact } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
@@ -606,24 +605,44 @@ export async function POST(request: NextRequest) {
           org_id: orgId,
         })
 
-        // Não distribuir para corretor quando o primeiro contato não é um lead
-        // de compra (vaga de emprego, parceria, fornecedor, mídia). A Nicole
-        // responde com o telefone comercial e o contato não entra na roleta.
-        if (isNonLeadContact(asyncText)) {
-          logEvent({
-            level: "info",
-            category: "system",
-            event_type: "roleta_skip_non_lead",
-            message: `Distribuição ignorada — contato não-lead: "${asyncText.slice(0, 80)}"`,
-            metadata: { lead_id: lead.id, conversation_id: conversation!.id },
-            source: "api/webhook/whatsapp",
-            org_id: orgId,
-          })
-        } else {
-          void distributeLeadToNextBroker(lead.id, orgId).catch((err) =>
-            console.error("[roleta] distribution error:", err)
-          )
-        }
+        // Classificar o contato ANTES de distribuir — nunca enviar um não-lead
+        // (candidato a emprego, parceria, fornecedor, mídia) para a roleta.
+        // Camada 1: fast-path de keyword (dentro de classifyContactIntent).
+        // Camada 2: classificação por IA (Haiku) para casos sutis.
+        // Default seguro: qualquer falha → trata como lead e distribui.
+        void (async () => {
+          try {
+            const { classifyContactIntent, createAnthropicClient } =
+              await import("@trifold/ai")
+            const classification = await classifyContactIntent(
+              createAnthropicClient(),
+              asyncText,
+              { hasDocument: asyncMediaBlock?.type === "document" }
+            )
+
+            if (!classification.isLead) {
+              logEvent({
+                level: "info",
+                category: "system",
+                event_type: "roleta_skip_non_lead",
+                message: `Distribuição ignorada — ${classification.category}: ${classification.reason}`,
+                metadata: {
+                  lead_id: lead.id,
+                  conversation_id: conversation!.id,
+                  category: classification.category,
+                  reason: classification.reason,
+                },
+                source: "api/webhook/whatsapp",
+                org_id: orgId,
+              })
+              return
+            }
+
+            await distributeLeadToNextBroker(lead.id, orgId)
+          } catch (err) {
+            console.error("[roleta] classify/distribution error:", err)
+          }
+        })()
       }
 
       // Nicole pipeline
