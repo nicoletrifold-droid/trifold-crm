@@ -207,3 +207,40 @@ Vitest (padrão do projeto — NÃO Jest)
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 1, visibilidade de janela 24h | @sm (River) |
 | 2026-06-18 | 1.0 | **Implementação @dev (Dex).** Criado helper puro `getWindowStatus(lastMessageAt, isWhatsApp, now?)` + `formatCountdown` em `lib/broker/window-status.ts` (thresholds 22h/24h; Telegram sem restrição; null=fechada). Criado `WindowStatusBadge` (Client) com `CheckCircle2`/`Clock`/`CircleOff`, retorna `null` p/ Telegram. `page.tsx`: deriva `lastMessageAt` (convertido p/ Date no Server Component — R2), `isWhatsApp` de `lead.phone`, renderiza badge no header da conversa e passa `disabledByWindow={windowClosed}`. `broker-message-input.tsx`: nova prop `disabledByWindow` combinada via `isDisabled = disabled || disabledByWindow` (preserva `const disabled` interna — gotcha @po); textarea/anexo/enviar desabilitados + banner AC5. 10 testes do helper; suíte completa (414) verde; type-check/ESLint limpos. Countdown dinâmico (setInterval) ficou fora (Out of Scope Fase 1). Sem `tel:`/`wa.me`. Status → Ready for Review. | @dev (Dex) |
 | 2026-06-18 | 0.2 | **Validação PO — verdict GO (8/10). Status Draft → Ready.** Refs confirmadas: `page.tsx` L41 busca `is_ai_active` e `last_message_at` na query de `conversations` (sem query extra → NFR-4 ok); `leads.phone` disponível; `WHATSAPP_WINDOW_CLOSED` tratado em `broker-message-input.tsx` L54-59. CON-4 (sem migration) respeitado. **Should-fix não-bloqueante para @dev:** AC6 afirma que `BrokerMessageInput` "já aceita a prop `disabled` (criada na Story 51-1)" — isso é FALSO: as props atuais são apenas `{ leadId, onSent }` (L18-22), não há prop `disabled`. Além disso, já existe uma `const disabled` **interna** em L39 (derivada de `loading`/tamanho do texto) — adicionar uma prop homônima causa colisão de nome. Recomendação ao @dev: ao implementar T4, renomear/mesclar a lógica (ex.: prop `disabledByWindow?: boolean` combinada via `const isDisabled = disabled || disabledByWindow`) em vez de sobrescrever a `const` existente. A T4 já hedge ("verificar se existe; se não, adicionar") e R3 já sinaliza retrocompat, então o caminho de implementação está coberto — apenas a redação do AC6 e o gotchada colisão precisam de atenção. AC não alterado pelo PO. | @po (Pax) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (@qa — Test Architect)
+
+### Code Quality Assessment
+Helper puro `getWindowStatus` sem deps React, com 3º param `now` opcional (testes determinísticos, retrocompatível) e thresholds nomeados (`WINDOW_MS`/`CLOSING_THRESHOLD_MS`). `formatCountdown` robusto (não-finito/≤0 → "0h 0m"). Separação limpa server (page) × client (badge) × helper puro. A colisão de nome sinalizada pelo @po foi resolvida exatamente como recomendado: `const disabled` interna preservada + `const isDisabled = disabled || disabledByWindow` (broker-message-input.tsx L45-47); `disabledByWindow` com default `false` (retrocompatível).
+
+### Compliance Check
+- Coding Standards: ✓ (imports absolutos, tipos exportados)
+- NFR-4 (sem query extra): ✓ derivado de `conversations.last_message_at` já buscado (page L43-48, L69-75)
+- CON-3 (não tocar `is_ai_active`/takeover): ✓ nenhum write no caminho tocado
+- CON-4 (sem migration): ✓
+- Estado desabilitado comunicado: ✓ por TEXTO (banner AC5 L101-105) + atributo HTML `disabled` (anunciado por AT), não só opacidade
+- All ACs Met: ✓ AC1-AC6, AC8 plenos; ⚠ AC7 PARCIAL (countdown ao vivo — Out of Scope Fase 1)
+- CON-1: ✓ git grep limpo
+
+### Verificação independente (resultados reais)
+- Vitest `window-status.test.ts`: 10/10 verde — cobre null, 1h/23h/25h, **limiar EXATO de 22h (boundary)**, Telegram, `formatCountdown` (2h/1h30/>24h/≤0/Infinity)
+- Telegram (`tg:`): badge retorna `null` (L42) e helper retorna `open`/label vazio (L50-52) — AC3 ✓
+- ESLint (arquivos da story): 0 erros
+- type-check: 0 erros nos arquivos da story
+- Vitest suíte completa: 414/414 verde
+
+### Issues
+- WIN-001 (low): AC7 parcial — badge calcula no render sem `setInterval`, countdown não decrementa ao vivo. Explicitamente Out of Scope da Fase 1; aceitável sob GR-3 (±1min). Adicionar `setInterval(1min)` na 63-9 se desejado.
+- WIN-002 (low): janela medida por `last_message_at` (bumpado por mensagens outbound, não só inbound do lead) — REL-001 herdado do gate 51.1. Para precisão futura, medir pela última `role='user'`. Não-bloqueante.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.4-estado-janela-24h.yml
+Consolidado: docs/qa/gates/epic-63-fase1.yml
+
+### Recommended Status
+✓ Ready for Done (liberar para @devops *push)

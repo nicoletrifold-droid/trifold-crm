@@ -217,3 +217,35 @@ Vitest (padrão do projeto — NÃO Jest)
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 1, padronização de bolhas | @sm (River) |
 | 2026-06-18 | 1.0 | **Implementação @dev (Dex).** Criado helper puro `getBubbleStyle(role)` em `_components/bubble-styles.ts` retornando `{ side, containerClass, bubbleClass, label }` (padrão canônico: broker=laranja/direita/"Você", user=stone/esquerda/"Lead", assistant=roxo/esquerda/"Nicole", system=centro/sem rótulo, default graceful). `page.tsx`: loop de bolhas reescrito usando o helper, com rótulo de autor (text-xs stone-500), `Check` (✓) para broker, timestamps `text-stone-500 dark:text-stone-400`, e tratamento `side='center'` para system. `lead-detail-drawer.tsx`: preview de mensagens passou a reusar `getBubbleStyle` (broker azul→laranja, assistant laranja→roxo, labels "Você"/"Nicole"); contraste do bloco de metadados corrigido. **AC4 parcial** (R2): Server Component não consome estado otimista → só ✓ no banco. 5 testes do helper passando; type-check e ESLint limpos (warnings pré-existentes no drawer intocados). Sem `tel:`/`wa.me`. Status → Ready for Review. | @dev (Dex) |
 | 2026-06-18 | 0.2 | **Validação PO — verdict GO (9/10). Status Draft → Ready.** Refs confirmadas no código: `page.tsx` L41 (`is_ai_active`, `last_message_at`), L192 (`max-h-96 overflow-y-auto`), loop de bolhas L196-216 (hoje `user`=cinza-esquerda, `assistant`=roxo-direita, `broker`=azul-direita — diagnóstico do epic confere); `OptimisticMessage` em `broker-message-input.tsx` L9-16; drawer com 974 linhas. **Ressalva não-bloqueante (já documentada em R2/Gotcha):** `page.tsx` é Server Component e renderiza só mensagens do banco — o `onSent`/estado otimista do `BrokerMessageInput` não é consumido na página, logo AC4 (status ⏳/✓/⚠) é parcialmente aspiracional; a story já simplifica para "✓ por default no banco, status só no state local". Design system (laranja/stone/roxo) e CON-1 respeitados. | @po (Pax) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (@qa — Test Architect)
+
+### Code Quality Assessment
+`getBubbleStyle` é função pura, sem deps React, com default graceful para `role` desconhecido (sem throw) e tipos exportados. JSDoc claro (ponto de vista do corretor). Reuso real em `page.tsx` E no preview do `lead-detail-drawer.tsx` — divergência (broker azul→laranja, assistant laranja→roxo, labels) eliminada. Drawer alterado apenas no loop de preview (slice 0,3); restante intocado.
+
+### Compliance Check
+- Coding Standards: ✓ (helper puro, imports absolutos)
+- Contraste (NFR-3): ✓ timestamps `text-stone-500 dark:text-stone-400` (≥3:1 claro+escuro); rótulo de autor identifica remetente sem depender só de cor
+- All ACs Met: ✓ AC1-AC3, AC5-AC7 plenos; ⚠ AC4 PARCIAL (documentado, ver issue)
+- CON-1: ✓ git grep limpo
+
+### Verificação independente (resultados reais)
+- Vitest `bubble-styles.test.ts`: 5/5 verde (broker/user/assistant/system + role vazio/desconhecido graceful)
+- ESLint (arquivos da story): 0 erros (2 warnings no drawer — `isCTWA` L302, `handleAddNote` L359 — são PRÉ-EXISTENTES, fora da região editada L825-845)
+- type-check: 0 erros nos arquivos da story
+- Vitest suíte completa: 414/414 verde
+
+### Issues
+- BUBBLE-001 (low): AC4 parcial — `page.tsx` (Server Component) exibe `Check` (✓) fixo para TODA mensagem `role='broker'` do banco, inclusive as gravadas com `metadata.send_error` (page.tsx só seleciona `id/role/content/created_at`, sem `metadata`). O ✓ representa "persistido", não "entregue" — pode induzir o corretor a achar que a mensagem chegou. Os estados `pending`(⏳)/`failed`(⚠) seguem modelados em `OptimisticMessage` mas não surfaced. Simplificação baked-in no próprio AC e aceita pelo @po. Tratar surfacing real ao unificar em 63-5 (casar com REL-001 de 51.1). Não-bloqueante.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.2-padronizar-bolhas-chat.yml
+Consolidado: docs/qa/gates/epic-63-fase1.yml
+
+### Recommended Status
+✓ Ready for Done (liberar para @devops *push)

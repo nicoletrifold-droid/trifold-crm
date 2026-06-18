@@ -166,3 +166,35 @@ Não há lógica nova para testar unitariamente. Validação principal é visual
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 1, composer mobile-first | @sm (River) |
 | 2026-06-18 | 1.0 | **Implementação @dev (Dex).** `broker-message-input.tsx`: emoji 📎 → `<Paperclip>` com `aria-label="Anexar arquivo"`; botão "Enviar"/"Enviando…" → `<Send>` (e `<Loader2 animate-spin>` no loading) com `aria-label="Enviar mensagem"`; ambos com `min-h/min-w-[44px] flex items-center justify-center`. Dica "Ctrl/Cmd + Enter" → `hidden lg:inline` (container `justify-end lg:justify-between` para manter contador à direita no mobile). Lógica `onKeyDown` (Ctrl/Cmd+Enter) preservada intacta. type-check e ESLint limpos. Sem `tel:`/`wa.me`. Status → Ready for Review. | @dev (Dex) |
 | 2026-06-18 | 0.2 | **Validação PO — verdict GO (10/10). Status Draft → Ready.** Refs confirmadas no código `broker-message-input.tsx`: botão de anexo com emoji 📎 em L105 (bloco L99-106); botão "Enviar" texto em L123; dica "Ctrl/Cmd + Enter para enviar" em L127; lógica `onKeyDown` (Ctrl/Cmd+Enter) em L83-88 — AC5 corretamente exige preservar essa lógica e ocultar só a dica visual. `lucide-react` já é padrão do projeto (`Paperclip`/`Send` disponíveis). CON-1/CON-2 respeitados (sem `tel:`/`wa.me`, sem mexer no envio). | @po (Pax) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (@qa — Test Architect)
+
+### Code Quality Assessment
+Troca limpa por `lucide-react` (`Paperclip`/`Send`/`Loader2`) conforme design system. Container do rodapé `justify-end lg:justify-between` mantém o contador à direita no mobile ao ocultar a dica. Cor `orange-500` do botão de envio segue a marca. Lógica de envio (51-1) não reimplementada (CON-2).
+
+### Compliance Check
+- Coding Standards: ✓
+- Acessibilidade (NFR-2): ✓ ícones com nome acessível via `aria-label` (antes o emoji 📎 não tinha); alvos ≥44px (`min-h/min-w-[44px]`, L118/L137)
+- All ACs Met: ✓ (AC1-AC6)
+- CON-1/CON-2: ✓ git grep limpo; envio não tocado
+
+### Verificação independente (resultados reais)
+- AC5: `handleKeyDown` (Ctrl/Cmd+Enter → `handleSend`) intacto L91-96; só a dica visual ficou `hidden lg:inline` (L147)
+- ESLint (arquivo da story): 0 erros
+- type-check: 0 erros no arquivo da story
+- Vitest suíte completa: 414/414 verde (sem testes unitários pré-existentes para o componente — sem regressão)
+
+### Issues
+Nenhuma.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.3-composer-mobile-first.yml
+Consolidado: docs/qa/gates/epic-63-fase1.yml
+
+### Recommended Status
+✓ Ready for Done (liberar para @devops *push)

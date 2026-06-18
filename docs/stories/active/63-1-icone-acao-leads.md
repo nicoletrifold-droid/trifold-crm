@@ -166,3 +166,34 @@ Não há lógica complexa para testar unitariamente. Validação principal é vi
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 1, quick win de ícone/label | @sm (River) |
 | 2026-06-18 | 0.2 | **Validação PO — verdict GO (10/10). Status Draft → Ready.** Refs confirmadas no código: `Pencil` importado em `leads-list-with-drawer.tsx` L5 (usado só nos 2 botões de ação → import pode ser removido na T3); botão mobile L81-87 (`aria-label="Atender lead"`, `p-3` ~40px, abaixo de 44px → AC3 justificado); botão desktop L154-160 (`p-1.5` + ícone `h-3.5` ~26px → AC4 justificado). Obs. não-bloqueante: o botão alvo abre o **drawer** (`setSelectedLeadId`), enquanto o `<Link>` (L49-51) navega para a página — AC5 ("abertura do lead preservada") cobre ambos. CON-1 respeitado (sem `tel:`/`wa.me`). | @po (Pax) |
 | 2026-06-18 | 1.0 | **Implementação @dev (Dex).** `Pencil` import removido (era usado só nos 2 botões → trocado por `MessageCircle`). Mobile: `aria-label="Responder"`, ícone `MessageCircle h-5 w-5`, `flex min-h-[44px] min-w-[44px] items-center justify-center` (alvo ≥44px). Desktop: `aria-label="Responder"`, `MessageCircle h-4 w-4`, `inline-flex min-h-[44px] min-w-[44px] items-center justify-center` (era ~26px → agora ≥44px). Navegação (`setSelectedLeadId`/`<Link>`) preservada — apenas ícone/label/alvo mudaram. type-check e ESLint limpos no arquivo. Sem `tel:`/`wa.me`. Status → Ready for Review. | @dev (Dex) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (@qa — Test Architect)
+
+### Code Quality Assessment
+Mudança limpa e contida. `Pencil` removido (uso único nos 2 botões → `MessageCircle`); imports absolutos; cor `orange-500` segue o design system (CON-6). Sem código morto.
+
+### Compliance Check
+- Coding Standards: ✓
+- Acessibilidade (NFR-2 ≥44px): ✓ mobile (`min-h/min-w-[44px] p-3`, L84) e desktop (`min-h/min-w-[44px]`, L157 — antes ~26px)
+- All ACs Met: ✓ (AC1-AC6) — `MessageCircle` mobile L86 / desktop L159; `aria-label="Responder"` L83/L156; navegação `<Link>` L49-51 e `setSelectedLeadId` L82/L155 preservadas
+- CON-1 (inviolável): ✓ git grep limpo (zero `tel:`/`wa.me`)
+
+### Verificação independente (resultados reais)
+- ESLint (arquivo da story): 0 erros
+- type-check: 0 erros no arquivo da story
+- Vitest suíte completa: 414/414 verde
+
+### Issues
+- UX-001 (low): o botão laranja "Responder" abre o `LeadDetailDrawer` (preview), enquanto o card (`<Link>`) navega para o chat completo — semântica dupla sob o mesmo rótulo. Pré-existente (story só trocou ícone/label), reconhecido pelo @po. Resolvido pela unificação 63-5. Não-bloqueante.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.1-icone-acao-leads.yml
+Consolidado: docs/qa/gates/epic-63-fase1.yml
+
+### Recommended Status
+✓ Ready for Done (liberar para @devops *push)

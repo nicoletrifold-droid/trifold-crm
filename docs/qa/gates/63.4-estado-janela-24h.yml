@@ -1,0 +1,149 @@
+schema: 1
+storyId: "63.4"
+story: "63.4"
+title: "Estado da Janela de 24h Visível Antes do Envio"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 e AC8 atendidos por código; AC7 parcial (countdown ao vivo via
+  setInterval explicitamente Out of Scope da Fase 1 — badge calcula no render).
+  Helper puro getWindowStatus (thresholds 22h/24h; Telegram sem restrição; null =
+  fechada) com 10 testes verdes. Badge no header (CheckCircle2/Clock/CircleOff),
+  retorna null para Telegram. Composer desabilitado proativamente via
+  disabledByWindow, combinado sem sobrescrever a const interna (isDisabled =
+  disabled || disabledByWindow). Derivado de last_message_at já buscado (NFR-4 ok,
+  sem query extra). CON-1/CON-4 respeitados. type-check/ESLint limpos; suíte
+  414/414.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T13:46:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (3 estados/cores/ícones — window-status-badge.tsx STYLES L13-32 + labels
+      em window-status.ts:62-78), AC2 (sem query extra — page.tsx:69-75 deriva de
+      conversations já buscado L43-48), AC3 (Telegram null — badge L42 + helper
+      L50-52), AC4 (disabledByWindow={windowClosed} page L264), AC5 (banner
+      explicativo broker-message-input L101-105), AC6 (isDisabled = disabled ||
+      disabledByWindow L45-47, const interna preservada), AC8 (10 testes + lint/
+      types). AC7 parcial (ver WIN-001).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Helper puro sem deps React, 3º param `now` opcional p/ testes determinísticos
+      (retrocompatível). Thresholds nomeados (WINDOW_MS/CLOSING_THRESHOLD_MS).
+      formatCountdown robusto (não-finito/≤0 → "0h 0m"). Tipos exportados. Separação
+      limpa: helper puro × badge (client) × page (server). Imports absolutos @web/*.
+  - check: "3. Test Architecture"
+    status: PASS
+    note: >
+      window-status.test.ts: 10 casos incl. null, 1h/23h/25h, limiar EXATO de 22h
+      (boundary), Telegram, e formatCountdown (2h/1h30/>24h/≤0/Infinity). Uso de
+      `now` fixo (NOW) garante determinismo sem mock de timers. 10/10 verdes.
+  - check: "4. Reliability / Correctness"
+    status: PASS
+    note: >
+      last_message_at null → fechada (gotcha tratado). Conversão string→Date no
+      Server Component (page L70-72, R2 resolvido) antes de cruzar a fronteira RSC.
+      Threshold de alerta (22h) independente do bloqueio real da API (24h em
+      dispatch-broker-message) — sem conflito; badge avisa 2h antes.
+  - check: "5. Accessibility / Disabled state"
+    status: PASS
+    note: >
+      Estado desabilitado comunicado por TEXTO (banner AC5 "Janela de 24h
+      encerrada...") além de opacity; textarea/anexo/enviar recebem o atributo HTML
+      `disabled` (anunciado por leitores de tela), não apenas estilo visual.
+  - check: "6. Regression Risk"
+    status: PASS
+    note: >
+      Aditiva: 3 arquivos novos + 2 edições. disabledByWindow tem default false
+      (retrocompatível com callers existentes). is_ai_active e lógica de takeover
+      intocados (CON-3). Suíte 414/414.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "window-status-badge.tsx:13-32 (verde/âmbar/cinza + CheckCircle2/Clock/CircleOff); labels window-status.ts:62-78."
+  - ac: "AC2"
+    status: PASS
+    note: "page.tsx:43-48 busca conversations; L69-75 deriva lastMessageAt/windowClosed sem nova query (NFR-4)."
+  - ac: "AC3"
+    status: PASS
+    note: "page.tsx:73 isWhatsApp=!phone.startsWith('tg:'); badge L42 retorna null; helper L50-52 status open/label vazio."
+  - ac: "AC4"
+    status: PASS
+    note: "page.tsx:264 <BrokerMessageInput leadId disabledByWindow={windowClosed}/>."
+  - ac: "AC5"
+    status: PASS
+    note: "broker-message-input.tsx:101-105 banner 'Janela de 24h encerrada. Aguarde o lead responder...'."
+  - ac: "AC6"
+    status: PASS
+    note: "L44-47 const disabled (interna) preservada; const isDisabled = disabled || disabledByWindow (nova prop)."
+  - ac: "AC7"
+    status: CONCERNS
+    note: >
+      PARCIAL (Out of Scope Fase 1). Badge é Client Component que recalcula via
+      getWindowStatus no render (badge L44), mas SEM setInterval → countdown não
+      atualiza ao vivo. Documentado em Out of Scope; aceitável (GR-3 tolerância
+      ±1min).
+  - ac: "AC8"
+    status: PASS
+    note: "vitest 10/10 (window-status.test.ts); suíte 414/414; ESLint 0 erros story; tsc 0 erros story."
+
+issues:
+  - id: WIN-001
+    severity: low
+    category: requirements
+    finding: >
+      AC7 parcial: o badge calcula o countdown uma vez no render (sem
+      setInterval), então o "fecha em Xh Ym" não decrementa ao vivo enquanto a
+      tela fica aberta. Explicitamente colocado em Out of Scope para a Fase 1.
+    suggested_action: >
+      Não-bloqueante. Adicionar useEffect + setInterval(1min) na Story 63-9
+      (que reusa o helper) se desejado.
+    suggested_owner: dev
+  - id: WIN-002
+    severity: low
+    category: reliability
+    finding: >
+      `windowClosed` é calculado no servidor (page.tsx:74) e o badge recalcula no
+      cliente (window-status-badge.tsx:44) — dois pontos de cálculo com
+      getWindowStatus usando `now` distintos (server render vs client). Diferença
+      desprezível (≤ segundos/min) e dentro da tolerância GR-3. Herdado também: a
+      janela é medida por last_message_at (bumpado por mensagens outbound, não só
+      inbound do lead) — mesma REL-001 do gate 51.1.
+    suggested_action: >
+      Não-bloqueante. Para precisão futura, medir a janela pela última mensagem
+      role='user' (inbound). Avaliar junto de 63-10/51-5.
+    suggested_owner: dev
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  note: "git grep nos arquivos tocados — zero ocorrências."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: "NFR-4 respeitado — badge derivado de conversations.last_message_at já buscado; zero query adicional."
+  maintainability:
+    status: PASS
+    notes: "Helper puro testável (now injetável); separação server/client/helper limpa."
+  reliability:
+    status: CONCERNS
+    notes: "Janela medida por last_message_at (outbound bumpa) — REL-001 herdado, não-bloqueante."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    7 de 8 ACs plenos; AC7 (countdown ao vivo) é Out of Scope declarado da Fase 1,
+    aceitável sob GR-3. Helper puro com 10 testes cobrindo boundaries (22h exato),
+    sem query extra (NFR-4), disabled comunicado por texto, CON-1/CON-3/CON-4
+    respeitados, sem regressão (414/414). As 2 issues são LOW. Aprovada para
+    @devops push.
