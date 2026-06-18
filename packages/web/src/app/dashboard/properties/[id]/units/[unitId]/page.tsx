@@ -389,20 +389,14 @@ export default function UnitEditPage() {
             </p>
           </div>
 
-          {/* Status */}
+          {/* Status — read-only, gerenciado via integração externa */}
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">
               Status
             </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className={inputClass}
-            >
-              <option value="available">{statusLabels.available}</option>
-              <option value="reserved">{statusLabels.reserved}</option>
-              <option value="sold">{statusLabels.sold}</option>
-            </select>
+            <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300">
+              {statusLabels[status] ?? status}
+            </p>
           </div>
 
           {/* Price */}
