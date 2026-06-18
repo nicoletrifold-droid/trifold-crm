@@ -21,12 +21,22 @@ interface HandoffMessage {
 }
 
 // Padrões que identificam contatos que NAO são leads de compra.
-// Nunca encaminhar para corretor — Nicole responde com o telefone comercial.
+// Nunca encaminhar para corretor nem distribuir via roleta — Nicole responde
+// com o telefone comercial (44) 3222-9698.
 const NON_LEAD_PATTERNS = [
   /(?:vaga|vagas|emprego|trabalhar|curriculo|currículo|seleção|seleçao|processo seletivo|oportunidade de trabalho)/i,
   /(?:parceria|fornecedor|fornecimento|proposta comercial|prestacao de servico|prestação de serviço)/i,
   /(?:anunciar|publicidade|mídia|midia|patrocínio|patrocinio|divulgacao|divulgação)/i,
 ]
+
+/**
+ * Identifica contatos que NÃO são leads de compra de imóvel — candidatos a
+ * vaga, parcerias, fornecedores, propostas de mídia. Usado tanto no handoff
+ * (não encaminhar para corretor) quanto na roleta (não distribuir).
+ */
+export function isNonLeadContact(message: string): boolean {
+  return NON_LEAD_PATTERNS.some((pattern) => pattern.test(message))
+}
 
 const OUT_OF_SCOPE_PATTERNS = [
   /(?:falar|conversar)\s+(?:com|c\/)\s+(?:um|uma|o|a)?\s*(?:corretor|corretora|pessoa|humano|atendente)/i,
@@ -54,10 +64,8 @@ export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
   const lowerMessage = message.toLowerCase()
 
   // Non-lead contacts (job seekers, partners, vendors) — never hand off to broker
-  for (const pattern of NON_LEAD_PATTERNS) {
-    if (pattern.test(lowerMessage)) {
-      return { trigger: false }
-    }
+  if (isNonLeadContact(lowerMessage)) {
+    return { trigger: false }
   }
 
   // Visit scheduled is NOT a handoff trigger anymore

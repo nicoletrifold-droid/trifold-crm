@@ -3,6 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
+import { isNonLeadContact } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
@@ -604,9 +605,25 @@ export async function POST(request: NextRequest) {
           phone: phoneNormalized,
           org_id: orgId,
         })
-        void distributeLeadToNextBroker(lead.id, orgId).catch((err) =>
-          console.error("[roleta] distribution error:", err)
-        )
+
+        // Não distribuir para corretor quando o primeiro contato não é um lead
+        // de compra (vaga de emprego, parceria, fornecedor, mídia). A Nicole
+        // responde com o telefone comercial e o contato não entra na roleta.
+        if (isNonLeadContact(asyncText)) {
+          logEvent({
+            level: "info",
+            category: "system",
+            event_type: "roleta_skip_non_lead",
+            message: `Distribuição ignorada — contato não-lead: "${asyncText.slice(0, 80)}"`,
+            metadata: { lead_id: lead.id, conversation_id: conversation!.id },
+            source: "api/webhook/whatsapp",
+            org_id: orgId,
+          })
+        } else {
+          void distributeLeadToNextBroker(lead.id, orgId).catch((err) =>
+            console.error("[roleta] distribution error:", err)
+          )
+        }
       }
 
       // Nicole pipeline
