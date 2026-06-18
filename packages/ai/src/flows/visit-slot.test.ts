@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { parseRequestedSlot } from "./visit-slot"
+import {
+  parseRequestedSlot,
+  parseDayParts,
+  parseTimeParts,
+  evaluateSlot,
+  dayPartsToIso,
+  isoToDayParts,
+} from "./visit-slot"
 
 // Âncora: 2026-06-18T17:00:00Z = quinta-feira 14:00 em BRT (UTC-3).
 const NOW = new Date("2026-06-18T17:00:00Z")
@@ -90,5 +97,35 @@ describe("parseRequestedSlot", () => {
   it("'3 da tarde' → 15h BRT", () => {
     const s = parseRequestedSlot("quinta às 3 da tarde", NOW)
     expect(s.startUtc?.toISOString()).toBe("2026-06-18T18:00:00.000Z")
+  })
+})
+
+describe("partes (combinação dia+hora entre turnos)", () => {
+  it("parseDayParts pega só o dia; parseTimeParts pega só a hora", () => {
+    expect(parseDayParts("pode ser quinta", NOW)).toEqual({ y: 2026, m: 5, d: 18 })
+    expect(parseTimeParts("às 15h")).toEqual({ hour: 15, minute: 0 })
+    expect(parseTimeParts("pode ser quinta")).toBeNull()
+    expect(parseDayParts("às 15h", NOW)).toBeNull()
+  })
+
+  it("dayPartsToIso / isoToDayParts são inversos (mês 1-based no ISO)", () => {
+    const iso = dayPartsToIso({ y: 2026, m: 5, d: 18 })
+    expect(iso).toBe("2026-06-18")
+    expect(isoToDayParts(iso)).toEqual({ y: 2026, m: 5, d: 18 })
+    expect(isoToDayParts("lixo")).toBeNull()
+  })
+
+  it("evaluateSlot combina dia pendente + hora nova → startUtc", () => {
+    const day = isoToDayParts("2026-06-19")! // sexta
+    const time = parseTimeParts("às 10h")!
+    const { startUtc, outsideHours } = evaluateSlot(day, time, NOW)
+    expect(outsideHours).toBe(false)
+    expect(startUtc?.toISOString()).toBe("2026-06-19T13:00:00.000Z")
+  })
+
+  it("evaluateSlot marca outsideHours para domingo", () => {
+    const { startUtc, outsideHours } = evaluateSlot(isoToDayParts("2026-06-21")!, { hour: 10, minute: 0 }, NOW)
+    expect(startUtc).toBeNull()
+    expect(outsideHours).toBe(true)
   })
 })

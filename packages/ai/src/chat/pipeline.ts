@@ -28,7 +28,7 @@ import {
   guardStageForAssignedLead,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
-import { parseRequestedSlot, checkSlotAvailability, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import { parseDayParts, parseTimeParts, evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -487,26 +487,49 @@ export async function processMessageWithMetadata(
       const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
       messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
     } else {
-      // 2) Sem visita ainda → entende o dia/horário pedido, confere a agenda interna
-      //    (que inclui Calendly) e injeta o contexto para a Nicole responder certo
-      //    na MESMA mensagem (confirmar / sugerir outro horário / pedir o horário).
-      const slot = parseRequestedSlot(message, new Date())
-      if (slot.hasDay) {
-        if (slot.startUtc) {
-          const { free, alternatives } = await checkSlotAvailability(supabase, orgId, slot.startUtc)
-          const whenStr = formatBrtDateTime(slot.startUtc)
+      // 2) Sem visita ainda → entende o dia/horário pedido (combinando com o que
+      //    ficou pendente de turnos anteriores), confere a agenda interna (que inclui
+      //    Calendly) e injeta o contexto para a Nicole responder certo na MESMA mensagem.
+      const cd = collectedData as Record<string, unknown>
+      const now = new Date()
+      const curDay = parseDayParts(message, now)
+      const curTime = parseTimeParts(message)
+      const pendingDay = typeof cd.visit_pending_date === "string" ? isoToDayParts(cd.visit_pending_date) : null
+      const pendingTime = typeof cd.visit_pending_hour === "number"
+        ? { hour: cd.visit_pending_hour as number, minute: (cd.visit_pending_minute as number | undefined) ?? 0 }
+        : null
+      const day = curDay ?? pendingDay
+      const time = curTime ?? pendingTime
+
+      if (day && time) {
+        // Dia + hora completos (no turno ou combinando com o pendente) → resolve e limpa pendência.
+        delete cd.visit_pending_date
+        delete cd.visit_pending_hour
+        delete cd.visit_pending_minute
+        const { startUtc, outsideHours } = evaluateSlot(day, time, now)
+        if (startUtc) {
+          const { free, alternatives } = await checkSlotAvailability(supabase, orgId, startUtc)
+          const whenStr = formatBrtDateTime(startUtc)
           if (free) {
-            bookableSlotUtc = slot.startUtc
-            messageWithContext = `[SISTEMA: O cliente está pedindo a visita para ${whenStr}. Esse horário está LIVRE na agenda. Confirme a visita com carinho e diga que vai deixar o café preparado.]\n\n${message}`
+            bookableSlotUtc = startUtc
+            messageWithContext = `[SISTEMA: O cliente quer a visita em ${whenStr}. Esse horário está LIVRE. Confirme a visita reafirmando o dia e o horário (${whenStr}) e diga que vai deixar o café preparado.]\n\n${message}`
           } else {
             const alts = alternatives.map(formatBrtDateTime).join(" ou ")
             messageWithContext = `[SISTEMA: O cliente pediu ${whenStr}, mas JÁ existe uma visita nesse horário. NÃO confirme esse horário. Com simpatia, avise que esse horário já está reservado e ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"}. Pergunte qual prefere.]\n\n${message}`
           }
-        } else if (slot.outsideHours) {
-          messageWithContext = `[SISTEMA: O cliente pediu um horário fora do nosso atendimento. Informe com gentileza que atendemos de segunda a sexta das 8h às 18h e sábado das 8h às 12h, e ofereça um horário válido.]\n\n${message}`
-        } else if (!slot.hasTime) {
-          messageWithContext = `[SISTEMA: O cliente indicou o dia mas não o horário exato. Pergunte qual horário prefere (atendemos seg–sex 8h–18h, sáb 8h–12h).]\n\n${message}`
+        } else {
+          messageWithContext = `[SISTEMA: O horário pedido não serve (já passou ou está fora do atendimento). Informe com gentileza que atendemos de segunda a sexta das 8h às 18h e sábado das 8h às 12h, e peça um horário válido.]\n\n${message}`
         }
+      } else if (day && !time) {
+        // Só o dia → guarda o dia e pergunta o horário.
+        cd.visit_pending_date = dayPartsToIso(day)
+        messageWithContext = `[SISTEMA: O cliente indicou o dia mas não o horário. Pergunte qual horário prefere (atendemos seg–sex 8h–18h, sáb 8h–12h).]\n\n${message}`
+      } else if (time && !day) {
+        // Só a hora → guarda a hora e pergunta a data (depois confirme "tal dia às tal hora").
+        cd.visit_pending_hour = time.hour
+        cd.visit_pending_minute = time.minute
+        const horaStr = `${time.hour}h${time.minute ? String(time.minute).padStart(2, "0") : ""}`
+        messageWithContext = `[SISTEMA: O cliente indicou o horário (${horaStr}) mas não o dia. Guarde esse horário, pergunte qual dia prefere e, quando ele disser, confirme reafirmando o dia e o horário. Atendemos seg–sex 8h–18h, sáb 8h–12h.]\n\n${message}`
       }
     }
   }
@@ -717,7 +740,10 @@ export async function processMessageWithMetadata(
     // quando o cliente pediu um dia+hora explícito que está LIVRE na agenda interna —
     // que já inclui Calendly). Handoff NÃO bloqueia mais a visita. Horário ocupado →
     // bookableSlotUtc fica null (a Nicole já ofereceu outro horário na resposta).
-    if (finalData.visit_explicitly_confirmed && bookableSlotUtc && !existingAppt && conversation.org_id) {
+    // bookableSlotUtc só é setado quando o cliente forneceu (no turno ou combinando turnos)
+    // um dia+hora concreto, LIVRE e dentro do horário — em modo de agendamento (visit_proposed).
+    // Isso é confirmação suficiente; não exige day-ref no turno atual (cobre conclusão só-hora).
+    if (bookableSlotUtc && !existingAppt && conversation.org_id) {
       const scheduledAt = bookableSlotUtc
       const endAt = new Date(scheduledAt.getTime() + VISIT_DURATION_MIN * 60_000)
       const propertyId = identifiedPropertyId ?? state?.current_property_id

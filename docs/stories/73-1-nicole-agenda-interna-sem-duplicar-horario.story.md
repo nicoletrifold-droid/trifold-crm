@@ -58,7 +58,8 @@
 - **typecheck:** `packages/ai` (tsc --noEmit) limpo; `packages/web` limpo nos arquivos tocados.
 - **unit-tests:** `vitest run packages/ai` → 307 passando, incluindo 15 novos em `visit-slot.test.ts` (parse de dia/hora PT-BR, horário comercial, passado, falso-positivos "ter"/"2 suítes").
 - **lint:** 0 erros.
-- **Limitação conhecida:** verificação ponta-a-ponta no WhatsApp só é possível em conversa real (canal externo). Parser cobre o caso comum (dia+hora juntos); seleção de alternativa em mensagem separada só com horário (sem repetir o dia) recai em "pergunte o horário".
+- **Limitação conhecida:** verificação ponta-a-ponta no WhatsApp só é possível em conversa real (canal externo).
+- **Follow-up (mesmo commit/sequência):** combinação dia+hora **entre turnos** — se o cliente dá só a hora, o sistema guarda em `collected_data.visit_pending_hour/minute`, pergunta a data e confirma "tal dia às tal hora" (e vice-versa para só-dia via `visit_pending_date`). Gate de criação passou a usar `bookableSlotUtc` como sinal de intenção (cobre conclusão por hora-isolada). +4 testes (partes/evaluateSlot/iso).
 
 ## File List
 - `packages/ai/src/flows/visit-slot.ts` (novo — parser + disponibilidade)

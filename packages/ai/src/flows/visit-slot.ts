@@ -126,6 +126,53 @@ function parseHour(text: string): { hour: number; minute: number } | null {
   return null
 }
 
+export type DayParts = { y: number; m: number; d: number } // m = 0-based
+
+/** Extrai só o dia referenciado (ou null). Exposto para combinar dia+hora entre turnos. */
+export function parseDayParts(message: string, now: Date): DayParts | null {
+  return parseDay(message, now)
+}
+
+/** Extrai só o horário referenciado (ou null). Exposto para combinar dia+hora entre turnos. */
+export function parseTimeParts(message: string): { hour: number; minute: number } | null {
+  return parseHour(message)
+}
+
+/** "YYYY-MM-DD" (mês 1-based) para persistir o dia pendente em conversation_state. */
+export function dayPartsToIso(d: DayParts): string {
+  return `${d.y}-${String(d.m + 1).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`
+}
+
+/** Inverso de dayPartsToIso. */
+export function isoToDayParts(s: string): DayParts | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (!m) return null
+  return { y: parseInt(m[1]!, 10), m: parseInt(m[2]!, 10) - 1, d: parseInt(m[3]!, 10) }
+}
+
+/**
+ * Dado dia + hora, devolve `startUtc` (se no futuro e dentro do horário comercial)
+ * ou marca `outsideHours`. Núcleo compartilhado entre o parse de turno único e a
+ * combinação dia+hora ao longo de turnos.
+ */
+export function evaluateSlot(
+  day: DayParts,
+  time: { hour: number; minute: number },
+  now: Date
+): { startUtc: Date | null; outsideHours: boolean } {
+  const startUtc = brtToUtc(day.y, day.m, day.d, time.hour, time.minute)
+
+  // Passado → trata como sem slot preciso (Nicole pede de novo)
+  if (startUtc.getTime() <= now.getTime()) return { startUtc: null, outsideHours: false }
+
+  const targetWeekday = new Date(startUtc.getTime() - BRT_OFFSET_HOURS * 3600_000).getUTCDay()
+  const close = closeHourFor(targetWeekday)
+  if (close === null || time.hour < OPEN_HOUR || time.hour >= close) {
+    return { startUtc: null, outsideHours: true }
+  }
+  return { startUtc, outsideHours: false }
+}
+
 /**
  * Faz o parse do dia+horário pedidos pelo cliente. Conservador: só devolve
  * `startUtc` quando há dia E hora explícitos, no futuro e dentro do horário comercial.
@@ -143,20 +190,9 @@ export function parseRequestedSlot(message: string, now: Date): ParsedSlot {
 
   if (!day || !time) return result
 
-  const startUtc = brtToUtc(day.y, day.m, day.d, time.hour, time.minute)
-
-  // Passado → trata como sem slot preciso (Nicole pede de novo)
-  if (startUtc.getTime() <= now.getTime()) return result
-
-  // Horário comercial do dia-alvo
-  const targetWeekday = new Date(startUtc.getTime() - BRT_OFFSET_HOURS * 3600_000).getUTCDay()
-  const close = closeHourFor(targetWeekday)
-  if (close === null || time.hour < OPEN_HOUR || time.hour >= close) {
-    result.outsideHours = true
-    return result
-  }
-
+  const { startUtc, outsideHours } = evaluateSlot(day, time, now)
   result.startUtc = startUtc
+  result.outsideHours = outsideHours
   return result
 }
 
