@@ -6,6 +6,8 @@ import { Check } from "lucide-react"
 import { BrokerMessageInput } from "./_components/broker-message-input"
 import { LeadEditForm } from "./_components/lead-edit-form"
 import { getBubbleStyle } from "./_components/bubble-styles"
+import { WindowStatusBadge } from "./_components/window-status-badge"
+import { getWindowStatus } from "@web/lib/broker/window-status"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
@@ -61,6 +63,16 @@ export default async function BrokerLeadDetailPage({
   const property = Array.isArray(lead.properties)
     ? lead.properties[0]
     : lead.properties
+
+  // Story 63-4 — estado da janela de 24h derivado de conversations.last_message_at
+  // (sem query adicional). Telegram (phone "tg:") não tem restrição de janela.
+  const activeConversation = conversations?.[0]
+  const lastMessageAt = activeConversation?.last_message_at
+    ? new Date(activeConversation.last_message_at as string)
+    : null
+  const isWhatsApp = !String(lead.phone).startsWith("tg:")
+  const windowClosed =
+    getWindowStatus(lastMessageAt, isWhatsApp).status === "closed"
 
   return (
     <div className="space-y-6">
@@ -189,7 +201,10 @@ export default async function BrokerLeadDetailPage({
 
       {/* Conversation */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
+          <WindowStatusBadge lastMessageAt={lastMessageAt} isWhatsApp={isWhatsApp} />
+        </div>
         {messages && messages.length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {messages.map((msg) => {
@@ -246,7 +261,7 @@ export default async function BrokerLeadDetailPage({
         )}
 
         {CAN_SEND_ROLES.includes(user.role) && (
-          <BrokerMessageInput leadId={id} />
+          <BrokerMessageInput leadId={id} disabledByWindow={windowClosed} />
         )}
       </div>
     </div>

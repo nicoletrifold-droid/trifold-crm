@@ -20,6 +20,11 @@ interface BrokerMessageInputProps {
   leadId: string
   /** Callback opcional para optimistic update na lista de mensagens. */
   onSent?: (msg: OptimisticMessage) => void
+  /**
+   * Story 63-4 — quando `true`, o composer é desabilitado proativamente porque
+   * a janela de 24h do WhatsApp está fechada (sem precisar tentar enviar).
+   */
+  disabledByWindow?: boolean
 }
 
 /**
@@ -29,7 +34,7 @@ interface BrokerMessageInputProps {
  * WHATSAPP_WINDOW_CLOSED com aviso amigável. Após sucesso, faz refresh do
  * server component (re-fetch) para refletir a mensagem gravada.
  */
-export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) {
+export function BrokerMessageInput({ leadId, onSent, disabledByWindow = false }: BrokerMessageInputProps) {
   const router = useRouter()
   const [text, setText] = useState("")
   const [loading, setLoading] = useState(false)
@@ -38,9 +43,11 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
 
   const trimmed = text.trim()
   const disabled = loading || trimmed.length === 0 || trimmed.length > MAX_MESSAGE_LENGTH
+  // Story 63-4 — combina o disabled interno (loading/conteúdo) com o bloqueio por janela.
+  const isDisabled = disabled || disabledByWindow
 
   async function handleSend() {
-    if (disabled) return
+    if (isDisabled) return
     setLoading(true)
     setError(null)
 
@@ -91,6 +98,11 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
   return (
     <>
       <div className="mt-4 border-t border-gray-100 pt-4 dark:border-stone-800">
+        {disabledByWindow && (
+          <p className="mb-2 rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+            Janela de 24h encerrada. Aguarde o lead responder para continuar a conversa.
+          </p>
+        )}
         {error && (
           <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
             {error}
@@ -102,7 +114,8 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
             title="Anexar arquivo"
             aria-label="Anexar arquivo"
             onClick={() => setShowMediaPicker(true)}
-            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-orange-400 hover:text-orange-600 dark:border-stone-700 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400"
+            disabled={disabledByWindow}
+            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-orange-400 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:text-stone-400 dark:hover:border-orange-500 dark:hover:text-orange-400"
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -113,13 +126,13 @@ export function BrokerMessageInput({ leadId, onSent }: BrokerMessageInputProps) 
             maxLength={MAX_MESSAGE_LENGTH}
             rows={2}
             placeholder="Digite sua mensagem para o lead…"
-            disabled={loading}
+            disabled={loading || disabledByWindow}
             className="min-h-[44px] flex-1 resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
           />
           <button
             type="button"
             onClick={() => void handleSend()}
-            disabled={disabled}
+            disabled={isDisabled}
             aria-label="Enviar mensagem"
             className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
