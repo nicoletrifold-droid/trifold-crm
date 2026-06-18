@@ -20,6 +20,14 @@ interface HandoffMessage {
   content: string
 }
 
+// Padrões que identificam contatos que NAO são leads de compra.
+// Nunca encaminhar para corretor — Nicole responde com o telefone comercial.
+const NON_LEAD_PATTERNS = [
+  /(?:vaga|vagas|emprego|trabalhar|curriculo|currículo|seleção|seleçao|processo seletivo|oportunidade de trabalho)/i,
+  /(?:parceria|fornecedor|fornecimento|proposta comercial|prestacao de servico|prestação de serviço)/i,
+  /(?:anunciar|publicidade|mídia|midia|patrocínio|patrocinio|divulgacao|divulgação)/i,
+]
+
 const OUT_OF_SCOPE_PATTERNS = [
   /(?:falar|conversar)\s+(?:com|c\/)\s+(?:um|uma|o|a)?\s*(?:corretor|corretora|pessoa|humano|atendente)/i,
   /(?:preciso|quero|gostaria)\s+(?:de)?\s+(?:ajuda|suporte)\s+(?:humano|real|pessoal)/i,
@@ -44,6 +52,13 @@ const PRICE_SIMULATION_PATTERNS = [
 export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
   const { qualificationScore, message, conversationState } = params
   const lowerMessage = message.toLowerCase()
+
+  // Non-lead contacts (job seekers, partners, vendors) — never hand off to broker
+  for (const pattern of NON_LEAD_PATTERNS) {
+    if (pattern.test(lowerMessage)) {
+      return { trigger: false }
+    }
+  }
 
   // Visit scheduled is NOT a handoff trigger anymore
   // Nicole continues attending until a broker actually sends a message
