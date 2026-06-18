@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
+import { classifyLeadFirstMessage } from "@web/lib/roleta/classify-lead"
 
 const MAX_PER_RUN = 50
 const RETRY_WINDOW_DAYS = 30
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "DB error" }, { status: 500 })
   }
 
-  const results = { distributed: 0, fora_horario: 0, sem_corretor: 0, skipped: 0, outros: 0 }
+  const results = { distributed: 0, fora_horario: 0, sem_corretor: 0, skipped: 0, nao_lead: 0, outros: 0 }
 
   for (const lead of leads ?? []) {
     // Guard de idempotência: re-verifica no banco antes de distribuir.
@@ -50,6 +51,20 @@ export async function GET(request: NextRequest) {
 
     if (!current || current.assigned_broker_id !== null) {
       results.skipped++
+      continue
+    }
+
+    // Triagem não-lead (Story 67-1): o cron é um caminho de distribuição
+    // automática e DEVE aplicar a mesma classificação do webhook. Não-lead
+    // (candidato a emprego, parceria, fornecedor, mídia) é arquivado
+    // (is_active=false) e NÃO distribuído — sai do batch e não retorna.
+    const classification = await classifyLeadFirstMessage(admin, lead.id)
+    if (!classification.isLead) {
+      await admin.from("leads").update({ is_active: false }).eq("id", lead.id)
+      console.log(
+        `[roleta-retry] não-lead arquivado (${classification.category}): ${lead.id} — ${classification.reason}`
+      )
+      results.nao_lead++
       continue
     }
 

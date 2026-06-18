@@ -621,11 +621,14 @@ export async function POST(request: NextRequest) {
             )
 
             if (!classification.isLead) {
+              // Arquiva o não-lead (is_active=false): sai das listas de leads
+              // ativos e o cron de retry (filtro is_active=true) nunca o pega.
+              await supabase.from("leads").update({ is_active: false }).eq("id", lead.id)
               logEvent({
                 level: "info",
                 category: "system",
                 event_type: "roleta_skip_non_lead",
-                message: `Distribuição ignorada — ${classification.category}: ${classification.reason}`,
+                message: `Distribuição ignorada + lead arquivado — ${classification.category}: ${classification.reason}`,
                 metadata: {
                   lead_id: lead.id,
                   conversation_id: conversation!.id,

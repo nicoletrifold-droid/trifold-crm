@@ -21,19 +21,29 @@ vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
 }))
 
+vi.mock("@web/lib/roleta/classify-lead", () => ({
+  classifyLeadFirstMessage: vi.fn(),
+}))
+
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
+import { classifyLeadFirstMessage } from "@web/lib/roleta/classify-lead"
 import { GET } from "./route"
 
 const eqCalls: [string, unknown][] = []
 const isCalls: [string, unknown][] = []
 const gteCalls: [string, unknown][] = []
+const updateCalls: unknown[] = []
 
 function makeAdminClient(leads: { id: string; org_id: string; name: string }[]) {
   eqCalls.length = 0
   isCalls.length = 0
   gteCalls.length = 0
+  updateCalls.length = 0
 
+  // chain encadeável: limit (fetch principal) e maybeSingle (guard de
+  // idempotência) resolvem promises próprias; await direto (update().eq())
+  // resolve via `then`.
   const chain = {
     eq: vi.fn((col: string, val: unknown) => {
       eqCalls.push([col, val])
@@ -50,6 +60,15 @@ function makeAdminClient(leads: { id: string; org_id: string; name: string }[]) 
     order: vi.fn(() => chain),
     limit: vi.fn(() => Promise.resolve({ data: leads, error: null })),
     select: vi.fn(() => chain),
+    update: vi.fn((patch: unknown) => {
+      updateCalls.push(patch)
+      return chain
+    }),
+    maybeSingle: vi.fn(() =>
+      Promise.resolve({ data: { assigned_broker_id: null }, error: null })
+    ),
+    then: (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: null, error: null }).then(resolve),
   }
 
   return { from: vi.fn(() => chain) }
@@ -65,6 +84,13 @@ describe("roleta-retry cron", () => {
   beforeEach(() => {
     process.env.CRON_SECRET = "test-secret"
     vi.mocked(distributeLeadToNextBroker).mockReset()
+    // Default: todo lead é classificado como lead (preserva testes de distribuição)
+    vi.mocked(classifyLeadFirstMessage).mockReset()
+    vi.mocked(classifyLeadFirstMessage).mockResolvedValue({
+      isLead: true,
+      category: "lead",
+      reason: "",
+    } as never)
   })
 
   it("calls distributeLeadToNextBroker for each lead found", async () => {
@@ -137,5 +163,28 @@ describe("roleta-retry cron", () => {
     expect(body.sem_corretor).toBe(1)
     expect(body.distributed).toBe(1)
     expect(body.processed).toBe(3)
+  })
+
+  it("não-lead: arquiva (is_active=false) e NÃO distribui", async () => {
+    const leads = [
+      { id: "lead-1", org_id: "org-1", name: "Candidato" },
+      { id: "lead-2", org_id: "org-1", name: "Comprador" },
+    ]
+    vi.mocked(createAdminClient).mockReturnValue(makeAdminClient(leads) as never)
+    vi.mocked(classifyLeadFirstMessage)
+      .mockResolvedValueOnce({ isLead: false, category: "emprego", reason: "candidato" } as never)
+      .mockResolvedValueOnce({ isLead: true, category: "lead", reason: "" } as never)
+    vi.mocked(distributeLeadToNextBroker).mockResolvedValue({ status: "distributed" } as never)
+
+    const res = await GET(makeRequest())
+    const body = await res.json()
+
+    // lead-1 (não-lead) não distribuído; lead-2 (lead) distribuído
+    expect(distributeLeadToNextBroker).toHaveBeenCalledTimes(1)
+    expect(distributeLeadToNextBroker).toHaveBeenCalledWith("lead-2", "org-1")
+    expect(body.nao_lead).toBe(1)
+    expect(body.distributed).toBe(1)
+    // arquivamento: update({ is_active: false }) chamado para o não-lead
+    expect(updateCalls).toContainEqual({ is_active: false })
   })
 })

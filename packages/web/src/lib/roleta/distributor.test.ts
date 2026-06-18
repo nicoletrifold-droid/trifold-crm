@@ -57,6 +57,7 @@ const VALID_LEAD = {
   property_interest_id: null,
   name: "Cliente Teste",
   phone: "11999999999",
+  assigned_broker_id: null,
 }
 
 const RPC_RESULT = [
