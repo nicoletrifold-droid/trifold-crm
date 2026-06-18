@@ -35,7 +35,7 @@ const PERDIDO_STAGE_IDS = [
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; criados?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -103,6 +103,16 @@ export default async function LeadsPage({
     const daysAgo = new Date(Date.now() - Number(params.days) * 86400000).toISOString()
     query = query.lt("updated_at", daysAgo)
     countQuery = countQuery.lt("updated_at", daysAgo)
+  }
+
+  // "criados=hoje" — leads criados a partir da meia-noite de hoje.
+  // Mesma lógica do card "Leads hoje" do dashboard (setHours(0,0,0,0)).
+  if (params.criados === "hoje") {
+    const todayMidnight = new Date()
+    todayMidnight.setHours(0, 0, 0, 0)
+    const iso = todayMidnight.toISOString()
+    query = query.gte("created_at", iso)
+    countQuery = countQuery.gte("created_at", iso)
   }
 
   query = query.range(offset, offset + PAGE_SIZE - 1)

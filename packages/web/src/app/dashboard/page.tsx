@@ -160,26 +160,38 @@ export default async function DashboardPage() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <Link
+          href="/dashboard/leads?criados=hoje"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads hoje</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
             {leadsToday.count ?? 0}
           </p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        </Link>
+        <Link
+          href="/dashboard/leads"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads ativos</p>
           <p className="mt-1 text-3xl font-bold text-orange-600 dark:text-orange-400">{activeLeads}</p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        </Link>
+        <Link
+          href="/dashboard/pipeline"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Total no pipeline</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">{totalLeads}</p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        </Link>
+        <Link
+          href="/dashboard/properties"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Empreendimentos</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
             {properties.data?.length ?? 0}
           </p>
-        </div>
+        </Link>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Unidades totais</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
