@@ -23,10 +23,21 @@ interface HandoffMessage {
 // Padrões que identificam contatos que NAO são leads de compra.
 // Nunca encaminhar para corretor nem distribuir via roleta — Nicole responde
 // com o telefone comercial (44) 3222-9698.
+// Alta precisão por desenho: só marcamos como não-lead quando o sinal é
+// inequívoco. Casos ambíguos (ex.: "tem vaga disponível?") ficam como lead —
+// o custo de não distribuir um comprador real é maior que o de distribuir um
+// não-lead ocasional. "vaga" sozinha NUNCA marca (é vaga de garagem).
 const NON_LEAD_PATTERNS = [
-  /(?:vaga|vagas|emprego|trabalhar|curriculo|currículo|seleção|seleçao|processo seletivo|oportunidade de trabalho)/i,
-  /(?:parceria|fornecedor|fornecimento|proposta comercial|prestacao de servico|prestação de serviço)/i,
-  /(?:anunciar|publicidade|mídia|midia|patrocínio|patrocinio|divulgacao|divulgação)/i,
+  // Emprego
+  /(?:emprego|curr[íi]culo|processo seletivo|recrutamento|contrata[çc][aã]o|\brh\b)/i,
+  /oportunidade\s+de\s+(?:trabalho|emprego)/i,
+  /vagas?\s+(?:de\s+)?(?:emprego|trabalho)/i,
+  /(?:trabalhar|fazer parte)\b.*\b(?:voc[êe]s|equipe|empresa|time)/i,
+  // Parceria / fornecedor
+  /(?:parceria|fornecedor|fornecimento|proposta comercial|presta[çc][aã]o de servi[çc]o)/i,
+  // Mídia / publicidade
+  /(?:anunciar|publicidade|patroc[íi]nio)/i,
+  /m[íi]dia\s+(?:exterior|externa|paga|out\s?of\s?home|ooh)/i,
 ]
 
 /**

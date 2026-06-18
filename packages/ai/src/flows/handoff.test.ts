@@ -119,9 +119,16 @@ describe("shouldHandoff", () => {
 
 describe("isNonLeadContact", () => {
   it("detects job/employment inquiries", () => {
-    expect(isNonLeadContact("vocês têm vagas disponíveis?")).toBe(true)
     expect(isNonLeadContact("gostaria de enviar meu curriculo")).toBe(true)
-    expect(isNonLeadContact("tenho interesse em fazer parte da equipe, processo seletivo")).toBe(true)
+    expect(isNonLeadContact("tenho interesse em fazer parte da equipe da empresa")).toBe(true)
+    expect(isNonLeadContact("vocês têm vaga de emprego?")).toBe(true)
+    expect(isNonLeadContact("estão com processo seletivo aberto?")).toBe(true)
+    // Caso real: candidata perguntando sobre vagas + currículo + equipe
+    expect(
+      isNonLeadContact(
+        "Gostaria de saber se a empresa possui vagas disponíveis. Tenho interesse em fazer parte da equipe e encaminhar meu currículo."
+      )
+    ).toBe(true)
   })
 
   it("detects partnership / vendor inquiries", () => {
@@ -130,14 +137,21 @@ describe("isNonLeadContact", () => {
   })
 
   it("detects media / advertising inquiries", () => {
-    expect(isNonLeadContact("quero anunciar com vocês, proposta de mídia")).toBe(true)
-    expect(isNonLeadContact("trabalho com publicidade exterior")).toBe(true)
+    expect(isNonLeadContact("quero anunciar com vocês")).toBe(true)
+    expect(isNonLeadContact("trabalho com mídia exterior, dupla face")).toBe(true)
   })
 
   it("does NOT flag genuine buyer messages", () => {
     expect(isNonLeadContact("quero comprar um apartamento")).toBe(false)
     expect(isNonLeadContact("tem unidade de 3 quartos disponível?")).toBe(false)
     expect(isNonLeadContact("gostaria de agendar uma visita")).toBe(false)
+  })
+
+  it("does NOT flag 'vaga' when it means parking spot (vaga de garagem)", () => {
+    expect(isNonLeadContact("esse apê tem vaga de garagem?")).toBe(false)
+    expect(isNonLeadContact("quantas vagas de garagem tem?")).toBe(false)
+    expect(isNonLeadContact("tem vaga coberta disponível?")).toBe(false)
+    expect(isNonLeadContact("o apartamento vem com 2 vagas?")).toBe(false)
   })
 })
 
