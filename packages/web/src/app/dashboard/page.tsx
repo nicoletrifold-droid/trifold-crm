@@ -245,43 +245,66 @@ export default async function DashboardPage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {properties.data?.map((property) => (
+          {properties.data?.map((property) => {
+            const soldPct =
+              property.total_units && property.available_units != null
+                ? Math.round(
+                    ((property.total_units - property.available_units) / property.total_units) * 100
+                  )
+                : null
+            return (
             <Link
               key={property.id}
               href={`/dashboard/properties/${property.id}`}
-              className="flex items-center justify-between rounded-md border p-4 hover:bg-gray-50 dark:border-stone-800 dark:hover:bg-stone-800/40"
+              className="rounded-md border p-4 hover:bg-gray-50 dark:border-stone-800 dark:hover:bg-stone-800/40"
             >
-              <div>
-                <p className="font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
-                <p className="text-sm text-gray-500 dark:text-stone-400">
-                  {property.city} &middot; {property.total_units} unidades
-                  {property.available_units != null && (
-                    <>
-                      {" · "}
-                      <span className="font-medium text-emerald-600 dark:text-emerald-300">
-                        {property.available_units} disponíveis
-                      </span>
-                    </>
-                  )}
-                </p>
-              </div>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  property.status === "selling"
-                    ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-stone-400">
+                    {property.city} &middot; {property.total_units} unidades
+                    {property.available_units != null && (
+                      <>
+                        {" · "}
+                        <span className="font-medium text-emerald-600 dark:text-emerald-300">
+                          {property.available_units} disponíveis
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    property.status === "selling"
+                      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                      : property.status === "launching"
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                      : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
+                  }`}
+                >
+                  {property.status === "selling"
+                    ? "Em venda"
                     : property.status === "launching"
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-                    : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
-                }`}
-              >
-                {property.status === "selling"
-                  ? "Em venda"
-                  : property.status === "launching"
-                  ? "Lançamento"
-                  : property.status}
-              </span>
+                    ? "Lançamento"
+                    : property.status}
+                </span>
+              </div>
+              {soldPct != null && (
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-stone-800">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 dark:bg-emerald-400"
+                      style={{ width: `${soldPct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium tabular-nums text-gray-400 dark:text-stone-500">
+                    {soldPct}% vendido
+                  </span>
+                </div>
+              )}
             </Link>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
