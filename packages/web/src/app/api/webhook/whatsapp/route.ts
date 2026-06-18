@@ -615,6 +615,8 @@ export async function POST(request: NextRequest) {
         const { processMessage, createAnthropicClient } = await import(
           "@trifold/ai"
         )
+        // Story 73-1: injeta o push pro Google Calendar (mantém packages/ai desacoplado).
+        const { createCalendarEvent } = await import("@web/lib/google-calendar")
 
         const anthropic = createAnthropicClient()
 
@@ -625,6 +627,7 @@ export async function POST(request: NextRequest) {
           message: asyncText,
           orgId,
           mediaBlock: asyncMediaBlock,
+          createCalendarEvent,
           onEvent: (event) => {
             logEvent({
               ...event,
