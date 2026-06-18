@@ -7,6 +7,7 @@ import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XC
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -824,22 +825,21 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   <div className="border-t border-stone-100 pt-2 dark:border-stone-800">
                     <dt className="mb-2 text-xs text-stone-500">Últimas mensagens</dt>
                     <div className="space-y-1.5">
-                      {messages.slice(0, 3).map((msg) => (
-                        <div key={msg.id} className={`rounded px-2 py-1.5 text-xs ${
-                          msg.role === "user" ? "bg-stone-100 dark:bg-stone-800"
-                          : msg.role === "broker" ? "bg-blue-50 dark:bg-blue-500/15"
-                          : "bg-orange-50 dark:bg-orange-500/15"
-                        }`}>
-                          <span className="text-[10px] font-medium uppercase opacity-60">
-                            {msg.role === "user" ? "Lead" : msg.role === "assistant" ? "IA" : msg.role === "broker" ? "Corretor" : msg.role}
-                          </span>
-                          <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap">{msg.content}</p>
-                        </div>
-                      ))}
+                      {messages.slice(0, 3).map((msg) => {
+                        const style = getBubbleStyle(msg.role)
+                        return (
+                          <div key={msg.id} className={`rounded px-2 py-1.5 text-xs ${style.bubbleClass}`}>
+                            <span className="text-[10px] font-medium uppercase opacity-60">
+                              {style.label || msg.role}
+                            </span>
+                            <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
-                <div className="border-t border-stone-100 pt-2 text-[10px] text-stone-400 dark:border-stone-800 dark:text-stone-500">
+                <div className="border-t border-stone-100 pt-2 text-[10px] text-stone-500 dark:border-stone-800 dark:text-stone-400">
                   <div>Criado: {new Date(lead.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}</div>
                   <div>Atualizado: {new Date(lead.updated_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
                 </div>

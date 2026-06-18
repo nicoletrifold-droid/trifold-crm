@@ -2,8 +2,10 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Check } from "lucide-react"
 import { BrokerMessageInput } from "./_components/broker-message-input"
 import { LeadEditForm } from "./_components/lead-edit-form"
+import { getBubbleStyle } from "./_components/bubble-styles"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
@@ -190,32 +192,54 @@ export default async function BrokerLeadDetailPage({
         <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
         {messages && messages.length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "user" ? "justify-start" : "justify-end"
-                }`}
-              >
+            {messages.map((msg) => {
+              const style = getBubbleStyle(msg.role)
+              const time = new Date(msg.created_at).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+
+              if (style.side === "center") {
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <p className={`max-w-[85%] text-center ${style.bubbleClass}`}>
+                      {msg.content}
+                    </p>
+                  </div>
+                )
+              }
+
+              return (
                 <div
-                  className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${
-                    msg.role === "user"
-                      ? "bg-gray-100 text-gray-800 dark:bg-stone-800 dark:text-stone-200"
-                      : msg.role === "assistant"
-                      ? "bg-purple-100 text-purple-900 dark:bg-purple-500/15 dark:text-purple-200"
-                      : "bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-200"
+                  key={msg.id}
+                  className={`flex flex-col ${
+                    style.side === "right" ? "items-end" : "items-start"
                   }`}
                 >
-                  <p className="whitespace-pre-line">{msg.content}</p>
-                  <p className="mt-1 text-[10px] opacity-60">
-                    {new Date(msg.created_at).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                  {style.label && (
+                    <span className="mb-0.5 px-1 text-xs text-stone-500 dark:text-stone-400">
+                      {style.label}
+                    </span>
+                  )}
+                  <div
+                    className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${style.bubbleClass}`}
+                  >
+                    <p className="whitespace-pre-line">{msg.content}</p>
+                    <div className="mt-1 flex items-center justify-end gap-1">
+                      <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                        {time}
+                      </span>
+                      {msg.role === "broker" && (
+                        <Check
+                          className="h-3 w-3 text-stone-500 dark:text-stone-400"
+                          aria-label="Enviado"
+                        />
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem ainda.</p>
