@@ -38,6 +38,9 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
     .slice(0, 2)
     .toUpperCase()
 
+  // Itens ocultos sob "Mais" no bottom bar mobile (índice 5+) — indica badge pendente.
+  const moreHasBadge = items.slice(5).some((i) => i.badge != null && i.badge > 0)
+
   return (
     <>
       {/* Desktop Sidebar */}
@@ -162,7 +165,14 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
               </a>
             ) : (
               <Link key={item.href} href={item.href} className={mobileClass}>
-                <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                <span className="relative flex h-5 w-5 items-center justify-center">
+                  {item.icon}
+                  {item.badge != null && item.badge > 0 && !active && (
+                    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold text-white">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[10px] font-medium">{item.label}</span>
               </Link>
             )
@@ -172,7 +182,12 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
               href={items[5].href}
               className="flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-stone-400 dark:text-stone-500"
             >
-              <span className="text-lg">...</span>
+              <span className="relative flex h-5 w-5 items-center justify-center">
+                <span className="text-lg leading-none">...</span>
+                {moreHasBadge && (
+                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-white dark:ring-stone-950" />
+                )}
+              </span>
               <span className="text-[10px] font-medium">Mais</span>
             </Link>
           )}

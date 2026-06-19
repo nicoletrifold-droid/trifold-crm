@@ -1,4 +1,5 @@
 import { getServerUser } from "@web/lib/auth"
+import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { LayoutDashboard, Users, Kanban, CalendarDays, Building2, Smartphone, CreditCard, MessageSquarePlus } from "lucide-react"
@@ -31,11 +32,26 @@ export default async function BrokerLayout({
     redirect("/dashboard")
   }
 
+  const supabase = await createClient()
+
+  // Compromissos futuros e ativos do corretor — alimenta o badge do menu "Agenda".
+  const { count: agendaCount } = await supabase
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", user.orgId)
+    .eq("broker_id", user.id)
+    .in("status", ["scheduled", "confirmed"])
+    .gte("scheduled_at", new Date().toISOString())
+
+  const navItems = NAV_ITEMS.map((item) =>
+    item.href === "/broker/agenda" ? { ...item, badge: agendaCount ?? 0 } : item
+  )
+
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 hidden lg:flex" />
       <SidebarNav
-        items={NAV_ITEMS}
+        items={navItems}
         userName={user.name}
         userRole={user.role}
         basePath="/broker"

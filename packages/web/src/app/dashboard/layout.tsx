@@ -161,11 +161,26 @@ export default async function DashboardLayout({
         ])
       : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
 
+  // Compromissos futuros e ativos da org — alimenta o badge do menu "Agenda".
+  // Escopo org-wide (todos os corretores), coerente com a página /dashboard/agenda.
+  const agendaCount = permissions["agenda"]
+    ? (
+        await supabase
+          .from("appointments")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", user.orgId)
+          .in("status", ["scheduled", "confirmed"])
+          .gte("scheduled_at", new Date().toISOString())
+      ).count ?? 0
+    : 0
+
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
     if (!permissions[NAV_MODULE_MAP[item.href]!]) return false
     return true
-  })
+  }).map((item) =>
+    item.href === "/dashboard/agenda" ? { ...item, badge: agendaCount } : item
+  )
 
   const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
