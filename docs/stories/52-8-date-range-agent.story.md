@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 52 — Agente de Tráfego com Acesso Read-Only ao Pipeline do CRM
 - **Story:** 52-8
-- **Status:** Draft
+- **Status:** Ready
 - **Priority:** P2 — melhoria de usabilidade; complementa Story 52-7
 - **Complexity:** L (1 migration SQL + TypeScript + UI React — ~8-10h)
 - **Created:** 2026-06-19
@@ -986,3 +986,4 @@ _(a preencher por @qa)_
 | 2026-06-19 | @sm (River) | Story criada — Epic 52, Story 52-8 |
 | 2026-06-19 | @pm (Morgan) | Revisão de produto: complexidade M→L; adicionados padrões "mês passado/semana passada/ontem/de X até hoje"; UI date picker movido de OUT→IN; validação de range inválido (AC14); cap 90 dias com feedback (AC15); prioridade UI>NL (AC16); T7 (UI), T8 (API body), T10 (testes manuais) adicionados. |
 | 2026-06-19 | @sm (River) | Especificação técnica completa: Dev Notes com código exato para extractDateWindow (MONTH_MAP, DATE_RANGE_PATTERNS, NEW_RELATIVE_PATTERNS), SQL migration 104 (bodies completos dos overloads DATE,DATE), assinaturas novas dos builders, lógica chat/route.ts e JSX de agent-chat-panel.tsx. T7 duplicado removido. |
+| 2026-06-19 | @po (Pax) | Validação GO 9/10. Draft → Ready. Pontos de atenção para @dev: AC14 (exibir erro 400 na UI), AC9 (formato DD/MM/YYYY com ano no cabeçalho). Não bloqueantes. |
