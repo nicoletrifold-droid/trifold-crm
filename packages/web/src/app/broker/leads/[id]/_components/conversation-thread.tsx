@@ -22,6 +22,11 @@ interface ConversationThreadProps {
   isWhatsApp: boolean
   /** Se o usuário atual pode enviar mensagens (gate de role do servidor). */
   canSend: boolean
+  /**
+   * Story 63-10 — estado inicial de `leads.metadata.notify_broker_on_reply`.
+   * Repassado ao `BrokerMessageInput` para o caminho de saída quando a janela fecha.
+   */
+  notifyOnReply?: boolean
 }
 
 /**
@@ -44,6 +49,7 @@ export function ConversationThread({
   lastMessageAt,
   isWhatsApp,
   canSend,
+  notifyOnReply = false,
 }: ConversationThreadProps) {
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
 
@@ -127,6 +133,7 @@ export function ConversationThread({
           <BrokerMessageInput
             leadId={lead.id}
             disabledByWindow={windowClosed}
+            notifyOnReply={notifyOnReply}
             onSent={(msg) => setOptimistic((prev) => [...prev, msg])}
           />
         </div>
