@@ -15,6 +15,37 @@ function setCached(key: string, text: string) {
   cache.set(key, { text, ts: Date.now() })
 }
 
+// ─── Period extraction for agent queries (Story 52-7) ─────────────────────────
+/** Ordered from most specific (multi-word) to most generic (single word). First match wins. */
+const PERIOD_MAP: Array<{ pattern: RegExp; days: number }> = [
+  { pattern: /últim[ao]s?\s*7\s*dias?\b/i, days: 7 },
+  { pattern: /últim[ao]\s*semana\b/i, days: 7 },
+  { pattern: /\b7\s*dias?\b/i, days: 7 },
+  { pattern: /últim[ao]s?\s*14\s*dias?\b/i, days: 14 },
+  { pattern: /\b14\s*dias?\b/i, days: 14 },
+  { pattern: /últim[ao]s?\s*15\s*dias?\b/i, days: 15 },
+  { pattern: /\bquinzena\b/i, days: 15 },
+  { pattern: /\b15\s*dias?\b/i, days: 15 },
+  { pattern: /últim[ao]s?\s*30\s*dias?\b/i, days: 30 },
+  { pattern: /últim[ao]\s*m[eê]s\b/i, days: 30 },
+  { pattern: /\bsemana\b/i, days: 7 },
+  { pattern: /\bm[eê]s\b/i, days: 30 },
+]
+
+/**
+ * Extrai o número de dias de uma frase em linguagem natural.
+ * Mapeamento: "7 dias"/"última semana" → 7, "14 dias" → 14,
+ * "quinzena"/"15 dias" → 15, "último mês"/"30 dias" → 30.
+ * Retorna 30 (default) quando nenhum padrão é encontrado.
+ * Cap: Math.min(days, 30) — nunca retorna valor acima de 30.
+ */
+export function extractPeriodDays(msg: string): number {
+  for (const entry of PERIOD_MAP) {
+    if (entry.pattern.test(msg)) return Math.min(entry.days, 30)
+  }
+  return 30
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtBRL(n: number): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -30,13 +61,16 @@ function pct(a: number, b: number): string {
 export async function buildGlobalContext(
   supabase: SupabaseClient,
   orgId: string,
+  pDays?: number,
 ): Promise<string> {
-  const key = `global:${orgId}`
+  const days = pDays ?? 30
+  const key = `global:${orgId}:${days}`
   const cached = getCached(key)
   if (cached) return cached
 
   const today = new Date().toISOString().split("T")[0]!
-  const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const dateNdAgo  = (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split("T")[0]! })()
+  const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30);   return d.toISOString().split("T")[0]! })()
 
   const [campaignsRes, insights30dRes, alertsRes, leadsRes] = await Promise.all([
     supabase
@@ -48,7 +82,7 @@ export async function buildGlobalContext(
       .select("entity_id, spend, leads, landing_page_views, outbound_clicks")
       .eq("org_id", orgId)
       .eq("level", "campaign")
-      .gte("date", date30dAgo)
+      .gte("date", dateNdAgo)
       .lte("date", today),
     supabase
       .from("meta_alerts")
@@ -105,7 +139,7 @@ export async function buildGlobalContext(
   const totalLeads  = [...agg.values()].reduce((s, v) => s + v.leads, 0)
   const totalCrm    = [...leadsByCampaign.values()].reduce((s, v) => s + v.responded, 0)
 
-  lines.push("=== PORTFÓLIO (30 dias) ===")
+  lines.push(`=== PORTFÓLIO (últimos ${days} dias) ===`)
   lines.push(`Spend total: R$${fmtBRL(totalSpend)} | Leads Meta: ${totalLeads} | Leads CRM responderam: ${totalCrm}`)
 
   // Per-campaign table
@@ -330,11 +364,12 @@ export function buildContext(
   orgId: string,
   contextType: "global" | "campaign",
   contextId?: string | null,
+  pDays?: number,
 ): Promise<string> {
   if (contextType === "campaign" && contextId) {
     return buildCampaignContext(supabase, orgId, contextId)
   }
-  return buildGlobalContext(supabase, orgId)
+  return buildGlobalContext(supabase, orgId, pDays)
 }
 
 // ─── Pipeline CRM (Story 52-2) ──────────────────────────────────────────────
@@ -769,7 +804,7 @@ export async function fetchCreativePerformance(
   const days = pDays ?? 30
   // Cache apenas para a janela default (30d); janelas customizadas não cacheadas.
   const cacheable = days === 30
-  const key = `creative_perf:${orgId}`
+  const key = `creative_perf:${orgId}:${days}`
   if (cacheable) {
     const cached = getCached(key)
     if (cached !== null) return cached
