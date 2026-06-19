@@ -26,6 +26,7 @@ interface Props {
 
 const EMPTY_FILTERS = {
   broker: "",
+  stage: "",
   property: "",
   source: "",
   minDays: "",
@@ -124,6 +125,10 @@ export function AlertasTable({ alerts: initialAlerts }: Props) {
     () => [...new Set(alerts.map((a) => a.brokerName))].sort(),
     [alerts]
   )
+  const stageOptions = useMemo(
+    () => [...new Set(alerts.map((a) => a.stageName).filter((s) => s !== "-"))].sort(),
+    [alerts]
+  )
   const propertyOptions = useMemo(
     () => [...new Set(alerts.map((a) => a.propertyName).filter((p) => p !== "-"))].sort(),
     [alerts]
@@ -135,6 +140,7 @@ export function AlertasTable({ alerts: initialAlerts }: Props) {
 
   const hasActiveFilters =
     filters.broker !== "" ||
+    filters.stage !== "" ||
     filters.property !== "" ||
     filters.source !== "" ||
     filters.minDays !== ""
@@ -142,6 +148,7 @@ export function AlertasTable({ alerts: initialAlerts }: Props) {
   const filtered = useMemo(() => {
     let list = alerts
     if (filters.broker) list = list.filter((a) => a.brokerName === filters.broker)
+    if (filters.stage) list = list.filter((a) => a.stageName === filters.stage)
     if (filters.property) list = list.filter((a) => a.propertyName === filters.property)
     if (filters.source) list = list.filter((a) => a.sourceName === filters.source)
     if (filters.minDays) {
@@ -187,6 +194,22 @@ export function AlertasTable({ alerts: initialAlerts }: Props) {
             ))}
           </select>
         </div>
+
+        {stageOptions.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-stone-500 dark:text-stone-400">Etapa</label>
+            <select
+              value={filters.stage}
+              onChange={(e) => setFilters((f) => ({ ...f, stage: e.target.value }))}
+              className={selectCls}
+            >
+              <option value="">Todas</option>
+              {stageOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-stone-500 dark:text-stone-400">Empreendimento</label>
