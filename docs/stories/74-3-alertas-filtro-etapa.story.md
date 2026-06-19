@@ -1,7 +1,7 @@
 # Story 74-3 — Filtro por Etapa na tela de Alertas
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 
