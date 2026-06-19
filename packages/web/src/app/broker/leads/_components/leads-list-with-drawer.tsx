@@ -2,8 +2,10 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { MessageCircle } from "lucide-react"
+import { MessageCircle, Clock } from "lucide-react"
 import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
+import { getWindowStatus, type WindowStatusKind } from "@web/lib/broker/window-status"
+import { sortByWindowUrgency } from "@web/lib/broker/leads-window"
 
 interface Stage { id: string; name: string; color: string | null }
 interface Property { id: string; name: string }
@@ -17,8 +19,49 @@ interface Lead {
   stage_id: string | null
   property_interest_id: string | null
   updated_at: string
+  /** Story 63-9 — `last_message_at` da conversa mais recente (badge de janela). */
+  last_message_at: string | null
   kanban_stages: { name: string; color: string | null } | { name: string; color: string | null }[] | null
   properties: { name: string } | { name: string }[] | null
+}
+
+/** Story 63-9 — estilo do badge compacto de janela de 24h por status. */
+const WINDOW_BADGE: Record<WindowStatusKind, { dot: string; label: string; text: string }> = {
+  open: {
+    dot: "bg-green-500",
+    label: "Aberta",
+    text: "text-green-700 dark:text-green-400",
+  },
+  closing: {
+    dot: "bg-amber-500",
+    label: "Fechando",
+    text: "text-amber-700 dark:text-amber-400",
+  },
+  closed: {
+    dot: "bg-stone-400",
+    label: "Fechada",
+    text: "text-stone-500 dark:text-stone-400",
+  },
+}
+
+/**
+ * Story 63-9 — badge compacto de status da janela de 24h para o card mobile.
+ * Leads Telegram (`tg:`) não exibem badge (AC2). Reutiliza `getWindowStatus` (63-4).
+ */
+function LeadWindowBadge({ lead }: { lead: Lead }) {
+  const isWhatsApp = !lead.phone.startsWith("tg:")
+  if (!isWhatsApp) return null
+
+  const lastAt = lead.last_message_at ? new Date(lead.last_message_at) : null
+  const { status } = getWindowStatus(lastAt, isWhatsApp)
+  const style = WINDOW_BADGE[status]
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${style.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} aria-hidden="true" />
+      {style.label}
+    </span>
+  )
 }
 
 interface Props {
@@ -29,6 +72,8 @@ interface Props {
 
 export function LeadsListWithDrawer({ leads }: Props) {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  // Story 63-9 (AC4) — ordenação "Janela fechando primeiro" (client-side).
+  const [sortByWindow, setSortByWindow] = useState(false)
 
   function getStage(lead: Lead) {
     return Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
@@ -37,11 +82,30 @@ export function LeadsListWithDrawer({ leads }: Props) {
     return Array.isArray(lead.properties) ? lead.properties[0] : lead.properties
   }
 
+  const displayedLeads = sortByWindow ? sortByWindowUrgency(leads) : leads
+
   return (
     <>
+      {/* Story 63-9 (AC4) — toggle de ordenação por urgência de janela */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setSortByWindow((v) => !v)}
+          aria-pressed={sortByWindow}
+          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-sm font-medium ring-1 transition-colors ${
+            sortByWindow
+              ? "bg-orange-500 text-white ring-orange-500"
+              : "bg-white text-stone-600 ring-gray-200 hover:bg-gray-50 dark:bg-stone-900 dark:text-stone-300 dark:ring-stone-800 dark:hover:bg-stone-800"
+          }`}
+        >
+          <Clock className="h-4 w-4" />
+          Janela fechando primeiro
+        </button>
+      </div>
+
       {/* Mobile */}
       <div className="space-y-2 lg:hidden">
-        {leads.map((lead) => {
+        {displayedLeads.map((lead) => {
           const stageData = getStage(lead)
           const propertyData = getProperty(lead)
           return (
@@ -73,6 +137,7 @@ export function LeadsListWithDrawer({ leads }: Props) {
                       {(stageData as { name: string }).name}
                     </span>
                   )}
+                  <LeadWindowBadge lead={lead} />
                   <p className="text-[11px] text-stone-600">
                     {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
                   </p>
@@ -104,7 +169,7 @@ export function LeadsListWithDrawer({ leads }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-stone-800/60">
-            {leads.map((lead) => {
+            {displayedLeads.map((lead) => {
               const stageData = getStage(lead)
               const propertyData = getProperty(lead)
               const score = lead.qualification_score

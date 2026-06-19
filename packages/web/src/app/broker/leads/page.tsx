@@ -5,6 +5,7 @@ import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
 import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsListWithDrawer } from "./_components/leads-list-with-drawer"
+import { selectLatestMessageAt, type ConversationRef } from "@web/lib/broker/leads-window"
 
 const TASK_LABELS: Record<string, string> = {
   atrasadas: "Tarefas atrasadas",
@@ -37,10 +38,14 @@ export default async function BrokerLeadsPage({
       supabase
         .from("leads")
         .select(
+          // Story 63-9 — embed de `conversations(last_message_at)` (LEFT JOIN único,
+          // sem N+1) para o badge de janela de 24h na lista. Um lead pode ter várias
+          // conversas; a mais recente é selecionada em JS via `selectLatestMessageAt`.
           `id, name, phone, email, qualification_score, interest_level,
            stage_id, property_interest_id, created_at, updated_at,
            kanban_stages:stage_id(name, color),
-           properties:property_interest_id(name)`
+           properties:property_interest_id(name),
+           conversations(last_message_at)`
         )
         .eq("assigned_broker_id", user.id)
         .eq("is_active", true)
@@ -199,7 +204,15 @@ export default async function BrokerLeadsPage({
         </div>
       ) : (
         <LeadsListWithDrawer
-          leads={filtered as Parameters<typeof LeadsListWithDrawer>[0]["leads"]}
+          leads={
+            filtered.map((lead) => ({
+              ...lead,
+              // Story 63-9 — conversa mais recente do lead → estado da janela de 24h.
+              last_message_at: selectLatestMessageAt(
+                (lead as { conversations?: ConversationRef[] | null }).conversations
+              ),
+            })) as Parameters<typeof LeadsListWithDrawer>[0]["leads"]
+          }
           stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
           properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}
         />
