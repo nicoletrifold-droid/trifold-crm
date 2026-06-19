@@ -5,9 +5,10 @@
 - **Story:** 52-8
 - **Status:** Draft
 - **Priority:** P2 — melhoria de usabilidade; complementa Story 52-7
-- **Complexity:** M (1 migration SQL + TypeScript — ~4-6h)
+- **Complexity:** L (1 migration SQL + TypeScript + UI React — ~8-10h)
 - **Created:** 2026-06-19
 - **Author:** @sm (River)
+- **Revisado por:** @pm (Morgan) — 2026-06-19
 
 ### Executor Assignment
 - **Executor:** @dev (Dex)
@@ -67,15 +68,26 @@ Os RPCs existentes aceitam apenas `p_days INTEGER`:
   - `"de 01/06/2026 a 15/06/2026"`
   - `"junho"` / `"maio"` (mês completo → primeiro ao último dia do mês)
   - Todos os padrões relativos da 52-7 (últimos N dias, última semana, etc.)
+  - **Novos:** `"mês passado"` → primeiro a último dia do mês anterior; `"semana passada"` → segunda a domingo da semana anterior; `"ontem"` → D-1; `"de X até hoje"` / `"a partir de X"` → startDate=X, endDate=hoje
+- **UI — Seletor de período no chat panel** (`src/components/agent/agent-chat-panel.tsx`):
+  - Barra compacta acima do `<textarea>` com chips de atalho: **Hoje · 7 dias · 15 dias · 30 dias · Mês passado · Personalizado...**
+  - Ao clicar em atalho, define `dateWindow` state e exibe badge ativo (ex: "📅 Últimos 7 dias ×")
+  - Ao clicar em **Personalizado...**, exibe dois `<input type="date">` inline (De / Até) com validação client-side de range
+  - Badge com ×  limpa o filtro de UI (retorna ao modo de extração por linguagem natural)
+  - Quando `dateWindow` está ativo, envia `date_window: { startDate, endDate }` no body do fetch
+  - `date_window` do UI **tem prioridade absoluta** sobre extração de linguagem natural da mensagem
+- **API route** (`chat/route.ts`): aceitar `date_window?: { startDate: string; endDate: string }` no body; quando presente e válido, usar diretamente (pular `extractDateWindow(message)`); quando ausente, usar extração NL
+- **Validação de range**: se `startDate > endDate` → `400 INVALID_DATE_RANGE`; agente exibe mensagem amigável
+- **Cap de 90 dias**: intervalo > 90 dias → agente informa e usa os 90 dias a partir do `startDate`
 
 ### OUT (não entra nesta story)
 
-- Intervalos maiores que 90 dias — RPCs não validados para janelas grandes
+- Intervalos maiores que 90 dias — RPCs não validados para janelas grandes; retorna erro com mensagem explicativa
 - Datas futuras — somente datas no passado ou hoje
 - `buildCampaignContext` — contexto de campanha individual usa séries históricas completas
-- UI de date picker — esta story é exclusivamente no agente conversacional
 - Suporte a hora/minuto (granularidade é dia, não hora)
 - Intervalos entre anos distintos (ex.: "dezembro de 2025 a janeiro de 2026") — complexidade de parsing fora do escopo
+- Comparação de dois períodos na mesma query ("junho vs maio") — story futura
 
 ---
 
@@ -109,9 +121,27 @@ Os RPCs existentes aceitam apenas `p_days INTEGER`:
   Para intervalo absoluto, o cabeçalho do portfólio exibe `=== PORTFÓLIO (01/06/2026 a 15/06/2026) ===`. Para relativo de 7 dias, exibe `=== PORTFÓLIO (últimos 7 dias) ===` (compatibilidade com 52-7).
 
 - [ ] **AC10 — `AGENT_SYSTEM_PROMPT` documenta intervalos absolutos:**
-  A seção `## Análise por período` inclui exemplos de intervalos fechados: "de 1 a 15 de junho", "entre 01/06 e 30/06", "junho" (mês completo).
+  A seção `## Análise por período` inclui exemplos de intervalos fechados: "de 1 a 15 de junho", "entre 01/06 e 30/06", "junho" (mês completo), "mês passado", "semana passada".
 
-- [ ] **AC11 — Typecheck e lint limpos:**
+- [ ] **AC11 — Novos padrões relativos reconhecidos:**
+  `extractDateWindow("mês passado")` → primeiro e último dia do mês anterior. `extractDateWindow("semana passada")` → segunda a domingo da semana passada. `extractDateWindow("ontem")` → D-1 a D-1. `extractDateWindow("a partir de 01/06")` → `{ startDate: "2026-06-01", endDate: hoje }`.
+
+- [ ] **AC12 — UI: chips de atalho funcionam:**
+  Clicar em "7 dias" define o filtro e exibe badge "📅 Últimos 7 dias ×" acima do textarea. A próxima mensagem enviada inclui `date_window` no body. Clicar em × remove o badge e retorna ao modo NL.
+
+- [ ] **AC13 — UI: date picker personalizado funciona:**
+  Clicar em "Personalizado..." exibe dois inputs de data. Ao confirmar um range válido, exibe badge "📅 01/06 a 15/06 ×". O body do fetch inclui `date_window: { startDate: "2026-06-01", endDate: "2026-06-15" }`.
+
+- [ ] **AC14 — Validação de range inválido:**
+  Se `startDate > endDate` (via UI ou linguagem natural), a API retorna `400 { error: "INVALID_DATE_RANGE" }`. O painel exibe mensagem amigável: *"O intervalo informado é inválido — a data de início é posterior à data de fim."*
+
+- [ ] **AC15 — Cap de 90 dias com feedback:**
+  Se o intervalo excede 90 dias, o agente responde: *"O intervalo solicitado ultrapassa 90 dias. Usando os últimos 90 dias como máximo disponível."* e executa com 90 dias a partir do `startDate`.
+
+- [ ] **AC16 — `date_window` do UI tem prioridade sobre NL:**
+  Dado que `dateWindow` está ativo no UI com range "01/06 a 15/06" e o usuário escreve "análise dos últimos 7 dias", o sistema usa `2026-06-01` a `2026-06-15` (UI sobrescreve NL).
+
+- [ ] **AC17 — Typecheck e lint limpos:**
   `tsc --noEmit` e `eslint` nos arquivos modificados retornam zero erros ou warnings novos.
 
 ---
@@ -120,10 +150,11 @@ Os RPCs existentes aceitam apenas `p_days INTEGER`:
 
 - [ ] **T1** — Pré-trabalho: ler contratos atuais
   - [ ] T1.1 — Ler `context-builder.ts` — assinaturas de `buildGlobalContext`, `buildContext`, `fetchPipelineAggregates`, `fetchCreativePerformance` e bloco de `extractPeriodDays`/`PERIOD_MAP`
-  - [ ] T1.2 — Ler `chat/route.ts` — ponto de chamada de `extractPeriodDays` e propagação
-  - [ ] T1.3 — Ler `supabase/migrations/096_crm_pipeline_readonly_layer.sql` — corpo completo de `pipeline_funnel_by_campaign` para adaptar a migration 104
-  - [ ] T1.4 — Ler `supabase/migrations/101_creative_performance_with_crm.sql` — corpo completo de `creative_performance` para adaptar a migration 104
+  - [ ] T1.2 — Ler `chat/route.ts` — ponto de chamada de `extractPeriodDays`, propagação e estrutura do body
+  - [ ] T1.3 — Ler `supabase/migrations/096_crm_pipeline_readonly_layer.sql` — corpo completo de `pipeline_funnel_by_campaign`
+  - [ ] T1.4 — Ler `supabase/migrations/101_creative_performance_with_crm.sql` — corpo completo de `creative_performance`
   - [ ] T1.5 — Ler `system-prompt.ts` — seção `## Análise por período` atual
+  - [ ] T1.6 — Ler `src/components/agent/agent-chat-panel.tsx` linhas 350-380 — estrutura do fetch e estado do componente
 
 - [ ] **T2** — Criar `DateWindow` e `extractDateWindow` em `context-builder.ts`
   - [ ] T2.1 — Exportar `type DateWindow = { startDate: string; endDate: string }`
@@ -156,11 +187,32 @@ Os RPCs existentes aceitam apenas `p_days INTEGER`:
   - [ ] T7.1 — `tsc --noEmit` — zero erros novos
   - [ ] T7.2 — `eslint` — zero warnings novos nos arquivos modificados
 
-- [ ] **T8** — Testes manuais
-  - [ ] T8.1 — "como foram as campanhas de 1 a 15 de junho?" → log `[52-8]` mostra `startDate: 2026-06-01, endDate: 2026-06-15`
-  - [ ] T8.2 — "análise de junho" → intervalo `2026-06-01` a `2026-06-30`
-  - [ ] T8.3 — "últimos 7 dias" → comportamento idêntico à 52-7 (sem regressão)
-  - [ ] T8.4 — "qual campanha tem melhor CTR?" → `startDate: hoje-30, endDate: hoje`
+- [ ] **T7** — UI: Seletor de período em `agent-chat-panel.tsx`
+  - [ ] T7.1 — Adicionar state `dateWindow: DateWindow | null` ao componente
+  - [ ] T7.2 — Renderizar barra de chips acima do `<textarea>` com atalhos: Hoje, 7 dias, 15 dias, 30 dias, Mês passado, Personalizado...
+  - [ ] T7.3 — Implementar badge ativo com label descritivo e botão × para limpar
+  - [ ] T7.4 — Implementar picker "Personalizado..." com dois `<input type="date">` e validação client-side (startDate ≤ endDate, endDate ≤ hoje, range ≤ 90 dias)
+  - [ ] T7.5 — Incluir `date_window` no body do fetch quando `dateWindow !== null`
+  - [ ] T7.6 — Limpar `dateWindow` ao iniciar nova sessão
+
+- [ ] **T8** — Atualizar `chat/route.ts` para aceitar `date_window` do body
+  - [ ] T8.1 — Adicionar `date_window?: { startDate: string; endDate: string }` ao tipo do body
+  - [ ] T8.2 — Validar `date_window` quando presente: `startDate <= endDate`, datas válidas ISO, range ≤ 90 dias; retornar `400 INVALID_DATE_RANGE` se inválido
+  - [ ] T8.3 — Quando `date_window` presente e válido, usar diretamente como `DateWindow` (pular `extractDateWindow`)
+  - [ ] T8.4 — Log de diagnóstico: `console.log("[52-8] date window:", dateWindow, "source:", source)` onde `source` é `"ui"` ou `"nl"`
+
+- [ ] **T9** — Typecheck e lint
+  - [ ] T9.1 — `tsc --noEmit` — zero erros novos
+  - [ ] T9.2 — `eslint` — zero warnings novos nos arquivos modificados
+
+- [ ] **T10** — Testes manuais
+  - [ ] T10.1 — "como foram as campanhas de 1 a 15 de junho?" → log `[52-8]` mostra `startDate: 2026-06-01, endDate: 2026-06-15, source: nl`
+  - [ ] T10.2 — "análise de junho" → intervalo `2026-06-01` a `2026-06-30`
+  - [ ] T10.3 — "mês passado" → primeiro e último dia do mês anterior
+  - [ ] T10.4 — "últimos 7 dias" → comportamento idêntico à 52-7 (sem regressão)
+  - [ ] T10.5 — Clicar chip "7 dias" → badge ativo; enviar mensagem → log `source: ui`; clicar × → badge limpo
+  - [ ] T10.6 — Picker personalizado "01/06 a 15/06" → badge correto; enviar → agente responde com intervalo correto
+  - [ ] T10.7 — Picker com startDate > endDate → validação client-side bloqueia envio; mensagem de erro exibida
 
 ---
 
@@ -234,9 +286,10 @@ Idem para `creative_performance`.
 
 ## File List
 
-- [ ] `packages/web/src/lib/agent/context-builder.ts` — novo tipo `DateWindow`, nova função `extractDateWindow`, builders atualizados
-- [ ] `packages/web/src/app/api/agent/chat/route.ts` — substituição de `extractPeriodDays` por `extractDateWindow`
+- [ ] `packages/web/src/lib/agent/context-builder.ts` — novo tipo `DateWindow`, nova função `extractDateWindow` (com novos padrões), builders atualizados
+- [ ] `packages/web/src/app/api/agent/chat/route.ts` — aceita `date_window` no body, validação, substituição de `extractPeriodDays` por `extractDateWindow`
 - [ ] `packages/web/src/lib/agent/system-prompt.ts` — atualização da seção `## Análise por período`
+- [ ] `packages/web/src/components/agent/agent-chat-panel.tsx` — UI de seletor de período (chips + picker personalizado)
 - [ ] `supabase/migrations/104_agent_daterange_rpcs.sql` — overloads com `p_start_date`/`p_end_date`
 
 ---
@@ -252,3 +305,4 @@ _(a preencher por @qa)_
 | Date | Agent | Change |
 |------|-------|--------|
 | 2026-06-19 | @sm (River) | Story criada — Epic 52, Story 52-8 |
+| 2026-06-19 | @pm (Morgan) | Revisão de produto: complexidade M→L; adicionados padrões "mês passado/semana passada/ontem/de X até hoje"; UI date picker movido de OUT→IN; validação de range inválido (AC14); cap 90 dias com feedback (AC15); prioridade UI>NL (AC16); T7 (UI), T8 (API body), T10 (testes manuais) adicionados. |
