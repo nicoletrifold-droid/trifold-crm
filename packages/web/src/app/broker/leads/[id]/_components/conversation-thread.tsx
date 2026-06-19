@@ -5,9 +5,11 @@ import { Check } from "lucide-react"
 import { BrokerMessageInput, type OptimisticMessage } from "./broker-message-input"
 import { getBubbleStyle } from "./bubble-styles"
 import { WindowStatusBadge } from "./window-status-badge"
+import { AiStatusBanner } from "./ai-status-banner"
 import { ChatScrollArea } from "./chat-scroll-area"
 import { mergeMessages, type ThreadMessage } from "./conversation-thread-merge"
 import { getWindowStatus } from "@web/lib/broker/window-status"
+import { deriveBrokerActive } from "@web/lib/broker/broker-takeover-status"
 
 interface ConversationThreadProps {
   /** Mensagens iniciais vindas do servidor (Server Component). */
@@ -47,6 +49,7 @@ export function ConversationThread({
   messages,
   lead,
   lastMessageAt,
+  isAiActive,
   isWhatsApp,
   canSend,
   notifyOnReply = false,
@@ -57,13 +60,23 @@ export function ConversationThread({
   const windowClosed =
     getWindowStatus(lastMessageAt, isWhatsApp).status === "closed"
 
+  // Story 63-8 — estado do banner read-only: corretor assumiu (envio <24h) ou
+  // handoff manual de admin (is_ai_active=false). Fonte de verdade do takeover
+  // é a mesma do cron de follow-up (brokerSentRecently), não o is_ai_active.
+  const brokerActive = deriveBrokerActive(messages, isAiActive)
+
   const allMessages = mergeMessages(messages, optimistic)
 
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-lg bg-white shadow-sm lg:h-[34rem] dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-4 dark:border-stone-800">
-        <h2 className="text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
-        <WindowStatusBadge lastMessageAt={lastMessageAt} isWhatsApp={isWhatsApp} />
+      <div className="shrink-0 border-b border-gray-100 dark:border-stone-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4">
+          <h2 className="text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
+          <WindowStatusBadge lastMessageAt={lastMessageAt} isWhatsApp={isWhatsApp} />
+        </div>
+        <div className="px-5 pb-3">
+          <AiStatusBanner brokerActive={brokerActive} />
+        </div>
       </div>
 
       {allMessages.length > 0 ? (
