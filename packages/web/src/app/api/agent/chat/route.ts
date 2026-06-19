@@ -10,6 +10,7 @@ import {
   requiresConversation,
   requiresCreative,
   fetchCreativePerformance,
+  extractPeriodDays,
 } from "@web/lib/agent/context-builder"
 import { isAdmin, isAdminOrSupervisor } from "@web/lib/agent/auth-helpers"
 import { AGENT_SYSTEM_PROMPT } from "@web/lib/agent/system-prompt"
@@ -157,8 +158,12 @@ export async function POST(request: NextRequest) {
     content: message,
   })
 
+  // ── Extrai período da mensagem (Story 52-7) ────────────────────────────────
+  const periodDays = extractPeriodDays(message)
+  console.log("[52-7] period extracted:", periodDays, "days from message")
+
   // ── Build context (mídia — sempre, para todos os roles; CON-5) ──────────────
-  const mediaContext = await buildContext(supabase, appUser.org_id, context_type, context_id)
+  const mediaContext = await buildContext(supabase, appUser.org_id, context_type, context_id, periodDays)
 
   // ── Gate de CRM (Story 52-2) — decisão de produto: SOMENTE admin ─────────────
   // Único ponto de decisão para acesso a dados de pipeline/CRM. Verificação
@@ -169,7 +174,7 @@ export async function POST(request: NextRequest) {
 
   if (admin) {
     // Agregados (sem PII) — sempre para admin, cacheáveis (AC1, AC2, AC3, AC8)
-    pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id))
+    pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id, periodDays))
 
     // Drill on-demand (PII) — disparado por heurística; fail-closed (AC4, AC6)
     if (requiresDrill(message)) {
@@ -199,7 +204,7 @@ export async function POST(request: NextRequest) {
   let creativeContext = ""
   const adminOrSupervisor = isAdminOrSupervisor(appUser)
   if (adminOrSupervisor && requiresCreative(message)) {
-    const creative = await fetchCreativePerformance(supabase, appUser.org_id)
+    const creative = await fetchCreativePerformance(supabase, appUser.org_id, periodDays)
     if (creative) {
       creativeContext += "\n\n" + creative
       console.log("[52-6] creative context injected for org: " + appUser.org_id)
