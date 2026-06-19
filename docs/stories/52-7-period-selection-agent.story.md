@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 52 — Agente de Tráfego com Acesso Read-Only ao Pipeline do CRM
 - **Story:** 52-7
-- **Status:** InReview
+- **Status:** Done
 - **Priority:** P1 — melhoria direta de usabilidade do agente; solicitada pelo usuário
 - **Complexity:** M (TypeScript only — sem migration SQL; ~4-5h)
 - **Created:** 2026-06-19
