@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 63 — UX do Atendimento do Corretor — Chat Mobile-First
 - **Story:** 63-7
-- **Status:** Ready for Review
+- **Status:** QA Approved (PASS) — aguardando @devops *push
 - **Validated:** 2026-06-18 by @po (Pax) — verdict **GO (9/10)** após revalidação dos fixes do @sm. **FIX 1 RESOLVIDO:** premissa falsa de "Transferir corretor" reconciliada — confirmado por grep que `TransferBrokerSection` existe apenas em `lead-detail-drawer.tsx` (declaração L890, uso L851) e NÃO em `page.tsx` (zero ocorrências); story removeu explicitamente do escopo via [AUTO-DECISION], Out of Scope e nota em T2. **FIX 2 RESOLVIDO:** confirmado que `components/ui/` só tem `scrollable-x.tsx` e `source-badge.tsx` (sem shadcn `Sheet`/`Drawer`); AC3 alinhado ao slide-over Tailwind custom reusando o padrão de overlay existente — `quick-history-modal.tsx` confirmado (`fixed inset-0 z-60` + backdrop `bg-black/40 onClick`, L223-225). Princípio REUSE respeitado. **FIX 3 OK:** dependência declarada (63-5 Done + 63-6 Done); refs de linha atualizadas. CON-1 OK (sem `tel:`/`wa.me` nos arquivos-alvo, verificado). **Nota (não-bloqueante):** `page.tsx` em alteração concorrente pela 63-6 — refs com drift de 1-2 linhas (`LeadEditForm` L127, cards L147/L190, conversa ~L204) e o gotcha "não tocar em `max-h-96` L209" já é histórico (63-6 removeu); marcadores localizáveis por conteúdo, story assume 63-5 + 63-6 Done antes da implementação.
 - **Priority:** P1 — formulário de edição bloqueia o acesso ao chat na tela principal
 - **Complexity:** M (4-6h)
@@ -221,6 +221,35 @@ Vitest (padrão do projeto) — lógica visual testada por smoke
 - [ ] T1–T4 marcados como done
 - [ ] @qa executou quality gate com verdict ≥ PASS
 - [ ] @devops fez push
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (@qa — Test Architect)
+
+**Gate: PASS → docs/qa/gates/63.7-detalhes-sheet.yml** (quality_score 94)
+
+**Traceability AC→código:**
+- AC1 PASS — `page.tsx`: `LeadEditForm` + cards "Dados do Lead"/"Resumo IA" removidos do layout principal; chat é o conteúdo principal (`ConversationThread` L152).
+- AC2 PASS — `lead-details-panel.tsx:84-94` botão `MoreVertical`, `aria-label="Detalhes do lead"`, abre painel com `LeadEditForm` + 2 cards (L128-188).
+- AC3 PASS — slide-over Tailwind custom: backdrop `fixed inset-0 z-40 bg-black/40` (L98), painel `fixed inset-y-0 right-0 z-50 translate-x-0/translate-x-full duration-200` (L104-112), sem shadcn — reusa padrão de `quick-history-modal.tsx`.
+- AC4 PASS — `LeadEditForm` L130 com props inalteradas (server action/PATCH + `router.refresh()` agnósticos ao pai); submit/edição preservados.
+- AC5 PASS — Escape fecha (`keydown` L73-76); backdrop `onClick=close` (L99); foco move p/ botão Fechar ao abrir (L78) e retorna ao gatilho ao fechar (`close()` L66-69).
+- AC6 PASS — type-check 0, ESLint 0, vitest 419/419.
+
+**CON-1 (INVIOLÁVEL):** CLEAN — ZERO ocorrências nos arquivos da Fase 2.
+
+**a11y:** `role="dialog"` / `aria-modal="true"` / `aria-label` no painel; `aria-haspopup="dialog"` + `aria-expanded` no gatilho; foco inicial e retorno geridos; alvos ≥44px (gatilho e Fechar com `min-h-[44px] min-w-[44px]`). Ressalva LOW `A11Y-001`: sem focus trap (Tab pode sair p/ o fundo) — consistente com o padrão leve de overlay do projeto.
+
+**Escopo:** "Transferir corretor" (`TransferBrokerSection`) corretamente FORA de escopo — existe só em `lead-detail-drawer.tsx` (admin/supervisor); portá-lo seria nova funcionalidade.
+
+**Verificação independente:** vitest `419/419`; ESLint `0`; type-check `0` nos arquivos da story (3 erros ambientais pré-existentes — `react-email-editor`).
+
+**Issues:** `A11Y-001` (LOW — sem focus trap); `SCOPE-002` (LOW — Transferir corretor fora de escopo, por design).
+
+**Veredito: PASS.** Liberada para @devops *push (commit `b484d31`).
 
 ---
 

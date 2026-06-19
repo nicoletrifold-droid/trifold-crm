@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 63 — UX do Atendimento do Corretor — Chat Mobile-First
 - **Story:** 63-6
-- **Status:** Ready for Review
+- **Status:** QA PASS — cleared for @devops push (aguardando push; Done após push)
 - **Validated:** 2026-06-18 by @po (Pax) — verdict GO (8/10). Status Draft → Ready. Story autossuficiente em `page.tsx` (não bloqueada por 63-5 — story declara aplicação isolada). Ressalvas não-bloqueantes a corrigir nas Dev Notes durante implementação: (a) `max-h-96 overflow-y-auto` agora está em `page.tsx` L209 (não L192) — drift pós-Fase 1; (b) container externo é `<div className="space-y-6">` (L78) sem parent flex full-height — o @dev precisa estabelecer o contexto de altura a partir do layout do broker; (c) `.mobile-nav-safe` existe em `globals.css` L129 mas aplica APENAS `padding-bottom: env(safe-area-inset-bottom)` — NÃO encoda a altura da própria bottom nav; o composer deve compensar a altura real da barra além do safe-area; (d) NÃO existe a var CSS `--header-height` citada no T-snippet — usar `100dvh`/flex a partir de container conhecido. CON-1/CON-5 OK.
 - **Priority:** P1 — chat empurrado para baixo do formulário e limitado a 96px de altura — inutilizável em mobile
 - **Complexity:** M (4-6h)
@@ -215,6 +215,38 @@ Vitest (padrão do projeto) — lógica de layout testada visualmente; apenas sm
 
 ---
 
+## QA Results
+
+### Review Date: 2026-06-18
+
+### Reviewed By: Quinn (@qa) — Test Architect
+
+**Veredito: PASS** (quality_score 95) — 6/6 ACs atendidos por código, sem regressão, CON-1 inviolável limpo, 3 issues LOW documentadas.
+
+#### Quality checks (7)
+1. **Traceability AC→código:** PASS — todos os 6 ACs rastreados (ver `ac_traceability` no gate file). A ressalva honesta do dev (form + cards ainda acima do chat no mobile até a 63-7) é **aceitável** para esta story: os ACs testáveis da 63-6 NÃO exigem remover o form (Out of Scope L203), e o @po validou o split (GO 8/10). Registrada como SCOPE-001 (LOW).
+2. **CON-1 INVIOLÁVEL:** PASS/CLEAN — `git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD` nos 2 arquivos tocados → **zero ocorrências** (exit 1).
+3. **Regressão:** PASS — `BrokerMessageInput`, `WindowStatusBadge` e `disabledByWindow` intactos (page passa as mesmas props). Auto-scroll de `chat-scroll-area.tsx` rola **apenas o container** via `el.scrollTo`, **nunca a window** (verificado em L33-38) — sem page-jump. CON-3 (is_ai_active/takeover) não tocado.
+4. **Mobile/PWA:** PASS — `100dvh` (não `100vh`) é a escolha correta (exclui barra de endereços retrátil). `env(safe-area-inset-bottom)` correto. Compositor não sobrepõe a bottom tab bar (`fixed bottom-0 lg:hidden` em `sidebar-nav.tsx:145`): clearance via `pb-24` do `broker/layout.tsx:44`. Cálculo `8rem` é heurístico/não-crítico (painel in-flow) → LAYOUT-001 (LOW).
+5. **Acessibilidade:** PASS — composer reusa controles ≥44px + aria-labels (herdado 63-3); foco do textarea preservado; histórico rolável por teclado (overflow nativo).
+6. **Escopo:** PASS — NÃO invadiu 63-5 (`ConversationThread`/2-colunas) nem 63-7 (remoção do `LeadEditForm`/sheet). Aplicada isoladamente em `page.tsx`.
+7. **Testes:** suíte REAL `npx vitest run` → **414/414 (31 files)**. ESLint nos 2 arquivos → **0 erros/0 warnings**. `type-check` → **0 erros nos arquivos da story** (3 erros pré-existentes em `visual-editor.tsx`/`react-email-editor` — ambientais, não relacionados). `chat-scroll-area.tsx` sem teste unitário → TEST-001 (LOW): repo não tem infra de teste de componente React (sem @testing-library/jsdom/env dom, zero `.test.tsx`); comportamento é layout-dependente, não unit-testável em node. **Decisão: não adicionar teste frágil** — fora do escopo do gate e do padrão do projeto (só helpers puros têm teste no Epic 63).
+
+#### Issues (todas LOW, não-bloqueantes)
+| ID | Sev | Achado |
+|----|-----|--------|
+| TEST-001 | low | `chat-scroll-area.tsx` sem teste (repo sem infra de teste de componente React; scroll é layout-dependente). |
+| LAYOUT-001 | low | `8rem` em `h-[calc(100dvh-8rem)]` é buffer heurístico, não derivado das alturas reais — revisar em 63-5/63-7. |
+| SCOPE-001 | low | Mobile: form + cards acima do chat até 63-7 (por design do faseamento; ACs da 63-6 atendidos). |
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/63.6-composer-sticky-rodape.yml
+
+**Recomendação:** LIBERADO para @devops *push — pode entrar no PR #14 (commit `eab263b`).
+
+---
+
 ## Change Log
 
 | Data | Versão | Descrição | Autor |
@@ -222,3 +254,4 @@ Vitest (padrão do projeto) — lógica de layout testada visualmente; apenas sm
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 2, composer sticky e layout full-screen | @sm (River) |
 | 2026-06-18 | 0.2 | **Validação PO — verdict GO (8/10). Status Draft → Ready.** Story bem-formada e autossuficiente em `page.tsx`. Ressalvas não-bloqueantes nas Dev Notes (drift de linhas pós-Fase 1: `max-h-96` L209; `.mobile-nav-safe` só aplica safe-area-padding, não a altura da nav; var `--header-height` inexistente). CON-1/CON-5 respeitados. | @po (Pax) |
 | 2026-06-18 | 0.3 | **Implementação @dev — Status InProgress → Ready for Review.** Card de conversa convertido em painel de chat flex full-height (`h-[calc(100dvh-8rem)]` mobile / `lg:h-[34rem]` desktop); `max-h-96` removido (AC1); histórico `flex-1 overflow-y-auto`; compositor `shrink-0` no rodapé com safe-area (AC2/AC3). Novo wrapper client `chat-scroll-area.tsx` p/ auto-scroll (AC5). type-check/lint/vitest verdes. CON-1 OK. Sem invadir 63-5/63-7. | @dev (Dex) |
+| 2026-06-18 | 0.4 | **Quality Gate @qa — verdict PASS (score 95). Status Ready for Review → QA PASS (cleared for @devops push).** 6/6 ACs por código; CON-1 limpo (git grep zero); suíte 414/414; ESLint 0; type-check 0 na story; auto-scroll rola só o container (sem page-jump). 3 issues LOW (TEST-001, LAYOUT-001, SCOPE-001). Liberado para PR #14. | @qa (Quinn) |

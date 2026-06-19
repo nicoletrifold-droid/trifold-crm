@@ -1,0 +1,157 @@
+schema: 1
+storyId: "epic-63-fase2"
+story: "epic-63-fase2"
+title: "Quality Gate consolidado — Epic 63 FASE 2 (Reestruturação do Chat do Corretor)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Consolida os 3 gates da Fase 2 (estrutural): 63-5 (ConversationThread), 63-6 (composer
+  sticky / full-height) e 63-7 (detalhes em slide-over). Todas PASS. Os 3 commits
+  (eab263b 63-6, 92166b0 63-5, b484d31 63-7) tocam page.tsx + componentes novos
+  (conversation-thread.tsx, conversation-thread-merge.ts(+test), chat-scroll-area.tsx,
+  lead-details-panel.tsx). CON-1 INVIOLÁVEL verificado por git grep: ZERO ocorrências.
+  lead-detail-drawer.tsx e kanban-board.tsx INTACTOS (Opção B na 63-5 — diffs confirmam).
+  Suíte COMPLETA 419/419 (32 arquivos); ESLint 0; type-check 0 nos arquivos das stories
+  (3 erros ambientais pré-existentes em react-email-editor). 1 débito MEDIUM rastreado
+  (DEBT-63-5-drawer) e concerns LOW documentados. Pronto para @devops *push.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T15:38:00Z"
+iteration: 1
+quality_score: 93
+waiver: { active: false }
+
+stories_summary:
+  - story: "63.5"
+    title: "Unificar Página vs Drawer (ConversationThread)"
+    gate: PASS
+    file: "docs/qa/gates/63.5-unificar-page-drawer.yml"
+    commit: "92166b0"
+    note: >
+      Opção B: ConversationThread só em page.tsx (AC1/2/4/5/6a/7). AC3/6b/T4 adiados como
+      DEBT-63-5-drawer (documentado, não omitido). mergeMessages deduplica por id real,
+      5 testes. drawer/kanban intactos.
+  - story: "63.6"
+    title: "Composer Fixo (Sticky) — Conversa Full-Height"
+    gate: PASS
+    file: "docs/qa/gates/63.6-composer-sticky-rodape.yml"
+    commit: "eab263b"
+    note: >
+      Painel flex full-height (min-h-0 flex-1 overflow-y-auto; max-h-96 removido); composer
+      shrink-0 com safe-area; chat-scroll-area rola só o container. (Gate prévio: PASS 95.)
+  - story: "63.7"
+    title: "Detalhes do Lead em Slide-over"
+    gate: PASS
+    file: "docs/qa/gates/63.7-detalhes-sheet.yml"
+    commit: "b484d31"
+    note: >
+      LeadEditForm + cards movidos p/ slide-over Tailwind (MoreVertical); a11y sólida
+      (foco gerido, Escape/backdrop, role/aria, ≥44px). LeadEditForm preservado. Transferir
+      corretor fora de escopo (só no drawer).
+
+con1_inviolable_scan:
+  result: CLEAN
+  command: "git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD -- <arquivos Fase 2>"
+  outcome: "ZERO ocorrências (exit 1). CON-1 respeitado nas 3 stories."
+
+untouched_verification:
+  - file: "packages/web/src/components/leads/lead-detail-drawer.tsx"
+    status: UNTOUCHED
+    note: "Ausente dos diffs de eab263b/92166b0/b484d31. Opção B (63-5) respeitada."
+  - file: "packages/web/src/components/pipeline/kanban-board.tsx"
+    status: UNTOUCHED
+    note: "Ausente dos diffs. Dashboard admin/supervisor sem regressão introduzida (Risco R4 mitigado por escopo)."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "419/419 passed (32 files) — +5 vs Fase 1 (conversation-thread-merge.test.ts)."
+  - check: "ESLint (4 arquivos das stories Fase 2)"
+    command: "pnpm --filter @trifold/web exec eslint <4 files>"
+    result: "0 erros, 0 warnings (exit 0)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros nos arquivos das stories. 3 erros ambientais pré-existentes em email-templates/visual-editor.tsx (react-email-editor ausente) — não relacionados ao Epic 63."
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos arquivos tocados"
+    result: "CLEAN (zero)."
+
+nfr_validation:
+  accessibility:
+    status: PASS
+    notes: "NFR-2 ≥44px (composer herdado 63-3; botões do slide-over 63-7); role/aria no painel. Ressalva LOW: sem focus trap (A11Y-001)."
+  performance:
+    status: PASS
+    notes: "NFR-4 zero query adicional nas 3 stories; 100dvh + scroll só no container; transição translate-x."
+  maintainability:
+    status: PASS
+    notes: "ConversationThread + helper puro mergeMessages reduzem duplicação no page-path; slide-over reusa padrão de overlay."
+  responsiveness:
+    status: PASS
+    notes: "NFR-5 ConversationThread renderiza mobile (<1024px full-height) e desktop (≥1024px lg:h-[34rem])."
+  reliability:
+    status: PASS
+    notes: "onSent usa id real → dedupe determinístico pós-refresh; CON-3 (is_ai_active/takeover) intocado."
+
+aggregated_issues:
+  - id: DEBT-63-5-drawer
+    story: "63.5"
+    severity: medium
+    finding: >
+      lead-detail-drawer.tsx ainda não consome ConversationThread (Opção B). Duplicação
+      estrutural persiste no drawer (broker + kanban dashboard). Adiado p/ evitar regressão
+      no kanban (Risco R4).
+    suggested_action: "Story 63-5b OU absorver na 63-7-followup; smoke nos 3 contextos ao fechar."
+    suggested_owner: sm
+  - id: BUBBLE-001
+    story: "63.5"
+    severity: low
+    finding: "Estado otimista pending/failed não surfaced (✓ fixo); mergeMessages descarta flags. Carryover da 63-2."
+    suggested_action: "Surfacing de pending/failed ao ConversationThread em 63-5b/63-8."
+    suggested_owner: dev
+  - id: A11Y-001
+    story: "63.7"
+    severity: low
+    finding: "Slide-over sem focus trap (Tab pode sair p/ o fundo). Escape/backdrop/retorno de foco OK."
+    suggested_action: "Aplicar focus-trap/inert uniformemente se adotar camada de modal acessível."
+    suggested_owner: dev
+  - id: SCOPE-canSend
+    story: "63.5"
+    severity: low
+    finding: "Prop canSend (gate de role) adicionada além do contrato AC1 — benéfica e retrocompatível."
+    suggested_action: "Documentar canSend no contrato se mantido."
+    suggested_owner: dev
+  - id: LAYOUT-001
+    story: "63.6"
+    severity: low
+    finding: "h-[calc(100dvh-8rem)] usa 8rem heurístico (in-flow, não crítico). Herdado do gate 63-6."
+    suggested_action: "Revisar cálculo ao fechar DEBT-63-5-drawer / reestruturação completa."
+    suggested_owner: dev
+  - id: OBS-001
+    story: "all"
+    severity: low
+    finding: "CodeRabbit CLI não executado (config WSL/Windows; host macOS) — mesmo cenário das Fases 1 e Epic 51."
+    suggested_action: "Não-bloqueante. Análise manual cobriu code review, a11y, regressão, dedupe e testes. CI pode rodar pós-push."
+
+regression_safety:
+  - "63-5: onSent com id real (data.messageId) → mergeMessages deduplica pós router.refresh() sem duplicar nem perder; 5 testes de boundary verdes."
+  - "63-6: composer/WindowStatusBadge/disabledByWindow/auto-scroll intactos (props idênticas)."
+  - "63-7: LeadEditForm reusado sem mudança de props — edição preservada; URL e navegação intactas."
+  - "CON-3: is_ai_active e takeover (brokerSentRecently) intocados nas 3 stories."
+  - "drawer/kanban intactos (Opção B) — dashboard sem regressão."
+  - "Suíte completa 419/419; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    As 3 stories da Fase 2 passam individualmente e em conjunto. CON-1 inviolável limpo;
+    NFR-2/4/5 atendidos; drawer e kanban comprovadamente intactos (Opção B na 63-5);
+    helper puro mergeMessages testado (dedupe por id real); suíte completa verde (419/419);
+    lint e type-check limpos nos arquivos das stories. As issues são MEDIUM (DEBT-63-5-drawer
+    rastreado) e LOW (carryovers documentados). Recomendação: LIBERAR Fase 2 para @devops
+    *push.
+  next_steps:
+    - "@devops *push da branch feat/epic-51-handoff-chat-corretor (commits eab263b, 92166b0, b484d31 — Fase 2 completa)."
+    - "@sm: criar/agendar DEBT-63-5-drawer (story 63-5b) p/ fechar a unificação do drawer com smoke nos 3 contextos."
+    - "Smoke pós-deploy mobile: tela do lead abre no chat (sem form); ⋯ abre detalhes; enviar msg → otimista aparece e confirma sem duplicar; histórico rola interno, composer fixo acima da bottom nav."

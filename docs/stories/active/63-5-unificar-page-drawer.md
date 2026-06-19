@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 63 — UX do Atendimento do Corretor — Chat Mobile-First
 - **Story:** 63-5
-- **Status:** Ready for Review
+- **Status:** QA Approved (PASS) — aguardando @devops *push
 - **Validated:** 2026-06-18 by @po (Pax) — verdict **GO (9/10)** após revalidação dos fixes do @sm. **FIX 1 RESOLVIDO:** consumidor compartilhado `kanban-board.tsx` mapeado e coberto — confirmado no código (`import LeadDetailDrawer` L20, uso L551); agora consta no Context (tabela de consumidores), AC3, AC6(b) dashboard, Risco R4 e Smoke de 3 contextos. **FIX 2 RESOLVIDO:** conflito `onSendMessage` eliminado — contrato de `ConversationThread` bate com a interface real de `BrokerMessageInput` confirmada no código (`{ leadId: string; onSent?: (msg: OptimisticMessage) => void; disabledByWindow?: boolean }`, L19-37); `ConversationThread` encapsula o composer e gerencia `useState<OptimisticMessage[]>` internamente, sem callback externo. **FIX 3 OK:** duplicação restante declarada como estrutural (visual já resolvido pela 63-2; helpers `bubble-styles.ts` e `window-status-badge.tsx` confirmados em `_components/`). **FIX 4 OK:** decisão de escopo Opção A/B explicitada nos Dev Notes e exigida no Change Log/DoD antes de iniciar T2. CON-1 OK (sem `tel:`/`wa.me` nos arquivos-alvo, verificado). **Nota (não-bloqueante):** `page.tsx` está em alteração concorrente pela 63-6 (já em implementação) — refs de linha sofreram drift de 1-2 linhas (`LeadEditForm` L127, conversa ~L204) e o `max-h-96` (antes L209) já foi removido pela 63-6; os marcadores são localizáveis por conteúdo e a story corretamente assume 63-6 Done antes da implementação.
 - **Priority:** P1 — duplicação de UI causa divergências e dobra o custo de manutenção
 - **Complexity:** L (8-12h)
@@ -247,6 +247,38 @@ Vitest (padrão do projeto)
 - [ ] Decisão Opção A / Opção B registrada no Change Log
 - [ ] @qa executou quality gate com verdict ≥ PASS (incluindo smoke nos 3 contextos)
 - [ ] @devops fez push
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (@qa — Test Architect)
+
+**Gate: PASS → docs/qa/gates/63.5-unificar-page-drawer.yml** (quality_score 92)
+
+**Decisão de escopo confirmada:** Opção B (decidida pelo usuário/@dev, registrada no Change Log v1.1). ConversationThread extraído e consumido APENAS por `page.tsx`. ACs adiados (AC3, AC6(b), T4) corretamente registrados como `DEBT-63-5-drawer` — não omitidos silenciosamente.
+
+**Traceability AC→código (Opção B):**
+- AC1 PASS — `conversation-thread.tsx:12-25` props + L48 `useState<OptimisticMessage[]>` + L127-131 `BrokerMessageInput` com `onSent`, sem `onSendMessage` externo. Bate com a interface real de `BrokerMessageInput` (`{ leadId, onSent?, disabledByWindow? }`, `broker-message-input.tsx:19-28`).
+- AC2 PASS — `page.tsx:152-163` consome `<ConversationThread>`; bloco inline + imports de chat removidos.
+- AC3 DEFERRED — `DEBT-63-5-drawer`. Drawer não tocado p/ proteger `kanban-board.tsx`.
+- AC4 PASS — `getBubbleStyle(msg.role)` L70 (padrão canônico 63-2).
+- AC5 PASS — `h-[calc(100dvh-8rem)]` mobile / `lg:h-[34rem]` desktop (L57).
+- AC6(a) PASS / AC6(b) DEFERRED — broker página OK; smoke kanban N/A (drawer intacto).
+- AC7 PASS — type-check 0, ESLint 0, vitest 419/419.
+
+**CON-1 (INVIOLÁVEL):** CLEAN — `git grep` nos 4 arquivos da Fase 2 → ZERO `tel:`/`wa.me`/`api.whatsapp.com`/`whatsapp://`/`click-to-call` (exit 1).
+
+**Opção B respeitada (verificado por diff):** `lead-detail-drawer.tsx` e `kanban-board.tsx` AUSENTES dos diffs de `92166b0`/`b484d31` → INTACTOS.
+
+**Regressão / dedupe:** `onSent` invocado com `id: data.messageId` (id REAL persistido, `broker-message-input.tsx:74-80`) → após `router.refresh()` o servidor devolve a mesma linha e `mergeMessages` deduplica por id (sem duplicar nem perder). `conversation-thread-merge.test.ts` cobre 5 boundaries: vazio, roles mistos, otimista nova, otimista já retornada pós-refresh (dedupe), mistura confirmada+pendente. Suíte completa 419/419 (32 arquivos).
+
+**Verificação independente:** vitest `419/419`; ESLint `0`; type-check `0` nos arquivos da story (3 erros ambientais pré-existentes em `email-templates/visual-editor.tsx` — `react-email-editor` ausente, não relacionados).
+
+**Issues:** `DEBT-63-5-drawer` (MEDIUM, rastreado — unificação do drawer adiada); `BUBBLE-001` (LOW, carryover 63-2 — pending/failed não surfaced, `<Check>` ✓ fixo); `SCOPE-canSend` (LOW — prop `canSend` adicionada além do contrato AC1, benéfica/retrocompatível).
+
+**Veredito: PASS.** Liberada para @devops *push (commit `92166b0`). Rastrear `DEBT-63-5-drawer` (@sm: story 63-5b ou absorver na 63-7-followup, com smoke obrigatório nos 3 contextos).
 
 ---
 

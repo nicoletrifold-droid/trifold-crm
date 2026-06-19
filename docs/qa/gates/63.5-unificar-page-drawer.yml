@@ -1,0 +1,195 @@
+schema: 1
+storyId: "63.5"
+story: "63.5"
+title: "Unificar Página vs Drawer em Componente Único de Conversa (ConversationThread)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Opção B (decidida pelo usuário/@dev e registrada no Change Log v1.1): ConversationThread
+  extraído e consumido APENAS por page.tsx. AC1, AC2, AC4, AC5, AC6(a), AC7 atendidos por
+  código. AC3, AC6(b) e T4 (refatorar lead-detail-drawer.tsx) ADIADOS e corretamente
+  documentados como DEBT-63-5-drawer — NÃO omitidos silenciosamente. Diff dos commits
+  92166b0 confirma: lead-detail-drawer.tsx e kanban-board.tsx INTACTOS (nenhuma linha
+  tocada). Helper puro mergeMessages deduplica por id real (data.messageId) após
+  router.refresh() — invariante correta, 5 testes cobrindo boundaries. CON-1 INVIOLÁVEL
+  limpo (git grep exit 1). Suíte completa 419/419 (32 arquivos); ESLint 0; type-check 0 nos
+  arquivos da story (3 erros ambientais pré-existentes em react-email-editor). Único concern
+  LOW: estado otimista pending/failed ainda não surfaced (Check ✓ fixo) — BUBBLE-001
+  herdado da 63-2, débito documentado.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T15:35:00Z"
+iteration: 1
+quality_score: 92
+waiver: { active: false }
+
+scope_decision:
+  option: "B"
+  decided_by: "user + @dev (Dex), registrado no Change Log v1.1"
+  delivered: "ConversationThread em page.tsx (AC1, AC2, AC4, AC5, AC6a, AC7)"
+  deferred_as_debt: "AC3 (drawer consome ConversationThread), AC6(b) (smoke dashboard/kanban), T4 (refatorar drawer)"
+  debt_id: "DEBT-63-5-drawer"
+  debt_registered: true
+  debt_location: "Story 63-5 Change Log v1.1 + AC3 (riscado) + T4 (adiado) + File List secção 'Adiado'"
+  verification: "git show 92166b0 --stat → lead-detail-drawer.tsx e kanban-board.tsx ausentes do diff (intactos)"
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (conversation-thread.tsx:41-47 — props messages/lead/lastMessageAt/isAiActive/
+      isWhatsApp + canSend; encapsula BrokerMessageInput L127-131 com useState<Optimistic
+      Message[]> L48 e onSent, sem onSendMessage externo — bate com interface real
+      broker-message-input.tsx:19-28). AC2 (page.tsx:152-163 consome ConversationThread;
+      bloco inline + imports de chat removidos). AC4 (getBubbleStyle L70 padrão canônico
+      63-2). AC5 (h-[calc(100dvh-8rem)] mobile / lg:h-[34rem] desktop L57). AC6a (scroll
+      via ChatScrollArea, envio interno, optimistic via mergeMessages, disabledByWindow
+      derivado L51-52). AC7 (type-check/ESLint/testes limpos). AC3/AC6b/T4 = DEBT-63-5-drawer.
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Helper puro mergeMessages isolado em arquivo próprio, JSDoc explicando a regra de
+      dedupe. Imports absolutos @web/*. Client/Server bem separados (page Server, thread
+      Client). isAiActive declarado na interface mas não consumido — reservado p/ 63-8
+      (sem unused-var pois não destructurado). canSend adicionado p/ gate de role (não
+      estava no contrato AC1 — adição benéfica, não-quebradora).
+  - check: "3. Test Architecture"
+    status: PASS
+    note: >
+      conversation-thread-merge.test.ts: 5 casos cobrindo boundaries — (a) vazio→[], (b)
+      roles mistos sem otimista, (c) otimista nova anexada, (d) otimista cujo id já voltou
+      do servidor pós-refresh → descartada sem duplicar (server prevalece), (e) mistura
+      confirmada+pendente. Invariante de dedupe (id real de data.messageId) validada. O
+      componente React não é unit-testável (repo sem jsdom/@testing-library — padrão do
+      Epic 63: só helpers puros).
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      onSent invocado com id: data.messageId (id REAL persistido, broker-message-input.tsx:
+      74-80), não temp-id → após router.refresh() o servidor devolve a mesma linha e
+      mergeMessages deduplica por id (sem duplicar nem perder). WindowStatusBadge, envio,
+      disabledByWindow e auto-scroll (ChatScrollArea da 63-6) preservados. CON-3
+      (is_ai_active/takeover) intocado. Suíte 419/419.
+  - check: "5. Performance / Mobile-PWA"
+    status: PASS
+    note: >
+      Zero query adicional (page reutiliza messages/conversations já buscados). 100dvh
+      correto p/ mobile; auto-scroll só no container (herdado 63-6). mergeMessages O(n+m)
+      com Set de ids.
+  - check: "6. Security (CON-1)"
+    status: PASS
+    note: >
+      git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD nos 4
+      arquivos da Fase 2 → ZERO (exit 1). Contato permanece exclusivo do chat interno
+      (dispatch oficial Epic 51). Page mantém ownership (.eq assigned_broker_id=user.id).
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Decisão Opção B registrada no Change Log v1.1 ANTES de T2 (conforme exigido pelo
+      @po/DoD). DEBT-63-5-drawer explícito em Change Log, AC3, AC6(b), T4 e File List.
+      JSDoc honesto sobre escopo (envio interno, layout 63-6).
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "conversation-thread.tsx:12-25 props + L48 useState + L127-131 BrokerMessageInput com onSent; sem onSendMessage externo."
+  - ac: "AC2"
+    status: PASS
+    note: "page.tsx:152-163 <ConversationThread>; bloco inline e imports de chat removidos (commit 92166b0: page -89 linhas líquidas no trecho de chat)."
+  - ac: "AC3"
+    status: DEFERRED
+    note: "DEBT-63-5-drawer (Opção B). Drawer NÃO consome ConversationThread — adiado p/ proteger kanban-board.tsx. Documentado, não omitido."
+  - ac: "AC4"
+    status: PASS
+    note: "getBubbleStyle(msg.role) L70 — padrão canônico 63-2 (broker laranja/direita, user cinza/esquerda, Nicole roxo/esquerda)."
+  - ac: "AC5"
+    status: PASS
+    note: "h-[calc(100dvh-8rem)] mobile / lg:h-[34rem] desktop (L57); inserível no layout de coluna existente."
+  - ac: "AC6"
+    status: PARTIAL
+    note: "AC6(a) PASS (broker página: scroll/envio/otimista/disabledByWindow OK). AC6(b) DEFERRED (smoke dashboard/kanban N/A — drawer intacto, sem risco introduzido)."
+  - ac: "AC7"
+    status: PASS
+    note: "type-check 0 (3 ambientais), ESLint 0, vitest 419/419."
+
+issues:
+  - id: BUBBLE-001
+    severity: low
+    category: code
+    finding: >
+      Estado otimista pending(⏳)/failed(⚠) do OptimisticMessage NÃO é surfaced — o bubble
+      broker renderiza <Check> ✓ fixo (conversation-thread.tsx:106-111) e mergeMessages
+      descarta os campos pending/failed ao mapear p/ ThreadMessage. ✓ = "persistido", não
+      "entregue". O gate da Fase 1 sugeria tratar isto "ao unificar em 63-5"; sob Opção B
+      o page-path manteve o comportamento da 63-2. Carryover documentado, não-bloqueante.
+    suggested_action: >
+      Surfacing de pending/failed/⚠ ao ConversationThread (page já tem o OptimisticMessage
+      com flags antes do merge) — tratar em 63-5b/63-8 ou ao executar DEBT-63-5-drawer.
+    suggested_owner: dev
+  - id: DEBT-63-5-drawer
+    severity: medium
+    category: requirements
+    finding: >
+      lead-detail-drawer.tsx ainda NÃO consome ConversationThread — duplicação estrutural
+      (fetch/scroll/layout do trecho de chat) persiste no drawer, consumido por
+      leads-list-with-drawer.tsx (broker) e kanban-board.tsx (dashboard admin/supervisor).
+      Adiado deliberadamente (Opção B) para evitar regressão no kanban (Risco R4).
+    suggested_action: >
+      Executar story 63-5b OU absorver na 63-7 a refatoração do drawer p/ consumir
+      ConversationThread; smoke obrigatório nos 3 contextos (broker página, broker drawer,
+      kanban dashboard) ao fechar o débito.
+    suggested_owner: sm
+  - id: SCOPE-canSend
+    severity: low
+    category: code
+    finding: >
+      Prop canSend (gate de role via CAN_SEND_ROLES em page.tsx:8/162) foi adicionada além
+      do contrato AC1. Adição benéfica (oculta composer p/ roles não autorizados) e
+      retrocompatível; page já restringe acesso por assigned_broker_id. Risco residual:
+      role string divergente ocultaria o composer.
+    suggested_action: "Não-bloqueante. Documentar canSend no contrato da story se mantido."
+    suggested_owner: dev
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  command: "git grep -nE '<pattern>' HEAD -- conversation-thread.tsx conversation-thread-merge.ts lead-details-panel.tsx page.tsx"
+  note: "Zero ocorrências (exit 1)."
+
+untouched_verification:
+  - file: "packages/web/src/components/leads/lead-detail-drawer.tsx"
+    status: UNTOUCHED
+    note: "Ausente dos diffs de 92166b0 e b484d31. Opção B respeitada."
+  - file: "packages/web/src/components/pipeline/kanban-board.tsx"
+    status: UNTOUCHED
+    note: "Ausente dos diffs. Superfície admin/supervisor (Risco R4) sem regressão introduzida."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "419/419 passed (32 files)."
+  - check: "ESLint (4 arquivos Fase 2)"
+    command: "pnpm --filter @trifold/web exec eslint <4 files>"
+    result: "0 erros, 0 warnings (exit 0)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros nos arquivos da story. 3 erros ambientais pré-existentes em email-templates/visual-editor.tsx (react-email-editor ausente)."
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos 4 arquivos tocados"
+    result: "CLEAN (zero)."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Sob a decisão de escopo Opção B (legítima, registrada antes de T2), os ACs entregues
+    (AC1/2/4/5/6a/7) estão atendidos por código e os ACs adiados (AC3/6b/T4) estão
+    corretamente registrados como DEBT-63-5-drawer — não omitidos. mergeMessages deduplica
+    corretamente por id real (sem duplicar/perder), com cobertura de boundaries. CON-1
+    limpo; drawer e kanban comprovadamente intactos via diff; suíte 419/419; lint e
+    type-check limpos. As issues são LOW/MEDIUM e documentadas (BUBBLE-001 carryover;
+    DEBT-63-5-drawer rastreado). Recomendação: LIBERAR para @devops *push.
+  next_steps:
+    - "@devops *push (branch feat/epic-51-handoff-chat-corretor) — commit 92166b0."
+    - "Rastrear DEBT-63-5-drawer (@sm cria 63-5b ou absorve na 63-7) — smoke obrigatório nos 3 contextos ao fechar."
+    - "Smoke pós-deploy: /broker/leads/[id] renderiza chat via ConversationThread; enviar msg → otimista aparece e confirma pós-refresh sem duplicar."
