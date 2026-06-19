@@ -183,10 +183,6 @@ Os RPCs existentes aceitam apenas `p_days INTEGER`:
 - [ ] **T6** — Atualizar `AGENT_SYSTEM_PROMPT`
   - [ ] T6.1 — Atualizar seção `## Análise por período` com exemplos de intervalos absolutos
 
-- [ ] **T7** — Typecheck e lint
-  - [ ] T7.1 — `tsc --noEmit` — zero erros novos
-  - [ ] T7.2 — `eslint` — zero warnings novos nos arquivos modificados
-
 - [ ] **T7** — UI: Seletor de período em `agent-chat-panel.tsx`
   - [ ] T7.1 — Adicionar state `dateWindow: DateWindow | null` ao componente
   - [ ] T7.2 — Renderizar barra de chips acima do `<textarea>` com atalhos: Hoje, 7 dias, 15 dias, 30 dias, Mês passado, Personalizado...
@@ -221,66 +217,749 @@ Os RPCs existentes aceitam apenas `p_days INTEGER`:
 ### Tipo `DateWindow`
 
 ```typescript
-// context-builder.ts
+// context-builder.ts — adicionar logo abaixo dos imports existentes
 export type DateWindow = {
-  startDate: string  // ISO: "YYYY-MM-DD"
-  endDate: string    // ISO: "YYYY-MM-DD"
-  label?: string     // ex: "01/06 a 15/06" | "últimos 7 dias" (para cabeçalhos)
+  startDate: string  // "YYYY-MM-DD"
+  endDate: string    // "YYYY-MM-DD"
+  label?: string     // ex: "01/06 a 15/06" | "Últimos 7 dias" — usado em cabeçalhos
 }
 ```
 
-### Padrões `DATE_RANGE_PATTERNS` (absolutos — prioridade sobre relativos)
+---
 
-| Padrão | Exemplo | Resolve |
-|--------|---------|---------|
-| `de D a D de Mês` | "de 1 a 15 de junho" | startDate=primeiro, endDate=último |
-| `entre D e D de Mês` | "entre 1 e 15 de junho" | idem |
-| `de DD/MM a DD/MM` | "de 01/06 a 15/06" | assumir ano corrente |
-| `DD/MM a DD/MM` | "01/06 a 15/06" | idem |
-| `de DD/MM/YYYY a DD/MM/YYYY` | "de 01/06/2026 a 15/06/2026" | ano explícito |
-| Nome do mês isolado | "junho" / "maio" | primeiro e último dia do mês |
+### T2 — `extractDateWindow` em `context-builder.ts`
 
-**Meses em PT-BR reconhecidos:** janeiro(1), fevereiro(2), março(3), abril(4), maio(5), junho(6), julho(7), agosto(8), setembro(9), outubro(10), novembro(11), dezembro(12). Abreviações de 3 letras também (jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez).
+Adicionar **logo após** o bloco de `PERIOD_MAP` / `extractPeriodDays` (em torno da linha 47).
 
-**Ano**: quando não especificado, assumir ano corrente. Se a data resultante for futura, usar ano anterior.
+#### Helpers internos (não exportar)
 
-### Overloads SQL (migration 104)
+```typescript
+function _isoDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
 
-Estratégia: `CREATE OR REPLACE` com assinatura nova. PostgreSQL suporta sobrecarga de funções por assinatura — criar duas funções distintas:
+function _lastDay(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
 
-```sql
--- Assinatura relativa (existente — sem alteração)
-CREATE OR REPLACE FUNCTION public.pipeline_funnel_by_campaign(p_days INTEGER DEFAULT 30)
-...
+const MONTH_MAP: Record<string, number> = {
+  janeiro: 1, jan: 1,
+  fevereiro: 2, fev: 2,
+  marco: 3, março: 3, mar: 3,
+  abril: 4, abr: 4,
+  maio: 5, mai: 5,
+  junho: 6, jun: 6,
+  julho: 7, jul: 7,
+  agosto: 8, ago: 8,
+  setembro: 9, set: 9,
+  outubro: 10, out: 10,
+  novembro: 11, nov: 11,
+  dezembro: 12, dez: 12,
+}
 
--- Nova assinatura com intervalo absoluto
-CREATE OR REPLACE FUNCTION public.pipeline_funnel_by_campaign(
-  p_start_date DATE,
-  p_end_date DATE
-)
-...
--- Corpo idêntico substituindo:
---   leads.created_at >= NOW() - INTERVAL '1 day' * p_days
--- por:
---   leads.created_at::date >= p_start_date
---   AND leads.created_at::date <= p_end_date
+function _monthNum(raw: string): number | null {
+  const key = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return MONTH_MAP[key] ?? null
+}
 ```
 
-Idem para `creative_performance`.
+#### `DATE_RANGE_PATTERNS` — intervalos absolutos (avaliados em ordem, do mais específico ao mais geral)
+
+```typescript
+type AbsolutePattern = { pattern: RegExp; resolve: (m: RegExpMatchArray) => DateWindow | null }
+
+const DATE_RANGE_PATTERNS: AbsolutePattern[] = [
+  // "de 01/06/2026 a 15/06/2026" (com ano explícito)
+  {
+    pattern: /(?:de|entre)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:a[té]?|e)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
+    resolve: (m) => ({
+      startDate: _isoDate(+m[3]!, +m[2]!, +m[1]!),
+      endDate:   _isoDate(+m[6]!, +m[5]!, +m[4]!),
+    }),
+  },
+  // "de 1 a 15 de junho [de 2026]" / "entre 1 e 15 de junho"
+  {
+    pattern: /(?:de|entre)\s+(\d{1,2})\s+(?:a[té]?|e)\s+(\d{1,2})\s+de\s+([\wçã]+)(?:\s+de\s+(\d{4}))?/i,
+    resolve: (m) => {
+      const mn = _monthNum(m[3]!)
+      if (!mn) return null
+      const today = new Date()
+      let year = m[4] ? +m[4] : today.getFullYear()
+      const start = _isoDate(year, mn, +m[1]!)
+      if (start > today.toISOString().split("T")[0]!) year -= 1
+      return {
+        startDate: _isoDate(year, mn, +m[1]!),
+        endDate:   _isoDate(year, mn, +m[2]!),
+      }
+    },
+  },
+  // "de 01/06 a 15/06" / "01/06 a 15/06" / "01/06 até 15/06"
+  {
+    pattern: /(?:de\s+)?(\d{1,2})\/(\d{1,2})\s+(?:a[té]?|e)\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/i,
+    resolve: (m) => {
+      const today = new Date()
+      const year = m[5] ? +m[5] : today.getFullYear()
+      return {
+        startDate: _isoDate(year, +m[2]!, +m[1]!),
+        endDate:   _isoDate(year, +m[4]!, +m[3]!),
+      }
+    },
+  },
+  // "a partir de 01/06" / "desde 01/06" / "de 01/06 até hoje"
+  {
+    pattern: /(?:a\s+partir\s+de|desde|de)\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s*(?:at[eé]\s*hoje)?/i,
+    resolve: (m) => {
+      const today = new Date()
+      const todayStr = today.toISOString().split("T")[0]!
+      const year = m[3] ? +m[3] : today.getFullYear()
+      return {
+        startDate: _isoDate(year, +m[2]!, +m[1]!),
+        endDate:   todayStr,
+        label: `a partir de ${String(m[1]).padStart(2,"0")}/${String(m[2]).padStart(2,"0")}`,
+      }
+    },
+  },
+  // Nome de mês isolado: "junho" / "maio" (não precedido por "últim")
+  {
+    pattern: /(?<!últim[ao]s?\s*)\b(janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i,
+    resolve: (m) => {
+      const mn = _monthNum(m[1]!)
+      if (!mn) return null
+      const today = new Date()
+      let year = today.getFullYear()
+      if (mn > today.getMonth() + 1) year -= 1
+      return {
+        startDate: _isoDate(year, mn, 1),
+        endDate:   _isoDate(year, mn, _lastDay(year, mn)),
+        label:     m[1]!.charAt(0).toUpperCase() + m[1]!.slice(1).toLowerCase(),
+      }
+    },
+  },
+]
+```
+
+#### `NEW_RELATIVE_PATTERNS` — novos padrões relativos (avaliados antes do `PERIOD_MAP` existente)
+
+```typescript
+type RelativePattern = { pattern: RegExp; resolve: () => DateWindow }
+
+const NEW_RELATIVE_PATTERNS: RelativePattern[] = [
+  // "mês passado"
+  {
+    pattern: /m[eê]s\s+passado/i,
+    resolve: () => {
+      const d = new Date()
+      const m = d.getMonth() === 0 ? 12 : d.getMonth()
+      const y = d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear()
+      return { startDate: _isoDate(y, m, 1), endDate: _isoDate(y, m, _lastDay(y, m)), label: "Mês passado" }
+    },
+  },
+  // "semana passada"
+  {
+    pattern: /semana\s+passada/i,
+    resolve: () => {
+      const today = new Date()
+      const dow = today.getDay() // 0=Dom
+      const toMon = dow === 0 ? 6 : dow - 1
+      const mon = new Date(today); mon.setDate(today.getDate() - toMon - 7)
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+      return {
+        startDate: mon.toISOString().split("T")[0]!,
+        endDate:   sun.toISOString().split("T")[0]!,
+        label: "Semana passada",
+      }
+    },
+  },
+  // "ontem"
+  {
+    pattern: /\bontem\b/i,
+    resolve: () => {
+      const d = new Date(); d.setDate(d.getDate() - 1)
+      const iso = d.toISOString().split("T")[0]!
+      return { startDate: iso, endDate: iso, label: "Ontem" }
+    },
+  },
+]
+```
+
+#### `extractDateWindow` — função principal
+
+```typescript
+export function extractDateWindow(msg: string): DateWindow {
+  const today = new Date()
+  const todayStr = today.toISOString().split("T")[0]!
+
+  // 1. Tentar padrões absolutos (prioridade máxima)
+  for (const { pattern, resolve } of DATE_RANGE_PATTERNS) {
+    const m = msg.match(pattern)
+    if (m) {
+      const w = resolve(m)
+      if (w) return w
+    }
+  }
+
+  // 2. Tentar novos padrões relativos (mês passado, semana passada, ontem)
+  for (const { pattern, resolve } of NEW_RELATIVE_PATTERNS) {
+    if (pattern.test(msg)) return resolve()
+  }
+
+  // 3. Fallback: PERIOD_MAP existente (dias relativos da 52-7)
+  const days = extractPeriodDays(msg)
+  const start = new Date(today)
+  start.setDate(today.getDate() - days)
+  return {
+    startDate: start.toISOString().split("T")[0]!,
+    endDate:   todayStr,
+    label:     days === 1 ? "Hoje" : `Últimos ${days} dias`,
+  }
+}
+```
+
+---
+
+### T3 — Migration `104_agent_daterange_rpcs.sql`
+
+O arquivo deve ter apenas os **novos overloads** (assinaturas com DATE). Não re-criar as assinaturas INTEGER existentes.
+
+```sql
+-- migration: 104_agent_daterange_rpcs.sql
+-- Adiciona overloads DATE,DATE para pipeline_funnel_by_campaign e creative_performance
+-- As assinaturas INTEGER DEFAULT 30 existentes nas migrations 096 e 101 permanecem intactas.
+
+-- ── pipeline_funnel_by_campaign(DATE, DATE) ────────────────────────────────
+CREATE OR REPLACE FUNCTION public.pipeline_funnel_by_campaign(
+  p_start_date DATE,
+  p_end_date   DATE
+)
+RETURNS TABLE (
+  org_id            UUID,
+  utm_source        VARCHAR(255),
+  utm_campaign      VARCHAR(255),
+  utm_medium        VARCHAR(255),
+  total_leads       BIGINT,
+  leads_qualificado BIGINT,
+  leads_agendado    BIGINT,
+  leads_visitou     BIGINT,
+  leads_proposta    BIGINT,
+  leads_fechado     BIGINT,
+  total_spend       NUMERIC,
+  cpl_real_visitou  NUMERIC,
+  cpl_real_fechado  NUMERIC
+)
+LANGUAGE sql
+SECURITY INVOKER
+STABLE
+SET search_path = public
+AS $$
+WITH lead_stage AS (
+  SELECT
+    l.org_id, l.utm_source, l.utm_campaign, l.utm_medium,
+    l.id AS lead_id,
+    ks.position AS stage_position,
+    ks.type     AS stage_type
+  FROM public.leads l
+  LEFT JOIN public.kanban_stages ks ON ks.id = l.stage_id
+  WHERE l.is_active = true
+),
+type_thresholds AS (
+  SELECT org_id, type, MIN(position) AS min_position
+  FROM public.kanban_stages
+  GROUP BY org_id, type
+),
+funnel AS (
+  SELECT
+    ls.org_id, ls.utm_source, ls.utm_campaign, ls.utm_medium,
+    COUNT(*)::BIGINT AS total_leads,
+    COUNT(*) FILTER (WHERE ls.stage_position >= tq.min_position)::BIGINT AS leads_qualificado,
+    COUNT(*) FILTER (WHERE ls.stage_position >= ta.min_position)::BIGINT AS leads_agendado,
+    COUNT(*) FILTER (WHERE ls.stage_position >= tv.min_position)::BIGINT AS leads_visitou,
+    COUNT(*) FILTER (WHERE ls.stage_position >= tp.min_position)::BIGINT AS leads_proposta,
+    COUNT(*) FILTER (WHERE ls.stage_type = 'fechado')::BIGINT            AS leads_fechado
+  FROM lead_stage ls
+  LEFT JOIN type_thresholds tq ON tq.org_id = ls.org_id AND tq.type = 'qualificado'
+  LEFT JOIN type_thresholds ta ON ta.org_id = ls.org_id AND ta.type = 'agendado'
+  LEFT JOIN type_thresholds tv ON tv.org_id = ls.org_id AND tv.type = 'visitou'
+  LEFT JOIN type_thresholds tp ON tp.org_id = ls.org_id AND tp.type = 'proposta'
+  GROUP BY ls.org_id, ls.utm_source, ls.utm_campaign, ls.utm_medium
+),
+campaign_spend AS (
+  SELECT
+    mc.org_id,
+    lower(trim(mc.name)) AS campaign_name_norm,
+    SUM(mid.spend)::NUMERIC AS total_spend
+  FROM public.meta_campaigns mc
+  JOIN public.meta_insights_daily mid
+    ON  mid.org_id    = mc.org_id
+    AND mid.level     = 'campaign'
+    AND mid.entity_id = mc.meta_campaign_id
+    AND mid.date      >= p_start_date    -- ← intervalo absoluto
+    AND mid.date      <= p_end_date      -- ← intervalo absoluto
+  WHERE mc.name IS NOT NULL
+  GROUP BY mc.org_id, lower(trim(mc.name))
+)
+SELECT
+  f.org_id, f.utm_source, f.utm_campaign, f.utm_medium,
+  f.total_leads, f.leads_qualificado, f.leads_agendado,
+  f.leads_visitou, f.leads_proposta, f.leads_fechado,
+  cs.total_spend,
+  (cs.total_spend / NULLIF(f.leads_visitou, 0))::NUMERIC AS cpl_real_visitou,
+  (cs.total_spend / NULLIF(f.leads_fechado, 0))::NUMERIC AS cpl_real_fechado
+FROM funnel f
+LEFT JOIN campaign_spend cs
+  ON  cs.org_id = f.org_id
+  AND cs.campaign_name_norm = lower(trim(f.utm_campaign))
+WHERE public.user_role() = 'admin'
+  AND f.org_id = public.user_org_id();
+$$;
+
+REVOKE ALL ON FUNCTION public.pipeline_funnel_by_campaign(DATE, DATE) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.pipeline_funnel_by_campaign(DATE, DATE) TO authenticated;
+
+COMMENT ON FUNCTION public.pipeline_funnel_by_campaign(DATE, DATE) IS
+  'Epic52 Story 52-8: overload com intervalo absoluto (p_start_date/p_end_date). Idêntico à assinatura INTEGER mas campaign_spend filtra por date BETWEEN p_start_date AND p_end_date.';
+
+-- ── creative_performance(DATE, DATE) ──────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.creative_performance(
+  p_start_date DATE,
+  p_end_date   DATE
+)
+RETURNS TABLE (
+  meta_ad_id              TEXT,
+  ad_name                 TEXT,
+  adset_id                UUID,
+  status                  TEXT,
+  creative                JSONB,
+  total_spend             NUMERIC,
+  total_impressions       BIGINT,
+  total_clicks            BIGINT,
+  avg_ctr                 NUMERIC,
+  avg_cpc                 NUMERIC,
+  avg_cpm                 NUMERIC,
+  total_leads             BIGINT,
+  avg_cost_per_lead       NUMERIC,
+  quality_ranking         TEXT,
+  engagement_rate_ranking TEXT,
+  conversion_rate_ranking TEXT,
+  crm_leads_total         BIGINT,
+  crm_leads_agendado      BIGINT,
+  crm_leads_visitou       BIGINT,
+  crm_leads_proposta      BIGINT,
+  crm_leads_fechado       BIGINT
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+AS $$
+  SELECT
+    a.meta_ad_id, a.name AS ad_name, a.adset_id, a.status, a.creative,
+    SUM(i.spend)           AS total_spend,
+    SUM(i.impressions)     AS total_impressions,
+    SUM(i.clicks)          AS total_clicks,
+    AVG(i.ctr)             AS avg_ctr,
+    AVG(i.cpc)             AS avg_cpc,
+    AVG(i.cpm)             AS avg_cpm,
+    SUM(i.leads)           AS total_leads,
+    AVG(i.cost_per_lead)   AS avg_cost_per_lead,
+    (SELECT i2.quality_ranking          FROM public.meta_insights_daily i2
+     WHERE i2.entity_id = a.meta_ad_id AND i2.org_id = a.org_id AND i2.level = 'ad'
+       AND i2.date >= p_start_date AND i2.date <= p_end_date
+     ORDER BY i2.date DESC LIMIT 1)     AS quality_ranking,
+    (SELECT i2.engagement_rate_ranking  FROM public.meta_insights_daily i2
+     WHERE i2.entity_id = a.meta_ad_id AND i2.org_id = a.org_id AND i2.level = 'ad'
+       AND i2.date >= p_start_date AND i2.date <= p_end_date
+     ORDER BY i2.date DESC LIMIT 1)     AS engagement_rate_ranking,
+    (SELECT i2.conversion_rate_ranking  FROM public.meta_insights_daily i2
+     WHERE i2.entity_id = a.meta_ad_id AND i2.org_id = a.org_id AND i2.level = 'ad'
+       AND i2.date >= p_start_date AND i2.date <= p_end_date
+     ORDER BY i2.date DESC LIMIT 1)     AS conversion_rate_ranking,
+    COUNT(DISTINCT l.id)::BIGINT                                          AS crm_leads_total,
+    COUNT(DISTINCT CASE WHEN ks.type = 'agendado' THEN l.id END)::BIGINT  AS crm_leads_agendado,
+    COUNT(DISTINCT CASE WHEN ks.type = 'visitou'  THEN l.id END)::BIGINT  AS crm_leads_visitou,
+    COUNT(DISTINCT CASE WHEN ks.type = 'proposta' THEN l.id END)::BIGINT  AS crm_leads_proposta,
+    COUNT(DISTINCT CASE WHEN ks.type = 'fechado'  THEN l.id END)::BIGINT  AS crm_leads_fechado
+  FROM   public.meta_ads a
+  JOIN   public.meta_insights_daily i
+         ON  i.entity_id = a.meta_ad_id
+         AND i.org_id    = a.org_id
+         AND i.level     = 'ad'
+         AND i.date      >= p_start_date   -- ← intervalo absoluto
+         AND i.date      <= p_end_date     -- ← intervalo absoluto
+  LEFT JOIN public.leads l
+         ON  (l.metadata->>'ad_id') = a.meta_ad_id AND l.org_id = a.org_id
+  LEFT JOIN public.kanban_stages ks ON ks.id = l.stage_id
+  WHERE  a.org_id = public.user_org_id()
+    AND  public.is_admin_or_supervisor()
+  GROUP BY a.meta_ad_id, a.name, a.adset_id, a.status, a.creative, a.org_id
+  ORDER BY crm_leads_visitou DESC NULLS LAST, total_leads DESC NULLS LAST
+$$;
+
+REVOKE ALL ON FUNCTION public.creative_performance(DATE, DATE) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.creative_performance(DATE, DATE) TO authenticated;
+
+COMMENT ON FUNCTION public.creative_performance(DATE, DATE) IS
+  'Epic52 Story 52-8: overload com intervalo absoluto (p_start_date/p_end_date). Filtra meta_insights_daily.date BETWEEN p_start_date AND p_end_date.';
+```
+
+---
+
+### T4 — Atualizar builders em `context-builder.ts`
+
+#### `buildGlobalContext` — substituição de `pDays?: number` por `window?: DateWindow`
+
+**Assinatura nova (linha 61–64 atualmente):**
+```typescript
+export async function buildGlobalContext(
+  supabase: SupabaseClient,
+  orgId: string,
+  window?: DateWindow,
+): Promise<string> {
+```
+
+**Início do corpo — substituir as linhas 66–73 (variáveis `days`, `key`, `today`, `dateNdAgo`, `date30dAgo`) por:**
+```typescript
+  const today = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]!
+  })()
+  const endDate = window?.endDate ?? today
+  const key = `global:${orgId}:${startDate}:${endDate}`
+  const cached = getCached(key)
+  if (cached) return cached
+  // date30dAgo ainda necessário para meta_alerts (alerta dos últimos 30d fixo):
+  const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+```
+
+**Query `meta_insights_daily` (linha 85–86 atualmente):**
+```typescript
+      .gte("date", startDate)   // era: .gte("date", dateNdAgo)
+      .lte("date", endDate)     // linha nova
+```
+
+**Header do portfólio (linha 142 atualmente):**
+```typescript
+  // Era: lines.push(`=== PORTFÓLIO (últimos ${days} dias) ===`)
+  const periodLabel = window?.label
+    ?? (startDate === (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+        && endDate === today
+        ? "últimos 30 dias"
+        : `${startDate.split("-").reverse().slice(0,2).join("/")} a ${endDate.split("-").reverse().slice(0,2).join("/")}`)
+  lines.push(`=== PORTFÓLIO (${periodLabel}) ===`)
+```
+
+> **Nota:** O `date30dAgo` permanece para `meta_alerts` (alerta fixo de 30 dias independente do filtro do usuário). A variável `dateNdAgo` pode ser removida — substituída por `startDate`.
+
+#### `buildContext` — substituir `pDays?` por `window?` (linha 362–373 atualmente)
+
+```typescript
+export function buildContext(
+  supabase: SupabaseClient,
+  orgId: string,
+  contextType: "global" | "campaign",
+  contextId?: string | null,
+  window?: DateWindow,
+): Promise<string> {
+  if (contextType === "campaign" && contextId) {
+    return buildCampaignContext(supabase, orgId, contextId)
+  }
+  return buildGlobalContext(supabase, orgId, window)
+}
+```
+
+#### `fetchPipelineAggregates` — substituir `pDays?` por `window?` (linha 505)
+
+```typescript
+export async function fetchPipelineAggregates(
+  supabase: SupabaseClient,
+  orgId: string,
+  window?: DateWindow,
+): Promise<string> {
+  const today = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const endDate = window?.endDate ?? today
+  const key = `pipeline_agg:${orgId}:${startDate}:${endDate}`
+  // cacheable somente para o default de 30 dias
+  const cacheable = startDate === (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })() && endDate === today
+  if (cacheable) {
+    const cached = getCached(key)
+    if (cached !== null) return cached
+  }
+  const [funnelRes, stageRes] = await Promise.all([
+    supabase.rpc("pipeline_funnel_by_campaign", { p_start_date: startDate, p_end_date: endDate }),
+    // ... stageRes igual ao atual
+  ])
+  // ... resto do corpo igual, apenas trocar `days` por label:
+  // Era: lines.push(`--- Funil por Campanha/UTM (últimos ${days} dias) ---`)
+  const label = window?.label ?? `${startDate} a ${endDate}`
+  lines.push(`--- Funil por Campanha/UTM (${label}) ---`)
+```
+
+#### `fetchCreativePerformance` — substituir `pDays?` por `window?` (linha 799)
+
+```typescript
+export async function fetchCreativePerformance(
+  supabase: SupabaseClient,
+  orgId: string,
+  window?: DateWindow,
+): Promise<string> {
+  const today = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const endDate = window?.endDate ?? today
+  const cacheable = startDate === (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })() && endDate === today
+  const key = `creative_perf:${orgId}:${startDate}:${endDate}`
+  if (cacheable) {
+    const cached = getCached(key)
+    if (cached !== null) return cached
+  }
+  const { data, error } = await supabase.rpc("creative_performance", { p_start_date: startDate, p_end_date: endDate })
+  // ...
+  const label = window?.label ?? `${startDate} a ${endDate}`
+  lines.push(`=== CRIATIVOS (${label}) ===`)
+```
+
+---
+
+### T5/T8 — `chat/route.ts`
+
+#### Imports a atualizar (linha 13 — trocar `extractPeriodDays` por `extractDateWindow`)
+
+```typescript
+import {
+  buildContext,
+  fetchPipelineAggregates,
+  fetchLeadDrill,
+  fetchConversationContext,
+  fetchCreativePerformance,
+  extractDateWindow,
+  type DateWindow,
+} from "@/lib/agent/context-builder"
+```
+
+#### Tipo do body (linha 89–94 — adicionar `date_window`)
+
+```typescript
+  let body: {
+    session_id?: string
+    message: string
+    context_type?: "global" | "campaign"
+    context_id?: string
+    date_window?: { startDate: string; endDate: string }
+  }
+```
+
+#### Lógica de extração (substituir linhas 162–163)
+
+```typescript
+  const { session_id, message, context_type = "global", context_id, date_window } = body
+
+  // ... (código de sessão existente permanece igual) ...
+
+  let dateWindow: DateWindow
+  let dateWindowSource: "ui" | "nl" = "nl"
+
+  if (date_window) {
+    if (!date_window.startDate || !date_window.endDate || date_window.startDate > date_window.endDate) {
+      return NextResponse.json({ error: "INVALID_DATE_RANGE" }, { status: 400 })
+    }
+    const diffMs = new Date(date_window.endDate).getTime() - new Date(date_window.startDate).getTime()
+    const diffDays = Math.ceil(diffMs / 86400000)
+    if (diffDays > 90) {
+      const cappedEnd = new Date(date_window.startDate)
+      cappedEnd.setDate(cappedEnd.getDate() + 90)
+      dateWindow = { startDate: date_window.startDate, endDate: cappedEnd.toISOString().split("T")[0]! }
+    } else {
+      dateWindow = { startDate: date_window.startDate, endDate: date_window.endDate }
+    }
+    dateWindowSource = "ui"
+  } else {
+    dateWindow = extractDateWindow(message)
+  }
+  console.log("[52-8] date window:", dateWindow, "source:", dateWindowSource)
+```
+
+#### Substituir `periodDays` nas calls (linhas 166, 177, 207)
+
+```typescript
+  // Era: buildContext(supabase, appUser.org_id, context_type, context_id, periodDays)
+  const mediaContext = await buildContext(supabase, appUser.org_id, context_type, context_id, dateWindow)
+
+  // Era: fetchPipelineAggregates(supabase, appUser.org_id, periodDays)
+  pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id, dateWindow))
+
+  // Era: fetchCreativePerformance(supabase, appUser.org_id, periodDays)
+  const creative = await fetchCreativePerformance(supabase, appUser.org_id, dateWindow)
+```
+
+---
+
+### T7 — UI `agent-chat-panel.tsx`
+
+#### Novos states (adicionar após linha 256, junto dos outros `useState`)
+
+```tsx
+  const [dateWindow, setDateWindow]       = useState<DateWindow | null>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [customStart, setCustomStart]     = useState("")
+  const [customEnd, setCustomEnd]         = useState("")
+```
+
+#### Chips config e helper (fora do componente, logo acima do `export default`)
+
+```tsx
+import { type DateWindow } from "@/lib/agent/context-builder"
+
+const CHIPS = [
+  { label: "Hoje",        days: 0 },
+  { label: "7 dias",      days: 7 },
+  { label: "15 dias",     days: 15 },
+  { label: "30 dias",     days: 30 },
+  { label: "Mês passado", monthPast: true as const },
+] as const
+
+function _windowForChip(chip: typeof CHIPS[number]): DateWindow {
+  const today = new Date()
+  const todayStr = today.toISOString().split("T")[0]!
+  if ("monthPast" in chip) {
+    const m = today.getMonth() === 0 ? 12 : today.getMonth()
+    const y = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear()
+    const last = new Date(y, m, 0).getDate()
+    const mm = String(m).padStart(2, "0")
+    return { startDate: `${y}-${mm}-01`, endDate: `${y}-${mm}-${String(last).padStart(2,"0")}`, label: "Mês passado" }
+  }
+  if (chip.days === 0) return { startDate: todayStr, endDate: todayStr, label: "Hoje" }
+  const start = new Date(today); start.setDate(today.getDate() - chip.days)
+  return { startDate: start.toISOString().split("T")[0]!, endDate: todayStr, label: `Últimos ${chip.days} dias` }
+}
+```
+
+#### JSX — barra de chips + badge + picker personalizado
+
+Inserir **acima** do `<textarea>` (antes da linha 755), dentro do container do input:
+
+```tsx
+{/* Barra de período */}
+<div className="flex flex-wrap items-center gap-1 px-3 pt-2">
+  {CHIPS.map((chip) => (
+    <button
+      key={chip.label}
+      type="button"
+      onClick={() => { setDateWindow(_windowForChip(chip)); setShowDatePicker(false) }}
+      className="text-xs px-2 py-0.5 rounded-full border border-border hover:bg-muted transition-colors"
+    >
+      {chip.label}
+    </button>
+  ))}
+  <button
+    type="button"
+    onClick={() => setShowDatePicker((v) => !v)}
+    className="text-xs px-2 py-0.5 rounded-full border border-border hover:bg-muted transition-colors"
+  >
+    Personalizado...
+  </button>
+</div>
+
+{/* Badge ativo */}
+{dateWindow && !showDatePicker && (
+  <div className="flex items-center gap-1 px-3 py-1">
+    <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+      📅 {dateWindow.label ?? `${dateWindow.startDate} a ${dateWindow.endDate}`}
+    </span>
+    <button
+      type="button"
+      onClick={() => setDateWindow(null)}
+      className="text-xs text-muted-foreground hover:text-foreground leading-none"
+      aria-label="Remover filtro de data"
+    >
+      ×
+    </button>
+  </div>
+)}
+
+{/* Picker personalizado */}
+{showDatePicker && (
+  <div className="flex flex-wrap items-center gap-2 px-3 py-1">
+    <input
+      type="date"
+      max={new Date().toISOString().split("T")[0]}
+      value={customStart}
+      onChange={(e) => setCustomStart(e.target.value)}
+      className="text-xs border border-border rounded px-1 py-0.5 bg-background"
+    />
+    <span className="text-xs text-muted-foreground">até</span>
+    <input
+      type="date"
+      max={new Date().toISOString().split("T")[0]}
+      value={customEnd}
+      onChange={(e) => setCustomEnd(e.target.value)}
+      className="text-xs border border-border rounded px-1 py-0.5 bg-background"
+    />
+    <button
+      type="button"
+      onClick={() => {
+        if (!customStart || !customEnd || customStart > customEnd) return
+        const fmt = (d: string) => d.split("-").reverse().slice(0, 2).join("/")
+        setDateWindow({ startDate: customStart, endDate: customEnd, label: `${fmt(customStart)} a ${fmt(customEnd)}` })
+        setShowDatePicker(false)
+      }}
+      className="text-xs px-2 py-0.5 bg-primary text-primary-foreground rounded"
+    >
+      Aplicar
+    </button>
+    <button type="button" onClick={() => setShowDatePicker(false)} className="text-xs text-muted-foreground">✕</button>
+  </div>
+)}
+```
+
+#### Atualizar corpo do `fetch` em `sendMessage` (linhas 372–377)
+
+```tsx
+        body: JSON.stringify({
+          session_id: activeSessionId,
+          message: text,
+          context_type: contextType,
+          context_id: contextId,
+          ...(dateWindow && { date_window: { startDate: dateWindow.startDate, endDate: dateWindow.endDate } }),
+        }),
+```
+
+#### Limpar `dateWindow` ao iniciar nova sessão
+
+```tsx
+// Adicionar useEffect logo após o useEffect de scroll (linha ~265)
+useEffect(() => {
+  if (!activeSessionId) {
+    setDateWindow(null)
+    setShowDatePicker(false)
+  }
+}, [activeSessionId])
+```
+
+---
 
 ### Cache key strategy
 
 | Função | Chave |
 |--------|-------|
 | `buildGlobalContext` | `global:{orgId}:{startDate}:{endDate}` |
+| `fetchPipelineAggregates` | `pipeline_agg:{orgId}:{startDate}:{endDate}` |
 | `fetchCreativePerformance` | `creative_perf:{orgId}:{startDate}:{endDate}` |
-| `fetchPipelineAggregates` | `pipeline:{orgId}:{startDate}:{endDate}` |
 
-`cacheable` = `endDate === hoje && startDate === hoje-30` (mesma regra de antes para o default de 30 dias).
+`cacheable` = `endDate === hoje && startDate === hoje-30` (somente default 30 dias é cacheado).
 
 ### Compatibilidade com `extractPeriodDays`
 
-`extractPeriodDays` permanece exportada e inalterada — é referenciada no `AGENT_SYSTEM_PROMPT` e pode ser usada por outras features. `extractDateWindow` é a nova função principal para `chat/route.ts`.
+`extractPeriodDays` permanece **exportada e inalterada**. `extractDateWindow` a reutiliza internamente como fallback (passo 3). `chat/route.ts` passa a importar `extractDateWindow` no lugar de `extractPeriodDays`.
+
+### Prioridade de interpretação no `extractDateWindow`
+
+1. **Padrões absolutos** (`DATE_RANGE_PATTERNS`) — "de 1 a 15 de junho", "junho", "01/06 a 15/06"
+2. **Novos relativos** (`NEW_RELATIVE_PATTERNS`) — "mês passado", "semana passada", "ontem"
+3. **Relativos legados** (`PERIOD_MAP` via `extractPeriodDays`) — "últimos 7 dias", "quinzena", etc.
+4. **Default** — 30 dias
+
+### Nota sobre `AGENT_SYSTEM_PROMPT` (T6)
+
+Localizar a seção `## Análise por período` em `system-prompt.ts` e adicionar exemplos:
+- "de 1 a 15 de junho", "entre 01/06 e 30/06", "junho" (mês inteiro), "mês passado", "semana passada", "ontem", "a partir de 01/06"
 
 ---
 
@@ -306,3 +985,4 @@ _(a preencher por @qa)_
 |------|-------|--------|
 | 2026-06-19 | @sm (River) | Story criada — Epic 52, Story 52-8 |
 | 2026-06-19 | @pm (Morgan) | Revisão de produto: complexidade M→L; adicionados padrões "mês passado/semana passada/ontem/de X até hoje"; UI date picker movido de OUT→IN; validação de range inválido (AC14); cap 90 dias com feedback (AC15); prioridade UI>NL (AC16); T7 (UI), T8 (API body), T10 (testes manuais) adicionados. |
+| 2026-06-19 | @sm (River) | Especificação técnica completa: Dev Notes com código exato para extractDateWindow (MONTH_MAP, DATE_RANGE_PATTERNS, NEW_RELATIVE_PATTERNS), SQL migration 104 (bodies completos dos overloads DATE,DATE), assinaturas novas dos builders, lógica chat/route.ts e JSX de agent-chat-panel.tsx. T7 duplicado removido. |
