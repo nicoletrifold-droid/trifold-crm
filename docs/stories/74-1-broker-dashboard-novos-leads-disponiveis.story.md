@@ -1,7 +1,7 @@
 # Story 74-1 — Lista de "Novos Leads Disponíveis" no Dashboard do Corretor
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 

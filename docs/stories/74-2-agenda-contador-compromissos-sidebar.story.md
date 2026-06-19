@@ -1,7 +1,7 @@
 # Story 74-2 — Contador de Compromissos no menu "Agenda" (sidebar)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 
