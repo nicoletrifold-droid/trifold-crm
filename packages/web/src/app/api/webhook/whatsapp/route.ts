@@ -7,6 +7,7 @@ import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
+import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
@@ -430,6 +431,20 @@ export async function POST(request: NextRequest) {
         whatsapp_message_id: messageId,
         ...mediaMetadata,
       },
+    })
+
+    // Story 63-12 — push ao corretor quando o lead responde. `after()` dedicado
+    // e independente do bloco da Nicole (abaixo): uma falha no push não afeta o
+    // pipeline e vice-versa. O gate (corretor já assumiu) + Q3 (sem corretor →
+    // nada) vivem dentro do helper. Fire-and-forget: não bloqueia o HTTP 200.
+    after(async () => {
+      await notifyBrokerOnReply({
+        supabase: getSupabaseAdmin(),
+        leadId: lead.id,
+        conversationId: conversation.id,
+        orgId,
+        messageExcerpt: text ?? "",
+      })
     })
   }
 
