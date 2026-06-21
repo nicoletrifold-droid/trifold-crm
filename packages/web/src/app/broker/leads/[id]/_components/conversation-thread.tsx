@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Check } from "lucide-react"
 import { BrokerMessageInput, type OptimisticMessage } from "./broker-message-input"
 import { getBubbleStyle } from "./bubble-styles"
@@ -8,8 +8,18 @@ import { WindowStatusBadge } from "./window-status-badge"
 import { AiStatusBanner } from "./ai-status-banner"
 import { ChatScrollArea } from "./chat-scroll-area"
 import { mergeMessages, type ThreadMessage } from "./conversation-thread-merge"
+import {
+  dedupeById,
+  hasStaleRealtime,
+  pruneRealtime,
+} from "./conversation-thread-realtime"
 import { getWindowStatus } from "@web/lib/broker/window-status"
 import { deriveBrokerActive } from "@web/lib/broker/broker-takeover-status"
+import { createClient } from "@web/lib/supabase/client"
+
+/** Story 63-11 — máximo de canais Realtime simultâneos (R3). Leads com mais de
+ *  3 conversas recebem realtime apenas das 3 mais recentes. */
+const MAX_REALTIME_CHANNELS = 3
 
 interface ConversationThreadProps {
   /** Mensagens iniciais vindas do servidor (Server Component). */
@@ -29,6 +39,12 @@ interface ConversationThreadProps {
    * Repassado ao `BrokerMessageInput` para o caminho de saída quando a janela fecha.
    */
   notifyOnReply?: boolean
+  /**
+   * Story 63-11 — ids das conversas do lead (já computados em `page.tsx`). Um
+   * canal Supabase Realtime é criado por id (cap em {@link MAX_REALTIME_CHANNELS})
+   * para receber INSERTs de `messages` sem reload.
+   */
+  conversationIds?: string[]
 }
 
 /**
@@ -53,26 +69,95 @@ export function ConversationThread({
   isWhatsApp,
   canSend,
   notifyOnReply = false,
+  conversationIds = [],
 }: ConversationThreadProps) {
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
 
-  // Janela de 24h derivada internamente (antes computada em page.tsx).
+  // Story 63-11 — mensagens recebidas via Supabase Realtime (lead respondeu /
+  // Nicole respondeu / corretor enviou em outra aba), antes de o `router.refresh()`
+  // incorporá-las ao prop `messages`.
+  const [realtimeMessages, setRealtimeMessages] = useState<ThreadMessage[]>([])
+  // `localLastMessageAt` reabre a janela de 24h sem reload quando o lead responde.
+  const [localLastMessageAt, setLocalLastMessageAt] = useState<Date | null>(
+    lastMessageAt
+  )
+
+  // Story 63-11 — quando o prop `messages` muda (após `router.refresh()`),
+  // remove de `realtimeMessages` o que já foi incorporado pelo servidor. Evita
+  // que a fonte-de-verdade diverja e que keys dupliquem entre as duas listas.
+  useEffect(() => {
+    setRealtimeMessages((prev) =>
+      hasStaleRealtime(prev, messages) ? pruneRealtime(prev, messages) : prev
+    )
+  }, [messages])
+
+  // Story 63-11 — um canal Realtime por conversa (postgres_changes não suporta
+  // IN). Cobre `role='user'` (lead) e `role='assistant'` (Nicole). Cap em 3
+  // canais (R3). Cleanup remove todos os canais no unmount (AC8).
+  useEffect(() => {
+    const ids = conversationIds.slice(0, MAX_REALTIME_CHANNELS)
+    if (ids.length === 0) return
+
+    const supabase = createClient()
+    const channels = ids.map((convId) =>
+      supabase
+        .channel(`broker-chat-${convId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `conversation_id=eq.${convId}`,
+          },
+          (payload) => {
+            const incoming = payload.new as ThreadMessage
+            setRealtimeMessages((prev) =>
+              prev.some((m) => m.id === incoming.id)
+                ? prev
+                : [...prev, incoming]
+            )
+            // AC6 — mensagem do lead reabre a janela de 24h sem reload.
+            if (incoming.role === "user") {
+              setLocalLastMessageAt(new Date(incoming.created_at))
+            }
+            // Auto-scroll (AC5) é tratado pelo `ChatScrollArea` quando o número
+            // de mensagens renderizadas muda — não precisa de ref aqui.
+          }
+        )
+        .subscribe()
+    )
+
+    return () => {
+      channels.forEach((ch) => supabase.removeChannel(ch))
+    }
+    // `conversationIds` é estável entre re-renders (vem do Server Component);
+    // a chave evita re-subscribe desnecessário em renders disparados por state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationIds.slice(0, MAX_REALTIME_CHANNELS).join(",")])
+
+  // Lista combinada servidor + realtime, deduplicada por id (servidor prevalece).
+  const serverPlusRealtime = dedupeById([...messages, ...realtimeMessages])
+
+  // Janela de 24h derivada de `localLastMessageAt` (reage ao inbound realtime).
   const windowClosed =
-    getWindowStatus(lastMessageAt, isWhatsApp).status === "closed"
+    getWindowStatus(localLastMessageAt, isWhatsApp).status === "closed"
 
   // Story 63-8 — estado do banner read-only: corretor assumiu (envio <24h) ou
   // handoff manual de admin (is_ai_active=false). Fonte de verdade do takeover
   // é a mesma do cron de follow-up (brokerSentRecently), não o is_ai_active.
-  const brokerActive = deriveBrokerActive(messages, isAiActive)
+  // Story 63-11 — usa a lista combinada: se um `role='broker'` chega de outra
+  // aba, o banner transiciona Estado A → Estado B sem reload (AC7).
+  const brokerActive = deriveBrokerActive(serverPlusRealtime, isAiActive)
 
-  const allMessages = mergeMessages(messages, optimistic)
+  const allMessages = mergeMessages(serverPlusRealtime, optimistic)
 
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-lg bg-white shadow-sm lg:h-[34rem] dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       <div className="shrink-0 border-b border-gray-100 dark:border-stone-800">
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4">
           <h2 className="text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
-          <WindowStatusBadge lastMessageAt={lastMessageAt} isWhatsApp={isWhatsApp} />
+          <WindowStatusBadge lastMessageAt={localLastMessageAt} isWhatsApp={isWhatsApp} />
         </div>
         <div className="px-5 pb-3">
           <AiStatusBanner brokerActive={brokerActive} />

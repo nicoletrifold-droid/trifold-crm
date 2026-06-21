@@ -160,6 +160,9 @@ export default async function BrokerLeadDetailPage({
         isAiActive={Boolean(activeConversation?.is_ai_active)}
         isWhatsApp={isWhatsApp}
         canSend={CAN_SEND_ROLES.includes(user.role)}
+        // Story 63-11 — ids das conversas para a subscription Realtime (um canal
+        // por conversa). Array já construído acima (L45).
+        conversationIds={conversationIds}
         // Story 63-10 — `leads.metadata` já vem no select `*`; estado inicial
         // do botão "me avisar quando o lead responder".
         notifyOnReply={Boolean(
