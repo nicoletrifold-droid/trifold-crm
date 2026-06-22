@@ -393,6 +393,51 @@ Dex (@dev) — Opus 4.8 (1M), modo YOLO autônomo. 2026-06-21.
 
 ---
 
+## QA Results
+
+### Review Date: 2026-06-21
+### Reviewed By: Quinn (@qa — Test Architect)
+### Commit: 8f50792
+
+**Veredito: PASS** (quality_score 92)
+
+#### Traceability AC → código (10/10 MET)
+- AC1 (Q1 gatilho): `notify-on-reply.ts` L73-96 — query lead (`id,name,assigned_broker_id` por id+org_id) + query messages (`role='broker'` `gte(now-24h)` limit 1) + `brokerSentRecently`. Flag `notify_broker_on_reply` NÃO consultada.
+- AC2 (Nicole sozinha → sem push): L96 `if (!brokerSentRecently(...)) return`.
+- AC3 (Q3 sem corretor): L81 `if (!lead?.assigned_broker_id) return` — sem fallback.
+- AC4 (sem debounce): nenhuma escrita em `leads.metadata`/`last_reply_push_at`; 1 push por chamada.
+- AC5 (deep-link): `buildReplyPushPayload` `url=${appUrl}/broker/leads/${leadId}`; `sw-source.js` L106-134 lê `data.url` (não modificado).
+- AC6 (fire-and-forget): `route.ts` L440-448 `after(async () => notifyBrokerOnReply(...))`.
+- AC7 (sem subscription → silencioso): garantido por `sendPushToUser` (trata vazio/410).
+- AC8 (encapsulado, CON-3/CON-1): webhook só chama; helper não toca `is_ai_active`; sem `tel:`/`wa.me`.
+- AC9 (sem regressão): `after()` do push separado do da Nicole (L454+); guard e INSERT intactos.
+- AC10 (type-check/lint): 0 erros nos arquivos da story.
+
+#### Gate Q1 — CORRETO
+`brokerSentRecently` consultado na conversa CERTA: o webhook passa `conversationId=conversation.id` (conversa do INSERT inbound) e o helper faz `.eq("conversation_id", conversationId).eq("role","broker").gte("created_at", now-24h).limit(1)`. `brokerSentRecently` (helper canônico de 63-8, mesma fonte-de-verdade do banner e do cron) reaplica a janela em memória — redundante-por-segurança. `assigned_broker_id` null → return ANTES da 2ª query (Q3). Shape `{role,created_at}` casa com `TakeoverMessage`. `after()` é dedicado, isolado do pipeline da Nicole, `getSupabaseAdmin()` correto para webhook server-side; `try/catch` interno garante best-effort (e o HTTP 200 já foi enviado de qualquer modo). Payload null-safe: `leadName ?? "Lead"`, `slice(0,100) || "Nova mensagem recebida."`.
+
+#### Constraints
+- **CON-1 INVIOLÁVEL**: CLEAN — 0 ocorrências de código (hits só em comentário JSDoc). Deep-link é interno via `data.url`.
+- **CON-3/CON-7**: CLEAN — helper só LÊ `leads`/`messages`; ZERO escrita de `is_ai_active` ou `leads.metadata`.
+- **CON-8**: CLEAN — `git show --stat 8f50792` confirma `sw-source.js` ausente do commit.
+
+#### Verificação independente
+- `npx vitest run` → **463/463 (36 arquivos)**; story = 9 testes (gates Q1/Q3, sem-debounce, best-effort, payload puro).
+- `type-check` → 0 nos arquivos da story (3 erros ambientais pré-existentes em `visual-editor.tsx`).
+- ESLint → 0 erros/warnings.
+
+#### Issues (todas LOW)
+- **PERF-001**: 2 queries extras por inbound no `after()` — aceitável (off critical path, indexado, limit 1).
+- **TEST-001**: 9 testes não cobrem isolamento por conversa errada (mock não varia `conversationId`) — o código usa o filtro correto.
+- **OBS-001**: smoke e2e (push real no dispositivo) requer infra — coberto pelo smoke pós-deploy.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.12-push-lead-respondeu.yml
+Consolidado: docs/qa/gates/epic-63-fase4.yml
+**Status: InReview — QA PASS (pronto para @devops *push; sem dependência de infra)**
+
+---
+
 ## Change Log
 
 | Data | Versão | Descrição | Autor |
@@ -400,3 +445,4 @@ Dex (@dev) — Opus 4.8 (1M), modo YOLO autônomo. 2026-06-21.
 | 2026-06-21 | 0.1 | Story drafted — Epic 63, Fase 4, push ao corretor quando lead responde + deep-link | @sm (River) |
 | 2026-06-21 | 1.0 | Validada — GO (9/10). Decisões Q1/Q2/Q3 RESOLVIDAS pelo @po e incorporadas como AC/regras: Q1 gatilho = corretor já assumiu (`brokerSentRecently`, flag 63-10 não é gate); Q2 sem debounce (removido `last_reply_push_at`); Q3 sem corretor → não notifica (sem fallback). ACs reescritos (AC1-AC10), helper/Tasks/Riscos/Testing/DoD ajustados; `conversationId` adicionado ao gate. Status Draft→Ready. | @po (Pax) |
 | 2026-06-21 | 1.1 | Implementada — `notify-on-reply.ts` (gate Q1 `brokerSentRecently`, Q3 sem fallback, Q2 sem debounce) + `after()` dedicado no webhook após INSERT inbound. Helper puro `buildReplyPushPayload` + 9 testes. Deep-link via `data.url` (SW intocado). Status InProgress→Ready for Review. | @dev (Dex) |
+| 2026-06-21 | 1.2 | QA Gate — **PASS** (Quinn). 10/10 ACs MET; gates Q1/Q2/Q3 corretos (conversa certa); `after()` isolado e não-bloqueante; CON-1/CON-3/CON-7/CON-8 limpos; 463/463 testes; lint/type-check limpos. Sem dependência de infra. Pronto para @devops *push. | @qa (Quinn) |

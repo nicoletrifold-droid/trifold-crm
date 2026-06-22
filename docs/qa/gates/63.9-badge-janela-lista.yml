@@ -1,0 +1,197 @@
+schema: 1
+storyId: "63.9"
+story: "63.9"
+title: "Badge de Janela de 24h na Lista de Leads"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 atendidos por código. Query da lista estendida com UM embed
+  `conversations(last_message_at)` (LEFT JOIN único do PostgREST — sem N+1);
+  a conversa mais recente é reduzida em JS pelo helper puro `selectLatestMessageAt`
+  (robusto a array/objeto/null/timestamp inválido). `LeadWindowBadge` reutiliza
+  `getWindowStatus` (63-4) e retorna null p/ Telegram (AC2); badge compacto
+  text-[11px] + dot colorido no card mobile (AC3). Toggle `aria-pressed` (≥44px)
+  ordena via `sortByWindowUrgency` — open/closing por menor remainingMs, closed
+  e sem-janela ao final (+Infinity), comparador evita NaN de Infinity-Infinity
+  (AC4). 12 testes cobrem os boundaries. CON-1 INVIOLÁVEL: git grep ZERO
+  ocorrências. CON-3 (is_ai_active) intocado. Filtros/contadores de page.tsx
+  preservados (embed só adiciona um campo ao select). Suíte completa 431/431
+  (33 arquivos); ESLint 0 nos arquivos da story; type-check 0 nos arquivos da
+  story. O erro ESLint em page.tsx L90 (Date.now impure) é PRÉ-EXISTENTE
+  (git blame: Marcos, commit 1615ae9b, 2026-06-03 — linha intocada pela 63-9).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T22:12:00Z"
+iteration: 1
+quality_score: 94
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (LeadWindowBadge usa getWindowStatus + WINDOW_BADGE verde/âmbar/cinza,
+      renderizado no card mobile), AC2 (isWhatsApp = !phone.startsWith('tg:') →
+      return null p/ Telegram), AC3 (text-[11px] + dot 1.5w, canto do card sem
+      poluir), AC4 (toggle sortByWindow + sortByWindowUrgency aplicado a mobile e
+      desktop via displayedLeads), AC5 (embed conversations(last_message_at) único
+      + selectLatestMessageAt em JS), AC6 (type-check/ESLint limpos nos arquivos).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Helpers puros isolados em leads-window.ts com JSDoc justificando a escolha
+      de reduzir em JS (em vez de order/limit aninhado frágil do PostgREST).
+      Imports absolutos @web/*. selectLatestMessageAt normaliza array/objeto e
+      ignora timestamps não-finitos. sortByWindowUrgency não muta o array (spread).
+  - check: "3. Test Architecture"
+    status: PASS
+    note: >
+      12 testes (leads-window.test.ts) com `now` injetado (determinístico):
+      selectLatestMessageAt — null/undefined, array vazio, único array, único
+      objeto, múltiplas→mais recente, ignora null/sem-ts (6); windowUrgencyKey —
+      closed→+Inf, sem-histórico→+Inf, open→remainingMs, Telegram→+Inf (4);
+      sortByWindowUrgency — ordenação por urgência + closed/telegram no final,
+      não-mutação (2). Boundaries de Infinity e seleção do máximo cobertos.
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      Embed só adiciona um campo ao SELECT existente; lógica de filtros/contadores
+      de page.tsx inalterada (filter roda sobre `leads` antes do map que adiciona
+      last_message_at). Desktop table recebe sort mas não o badge (Out of Scope,
+      consistente). Suíte 431/431.
+  - check: "5. Performance"
+    status: PASS
+    note: >
+      UM embed LEFT JOIN (uma round-trip PostgREST) — sem N+1. selectLatestMessageAt
+      é O(n) sobre conversas do lead, síncrono e leve. NFR-4 não se aplica (Fase 3
+      permite query nova; @po confirmou). getWindowStatus é comparação de datas.
+  - check: "6. Security (CON-1)"
+    status: PASS
+    note: >
+      git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD nos
+      arquivos tocados → ZERO (exit 1). CON-3: is_ai_active não tocado. Sem nova
+      superfície de dados sensíveis (last_message_at já é interno).
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Completion Notes honestas sobre a escolha de JS-reduce vs PostgREST order,
+      badge só mobile (escopo), filtros preservados. Comentários no embed e no map
+      de page.tsx explicam o motivo do LEFT JOIN único.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "LeadWindowBadge → getWindowStatus(lastAt, isWhatsApp) + WINDOW_BADGE (open/closing/closed); render no card mobile."
+  - ac: "AC2"
+    status: PASS
+    note: "isWhatsApp = !lead.phone.startsWith('tg:') → return null; windowUrgencyKey trata Telegram como +Infinity."
+  - ac: "AC3"
+    status: PASS
+    note: "Badge inline text-[11px] font-medium + dot h-1.5 w-1.5 rounded-full (aria-hidden); ao lado do timestamp."
+  - ac: "AC4"
+    status: PASS
+    note: "Toggle button aria-pressed min-h-[44px]; displayedLeads = sortByWindow ? sortByWindowUrgency(leads) : leads; aplicado a mobile e desktop."
+  - ac: "AC5"
+    status: PASS
+    note: "page.tsx select estendido com conversations(last_message_at); map adiciona last_message_at via selectLatestMessageAt (cast de props L204+)."
+  - ac: "AC6"
+    status: PASS
+    note: "type-check 0 nos arquivos da story; ESLint 0 nos arquivos da story; suíte 431/431."
+
+issues:
+  - id: PERF-001
+    severity: low
+    category: performance
+    finding: >
+      O badge no card (LeadWindowBadge) e o sort (sortByWindowUrgency(leads))
+      chamam getWindowStatus sem injetar `now`, usando new Date() no render do
+      client component. Snapshot de momento — não há countdown ao vivo na lista.
+    suggested_action: >
+      Não-bloqueante. Aceitável sob GR-3 do epic (tolerância ±1min; estático no
+      load conforme Out of Scope da story). Live-refresh é débito futuro se exigido.
+    suggested_owner: dev
+  - id: A11Y-001
+    severity: low
+    category: code
+    finding: >
+      O ícone Clock do toggle de ordenação não tem aria-hidden; o texto visível
+      "Janela fechando primeiro" já é lido por leitor de tela. O dot do badge tem
+      aria-hidden e o texto ("Aberta/Fechando/Fechada") é acessível.
+    suggested_action: >
+      Não-bloqueante. Adicionar aria-hidden ao Clock decorativo se padronizar
+      ícones decorativos.
+    suggested_owner: dev
+  - id: SCOPE-001
+    severity: low
+    category: requirements
+    finding: >
+      Badge exibido apenas no card mobile (desktop table sem badge) — por design
+      (Out of Scope da story, @po validou GO 8/10). Desktop recebe apenas o sort.
+    suggested_action: "Não-bloqueante. Adicionar badge à tabela desktop em follow-up se desejado."
+    suggested_owner: sm
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  command: "git grep -nE '<pattern>' HEAD -- leads-window.ts leads-window.test.ts page.tsx leads-list-with-drawer.tsx"
+  note: "Zero ocorrências (exit 1)."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "431/431 passed (33 files)."
+  - check: "ESLint (arquivos da story)"
+    command: "cd packages/web && pnpm exec eslint leads-window.ts leads-window.test.ts page.tsx leads-list-with-drawer.tsx"
+    result: >
+      0 erros nos arquivos da story. 1 erro em broker/leads/page.tsx L90
+      (Date.now impure, react-hooks/purity) é PRÉ-EXISTENTE — git blame confirma
+      autoria Marcos/1615ae9b (2026-06-03), linha NÃO tocada pela 63-9 (diff só
+      mexe nas L38-48 da query e L204+ do map de props).
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos da story. 3 erros ambientais pré-existentes em
+      email-templates/_components/visual-editor.tsx (react-email-editor ausente)
+      — não relacionados à 63-9.
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos arquivos tocados"
+    result: "CLEAN (zero)."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: "Embed único (sem N+1); reduce O(n) síncrono; getWindowStatus leve."
+  accessibility:
+    status: PASS
+    notes: "Toggle ≥44px aria-pressed; badge com dot aria-hidden + texto acessível. A11Y-001 LOW (Clock sem aria-hidden)."
+  maintainability:
+    status: PASS
+    notes: "Helpers puros isolados e testados; reusa getWindowStatus da 63-4 sem duplicar lógica."
+  reliability:
+    status: PASS
+    notes: "selectLatestMessageAt robusto a formato do embed e timestamps inválidos; sort estável e não-mutante; CON-3 intocado."
+
+regression_safety:
+  - "Embed adiciona só um campo ao SELECT; filtros/contadores de page.tsx inalterados."
+  - "selectLatestMessageAt no map de props mantém o restante do lead via spread."
+  - "Sort não muta o array original (testado)."
+  - "CON-3: is_ai_active não tocado; CON-1 limpo."
+  - "Suíte completa 431/431; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 6 ACs estão atendidos por código. A query usa um único embed (sem N+1), a
+    seleção da conversa mais recente é robusta (array/objeto/null/ts inválido), e a
+    ordenação trata corretamente os boundaries (open/closing por remainingMs asc;
+    closed/sem-janela ao final via +Infinity; comparador evita NaN). Os 12 testes
+    cobrem esses casos. CON-1 limpo; CON-3 intocado; filtros e contadores
+    preservados; suíte 431/431; lint e type-check limpos nos arquivos da story (o
+    erro em page.tsx L90 é pré-existente, comprovado por git blame). As 3 issues
+    são todas LOW (snapshot de janela sem live-refresh, ícone Clock sem aria-hidden,
+    badge só mobile — todas por design/aceitas). Recomendação: LIBERAR para
+    @devops *push.
+  next_steps:
+    - "@devops *push (branch feat/epic-51-handoff-chat-corretor) — commit f4fd35b."
+    - "Smoke pós-deploy: cards WhatsApp exibem badge colorido, cards Telegram sem badge; ativar 'Janela fechando primeiro' → leads com menos tempo restante no topo."

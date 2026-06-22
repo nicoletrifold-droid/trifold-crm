@@ -1,0 +1,155 @@
+schema: 1
+story: "63.12"
+storyId: "63.12"
+title: "Push ao Corretor quando o Lead Responde + Deep-link"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Helper server-only notify-on-reply.ts implementa corretamente os 3 gates de
+  produto decididos pelo @po: Q1 (corretor já assumiu — assigned_broker_id não-null
+  + role='broker' <24h na conversa via brokerSentRecently canônico de 63-8), Q3
+  (sem corretor → return, sem fallback) e Q2 (sem debounce, leads.metadata
+  intocado). O disparo é via after() dedicado no webhook, após o INSERT inbound,
+  dentro do guard correto, independente do after() da Nicole e fire-and-forget
+  (nunca bloqueia o HTTP 200). Best-effort com try/catch interno (nunca propaga).
+  Payload null-safe (nome ?? "Lead"; body 100ch ou fallback de mídia) com deep-link
+  url=/broker/leads/{leadId} lido pelo service worker existente (sw-source.js
+  intocado, CON-8). CON-1/CON-3/CON-7 limpos. 9 testes cobrem gates Q1/Q3,
+  sem-debounce, best-effort e o payload puro. Os 10 ACs estão atendidos. Sem
+  dependência de infra — funciona imediatamente no push. Pronto para @devops *push.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-21"
+updated: "2026-06-21T20:30:00Z"
+commit: "8f50792"
+quality_score: 92
+waiver: { active: false }
+
+ac_traceability:
+  - ac: AC1
+    desc: "Q1 gatilho: assigned_broker_id não-null E role='broker' <24h → push com title/body corretos"
+    status: MET
+    evidence: "notify-on-reply.ts L73-96 (query lead + query messages role='broker' gte since + brokerSentRecently); buildReplyPushPayload L52-64. Flag notify_broker_on_reply NÃO consultada."
+  - ac: AC2
+    desc: "Nicole sozinha (sem broker recente) → nenhum push, mesmo com assigned_broker_id"
+    status: MET
+    evidence: "L96 if (!brokerSentRecently(brokerMsgs ?? [])) return. Teste 'Nicole sozinha → nenhum push'."
+  - ac: AC3
+    desc: "assigned_broker_id null → nenhum push, sem fallback gerente/admin"
+    status: MET
+    evidence: "L81 if (!lead?.assigned_broker_id) return. Sem FALLBACK_ROLES. Teste Q3."
+  - ac: AC4
+    desc: "Sem debounce — 1 push por inbound; leads.metadata não modificado"
+    status: MET
+    evidence: "Nenhuma escrita em leads.metadata nem last_reply_push_at no helper; 1 sendPushToUser por chamada."
+  - ac: AC5
+    desc: "Deep-link url=/broker/leads/{leadId}; SW abre/foca o CRM"
+    status: MET
+    evidence: "buildReplyPushPayload url=`${appUrl}/broker/leads/${leadId}` (L62); sw-source.js L106-134 lê data.url (não modificado, CON-8)."
+  - ac: AC6
+    desc: "Dispatch fire-and-forget via after() — não bloqueia webhook/HTTP 200"
+    status: MET
+    evidence: "route.ts L440-448 after(async () => notifyBrokerOnReply(...)); HTTP 200 retornado independente."
+  - ac: AC7
+    desc: "Corretor sem subscription ativa → finaliza silenciosamente sem erro"
+    status: MET
+    evidence: "Garantido por sendPushToUser (push-service L31-48 trata vazio/410); helper não assume entrega."
+  - ac: AC8
+    desc: "Lógica encapsulada no helper; webhook só chama; CON-3/CON-7/CON-1 respeitados"
+    status: MET
+    evidence: "route.ts apenas importa e chama; helper não toca is_ai_active; sem tel:/wa.me."
+  - ac: AC9
+    desc: "Nenhum comportamento existente do webhook afetado (Nicole, after() independente, HTTP 200)"
+    status: MET
+    evidence: "after() do push separado do after() da Nicole (L454+); guard inalterado; INSERT inbound intacto."
+  - ac: AC10
+    desc: "type-check e ESLint passam nos arquivos da story"
+    status: MET
+    evidence: "type-check 0 nos arquivos (3 erros ambientais pré-existentes em visual-editor.tsx); ESLint 0."
+
+gate_q1_analysis:
+  result: CORRECT
+  notes: >
+    brokerSentRecently consultado na conversa CERTA: route.ts passa
+    conversationId=conversation.id (a conversa onde o inbound foi inserido) →
+    notify-on-reply faz .eq("conversation_id", conversationId).eq("role","broker")
+    .gte("created_at", now-24h).limit(1). O brokerSentRecently(brokerMsgs ?? [])
+    reaplica a mesma janela de 24h em memória (helper puro canônico de 63-8, mesma
+    fonte-de-verdade do banner e do cron de follow-up) — redundante-por-segurança,
+    documentado. assigned_broker_id null → return ANTES da 2ª query (Q3). Nicole
+    sozinha (sem broker recente) → return sem push.
+  query_shape: "select('role, created_at') casa exatamente com TakeoverMessage{role,created_at} esperado por brokerSentRecently."
+  after_isolation: >
+    after() do push é dedicado, dentro do guard if(text||mediaMetadata.media_type),
+    após o INSERT, independente do after() da Nicole. try/catch interno garante
+    best-effort; mesmo que lançasse, o HTTP 200 já foi enviado. getSupabaseAdmin()
+    (admin client) é correto para webhook server-side (sem sessão de usuário).
+  null_handling: "leadName ?? 'Lead'; messageExcerpt.slice(0,100) || 'Nova mensagem recebida.' (mídia sem texto via text ?? '')."
+
+con_verification:
+  con1_inviolable:
+    result: CLEAN
+    notes: "git grep tel:/wa.me: 0 ocorrências de código (único hit é o comentário JSDoc 'nenhum tel:/wa.me' e a referência à path do webhook). Deep-link é interno via data.url."
+  con3_con7:
+    result: CLEAN
+    notes: "Helper só LÊ leads (id,name,assigned_broker_id) e messages (role,created_at). ZERO escrita; is_ai_active intocado; leads.metadata intocado. Notificação pura (observação, não intervenção)."
+  con8:
+    result: CLEAN
+    notes: "git show --stat 8f50792: sw-source.js NÃO está no commit. Deep-link reusa o handler existente."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: "2 queries extras (leads + messages) no after(), FORA do caminho crítico do webhook. messages coberta por idx_messages_conversation (migration 001); limit(1). HTTP 200 não impactado. Aceitável (R3)."
+  security:
+    status: PASS
+    notes: "Admin client no webhook (server-side sem sessão); query escopada por org_id no lead. sendPushToUser trata subscriptions expiradas (410)."
+  reliability:
+    status: PASS
+    notes: "Best-effort never-throws; isolado do pipeline da Nicole; degradação silenciosa sem subscription."
+  maintainability:
+    status: PASS
+    notes: "Helper server-only dedicado; buildReplyPushPayload puro e testado; reuso de brokerSentRecently e sendPushToUser (Reuso > Create)."
+
+issues:
+  - id: PERF-001
+    severity: low
+    category: performance
+    finding: "2 queries assíncronas extras por inbound no after() (leads + messages gate Q1)."
+    suggested_action: "Aceitável — off critical path, indexado, limit(1). Otimização futura (single query/join) só se virar gargalo."
+    suggested_owner: dev
+  - id: TEST-001
+    severity: low
+    category: tests
+    finding: >
+      Os 9 testes não cobrem o isolamento por conversa errada (o mock não varia
+      conversationId). O código usa .eq('conversation_id', conversationId)
+      corretamente, mas o teste não exercita o cenário de outra conversa.
+    suggested_action: "Adicionar 1 caso que confirme que broker recente em OUTRA conversa não dispara (defesa do filtro). Não-bloqueante."
+    suggested_owner: dev
+  - id: OBS-001
+    severity: low
+    category: tests
+    finding: "Smoke end-to-end (push real no dispositivo) requer infra/dispositivo — fora do ambiente @dev; coberto por unit dos gates e payload."
+    suggested_action: "Validar no smoke pós-deploy (lista de cenários na story)."
+    suggested_owner: devops
+
+regression_safety:
+  - "route.ts: só adiciona import + after() aditivo dentro do guard existente; INSERT inbound e after() da Nicole intactos."
+  - "Nenhuma mutação de estado de atendimento; leads.metadata e is_ai_active intocados."
+  - "Suíte completa 463/463; nenhuma regressão."
+  - "Sem migration; service worker intocado (CON-8)."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 3 gates de produto (Q1/Q2/Q3) estão corretamente implementados e
+    testados; a query do gate Q1 usa a conversa certa e reusa o helper canônico
+    brokerSentRecently. O after() é dedicado, isolado e fire-and-forget — não
+    afeta o HTTP 200 nem o pipeline da Nicole. Payload null-safe com deep-link via
+    SW existente (CON-8 intocado). CON-1/CON-3/CON-7 limpos; 463/463 verde; lint e
+    type-check limpos nos arquivos. Issues todas LOW. Sem dependência de infra —
+    funciona no push.
+  next_steps:
+    - "@devops *push (commit 8f50792)."
+    - "Smoke pós-deploy: lead que o corretor assumiu responde → push em ≤5s + clique abre /broker/leads/{id}; Nicole sozinha → sem push; sem corretor → sem push."

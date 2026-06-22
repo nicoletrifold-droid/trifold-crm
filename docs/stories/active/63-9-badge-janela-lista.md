@@ -161,3 +161,29 @@ packages/web/src/lib/broker/window-status.ts                              ← RE
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 3, badge de janela na lista | @sm (River) |
 | 2026-06-18 | 1.1 | **Implementação (@dev).** Query estendida com embed `conversations(last_message_at)` (sem N+1); helpers puros `selectLatestMessageAt`/`sortByWindowUrgency` + 12 testes; `LeadWindowBadge` no card mobile; toggle de ordenação. AC1–AC6 e T1–T4 done. Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-06-18 | 1.0 | **Validação PO — verdict GO (8/10). Status Draft → Ready.** Confirmado que a query da lista (`broker/leads/page.tsx` L37-48) não busca `conversations`/`last_message_at` e a interface `Lead` (L11-22) não tem o campo — extensão é OBRIGATÓRIA (novo embed + interface + cast de props L202), não condicional. Helper `getWindowStatus` (63-4) confirmado. Should-fix não-bloqueantes: selecionar a conversation mais recente por lead; embed único (não N+1); badge desktop fora de escopo é aceitável. Independe de 63-8/63-10. CON-1 OK. Liberada para @dev. | @po (Pax) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (Test Architect, @qa)
+
+**Veredito: PASS** (quality_score 94)
+
+**Traceability AC→código:** AC1–AC6 atendidos. AC1 `LeadWindowBadge`+`getWindowStatus`+`WINDOW_BADGE` (verde/âmbar/cinza) no card mobile; AC2 `isWhatsApp = !phone.startsWith('tg:')` → `null`; AC3 badge `text-[11px]`+dot compacto; AC4 toggle `aria-pressed` (≥44px) + `sortByWindowUrgency` aplicado a mobile e desktop; AC5 embed `conversations(last_message_at)` único + `selectLatestMessageAt` em JS; AC6 lint/type-check limpos.
+
+**Performance/correção (ponto crítico):** query usa UM embed LEFT JOIN (sem N+1). `selectLatestMessageAt` robusto a array/objeto/null/timestamp inválido (seleciona o máximo). `sortByWindowUrgency` correto nos boundaries: `open`/`closing` por `remainingMs` asc; `closed`/sem-janela → `+Infinity` ao final; comparador (`ka===kb?0:ka<kb?-1:1`) evita `NaN` de `Infinity-Infinity`. 12 testes cobrem esses casos. Filtros/contadores de `page.tsx` preservados (embed só adiciona um campo ao select; `filter` roda antes do map).
+
+**CON-1 INVIOLÁVEL:** `git grep` por `tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call` nos arquivos tocados → ZERO (exit 1). **CON-3:** `is_ai_active` não tocado.
+
+**Testes/lint/type-check (reais):** suíte `npx vitest run` → 431/431 (33 arquivos). ESLint 0 nos arquivos da story. Type-check 0 nos arquivos da story (3 erros ambientais pré-existentes em `visual-editor.tsx`/react-email-editor). O erro ESLint em `broker/leads/page.tsx` L90 (`Date.now` impure) é **PRÉ-EXISTENTE** — git blame: Marcos/commit `1615ae9b` (2026-06-03), linha NÃO tocada pela 63-9 (diff só mexe L38-48 e L204+).
+
+**Issues (todas LOW, não-bloqueantes):** PERF-001 (badge/sort usam `new Date()` no render, sem countdown ao vivo — aceitável GR-3); A11Y-001 (ícone `Clock` do toggle sem `aria-hidden`); SCOPE-001 (badge só mobile — por design).
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/63.9-badge-janela-lista.yml
+Consolidado Fase 3: docs/qa/gates/epic-63-fase3.yml
+
+**Recomendação:** LIBERAR para @devops *push (commit f4fd35b).

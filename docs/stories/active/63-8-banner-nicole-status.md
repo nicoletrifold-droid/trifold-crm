@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 63 — UX do Atendimento do Corretor — Chat Mobile-First
 - **Story:** 63-8
-- **Status:** Ready for Review
+- **Status:** InReview — QA PASS (Quinn @qa, 2026-06-21). Aguardando @devops *push.
 - **Validated:** 2026-06-18 by @po (Pax) — verdict **GO (9/10)** na revalidação da v1.0. Os 3 bloqueantes do NO-GO anterior foram resolvidos (botão de takeover removido; sem mutação de `is_ai_active`/CON-3; derivação via `brokerSentRecently` real). Status Draft→Ready. Liberada para @dev.
 - **Priority:** P1 — corretor não sabe se a Nicole está respondendo automaticamente ao lead ou se ele deve agir
 - **Complexity:** S (2h)
@@ -315,6 +315,62 @@ packages/web/src/app/api/leads/[id]/send-message/route.ts ← regra de negócio 
 
 ---
 
+## QA Results
+
+### Review Date: 2026-06-21
+### Reviewed By: Quinn (Test Architect / @qa)
+### Commit revisado: 9fa5f09
+
+**Veredito: PASS** (quality_score 95) — Gate file: `docs/qa/gates/63.8-banner-nicole-status.yml`
+
+#### Traceability AC → código
+| AC | Status | Evidência |
+|----|--------|-----------|
+| AC1 — banner no header, 2 estados | PASS | `conversation-thread.tsx` L77-79 (abaixo do `WindowStatusBadge` L75); Estado A roxo+`Bot`+subtexto, Estado B verde+`UserCheck` em `ai-status-banner.tsx` L26-60 |
+| AC2 — derivação sem query nova | PASS | `brokerActive = deriveBrokerActive(messages, isAiActive)` (`conversation-thread.tsx` L66); ambos props existentes |
+| AC3 — read-only puro | PASS | sem botão/`onClick`/`fetch`/mutação — confirmado por grep no diff |
+| AC4 — `role=status` + `aria-live=polite` | PASS | `ai-status-banner.tsx` L30-31 e L45-46 (ambas variantes) |
+| AC5 — type-check + ESLint limpos | PASS | type-check 0 nos arquivos da story; ESLint exit 0 |
+
+#### CON-3 INVIOLÁVEL (motivo do NO-GO original) — RESOLVIDO
+- ZERO mutação de `is_ai_active`, ZERO chamada ao endpoint `handoff`, ZERO botão/`onClick`/`fetch`.
+- `git grep` por `is_ai_active =` / `handoff` / `fetch(` / `onClick` nos 4 arquivos → as únicas ocorrências de `handoff`/`is_ai_active` são **JSDoc/comentário** explicativo, não código executável.
+- Banner é 100% read-only. O botão de takeover do draft v0.2 foi corretamente removido.
+
+#### CON-1 INVIOLÁVEL — LIMPO
+- `git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call'` nos 4 arquivos → ZERO (exit 1).
+
+#### Semântica do banner — CORRETA (não-enganosa)
+- `brokerActive = brokerSentRecently(messages, now) || !isAiActive`.
+- Corretor que enviou `role='broker'` <24h → **Estado B** ("Você está no atendimento") mesmo com `is_ai_active=true` (takeover implícito; `send-message/route.ts` L15-28 não desliga a flag). Verificado em teste.
+- Sem msg de broker + `is_ai_active=true` → Estado A. Handoff admin (`is_ai_active=false`) sem broker → Estado B. Broker >24h → Estado A (Nicole retomou).
+- **Robustez de parse:** `created_at` inválido → `new Date(...).getTime()` = `NaN`, `now - NaN < WINDOW` = `false` → sem falso positivo. **Lacuna de teste fechada pelo QA** (1 teste adicionado em `broker-takeover-status.test.ts` — helper puro, autorizado).
+- 13 testes do helper cobrem: vazio→false; broker 1h→true; broker 25h→false; limiar exato 24h→false; só assistant/user→false; mistura→true; NaN→false; Estados A/B incluindo handoff admin com/sem mensagens.
+
+#### a11y
+- `role="status"` + `aria-live="polite"` nas 2 variantes; ícones `Bot`/`UserCheck` com `aria-hidden="true"`.
+- Contraste: primário `text-purple-800`/`text-green-800` sobre fundo `-50` (≥4.5:1); subtexto `text-purple-600` (não-essencial ≥3:1); dark `-200` sobre `-900/20`. NFR-3 ok.
+
+#### Regressão
+- `WindowStatusBadge` continua renderizando (coexiste, L75). `page.tsx` **NÃO** tocado (confirmado no diff de 9fa5f09; `isAiActive` já era passado, apenas destruturado). Composer e merge de otimistas inalterados.
+
+#### Verificação independente (números reais)
+- `npx vitest run` → **444/444** (34 arquivos; +13 do helper, sendo 1 de robustez adicionado pelo QA).
+- `pnpm --filter @trifold/web type-check` → 0 erros nos arquivos da story; 3 erros ambientais pré-existentes só em `visual-editor.tsx` (react-email-editor ausente, fora do escopo).
+- ESLint (4 arquivos da story) → exit 0.
+
+#### Issues (todas LOW, não-bloqueantes)
+- **DESIGN-001** (LOW): paleta roxo/verde diverge do `orange-500` literal do CON-6 — decisão de design já aceita pelo @po (laranja=ação; status=cor semântica). Observação: verde do Estado B coabita o header com o verde da janela; roxo da Nicole é consistente com a bolha da Nicole (63-2). Defensável. Owner: @ux-design-expert (follow-up opcional).
+- **OBS-001** (LOW): CodeRabbit CLI não executado (WSL/Windows em host macOS) — mesmo cenário das Fases 1/2/3. Análise manual cobriu todos os checks.
+
+#### Recomendação
+LIBERAR para **@devops \*push**. A Fase 3 do Epic 63 (63-8/63-9/63-10) está **completa** — gate consolidado `docs/qa/gates/epic-63-fase3.yml` atualizado para PASS.
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.8-banner-nicole-status.yml
+
+---
+
 ## Change Log
 
 | Data | Versão | Descrição | Autor |
@@ -323,4 +379,5 @@ packages/web/src/app/api/leads/[id]/send-message/route.ts ← regra de negócio 
 | 2026-06-18 | 0.2 | **Validação PO — verdict NO-GO (5/10). Status mantido Draft.** 3 fixes bloqueantes: (1) `POST /api/leads/[id]/handoff` exige admin/supervisor → corretor recebe 403, AC3 inviável; (2) handoff seta `is_ai_active=false` → conflita com CON-3; (3) `is_ai_active` não é fonte de verdade do takeover (`send-message` L26 + `brokerSentRecently` no cron) → banner enganoso. Should-fix: integrar no `ConversationThread`, não em `page.tsx` (bloco de conversa extraído na 63-5); `isAiActive` já está plumbado no `ConversationThread` (prop L19-20, hoje não consumida). Repensar: banner read-only informativo + takeover implícito por envio, OU endpoint acessível ao broker reconciliado com CON-3. Re-draft pelo @sm. | @po (Pax) |
 | 2026-06-18 | 1.0 | **Re-draft pós-NO-GO (CON-3 + semântica real do takeover).** Raiz do problema: (a) `is_ai_active` não reflete takeover implícito — `send-message/route.ts` L15-28 confirma que o campo não muda quando corretor envia; (b) `handoff/route.ts` L15 reserva o endpoint para admin/supervisor, tornando o botão 403 para a persona-alvo. Solução: banner puramente read-only, sem botão, sem endpoint. Derivação via `brokerSentRecently` computado de `messages` (já prop do ConversationThread) + `isAiActive` como sinal secundário (`brokerActive = brokerSentRecently \|\| !isAiActive`). Ponto de integração corrigido: header do `ConversationThread` (não `page.tsx` inline). `isAiActive` prop já é passada de `page.tsx` L160 mas não estava sendo destruturada (L41-47) — esta story corrige isso. Botão de takeover/handoff movido para Out of Scope com referência explícita a CON-3. Texto educativo no Estado A ensina o mecanismo implícito. Story pronta para REVALIDAÇÃO do @po. | @sm (River) |
 | 2026-06-18 | 1.1 | **Implementação @dev (Dex) — YOLO. Status Ready→Ready for Review.** T1: criado `ai-status-banner.tsx` (read-only, `role=status`/`aria-live=polite`, Bot/UserCheck, paleta roxo/verde). T2: `isAiActive` adicionado à destruturação do `ConversationThread`; derivação extraída como função pura testável em `lib/broker/broker-takeover-status.ts` (`deriveBrokerActive` = `brokerSentRecently(<24h) \|\| !isAiActive`, `now` injetável no padrão de `window-status.ts`); banner renderizado no header abaixo do `WindowStatusBadge`. T3: `npx vitest run` 443/443 verde (12 novos); lint dos arquivos da story limpo; type-check sem erros nos arquivos da story (erros pré-existentes só em `visual-editor.tsx`, fora do escopo). CON-1 (sem tel:/wa.me), CON-3 (sem mutação de `is_ai_active`, sem endpoint handoff, sem botão) confirmados. Refs de linha em Dev Notes confirmadas com drift ~+6 (âncoras semânticas usadas). Liberada para @qa. | @dev (Dex) |
+| 2026-06-21 | 1.2 | **QA Gate — verdict PASS (Quinn @qa, quality_score 95). Status Ready for Review→InReview.** AC1-AC5 atendidos. CON-3 inviolável RESOLVIDO (banner 100% read-only — sem botão/endpoint/mutação; ocorrências de handoff/is_ai_active são só JSDoc). CON-1 limpo (grep zero). Semântica correta (corretor <24h→Estado B mesmo com is_ai_active=true). Robustez de parse de created_at validada — 1 teste de NaN adicionado pelo QA (helper puro). Suíte 444/444 (34 arq); type-check 0 nos arquivos da story (3 erros ambientais pré-existentes em visual-editor); ESLint exit 0. page.tsx intocado; WindowStatusBadge coexiste. Issue DESIGN-001 (LOW, paleta — aceita pelo @po). Gate: docs/qa/gates/63.8-banner-nicole-status.yml; Fase 3 consolidada em epic-63-fase3.yml→PASS. Liberada para @devops *push. | @qa (Quinn) |
 | 2026-06-18 | 1.0 | **Revalidação PO — verdict GO (9/10). Status Draft→Ready.** Os 3 bloqueantes do NO-GO (v0.2) verificados contra o código real e RESOLVIDOS: (1) botão "Assumir atendimento" REMOVIDO — AC3 fixa banner read-only sem endpoint; `handoff/route.ts` L15 (`requireRole(["admin","supervisor"])`) e L56 (`is_ai_active:false`) confirmados, botão movido para Out of Scope citando CON-3+403; (2) sem mutação de `is_ai_active` — AC3 explícito, CON-3 (epic L174) respeitado; (3) derivação usa a fonte de verdade real — `brokerSentRecently` (msg `role='broker'` <24h), mesmo sinal de `send-message/route.ts` L22-27 ("NÃO desliga is_ai_active; takeover via janela do cron"). Dados confirmados em `ConversationThread`: `page.tsx` L50 seleciona `id, role, content, created_at`; L160 passa `isAiActive`; prop definida em `conversation-thread.tsx` L19-20, ausente na destruturação L46-53 (T2 corrige). Derivação 100% client-side, sem query nova (NFR-4 ok). Semântica correta: corretor que respondeu <24h cai em Estado B ("Você está no atendimento"), nunca "Nicole atendendo". Should-fix não-bloqueantes: refs de linha em Dev Notes com drift de ±6 linhas (âncoras semanticamente corretas — destr. real L46-53, header L64-67); paleta roxo/verde diverge do `orange-500` literal do CON-6 (defensável: laranja=ação, roxo=AI, verde=humano; consistente com badges verde/âmbar do epic) — confirmar com design no QA gate. Liberada para @dev. | @po (Pax) |

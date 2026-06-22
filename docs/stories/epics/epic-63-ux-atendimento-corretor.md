@@ -3,7 +3,7 @@ epic: 63
 title: UX do Atendimento do Corretor — Chat Mobile-First
 status: Draft
 created_at: 2026-06-18
-updated_at: 2026-06-18
+updated_at: 2026-06-21
 created_by: River (@sm)
 priority: P0/P1/P2
 objetivo_negocio:
@@ -19,7 +19,7 @@ related:
   - packages/web/src/app/broker/leads/[id]/_components/broker-message-input.tsx (composer atual)
   - packages/web/src/app/broker/leads/_components/leads-list-with-drawer.tsx (lista de leads mobile+desktop)
   - packages/web/src/components/leads/lead-detail-drawer.tsx (drawer alternativo — duplicação a unificar na S5)
-stories_planned: [63-1, 63-2, 63-3, 63-4, 63-5, 63-6, 63-7, 63-8, 63-9, 63-10]
+stories_planned: [63-1, 63-2, 63-3, 63-4, 63-5, 63-6, 63-7, 63-8, 63-9, 63-10, 63-11, 63-12, 63-13, 63-14]
 ---
 
 # Epic 63 — UX do Atendimento do Corretor: Chat Mobile-First
@@ -141,6 +141,26 @@ Badge na lista de leads (`leads-list-with-drawer.tsx`) indicando estado da janel
 Quando janela fechada: botão "Me avisar quando o lead responder" (grava preferência local/DB) + placeholder explicativo sobre template aprovado. Prepara a arquitetura para o envio real de template (não implementa envio — somente UI e estrutura de dados para futura integração).
 **Depende de:** 63-4 (estado de janela implementado)
 
+### Story 63-11 — Atualização em Tempo Real do Chat do Corretor (P1)
+**Executor:** @dev | **QG:** @qa | **Complexity:** M (3-5h) | **Prioridade:** P1 | **Fase:** 4
+Subscription Supabase Realtime (`postgres_changes`) em `messages` filtrada por `conversation_id`, adicionada ao `ConversationThread`. Mensagens do lead (`role='user'`) e da Nicole (`role='assistant'`) aparecem sem reload. Dedup por `id`, auto-scroll, cleanup no unmount. Quando mensagem inbound chega, o `WindowStatusBadge` e o estado do `BrokerMessageInput` reagem imediatamente (janela reabre). Pré-condição: habilitar `messages` na publicação `supabase_realtime` (Supabase Dashboard ou SQL).
+**Depende de:** 63-5 Done (`ConversationThread` como Client Component); 63-4 Done (`getWindowStatus`)
+
+### Story 63-12 — Push ao Corretor quando o Lead Responde + Deep-link (P0)
+**Executor:** @dev | **QG:** @qa | **Complexity:** M (3-4h) | **Prioridade:** P0 | **Fase:** 4
+No webhook (`api/webhook/whatsapp/route.ts`), após o INSERT da mensagem inbound: segundo bloco `after()` fire-and-forget que chama `lib/broker/notify-on-reply.ts` — helper push-only que lê `assigned_broker_id` + `notify_broker_on_reply` do lead, aplica debounce anti-spam via `metadata.last_reply_push_at`, e envia push via `sendPushToUser` com `url=/broker/leads/{leadId}`. O service worker existente (`sw-source.js` L121-134) já lida com o deep-link; nenhuma mudança no SW. Contém 3 decisões de produto a resolver com @po antes de Ready (condição de disparo, tempo de debounce, lead sem corretor atribuído).
+**Depende de:** 63-10 Done (flag `notify_broker_on_reply` + endpoint já existentes); pode ser executada em paralelo com 63-11
+
+### Story 63-13 — Handoff Explícito ao Responder + Reativação Automática da Nicole em 24h (P0)
+**Executor:** @dev | **QG:** @qa | **Complexity:** M (4-6h) | **Prioridade:** P0 | **Fase:** 5
+Inverte a regra de negócio da CON-3 anterior: ao gravar a 1ª msg `role='broker'` (ou qualquer envio enquanto `is_ai_active=true`), `send-message/route.ts` seta `is_ai_active=false` + `handoff_at` + `handoff_reason='broker_reply'`. Nicole para imediatamente. No webhook, bloco de reativação automática: inbound com `is_ai_active=false` + última msg `role='broker'` há > 24h → reativa `is_ai_active=true` (Nicole reassume). Reutiliza `BROKER_WINDOW_MS` de `broker-takeover-status.ts`. Sem migration. Compatível com banner 63-8 (`deriveBrokerActive = brokerSentRecently || !isAiActive` permanece correto). Decisão de produto X=24h (default, confirmar @po).
+**Depende de:** Epic 51 Done, Story 63-8 Done; bloqueia 63-14
+
+### Story 63-14 — Botão "Devolver para a Nicole" — Reativação Manual da IA (P1)
+**Executor:** @dev | **QG:** @qa | **Complexity:** M (3-5h) | **Prioridade:** P1 | **Fase:** 5
+Novo endpoint `POST /api/leads/[id]/resume-ai` (permissão: corretor dono OU admin/supervisor/gerente-comercial) que seta `is_ai_active=true`. Botão "Devolver para Nicole" (ícone `RotateCcw`, alvo ≥44px) no Estado B do `AiStatusBanner` — visível apenas quando `brokerActive=true`. `ConversationThread` adiciona `localIsAiActive` state e callback; banner transiciona Estado B→A sem reload completo. Sem confirmação (ação reversível). Activity log `type='ai_resumed'`. Decisão de permissão pendente @po.
+**Depende de:** 63-13 Done
+
 ---
 
 ## Ordem de Execução Recomendada
@@ -163,6 +183,19 @@ FASE 3 — Em paralelo após Fase 2:
   63-8 (Banner Nicole) — S
   63-9 (Badge lista) — S/M, depende de 63-4
   63-10 (Saída janela) — S, depende de 63-4
+
+FASE 4 — Em paralelo (independentes entre si; desbloqueadas quando Fase 3 Done):
+  63-11 (Realtime chat) — M, depende de 63-5 + 63-4
+    PRÉ-CONDIÇÃO: habilitar messages em supabase_realtime (infra/devops)
+  63-12 (Push lead respondeu) — M, depende de 63-10
+    PRÉ-CONDIÇÃO: 3 decisões de produto (@po) resolvidas antes de Ready
+
+FASE 5 — Sequencial (controle de handoff IA↔Corretor):
+  63-13 (Handoff explícito ao responder + reativação 24h) — M, P0
+    PRÉ-CONDIÇÃO: decisão de produto X=24h confirmada pelo @po
+    ↓
+  63-14 (Botão "Devolver para Nicole") — M, P1
+    PRÉ-CONDIÇÃO: 63-13 Done; permissão do botão confirmada pelo @po
 ```
 
 ---
@@ -171,10 +204,13 @@ FASE 3 — Em paralelo após Fase 2:
 
 - **CON-1 (INVIOLÁVEL):** NÃO usar `tel:`, `wa.me` ou qualquer deep link para WhatsApp pessoal — viola RLS, fragmenta histórico e expõe número do corretor
 - **CON-2:** NÃO reimplementar o mecanismo de envio — reusar `dispatchBrokerMessage` e `POST /api/leads/[id]/send-message` do Epic 51
-- **CON-3:** NÃO alterar `is_ai_active` nem lógica de takeover — `brokerSentRecently` no cron já cuida disso automaticamente
+- **CON-3 (REESCRITA na Fase 5 — substitui a constraint original):** A constraint original ("NÃO alterar `is_ai_active`") era válida para Fases 1-4 e permanece válida para elas. A **Fase 5** inverte esta regra de forma deliberada: APENAS os três mecanismos abaixo podem alterar `is_ai_active`: (1) **63-13 — envio do corretor** (`send-message/route.ts`): `is_ai_active=false`, `handoff_reason='broker_reply'`; (2) **63-13 — reativação automática 24h** (webhook `after()`): `is_ai_active=true` quando corretor inativo; (3) **63-14 — botão "Devolver para Nicole"** (`POST /api/leads/[id]/resume-ai`): `is_ai_active=true`. Qualquer outro componente das Fases 1-4 continua **proibido** de alterar `is_ai_active`. A constraint original se mantém para as stories já implementadas (63-1 a 63-12).
 - **CON-4:** NÃO criar nova migration para stories de FASE 1 — todas as mudanças são UI/componentes puros
 - **CON-5:** Composer DEVE ficar acima da bottom tab bar (`mobile-nav-safe` / safe-area iOS) em todas as stories que tocarem o layout
 - **CON-6:** Design system: Tailwind, laranja `orange-500`/`ea580c`, dark mode `stone`, breakpoint `lg` (1024px), lucide-react para ícones
+- **CON-7 (FASE 4 — mantida):** A notificação push (63-12), o realtime (63-11) e o banner leitura (63-8) NÃO alteram `is_ai_active` — são observação pura, não intervenção. Esta constraint se mantém inalterada para as stories 63-8, 63-11, 63-12.
+- **CON-8 (FASE 4):** O service worker (`lib/pwa/sw-source.js`) NÃO deve ser modificado por nenhuma story da Fase 4 — o deep-link já funciona com o payload `url` existente
+- **CON-9 (FASE 5 — sem migration):** Stories 63-13 e 63-14 NÃO criam migration — todos os campos necessários já existem em `conversations` (`is_ai_active`, `handoff_at`, `handoff_reason`, `last_message_at`; confirmados em `001_base_schema.sql` L152-164)
 
 ---
 
@@ -200,8 +236,14 @@ FASE 3 — Em paralelo após Fase 2:
 - [ ] Story 63-8 Done → banner Nicole/corretor visível no topo da conversa
 - [ ] Story 63-9 Done → badge de janela na lista; ordenação por urgência disponível
 - [ ] Story 63-10 Done → caminho de saída implementado quando janela fechada
+- [ ] Story 63-11 Done → mensagens do lead e da Nicole aparecem sem reload; janela reabre em tempo real
+- [ ] Story 63-12 Done → corretor recebe push com deep-link direto para a conversa do lead que respondeu
+- [ ] Story 63-13 Done → `is_ai_active=false` ao corretor responder; Nicole para imediatamente; reativação automática em 24h funcional
+- [ ] Story 63-14 Done → botão "Devolver para Nicole" funcional no Estado B do banner; endpoint `resume-ai` retorna 200
 - [ ] Zero regressão na API de envio (Epic 51 continua funcional)
-- [ ] Zero regressão no brokerSentRecently (Nicole continua pausando automaticamente)
+- [ ] Zero regressão no brokerSentRecently (usado como sinal complementar; continua correto)
+- [ ] Zero regressão no webhook WhatsApp (HTTP 200 imediato; Nicole continua processando quando is_ai_active=true)
+- [ ] Banner 63-8 (`deriveBrokerActive`) reflete corretamente o novo modelo: Estado B quando is_ai_active=false; Estado A quando is_ai_active=true e sem broker msg <24h
 
 ---
 
@@ -214,6 +256,10 @@ FASE 3 — Em paralelo após Fase 2:
 | GR-3 | Badge de janela 24h com cálculo client-side dessincroniza com estado real | Baixa | Médio | Usar `last_message_at` + `Date.now()` (sem polling extra); tolerância de ±1min é aceitável |
 | GR-4 | 63-7 (sheet de detalhes) afeta fluxo de edição de cadastro do lead | Média | Médio | Preservar URL de navegação e funcionalidade de `LeadEditForm` dentro da sheet |
 | GR-5 | FASE 1 bloqueada esperando FASE 2 por dependências acidentais | Baixa | Alto | CON-4: FASE 1 sem migration, autossuficiente — verificar isolamento antes de iniciar |
+| GR-6 | `messages` não está em `supabase_realtime` — 63-11 silenciosa em produção | Alta | Alto | T1 da 63-11 é bloqueante: verificar ANTES do deploy; sem isso nenhum evento é entregue |
+| GR-7 | Push spam por rajada de mensagens do lead (Q2 da 63-12) | Média | Médio | Debounce via `metadata.last_reply_push_at`; tempo definido pelo @po antes de Ready |
+| GR-8 | 63-13 inverte comportamento de `is_ai_active` em produção — Nicole pode parar de responder leads ativos se bug | Alta | Crítico | Smoke obrigatório pré-deploy em conversa de teste; rollback = `UPDATE conversations SET is_ai_active=true` (SQL admin); monitorar logs do webhook nas primeiras 2h após deploy |
+| GR-9 | Race condition 63-13: broker envia + lead responde simultaneamente → webhook pode ler `is_ai_active=true` antes do update do send-message | Baixa | Baixo | Eventual consistency aceitável — Nicole responde uma vez a mais; próxima mensagem do lead já encontrará `is_ai_active=false` |
 
 ---
 
@@ -222,3 +268,5 @@ FASE 3 — Em paralelo após Fase 2:
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-06-18 | @sm (River) | Epic criado após auditoria de UX da área do corretor (10 problemas identificados em código; 3 fases; 10 stories) |
+| 2026-06-21 | @sm (River) | Fase 4 adicionada (Tempo Real & Notificações): stories 63-11 (realtime chat) e 63-12 (push lead respondeu). CON-7/CON-8, GR-6/GR-7, 3 novos Critérios de Done. 12 stories no total. |
+| 2026-06-21 | @sm (River) | Fase 5 adicionada (Controle de Handoff IA↔Corretor): stories 63-13 (handoff explícito ao responder + reativação 24h) e 63-14 (botão "Devolver para Nicole"). CON-3 REESCRITA (de proibição total a "apenas 3 mecanismos autorizados"). CON-9 adicionada (sem migration). GR-8/GR-9 adicionados. Compatibilidade de `deriveBrokerActive` (63-8), `getWindowStatus` (63-4), `notifyBrokerOnReply` (63-12) e realtime (63-11) com novo modelo verificada e documentada. 14 stories no total. Decisões pendentes @po: X=24h para reativação; permissão do botão resume-ai. |

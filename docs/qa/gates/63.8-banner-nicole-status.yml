@@ -1,0 +1,221 @@
+schema: 1
+storyId: "63.8"
+story: "63.8"
+title: "Banner 'Nicole no Controle / Você Assumiu' (v2 — Indicador Read-Only)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC5 atendidos por código. Banner read-only AiStatusBanner renderizado no
+  header do ConversationThread, abaixo do WindowStatusBadge (coexistem). Derivação
+  via função pura deriveBrokerActive(messages, isAiActive) = brokerSentRecently(<24h)
+  || !isAiActive — usa a MESMA fonte de verdade do takeover do cron (mensagem
+  role='broker' nas últimas 24h), não o is_ai_active isolado. CON-3 INVIOLÁVEL
+  respeitado: ZERO mutação de is_ai_active, ZERO chamada a endpoint handoff, ZERO
+  botão/onClick/fetch (confirmado por git grep no diff — todas as ocorrências de
+  'handoff'/'is_ai_active' são JSDoc/comentário). CON-1 INVIOLÁVEL: git grep
+  tel:/wa.me/... → ZERO (exit 1). a11y: role="status" + aria-live="polite" nas duas
+  variantes; ícones Bot/UserCheck com aria-hidden. Semântica correta: corretor que
+  enviou <24h cai em Estado B mesmo com is_ai_active=true. Parse de created_at
+  robusto (NaN não gera falso positivo — teste adicionado). Suíte completa 444/444
+  (34 arquivos; +13 do helper, sendo 1 teste de robustez adicionado pelo QA);
+  type-check 0 nos arquivos da story (3 erros ambientais pré-existentes em
+  visual-editor.tsx/react-email-editor, fora do escopo); ESLint exit 0. page.tsx
+  NÃO tocado (dados via props existentes). Issues todas LOW.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-21"
+updated: "2026-06-21T18:46:00Z"
+iteration: 1
+quality_score: 95
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (banner no header abaixo do WindowStatusBadge — conversation-thread.tsx
+      L72-80; Estado A roxo+Bot+subtexto educativo, Estado B verde+UserCheck —
+      ai-status-banner.tsx L26-60), AC2 (deriveBrokerActive de messages+isAiActive,
+      ambos props existentes, sem query nova), AC3 (read-only — sem botão/endpoint/
+      mutação), AC4 (role=status + aria-live=polite nas 2 variantes), AC5 (type-check
+      e ESLint limpos nos arquivos).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Derivação extraída como helper puro testável em lib/broker/broker-takeover-status.ts
+      (padrão de window-status.ts, com `now` injetável). JSDoc explica por que
+      is_ai_active NÃO é fonte de verdade isolada (cita send-message/route.ts L15-28).
+      Imports absolutos @web/*. Componente sem estado interno, sem interação. Variantes
+      A/B claras e legíveis.
+  - check: "3. Test Architecture"
+    status: PASS
+    note: >
+      13 testes (helper) com `now` injetado (determinístico): brokerSentRecently —
+      vazio→false, broker 1h→true, broker 25h→false, limiar exato 24h→false (não
+      estritamente menor), só assistant/user→false, mistura broker recente→true,
+      created_at inválido (NaN)→false [adicionado pelo QA]; deriveBrokerActive —
+      Estado A (sem broker+ai ativo / lead novo / broker >24h) e Estado B (broker
+      hoje com is_ai_active=true / handoff admin com e sem mensagens). Boundary de
+      24h e robustez de parse cobertos.
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      WindowStatusBadge continua renderizando (L75), não substituído — coexiste com
+      o banner. page.tsx NÃO tocado (confirmado no diff do commit 9fa5f09). isAiActive
+      apenas adicionado à destruturação (prop já passada de page.tsx L160). Composer
+      e merge de mensagens otimistas inalterados. Suíte 444/444.
+  - check: "5. Performance"
+    status: PASS
+    note: >
+      Derivação 100% client-side sobre `messages` já carregadas (NFR-4 ok, sem query
+      adicional). brokerSentRecently é O(n) com short-circuit (.some). Sem efeitos,
+      sem polling, sem estado.
+  - check: "6. Security (CON-1 + CON-3)"
+    status: PASS
+    note: >
+      CON-1: git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' nos
+      4 arquivos da story → ZERO (exit 1). CON-3 INVIOLÁVEL: ZERO atribuição a
+      is_ai_active, ZERO chamada a handoff/route.ts, ZERO botão/onClick/fetch. As
+      únicas ocorrências de 'handoff'/'is_ai_active' são JSDoc/comentário explicativo.
+      Banner 100% read-only — o motivo do NO-GO original (v0.2) está resolvido.
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Story documenta a semântica do takeover implícito, a tabela de estados e o
+      design visual. JSDoc do helper e do componente justifica a paleta e a fonte de
+      verdade. Dev Notes referenciam handoff/route.ts e send-message/route.ts como
+      leitura (não modificação).
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "Banner no header abaixo do WindowStatusBadge (conversation-thread.tsx L77-79). Estado A: roxo+Bot+subtexto educativo; Estado B: verde+UserCheck (ai-status-banner.tsx)."
+  - ac: "AC2"
+    status: PASS
+    note: "brokerActive = deriveBrokerActive(messages, isAiActive) (L66). messages e isAiActive são props existentes; nenhuma query nova."
+  - ac: "AC3"
+    status: PASS
+    note: "Banner read-only puro — sem botão, sem onClick/fetch, sem mutação de is_ai_active, sem chamada a handoff. Verificado por grep no diff."
+  - ac: "AC4"
+    status: PASS
+    note: "role=status + aria-live=polite no elemento raiz das DUAS variantes (ai-status-banner.tsx L30-31, L45-46)."
+  - ac: "AC5"
+    status: PASS
+    note: "type-check 0 nos arquivos da story; ESLint exit 0; suíte 444/444."
+
+semantics_validation:
+  result: CORRECT
+  logic: "brokerActive = brokerSentRecently(messages, now) || !isAiActive"
+  cases:
+    - "broker enviou <24h + is_ai_active=true → Estado B (Você no atendimento). Correto: takeover implícito; is_ai_active permanece true por design (send-message L15-28)."
+    - "sem msg broker + is_ai_active=true → Estado A (Nicole atendendo). Correto."
+    - "handoff admin (is_ai_active=false) sem broker → Estado B. Correto."
+    - "broker >24h + is_ai_active=true → Estado A (Nicole retomou). Correto — coerente com a janela do cron."
+    - "boundary 24h: < estrito → 23h59 = B, exatamente 24h = A. Testado."
+    - "created_at inválido → brokerSentRecently=false (NaN < WINDOW === false). Sem falso positivo. Testado (adicionado pelo QA)."
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  command: "git grep -nE '<pattern>' -- ai-status-banner.tsx broker-takeover-status.ts broker-takeover-status.test.ts conversation-thread.tsx"
+  note: "Zero ocorrências (exit 1)."
+
+con3_verification:
+  result: CLEAN
+  note: >
+    Banner 100% read-only. ZERO mutação de is_ai_active, ZERO chamada a endpoint
+    handoff, ZERO botão/onClick/fetch. Takeover (brokerSentRecently) apenas LIDO para
+    derivar o estado visual — nunca alterado. As ocorrências textuais de
+    'handoff'/'is_ai_active' nos 4 arquivos são exclusivamente JSDoc/comentário.
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "444/444 passed (34 files). +13 do helper broker-takeover-status (1 teste de robustez de parse adicionado pelo QA)."
+  - check: "ESLint (arquivos da story)"
+    command: "cd packages/web && pnpm exec eslint ai-status-banner.tsx broker-takeover-status.ts broker-takeover-status.test.ts conversation-thread.tsx"
+    result: "exit 0 — zero erros/warnings nos arquivos da story."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos da story. 3 erros ambientais pré-existentes em
+      email-templates/_components/visual-editor.tsx (react-email-editor ausente) —
+      não relacionados ao Epic 63, mesmos das Fases 1/2/3.
+  - check: "CON-1 / CON-3 scan"
+    command: "git grep nos 4 arquivos tocados"
+    result: "CLEAN — CON-1 zero (exit 1); CON-3 sem mutação/endpoint/ação."
+  - check: "page.tsx intocado"
+    command: "git show --name-only 9fa5f09"
+    result: "Confirmado — page.tsx NÃO está no commit; dados fluem via props existentes."
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Read-only puro; nenhuma superfície de mutação. CON-3 inviolável respeitado."
+  performance:
+    status: PASS
+    notes: "Derivação client-side O(n) sobre messages já carregadas; sem query nova (NFR-4)."
+  accessibility:
+    status: PASS
+    notes: >
+      role=status + aria-live=polite nas 2 variantes (NFR anuncia mudança sem
+      interromper). Ícones Bot/UserCheck com aria-hidden=true. Contraste: texto
+      primário text-purple-800/green-800 sobre fundo -50 (≥4.5:1), subtexto
+      text-purple-600 (não-essencial, ≥3:1); dark mode -200 sobre -900/20. NFR-3 ok.
+  maintainability:
+    status: PASS
+    notes: "Lógica de takeover isolada em helper puro testável; componente sem estado; integração mínima no thread."
+  reliability:
+    status: PASS
+    notes: "Parse de created_at robusto (NaN→false, sem falso positivo). Boundary de 24h testado. R1 (limite de 50 msgs) aceito na story — coerente com a janela do cron."
+
+issues:
+  - id: DESIGN-001
+    severity: low
+    category: code
+    finding: >
+      Paleta diverge do orange-500 literal do CON-6: roxo (Nicole/AI) + verde
+      (corretor/humano). Decisão de design já aceita pelo @po (laranja=ação;
+      status usa cor semântica própria). Observação de consistência: o verde do
+      Estado B coabita o header com o verde do WindowStatusBadge (janela aberta),
+      e o corretor é representado por laranja nas bolhas (63-2) mas por verde no
+      banner. Não-enganoso e espacialmente separado; defensável.
+    suggested_action: >
+      Não-bloqueante. Roxo p/ Nicole é consistente com a bolha da Nicole (63-2).
+      Avaliar com design se o verde do banner deve ser diferenciado do verde da
+      janela em follow-up de design system, se desejado.
+    suggested_owner: ux-design-expert
+  - id: OBS-001
+    severity: low
+    category: code
+    finding: >
+      CodeRabbit CLI não executado (config WSL/Windows; host macOS) — mesmo cenário
+      das Fases 1/2/3 e Epic 51.
+    suggested_action: "Não-bloqueante. Análise manual cobriu traceability, CON-1/CON-3, semântica, a11y, regressão e testes. CI pode rodar pós-push."
+    suggested_owner: devops
+
+regression_safety:
+  - "WindowStatusBadge continua renderizando (L75); banner é adicional, não substitui."
+  - "page.tsx NÃO tocado; isAiActive já era passado, só foi destruturado."
+  - "Composer (BrokerMessageInput) e merge de otimistas inalterados."
+  - "CON-3: is_ai_active e takeover intocados. CON-1 limpo."
+  - "Suíte completa 444/444; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 5 ACs estão atendidos por código. O motivo do NO-GO original (botão de
+    takeover + mutação de is_ai_active) está completamente resolvido: o banner é
+    100% read-only (CON-3 inviolável verificado — sem botão/endpoint/mutação/fetch).
+    A semântica é correta e não-enganosa: a derivação usa a fonte de verdade real
+    do takeover (brokerSentRecently <24h), de modo que um corretor que respondeu
+    cai em Estado B mesmo com is_ai_active=true. O helper é puro, testável e robusto
+    a parse inválido (NaN não gera falso positivo). CON-1 limpo; a11y com
+    role=status/aria-live/aria-hidden; suíte 444/444; type-check e ESLint limpos nos
+    arquivos da story (os 3 erros de visual-editor são ambientais pré-existentes).
+    A única observação é a paleta (DESIGN-001, LOW), já aceita pelo @po. Recomendação:
+    LIBERAR para @devops *push e fechar a Fase 3 do Epic 63.
+  next_steps:
+    - "@devops *push (branch feat/epic-51-handoff-chat-corretor) — commit 9fa5f09 (63-8) junto com f4fd35b (63-9) e 8826843 (63-10)."
+    - "Smoke pós-deploy: lead sem msg do corretor → banner roxo (Nicole atendendo); corretor responde → banner verde (Você no atendimento) na próxima carga."
+    - "DESIGN-001: avaliar com @ux-design-expert a coexistência verde-banner / verde-janela em follow-up (opcional)."

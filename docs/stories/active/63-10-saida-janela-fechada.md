@@ -184,3 +184,35 @@ packages/web/src/app/broker/leads/[id]/page.tsx                               �
 | 2026-06-18 | 0.1 | Story drafted — Epic 63, Fase 3, caminho de saída para janela fechada | @sm (River) |
 | 2026-06-18 | 1.1 | **Implementação (@dev).** Endpoint dedicado `POST /api/leads/[id]/notify-on-reply` (admin + merge JSONB, sem o PATCH genérico); botão "me avisar" com estados + placeholder; prop `notifyOnReply` via `ConversationThread`. AC1–AC6 e T1–T4 done. Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-06-18 | 1.0 | **Validação PO — verdict GO (7/10). Status Draft → Ready.** Escopo honesto (placeholder de template, sem envio real — correto). `leads.metadata` confirmado (migr. 063/075), Option B viável. Should-fix não-bloqueantes: AC2 — `PATCH /api/leads/[id]` não aceita `metadata` (L65-85); usar endpoint dedicado/`createAdminClient` (já previsto em T1/Gotcha); plumbing de `notifyOnReply` deve passar pelo `ConversationThread`; `metadata` já vem no `*` do select de detalhe. Depende de 63-4 (pronto). Independe de 63-8/63-9. CON-1 OK. Liberada para @dev. | @po (Pax) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-18
+### Reviewed By: Quinn (Test Architect, @qa)
+
+**Veredito: PASS** (quality_score 93)
+
+**Traceability AC→código:** AC1–AC6 atendidos. AC1 bloco `disabledByWindow` exibe msg + botão "Me avisar"; AC2 `POST /api/leads/[id]/notify-on-reply` grava `metadata.notify_broker_on_reply` (PATCH genérico não aceita `metadata`, confirmado); AC3 `notifyEnabled ? BellRing "Aviso configurado" : botão` (guard impede reclique); AC4 `page.tsx` passa `notifyOnReply` de `lead.metadata` → `useState` inicial; AC5 placeholder `MessageSquarePlus` cinza sem ação; AC6 lint/type-check limpos.
+
+**Segurança do endpoint (ponto crítico):** `requireAuth` (401 sem sessão) → SELECT do lead com supabase do USUÁRIO (RLS por org) + `.eq(org_id).eq(is_active)` → gate de ownership (`isPrivileged` admin/supervisor/gerente-comercial OU `assigned_broker_id === appUser.id`, senão 403, 404 se lead ausente) → merge JSONB `{ ...currentMetadata, notify_broker_on_reply }` (preserva chaves existentes) → UPDATE via `createAdminClient()` escopado por `.eq(id).eq(org_id)` (id já validado como do usuário → sem cross-org). Idempotente (`{ enabled }` default true). **CON-3:** UPDATE só de `metadata`, `is_ai_active` intocado.
+
+**Plumbing:** `page.tsx` (select `*` → `metadata` disponível, no-op de query) → `ConversationThread` (prop `notifyOnReply`, default false) → `BrokerMessageInput`. Não pula o intermediário da 63-5. Verificado em código.
+
+**a11y:** botão `aria-label` ≥44px; estado confirmado `aria-live="polite"`; ícones `aria-hidden`. NFR-2 atendido.
+
+**CON-1 INVIOLÁVEL:** `git grep` nos arquivos tocados → ZERO (exit 1).
+
+**Escopo honesto:** persiste apenas a preferência; NENHUM envio real de template. Placeholder informativo, não promessa de release (R3).
+
+**Testes/lint/type-check (reais):** suíte `npx vitest run` → 431/431 (33 arquivos), zero regressão. ESLint 0 e type-check 0 nos arquivos da story (3 erros ambientais pré-existentes em `visual-editor.tsx`/react-email-editor).
+
+**Issues (LOW/CONCERNS, não-bloqueantes):** TEST-001 (endpoint/UI sem teste de rota — repo só testa helper puro); REL-001 (notificação real é débito futuro no webhook — por design, escopo Fase 3); SEC-001 (TOCTOU teórico no read-then-write, inócuo p/ flag idempotente).
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/63.10-saida-janela-fechada.yml
+Consolidado Fase 3: docs/qa/gates/epic-63-fase3.yml
+
+**Recomendação:** LIBERAR para @devops *push (commit 8826843). @sm rastrear REL-001 (webhook) como débito.

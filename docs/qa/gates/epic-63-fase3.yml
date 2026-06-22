@@ -1,0 +1,199 @@
+schema: 1
+storyId: "epic-63-fase3"
+story: "epic-63-fase3"
+title: "Quality Gate consolidado — Epic 63 FASE 3 (Inteligência do Atendimento)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Consolida a Fase 3 (Inteligência) do Epic 63 — agora COMPLETA. 63-8 (banner
+  Nicole/corretor), 63-9 (badge de janela + ordenação na lista) e 63-10 (caminho de
+  saída quando janela fecha) revisadas e PASS. 63-8 (commit 9fa5f09) adiciona o
+  AiStatusBanner read-only + helper puro broker-takeover-status.ts (+13 testes,
+  incluindo 1 de robustez de parse adicionado pelo QA); o motivo do NO-GO original
+  (botão de takeover + mutação de is_ai_active) está resolvido — banner 100%
+  read-only, CON-3 inviolável respeitado. Os outros 2 commits (f4fd35b 63-9, 8826843
+  63-10) tocam helpers puros (leads-window.ts), a lista, a query da lista, o endpoint
+  notify-on-reply/route.ts, o composer e o ConversationThread. CON-1 INVIOLÁVEL
+  verificado por git grep: ZERO ocorrências nas 3 stories. CON-3 (is_ai_active)
+  intocado nas 3. Suíte COMPLETA 444/444 (34 arquivos, +13 vs Fase 2 com 63-8).
+  ESLint 0 e type-check 0 nos arquivos das stories (3 erros ambientais pré-existentes
+  em react-email-editor; 1 erro ESLint pré-existente em leads/page.tsx L90 Date.now
+  confirmado por git blame). Issues todas LOW/CONCERNS documentadas. Pronto para
+  @devops *push.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-21"
+updated: "2026-06-21T18:46:00Z"
+iteration: 2
+quality_score: 94
+waiver: { active: false }
+
+stories_summary:
+  - story: "63.8"
+    title: "Banner 'Nicole no Controle / Você Assumiu' (v2 — read-only)"
+    gate: PASS
+    file: "docs/qa/gates/63.8-banner-nicole-status.yml"
+    commit: "9fa5f09"
+    note: >
+      AiStatusBanner read-only no header do ConversationThread (abaixo do
+      WindowStatusBadge, coexistem). Derivação via helper puro deriveBrokerActive =
+      brokerSentRecently(<24h) || !isAiActive — fonte de verdade real do takeover
+      (não is_ai_active isolado). NO-GO original resolvido: ZERO botão/endpoint/
+      mutação (CON-3 inviolável); CON-1 limpo. role=status/aria-live nas 2 variantes;
+      ícones aria-hidden. Semântica correta (corretor <24h → Estado B mesmo com
+      is_ai_active=true). +13 testes do helper (1 de robustez de parse NaN adicionado
+      pelo QA). 1 issue LOW (DESIGN-001 paleta roxo/verde — aceita pelo @po).
+  - story: "63.9"
+    title: "Badge de Janela de 24h na Lista de Leads"
+    gate: PASS
+    file: "docs/qa/gates/63.9-badge-janela-lista.yml"
+    commit: "f4fd35b"
+    note: >
+      Embed único conversations(last_message_at) sem N+1; selectLatestMessageAt
+      robusto; sortByWindowUrgency com boundaries corretos (+Infinity p/ closed,
+      comparador evita NaN). 12 testes. Badge mobile (desktop Out of Scope). Filtros/
+      contadores preservados. 3 issues LOW (snapshot sem live-refresh, Clock sem
+      aria-hidden, badge só mobile).
+  - story: "63.10"
+    title: "Caminho de Saída quando Janela Fechada"
+    gate: PASS
+    file: "docs/qa/gates/63.10-saida-janela-fechada.yml"
+    commit: "8826843"
+    note: >
+      Endpoint dedicado POST notify-on-reply com authz sólida (requireAuth +
+      ownership org/role; admin escopado por id+org_id; merge JSONB preservando
+      chaves; idempotente). Plumbing via ConversationThread (não pula intermediário).
+      Escopo honesto (sem envio real). 3 issues LOW/CONCERNS (sem teste de rota,
+      notificação real é débito futuro REL-001, TOCTOU inócuo).
+
+con1_inviolable_scan:
+  result: CLEAN
+  command: "git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD -- <arquivos Fase 3>"
+  outcome: "ZERO ocorrências (exit 1). CON-1 respeitado nas 3 stories revisadas (63-8/63-9/63-10)."
+
+con3_verification:
+  result: CLEAN
+  note: >
+    63-8: banner 100% read-only — apenas LÊ messages/is_ai_active para derivar o
+    estado visual; ZERO mutação/endpoint/botão. 63-9 não toca is_ai_active (só lê
+    last_message_at). 63-10: o endpoint notify-on-reply faz UPDATE apenas de
+    `metadata`; nenhum componente altera is_ai_active. Takeover (brokerSentRecently)
+    intocado nas 3.
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "444/444 passed (34 files) — +13 vs Fase 2 (leads-window.test.ts + broker-takeover-status.test.ts)."
+  - check: "ESLint (arquivos das stories Fase 3)"
+    command: "cd packages/web && pnpm exec eslint <arquivos das 2 stories>"
+    result: >
+      0 erros nos arquivos das stories. 1 erro em broker/leads/page.tsx L90
+      (Date.now impure) é PRÉ-EXISTENTE — git blame: Marcos/1615ae9b (2026-06-03),
+      linha não tocada pela 63-9.
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos das stories. 3 erros ambientais pré-existentes em
+      email-templates/_components/visual-editor.tsx (react-email-editor ausente)
+      — não relacionados ao Epic 63.
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos arquivos tocados"
+    result: "CLEAN (zero)."
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "63-10 endpoint com authz por org+ownership/role; admin escopado por id+org_id (sem cross-org); merge JSONB preservado; idempotente."
+  performance:
+    status: PASS
+    notes: "63-9 embed único sem N+1; 63-10 sem query extra na página (metadata no select `*`)."
+  accessibility:
+    status: PASS
+    notes: "NFR-2 ≥44px em toggle (63-9) e botão 'me avisar' (63-10); aria-pressed/aria-label/aria-live; ícones decorativos aria-hidden (exceto Clock — A11Y-001 LOW)."
+  maintainability:
+    status: PASS
+    notes: "Helpers puros isolados e testados (63-9); endpoint dedicado + prop pelo intermediário ConversationThread (63-10)."
+  reliability:
+    status: CONCERNS
+    notes: "63-10: preferência persistida mas notificação real é débito futuro (REL-001, webhook). Sem regressão no envio nem nos filtros."
+
+aggregated_issues:
+  - id: DESIGN-001
+    story: "63.8"
+    severity: low
+    finding: >
+      Banner usa roxo (Nicole) + verde (corretor) em vez do orange-500 literal do
+      CON-6. Decisão de design aceita pelo @po (laranja=ação; status=cor semântica).
+      Observação de consistência: verde do Estado B coabita o header com o verde do
+      WindowStatusBadge (janela aberta). Defensável e não-enganoso.
+    suggested_action: "Não-bloqueante. Roxo p/ Nicole é consistente com a bolha da Nicole (63-2). Avaliar diferenciação do verde com design, se desejado."
+    suggested_owner: ux-design-expert
+  - id: REL-001
+    story: "63.10"
+    severity: low
+    finding: >
+      Entrega real da notificação (quando o lead responde) não implementada —
+      requer consumir notify_broker_on_reply no webhook WhatsApp. Preferência
+      persistida fica inerte até essa integração.
+    suggested_action: "Rastrear como débito; implementar o consumo no webhook handler."
+    suggested_owner: sm
+  - id: PERF-001
+    story: "63.9"
+    severity: low
+    finding: "Badge/sort usam new Date() no render (snapshot, sem countdown ao vivo na lista)."
+    suggested_action: "Aceitável sob GR-3 (±1min); live-refresh é débito futuro se exigido."
+    suggested_owner: dev
+  - id: TEST-001
+    story: "63.10"
+    severity: low
+    finding: "Endpoint e UI sem teste de rota/componente (repo só testa helper puro)."
+    suggested_action: "Cobrir authz e merge se infra de teste de rota for introduzida."
+    suggested_owner: dev
+  - id: A11Y-001
+    story: "63.9"
+    severity: low
+    finding: "Ícone Clock do toggle sem aria-hidden (texto visível já é lido)."
+    suggested_action: "Adicionar aria-hidden ao ícone decorativo."
+    suggested_owner: dev
+  - id: SEC-001
+    story: "63.10"
+    severity: low
+    finding: "Read-then-write TOCTOU teórico no merge do metadata — inócuo p/ flag booleano idempotente."
+    suggested_action: "Usar jsonb_set no servidor se virar campo crítico."
+    suggested_owner: dev
+  - id: SCOPE-001
+    story: "63.9"
+    severity: low
+    finding: "Badge só no card mobile (desktop table sem badge) — por design, @po validou."
+    suggested_action: "Adicionar à tabela desktop em follow-up se desejado."
+    suggested_owner: sm
+  - id: OBS-001
+    story: "all"
+    severity: low
+    finding: "CodeRabbit CLI não executado (config WSL/Windows; host macOS) — mesmo cenário das Fases 1/2 e Epic 51."
+    suggested_action: "Não-bloqueante. Análise manual cobriu authz, query/ordenação, regressão, CON-1/CON-3 e testes. CI pode rodar pós-push."
+    suggested_owner: devops
+
+regression_safety:
+  - "63-8: WindowStatusBadge coexiste (não substituído); page.tsx intocado; isAiActive só destruturado; banner read-only."
+  - "63-9: embed adiciona só um campo ao SELECT; filtros/contadores de page.tsx inalterados; sort não muta o array."
+  - "63-10: composer/handleSend intactos; novo bloco só em disabledByWindow; prop nova default false."
+  - "CON-3: is_ai_active e takeover intocados nas 3 stories."
+  - "Suíte completa 444/444; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    63-8, 63-9 e 63-10 passam individualmente e em conjunto — Fase 3 COMPLETA.
+    63-8: banner 100% read-only resolve o NO-GO original (sem botão/endpoint/mutação;
+    CON-3 inviolável); semântica correta via brokerSentRecently; +13 testes do helper.
+    CON-1 inviolável limpo nas 3; CON-3 intocado; endpoint da 63-10 com autorização
+    sólida e escopo de admin correto; query da 63-9 sem N+1 com seleção/ordenação
+    corretas nos boundaries. Suíte completa verde (444/444); lint e type-check limpos
+    nos arquivos das stories (o erro L90 é pré-existente, comprovado; os 3 de
+    visual-editor são ambientais). Issues todas LOW/CONCERNS documentadas.
+    Recomendação: LIBERAR 63-8, 63-9 e 63-10 para @devops *push.
+  next_steps:
+    - "@devops *push da branch feat/epic-51-handoff-chat-corretor (commits 9fa5f09 63-8, f4fd35b 63-9, 8826843 63-10)."
+    - "@sm: rastrear REL-001 (webhook notify-on-reply) e DESIGN-001 (paleta do banner) como débitos não-bloqueantes."
+    - "Smoke pós-deploy: banner roxo (Nicole) vs verde (corretor após responder); lista com badge de janela + sort; lead com janela fechada → 'Me avisar' grava e persiste."

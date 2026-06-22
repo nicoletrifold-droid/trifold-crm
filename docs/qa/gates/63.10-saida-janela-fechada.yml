@@ -1,0 +1,198 @@
+schema: 1
+storyId: "63.10"
+story: "63.10"
+title: "Caminho de Saída quando Janela de 24h está Fechada"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 atendidos por código. Endpoint dedicado POST /api/leads/[id]/notify-on-reply
+  com autorização sólida: requireAuth (401 sem sessão) → SELECT do lead com a
+  supabase do USUÁRIO (RLS por org) + .eq(org_id).eq(is_active) → gate de ownership
+  (role privilegiada OU assigned_broker_id === appUser.id, senão 403) → merge JSONB
+  preservando metadata existente ({ ...currentMetadata, notify_broker_on_reply }) →
+  UPDATE via createAdminClient escopado por id+org_id (sem vazar cross-org).
+  Idempotente (body { enabled } default true). CON-3: o endpoint só escreve
+  `metadata`, NÃO toca is_ai_active. CON-1 INVIOLÁVEL: git grep ZERO ocorrências.
+  Plumbing correto: page.tsx (select `*` → metadata) → ConversationThread
+  (notifyOnReply) → BrokerMessageInput, sem pular o intermediário da 63-5. UI:
+  botão Bell→Loader2→BellRing "Aviso configurado" (não clicável após confirmar) +
+  placeholder MessageSquarePlus informativo (sem ação, sem envio real). a11y:
+  aria-label, aria-live="polite" no estado confirmado, ≥44px, ícones aria-hidden.
+  Suíte completa 431/431 (33 arquivos); ESLint 0 e type-check 0 nos arquivos da story.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T22:12:00Z"
+iteration: 1
+quality_score: 93
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (bloco disabledByWindow exibe msg + botão "me avisar"), AC2 (POST endpoint
+      dedicado grava metadata.notify_broker_on_reply — PATCH genérico não aceita
+      metadata, confirmado), AC3 (notifyEnabled ? BellRing "Aviso configurado" :
+      botão; não clicável após confirmar), AC4 (page passa notifyOnReply de
+      lead.metadata → useState inicial), AC5 (placeholder MessageSquarePlus cinza
+      sem ação), AC6 (type-check/ESLint limpos).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Endpoint dedicado (não afrouxa o whitelist do PATCH genérico — decisão
+      correta de escopo). Merge JSONB preserva chaves existentes. Estados de UI
+      idle/loading/confirmado/erro bem modelados. Imports absolutos @web/*. JSDoc
+      explica a escolha do admin client para o merge e o escopo honesto (sem envio).
+  - check: "3. Test Architecture"
+    status: CONCERNS
+    note: >
+      Endpoint e UI sem teste automatizado. Consistente com o padrão do Epic 63
+      (repo só tem teste de helper puro; sem infra de teste de rota/componente —
+      sem @testing-library/jsdom/MSW; vitest env=node). A lógica do endpoint é
+      simples (authz + merge idempotente) e foi revisada manualmente linha a linha.
+      Suíte completa 431/431 sem regressão. TEST-001 LOW advisory.
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      BrokerMessageInput mantém o fluxo de envio (handleSend/isDisabled) intacto;
+      o novo bloco só renderiza quando disabledByWindow. ConversationThread repassa
+      a prop nova com default false (retrocompatível). page.tsx adiciona só a prop.
+      Suíte 431/431.
+  - check: "5. Performance"
+    status: PASS
+    note: >
+      Sem query adicional na página (metadata já vem no select `*`). O endpoint faz
+      1 SELECT (RLS) + 1 UPDATE (admin). POST disparado só no clique do corretor.
+  - check: "6. Security (CON-1 + endpoint authz)"
+    status: PASS
+    note: >
+      CON-1: git grep ZERO. Authz: requireAuth → ownership por org + assigned_broker
+      ou role privilegiada (403 caso contrário). SELECT com supabase do usuário
+      (RLS); UPDATE admin escopado por id+org_id (id já validado como do usuário) —
+      sem cross-org. Merge preserva JSONB (não clobbra outras chaves). Idempotente.
+      CON-3: is_ai_active não tocado.
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Completion Notes e AUTO-DECISION (Option B leads.metadata) honestos sobre o
+      escopo: persiste preferência, NÃO entrega notificação real (débito futuro no
+      webhook). Placeholder "em breve" é informativo, não promessa de release (R3).
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "broker-message-input.tsx: bloco {disabledByWindow && (...)} exibe msg explicativa + botão 'Me avisar quando o lead responder'."
+  - ac: "AC2"
+    status: PASS
+    note: "handleNotifyOnReply → POST /api/leads/[id]/notify-on-reply; route grava metadata.notify_broker_on_reply via admin merge."
+  - ac: "AC3"
+    status: PASS
+    note: "notifyEnabled ? <div BellRing 'Aviso configurado' aria-live> : <button>; guard if (notifyEnabled || notifyLoading) return."
+  - ac: "AC4"
+    status: PASS
+    note: "page.tsx notifyOnReply={Boolean(lead.metadata?.notify_broker_on_reply)} → ConversationThread → useState(notifyOnReply)."
+  - ac: "AC5"
+    status: PASS
+    note: "Placeholder <p> com MessageSquarePlus (aria-hidden) + texto cinza text-stone-500, sem onClick/botão."
+  - ac: "AC6"
+    status: PASS
+    note: "type-check 0 e ESLint 0 nos arquivos da story; suíte 431/431."
+
+issues:
+  - id: TEST-001
+    severity: low
+    category: tests
+    finding: >
+      Endpoint notify-on-reply e UI do caminho de saída sem teste automatizado.
+      Repo não tem infra de teste de rota/componente (padrão do Epic 63 = só
+      helpers puros). Lógica simples e revisada manualmente.
+    suggested_action: >
+      Não-bloqueante. Cobrir authz (401/403/404) e merge idempotente se infra de
+      teste de rota (MSW/supertest) for introduzida.
+    suggested_owner: dev
+  - id: REL-001
+    severity: low
+    category: reliability
+    finding: >
+      A entrega real da notificação quando o lead responde NÃO é implementada
+      (requer check no webhook WhatsApp). A preferência é persistida mas inerte até
+      essa integração — placeholder "em breve" pode permanecer indefinidamente.
+    suggested_action: >
+      Não-bloqueante e por design (R3 da story, escopo Fase 3). Rastrear como débito
+      para implementar o consumo de notify_broker_on_reply no webhook handler.
+    suggested_owner: sm
+  - id: SEC-001
+    severity: low
+    category: security
+    finding: >
+      Read-then-write do metadata (SELECT RLS → merge → UPDATE admin) tem janela
+      TOCTOU teórica. Para um flag booleano idempotente o impacto é nulo (último
+      write vence com o mesmo valor).
+    suggested_action: "Não-bloqueante. Aceitável para P2; um UPDATE com jsonb_set no servidor eliminaria a janela se virar campo crítico."
+    suggested_owner: dev
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  command: "git grep -nE '<pattern>' HEAD -- notify-on-reply/route.ts broker-message-input.tsx conversation-thread.tsx [id]/page.tsx"
+  note: "Zero ocorrências (exit 1)."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "431/431 passed (33 files)."
+  - check: "ESLint (arquivos da story)"
+    command: "cd packages/web && pnpm exec eslint notify-on-reply/route.ts broker-message-input.tsx conversation-thread.tsx [id]/page.tsx"
+    result: "0 erros, 0 warnings nos arquivos da story (exit 0)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos da story. 3 erros ambientais pré-existentes em
+      email-templates/_components/visual-editor.tsx (react-email-editor ausente)
+      — não relacionados à 63-10.
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos arquivos tocados"
+    result: "CLEAN (zero)."
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Authz por sessão + ownership/role; admin escopado por id+org_id (sem cross-org); merge preserva JSONB; idempotente; CON-3 intocado."
+  performance:
+    status: PASS
+    notes: "Sem query extra na página; endpoint 1 SELECT + 1 UPDATE só no clique."
+  accessibility:
+    status: PASS
+    notes: "Botão aria-label ≥44px; estado confirmado aria-live='polite'; ícones aria-hidden. NFR-2 atendido."
+  maintainability:
+    status: PASS
+    notes: "Endpoint dedicado isolado; prop atravessa o intermediário ConversationThread (não pula a 63-5)."
+  reliability:
+    status: CONCERNS
+    notes: "Preferência persistida mas notificação real é débito futuro (REL-001). Sem regressão no envio."
+
+regression_safety:
+  - "BrokerMessageInput: handleSend/isDisabled e o composer intactos; novo bloco só em disabledByWindow."
+  - "ConversationThread: prop notifyOnReply default false (retrocompatível); demais props inalteradas."
+  - "page.tsx: metadata já vinha no select `*` (no-op de query); só adiciona a prop."
+  - "CON-3: is_ai_active não tocado pelo endpoint nem pelos componentes."
+  - "Suíte completa 431/431; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 6 ACs estão atendidos por código. O endpoint dedicado tem autorização
+    correta (requireAuth + ownership por org/role, 403/404 apropriados), o admin
+    client é escopado por id+org_id (sem cross-org), o merge preserva o JSONB
+    existente e a operação é idempotente. CON-3 respeitado (só metadata). CON-1
+    limpo. O plumbing atravessa o ConversationThread sem pular o intermediário. O
+    escopo é honesto: persiste a preferência sem prometer/realizar envio. As issues
+    são LOW/CONCERNS não-bloqueantes (ausência de teste de rota — padrão do repo;
+    notificação real é débito futuro por design; TOCTOU teórico inócuo p/ flag
+    idempotente). Suíte 431/431; lint e type-check limpos nos arquivos da story.
+    Recomendação: LIBERAR para @devops *push.
+  next_steps:
+    - "@devops *push (branch feat/epic-51-handoff-chat-corretor) — commit 8826843."
+    - "Smoke pós-deploy: lead WhatsApp com janela fechada → botão 'Me avisar' visível; clicar → 'Aviso configurado'; reload mantém estado; SELECT metadata mostra notify_broker_on_reply=true."
+    - "@sm: rastrear REL-001 (consumir notify_broker_on_reply no webhook WhatsApp) como débito futuro."

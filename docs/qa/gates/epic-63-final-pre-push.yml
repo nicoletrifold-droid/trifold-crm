@@ -1,0 +1,194 @@
+schema: 1
+storyId: "epic-63-final-pre-push"
+story: "epic-63-final-pre-push"
+title: "Quality Gate FINAL pré-push — Epic 63 (estado MERGED + Story 63-15)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Gate final pré-push sobre o ESTADO MERGED com a main (merge 798681c) + commit
+  5ae3b2f (Story 63-15, handoff por agendamento). Valida não-regressão da Nicole e
+  os 2 gatilhos de handoff. RESULTADO: PASS. Não-regressão CONFIRMADA: lead novo
+  nasce com is_ai_active=true (findOrCreateConversation route.ts:994) → guard
+  `!isAiActive` pula o bloco de reativação → `if (isAiActive)` (L682) → Nicole
+  responde; appointmentCreated permanece false para mensagens normais → SEM handoff.
+  Pipeline, createCalendarEvent (73-1), 71-1 (sem distribuição na 1ª msg) e dedupe
+  wamid 23505 (early-return) preservados pelo merge — diff main→merge SÓ adiciona o
+  push 63-12 e o bloco de reativação 63-13/63-15, nenhuma lógica da main removida.
+  Handoff por agendamento CONFIRMADO: appointmentCreated setado no onEvent em
+  APPOINTMENT_CREATED (L728), e após o envio da resposta da Nicole o UPDATE
+  is_ai_active=false/handoff_at/handoff_reason='appointment' com `.eq("is_ai_active",
+  true)` (idempotente, por-conversa, L768-778); notifyBrokerOfAppointment preservado
+  (L733, dispara ANTES do fetch → corretor avisado mesmo se o envio falhar). Handoff
+  por msg do corretor CONFIRMADO: send-message/route.ts:281-297 seta
+  is_ai_active=false/handoff_at/handoff_reason='broker_reply' via admin client sob
+  guard `if(conversation.is_ai_active)`. Reativação 24h ANCORADA CONFIRMADA:
+  resolveTakeoverAnchor(handoff_at, lastBrokerAt) + shouldReactivateAi(anchor)
+  (L650-678), limpa handoff_at/handoff_reason ao reassumir. CON-1 inviolável LIMPO
+  (git grep zero ocorrências nos arquivos do 63-15). Suíte completa 526/526 (40
+  arquivos). type-check 0 erros nos arquivos do Epic 63 (3 erros ambientais
+  pré-existentes em visual-editor.tsx/react-email-editor). ESLint exit 0 nos 4
+  arquivos do 63-15. Sem migration (handoff_at/handoff_reason existem desde
+  001_base_schema.sql:159-160). Pronto para @devops *push.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-21"
+updated: "2026-06-21T22:50:00Z"
+iteration: 1
+quality_score: 92
+waiver: { active: false }
+
+scope:
+  base_state: "Merge 798681c (origin/main → feat/epic-51-handoff-chat-corretor)"
+  new_commit: "5ae3b2f (Story 63-15 — handoff pós-agendamento + reativação ancorada)"
+  note: >
+    Epic 63 Fases 1–5 já tiveram gates PASS individuais ANTES do merge (epic-63-fase2/3/4).
+    Este gate valida o estado MERGED + a nova Story 63-15, implementada em modo direto
+    (sem ciclo @sm/@po completo por indisponibilidade de subagentes).
+
+behaviors_verified:
+  nao_regressao_nicole:
+    result: CONFIRMED
+    evidence:
+      - "findOrCreateConversation cria conversa com is_ai_active=true (route.ts:994)."
+      - "let isAiActive = conversation!.is_ai_active (route.ts:644) → true para lead novo."
+      - "guard if(!isAiActive) (L645) pula o bloco de reativação para conversa ativa."
+      - "if(isAiActive) (L682) → pipeline processMessage → Nicole responde."
+      - "appointmentCreated default false (L693); só vira true em APPOINTMENT_CREATED → mensagem normal NÃO dispara handoff."
+      - "Merge preservou main: 23505 early-return (L443), 71-1 sem distribuição (L628), createCalendarEvent 73-1 (L687)."
+  handoff_por_agendamento:
+    result: CONFIRMED
+    trigger: "APPOINTMENT_CREATED"
+    evidence:
+      - "appointmentCreated = true no onEvent quando event.event_type === 'APPOINTMENT_CREATED' (route.ts:728)."
+      - "Após enviar a resposta da Nicole (fetch L748-760), UPDATE is_ai_active=false / handoff_at=now / handoff_reason='appointment' (L768-778)."
+      - "Guard .eq('is_ai_active', true) → idempotente, só desliga se ainda ativa; por-conversa via .eq('id', conversation.id)."
+      - "notifyBrokerOfAppointment preservado (L733), dispara no onEvent ANTES do fetch → backstop: corretor é avisado mesmo se o envio/handoff falhar."
+  handoff_por_msg_corretor:
+    result: CONFIRMED
+    trigger: "broker_reply"
+    evidence:
+      - "send-message/route.ts:281 guard if(conversation.is_ai_active)."
+      - "createAdminClient().update({ is_ai_active:false, handoff_at:now, handoff_reason:'broker_reply' }).eq('id', conversation.id) (L282-290)."
+      - "Admin client necessário: corretor não-admin pode não ter policy UPDATE em conversations sob RLS."
+      - "Best-effort: se UPDATE falhar, loga e segue; próximo envio reencontra is_ai_active=true."
+  reativacao_ancorada:
+    result: CONFIRMED
+    evidence:
+      - "Promise.all busca conversations.handoff_at + última msg role='broker' (route.ts:650-664)."
+      - "anchor = resolveTakeoverAnchor(handoff_at, lastBrokerAt) (L666-669) — retorna o mais recente; null se ambos null."
+      - "shouldReactivateAi(anchor) (L671): reassume se anchor null OU ≥24h; mantém se <24h."
+      - "Ao reassumir, limpa handoff_at/handoff_reason (L675) para não influenciar cálculos futuros."
+      - "Helper resolveTakeoverAnchor puro (broker-takeover-status.ts:116-125) + 9 testes novos (boundaries, igualdade >=, integração com shouldReactivateAi)."
+
+con_verification:
+  con1_inviolable:
+    result: CLEAN
+    command: "git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' 5ae3b2f -- <arquivos 63-15>"
+    outcome: "EXIT 1 (zero ocorrências) nos 4 arquivos do 63-15 (webhook route.ts, send-message route.ts, broker-takeover-status.ts/.test.ts)."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "526/526 passed (40 files). +9 testes de resolveTakeoverAnchor (Story 63-15) vs baseline."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos do Epic 63 / webhook. 3 erros ambientais pré-existentes em
+      email-templates/_components/visual-editor.tsx (react-email-editor ausente) —
+      aceitos, não relacionados ao Epic 63.
+  - check: "ESLint (arquivos do 63-15)"
+    command: "pnpm exec eslint <webhook + send-message + broker-takeover-status.ts/.test.ts>"
+    result: "EXIT 0 — zero erros/warnings."
+  - check: "Resolução do merge"
+    command: "git diff 941491b 798681c -- webhook/route.ts"
+    result: "Merge SÓ adiciona push 63-12 + bloco reativação 63-13; troca if(conversation!.is_ai_active) por if(isAiActive). Nenhuma lógica da main removida."
+  - check: "Colunas de schema"
+    command: "git grep -nE 'handoff_at|handoff_reason' -- supabase/migrations/"
+    result: "Existem desde 001_base_schema.sql:159-160. Story 63-15 não cria migration (correto)."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: >
+      Reativação faz 2 queries em Promise.all SÓ quando is_ai_active=false (caminho
+      raro de conversa em handoff), ambas indexadas e limit(1)/maybeSingle. Handoff por
+      agendamento é 1 UPDATE no after() (fora do caminho crítico do HTTP 200).
+  security:
+    status: PASS
+    notes: >
+      Webhook usa admin client server-side (sem sessão). Handoff por agendamento e
+      reativação escopados por conversation.id (sem cross-conversation). send-message
+      valida ownership antes do handoff (padrão do Epic 51/63).
+  reliability:
+    status: CONCERNS
+    notes: >
+      Handoff por agendamento roda no after() best-effort: se o fetch de envio (L748)
+      lançar, o catch (L796) é alcançado ANTES do UPDATE de handoff → Nicole permanece
+      ativa. Mitigado por: notifyBrokerOfAppointment já disparou no onEvent (antes do
+      fetch) → corretor é avisado e, ao responder, o handoff por broker_reply assume
+      como backstop. Risco residual aceitável e documentado (RISK-001).
+  maintainability:
+    status: PASS
+    notes: >
+      resolveTakeoverAnchor unifica os 2 gatilhos num único helper puro testado;
+      reusa shouldReactivateAi/brokerSentRecently. handoff_reason dá rastreabilidade.
+
+residual_risks:
+  - id: RISK-001
+    severity: medium
+    finding: >
+      Handoff por agendamento é best-effort no after(): se o envio da confirmação
+      falhar, o UPDATE de is_ai_active=false não roda e a Nicole continua respondendo.
+    mitigation: >
+      notifyBrokerOfAppointment dispara no onEvent ANTES do fetch → corretor sempre
+      avisado; a resposta dele aciona o handoff por broker_reply. Backstop estrutural.
+    suggested_owner: dev
+    blocking: false
+  - id: RISK-002
+    severity: low
+    finding: >
+      Race R1 (herdado 63-13): se o webhook leu is_ai_active=true antes do send-message
+      desligar, a Nicole pode responder 1x a mais. A próxima msg do lead já verá false.
+    mitigation: "Aceito — janela de race mínima, sem efeito de negócio relevante."
+    suggested_owner: dev
+    blocking: false
+  - id: INFRA-001
+    severity: medium
+    finding: >
+      Pré-existente da Fase 4 (63-11): `messages` precisa estar na publicação
+      supabase_realtime (migration 102) para o chat em tempo real funcionar. Não é do
+      63-15, mas é dependência de deploy do Epic 63 como um todo.
+    mitigation: "Degrada graciosamente (reload). Habilitar antes/durante o deploy."
+    suggested_owner: devops
+    blocking: false
+
+smoke_pos_deploy:
+  - "PRINCIPAL — Handoff por agendamento (só testável em PRODUÇÃO, E2E real do pipeline): lead conversa com a Nicole até ela AGENDAR uma visita → confirmar que conversations.is_ai_active vira false e handoff_reason='appointment'; corretor recebe a notificação; a PRÓXIMA mensagem do lead NÃO é respondida pela Nicole (corretor assume)."
+  - "Handoff por msg do corretor: corretor responde no chat → is_ai_active=false, handoff_reason='broker_reply'; Nicole para imediatamente."
+  - "Reativação ancorada: conversa em handoff por agendamento → Nicole NÃO reassume antes de 24h do handoff_at (mesmo sem msg de corretor); após 24h sem corretor, reassume e limpa handoff_at/handoff_reason."
+  - "Não-regressão: lead NOVO manda 'Olá' → Nicole responde normalmente; sem handoff espúrio."
+  - "INFRA-001: confirmar `messages` na publicação supabase_realtime (chat em tempo real do corretor)."
+
+regression_safety:
+  - "Merge 798681c preserva 23505 dedupe, 71-1 (sem distribuição na 1ª msg) e createCalendarEvent (73-1) — verificado por git diff main→merge."
+  - "Lead novo → Nicole responde (is_ai_active=true por padrão); handoff só em APPOINTMENT_CREATED ou broker_reply."
+  - "Sem migration; colunas handoff_* existem desde 001. Suíte 526/526 sem falhas introduzidas."
+  - "after() do push 63-12 (notifyBrokerOnReply) preservado e APÓS o early-return 23505 (sem push duplicado em reentrega)."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Estado merged + Story 63-15 passam em todos os checks. Não-regressão da Nicole
+    confirmada por leitura do fluxo (lead novo responde como antes; merge não removeu
+    lógica da main). Os 2 gatilhos de handoff (agendamento e broker_reply) e a
+    reativação ancorada em resolveTakeoverAnchor estão corretos, idempotentes e
+    por-conversa. CON-1 limpo. Suíte 526/526, type-check 0 (3 erros ambientais
+    aceitos), ESLint 0. Riscos residuais (RISK-001 best-effort do handoff por
+    agendamento, RISK-002 race, INFRA-001 publicação realtime) são LOW/MEDIUM,
+    documentados e não-bloqueantes — com backstop estrutural para o RISK-001.
+    Recomendação: LIBERAR para @devops *push.
+  next_steps:
+    - "@devops *push da branch feat/epic-51-handoff-chat-corretor (até o commit 5ae3b2f)."
+    - "@devops/@data-engineer: garantir `messages` na publicação supabase_realtime (INFRA-001) durante o deploy."
+    - "Smoke PRINCIPAL pós-deploy: handoff por agendamento (E2E real da Nicole agendando) — único caminho não coberto por teste automatizado."
+    - "@sm: rastrear RISK-001 (best-effort do handoff por agendamento) como follow-up não-bloqueante."

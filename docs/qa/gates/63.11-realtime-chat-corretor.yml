@@ -1,0 +1,158 @@
+schema: 1
+story: "63.11"
+storyId: "63.11"
+title: "Atualização em Tempo Real do Chat do Corretor (Supabase Realtime)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Subscription Supabase Realtime (postgres_changes em messages por
+  conversation_id) corretamente implementada no ConversationThread Client
+  Component. Os 9 ACs estão atendidos em código; a correção crítica de dedup/race
+  (dedupeById + mergeMessages) impede duas bolhas com a mesma key React E impede
+  perda de mensagem no frame do próprio envio do corretor. Dep do useEffect é
+  estável (string joinada) — sem loop de re-subscribe; cleanup remove TODOS os
+  canais no unmount (sem leak). Badge/composer/banner reagem ao inbound via
+  localLastMessageAt e lista combinada. CON-1/CON-3/CON-7/CON-8 limpos. Helper puro
+  com 10 testes cobrindo boundaries. ÚNICA pendência é de INFRA (não de código):
+  habilitar `messages` na publicação supabase_realtime (migration 102 NÃO aplicada
+  — token Supabase expirado). Sem isso o feature fica inerte, mas degrada de forma
+  graciosa (reload/router.refresh continua funcionando). Pronto para @devops *push,
+  com a ressalva de que a habilitação do Realtime é pré-condição para o feature
+  funcionar em produção.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-21"
+updated: "2026-06-21T20:30:00Z"
+commit: "67ed19b"
+quality_score: 90
+waiver: { active: false }
+
+ac_traceability:
+  - ac: AC1
+    desc: "Mensagem do lead (role='user') aparece automaticamente (bolha cinza esquerda)"
+    status: MET
+    evidence: "conversation-thread.tsx L97-129 subscription INSERT em messages; callback append a realtimeMessages; getBubbleStyle('user')=cinza/esquerda (63-2)."
+  - ac: AC2
+    desc: "Resposta da Nicole (role='assistant') aparece automaticamente (bolha roxa esquerda)"
+    status: MET
+    evidence: "Filtro é só por conversation_id+event=INSERT (sem filtro de role) → captura assistant também; callback append independe do role (L113-126)."
+  - ac: AC3
+    desc: "Nova prop conversationIds; 1 canal por id; cleanup de todos no unmount"
+    status: MET
+    evidence: "ConversationThreadProps L47; page.tsx passa conversationIds (commit 67ed19b L163); 1 canal broker-chat-{id} por id (L102-129); return cleanup removeChannel em todos (L131-133)."
+  - ac: AC4
+    desc: "Dedup por id — sem duplicata mesmo com router.refresh logo após realtime"
+    status: MET
+    evidence: "dedupeById([...messages, ...realtimeMessages]) servidor prevalece (realtime.ts L29-38); mergeMessages dedup otimista×server; useEffect([messages]) com pruneRealtime/hasStaleRealtime."
+  - ac: AC5
+    desc: "Auto-scroll ao receber via realtime"
+    status: MET
+    evidence: "Delegado ao ChatScrollArea (63-6) que rola quando messageCount aumenta (L168-169)."
+  - ac: AC6
+    desc: "role='user' via realtime com janela fechada → badge verde + composer habilitado sem reload"
+    status: MET
+    evidence: "setLocalLastMessageAt(new Date(msg.created_at)) em role='user' (L121-123); windowClosed=getWindowStatus(localLastMessageAt) (L143-144); WindowStatusBadge e BrokerMessageInput recebem o estado local (L160, L233)."
+  - ac: AC7
+    desc: "AiStatusBanner usa lista combinada; role='broker' de outra aba → Estado A→B sem reload"
+    status: MET
+    evidence: "deriveBrokerActive(serverPlusRealtime, isAiActive) (L151) usa a lista combinada server+realtime."
+  - ac: AC8
+    desc: "Unmount remove todos os canais sem memory leak"
+    status: MET
+    evidence: "cleanup L131-133 itera channels.forEach(removeChannel); dep estável evita re-subscribe (L137)."
+  - ac: AC9
+    desc: "type-check e ESLint passam nos arquivos da story"
+    status: MET
+    evidence: "type-check 0 erros nos arquivos (3 erros ambientais pré-existentes em visual-editor.tsx); ESLint 0."
+
+dedup_race_analysis:
+  result: SOLID
+  notes: >
+    Cenário do próprio envio do corretor (INSERT chega via realtime E volta no
+    router.refresh): (1) serverPlusRealtime=dedupeById([...messages, ...realtime])
+    — server vem primeiro, em colisão de id o server vence → NUNCA duas bolhas com
+    a mesma key React. (2) mergeMessages(serverPlusRealtime, optimistic) descarta o
+    otimista cujo id já está no server (id otimista é o REAL persistido, carryover
+    de 63-5). (3) useEffect([messages]) chama pruneRealtime apenas quando
+    hasStaleRealtime=true (retorna a mesma ref quando nada muda → evita re-render).
+    Resultado: no máximo 1 bolha por id em qualquer frame; nenhuma mensagem perdida
+    (pruneRealtime só remove o que já está em messages, que será renderizado pelo
+    servidor). A ressalva da story sobre "ver 2x por 1 frame" é mais conservadora
+    que o código real — o dedupeById já fecha esse frame.
+  multi_conversation_cap: "conversationIds.slice(0,3) (MAX_REALTIME_CHANNELS=3, R3); 3 conversas mais recentes (page ordena created_at desc)."
+  effect_dep_stability: "dep = conversationIds.slice(0,3).join(',') (string value-equal entre renders apesar de nova ref do array) → sem re-subscribe em re-render disparado por state. eslint-disable exhaustive-deps justificado e documentado."
+  cleanup: "channels.forEach(ch => supabase.removeChannel(ch)) no return do effect — todos os canais; supabase é a instância do closure que criou os canais."
+
+con_verification:
+  con1_inviolable:
+    result: CLEAN
+    notes: "git grep tel:/wa.me/click-to-call: 0 ocorrências de código nos arquivos da story (único hit é comentário JSDoc). Subscription é read-only; nenhum deep-link externo."
+  con3_con7:
+    result: CLEAN
+    notes: "Realtime é puramente observação (channel/on/subscribe/removeChannel). ZERO mutação: nenhum .update/.insert/is_ai_active=; is_ai_active apenas LIDO via prop e passado a deriveBrokerActive."
+  con8:
+    result: CLEAN
+    notes: "git show --stat 67ed19b: sw-source.js NÃO está no commit. Service worker intocado."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: "Sem polling; subscription event-driven. Dep estável evita re-subscribe loop. Cap de 3 canais limita overhead."
+  reliability:
+    status: PASS
+    notes: "Cleanup completo evita leak de subscription. Degradação graciosa: sem infra realtime, page funciona via reload (Out of Scope: fallback de polling)."
+  maintainability:
+    status: PASS
+    notes: "Helpers puros isolados (dedupeById/pruneRealtime/hasStaleRealtime) testáveis em Node; razão de não estender mergeMessages documentada no header."
+  security:
+    status: PASS
+    notes: "Realtime respeita RLS da sessão do corretor (browser client anon+session); messages_select (migration 004) permite o corretor ler apenas mensagens dos SEUS leads. Confirmado pelo @po."
+
+issues:
+  - id: INFRA-001
+    severity: medium
+    category: reliability
+    finding: >
+      Pré-condição de infra (T1, GR-6): tabela `messages` precisa estar na
+      publicação supabase_realtime. Nenhuma migration referencia a publicação;
+      migration 102_realtime_messages.sql criada mas NÃO aplicada em produção
+      (token Supabase expirado). Sem isso, a subscription assina mas NUNCA recebe
+      eventos — o feature fica silenciosamente inerte.
+    suggested_action: >
+      DEPLOY BLOCKER do FEATURE (não do código): @data-engineer/@devops habilitar
+      `messages` em supabase_realtime (Dashboard → Replication ou ALTER PUBLICATION
+      supabase_realtime ADD TABLE messages;) ANTES de considerar 63-11 funcional.
+      Não bloqueia o push do código (degrada graciosamente).
+    suggested_owner: devops
+  - id: TEST-001
+    severity: low
+    category: tests
+    finding: >
+      Os 10 testes cobrem os helpers puros; a fiação da subscription (callback,
+      update de localLastMessageAt, cleanup de canais) é verificada só por code
+      review — o repo não tem infra de teste de componente React (vitest env=node,
+      sem @testing-library). Consistente com o padrão do Epic 63 (63-6).
+    suggested_action: "Aceitável sob o padrão do epic. Cobrir com teste de componente se a infra (RTL/jsdom) for introduzida no futuro."
+    suggested_owner: dev
+
+regression_safety:
+  - "page.tsx: apenas adiciona a prop conversationIds (array já existia em L45); sem mudança de query."
+  - "ConversationThread: novos states/effects aditivos; render path inalterado (mesma pipeline mergeMessages→bolhas 63-2)."
+  - "Suíte completa 463/463; nenhuma falha introduzida."
+  - "Sem migration; sem mudança no service worker; sem mutação de estado de atendimento."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Implementação correta e robusta. A correção crítica de dedup/race resolve o
+    risco real (duas bolhas/key duplicada e mensagem perdida no auto-envio) via
+    dedupeById + mergeMessages; dep de effect estável e cleanup completo eliminam
+    re-subscribe e memory leak. ACs todos atendidos; CON-1/CON-3/CON-7/CON-8
+    limpos; testes dos helpers cobrem boundaries. A única pendência é de INFRA
+    (habilitar Realtime para messages), registrada como INFRA-001 (medium) — é
+    pré-condição de DEPLOY do feature, não defeito de código, e o sistema degrada
+    graciosamente sem ela.
+  next_steps:
+    - "@devops *push (commit 67ed19b)."
+    - "@data-engineer/@devops: habilitar `messages` em supabase_realtime (migration 102) ANTES do feature funcionar em produção."
+    - "Smoke pós-infra: lead responde via WhatsApp → mensagem aparece em ≤3s sem reload; janela fechada reabre; banner muda de outra aba."
