@@ -17,6 +17,7 @@ import {
 import { getWindowStatus } from "@web/lib/broker/window-status"
 import { deriveBrokerActive } from "@web/lib/broker/broker-takeover-status"
 import { createClient } from "@web/lib/supabase/client"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 
 /** Story 63-11 — máximo de canais Realtime simultâneos (R3). Leads com mais de
  *  3 conversas recebem realtime apenas das 3 mais recentes. */
@@ -117,41 +118,69 @@ export function ConversationThread({
   // Story 63-11 — um canal Realtime por conversa (postgres_changes não suporta
   // IN). Cobre `role='user'` (lead) e `role='assistant'` (Nicole). Cap em 3
   // canais (R3). Cleanup remove todos os canais no unmount (AC8).
+  //
+  // FIX de auth (Story 63-11): o socket Realtime do `createBrowserClient`
+  // (anon key) NÃO é autenticado por padrão, então a RLS de `messages`
+  // (`auth.uid()`) filtra TODOS os eventos e nada chega. Antes de subscrever,
+  // obtemos a sessão e chamamos `realtime.setAuth(access_token)` para que o
+  // canal carregue o JWT do corretor e a RLS libere os INSERTs.
   useEffect(() => {
     const ids = conversationIds.slice(0, MAX_REALTIME_CHANNELS)
     if (ids.length === 0) return
 
     const supabase = createClient()
-    const channels = ids.map((convId) =>
-      supabase
-        .channel(`broker-chat-${convId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "messages",
-            filter: `conversation_id=eq.${convId}`,
-          },
-          (payload) => {
-            const incoming = payload.new as ThreadMessage
-            setRealtimeMessages((prev) =>
-              prev.some((m) => m.id === incoming.id)
-                ? prev
-                : [...prev, incoming]
-            )
-            // AC6 — mensagem do lead reabre a janela de 24h sem reload.
-            if (incoming.role === "user") {
-              setLocalLastMessageAt(new Date(incoming.created_at))
+    let cancelled = false
+    let channels: RealtimeChannel[] = []
+
+    void (async () => {
+      // Autentica o socket Realtime ANTES de subscrever — sem o JWT a RLS
+      // de `messages` bloqueia todos os eventos (bug-alvo).
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        await supabase.realtime.setAuth(session.access_token)
+      }
+      // O efeito pode ter sido desmontado durante o await: não subscreva.
+      if (cancelled) return
+
+      channels = ids.map((convId) =>
+        supabase
+          .channel(`broker-chat-${convId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "messages",
+              filter: `conversation_id=eq.${convId}`,
+            },
+            (payload) => {
+              const incoming = payload.new as ThreadMessage
+              setRealtimeMessages((prev) =>
+                prev.some((m) => m.id === incoming.id)
+                  ? prev
+                  : [...prev, incoming]
+              )
+              // AC6 — mensagem do lead reabre a janela de 24h sem reload.
+              if (incoming.role === "user") {
+                setLocalLastMessageAt(new Date(incoming.created_at))
+              }
+              // Auto-scroll (AC5) é tratado pelo `ChatScrollArea` quando o número
+              // de mensagens renderizadas muda — não precisa de ref aqui.
             }
-            // Auto-scroll (AC5) é tratado pelo `ChatScrollArea` quando o número
-            // de mensagens renderizadas muda — não precisa de ref aqui.
-          }
-        )
-        .subscribe()
-    )
+          )
+          .subscribe((status, err) => {
+            // Diagnóstico leve: só loga falhas (não polui em SUBSCRIBED).
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              console.warn("[realtime]", convId, status, err?.message)
+            }
+          })
+      )
+    })()
 
     return () => {
+      cancelled = true
       channels.forEach((ch) => supabase.removeChannel(ch))
     }
     // `conversationIds` é estável entre re-renders (vem do Server Component);

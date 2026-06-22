@@ -299,12 +299,55 @@ Dex (@dev) — Opus 4.8 (1M), modo YOLO autônomo. 2026-06-21.
 - **Dedup do próprio envio:** o INSERT do corretor chega via realtime e também volta no `router.refresh()` (prop `messages`). `mergeMessages` só deduplica otimista×server; criei `dedupeById([...messages, ...realtimeMessages])` para evitar duas bolhas com a MESMA key React no frame intermediário. O `useEffect([messages])` remove de `realtimeMessages` o que já entrou no servidor (`hasStaleRealtime`/`pruneRealtime`), retornando a mesma referência quando nada muda (evita re-render desnecessário).
 - **Auto-scroll (AC5):** delegado ao `ChatScrollArea` existente (rola quando `messageCount` aumenta) — não foi preciso ref próprio.
 - **T1 (infra realtime) NÃO executada pelo @dev:** habilitar `messages` em `supabase_realtime` é ação de @data-engineer/@devops (rodando em paralelo). O código assume a publicação ativa. Teste manual de inserção real fica pendente dessa infra.
+- **FIX runtime de auth (2026-06-21):** após a infra confirmada (publicação OK, RLS `messages_select` correta), nenhum evento chegava no app. Diagnóstico decisivo com service role key: canal `SUBSCRIBED` + INSERT entregue → infra OK; com a sessão anon do corretor, nada chegava → o socket Realtime do `createBrowserClient` (anon key) NÃO carregava o `access_token` do corretor, então a RLS de `messages` (`auth.uid()`) filtrava todos os eventos. Correção: o `useEffect` da subscription virou uma IIFE `async` com flag `cancelled`; antes de `.subscribe()` faz `const { data: { session } } = await supabase.auth.getSession()` e, havendo token, `await supabase.realtime.setAuth(session.access_token)`. `setAuth` ocorre SEMPRE antes do subscribe; se `cancelled` virou `true` durante o await, não subscreve. Cleanup seta `cancelled=true` e `removeChannel` em todos os canais criados. Adicionado callback de status no `.subscribe((status, err) => ...)` que loga `console.warn('[realtime]', convId, status, err?.message)` apenas em `CHANNEL_ERROR`/`TIMED_OUT` (diagnóstico leve, sem poluir em SUBSCRIBED). Único arquivo tocado: `conversation-thread.tsx` (só o `useEffect` do Realtime). Fase 5 (`localIsAiActive`/`handleResumeAi`) e a dedup (`dedupeById`/`pruneRealtime`) intocadas. Importado o tipo `RealtimeChannel` de `@supabase/supabase-js` para tipar o array de canais no escopo async.
 
 ### Validações
 - `npx vitest run .../conversation-thread-realtime.test.ts` → **10/10 PASS**
 - `pnpm --filter @trifold/web type-check` → zero erros nos arquivos da story (restam 3 erros pré-existentes em `visual-editor.tsx`, módulo `react-email-editor` ausente — não relacionado)
 - ESLint nos 4 arquivos da story → zero erros/warnings
 - CON-1 OK (nenhum `tel:`/`wa.me`); CON-3/CON-7 OK (realtime é read/notify, não toca `is_ai_active`); nenhuma migration criada; service worker intocado
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-21
+### Reviewed By: Quinn (@qa — Test Architect)
+### Commit: 67ed19b
+
+**Veredito: PASS** (quality_score 90)
+
+#### Traceability AC → código (9/9 MET)
+- AC1/AC2 (lead + Nicole sem reload): subscription só filtra por `conversation_id`+`event=INSERT` (sem filtro de role) → captura `role='user'` e `role='assistant'`; callback append independe do role (`conversation-thread.tsx` L113-126).
+- AC3 (prop `conversationIds`, 1 canal/id, cleanup de todos): interface L47; `page.tsx` passa `conversationIds` (commit L163); `broker-chat-{id}` por id L102-129; cleanup `channels.forEach(removeChannel)` L131-133.
+- AC4 (dedup): `dedupeById([...messages, ...realtimeMessages])` (server vence) + `mergeMessages` + `useEffect([messages])` com `pruneRealtime`/`hasStaleRealtime`.
+- AC5 (auto-scroll): delegado ao `ChatScrollArea` (63-6).
+- AC6 (janela reabre): `setLocalLastMessageAt` em `role='user'` L121-123; `windowClosed=getWindowStatus(localLastMessageAt)`; badge/composer recebem o estado local.
+- AC7 (banner de outra aba): `deriveBrokerActive(serverPlusRealtime, isAiActive)` L151.
+- AC8 (sem leak): cleanup remove todos os canais; dep estável evita re-subscribe.
+- AC9 (type-check/lint): 0 erros nos arquivos da story.
+
+#### Correção crítica dedup/race — SÓLIDA
+No auto-envio do corretor (INSERT chega via realtime E volta no `router.refresh()`): `dedupeById` (server primeiro → vence na colisão de id) garante no máx 1 bolha por id em qualquer frame (nenhuma key React duplicada); `mergeMessages` descarta o otimista cujo id já está no server; `pruneRealtime` (sob guard `hasStaleRealtime`, retorna mesma ref quando nada muda) limpa o realtime já incorporado. **Nenhuma mensagem perdida** (prune só remove o que já está no servidor, que renderiza). A ressalva da story sobre "ver 2x por 1 frame" é mais conservadora que o código real. Dep do `useEffect` = `conversationIds.slice(0,3).join(",")` (string value-equal entre renders) → sem loop de re-subscribe; cleanup completo no unmount.
+
+#### Constraints
+- **CON-1 INVIOLÁVEL**: CLEAN — `git grep tel:/wa.me/click-to-call` → 0 ocorrências de código (único hit é comentário). Realtime é read-only.
+- **CON-3/CON-7**: CLEAN — realtime puramente observação; `is_ai_active` apenas lido via prop; ZERO mutação.
+- **CON-8**: CLEAN — `git show --stat 67ed19b` confirma `sw-source.js` ausente do commit.
+
+#### Verificação independente
+- `npx vitest run` → **463/463 (36 arquivos)**; helpers da story = 10 testes cobrindo boundaries (vazio, dup por id, combinar server+realtime, prune, hasStale).
+- `type-check` → 0 nos arquivos da story (3 erros ambientais pré-existentes em `visual-editor.tsx`/`react-email-editor`).
+- ESLint → 0 erros/warnings nos arquivos da story.
+
+#### Issues
+- **INFRA-001 (medium)**: `messages` não está na publicação `supabase_realtime` (migration 102 NÃO aplicada — token Supabase expirado). É **DEPLOY BLOCKER do FEATURE**, NÃO defeito de código (degrada graciosamente: reload continua). Owner: @devops/@data-engineer.
+- **TEST-001 (low)**: fiação da subscription verificada só por code review (repo sem infra de teste de componente React — padrão do Epic 63).
+
+### Gate Status
+Gate: PASS → docs/qa/gates/63.11-realtime-chat-corretor.yml
+Consolidado: docs/qa/gates/epic-63-fase4.yml
+**Status: InReview — QA PASS (pronto para @devops *push; habilitar `messages` em supabase_realtime antes do feature funcionar)**
 
 ---
 
@@ -315,3 +358,5 @@ Dex (@dev) — Opus 4.8 (1M), modo YOLO autônomo. 2026-06-21.
 | 2026-06-21 | 0.1 | Story drafted — Epic 63, Fase 4, atualização realtime do chat do corretor | @sm (River) |
 | 2026-06-21 | 1.0 | Validada — GO (9/10). RLS de `messages` e pré-req de Realtime confirmados em código. Status Draft→Ready. | @po (Pax) |
 | 2026-06-21 | 1.1 | Implementada — subscription Realtime por conversa (cap 3 canais), `localLastMessageAt` reabre a janela, `dedupeById` evita keys duplicadas, banner reativo via lista combinada. Novo helper puro + 10 testes. T1 (infra publicação) é @data-engineer/@devops. Status InProgress→Ready for Review. | @dev (Dex) |
+| 2026-06-21 | 1.2 | QA Gate — **PASS** (Quinn). 9/9 ACs MET; dedup/race sólido; CON-1/CON-3/CON-7/CON-8 limpos; 463/463 testes; lint/type-check limpos. INFRA-001 (publicação realtime) = deploy blocker do feature, não do código. Pronto para @devops *push. | @qa (Quinn) |
+| 2026-06-21 | 1.3 | Fix de runtime — autenticar canal Realtime com JWT da sessão (`realtime.setAuth(access_token)` antes do `.subscribe()`) p/ a RLS de `messages` liberar os eventos; sem isso o socket anon era filtrado por `auth.uid()` e nada chegava. `useEffect` virou IIFE async com flag `cancelled`; cleanup remove canais. Callback de status loga só `CHANNEL_ERROR`/`TIMED_OUT`. Fase 5 e dedup intocadas. 469/469 testes, type-check/lint limpos. | @dev (Dex) |
