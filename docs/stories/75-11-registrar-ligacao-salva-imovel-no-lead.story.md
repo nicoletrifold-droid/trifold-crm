@@ -6,7 +6,7 @@
 - **Branch:** main
 
 ## Context
-No modal "Registrar Ligação" do corretor (`broker/_components/quick-history-modal.tsx`), o campo "Empreendimento / Imóvel (opcional)" hoje só vai para o `metadata` da nota do contato — **não atualiza o lead**. Resultado: num segundo contato o corretor precisa selecionar de novo.
+No modal de registro de atividade do corretor (`broker/_components/quick-history-modal.tsx`) — vale para **QUALQUER tipo**: ligação, e-mail, WhatsApp ou visita ("Ligação" foi só o exemplo do print) — o campo "Empreendimento / Imóvel" é exibido para todos os tipos (não condicional ao tipo) e o salvamento ocorre no `handleSave` comum a todos. Antes, o imóvel só ia para o `metadata` da nota — **não atualizava o lead**. Resultado: num segundo contato o corretor precisava selecionar de novo.
 
 O lead já tem `leads.property_interest_id` (FK → properties) e o PATCH `/api/leads/[id]` já aceita esse campo. Basta: ao salvar o registro, gravar o imóvel no lead; e ao abrir o modal, pré-selecionar com o imóvel já vinculado.
 
