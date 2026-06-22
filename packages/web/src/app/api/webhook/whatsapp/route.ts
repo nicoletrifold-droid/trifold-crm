@@ -8,6 +8,7 @@ import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
+import { shouldReactivateAi } from "@web/lib/broker/broker-takeover-status"
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
@@ -608,8 +609,38 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // Story 63-13 — Reativação automática da Nicole após 24h de inatividade do
+      // corretor. Só executa quando is_ai_active=false (corretor assumiu via
+      // handoff explícito). Busca a última msg `role='broker'` da conversa; se não
+      // existe OU foi há ≥ 24h (`shouldReactivateAi` / `BROKER_WINDOW_MS`), a Nicole
+      // reassume (is_ai_active=true). Se o corretor enviou < 24h, mantém false →
+      // Nicole silente. Escopo por-conversa (`.eq("id", conversation.id)`). Idempotente:
+      // o guard `!isAiActive` evita query/UPDATE quando a Nicole já está ativa.
+      // `supabase` aqui é admin client (getSupabaseAdmin, L155) — sem RLS no UPDATE.
+      // Race (R1): se o webhook leu is_ai_active=true antes do send-message desligar,
+      // pior caso a Nicole responde 1x a mais — a próxima msg do lead já verá false.
+      let isAiActive = conversation!.is_ai_active
+      if (!isAiActive) {
+        const { data: lastBrokerMsg } = await supabase
+          .from("messages")
+          .select("created_at")
+          .eq("conversation_id", conversation!.id)
+          .eq("role", "broker")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (shouldReactivateAi(lastBrokerMsg?.created_at ?? null)) {
+          await supabase
+            .from("conversations")
+            .update({ is_ai_active: true })
+            .eq("id", conversation!.id)
+          isAiActive = true
+        }
+      }
+
       // Nicole pipeline
-      if (conversation!.is_ai_active) {
+      if (isAiActive) {
         const { processMessage, createAnthropicClient } = await import(
           "@trifold/ai"
         )

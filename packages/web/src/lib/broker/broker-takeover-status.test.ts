@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   brokerSentRecently,
   deriveBrokerActive,
+  shouldReactivateAi,
   BROKER_WINDOW_MS,
   type TakeoverMessage,
 } from "./broker-takeover-status"
@@ -44,6 +45,13 @@ describe("brokerSentRecently", () => {
       )
     ).toBe(true)
   })
+
+  it("created_at inválido (NaN) não gera falso positivo → false", () => {
+    // Robustez: new Date("garbage").getTime() === NaN; (now - NaN < WINDOW) === false.
+    expect(
+      brokerSentRecently([{ role: "broker", created_at: "not-a-date" }], NOW)
+    ).toBe(false)
+  })
 })
 
 describe("deriveBrokerActive", () => {
@@ -69,5 +77,39 @@ describe("deriveBrokerActive", () => {
 
   it("Estado A — corretor enviou há mais de 24h + is_ai_active=true → false (Nicole retomou)", () => {
     expect(deriveBrokerActive([msg("broker", 30 * HOUR)], true, NOW)).toBe(false)
+  })
+})
+
+describe("shouldReactivateAi", () => {
+  it("nunca houve msg do corretor (null) → true (Nicole reassume)", () => {
+    expect(shouldReactivateAi(null, NOW)).toBe(true)
+  })
+
+  it("última msg do corretor há 25h → true (corretor inativo, reassume)", () => {
+    expect(
+      shouldReactivateAi(new Date(NOW - 25 * HOUR).toISOString(), NOW)
+    ).toBe(true)
+  })
+
+  it("última msg do corretor há 2h → false (corretor ativo, Nicole silente)", () => {
+    expect(
+      shouldReactivateAi(new Date(NOW - 2 * HOUR).toISOString(), NOW)
+    ).toBe(false)
+  })
+
+  it("limiar exato de 24h → true (espelho do < de brokerSentRecently)", () => {
+    expect(
+      shouldReactivateAi(new Date(NOW - BROKER_WINDOW_MS).toISOString(), NOW)
+    ).toBe(true)
+  })
+
+  it("1ms antes de 24h → false (ainda dentro da janela do corretor)", () => {
+    expect(
+      shouldReactivateAi(new Date(NOW - (BROKER_WINDOW_MS - 1)).toISOString(), NOW)
+    ).toBe(false)
+  })
+
+  it("created_at inválido (NaN) → false (conservador: mantém corretor no controle)", () => {
+    expect(shouldReactivateAi("not-a-date", NOW)).toBe(false)
   })
 })

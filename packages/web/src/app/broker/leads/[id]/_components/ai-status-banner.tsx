@@ -52,8 +52,9 @@ export function AiStatusBanner({ brokerActive }: AiStatusBannerProps) {
           Nicole está atendendo automaticamente
         </span>
         <span className="text-xs text-purple-600 dark:text-purple-400">
-          Ao enviar sua primeira mensagem, você assume o atendimento pelas
-          próximas 24h — Nicole pausará automaticamente.
+          Ao enviar sua primeira mensagem, você assume e a Nicole pausa
+          imediatamente. Se ficar 24h sem responder ao lead, a Nicole reassume
+          automaticamente.
         </span>
       </div>
     </div>

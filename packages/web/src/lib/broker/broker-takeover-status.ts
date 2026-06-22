@@ -6,14 +6,15 @@
  * read-only `AiStatusBanner` para distinguir "Nicole atendendo" de "Você está
  * no atendimento".
  *
- * Fonte de verdade do takeover (NÃO é `is_ai_active`): a mesma usada pelo cron
- * de follow-up — presença de mensagem `role='broker'` nas últimas 24h
- * (`brokerSentRecently`). Conforme `send-message/route.ts` (L15-28), o envio do
- * corretor NÃO desliga `is_ai_active`; o takeover é implícito via janela de 24h.
- * Por isso `is_ai_active` entra apenas como sinal secundário (handoff de admin).
+ * Fonte de verdade do takeover: `conversations.is_ai_active` (explícito, via
+ * Story 63-13) — false quando o corretor enviou; true quando a Nicole está ativa.
+ * `brokerSentRecently` permanece como sinal COMPLEMENTAR: race conditions,
+ * primeira carga antes da hidratação de state, e edge cases de transição.
+ * `deriveBrokerActive = brokerSentRecently || !isAiActive` captura ambos.
  *
- * `is_ai_active=false` (handoff manual por admin/supervisor) também conta como
- * corretor/humano no atendimento.
+ * `is_ai_active=false` (handoff explícito por envio do corretor — 63-13 — ou
+ * handoff manual por admin/supervisor) também conta como corretor/humano no
+ * atendimento.
  *
  * Função pura e determinística (com `now` injetável) para ser testável em
  * ambiente Node (Vitest), no mesmo padrão de `window-status.ts`.
@@ -60,4 +61,33 @@ export function deriveBrokerActive(
   now: number = Date.now()
 ): boolean {
   return brokerSentRecently(messages, now) || !isAiActive
+}
+
+/**
+ * Story 63-13 — Decide se a Nicole deve reassumir automaticamente um lead cuja
+ * conversa está com `is_ai_active=false` (corretor assumiu via handoff). Usado
+ * no webhook (`webhook/whatsapp/route.ts`) quando o lead envia uma nova mensagem.
+ *
+ * Reativa quando o corretor está inativo há ≥ 24h (`BROKER_WINDOW_MS`):
+ * - `lastBrokerAt === null` → nunca houve mensagem `role='broker'` → reassume.
+ * - última msg `role='broker'` há ≥ 24h → corretor inativo → reassume.
+ * - última msg `role='broker'` há < 24h → corretor ativo → NÃO reassume (silente).
+ *
+ * Helper puro e determinístico (com `now` injetável) — mesma fonte de janela
+ * (`BROKER_WINDOW_MS`) de `brokerSentRecently` para consistência. O limiar usa
+ * `>=` (espelho do `<` estritamente menor de `brokerSentRecently`): em exatamente
+ * 24h o corretor deixa de ser "recente" e a Nicole reassume.
+ *
+ * Robustez: `lastBrokerAt` inválido (NaN) → `now - NaN` é NaN, `NaN >= WINDOW` é
+ * false → NÃO reassume (conservador: mantém o corretor no controle).
+ *
+ * @param lastBrokerAt `created_at` da última msg `role='broker'`, ou `null`.
+ * @param now          Instante de referência (default: agora). Injetável p/ teste.
+ */
+export function shouldReactivateAi(
+  lastBrokerAt: string | null,
+  now: number = Date.now()
+): boolean {
+  if (!lastBrokerAt) return true
+  return now - new Date(lastBrokerAt).getTime() >= BROKER_WINDOW_MS
 }
