@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderBaseLayout, renderButton } from "@web/lib/email-layout"
+import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET() {
   const auth = await requireAuth()
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     const authUser = authData.user
 
     // Step 2: Create users table row
-    const phone: string | null = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+    const phone: string | null = normalizePhoneBR(typeof body.phone === "string" ? body.phone : null)
 
     const { data: newUser, error: userError } = await adminSupabase
       .from("users")
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
     const authUser = authData.user
 
     // Step 2: Create users table row
-    const phone: string | null = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+    const phone: string | null = normalizePhoneBR(typeof body.phone === "string" ? body.phone : null)
 
     const { data: newUser, error: userError } = await adminSupabase
       .from("users")

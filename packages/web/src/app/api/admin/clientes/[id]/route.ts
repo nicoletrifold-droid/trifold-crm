@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { normalizePhoneBR } from "@trifold/shared"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -102,6 +103,10 @@ export async function PATCH(
       }
     }
   }
+
+  // Story 75-9: telefones em formato canônico (E.164) para o WhatsApp funcionar.
+  if (updates.telefone) updates.telefone = normalizePhoneBR(updates.telefone as string)
+  if (updates.whatsapp) updates.whatsapp = normalizePhoneBR(updates.whatsapp as string)
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(

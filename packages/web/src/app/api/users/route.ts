@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { normalizePhoneBR } from "@trifold/shared"
 
 /**
  * GET /api/users
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nome, email, senha e perfil sao obrigatorios" }, { status: 400 })
   }
 
-  const phone: string | null = typeof body.phone === "string" && body.phone.trim() ? body.phone.trim() : null
+  const phone: string | null = normalizePhoneBR(typeof body.phone === "string" ? body.phone : null)
 
   const { data: validRole } = await supabase
     .from("roles")

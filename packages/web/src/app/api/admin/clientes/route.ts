@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { normalizePhoneBR } from "@trifold/shared"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 
@@ -164,6 +165,10 @@ export async function POST(request: NextRequest) {
       insertRow[field] = str(body[field])
     }
   }
+
+  // Story 75-9: telefones em formato canônico (E.164) para o WhatsApp funcionar.
+  if (insertRow.telefone) insertRow.telefone = normalizePhoneBR(insertRow.telefone as string)
+  if (insertRow.whatsapp) insertRow.whatsapp = normalizePhoneBR(insertRow.whatsapp as string)
 
   // CPF unicidade na org (se fornecido)
   if (insertRow.cpf) {

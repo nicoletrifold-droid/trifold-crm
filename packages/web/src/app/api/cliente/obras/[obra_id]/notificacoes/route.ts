@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { normalizePhoneBR } from "@trifold/shared"
 
 const DEFAULT_PREFS = {
   email_enabled: true,
@@ -85,7 +86,7 @@ export async function PATCH(
 
   // Atualizar phone do usuário se fornecido
   if (typeof body.phone === "string") {
-    const phone = body.phone.trim() || null
+    const phone = normalizePhoneBR(body.phone)
     await supabase.from("users").update({ phone }).eq("id", appUser.id)
   }
 

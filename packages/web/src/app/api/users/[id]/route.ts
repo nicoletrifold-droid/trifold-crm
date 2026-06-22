@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { normalizePhoneBR } from "@trifold/shared"
 
 export async function PATCH(
   request: NextRequest,
@@ -43,7 +44,7 @@ export async function PATCH(
     publicUpdates.email = body.email.trim()
   }
   if (typeof body.phone === "string") {
-    publicUpdates.phone = body.phone.trim() || null
+    publicUpdates.phone = normalizePhoneBR(body.phone)
   }
 
   const hasNewPassword =
