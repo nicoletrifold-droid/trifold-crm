@@ -6,7 +6,7 @@ import { RejeitarModal } from "./rejeitar-modal"
 
 export interface AprovacaoItem {
   id: string
-  tipo: "foto" | "documento"
+  tipo: "foto" | "documento" | "exclusao_foto"
   storage_path: string
   signed_url: string | null
   metadata: Record<string, unknown>
@@ -58,7 +58,7 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
         throw new Error(data.error ?? "Erro ao aprovar")
       }
       setItems((prev) => prev.filter((i) => i.id !== item.id))
-      showToast(item.id, "Upload aprovado e publicado.")
+      showToast(item.id, item.tipo === "exclusao_foto" ? "Foto excluída." : "Upload aprovado e publicado.")
     } catch (err) {
       alert(err instanceof Error ? err.message : "Erro ao aprovar")
     } finally {
@@ -115,11 +115,13 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
         const meta = item.metadata as {
           caption?: string
           name?: string
+          motivo?: string
         }
-        const displayName =
-          item.tipo === "foto"
-            ? (meta.caption ?? "Foto sem legenda")
-            : (meta.name ?? item.storage_path.split("/").pop() ?? "Documento")
+        const isExclusao = item.tipo === "exclusao_foto"
+        const isImagem = item.tipo === "foto" || isExclusao
+        const displayName = isImagem
+          ? (meta.caption ?? "Foto sem legenda")
+          : (meta.name ?? item.storage_path.split("/").pop() ?? "Documento")
 
         return (
           <div
@@ -128,7 +130,7 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
           >
             {/* Preview */}
             <div className="flex-shrink-0">
-              {item.tipo === "foto" && item.signed_url ? (
+              {isImagem && item.signed_url ? (
                 <button
                   type="button"
                   onClick={() => window.open(item.signed_url!, "_blank")}
@@ -145,7 +147,7 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
                     <ExternalLink className="h-4 w-4 text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-100" />
                   </span>
                 </button>
-              ) : item.tipo === "foto" ? (
+              ) : isImagem ? (
                 <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100 dark:bg-stone-800">
                   <ImageIcon className="h-6 w-6 text-gray-400 dark:text-stone-500" />
                 </div>
@@ -164,17 +166,24 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
                 </p>
                 <span
                   className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    item.tipo === "foto"
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-                      : "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300"
+                    isExclusao
+                      ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                      : item.tipo === "foto"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                        : "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300"
                   }`}
                 >
-                  {item.tipo === "foto" ? "Foto" : "Documento"}
+                  {isExclusao ? "Pedido de exclusão" : item.tipo === "foto" ? "Foto" : "Documento"}
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">
                 Por <span className="font-medium">{item.enviado_por_nome}</span> · {formatDate(item.created_at)}
               </p>
+              {isExclusao && meta.motivo && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-300">
+                  Motivo: {meta.motivo}
+                </p>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {item.signed_url && (
@@ -192,7 +201,11 @@ export function AprovacoesTab({ obraId, items, setItems }: AprovacoesTabProps) {
                   disabled={isLoading}
                   className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
                 >
-                  {isLoading && loadingId === item.id ? "Aprovando..." : "Aprovar"}
+                  {isLoading && loadingId === item.id
+                    ? "Processando..."
+                    : isExclusao
+                      ? "Aprovar exclusão"
+                      : "Aprovar"}
                 </button>
                 <button
                   onClick={() => setRejeitandoItem(item)}

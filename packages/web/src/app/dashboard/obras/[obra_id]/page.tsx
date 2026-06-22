@@ -203,7 +203,7 @@ export default async function ObraDetailPage({
 
       return {
         id: item.id,
-        tipo: item.tipo as "foto" | "documento",
+        tipo: item.tipo as "foto" | "documento" | "exclusao_foto",
         storage_path: item.storage_path,
         signed_url: signed?.signedUrl ?? null,
         metadata: (item.metadata as Record<string, unknown>) ?? {},

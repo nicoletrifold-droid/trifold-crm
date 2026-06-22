@@ -89,8 +89,19 @@ export async function PATCH(
   }
 
   if (acao === "aprovar") {
-    // Inserir na tabela publicada correspondente
-    if (aprovacao.tipo === "foto") {
+    if (aprovacao.tipo === "exclusao_foto") {
+      // Story 75-14 — aprovar pedido de exclusão: apaga a foto viva + o arquivo.
+      const meta = aprovacao.metadata as { foto_id?: string }
+      if (meta.foto_id) {
+        await supabase
+          .from("obra_fotos")
+          .delete()
+          .eq("id", meta.foto_id)
+          .eq("obra_id", aprovacao.obra_id)
+          .eq("org_id", aprovacao.org_id)
+        await supabase.storage.from("obra-fotos").remove([aprovacao.storage_path])
+      }
+    } else if (aprovacao.tipo === "foto") {
       const meta = aprovacao.metadata as {
         caption?: string
         fase_id?: string
@@ -133,12 +144,10 @@ export async function PATCH(
     }
 
     // Status já atualizado no claim atômico acima
-  } else {
-    // Rejeição: remove arquivo do Storage (status já atualizado no claim)
-    await supabase.storage
-      .from(aprovacao.storage_bucket)
-      .remove([aprovacao.storage_path])
   }
+  // Story 75-15: NÃO remove o arquivo na rejeição. Uploads rejeitados ficam 7 dias
+  // (visíveis com o motivo) e são purgados pelo cron purge-rejected-uploads.
+  // Para 'exclusao_foto' rejeitado, a foto viva permanece intocada (nada a remover).
 
   // Busca obra para subject do email
   const { data: obra } = await supabase
@@ -150,8 +159,9 @@ export async function PATCH(
 
   const obraName = obra?.name ?? "Obra"
 
-  // Story 75-5: ao aprovar, notifica os clientes (foto/documento agora publicado).
-  if (acao === "aprovar") {
+  // Story 75-5: ao aprovar um UPLOAD (foto/documento), notifica os clientes.
+  // 'exclusao_foto' é exclusão — não notifica cliente.
+  if (acao === "aprovar" && aprovacao.tipo !== "exclusao_foto") {
     notifyClientes(
       obra_id,
       aprovacao.tipo === "foto" ? "nova_foto" : "novo_documento",
@@ -159,14 +169,17 @@ export async function PATCH(
     ).catch(() => {})
   }
 
-  // Fire-and-forget: email para o usuário obras que enviou
-  notificarResultadoUpload({
-    supabase,
-    enviadoPorId: aprovacao.enviado_por,
-    acao,
-    obraName,
-    motivo: motivo_rejeicao?.trim(),
-  }).catch(() => {})
+  // Fire-and-forget: email ao usuário obras que enviou (só para uploads;
+  // pedido de exclusão não usa a cópia de "upload aprovado/rejeitado").
+  if (aprovacao.tipo !== "exclusao_foto") {
+    notificarResultadoUpload({
+      supabase,
+      enviadoPorId: aprovacao.enviado_por,
+      acao,
+      obraName,
+      motivo: motivo_rejeicao?.trim(),
+    }).catch(() => {})
+  }
 
   void logAudit({
     org_id: appUser.org_id,

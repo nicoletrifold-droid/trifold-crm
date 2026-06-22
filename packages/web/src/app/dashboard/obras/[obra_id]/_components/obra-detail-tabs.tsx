@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { FotoUploadForm } from "./foto-upload-form"
 import { FotoDeleteButton } from "./foto-delete-button"
 import { FotoEditModal } from "./foto-edit-modal"
+import { FotoExclusaoRequestModal } from "./foto-exclusao-request-modal"
 import { DocUploadForm } from "./doc-upload-form"
 import { DocDeleteButton } from "./doc-delete-button"
 import { FaseCreateForm } from "./fase-create-form"
@@ -450,6 +451,7 @@ export function ObraDetailTabs({
   // Fotos — lightbox
   const [lightboxFoto, setLightboxFoto] = useState<Foto | null>(null)
   const [editingFoto, setEditingFoto] = useState<Foto | null>(null)
+  const [excluindoFotoId, setExcluindoFotoId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!lightboxFoto) return
@@ -628,9 +630,21 @@ export function ObraDetailTabs({
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        {/* Botão de exclusão apenas para admin/supervisor */}
+                        {/* Botão de exclusão apenas para admin/supervisor (direto) */}
                         {isAdminOrSupervisor && (
                           <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
+                        )}
+                        {/* Story 75-14 — obras solicita exclusão (com motivo → aprovação) */}
+                        {isObras && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setExcluindoFotoId(foto.id) }}
+                            title="Solicitar exclusão"
+                            aria-label="Solicitar exclusão"
+                            className="absolute right-1.5 top-1.5 z-10 rounded-full bg-black/55 p-1.5 text-white hover:bg-red-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         )}
                       </div>
                       {foto.caption && (
@@ -882,6 +896,15 @@ export function ObraDetailTabs({
           foto={{ id: editingFoto.id, caption: editingFoto.caption ?? null, fase_id: editingFoto.fase_id ?? null }}
           fases={fases.map((f) => ({ id: f.id, name: f.name }))}
           onClose={() => setEditingFoto(null)}
+        />
+      )}
+
+      {/* Story 75-14 — modal de pedido de exclusão (perfil obras) */}
+      {excluindoFotoId && (
+        <FotoExclusaoRequestModal
+          obraId={obraId}
+          fotoId={excluindoFotoId}
+          onClose={() => setExcluindoFotoId(null)}
         />
       )}
     </div>

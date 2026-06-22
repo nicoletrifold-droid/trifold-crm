@@ -1,7 +1,7 @@
 # Story 75-13 — Editar foto da obra (legenda + fase), livre para o perfil obras
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal/Obras
 - **Branch:** main
 
@@ -50,3 +50,4 @@ Corrigir legenda/fase de fotos sem precisar reenviar; autonomia para o time de o
 - @po (Pax): GO.
 - @dev (Dex): PATCH + modal + botão. Status → InReview.
 - @qa (Quinn): PASS. Pronta para push.
+- @devops (Gage): push em produção (commit 3b9e03e). Status → Done.
