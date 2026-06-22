@@ -299,3 +299,14 @@ Confirmado no código (`components/layout/sidebar-nav.tsx` + `app/broker/layout.
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Fase 6, reorg nav mobile + "Mais" sheet | @sm (River) |
 | 2026-06-22 | v1.1 | Validada (GO 8/10). Linhas/slices de `sidebar-nav.tsx` confirmadas; overlay reutilizável existe. **AC7 corrigido** (desktop compartilha NAV_ITEMS → 9 itens c/ Chat na nova ordem; slice/sheet só mobile). Status Draft → Ready. | @po (Pax) |
+
+## QA Results (Quinn — @qa) — 2026-06-22
+
+**Veredito: PASS** — gate: `docs/qa/gates/epic-63-fase6-leva1.yml`
+
+- **Desktop preservado** (commit 421558b): `sidebar-nav.tsx:118` usa `items.map` (TODOS os 9 itens, SEM slice) — AC7 sem regressão. `tabItems=slice(0,4)` / `moreItems=slice(4)` (L55-56) só alimentam o mobile.
+- **Mobile:** bottom bar 4 tabs (L205-234, `lg:hidden`); slot "Mais" é `<button>` (L235-252) com `MoreHorizontal`, `aria-haspopup`/`aria-expanded`.
+- **Sheet a11y** (L257-315): `role=dialog`+`aria-modal`+`aria-label="Menu principal"`; overlay tap-fora; itens ≥44px (`min-h-[44px]`); Fluxo `target=_blank`. **Focus-trap** (Tab/Shift+Tab wrap) + Esc (L64-97); `closeMore()` retorna foco ao `moreButtonRef`.
+- **`badgeTone`** adicionado à `NavItem` (L11-20) sem quebrar badges; `badgeBg()` → green-700 p/ 'green', orange-500 default → **Agenda permanece laranja**.
+- Concern LOW cosmético (dot do "Mais" sempre laranja) — irrelevante hoje (Chat é tab, não vai p/ o sheet). Documentado no gate.
+- Validação: Vitest 545/545; type-check 0 erros nos arquivos.

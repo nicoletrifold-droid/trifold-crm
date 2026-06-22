@@ -1,0 +1,119 @@
+# Quality Gate — Epic 63, Fase 6 (Caixa de Entrada de Conversas), Primeira Leva
+# Stories: 63-16, 63-17, 63-18, 63-19
+# Reviewer: Quinn (@qa) | Data: 2026-06-22
+# Branch: feat/epic-51-handoff-chat-corretor
+# Commits revisados (locais, NÃO empurrados):
+#   edbb9b5 (63-16) · 4c3cf8e (63-17) · 421558b (63-18) · 2961aed (63-19)
+
+epic: 63
+phase: "Fase 6 — Caixa de Entrada de Conversas"
+leva: "Primeira (caminho crítico)"
+verdict: PASS
+recommendation: "Liberado para @devops *push. INFRA já aplicada (migration 104 em produção)."
+
+validation:
+  vitest:
+    command: "npx vitest run (raiz)"
+    result: "545/545 em 42 arquivos — PASS"
+  type_check:
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros nos arquivos da Fase 6; 3 erros PRÉ-EXISTENTES em visual-editor.tsx (react-email-editor) — ruído ambiental conhecido, aceito"
+  eslint:
+    command: "pnpm --filter @trifold/web exec eslint <arquivos>"
+    result: "NÃO EXECUTADO — binário ESLint bloqueado pelo sandbox desta sessão de QA. type-check limpo + revisão manual cobrem; @dev reportou 0 erros. Confirmar `lint` exit 0 antes/no push (LOW residual)."
+  con1_grep:
+    command: "inspeção manual dos 7 arquivos (Grep/git grep bloqueados no sandbox)"
+    result: "LIMPO — sem tel:/wa.me/whatsapp://; navegação interna /broker/leads/[id]; único link externo é streamlit.app (Fluxo de Pagamento)"
+
+stories:
+  - id: "63-16"
+    title: "Infra de não-lidas: broker_last_read_at + action Marcar Lido"
+    verdict: PASS
+    evidence:
+      - "supabase/migrations/104_*.sql:19-20 — ADD COLUMN IF NOT EXISTS (idempotente, AC1)"
+      - "104_*.sql:30-32 — CREATE INDEX IF NOT EXISTS parcial (WHERE broker_last_read_at IS NOT NULL), NÃO concurrent (PO should-fix aplicado, AC2)"
+      - "104_*.sql:41-63 — RPC get_broker_unread_total SECURITY INVOKER STABLE (NÃO DEFINER); EXISTS+LIMIT 1; GRANT EXECUTE authenticated L69 (AC3)"
+      - "lib/broker/unread-count.ts:40-66 — countUnreadForLead pura: null/data-inválida→tudo conta; role!='user' ignorado; conv fora da lista ignorada (AC4)"
+      - "lib/broker/unread-count.ts:73-84 — getBrokerUnreadTotal: RPC wrapper, retorna 0 em erro (AC5)"
+      - "leads/[id]/_actions/mark-read.ts:27-39 — ownership (assigned_broker_id===user.id via maybeSingle) ANTES do UPDATE; createClient() sessão; try/catch silencioso (AC6)"
+      - "__tests__/unread-count.test.ts — 10 cenários cobrindo os 4 boundaries obrigatórios + data inválida/multi-conv/fora-da-lista/vazios (AC7)"
+    security:
+      - "RPC SECURITY INVOKER → RLS de leads/conversations/messages aplica como o corretor. Filtro explícito p_broker_user_id. OK."
+      - "UPDATE via sessão do corretor; RLS conversations_update (004 L145-146) org-scoped; ownership na aplicação fecha o escopo ao próprio lead. OK."
+    items_para_dev: []
+
+  - id: "63-17"
+    title: "Rota /broker/chat — inbox estilo WhatsApp"
+    verdict: PASS
+    evidence:
+      - "broker/chat/page.tsx:51-70 — Promise.all: conversations + properties + stages; SEM N+1"
+      - "broker/chat/page.tsx:92-105 — UM fetch batch de messages (.in('conversation_id', ids)) agrupado em Map JS; zero query por linha (sem N+1)"
+      - "broker/chat/page.tsx:48,64 — RLS conversations_select restringe ao corretor; sem assigned_broker_id manual; .eq('status','active')+order last_message_at desc nullsFirst:false (AC2)"
+      - "broker/chat/page.tsx:77-88 — filtros q/property/stage combinados em AND (JS); search por name+phone (AUTO-DECISION da story)"
+      - "broker/chat/page.tsx:126-145 — estados vazios distintos (SearchX p/ filtro, MessageSquare p/ sem conversas) (AC10)"
+      - "broker/chat/page.tsx:162-168 — prefixo preview broker→'Você:', assistant→'🤖', user→sem prefixo (AC4)"
+      - "broker/chat/page.tsx:171-173 — formatRelativeTime(new Date(last_message_at)) (AC3)"
+      - "broker/chat/page.tsx:177-179 — <Link href=/broker/leads/{id}> cobrindo o card (CON-1, AC7); min-h-[72px] (AC8)"
+      - "broker/chat/page.tsx:219 — badge bg-green-700 text-white só quando unread>0 (AC6, WCAG AA)"
+      - "lib/broker/format-relative-time.ts:27-50 — pura, base em dia de calendário; now injetável (AC5)"
+      - "__tests__/format-relative-time.test.ts — 9 cenários: hoje manhã/tarde, ontem, 3/6 dias, 7/8 dias, futuro, virada de ano"
+      - "lib/broker/channel-labels.ts — extraído p/ reuso (IDS), getChannelLabel com fallback neutro"
+    concerns:
+      - severity: low
+        category: ux
+        id: "UX-FASE6-1"
+        description: "LeadFilters renderiza sempre o dropdown 'Sem contato' (?days=) (lead-filters.tsx:79-84), mas a inbox /broker/chat filtra apenas q/property/stage em JS — o parâmetro days fica inerte (seleção não tem efeito)."
+        recommendation: "Em follow-up: ou aplicar o filtro days na inbox, ou esconder o controle 'Sem contato' nesta rota. Não bloqueia (controle não quebra nada; apenas no-op)."
+    items_para_dev: []
+
+  - id: "63-18"
+    title: "Reorg nav mobile: 4 tabs + botão Mais com bottom sheet"
+    verdict: PASS
+    evidence:
+      - "sidebar-nav.tsx:118 — DESKTOP usa items.map (TODOS os 9 itens, SEM slice) (AC7, sem regressão)"
+      - "sidebar-nav.tsx:55-56 — tabItems=slice(0,4), moreItems=slice(4) só alimentam o mobile"
+      - "broker/layout.tsx:17-27 — NAV_ITEMS reordenado (Chat índice 3, MessageCircle); 9 itens"
+      - "sidebar-nav.tsx:205-234 — bottom bar mobile 4 tabs (lg:hidden)"
+      - "sidebar-nav.tsx:235-252 — slot 'Mais' é <button> (não <Link>), MoreHorizontal, aria-haspopup/expanded"
+      - "sidebar-nav.tsx:257-315 — bottom sheet: role=dialog+aria-modal+aria-label='Menu principal'; overlay tap-fora; itens ≥44px (min-h-[44px]); Fluxo target=_blank (AC4/AC6)"
+      - "sidebar-nav.tsx:64-97 — focus-trap (Tab/Shift+Tab wrap) + Esc; closeMore() retorna foco ao moreButtonRef (AC5)"
+      - "sidebar-nav.tsx:31-33 — badgeBg(): green-700 p/ badgeTone='green', orange-500 default → Agenda permanece laranja (AC9)"
+      - "sidebar-nav.tsx:11-20 — NavItem.badgeTone?: 'orange'|'green' adicionado sem quebrar badges existentes"
+    concerns:
+      - severity: low
+        category: ux
+        id: "COSMETIC-FASE6-1"
+        description: "O dot de badge do botão 'Mais' (sidebar-nav.tsx:247) é sempre laranja. Hoje irrelevante (Chat é tab, não vai p/ o sheet; Meus Leads/Imóveis sem badge), mas se um item com badgeTone='green' migrar p/ o sheet no futuro, o dot não refletiria o tom."
+        recommendation: "Sem ação agora. Reavaliar se algum item com tom verde for movido para 'Mais'."
+    items_para_dev: []
+
+  - id: "63-19"
+    title: "Badge verde da aba Chat + marcar lido ao abrir thread"
+    verdict: PASS
+    evidence:
+      - "broker/layout.tsx:44-53 — getBrokerUnreadTotal em Promise.all com query da Agenda (independentes)"
+      - "broker/layout.tsx:59-63 — segundo .map injeta {badge: chatUnread, badgeTone:'green'} no item /broker/chat (AC1)"
+      - "broker/layout.tsx:68-72 — <span aria-live='polite' sr-only> anuncia 'N conversa(s) não lida(s)' (AC4)"
+      - "sidebar-nav.tsx:147,226,303 — badges numéricos com aria-hidden='true' (evita leitura dupla, AC4); badge só quando badge>0 (AC3)"
+      - "leads/[id]/page.tsx:35-39 — markLeadConversationsRead(id) em try/catch silencioso, APÓS notFound() (ownership garantido) (AC5)"
+      - "Badge verde via badgeTone='green' → badgeBg()=bg-green-700 text-white, contraste WCAG AA (AC2)"
+    notes:
+      - "Decremento é eventual (próximo request do layout) — realtime fica p/ 63-20, declarado no AC7. OK."
+      - "Badge oculto quando a aba está ativa (!active) — UX aceitável: ao estar EM /broker/chat o badge some."
+    items_para_dev: []
+
+smoke_manual_required:
+  - "63-19 AC6/AC7: abrir lead com não-lidas → confirmar conversations.broker_last_read_at atualizado e badge verde decrementa na próxima navegação (Server Component, sem teste automatizado)."
+  - "63-18: no mobile (375px), validar 4 tabs (Início/Pipeline/Agenda/Chat) + botão 'Mais'; abrir/fechar sheet via Esc, tap-fora e tap-item; focus-trap (Tab/Shift+Tab) e retorno de foco ao botão."
+  - "63-17: inbox ordenada por last_message_at desc; filtros q/property/stage; estados vazios; timestamp relativo correto; chip de canal."
+  - "63-18 AC7: sidebar desktop (≥1024px) mostra os 9 itens sem corte, incluindo Chat."
+  - "63-16 prod: RPC get_broker_unread_total retorna contagem correta (migration 104 já aplicada em produção)."
+
+residual_items:
+  - "ESLint não executado nesta sessão (sandbox). Recomenda-se confirmar `pnpm --filter @trifold/web lint` exit 0 no push (LOW — type-check limpo + revisão manual)."
+
+constitution_checks:
+  CON-1: "PASS — sem tel:/wa.me/whatsapp://; navegação 100% interna"
+  rls_63_16: "PASS — RPC SECURITY INVOKER; UPDATE com ownership na aplicação + RLS org-scoped"
+  n_plus_1_63_17: "PASS — fetch batch único de messages, agrupamento em JS"
+  desktop_63_18: "PASS — items.map sem slice; 9 itens preservados"

@@ -224,3 +224,13 @@ Pontos críticos confirmados com evidência no código:
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Fase 6, fundação de não-lidas | @sm (River) |
 | 2026-06-22 | v1.1 | Validada (GO 9/10). RLS de UPDATE do broker confirmada (`org_id`-based, sem admin); migration 104 sem colisão; idempotência OK. Should-fix: índice CONCURRENTLY fora de transação. Status Draft → Ready. | @po (Pax) |
+
+## QA Results (Quinn — @qa) — 2026-06-22
+
+**Veredito: PASS** — gate: `docs/qa/gates/epic-63-fase6-leva1.yml`
+
+- **Migration 104** (commit edbb9b5): idempotente (`ADD COLUMN IF NOT EXISTS` L19-20, `CREATE INDEX IF NOT EXISTS` parcial L30-32 não-concurrent — should-fix do PO aplicado). **RPC `get_broker_unread_total` `SECURITY INVOKER STABLE`** L41-47 (NÃO DEFINER), `EXISTS`+`LIMIT 1`, `GRANT EXECUTE ... authenticated` L69. Já aplicada em produção.
+- **`countUnreadForLead`** (unread-count.ts:40-66): pura; null/data-inválida→conversa nunca-lida (tudo conta); `role!='user'` e conv fora da lista ignoradas; `created_at` inválido descartado. 10 testes cobrem os 4 boundaries obrigatórios + extras.
+- **`mark-read.ts`:27-39:** ownership (`assigned_broker_id===user.id` via `maybeSingle`) **ANTES** do UPDATE; `createClient()` (sessão, RLS `conversations_update` org-scoped permite); try/catch best-effort.
+- Validação: Vitest 545/545; type-check 0 erros nos arquivos da story. CON-1 limpo.
+- SMOKE prod: confirmar RPC retornando contagem correta.

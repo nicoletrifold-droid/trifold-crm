@@ -282,3 +282,15 @@ Confirmado com evidência:
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Fase 6, rota inbox do corretor | @sm (River) |
 | 2026-06-22 | v1.1 | Validada (GO 8/10). RLS de SELECT do broker e joins confirmados; reuso de busca/filtros e channelLabels verificados. Should-fix: fonte de `msgs` p/ badge (batch, sem N+1) e fetch de listas p/ LeadFilters. Status Draft → Ready. | @po (Pax) |
+
+## QA Results (Quinn — @qa) — 2026-06-22
+
+**Veredito: PASS** (com 1 concern LOW) — gate: `docs/qa/gates/epic-63-fase6-leva1.yml`
+
+- **Sem N+1** (commit 4c3cf8e): `Promise.all` p/ conversations+properties+stages (page.tsx:51-70) + **UM** fetch batch de `messages` (`.in('conversation_id', ids)` L92-98) agrupado em `Map` JS L100-105. Zero query por linha.
+- **RLS:** `conversations_select` restringe ao corretor (sem `assigned_broker_id` manual). `.eq('status','active')` + `order last_message_at desc nullsFirst:false` (AC2).
+- **Filtros** q/property/stage combinam em AND no JS (L77-88); search por name+phone. **Estados vazios** distintos (SearchX/MessageSquare). **Prefixo preview** broker/assistant/user correto (L162-168). **Badge** `bg-green-700` só quando >0 (WCAG AA).
+- **`formatRelativeTime`** (pura, base dia de calendário, `now` injetável): 9 testes (hoje/ontem/2-6d/7+/futuro/virada de ano).
+- CON-1: navegação interna `/broker/leads/{id}` (Link cobre o card). channel-labels extraído p/ reuso.
+- **Concern LOW (UX-FASE6-1):** `LeadFilters` renderiza o dropdown "Sem contato" (`?days=`), mas a inbox não filtra `days` em JS → controle inerte. Follow-up: aplicar ou esconder. Não bloqueia.
+- Validação: Vitest 545/545; type-check 0 erros nos arquivos.

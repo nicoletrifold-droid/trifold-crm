@@ -263,3 +263,14 @@ Sem should-fix bloqueante. Depende de **63-16 Done** (RPC + action) e **63-18 Do
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Fase 6, badge verde + marcar lido | @sm (River) |
 | 2026-06-22 | v1.1 | Validada (GO 9/10). Padrão do badge Agenda, `conversationIds` L45 e ownership da query de lead confirmados. Dependências 63-16/63-18 corretas. Status Draft → Ready. | @po (Pax) |
+
+## QA Results (Quinn — @qa) — 2026-06-22
+
+**Veredito: PASS** — gate: `docs/qa/gates/epic-63-fase6-leva1.yml`
+
+- **Badge verde** (commit 2961aed): `broker/layout.tsx:44-53` busca `getBrokerUnreadTotal` em `Promise.all` com a Agenda; segundo `.map` (L59-63) injeta `{badge: chatUnread, badgeTone:'green'}` no `/broker/chat`. Badge só renderiza quando >0 (AC1/AC3). Tom verde via `badgeBg()`→`bg-green-700 text-white` (WCAG AA, AC2).
+- **a11y** (AC4): `<span aria-live="polite" sr-only>` no layout (L68-72) anuncia "N conversa(s) não lida(s)"; badges numéricos com `aria-hidden="true"` (sidebar-nav.tsx:147/226/303) evitam leitura dupla.
+- **Marcar lido** (AC5): `leads/[id]/page.tsx:35-39` chama `markLeadConversationsRead(id)` em `try/catch` silencioso **após** `notFound()` (ownership já garantido pela query L20-29). Não derruba a página se falhar.
+- Decremento eventual (próximo request) — realtime fica p/ 63-20, conforme AC7. OK.
+- Validação: Vitest 545/545; type-check 0 erros nos arquivos.
+- SMOKE: confirmar `broker_last_read_at` atualizado e badge decrementando na navegação (Server Component, sem teste automatizado).
