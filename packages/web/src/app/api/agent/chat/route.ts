@@ -10,7 +10,8 @@ import {
   requiresConversation,
   requiresCreative,
   fetchCreativePerformance,
-  extractPeriodDays,
+  extractDateWindow,
+  type DateWindow,
 } from "@web/lib/agent/context-builder"
 import { isAdmin, isAdminOrSupervisor } from "@web/lib/agent/auth-helpers"
 import { AGENT_SYSTEM_PROMPT } from "@web/lib/agent/system-prompt"
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
     message: string
     context_type?: "global" | "campaign"
     context_id?: string
+    date_window?: { startDate: string; endDate: string }
   }
   try {
     body = await request.json()
@@ -98,7 +100,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "INVALID_JSON" }, { status: 400 })
   }
 
-  const { session_id, message, context_type = "global", context_id } = body
+  const { session_id, message, context_type = "global", context_id, date_window } = body
 
   if (!message?.trim()) {
     return NextResponse.json({ error: "EMPTY_MESSAGE" }, { status: 400 })
@@ -158,12 +160,32 @@ export async function POST(request: NextRequest) {
     content: message,
   })
 
-  // ── Extrai período da mensagem (Story 52-7) ────────────────────────────────
-  const periodDays = extractPeriodDays(message)
-  console.log("[52-7] period extracted:", periodDays, "days from message")
+  // ── Extrai janela de datas (Story 52-8) ───────────────────────────────────
+  let dateWindow: DateWindow
+  let dateWindowSource: "ui" | "nl" = "nl"
+
+  if (date_window) {
+    if (!date_window.startDate || !date_window.endDate || date_window.startDate > date_window.endDate) {
+      return NextResponse.json({ error: "INVALID_DATE_RANGE" }, { status: 400 })
+    }
+    const diffDays = Math.ceil(
+      (new Date(date_window.endDate).getTime() - new Date(date_window.startDate).getTime()) / 86400000,
+    )
+    if (diffDays > 90) {
+      const cappedEnd = new Date(date_window.startDate)
+      cappedEnd.setDate(cappedEnd.getDate() + 90)
+      dateWindow = { startDate: date_window.startDate, endDate: cappedEnd.toISOString().split("T")[0]! }
+    } else {
+      dateWindow = { startDate: date_window.startDate, endDate: date_window.endDate }
+    }
+    dateWindowSource = "ui"
+  } else {
+    dateWindow = extractDateWindow(message)
+  }
+  console.log("[52-8] date window:", dateWindow, "source:", dateWindowSource)
 
   // ── Build context (mídia — sempre, para todos os roles; CON-5) ──────────────
-  const mediaContext = await buildContext(supabase, appUser.org_id, context_type, context_id, periodDays)
+  const mediaContext = await buildContext(supabase, appUser.org_id, context_type, context_id, dateWindow)
 
   // ── Gate de CRM (Story 52-2) — decisão de produto: SOMENTE admin ─────────────
   // Único ponto de decisão para acesso a dados de pipeline/CRM. Verificação
@@ -174,7 +196,7 @@ export async function POST(request: NextRequest) {
 
   if (admin) {
     // Agregados (sem PII) — sempre para admin, cacheáveis (AC1, AC2, AC3, AC8)
-    pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id, periodDays))
+    pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id, dateWindow))
 
     // Drill on-demand (PII) — disparado por heurística; fail-closed (AC4, AC6)
     if (requiresDrill(message)) {
@@ -204,7 +226,7 @@ export async function POST(request: NextRequest) {
   let creativeContext = ""
   const adminOrSupervisor = isAdminOrSupervisor(appUser)
   if (adminOrSupervisor && requiresCreative(message)) {
-    const creative = await fetchCreativePerformance(supabase, appUser.org_id, periodDays)
+    const creative = await fetchCreativePerformance(supabase, appUser.org_id, dateWindow)
     if (creative) {
       creativeContext += "\n\n" + creative
       console.log("[52-6] creative context injected for org: " + appUser.org_id)

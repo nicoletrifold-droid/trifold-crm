@@ -1,6 +1,35 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { type DateWindow } from "@web/lib/agent/context-builder"
+
+// ─── Period chips config (Story 52-8) ──────────────────────────────────────
+const PERIOD_CHIPS = [
+  { label: "Hoje",        days: 0  },
+  { label: "7 dias",      days: 7  },
+  { label: "15 dias",     days: 15 },
+  { label: "30 dias",     days: 30 },
+  { label: "Mês passado", days: -1 }, // sentinel for month-past
+] as const
+
+function _windowForChip(chip: typeof PERIOD_CHIPS[number]): DateWindow {
+  const today = new Date()
+  const todayStr = today.toISOString().split("T")[0]!
+  if (chip.days === -1) {
+    const m = today.getMonth() === 0 ? 12 : today.getMonth()
+    const y = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear()
+    const last = new Date(y, m, 0).getDate()
+    const mm = String(m).padStart(2, "0")
+    return {
+      startDate: `${y}-${mm}-01`,
+      endDate:   `${y}-${mm}-${String(last).padStart(2, "0")}`,
+      label: "Mês passado",
+    }
+  }
+  if (chip.days === 0) return { startDate: todayStr, endDate: todayStr, label: "Hoje" }
+  const start = new Date(today); start.setDate(today.getDate() - chip.days)
+  return { startDate: start.toISOString().split("T")[0]!, endDate: todayStr, label: `Últimos ${chip.days} dias` }
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -255,6 +284,11 @@ export default function AgentChatPanel({
   const [showLog, setShowLog]               = useState(false)
   const [logEntries, setLogEntries]         = useState<LogEntry[]>([])
   const [loadingLog, setLoadingLog]         = useState(false)
+  const [dateWindow, setDateWindow]         = useState<DateWindow | null>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [customStart, setCustomStart]       = useState("")
+  const [customEnd, setCustomEnd]           = useState("")
+  const [datePickerError, setDatePickerError] = useState("")
 
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   const inputRef        = useRef<HTMLTextAreaElement>(null)
@@ -264,6 +298,17 @@ export default function AgentChatPanel({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, streamingContent])
+
+  // Limpar filtro de data ao iniciar nova sessão
+  useEffect(() => {
+    if (!activeSessionId) {
+      setDateWindow(null)
+      setShowDatePicker(false)
+      setCustomStart("")
+      setCustomEnd("")
+      setDatePickerError("")
+    }
+  }, [activeSessionId])
 
   // Focus input when panel opens
   useEffect(() => {
@@ -374,11 +419,30 @@ export default function AgentChatPanel({
           message: text,
           context_type: contextType,
           context_id: contextId,
+          ...(dateWindow && { date_window: { startDate: dateWindow.startDate, endDate: dateWindow.endDate } }),
         }),
         signal: abortRef.current.signal,
       })
 
       if (!res.ok || !res.body) {
+        if (res.status === 400) {
+          const errData = await res.json().catch(() => ({})) as { error?: string }
+          if (errData.error === "INVALID_DATE_RANGE") {
+            setMessages((prev) => [
+              ...prev.slice(0, -1), // remove optimistic user msg
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                content: "O intervalo informado é inválido — a data de início é posterior à data de fim.",
+                action_card: null,
+                action_status: null,
+                action_executed_at: null,
+                created_at: new Date().toISOString(),
+              },
+            ])
+            return
+          }
+        }
         throw new Error(`HTTP ${res.status}`)
       }
 
@@ -463,7 +527,7 @@ export default function AgentChatPanel({
       setIsStreaming(false)
       setStreamingContent("")
     }
-  }, [input, isStreaming, activeSessionId, contextType, contextId, loadSessions])
+  }, [input, isStreaming, activeSessionId, contextType, contextId, dateWindow, loadSessions])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -750,7 +814,95 @@ export default function AgentChatPanel({
         </div>
 
         {/* Input area */}
-        <div className="border-t border-gray-200 px-3 py-3 dark:border-stone-700">
+        <div className="border-t border-gray-200 dark:border-stone-700">
+          {/* Barra de período (Story 52-8) */}
+          <div className="px-3 pt-2 pb-1">
+            <div className="flex flex-wrap items-center gap-1">
+              {PERIOD_CHIPS.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => { setDateWindow(_windowForChip(chip)); setShowDatePicker(false); setDatePickerError("") }}
+                  className="text-xs px-2 py-0.5 rounded-full border border-gray-200 hover:bg-gray-100 dark:border-stone-700 dark:hover:bg-stone-700 transition-colors"
+                >
+                  {chip.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => { setShowDatePicker((v) => !v); setDatePickerError("") }}
+                className="text-xs px-2 py-0.5 rounded-full border border-gray-200 hover:bg-gray-100 dark:border-stone-700 dark:hover:bg-stone-700 transition-colors"
+              >
+                Personalizado...
+              </button>
+            </div>
+
+            {/* Badge ativo */}
+            {dateWindow && !showDatePicker && (
+              <div className="mt-1 flex items-center gap-1">
+                <span className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800">
+                  📅 {dateWindow.label ?? `${dateWindow.startDate} a ${dateWindow.endDate}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDateWindow(null)}
+                  className="text-xs text-gray-400 hover:text-gray-700 dark:text-stone-500 dark:hover:text-stone-300 leading-none"
+                  aria-label="Remover filtro de data"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {/* Picker personalizado */}
+            {showDatePicker && (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  max={new Date().toISOString().split("T")[0]}
+                  value={customStart}
+                  onChange={(e) => { setCustomStart(e.target.value); setDatePickerError("") }}
+                  className="text-xs border border-gray-200 dark:border-stone-700 rounded px-1.5 py-0.5 bg-white dark:bg-stone-800 dark:text-stone-100"
+                />
+                <span className="text-xs text-gray-400">até</span>
+                <input
+                  type="date"
+                  max={new Date().toISOString().split("T")[0]}
+                  value={customEnd}
+                  onChange={(e) => { setCustomEnd(e.target.value); setDatePickerError("") }}
+                  className="text-xs border border-gray-200 dark:border-stone-700 rounded px-1.5 py-0.5 bg-white dark:bg-stone-800 dark:text-stone-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!customStart || !customEnd) { setDatePickerError("Preencha as duas datas."); return }
+                    if (customStart > customEnd) { setDatePickerError("Data de início posterior ao fim."); return }
+                    const diffDays = Math.ceil((new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86400000)
+                    if (diffDays > 90) { setDatePickerError("Máximo de 90 dias."); return }
+                    const fmt = (d: string) => d.split("-").reverse().join("/")
+                    setDateWindow({ startDate: customStart, endDate: customEnd, label: `${fmt(customStart)} a ${fmt(customEnd)}` })
+                    setShowDatePicker(false)
+                    setDatePickerError("")
+                  }}
+                  className="text-xs px-2 py-0.5 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+                >
+                  Aplicar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowDatePicker(false); setDatePickerError("") }}
+                  className="text-xs text-gray-400 hover:text-gray-700 dark:text-stone-500"
+                >
+                  ✕
+                </button>
+                {datePickerError && (
+                  <p className="w-full text-xs text-red-500 dark:text-red-400">{datePickerError}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="px-3 pb-3">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -777,6 +929,7 @@ export default function AgentChatPanel({
           <p className="mt-1.5 text-center text-xs text-gray-300 dark:text-stone-600">
             Enter para enviar · Shift+Enter nova linha
           </p>
+          </div>
         </div>
 
         </>}

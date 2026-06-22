@@ -46,6 +46,183 @@ export function extractPeriodDays(msg: string): number {
   return 30
 }
 
+// ─── Date window (Story 52-8) ─────────────────────────────────────────────────
+export type DateWindow = {
+  startDate: string  // "YYYY-MM-DD"
+  endDate: string    // "YYYY-MM-DD"
+  label?: string     // ex: "01/06 a 15/06" | "Últimos 7 dias"
+}
+
+function _isoDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+function _lastDay(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+const MONTH_MAP: Record<string, number> = {
+  janeiro: 1, jan: 1,
+  fevereiro: 2, fev: 2,
+  marco: 3, março: 3, mar: 3,
+  abril: 4, abr: 4,
+  maio: 5, mai: 5,
+  junho: 6, jun: 6,
+  julho: 7, jul: 7,
+  agosto: 8, ago: 8,
+  setembro: 9, set: 9,
+  outubro: 10, out: 10,
+  novembro: 11, nov: 11,
+  dezembro: 12, dez: 12,
+}
+function _monthNum(raw: string): number | null {
+  const key = raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return MONTH_MAP[key] ?? null
+}
+
+type AbsolutePattern = { pattern: RegExp; resolve: (m: RegExpMatchArray) => DateWindow | null }
+const DATE_RANGE_PATTERNS: AbsolutePattern[] = [
+  // "de 01/06/2026 a 15/06/2026" (com ano explícito)
+  {
+    pattern: /(?:de|entre)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:at[eé]?|e)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
+    resolve: (m) => ({
+      startDate: _isoDate(+m[3]!, +m[2]!, +m[1]!),
+      endDate:   _isoDate(+m[6]!, +m[5]!, +m[4]!),
+    }),
+  },
+  // "de 1 a 15 de junho [de 2026]" / "entre 1 e 15 de junho"
+  {
+    pattern: /(?:de|entre)\s+(\d{1,2})\s+(?:at[eé]?|e)\s+(\d{1,2})\s+de\s+([\wçã]+)(?:\s+de\s+(\d{4}))?/i,
+    resolve: (m) => {
+      const mn = _monthNum(m[3]!)
+      if (!mn) return null
+      const today = new Date()
+      let year = m[4] ? +m[4] : today.getFullYear()
+      const testStart = _isoDate(year, mn, +m[1]!)
+      if (testStart > today.toISOString().split("T")[0]!) year -= 1
+      const fmt = (d: number) => String(d).padStart(2, "0")
+      return {
+        startDate: _isoDate(year, mn, +m[1]!),
+        endDate:   _isoDate(year, mn, +m[2]!),
+        label:     `${fmt(+m[1]!)}/${fmt(mn)}/${year} a ${fmt(+m[2]!)}/${fmt(mn)}/${year}`,
+      }
+    },
+  },
+  // "de 01/06 a 15/06" / "01/06 a 15/06" / "01/06 até 15/06"
+  {
+    pattern: /(?:de\s+)?(\d{1,2})\/(\d{1,2})\s+(?:at[eé]?|e)\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/i,
+    resolve: (m) => {
+      const today = new Date()
+      const year = m[5] ? +m[5] : today.getFullYear()
+      const fmt = (d: number) => String(d).padStart(2, "0")
+      return {
+        startDate: _isoDate(year, +m[2]!, +m[1]!),
+        endDate:   _isoDate(year, +m[4]!, +m[3]!),
+        label:     `${fmt(+m[1]!)}/${fmt(+m[2]!)}/${year} a ${fmt(+m[3]!)}/${fmt(+m[4]!)}/${year}`,
+      }
+    },
+  },
+  // "a partir de 01/06" / "desde 01/06" / "de 01/06 até hoje"
+  {
+    pattern: /(?:a\s+partir\s+de|desde|de)\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\s*(?:at[eé]\s*hoje)?/i,
+    resolve: (m) => {
+      const today = new Date()
+      const todayStr = today.toISOString().split("T")[0]!
+      const year = m[3] ? +m[3] : today.getFullYear()
+      const fmt = (d: number) => String(d).padStart(2, "0")
+      return {
+        startDate: _isoDate(year, +m[2]!, +m[1]!),
+        endDate:   todayStr,
+        label:     `a partir de ${fmt(+m[1]!)}/${fmt(+m[2]!)}`,
+      }
+    },
+  },
+  // Nome de mês isolado: "junho" / "maio"
+  {
+    pattern: /(?<![úu]ltim[ao]s?\s{0,5})\b(janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i,
+    resolve: (m) => {
+      const mn = _monthNum(m[1]!)
+      if (!mn) return null
+      const today = new Date()
+      let year = today.getFullYear()
+      if (mn > today.getMonth() + 1) year -= 1
+      const name = m[1]!.charAt(0).toUpperCase() + m[1]!.slice(1).toLowerCase()
+      return {
+        startDate: _isoDate(year, mn, 1),
+        endDate:   _isoDate(year, mn, _lastDay(year, mn)),
+        label:     name,
+      }
+    },
+  },
+]
+
+type RelativePattern = { pattern: RegExp; resolve: () => DateWindow }
+const NEW_RELATIVE_PATTERNS: RelativePattern[] = [
+  {
+    pattern: /m[eê]s\s+passado/i,
+    resolve: () => {
+      const d = new Date()
+      const m = d.getMonth() === 0 ? 12 : d.getMonth()
+      const y = d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear()
+      const mm = String(m).padStart(2, "0")
+      const last = _lastDay(y, m)
+      return { startDate: `${y}-${mm}-01`, endDate: `${y}-${mm}-${String(last).padStart(2, "0")}`, label: "Mês passado" }
+    },
+  },
+  {
+    pattern: /semana\s+passada/i,
+    resolve: () => {
+      const today = new Date()
+      const dow = today.getDay()
+      const toMon = dow === 0 ? 6 : dow - 1
+      const mon = new Date(today); mon.setDate(today.getDate() - toMon - 7)
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+      return {
+        startDate: mon.toISOString().split("T")[0]!,
+        endDate:   sun.toISOString().split("T")[0]!,
+        label: "Semana passada",
+      }
+    },
+  },
+  {
+    pattern: /\bontem\b/i,
+    resolve: () => {
+      const d = new Date(); d.setDate(d.getDate() - 1)
+      const iso = d.toISOString().split("T")[0]!
+      return { startDate: iso, endDate: iso, label: "Ontem" }
+    },
+  },
+]
+
+/**
+ * Extrai um intervalo de datas de uma frase em linguagem natural.
+ * Prioridade: padrões absolutos > novos relativos > PERIOD_MAP legado.
+ * Retorna sempre { startDate, endDate } em ISO 8601.
+ */
+export function extractDateWindow(msg: string): DateWindow {
+  const today = new Date()
+  const todayStr = today.toISOString().split("T")[0]!
+
+  for (const { pattern, resolve } of DATE_RANGE_PATTERNS) {
+    const m = msg.match(pattern)
+    if (m) {
+      const w = resolve(m)
+      if (w) return w
+    }
+  }
+
+  for (const { pattern, resolve } of NEW_RELATIVE_PATTERNS) {
+    if (pattern.test(msg)) return resolve()
+  }
+
+  const days = extractPeriodDays(msg)
+  const start = new Date(today)
+  start.setDate(today.getDate() - days)
+  return {
+    startDate: start.toISOString().split("T")[0]!,
+    endDate:   todayStr,
+    label:     days === 1 ? "Hoje" : `Últimos ${days} dias`,
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtBRL(n: number): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -61,16 +238,17 @@ function pct(a: number, b: number): string {
 export async function buildGlobalContext(
   supabase: SupabaseClient,
   orgId: string,
-  pDays?: number,
+  window?: DateWindow,
 ): Promise<string> {
-  const days = pDays ?? 30
-  const key = `global:${orgId}:${days}`
+  const today = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const endDate   = window?.endDate ?? today
+  const key = `global:${orgId}:${startDate}:${endDate}`
   const cached = getCached(key)
   if (cached) return cached
 
-  const today = new Date().toISOString().split("T")[0]!
-  const dateNdAgo  = (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split("T")[0]! })()
-  const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30);   return d.toISOString().split("T")[0]! })()
+  // date30dAgo usado apenas em meta_alerts (janela fixa de 30d para alertas)
+  const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
 
   const [campaignsRes, insights30dRes, alertsRes, leadsRes] = await Promise.all([
     supabase
@@ -82,8 +260,8 @@ export async function buildGlobalContext(
       .select("entity_id, spend, leads, landing_page_views, outbound_clicks")
       .eq("org_id", orgId)
       .eq("level", "campaign")
-      .gte("date", dateNdAgo)
-      .lte("date", today),
+      .gte("date", startDate)
+      .lte("date", endDate),
     supabase
       .from("meta_alerts")
       .select("alert_type, level, entity_name, severity, message, fired_date")
@@ -139,7 +317,8 @@ export async function buildGlobalContext(
   const totalLeads  = [...agg.values()].reduce((s, v) => s + v.leads, 0)
   const totalCrm    = [...leadsByCampaign.values()].reduce((s, v) => s + v.responded, 0)
 
-  lines.push(`=== PORTFÓLIO (últimos ${days} dias) ===`)
+  const periodLabel = window?.label ?? `${startDate.split("-").reverse().join("/")} a ${endDate.split("-").reverse().join("/")}`
+  lines.push(`=== PORTFÓLIO (${periodLabel}) ===`)
   lines.push(`Spend total: R$${fmtBRL(totalSpend)} | Leads Meta: ${totalLeads} | Leads CRM responderam: ${totalCrm}`)
 
   // Per-campaign table
@@ -191,7 +370,6 @@ export async function buildCampaignContext(
   const cached = getCached(key)
   if (cached) return cached
 
-  const today = new Date().toISOString().split("T")[0]!
   const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
   const date7dAgo  = (() => { const d = new Date(); d.setDate(d.getDate() - 7);  return d.toISOString().split("T")[0]! })()
 
@@ -364,12 +542,12 @@ export function buildContext(
   orgId: string,
   contextType: "global" | "campaign",
   contextId?: string | null,
-  pDays?: number,
+  window?: DateWindow,
 ): Promise<string> {
   if (contextType === "campaign" && contextId) {
     return buildCampaignContext(supabase, orgId, contextId)
   }
-  return buildGlobalContext(supabase, orgId, pDays)
+  return buildGlobalContext(supabase, orgId, window)
 }
 
 // ─── Pipeline CRM (Story 52-2) ──────────────────────────────────────────────
@@ -505,20 +683,21 @@ function fmtBRLNullable(n: number | null): string {
 export async function fetchPipelineAggregates(
   supabase: SupabaseClient,
   orgId: string,
-  pDays?: number,
+  window?: DateWindow,
 ): Promise<string> {
-  const days = pDays ?? 30
-  // Cache apenas para a janela default (30d); janelas customizadas não cacheadas
-  // para não poluir a chave com múltiplas variações.
-  const cacheable = days === 30
-  const key = `pipeline_agg:${orgId}`
+  const today = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const endDate   = window?.endDate ?? today
+  const default30Start = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const cacheable = startDate === default30Start && endDate === today
+  const key = `pipeline_agg:${orgId}:${startDate}:${endDate}`
   if (cacheable) {
     const cached = getCached(key)
     if (cached !== null) return cached
   }
 
   const [funnelRes, stageRes] = await Promise.all([
-    supabase.rpc("pipeline_funnel_by_campaign", { p_days: days }),
+    supabase.rpc("pipeline_funnel_by_campaign", { p_start_date: startDate, p_end_date: endDate }),
     supabase
       .from("v_pipeline_stage_distribution")
       .select("*")
@@ -537,7 +716,8 @@ export async function fetchPipelineAggregates(
   lines.push("")
 
   if (funnel.length > 0) {
-    lines.push(`--- Funil por Campanha/UTM (últimos ${days} dias) ---`)
+    const funnelLabel = window?.label ?? `${startDate} a ${endDate}`
+    lines.push(`--- Funil por Campanha/UTM (${funnelLabel}) ---`)
     lines.push(
       `[Nota: CPL Visitou/CPL Fechado = "—" quando não há dados de mídia correlacionados por nome de campanha — NÃO interprete como R$0,00]`,
     )
@@ -799,18 +979,20 @@ function fmtCrmFunnel(r: CreativeRow): string {
 export async function fetchCreativePerformance(
   supabase: SupabaseClient,
   orgId: string,
-  pDays?: number,
+  window?: DateWindow,
 ): Promise<string> {
-  const days = pDays ?? 30
-  // Cache apenas para a janela default (30d); janelas customizadas não cacheadas.
-  const cacheable = days === 30
-  const key = `creative_perf:${orgId}:${days}`
+  const today = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const endDate   = window?.endDate ?? today
+  const default30Start = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const cacheable = startDate === default30Start && endDate === today
+  const key = `creative_perf:${orgId}:${startDate}:${endDate}`
   if (cacheable) {
     const cached = getCached(key)
     if (cached !== null) return cached
   }
 
-  const { data, error } = await supabase.rpc("creative_performance", { p_days: days })
+  const { data, error } = await supabase.rpc("creative_performance", { p_start_date: startDate, p_end_date: endDate })
 
   if (error) {
     console.error("[52-6] erro ao consultar creative_performance", { error, orgId })
@@ -823,7 +1005,8 @@ export async function fetchCreativePerformance(
   }
 
   const lines: string[] = []
-  lines.push(`=== CRIATIVOS (últimos ${days} dias) ===`)
+  const creativeLabel = window?.label ?? `${startDate} a ${endDate}`
+  lines.push(`=== CRIATIVOS (${creativeLabel}) ===`)
   lines.push(
     "[Nota: dados de performance por anúncio individual agregados de meta_insights_daily level='ad', cruzados com o funil do CRM via metadata->>'ad_id' → kanban_stages]",
   )
