@@ -1,7 +1,7 @@
 # Story 75-11 — "Registrar Ligação": salvar o imóvel selecionado no lead (persistente)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 51/63 — Corretor / Atendimento
 - **Branch:** main
 
@@ -53,3 +53,4 @@ O imóvel de interesse fica registrado no lead a partir de qualquer atendimento 
 - @po (Pax): validação → GO. Status Draft → Ready.
 - @dev (Dex): persiste imóvel no lead + pré-seleção. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS. Pronta para @devops *push.
+- @devops (Gage): push em produção (commit 69ae2ff). Status → Done.

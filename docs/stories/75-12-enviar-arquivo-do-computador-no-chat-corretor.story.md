@@ -1,7 +1,7 @@
 # Story 75-12 — Enviar arquivo do computador no chat do corretor com o lead
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 51/56 — Corretor / Mídia
 - **Branch:** main
 
@@ -60,3 +60,4 @@ Corretor passa a enviar arquivos do computador (fotos, PDFs) direto ao lead pelo
 - @po (Pax): validação → GO. Status Draft → Ready.
 - @dev (Dex): endpoint send-file + botão no modal. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS. Pronta para @devops *push.
+- @devops (Gage): push em produção (commit 69ae2ff). Status → Done.
