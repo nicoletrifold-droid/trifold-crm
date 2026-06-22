@@ -163,14 +163,25 @@ export default async function ObraDetailPage({
     }
   })
 
-  // Story 75-6: destinatários para documentos exclusivos (vínculos de portal).
+  // Story 75-6/75-7: destinatários para documentos exclusivos (vínculos de portal).
+  // O número da unidade é mantido no CRM (clientes_obras_vinculos); usamos como
+  // fallback, casando pelo e-mail, já que `cliente_obras.numero_unidade` costuma
+  // estar vazio.
+  const crmUnidadePorEmail = new Map<string, string>()
+  for (const c of clientes) {
+    if (c.email && c.numero_unidade) {
+      crmUnidadePorEmail.set(c.email.toLowerCase(), c.numero_unidade)
+    }
+  }
   const docDestinatarios = (clienteObrasRes.data ?? []).map((row) => {
     const u = Array.isArray(row.users) ? row.users[0] : row.users
     const nome =
       (u as { name?: string } | null)?.name ??
       (u as { email?: string } | null)?.email ??
       "Cliente"
-    const label = row.numero_unidade ? `${nome} — ${row.numero_unidade}` : nome
+    const email = ((u as { email?: string } | null)?.email ?? "").toLowerCase()
+    const unidade = row.numero_unidade ?? crmUnidadePorEmail.get(email) ?? null
+    const label = unidade ? `${nome} — ${unidade}` : nome
     return { id: row.id, label }
   })
 
