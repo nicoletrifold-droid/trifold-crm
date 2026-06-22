@@ -91,3 +91,35 @@ export function shouldReactivateAi(
   if (!lastBrokerAt) return true
   return now - new Date(lastBrokerAt).getTime() >= BROKER_WINDOW_MS
 }
+
+/**
+ * Story 63-15 — Resolve a "âncora" de atividade humana de uma conversa em handoff,
+ * para alimentar `shouldReactivateAi`. É o instante MAIS RECENTE entre:
+ * - `handoffAt`: `conversations.handoff_at` (momento do handoff — por envio do
+ *   corretor, `handoff_reason='broker_reply'`, OU por agendamento da Nicole,
+ *   `handoff_reason='appointment'`).
+ * - `lastBrokerAt`: `created_at` da última mensagem `role='broker'`.
+ *
+ * Usar o máximo dos dois unifica os dois gatilhos de handoff:
+ * - Handoff por agendamento (sem msg de corretor) → âncora = `handoffAt` → a Nicole
+ *   só reassume 24h após o agendamento (sem isso, `lastBrokerAt=null` reativaria
+ *   na mensagem seguinte e anularia o handoff).
+ * - Corretor respondendo por vários dias → âncora = `lastBrokerAt` (mais recente
+ *   que o `handoffAt` inicial) → a Nicole não reassume enquanto ele está ativo.
+ *
+ * Retorna o timestamp ISO mais recente, ou `null` se ambos forem nulos (caso em
+ * que `shouldReactivateAi(null)` reativa — não há sinal de humano no atendimento).
+ *
+ * @param handoffAt    `conversations.handoff_at`, ou `null`.
+ * @param lastBrokerAt `created_at` da última msg `role='broker'`, ou `null`.
+ */
+export function resolveTakeoverAnchor(
+  handoffAt: string | null,
+  lastBrokerAt: string | null
+): string | null {
+  if (!handoffAt) return lastBrokerAt
+  if (!lastBrokerAt) return handoffAt
+  return new Date(handoffAt).getTime() >= new Date(lastBrokerAt).getTime()
+    ? handoffAt
+    : lastBrokerAt
+}

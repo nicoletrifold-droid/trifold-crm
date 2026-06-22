@@ -7,7 +7,10 @@ import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
-import { shouldReactivateAi } from "@web/lib/broker/broker-takeover-status"
+import {
+  shouldReactivateAi,
+  resolveTakeoverAnchor,
+} from "@web/lib/broker/broker-takeover-status"
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
@@ -640,19 +643,36 @@ export async function POST(request: NextRequest) {
       // pior caso a Nicole responde 1x a mais — a próxima msg do lead já verá false.
       let isAiActive = conversation!.is_ai_active
       if (!isAiActive) {
-        const { data: lastBrokerMsg } = await supabase
-          .from("messages")
-          .select("created_at")
-          .eq("conversation_id", conversation!.id)
-          .eq("role", "broker")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
+        // Story 63-15 — âncora do handoff = MAIS RECENTE entre `handoff_at` (handoff
+        // por envio do corretor OU por agendamento da Nicole) e a última msg
+        // `role='broker'`. Sem isso, um handoff por agendamento (lastBrokerAt=null)
+        // reativaria a Nicole na mensagem seguinte e anularia o handoff.
+        const [{ data: convRow }, { data: lastBrokerMsg }] = await Promise.all([
+          supabase
+            .from("conversations")
+            .select("handoff_at")
+            .eq("id", conversation!.id)
+            .maybeSingle(),
+          supabase
+            .from("messages")
+            .select("created_at")
+            .eq("conversation_id", conversation!.id)
+            .eq("role", "broker")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ])
 
-        if (shouldReactivateAi(lastBrokerMsg?.created_at ?? null)) {
+        const anchor = resolveTakeoverAnchor(
+          convRow?.handoff_at ?? null,
+          lastBrokerMsg?.created_at ?? null
+        )
+
+        if (shouldReactivateAi(anchor)) {
+          // Reassume: limpa o handoff para não influenciar cálculos futuros.
           await supabase
             .from("conversations")
-            .update({ is_ai_active: true })
+            .update({ is_ai_active: true, handoff_at: null, handoff_reason: null })
             .eq("id", conversation!.id)
           isAiActive = true
         }
@@ -667,6 +687,10 @@ export async function POST(request: NextRequest) {
         const { createCalendarEvent } = await import("@web/lib/google-calendar")
 
         const anthropic = createAnthropicClient()
+
+        // Story 63-15 — sinaliza que a Nicole agendou uma visita nesta interação,
+        // para aplicar o handoff (is_ai_active=false) após enviar a confirmação.
+        let appointmentCreated = false
 
         const response = await processMessage({
           supabase,
@@ -701,6 +725,7 @@ export async function POST(request: NextRequest) {
             // ownership. Prefer notification_broker_user_id (the lead owner kept by
             // the guard); fall back to broker_user_id for backward compatibility.
             if (event.event_type === "APPOINTMENT_CREATED") {
+              appointmentCreated = true
               const notifyBrokerUserId =
                 (event.metadata?.notification_broker_user_id as string | null) ??
                 (event.metadata?.broker_user_id as string | null)
@@ -733,6 +758,24 @@ export async function POST(request: NextRequest) {
             text: { body: response },
           }),
         })
+
+        // Story 63-15 — Handoff após agendamento: a Nicole acabou de confirmar a
+        // visita; desliga is_ai_active para ela parar de responder as próximas
+        // mensagens do lead (o corretor assume). `handoff_at` ancora a reativação
+        // de 24h (resolveTakeoverAnchor). `notifyBrokerOfAppointment` (no onEvent
+        // acima) já avisa o corretor. Por-conversa, admin client. `.eq(is_ai_active,
+        // true)` garante idempotência (só desliga se ainda estava ativa).
+        if (appointmentCreated) {
+          await supabase
+            .from("conversations")
+            .update({
+              is_ai_active: false,
+              handoff_at: new Date().toISOString(),
+              handoff_reason: "appointment",
+            })
+            .eq("id", conversation!.id)
+            .eq("is_ai_active", true)
+        }
       }
 
       logEvent({

@@ -3,6 +3,7 @@ import {
   brokerSentRecently,
   deriveBrokerActive,
   shouldReactivateAi,
+  resolveTakeoverAnchor,
   BROKER_WINDOW_MS,
   type TakeoverMessage,
 } from "./broker-takeover-status"
@@ -111,5 +112,52 @@ describe("shouldReactivateAi", () => {
 
   it("created_at inválido (NaN) → false (conservador: mantém corretor no controle)", () => {
     expect(shouldReactivateAi("not-a-date", NOW)).toBe(false)
+  })
+})
+
+describe("resolveTakeoverAnchor (Story 63-15)", () => {
+  const handoff = new Date(NOW - 2 * HOUR).toISOString()
+  const broker = new Date(NOW - 1 * HOUR).toISOString()
+
+  it("ambos nulos → null", () => {
+    expect(resolveTakeoverAnchor(null, null)).toBeNull()
+  })
+
+  it("só handoff_at (handoff por agendamento, sem msg de corretor) → handoff_at", () => {
+    expect(resolveTakeoverAnchor(handoff, null)).toBe(handoff)
+  })
+
+  it("só lastBrokerAt → lastBrokerAt", () => {
+    expect(resolveTakeoverAnchor(null, broker)).toBe(broker)
+  })
+
+  it("corretor respondeu depois do handoff → âncora = msg do corretor (mais recente)", () => {
+    expect(resolveTakeoverAnchor(handoff, broker)).toBe(broker)
+  })
+
+  it("handoff mais recente que a última msg do corretor → âncora = handoff_at", () => {
+    const older = new Date(NOW - 5 * HOUR).toISOString()
+    expect(resolveTakeoverAnchor(handoff, older)).toBe(handoff)
+  })
+
+  it("timestamps iguais → handoff_at (>=)", () => {
+    expect(resolveTakeoverAnchor(handoff, handoff)).toBe(handoff)
+  })
+
+  it("integração: handoff por agendamento há 2h → NÃO reativa (Nicole silente)", () => {
+    const anchor = resolveTakeoverAnchor(handoff, null)
+    expect(shouldReactivateAi(anchor, NOW)).toBe(false)
+  })
+
+  it("integração: handoff por agendamento há 25h sem corretor → reativa", () => {
+    const old = new Date(NOW - 25 * HOUR).toISOString()
+    const anchor = resolveTakeoverAnchor(old, null)
+    expect(shouldReactivateAi(anchor, NOW)).toBe(true)
+  })
+
+  it("integração: agendamento há 30h mas corretor respondeu há 1h → NÃO reativa", () => {
+    const oldHandoff = new Date(NOW - 30 * HOUR).toISOString()
+    const anchor = resolveTakeoverAnchor(oldHandoff, broker)
+    expect(shouldReactivateAi(anchor, NOW)).toBe(false)
   })
 })
