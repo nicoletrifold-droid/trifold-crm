@@ -1,7 +1,7 @@
 # Story 75-16 — Portal: atendente responsável, transferência e participantes
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente / Atendimento
 - **Branch:** main
 
@@ -23,8 +23,8 @@ Modelo (migration 107): `obra_conversas` (obra+cliente, `assigned_to`, `status`)
 ### Fase 3 — aviso à equipe (PENDENTE — próximo bloco)
 - [x] AC6: Ao cliente enviar mensagem (texto), notifica o atendente responsável (push + e-mail) e os participantes (push). Helper `notifyEquipeNovaMensagem`.
 
-### Config (PENDENTE — polimento)
-- [ ] AC7: Tela de Config para escolher o atendente padrão (atendente padrão JÁ semeado = Samara; falta só a UI de troca).
+### Config (esta entrega)
+- [x] AC7: Tela em Config → Empresa para escolher o atendente padrão do portal (endpoint `/api/admin/config/atendente-padrao` GET/PATCH + componente AtendentePadraoConfig).
 
 ## Out of Scope (por ora)
 - Filtro "minhas/não atribuídas/todas" e exibição do atendente na LISTA da caixa (mostra na conversa aberta). Pode entrar depois.
@@ -60,3 +60,4 @@ Modelo (migration 107): `obra_conversas` (obra+cliente, `assigned_to`, `status`)
 ## Change Log
 - @sm/@po/@dev/@qa: Fase 1+2 criada, implementada, QA PASS (estático). Pendente migration 107 + push.
 - @devops (Gage): migration 107 aplicada via Management API + Samara setada como atendente padrão + Fase 1+2+3 em produção (commits 98e1bb1, +). Falta só a Config UI (AC7).
+- @devops (Gage): AC7 (config UI) implementada + push. Story 75-16 COMPLETA (Fases 1+2+3 + config) em produção.

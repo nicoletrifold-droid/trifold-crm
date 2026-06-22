@@ -2,6 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
+import { AtendentePadraoConfig } from "./_atendente-padrao"
 
 export default async function EmpresaPage() {
   const user = await getServerUser()
@@ -72,6 +73,9 @@ export default async function EmpresaPage() {
               </div>
             </div>
           </div>
+
+          {/* Story 75-16 — atendente padrão do portal (admin/supervisor) */}
+          {isAdmin && <AtendentePadraoConfig />}
 
           {/* Edit Form (admin only) */}
           {isAdmin && (
