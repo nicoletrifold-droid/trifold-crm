@@ -1,0 +1,163 @@
+schema: 1
+storyId: "63.7"
+story: "63.7"
+title: "Detalhes do Lead em Sheet/Aba Secundária (slide-over Tailwind)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 atendidos por código. LeadEditForm + cards "Dados do Lead"/"Resumo IA" removidos
+  do layout principal de page.tsx e movidos p/ LeadDetailsPanel (slide-over Tailwind custom,
+  sem shadcn Sheet/Drawer, reusando padrão de quick-history-modal.tsx). Botão MoreVertical
+  com aria-label="Detalhes do lead" abre o painel. a11y sólida: foco move p/ botão Fechar ao
+  abrir e retorna ao gatilho ao fechar; Escape e backdrop fecham; role=dialog/aria-modal/
+  aria-label corretos; alvos ≥44px (trigger e Fechar). LeadEditForm preservado intacto
+  dentro do painel (props inalteradas, server action/PATCH agnósticos ao pai). "Transferir
+  corretor" corretamente FORA de escopo (só existe no drawer). CON-1 limpo. Suíte 419/419;
+  ESLint 0; type-check 0 nos arquivos da story. Único concern LOW: sem focus trap (Tab pode
+  sair do slide-over) — consistente com o padrão leve de overlay do projeto.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T15:36:00Z"
+iteration: 1
+quality_score: 94
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (page.tsx: LeadEditForm + 2 cards removidos do layout principal; chat é o conteúdo
+      principal via ConversationThread L152). AC2 (lead-details-panel.tsx:84-94 botão
+      MoreVertical, aria-label="Detalhes do lead", abre painel com LeadEditForm+2 cards
+      L128-188). AC3 (slide-over: backdrop fixed inset-0 z-40 bg-black/40 L98; painel fixed
+      inset-y-0 right-0 z-50 translate-x duration-200 L104-112 — sem shadcn). AC4 (LeadEditForm
+      L130, props inalteradas). AC5 (Escape L73-76 + backdrop onClick=close L99; foco volta ao
+      gatilho L68). AC6 (type-check/ESLint/vitest 419 limpos).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Client Component encapsulando state open; page.tsx permanece Server Component (padrão
+      do BrokerMessageInput). Refs (triggerRef/closeBtnRef) bem usadas p/ gestão de foco.
+      Cleanup do listener keydown no return do useEffect. Imports relativos locais coerentes
+      com vizinhança (_components). Tipagem explícita de LeadEditData/Property.
+  - check: "3. Test Architecture"
+    status: PASS
+    note: >
+      Sem novo helper puro (componente puramente visual/interativo). Comportamento de
+      slide-over/foco é layout/DOM-dependente — não unit-testável em node (repo sem jsdom/
+      @testing-library, padrão do Epic 63). Validado por análise estática + smoke manual.
+      Suíte completa 419/419 sem regressão.
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      LeadEditForm reusado sem mudança de props (server action/PATCH + router.refresh()
+      agnósticos ao pai) — edição preservada (GR-4 mitigado). URL inalterada. Navegação de
+      volta à lista intacta (Link no topo de page.tsx). ConversationThread (63-5/63-6) não
+      afetado. Suíte 419/419.
+  - check: "5. Performance / Mobile-PWA"
+    status: PASS
+    note: >
+      Painel in-DOM com translate-x (transição GPU-friendly); overflow-y-auto no painel.
+      Zero query adicional (mesmos dados de page). max-w-sm no mobile = full-width util.
+  - check: "6. Security (CON-1)"
+    status: PASS
+    note: >
+      git grep CON-1 nos 4 arquivos da Fase 2 → ZERO. Edição de lead permanece via
+      LeadEditForm existente (server action). Sem deep-link externo.
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Change Log v1.1 documenta decisão T1 (slide-over Tailwind custom) e escopo
+      ("Transferir corretor" fora). JSDoc do componente descreve a11y e o padrão de overlay
+      reusado. Out of Scope explícito.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "page.tsx: LeadEditForm + cards 'Dados do Lead'/'Resumo IA' removidos do layout principal (commit b484d31, page -78 líquidas); chat principal via ConversationThread."
+  - ac: "AC2"
+    status: PASS
+    note: "lead-details-panel.tsx:84-94 botão MoreVertical aria-label='Detalhes do lead'; painel contém LeadEditForm + 2 cards (L128-188)."
+  - ac: "AC3"
+    status: PASS
+    note: "slide-over Tailwind: backdrop L98 (fixed inset-0 z-40 bg-black/40), painel L104-112 (fixed inset-y-0 right-0 z-50, translate-x-0/translate-x-full duration-200). Sem shadcn Sheet/Drawer."
+  - ac: "AC4"
+    status: PASS
+    note: "LeadEditForm L130 com props lead/properties inalteradas — submit/edição funcionam dentro do painel."
+  - ac: "AC5"
+    status: PASS
+    note: "Escape fecha (keydown L73-76); backdrop onClick=close (L99); foco volta ao triggerRef (close() L66-69); foco move p/ closeBtnRef ao abrir (L78)."
+  - ac: "AC6"
+    status: PASS
+    note: "type-check 0 (3 ambientais), ESLint 0, vitest 419/419."
+
+issues:
+  - id: A11Y-001
+    severity: low
+    category: code
+    finding: >
+      O slide-over não implementa focus trap — com o painel aberto, Tab pode mover o foco
+      para o conteúdo de fundo (a página não fica inert/aria-hidden). Escape, backdrop,
+      retorno de foco ao gatilho e foco inicial no botão Fechar estão corretos. Consistente
+      com o padrão leve de overlay do projeto (quick-history-modal.tsx).
+    suggested_action: >
+      Não-bloqueante. Se for adotada uma camada de modal acessível no futuro (focus-trap/
+      inert no background), aplicar uniformemente aos overlays do projeto.
+    suggested_owner: dev
+  - id: SCOPE-002
+    severity: low
+    category: requirements
+    finding: >
+      "Transferir corretor" (TransferBrokerSection) permanece exclusivo de
+      lead-detail-drawer.tsx (admin/supervisor) e fora de page.tsx — corretamente excluído
+      do escopo (portá-lo seria nova funcionalidade).
+    suggested_action: "Nenhuma. Se necessário em page.tsx no futuro, criar story dedicada."
+    suggested_owner: sm
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  command: "git grep -nE '<pattern>' HEAD -- conversation-thread.tsx conversation-thread-merge.ts lead-details-panel.tsx page.tsx"
+  note: "Zero ocorrências (exit 1)."
+
+nfr_validation:
+  accessibility:
+    status: PASS
+    notes: "role=dialog/aria-modal/aria-label; aria-haspopup=dialog + aria-expanded no gatilho; foco inicial e retorno geridos; alvos ≥44px. Ressalva LOW: sem focus trap (A11Y-001)."
+  performance:
+    status: PASS
+    notes: "Zero query adicional; transição translate-x; overflow no painel."
+  maintainability:
+    status: PASS
+    notes: "Componente isolado reusando padrão de overlay existente (REUSE)."
+  reliability:
+    status: PASS
+    notes: "Cleanup de listener no useEffect; LeadEditForm preservado."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "419/419 passed (32 files)."
+  - check: "ESLint (4 arquivos Fase 2)"
+    command: "pnpm --filter @trifold/web exec eslint <4 files>"
+    result: "0 erros, 0 warnings (exit 0)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: "0 erros nos arquivos da story. 3 erros ambientais pré-existentes (react-email-editor)."
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos 4 arquivos tocados"
+    result: "CLEAN (zero)."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 6 ACs estão atendidos por código. A tela foca no chat; detalhes/edição vão p/ um
+    slide-over acessível (foco gerido, Escape/backdrop, role/aria, ≥44px) reusando o padrão
+    de overlay do projeto. LeadEditForm preservado sem mudança de props (sem regressão de
+    edição). "Transferir corretor" corretamente fora de escopo. CON-1 limpo; suíte 419/419;
+    lint e type-check limpos. As 2 issues são LOW (sem focus trap; escopo Transferir).
+    Recomendação: LIBERAR para @devops *push.
+  next_steps:
+    - "@devops *push (branch feat/epic-51-handoff-chat-corretor) — commit b484d31."
+    - "Smoke pós-deploy mobile: abrir lead → chat imediato sem rolar form; ⋯ abre painel da direita; editar e salvar OK; Escape/backdrop fecham; foco volta ao ⋯."

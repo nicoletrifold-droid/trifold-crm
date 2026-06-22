@@ -1,0 +1,118 @@
+schema: 1
+storyId: "63.2"
+story: "63.2"
+title: "Padronizar Bolhas do Chat do Corretor"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC3, AC5-AC7 atendidos por código; AC4 PARCIAL e explicitamente
+  simplificado/documentado (page.tsx é Server Component sem estado otimista →
+  mensagens broker do banco exibem ✓ Check; ⏳/⚠ permanecem no state local não
+  consumido). Helper puro getBubbleStyle reusado em page.tsx E drawer (eliminando
+  divergência broker azul→laranja / assistant laranja→roxo). Contraste de
+  timestamps corrigido. 5 testes do helper verdes; suíte 414/414. CON-1 limpo.
+  Limitação do AC4 é LOW e aceita pelo @po (GO 9/10).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T13:42:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 broker direita/laranja/"Você" (bubble-styles.ts:30-37 + page.tsx
+      side==='right' items-end L231), AC2 user esquerda/stone/"Lead" (L38-45),
+      AC3 assistant esquerda/purple/"Nicole" (L46-53), AC5 drawer reusa
+      getBubbleStyle (lead-detail-drawer.tsx import + map L825-845), AC6
+      timestamps text-stone-500 dark:text-stone-400 (page L244 / drawer ajustado),
+      AC7 5 testes verdes + lint/types limpos. AC4 parcial (ver issue BUBBLE-001).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      getBubbleStyle é função pura, sem deps React, com default graceful para
+      role desconhecido (sem throw). Tipos exportados (BubbleSide, BubbleStyle).
+      JSDoc claro do ponto de vista do corretor. Drawer alterado apenas no loop de
+      preview de mensagens (slice 0,3) — restante intocado. Imports absolutos.
+  - check: "3. Test Architecture"
+    status: PASS
+    note: >
+      bubble-styles.test.ts cobre broker/user/assistant/system + role vazio e
+      desconhecido (graceful, não-throw). 5/5 verdes. Cobertura adequada para
+      helper puro determinístico.
+  - check: "4. Accessibility / Contrast (NFR-3)"
+    status: PASS
+    note: >
+      Timestamps invertidos para stone-500 (claro) / stone-400 (escuro) garantindo
+      ≥3:1 em ambos os modos sobre os fundos das bolhas (orange/stone/purple-100 e
+      /30). Rótulo de autor (text-xs stone-500/400) provê identificação textual do
+      remetente além da cor/posição (não depende só de cor).
+  - check: "5. Regression Risk"
+    status: PASS
+    note: >
+      Mudança visual; lógica de fetch/API intocada. Drawer preserva tudo fora do
+      loop de preview. ESLint warnings do drawer (isCTWA L302, handleAddNote L359)
+      são PRÉ-EXISTENTES, fora da região editada (L825-845). Suíte 414/414.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "bubble-styles.ts:30-37 (orange/right/'Você') + page.tsx:227-256 render à direita com label."
+  - ac: "AC2"
+    status: PASS
+    note: "bubble-styles.ts:38-45 (stone/left/'Lead')."
+  - ac: "AC3"
+    status: PASS
+    note: "bubble-styles.ts:46-53 (purple/left/'Nicole')."
+  - ac: "AC4"
+    status: CONCERNS
+    note: >
+      PARCIAL (documentado). page.tsx:247-252 renderiza apenas <Check/> ✓ para
+      role==='broker' do banco. Estados pending(⏳)/failed(⚠) modelados em
+      OptimisticMessage (broker-message-input.tsx:10-17) mas NÃO surfaced em
+      page.tsx (Server Component via router.refresh, sem merge de state otimista).
+      Simplificação assumida no próprio texto do AC e aceita pelo @po.
+  - ac: "AC5"
+    status: PASS
+    note: "lead-detail-drawer.tsx:828-845 — preview reusa getBubbleStyle; divergência de cores/labels eliminada."
+  - ac: "AC6"
+    status: PASS
+    note: "page.tsx:235,244 e drawer metadados → text-stone-500 dark:text-stone-400."
+  - ac: "AC7"
+    status: PASS
+    note: "vitest 5/5 (bubble-styles.test.ts); ESLint 0 erros story; tsc 0 erros story; suíte 414/414."
+
+issues:
+  - id: BUBBLE-001
+    severity: low
+    category: requirements
+    finding: >
+      AC4 (status de entrega ⏳/✓/⚠) é parcial: page.tsx exibe ✓ (Check) fixo para
+      TODA mensagem broker persistida, inclusive as gravadas com
+      metadata.send_error (envio externo falhou mas a row foi salva — ver AC7/
+      REL-001 do gate 51.1). page.tsx só seleciona id/role/content/created_at
+      (L54), sem metadata, então não distingue "entregue" de "falhou". O ✓
+      representa "persistido no banco", não "entregue ao lead" — pode induzir o
+      corretor a achar que a mensagem chegou.
+    suggested_action: >
+      Não-bloqueante para Fase 1. Ao unificar em 63-5, buscar metadata.send_error
+      e renderizar ⚠ quando presente; surfacing de ⏳/pending via estado otimista
+      do composer. Casar com REL-001 de 51.1.
+    suggested_owner: dev
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  note: "git grep nos arquivos tocados — zero ocorrências."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    6 de 7 ACs plenamente atendidos; AC4 parcial é uma simplificação baked-in no
+    próprio AC e aceita pelo @po, com a limitação documentada. Helper puro testado
+    (5/5), reuso real em page+drawer, contraste corrigido, CON-1 limpo, sem
+    regressão (414/414). A única issue (BUBBLE-001) é LOW. Aprovada para @devops
+    push; tratar surfacing completo do status em 63-5.

@@ -1,0 +1,136 @@
+schema: 1
+storyId: "epic-63-fase1"
+story: "epic-63-fase1"
+title: "Quality Gate consolidado — Epic 63 FASE 1 (Quick Wins de UX do Chat do Corretor)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Consolida os 4 gates individuais das stories 63-1..63-4 (Fase 1). Todas PASS.
+  Os 4 commits (8312919, c5652eb, 261f231, 7aa76df) tocam 9 arquivos (~425 linhas,
+  só UI/componentes puros — CON-4 sem migration). CON-1 (INVIOLÁVEL) verificado por
+  git grep: ZERO tel:/wa.me/api.whatsapp.com/whatsapp:// nos arquivos tocados.
+  Acessibilidade ≥44px (NFR-2) e contraste de timestamps (NFR-3) atendidos. Sem
+  query adicional ao banco (NFR-4). Helpers puros extraídos (bubble-styles,
+  window-status) com 15 testes verdes. Suíte COMPLETA do repositório 414/414 verde;
+  ESLint 0 erros nos arquivos das stories; type-check 0 erros nos arquivos das
+  stories. Ressalvas conhecidas (63-2 AC4 status otimista em Server Component;
+  63-4 AC7 countdown ao vivo) são LOW, documentadas e aceitas. Pronto para @devops
+  push.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T13:50:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+stories_summary:
+  - story: "63.1"
+    title: "Ícone de Ação na Lista de Leads"
+    gate: PASS
+    file: "docs/qa/gates/63.1-icone-acao-leads.yml"
+    note: "Pencil→MessageCircle, label 'Responder', ≥44px mobile+desktop. 1 issue LOW (UX-001: rota botão/card)."
+  - story: "63.2"
+    title: "Padronizar Bolhas do Chat"
+    gate: PASS
+    file: "docs/qa/gates/63.2-padronizar-bolhas-chat.yml"
+    note: "getBubbleStyle reusado page+drawer; contraste corrigido. AC4 parcial (✓ no banco) — LOW, documentado."
+  - story: "63.3"
+    title: "Composer Mobile-First"
+    gate: PASS
+    file: "docs/qa/gates/63.3-composer-mobile-first.yml"
+    note: "Paperclip/Send + aria-labels, ≥44px, dica hidden lg:inline, onKeyDown preservado. Zero issues."
+  - story: "63.4"
+    title: "Estado da Janela de 24h Visível"
+    gate: PASS
+    file: "docs/qa/gates/63.4-estado-janela-24h.yml"
+    note: "getWindowStatus (22h/24h) + badge + disabledByWindow sem sobrescrever const interna. AC7 (live) Out of Scope — LOW."
+
+con1_inviolable_scan:
+  result: CLEAN
+  command: "git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD -- <9 arquivos tocados>"
+  outcome: "ZERO ocorrências. CON-1 respeitado em todas as 4 stories."
+
+independent_verification:
+  - check: "Testes dos helpers da story"
+    command: "npx vitest run bubble-styles.test.ts window-status.test.ts"
+    result: "15/15 passed (2 files)"
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "414/414 passed (31 files)"
+  - check: "ESLint (7 arquivos das stories)"
+    command: "pnpm --filter @trifold/web exec eslint <7 files>"
+    result: "0 erros; 2 warnings PRÉ-EXISTENTES no drawer (isCTWA L302, handleAddNote L359), fora da região editada na 63-2."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos das stories. 3 erros pré-existentes/ambientais em
+      email-templates/_components/visual-editor.tsx (módulo 'react-email-editor'
+      ausente) — NÃO relacionados ao Epic 63.
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos arquivos tocados"
+    result: "CLEAN (zero)."
+
+nfr_validation:
+  accessibility:
+    status: PASS
+    notes: "NFR-2 ≥44px enforced em 63-1/63-3; aria-labels corretos (nome acessível = função)."
+  contrast:
+    status: PASS
+    notes: "NFR-3 timestamps stone-500/stone-400 ≥3:1 claro+escuro; rótulo de autor não depende só de cor."
+  performance:
+    status: PASS
+    notes: "NFR-4 zero query adicional — 63-4 deriva de conversations já buscado."
+  maintainability:
+    status: PASS
+    notes: "Helpers puros extraídos (bubble-styles, window-status); drawer alinhado reduz dívida da futura 63-5."
+  isolation:
+    status: PASS
+    notes: "NFR-1 — as 4 stories são autossuficientes; sem dependências acidentais entre S1-S4."
+
+aggregated_issues:
+  - id: BUBBLE-001
+    story: "63.2"
+    severity: low
+    finding: "✓ exibido para toda mensagem broker do banco, inclusive as com send_error (page.tsx não busca metadata)."
+    suggested_action: "Surfacing de send_error/⚠ e estado otimista ao unificar em 63-5."
+  - id: WIN-001
+    story: "63.4"
+    severity: low
+    finding: "Countdown do badge não atualiza ao vivo (sem setInterval) — Out of Scope Fase 1."
+    suggested_action: "Adicionar setInterval(1min) na 63-9 se desejado."
+  - id: WIN-002
+    story: "63.4"
+    severity: low
+    finding: "Janela medida por last_message_at (bumpado por outbound) — REL-001 herdado de 51.1."
+    suggested_action: "Medir por última inbound (role='user') em iteração futura (63-10/51-5)."
+  - id: UX-001
+    story: "63.1"
+    severity: low
+    finding: "Botão 'Responder' abre drawer (preview); card navega para chat completo — semântica dupla."
+    suggested_action: "Resolvido pela unificação page/drawer (63-5)."
+  - id: OBS-001
+    story: "all"
+    severity: low
+    finding: "CodeRabbit CLI não executado (config WSL/Windows; host de review macOS) — mesmo cenário do Epic 51."
+    suggested_action: "Não-bloqueante. Análise manual cobriu code review, a11y, regressão e testes. CI pode rodar pós-push."
+
+regression_safety:
+  - "63-1: Link navega + botão abre drawer (setSelectedLeadId) — ambos preservados."
+  - "63-3: onKeyDown Ctrl/Cmd+Enter intacto (só a dica visual ocultada no mobile)."
+  - "63-4: disabledByWindow combinado via isDisabled sem sobrescrever a const disabled interna; default false retrocompatível."
+  - "CON-3: is_ai_active e takeover (brokerSentRecently) intocados — nenhum write no caminho tocado."
+  - "Suíte completa 414/414; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    As 4 stories da Fase 1 passam individualmente e em conjunto. CON-1 inviolável
+    verificado limpo; NFR-1/2/3/4 atendidos; helpers puros testados (15/15); suíte
+    completa verde (414/414); lint e type-check limpos nos arquivos das stories. As
+    5 issues agregadas são todas LOW e não-bloqueantes (ressalvas documentadas ou
+    débito herdado). Recomendação: LIBERAR para @devops *push.
+  next_steps:
+    - "@devops *push da branch feat/epic-51-handoff-chat-corretor (contém os 4 commits do Epic 63 Fase 1)."
+    - "Smoke pós-deploy mobile: lista de leads mostra ícone de conversa 'Responder' (≥44px); chat com bolhas laranja/cinza/roxo + rótulos; composer com ícones Paperclip/Send; badge de janela 24h no header (verde/âmbar/cinza) e composer desabilitado quando fechada; lead Telegram sem badge."
+    - "Fase 2 (63-5 unificação): tratar BUBBLE-001 (surfacing de status real) e UX-001 (rota única page/drawer)."

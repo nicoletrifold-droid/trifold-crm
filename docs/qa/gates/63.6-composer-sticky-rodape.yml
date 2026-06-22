@@ -1,0 +1,200 @@
+schema: 1
+storyId: "63.6"
+story: "63.6"
+title: "Composer Fixo (Sticky) no Rodapé — Conversa Full-Height"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 atendidos por código. Card de conversa convertido em painel flex
+  full-height (h-[calc(100dvh-8rem)] mobile / lg:h-[34rem] desktop, overflow-hidden);
+  histórico min-h-0 flex-1 overflow-y-auto (max-h-96 removido — AC1); compositor
+  shrink-0 fora do scroll, no rodapé, com pb-[max(1rem,env(safe-area-inset-bottom))]
+  (AC2/AC3). Novo wrapper client chat-scroll-area.tsx faz auto-scroll rolando APENAS
+  o container (el.scrollTo), nunca a window — evita page-jump (AC5). CON-1 INVIOLÁVEL
+  verificado por git grep: ZERO tel:/wa.me/api.whatsapp.com/whatsapp:// nos 2 arquivos
+  tocados. Sem invadir 63-5 (unificação) nem 63-7 (sheet). Suíte completa 414/414;
+  ESLint 0 nos arquivos da story; type-check 0 nos arquivos da story. Concerns todos
+  LOW e documentados (test do wrapper, heurística 8rem, scroll interino pré-63-7).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T14:46:00Z"
+iteration: 1
+quality_score: 95
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (page.tsx:221 min-h-0 flex-1 overflow-y-auto, max-h-96 removido; empty-state
+      L275 idem), AC2 (compositor fora da ChatScrollArea em <div shrink-0> L281), AC3
+      (pb-[max(1rem,env(safe-area-inset-bottom))] L281 + clearance pb-24 do broker/
+      layout.tsx:44 acima da nav fixa sidebar-nav.tsx:145), AC4 (lg:h-[34rem] desktop
+      não ocupa tela inteira; h-[calc(100dvh-8rem)] mobile — L212), AC5 (chat-scroll-
+      area.tsx scrollTo no container, auto no mount / smooth em messageCount), AC6
+      (type-check/ESLint limpos, sem regressão de envio).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      min-h-0 corretamente aplicado p/ permitir shrink do flex child e scroll real
+      (sem ele, flex-1 não rola em flex-col). overflow-hidden no painel contém o
+      scroll interno. Wrapper client mínimo (47 linhas), JSDoc explicando a escolha
+      de rolar só o container. Imports absolutos @web/*. Server/client bem separados.
+  - check: "3. Test Architecture"
+    status: CONCERNS
+    note: >
+      chat-scroll-area.tsx (componente novo) sem teste unitário. Repo NÃO possui infra
+      de teste de componente React (sem @testing-library, jsdom, vitest env dom; zero
+      .test.tsx no monorepo) — padrão do projeto testa apenas helpers puros. Behavior
+      de auto-scroll é layout-dependente (scrollHeight), não unit-testável em node sem
+      nova stack. TEST-001 LOW advisory. Suíte completa 414/414 sem regressão.
+  - check: "4. No Regressions"
+    status: PASS
+    note: >
+      Envio (BrokerMessageInput), WindowStatusBadge e disabledByWindow intactos —
+      page passa as mesmas props (leadId, disabledByWindow={windowClosed}). router.
+      refresh() preservado; messageCount muda → auto-scroll. CON-3 (is_ai_active/
+      takeover) não tocado. Suíte 414/414.
+  - check: "5. Performance / Mobile-PWA"
+    status: PASS
+    note: >
+      100dvh (não 100vh) é a escolha correta p/ mobile — exclui barra de endereços
+      retrátil (gotcha da story respeitado). Nenhuma query adicional ao banco (mesma
+      busca de messages/conversations). Auto-scroll via scrollTo no container, sem
+      jank de window.
+  - check: "6. Security (CON-1)"
+    status: PASS
+    note: >
+      git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD nos 2
+      arquivos tocados → ZERO ocorrências. Contato com o lead permanece exclusivo do
+      chat interno (dispatch oficial Epic 51). CON-2/CON-3 respeitados.
+  - check: "7. Documentation"
+    status: PASS
+    note: >
+      Dev Notes/Completion Notes honestas sobre escopo (form acima do chat até 63-7;
+      var --header-height inexistente não inventada). Comentário no painel (page L203-
+      211) explica a estrutura flex e o mapeamento dos ACs.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "page.tsx:221 'min-h-0 flex-1 overflow-y-auto'; max-h-96 removido; empty-state L275 idem."
+  - ac: "AC2"
+    status: PASS
+    note: "Compositor renderizado fora de <ChatScrollArea>, em <div className='shrink-0 ...'> L281."
+  - ac: "AC3"
+    status: PASS
+    note: "pb-[max(1rem,env(safe-area-inset-bottom))] L281 + broker/layout pb-24 (L44) clearance da nav fixa (sidebar-nav L145)."
+  - ac: "AC4"
+    status: PASS
+    note: "lg:h-[34rem] (desktop bounded) vs h-[calc(100dvh-8rem)] (mobile) — page L212. Layout 2-colunas é 63-5, não regressão aqui."
+  - ac: "AC5"
+    status: PASS
+    note: "chat-scroll-area.tsx el.scrollTo(scrollHeight); behavior auto no 1º render, smooth em mudança de messageCount; nunca a window."
+  - ac: "AC6"
+    status: PASS
+    note: "type-check 0 erros story; ESLint 0; suíte 414/414; envio/badge/disabledByWindow intactos."
+
+issues:
+  - id: TEST-001
+    severity: low
+    category: tests
+    finding: >
+      chat-scroll-area.tsx (componente novo) sem teste unitário. Repo não tem infra
+      de teste de componente React e o comportamento de scroll é layout-dependente
+      (não testável em node). Consistente com o padrão do Epic 63 (só helpers puros
+      têm teste).
+    suggested_action: >
+      Não-bloqueante. Se infra de teste de componente for introduzida (jsdom +
+      @testing-library), cobrir o contrato auto/smooth e scroll em mudança de
+      messageCount.
+    suggested_owner: dev
+  - id: LAYOUT-001
+    severity: low
+    category: code
+    finding: >
+      h-[calc(100dvh-8rem)] usa 8rem como buffer heurístico, não derivado das alturas
+      reais de header/nav. Como o painel está in-flow (não fixed) e a clearance da
+      bottom nav vem do pb-24 do layout, o valor não é crítico — pior caso é o painel
+      ligeiramente mais alto/baixo, nunca esconde o compositor.
+    suggested_action: >
+      Não-bloqueante. Revisar o cálculo de altura quando 63-5 (unificação) e 63-7
+      (remoção do form) reestruturarem a tela.
+    suggested_owner: dev
+  - id: SCOPE-001
+    severity: low
+    category: requirements
+    finding: >
+      No mobile, LeadEditForm + cards permanecem ACIMA do painel de chat até a 63-7,
+      então o corretor ainda rola a PÁGINA até chegar ao painel. A aspiração da User
+      Story ("sem rolar para baixo de um formulário enorme") só é plenamente atendida
+      com 63-7. Os ACs testáveis da 63-6 (que NÃO exigem remover o form — Out of Scope
+      L203) estão 100% atendidos. @po já validou esse split (GO 8/10).
+    suggested_action: >
+      Não-bloqueante e por design (faseamento do epic). Concluir 63-7 (sheet de
+      detalhes) para entregar a experiência completa.
+    suggested_owner: dev
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  command: "git grep -nE '<pattern>' HEAD -- page.tsx chat-scroll-area.tsx"
+  note: "Zero ocorrências introduzidas nos 2 arquivos tocados (exit 1)."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "414/414 passed (31 files) — sem regressão vs Fase 1."
+  - check: "ESLint (2 arquivos da story)"
+    command: "pnpm --filter @trifold/web exec eslint page.tsx chat-scroll-area.tsx"
+    result: "0 erros, 0 warnings (exit 0)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos da story. 3 erros pré-existentes/ambientais em
+      email-templates/_components/visual-editor.tsx (módulo react-email-editor
+      ausente) — NÃO relacionados à 63-6.
+  - check: "CON-1 scan"
+    command: "git grep tel:/wa.me/... nos 2 arquivos tocados"
+    result: "CLEAN (zero)."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: "100dvh correto p/ mobile; zero query adicional; scroll só no container."
+  accessibility:
+    status: PASS
+    notes: "Composer reusa BrokerMessageInput (alvos ≥44px, aria-labels — herdado 63-3); foco do textarea preservado; histórico rolável por teclado (overflow nativo)."
+  maintainability:
+    status: PASS
+    notes: "Wrapper client mínimo e isolado; estrutura flex padrão de chat; reaproveita getBubbleStyle/WindowStatusBadge."
+  reliability:
+    status: PASS
+    notes: "Auto-scroll determinístico por messageCount; empty-state tratado; CON-3 intocado."
+  isolation:
+    status: PASS
+    notes: "Sem invadir 63-5/63-7; aplicada isoladamente em page.tsx conforme @po validou."
+
+regression_safety:
+  - "BrokerMessageInput recebe as mesmas props (leadId, disabledByWindow={windowClosed}) — envio intacto."
+  - "WindowStatusBadge no header do painel preservado (page L215)."
+  - "router.refresh() pós-envio mantém o fluxo; messageCount dispara auto-scroll."
+  - "CON-3: is_ai_active e takeover não tocados."
+  - "Suíte completa 414/414; nenhuma falha introduzida."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 6 ACs estão atendidos por código. CON-1 inviolável limpo; sem regressão (414/
+    414); ESLint e type-check limpos nos arquivos da story; mobile/PWA correto (100dvh,
+    safe-area, clearance da nav via pb-24); auto-scroll rola só o container (sem
+    page-jump). As 3 issues são todas LOW e documentadas: ausência de teste do wrapper
+    (sem infra de teste de componente no repo — padrão do projeto), heurística 8rem
+    (não-crítica, in-flow), e scroll interino da página até a 63-7 (por design do
+    faseamento; ACs da 63-6 não exigem remover o form). Recomendação: LIBERAR para
+    @devops *push — pode entrar no PR #14.
+  next_steps:
+    - "@devops *push (branch feat/epic-51-handoff-chat-corretor) — incluir commit eab263b no PR #14."
+    - "Smoke pós-deploy mobile: abrir lead, rolar até o painel de chat; histórico rola interno, compositor fixo no rodapé visível sem sobrepor a bottom nav; enviar mensagem → auto-scroll ao final."
+    - "63-7 (sheet de detalhes) resolve SCOPE-001; 63-5 (unificação) + 63-7 revisam LAYOUT-001 (8rem)."

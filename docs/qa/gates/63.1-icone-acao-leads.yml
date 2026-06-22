@@ -1,0 +1,96 @@
+schema: 1
+storyId: "63.1"
+story: "63.1"
+title: "Ícone de Ação na Lista de Leads"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 atendidos por código. Pencil → MessageCircle (lucide-react) em mobile
+  e desktop; aria-label "Responder" nos dois; alvos de toque ≥44px
+  (min-h/min-w-[44px]); navegação preservada (Link navega, botão abre drawer via
+  setSelectedLeadId). CON-1 respeitado (sem tel:/wa.me). type-check e ESLint
+  limpos nos arquivos da story; suíte completa 414/414 verde. Única observação é
+  LOW e não-bloqueante.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T13:40:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (mobile MessageCircle L86), AC2 (aria-label "Responder" L83 mobile /
+      L156 desktop), AC3 (mobile min-h/min-w-[44px] p-3 L84), AC4 (desktop
+      MessageCircle L159 + min-h/min-w-[44px] L157), AC5 (Link href navega L49-51
+      e botão setSelectedLeadId L82/L155 — ambos preservados), AC6 (lint/types/
+      testes verdes).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      Import de Pencil removido (era usado só nos 2 botões → trocado por
+      MessageCircle). Imports absolutos (@web/*). Cor laranja orange-500 segue o
+      design system (CON-6). Sem código morto introduzido.
+  - check: "3. Security"
+    status: PASS
+    note: "Mudança puramente visual (ícone/label/padding). Sem nova superfície."
+  - check: "4. Accessibility (NFR-2)"
+    status: PASS
+    note: >
+      Alvo de toque ≥44px enforced por min-h/min-w-[44px] em mobile e desktop
+      (desktop antes ~26px). aria-label "Responder" provê nome acessível.
+  - check: "5. Regression Risk"
+    status: PASS
+    note: >
+      Aditiva/visual. Link de navegação e abertura do drawer intactos. Suíte
+      completa 414/414 verde.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "leads-list-with-drawer.tsx:86 — <MessageCircle className='h-5 w-5'/> no card mobile."
+  - ac: "AC2"
+    status: PASS
+    note: "L83 (mobile) e L156 (desktop) — aria-label='Responder'."
+  - ac: "AC3"
+    status: PASS
+    note: "L84 — flex min-h-[44px] min-w-[44px] ... p-3 items-center justify-center."
+  - ac: "AC4"
+    status: PASS
+    note: "L157-159 — botão desktop com min-h/min-w-[44px] e <MessageCircle className='h-4 w-4'/>."
+  - ac: "AC5"
+    status: PASS
+    note: "Link href=/broker/leads/{id} (L49-51) e onClick setSelectedLeadId (L82/L155) — navegação inalterada."
+  - ac: "AC6"
+    status: PASS
+    note: "ESLint 0 erros nos arquivos da story; tsc 0 erros nos arquivos da story; vitest 414/414."
+
+issues:
+  - id: UX-001
+    severity: low
+    category: maintainability
+    finding: >
+      O botão laranja "Responder" abre o LeadDetailDrawer (preview com as últimas
+      3 mensagens), enquanto tocar no card (Link) navega para a página de chat
+      completa com o composer. Dois caminhos com semântica levemente distinta sob
+      o mesmo rótulo "Responder". Comportamento pré-existente (a story só trocou
+      ícone/label), reconhecido pelo @po na validação.
+    suggested_action: >
+      Não-bloqueante. A unificação page/drawer (Story 63-5) elimina essa
+      ambiguidade. Manter como está na Fase 1.
+    suggested_owner: dev
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  note: "git grep nos arquivos tocados — zero ocorrências."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Os 6 ACs atendidos com evidência path:linha. Acessibilidade (≥44px) e CON-1
+    verificados. Sem regressão (414/414). Única issue é LOW (ambiguidade de rota
+    resolvida por 63-5). Aprovada para @devops push.

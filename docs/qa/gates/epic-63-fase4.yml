@@ -1,0 +1,177 @@
+schema: 1
+storyId: "epic-63-fase4"
+story: "epic-63-fase4"
+title: "Quality Gate consolidado — Epic 63 FASE 4 (Tempo Real & Notificações)"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  Consolida a Fase 4 (Tempo Real & Notificações) do Epic 63 — COMPLETA. 63-11
+  (chat do corretor em tempo real via Supabase Realtime, commit 67ed19b) e 63-12
+  (push ao corretor quando o lead responde + deep-link, commit 8f50792) revisadas e
+  PASS. 63-11: subscription postgres_changes em messages por conversation_id com
+  correção crítica de dedup/race (dedupeById + mergeMessages impedem key duplicada
+  E perda de mensagem), dep de effect estável (sem re-subscribe), cleanup completo
+  (sem leak); badge/composer/banner reagem ao inbound. 63-12: gate Q1
+  (brokerSentRecently na conversa certa) + Q3 (sem corretor → nada) + Q2 (sem
+  debounce, metadata intocado) corretos; after() dedicado fire-and-forget que não
+  bloqueia o HTTP 200 nem o pipeline da Nicole; payload null-safe com deep-link via
+  SW existente. CON-1 INVIOLÁVEL limpo nas 2 (git grep: zero ocorrências de código).
+  CON-3/CON-7 intocados (realtime e push são observação pura, sem mutar
+  is_ai_active). CON-8 intocado (sw-source.js NÃO está em nenhum dos 2 commits).
+  Suíte completa 463/463 (36 arquivos, +19 vs Fase 3: +10 realtime, +9 notify).
+  type-check e ESLint limpos nos arquivos das stories (3 erros ambientais
+  pré-existentes em visual-editor.tsx/react-email-editor). Issues todas LOW/MEDIUM
+  documentadas. ÚNICA pendência: 63-11 EXIGE habilitar `messages` na publicação
+  supabase_realtime (migration 102 NÃO aplicada — token Supabase expirado) ANTES do
+  feature funcionar — é dependência de DEPLOY, não defeito de código (degrada
+  graciosamente). Pronto para @devops *push.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-21"
+updated: "2026-06-21T20:31:00Z"
+iteration: 1
+quality_score: 91
+waiver: { active: false }
+
+stories_summary:
+  - story: "63.11"
+    title: "Atualização em Tempo Real do Chat do Corretor"
+    gate: PASS
+    file: "docs/qa/gates/63.11-realtime-chat-corretor.yml"
+    commit: "67ed19b"
+    note: >
+      Subscription Realtime (1 canal por conversa, cap 3) no ConversationThread.
+      Dedup/race resolvido: dedupeById([...messages,...realtime]) (server vence) +
+      mergeMessages (otimista×server) → no máx 1 bolha/id, nenhuma perda;
+      useEffect([messages]) com pruneRealtime/hasStaleRealtime. Dep estável (string
+      joinada) → sem re-subscribe; cleanup removeChannel em TODOS os canais.
+      localLastMessageAt reabre janela; deriveBrokerActive(lista combinada) atualiza
+      banner de outra aba. 9 ACs MET. 10 testes dos helpers puros. 1 issue MEDIUM
+      (INFRA-001: publicação realtime — deploy blocker do feature) + 1 LOW (sem
+      teste de componente, padrão do epic).
+  - story: "63.12"
+    title: "Push ao Corretor quando o Lead Responde + Deep-link"
+    gate: PASS
+    file: "docs/qa/gates/63.12-push-lead-respondeu.yml"
+    commit: "8f50792"
+    note: >
+      notify-on-reply.ts server-only: Q1 (assigned_broker_id + brokerSentRecently
+      <24h na conversa certa), Q3 (sem corretor → return, sem fallback), Q2 (sem
+      debounce, metadata intocado). after() dedicado no webhook após INSERT inbound,
+      independente do after() da Nicole, fire-and-forget (HTTP 200 não bloqueado),
+      best-effort never-throws. Payload null-safe + deep-link /broker/leads/{id} via
+      SW existente. 10 ACs MET. 9 testes (gates + payload puro). 3 issues LOW
+      (2 queries no after(), sem teste de conversa-errada, smoke e2e). Sem dep de
+      infra — funciona no push.
+
+con_verification:
+  con1_inviolable:
+    result: CLEAN
+    command: "git grep -nE 'tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call' HEAD -- <arquivos Fase 4>"
+    outcome: "ZERO ocorrências de código nas 2 stories (únicos hits são comentários JSDoc). CON-1 respeitado."
+  con3_con7:
+    result: CLEAN
+    notes: >
+      63-11: realtime é read-only (channel/on/subscribe/removeChannel); is_ai_active
+      apenas lido via prop. 63-12: helper só lê leads/messages; ZERO escrita de
+      is_ai_active ou leads.metadata. Takeover (brokerSentRecently) intocado.
+  con8:
+    result: CLEAN
+    notes: "git show --stat dos 2 commits: sw-source.js ausente. Service worker NÃO modificado; deep-link reusa handler existente."
+
+independent_verification:
+  - check: "Suíte completa do repositório"
+    command: "npx vitest run"
+    result: "463/463 passed (36 files) — +19 vs Fase 3 (conversation-thread-realtime.test.ts +10, notify-on-reply.test.ts +9)."
+  - check: "Type-check web"
+    command: "pnpm --filter @trifold/web type-check"
+    result: >
+      0 erros nos arquivos das stories. 3 erros ambientais pré-existentes em
+      email-templates/_components/visual-editor.tsx (react-email-editor ausente) —
+      não relacionados ao Epic 63.
+  - check: "ESLint (arquivos das stories Fase 4)"
+    command: "pnpm --filter @trifold/web exec eslint <arquivos das 2 stories>"
+    result: "0 erros/warnings (conversation-thread.tsx, conversation-thread-realtime.ts/.test.ts, notify-on-reply.ts/.test.ts, webhook route.ts)."
+  - check: "CON-1/CON-3/CON-8 scans"
+    command: "git grep + git show --stat"
+    result: "CLEAN nas 2 stories."
+
+nfr_validation:
+  performance:
+    status: PASS
+    notes: "63-11 event-driven sem polling, dep estável (sem re-subscribe), cap 3 canais. 63-12 2 queries no after() fora do caminho crítico, indexadas, limit(1)."
+  security:
+    status: PASS
+    notes: "63-11 Realtime respeita RLS da sessão do corretor (messages_select migration 004 confirmada pelo @po). 63-12 admin client server-side, query escopada por org_id."
+  reliability:
+    status: CONCERNS
+    notes: >
+      63-11 depende de infra (messages em supabase_realtime) para funcionar —
+      INFRA-001 (medium). Degrada graciosamente sem ela (reload continua). 63-12
+      best-effort isolado.
+  maintainability:
+    status: PASS
+    notes: "Helpers puros isolados e testados; reuso de mergeMessages/brokerSentRecently/sendPushToUser."
+  accessibility:
+    status: PASS
+    notes: "Sem novos controles interativos relevantes; bolhas/badge/banner herdam padrões de 63-2/63-4/63-8."
+
+aggregated_issues:
+  - id: INFRA-001
+    story: "63.11"
+    severity: medium
+    finding: >
+      `messages` não está na publicação supabase_realtime (migration 102 NÃO
+      aplicada — token Supabase expirado). Sem isso a subscription assina mas não
+      recebe eventos — feature inerte (GR-6).
+    suggested_action: >
+      DEPLOY BLOCKER do FEATURE (não do código): habilitar antes de 63-11 funcionar
+      (ALTER PUBLICATION supabase_realtime ADD TABLE messages; ou Dashboard →
+      Replication). Não bloqueia o push (degrada graciosamente).
+    suggested_owner: devops
+  - id: PERF-001
+    story: "63.12"
+    severity: low
+    finding: "2 queries extras por inbound no after() (leads + gate Q1)."
+    suggested_action: "Aceitável — off critical path, indexado, limit(1)."
+    suggested_owner: dev
+  - id: TEST-001
+    story: "63.11"
+    severity: low
+    finding: "Fiação da subscription verificada só por code review (repo sem infra de teste de componente React)."
+    suggested_action: "Aceitável sob padrão do epic; cobrir se RTL/jsdom for introduzido."
+    suggested_owner: dev
+  - id: TEST-002
+    story: "63.12"
+    severity: low
+    finding: "9 testes não cobrem isolamento por conversa errada (mock não varia conversationId)."
+    suggested_action: "Adicionar 1 caso de broker recente em outra conversa não disparar."
+    suggested_owner: dev
+  - id: OBS-001
+    story: "all"
+    severity: low
+    finding: "CodeRabbit CLI não executado (config WSL/Windows; host macOS) — mesmo cenário das Fases 1/2/3 e Epic 51."
+    suggested_action: "Não-bloqueante. Análise manual cobriu dedup/race, gate Q1, CON-1/CON-3/CON-8, regressão e testes. CI pode rodar pós-push."
+    suggested_owner: devops
+
+regression_safety:
+  - "63-11: page.tsx só adiciona prop conversationIds; render path inalterado."
+  - "63-12: route.ts só adiciona import + after() aditivo no guard existente; INSERT inbound e after() da Nicole intactos."
+  - "CON-3: is_ai_active e takeover intocados nas 2 stories."
+  - "Suíte completa 463/463; nenhuma falha introduzida; sem migration; SW intocado."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    63-11 e 63-12 passam individualmente e em conjunto — Fase 4 COMPLETA.
+    63-11: dedup/race resolvido corretamente (sem key duplicada nem perda),
+    cleanup e dep de effect sólidos; pendência única é de INFRA (publicação
+    realtime), não de código, com degradação graciosa. 63-12: gates Q1/Q2/Q3
+    corretos com after() isolado e não-bloqueante. CON-1 inviolável limpo;
+    CON-3/CON-7/CON-8 intocados. Suíte verde 463/463; lint e type-check limpos.
+    Issues LOW/MEDIUM documentadas. Recomendação: LIBERAR Fase 4 para @devops *push.
+  next_steps:
+    - "@devops *push da branch feat/epic-51-handoff-chat-corretor (commits 67ed19b 63-11, 8f50792 63-12)."
+    - "@data-engineer/@devops: habilitar `messages` em supabase_realtime (migration 102) — pré-condição para 63-11 funcionar em produção."
+    - "@sm: rastrear INFRA-001 (publicação realtime) e os débitos de teste (TEST-001/002) como follow-up não-bloqueante."
+    - "Smoke pós-deploy: (63-11) lead responde → mensagem em ≤3s sem reload, janela reabre; (63-12) corretor que assumiu recebe push + clique abre a conversa; Nicole sozinha/sem corretor → sem push."

@@ -1,0 +1,81 @@
+schema: 1
+storyId: "63.3"
+story: "63.3"
+title: "Composer Mobile-First"
+epic: 63
+gate: PASS
+verdict: PASS
+status_reason: >
+  AC1-AC6 atendidos por código. Emoji 📎 → <Paperclip> com aria-label "Anexar
+  arquivo"; "Enviar" texto → <Send> com aria-label "Enviar mensagem" (loading com
+  <Loader2 animate-spin>); dica de atalho oculta em mobile (hidden lg:inline);
+  alvos ≥44px (min-h/min-w-[44px]) nos dois botões; lógica onKeyDown
+  (Ctrl/Cmd+Enter) preservada intacta. CON-1/CON-2 respeitados (sem tel:/wa.me,
+  envio não reimplementado). type-check e ESLint limpos; suíte 414/414.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-18"
+updated: "2026-06-18T13:44:00Z"
+iteration: 1
+quality_score: 100
+waiver: { active: false }
+
+quality_checks:
+  - check: "1. Requirements Traceability"
+    status: PASS
+    note: >
+      AC1 (Paperclip + aria L114-120), AC2 (Send + aria L132-143 com Loader2 no
+      loading), AC3 (dica hidden lg:inline L147), AC4 (ambos botões
+      min-h/min-w-[44px] flex items-center justify-center L118/L137), AC5
+      (handleKeyDown Ctrl/Cmd+Enter L91-96 intacto), AC6 (lint/types/testes).
+  - check: "2. Code Quality & Standards"
+    status: PASS
+    note: >
+      lucide-react (Paperclip/Send/Loader2) conforme design system. Container do
+      rodapé justify-end lg:justify-between mantém contador à direita no mobile.
+      Cor orange-500 do botão de envio segue a marca. Sem alteração na lógica de
+      envio (reuso fiel da Story 51-1).
+  - check: "3. Accessibility (NFR-2)"
+    status: PASS
+    note: >
+      Ícones agora têm nome acessível via aria-label (antes o emoji 📎 não tinha).
+      Alvos de toque ≥44px enforced. title + aria-label no botão de anexo.
+  - check: "4. Regression Risk"
+    status: PASS
+    note: >
+      Apenas o composer alterado; lógica de envio, validação e tratamento de
+      WHATSAPP_WINDOW_CLOSED preservados. Sem testes unitários pré-existentes para
+      o componente; suíte completa 414/414.
+
+ac_traceability:
+  - ac: "AC1"
+    status: PASS
+    note: "broker-message-input.tsx:114-121 — <Paperclip className='h-5 w-5'/> + aria-label='Anexar arquivo'."
+  - ac: "AC2"
+    status: PASS
+    note: "L132-144 — aria-label='Enviar mensagem'; loading ? <Loader2 animate-spin> : <Send>."
+  - ac: "AC3"
+    status: PASS
+    note: "L147 — <span className='hidden lg:inline'>Ctrl/Cmd + Enter para enviar</span>."
+  - ac: "AC4"
+    status: PASS
+    note: "L118 (anexo) e L137 (enviar) — flex min-h-[44px] min-w-[44px] ... items-center justify-center."
+  - ac: "AC5"
+    status: PASS
+    note: "L91-96 handleKeyDown detecta (metaKey||ctrlKey)+Enter → handleSend; só a dica visual foi ocultada."
+  - ac: "AC6"
+    status: PASS
+    note: "ESLint 0 erros story; tsc 0 erros story; suíte 414/414."
+
+issues: []
+
+con1_scan:
+  result: CLEAN
+  pattern: "tel:|wa.me|api.whatsapp.com|whatsapp://|click-to-call"
+  note: "git grep no arquivo tocado — zero ocorrências."
+
+gate_decision:
+  verdict: PASS
+  rationale: >
+    Todos os 6 ACs atendidos com evidência. Acessibilidade melhorada (aria-labels
+    + ≥44px), atalho de teclado preservado, CON-1/CON-2 respeitados, sem regressão
+    (414/414). Zero issues. Aprovada para @devops push.

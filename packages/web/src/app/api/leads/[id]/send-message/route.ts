@@ -19,12 +19,15 @@ const MAX_MESSAGE_LENGTH = 4096 // Limite do WhatsApp
  * Body: { message: string }
  *
  * Envia uma mensagem do corretor ao lead pelo canal correto (Telegram ou
- * WhatsApp Cloud API) e grava em `messages` com `role='broker'`. Ao gravar
- * `role='broker'`, o cron followup (`brokerSentRecently`) detecta o takeover
- * de 24h automaticamente — a Nicole pausa sem lógica adicional (AC6).
+ * WhatsApp Cloud API) e grava em `messages` com `role='broker'`.
  *
- * REGRA DE NEGÓCIO: NÃO desliga `is_ai_active`. O takeover é controlado pela
- * janela de 24h do cron, não por flag de agendamento.
+ * REGRA DE NEGÓCIO (Story 63-13): ao gravar a 1ª `role='broker'` numa conversa
+ * com a Nicole ativa, desliga explicitamente `is_ai_active` (handoff explícito)
+ * — a Nicole para imediatamente de responder. O UPDATE usa o ADMIN client para
+ * não falhar silenciosamente sob RLS de corretor não-admin. A Nicole só reassume
+ * automaticamente quando o corretor fica ≥ 24h sem responder (reativação no
+ * `webhook/whatsapp/route.ts`) ou via botão "Devolver para Nicole" (Story 63-14).
+ * O sinal complementar `brokerSentRecently` permanece para race conditions.
  */
 export async function POST(
   request: NextRequest,
@@ -95,7 +98,7 @@ export async function POST(
   const channel = resolveChannel(lead.phone)
   let { data: conversation } = await supabase
     .from("conversations")
-    .select("id, last_message_at")
+    .select("id, last_message_at, is_ai_active")
     .eq("lead_id", id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -110,7 +113,7 @@ export async function POST(
         channel,
         status: "active",
       })
-      .select("id, last_message_at")
+      .select("id, last_message_at, is_ai_active")
       .single()
 
     if (createErr || !created) {
@@ -264,6 +267,34 @@ export async function POST(
   }
 
   // `conversations.last_message_at` é atualizado pelo trigger trg_messages_update_conv.
+
+  // --- Story 63-13: Handoff explícito ao corretor responder (AC1) ---
+  // Se a Nicole ainda estava ativa, desliga is_ai_active para ela parar
+  // IMEDIATAMENTE. Idempotente: o guard garante UPDATE só quando is_ai_active=true
+  // (corretor enviando múltiplas msgs com is_ai_active=false já → nenhum UPDATE).
+  // ADMIN client: o corretor não-admin pode não ter policy de UPDATE em
+  // `conversations` sob RLS — com o client de sessão o handoff falharia
+  // silenciosamente e a Nicole continuaria respondendo (o bug-alvo). Best-effort:
+  // a mensagem já foi enviada/gravada; se o UPDATE falhar, loga e segue (o próximo
+  // envio reencontrará is_ai_active=true e tentará de novo). Escopo por-conversa
+  // (`.eq("id", conversation.id)`) — não afeta outras conversas/leads.
+  if (conversation.is_ai_active) {
+    const admin = createAdminClient()
+    const { error: handoffErr } = await admin
+      .from("conversations")
+      .update({
+        is_ai_active: false,
+        handoff_at: new Date().toISOString(),
+        handoff_reason: "broker_reply",
+      })
+      .eq("id", conversation.id)
+
+    if (handoffErr) {
+      console.error(
+        `[send-message] handoff is_ai_active=false falhou (lead=${id}, conv=${conversation.id}): ${handoffErr.message}`
+      )
+    }
+  }
 
   return NextResponse.json({
     success: true,
