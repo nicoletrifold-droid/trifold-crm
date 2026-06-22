@@ -26,6 +26,7 @@ interface Props {
   orgId: string
   currentStageId: string | null
   currentInterestLevel: string | null
+  currentPropertyId?: string | null
   onClose: () => void
   onSaved: (note: HistoryItem) => void
   onTaskAdded?: (task: Task) => void
@@ -49,7 +50,7 @@ const INTEREST_LEVELS = [
 ]
 
 export function QuickHistoryModal({
-  leadId, orgId, currentStageId, currentInterestLevel,
+  leadId, orgId, currentStageId, currentInterestLevel, currentPropertyId,
   onClose, onSaved, onTaskAdded,
 }: Props) {
   const [step, setStep] = useState<Step>("type")
@@ -70,7 +71,7 @@ export function QuickHistoryModal({
   const [details, setDetails] = useState("")
   const [stageId, setStageId] = useState(currentStageId ?? "")
   const [interestLevel, setInterestLevel] = useState(currentInterestLevel ?? "")
-  const [propertyId, setPropertyId] = useState("")
+  const [propertyId, setPropertyId] = useState(currentPropertyId ?? "")
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [conflictError, setConflictError] = useState<string | null>(null)
@@ -143,6 +144,9 @@ export function QuickHistoryModal({
     const updates: Record<string, string> = {}
     if (stageId && stageId !== currentStageId) updates.stage_id = stageId
     if (interestLevel && interestLevel !== currentInterestLevel) updates.interest_level = interestLevel
+    // Story 75-11: salva o imóvel selecionado no lead (persiste p/ próximos contatos).
+    // Não apaga o atual ao deixar vazio; só atualiza quando muda.
+    if (propertyId && propertyId !== (currentPropertyId ?? "")) updates.property_interest_id = propertyId
     if (Object.keys(updates).length > 0) {
       await fetch(`/api/leads/${leadId}`, {
         method: "PATCH",

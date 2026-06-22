@@ -33,6 +33,46 @@ export function MediaPickerModal({ leadId, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [uploading, setUploading] = useState(false)
+
+  // Story 75-12 — envio de arquivo do computador do corretor.
+  async function handleUploadFromComputer(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    setUploading(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch(`/api/leads/${leadId}/send-file`, { method: "POST", body: fd })
+      const json = (await res.json().catch(() => ({}))) as {
+        success?: boolean
+        error?: string
+        message?: string
+        sent?: boolean
+      }
+      if (!res.ok || !json.success) {
+        setError(
+          json.error === "WHATSAPP_WINDOW_CLOSED"
+            ? (json.message ?? "Fora da janela de 24h do WhatsApp.")
+            : (json.message ?? "Não foi possível enviar o arquivo.")
+        )
+        return
+      }
+      setSuccess(
+        json.sent
+          ? `"${file.name}" enviado com sucesso.`
+          : `"${file.name}" registrado (envio WhatsApp pendente).`
+      )
+      router.refresh()
+    } catch {
+      setError("Erro de conexão. Tente novamente.")
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const loadAssets = useCallback(async () => {
     setLoading(true)
@@ -113,6 +153,22 @@ export function MediaPickerModal({ leadId, onClose }: Props) {
           >
             ✕
           </button>
+        </div>
+
+        {/* Story 75-12 — enviar arquivo do computador */}
+        <div className="border-b border-gray-100 px-4 py-3 dark:border-stone-800">
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-orange-300 bg-orange-50 px-3 py-2.5 text-sm font-medium text-orange-700 hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300">
+            {uploading ? "Enviando arquivo…" : "📎 Enviar arquivo do computador"}
+            <input
+              type="file"
+              className="hidden"
+              onChange={(e) => void handleUploadFromComputer(e)}
+              disabled={uploading}
+            />
+          </label>
+          <p className="mt-1 text-center text-[11px] text-gray-400 dark:text-stone-500">
+            Imagens ou documentos até 4 MB.
+          </p>
         </div>
 
         {/* Search */}

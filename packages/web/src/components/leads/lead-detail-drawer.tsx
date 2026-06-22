@@ -874,6 +874,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           orgId={lead.org_id}
           currentStageId={(lead.stage as { id: string } | null)?.id ?? null}
           currentInterestLevel={lead.interest_level}
+          currentPropertyId={lead.property_interest?.id ?? null}
           onClose={() => dispatch({ type: "TOGGLE_QUICK_HISTORY" })}
           onSaved={(note) => dispatch({ type: "NOTE_ADDED", note })}
           onTaskAdded={(task) => dispatch({ type: "TASK_ADDED", task })}
