@@ -3,6 +3,8 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { MoreHorizontal } from "lucide-react"
 import { LogoutButton } from "./logout-button"
 import { ThemeToggle } from "@web/components/theme-toggle"
 
@@ -11,6 +13,8 @@ interface NavItem {
   label: string
   icon: React.ReactNode
   badge?: number
+  /** Story 63-18 — tom do badge: 'orange' (default) ou 'green' (não-lidas do Chat, 63-19). */
+  badgeTone?: 'orange' | 'green'
   separator?: boolean
   external?: boolean
 }
@@ -23,8 +27,17 @@ interface SidebarNavProps {
   alertCount?: number
 }
 
+/** Classe de background do badge numérico conforme `badgeTone`. */
+function badgeBg(item: NavItem): string {
+  return item.badgeTone === "green" ? "bg-green-700" : "bg-orange-500"
+}
+
 export function SidebarNav({ items, userName, userRole, basePath, alertCount }: SidebarNavProps) {
   const pathname = usePathname()
+  // Story 63-18 — bottom sheet "Mais" (mobile).
+  const [moreOpen, setMoreOpen] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
 
   const isActive = (href: string) => {
     if (href === basePath) return pathname === basePath
@@ -38,8 +51,50 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
     .slice(0, 2)
     .toUpperCase()
 
-  // Itens ocultos sob "Mais" no bottom bar mobile (índice 5+) — indica badge pendente.
-  const moreHasBadge = items.slice(5).some((i) => i.badge != null && i.badge > 0)
+  // Story 63-18 — itens visíveis no bottom bar mobile (4 tabs) vs. ocultos no "Mais".
+  const tabItems = items.slice(0, 4)
+  const moreItems = items.slice(4)
+  const moreHasBadge = moreItems.some((i) => i.badge != null && i.badge > 0)
+
+  const closeMore = useCallback(() => {
+    setMoreOpen(false)
+    moreButtonRef.current?.focus()
+  }, [])
+
+  // Story 63-18 — focus-trap + Esc enquanto o sheet "Mais" está aberto.
+  useEffect(() => {
+    if (!moreOpen) return
+    const sheet = sheetRef.current
+    if (!sheet) return
+
+    const focusable = sheet.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+    focusable[0]?.focus()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        closeMore()
+        return
+      }
+      if (e.key === "Tab" && focusable.length > 0) {
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (!first || !last) return
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [moreOpen, closeMore])
 
   return (
     <>
@@ -89,7 +144,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                         <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                         <span className="flex-1">{item.label}</span>
                         {item.badge != null && item.badge > 0 && !active && (
-                          <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                          <span className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
                             {item.badge > 99 ? "99+" : item.badge}
                           </span>
                         )}
@@ -144,10 +199,10 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
         </div>
       </header>
 
-      {/* Mobile Bottom Tab Bar */}
+      {/* Mobile Bottom Tab Bar — Story 63-18: 4 tabs + botão "Mais" */}
       <nav className="mobile-nav-safe fixed bottom-0 left-0 right-0 z-30 border-t border-stone-200 bg-white/95 backdrop-blur-sm lg:hidden dark:border-stone-800 dark:bg-stone-950/95">
         <div className="flex items-center justify-around px-1 py-1">
-          {items.slice(0, 5).map((item) => {
+          {tabItems.map((item) => {
             const active = isActive(item.href)
             const mobileClass = `flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors ${
               active ? "text-orange-600 dark:text-orange-300" : "text-stone-400 dark:text-stone-500"
@@ -168,7 +223,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                 <span className="relative flex h-5 w-5 items-center justify-center">
                   {item.icon}
                   {item.badge != null && item.badge > 0 && !active && (
-                    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold text-white">
+                    <span className={`absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full ${badgeBg(item)} px-1 text-[9px] font-bold text-white`}>
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
@@ -177,22 +232,87 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
               </Link>
             )
           })}
-          {items[5] && (
-            <Link
-              href={items[5].href}
-              className="flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-stone-400 dark:text-stone-500"
+          {moreItems.length > 0 && (
+            <button
+              ref={moreButtonRef}
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={moreOpen}
+              className="flex min-h-[44px] min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-stone-400 dark:text-stone-500"
             >
               <span className="relative flex h-5 w-5 items-center justify-center">
-                <span className="text-lg leading-none">...</span>
+                <MoreHorizontal className="h-[18px] w-[18px]" />
                 {moreHasBadge && (
                   <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-white dark:ring-stone-950" />
                 )}
               </span>
               <span className="text-[10px] font-medium">Mais</span>
-            </Link>
+            </button>
           )}
         </div>
       </nav>
+
+      {/* Story 63-18 — Bottom Sheet "Mais" (mobile only) */}
+      {moreOpen && (
+        <div className="lg:hidden">
+          {/* Overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={closeMore}
+            aria-hidden="true"
+          />
+          {/* Sheet */}
+          <div
+            ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu principal"
+            className="mobile-nav-safe fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t border-stone-200 bg-white shadow-xl dark:border-stone-800 dark:bg-stone-900"
+          >
+            <div className="mx-auto mt-3 mb-1 h-1 w-8 rounded-full bg-stone-300 dark:bg-stone-600" />
+            <ul className="flex flex-col gap-0.5 p-3">
+              {moreItems.map((item) => {
+                const active = isActive(item.href)
+                const rowClass = `flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                    : "text-stone-600 hover:bg-stone-50 dark:text-stone-300 dark:hover:bg-stone-800/60"
+                }`
+                return (
+                  <li key={item.href}>
+                    {item.separator && (
+                      <div className="mx-1 mb-1 mt-1 border-t border-stone-100 dark:border-stone-800" />
+                    )}
+                    {item.external ? (
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setMoreOpen(false)}
+                        className={rowClass}
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                        <span className="flex-1">{item.label}</span>
+                      </a>
+                    ) : (
+                      <Link href={item.href} onClick={() => setMoreOpen(false)} className={rowClass}>
+                        <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                        <span className="flex-1">{item.label}</span>
+                        {item.badge != null && item.badge > 0 && !active && (
+                          <span className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
+                            {item.badge > 99 ? "99+" : item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
     </>
   )
 }
