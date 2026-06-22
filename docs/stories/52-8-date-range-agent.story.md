@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 52 — Agente de Tráfego com Acesso Read-Only ao Pipeline do CRM
 - **Story:** 52-8
-- **Status:** Ready for Review
+- **Status:** Done
 - **Priority:** P2 — melhoria de usabilidade; complementa Story 52-7
 - **Complexity:** L (1 migration SQL + TypeScript + UI React — ~8-10h)
 - **Created:** 2026-06-19
@@ -1013,3 +1013,4 @@ Story pode avançar para `@devops *push`.
 | 2026-06-19 | @sm (River) | Especificação técnica completa: Dev Notes com código exato para extractDateWindow (MONTH_MAP, DATE_RANGE_PATTERNS, NEW_RELATIVE_PATTERNS), SQL migration 104 (bodies completos dos overloads DATE,DATE), assinaturas novas dos builders, lógica chat/route.ts e JSX de agent-chat-panel.tsx. T7 duplicado removido. |
 | 2026-06-19 | @po (Pax) | Validação GO 9/10. Draft → Ready. Pontos de atenção para @dev: AC14 (exibir erro 400 na UI), AC9 (formato DD/MM/YYYY com ano no cabeçalho). Não bloqueantes. |
 | 2026-06-22 | @dev (Dex) | Implementação completa: 5 arquivos (commit 3c20daf). Bugfix descoberto em T10: padrões DATE_RANGE_PATTERNS usavam `(?:at[eé]?|e)` sem contemplar "a" simples — corrigido para `(?:at[eé]?|[ae])` nos 3 padrões de range. Todos os testes T1-T10 passando. InProgress → Ready for Review. |
+| 2026-06-22 | @po (Pax) | Story fechada. QA: PASS with CONCERNS (@qa Quinn). Push: `f0033d6..aef44db` em `origin/main`. Migration 104 aplicada em produção (dsopqkqjkmhytudaaolv). Ready for Review → Done. |
