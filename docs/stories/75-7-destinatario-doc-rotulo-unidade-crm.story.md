@@ -1,7 +1,7 @@
 # Story 75-7 — Seletor "Destinatário": rótulo usa o número de unidade do CRM (fallback)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente
 - **Branch:** main
 
@@ -53,3 +53,4 @@ O seletor passa a mostrar a unidade para todos os clientes que já têm unidade 
 - @po (Pax): validação 10/10 → GO. Status Draft → Ready.
 - @dev (Dex): fallback de unidade pelo CRM no rótulo do seletor. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (simulação 2→3 em prod; gap real é dado faltante). Pronta para @devops *push.
+- @devops (Gage): push em produção (commit 5e1f2d1). Status → Done.
