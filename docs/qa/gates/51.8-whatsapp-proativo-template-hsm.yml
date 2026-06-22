@@ -1,0 +1,52 @@
+schema: 1
+story: "51.8"
+slug: whatsapp-proativo-template-hsm
+gate: PASS
+status_reason: "Os 3 fluxos proativos migrados para templates HSM com payload Graph API correto; helper puro nunca lança, 19 testes verdes, type-check limpo no escopo e arquivos de referência freeform intactos."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-22T18:17:00Z"
+
+# ── 7 Quality Checks (story-lifecycle Phase 4) ──────────────────────────────
+quality_checks:
+  code_review: PASS          # helper espelha send-whatsapp-message.ts; tipos discriminados; comentários rastreiam ACs
+  unit_tests: PASS           # 19 passed (8 novos + 11 existentes), 2 arquivos
+  acceptance_criteria: PASS  # AC1-AC8 verificados contra o código real
+  no_regressions: PASS       # send-whatsapp-message.ts e dispatch-broker-message.ts com diff vazio
+  performance: PASS          # WA config de notifyImobiliaria agora em paralelo (Promise.all) — melhora latência
+  security: PASS             # sem secrets hardcoded; access_token injetado via waConfig resolvido; sem URL completa no botão
+  documentation: PASS        # Dev Notes/Completion Notes completos; AUTO-DECISIONs documentadas
+
+# ── Acceptance Criteria trace ───────────────────────────────────────────────
+ac_trace:
+  AC1: PASS  # helper puro: sem @web/*/Supabase; assinatura correta; tipos relativos; WHATSAPP_CONFIG_MISSING sem fetch; nunca lança
+  AC2: PASS  # Fluxo 1 novo_lead_corretor pt_BR; body[brokerName,leadName,leadPhone]; button url index "0" suffix=leadId; freeform removido
+  AC3: PASS  # `if (context) return` (notify-broker.ts:101) antes de qualquer fetch; push/email no caller intactos
+  AC4: PASS  # Fluxo 2 aviso_roleta_gestor; WA config em Promise.all com users; body[name??"",messageBody,"name — phone".trim()]; button suffix=lead.id; delegação legada removida
+  AC5: PASS  # Fluxo 3 atualizacao_obra_cliente; obraId substitui link; .single()→.maybeSingle(); body[nome??"",obraName,descricao]; button suffix=obraId
+  AC6: PASS  # apenas novo_lead_corretor / aviso_roleta_gestor / atualizacao_obra_cliente; sem referência a boleto
+  AC7: PASS  # git diff vazio em send-whatsapp-message.ts e dispatch-broker-message.ts
+  AC8: PASS  # type-check 0 erros no escopo (3 erros pré-existentes em visual-editor.tsx, fora de escopo); 8 cenários cobertos
+
+# ── Validações executadas pelo @qa ──────────────────────────────────────────
+validations_run:
+  - cmd: "npx vitest run packages/web/src/lib/whatsapp/"
+    result: "2 files / 19 tests passed"
+  - cmd: "pnpm --filter @trifold/web type-check"
+    result: "0 erros nos arquivos da story; 3 erros pré-existentes em visual-editor.tsx (módulo react-email-editor ausente — fora de escopo)"
+  - cmd: "git diff --stat HEAD -- send-whatsapp-message.ts dispatch-broker-message.ts"
+    result: "diff vazio (arquivos de referência intactos)"
+  - cmd: "grep template names + leftover freeform check"
+    result: "apenas 3 templates aprovados; todo type:\"text\" está dentro de parameters de template (não freeform)"
+
+top_issues:
+  - id: "MNT-001"
+    severity: low
+    finding: "Deep links de email/push usam NEXT_PUBLIC_APP_URL (fallback https://app.trifold.com.br) enquanto a URL base dos botões dos templates HSM é https://crm.trifold.eng.br (embutida no painel Meta). Domínios divergentes entre canais."
+    suggested_action: "Pré-existente e fora do escopo desta story (base do template é controlada na Meta). Alinhar o domínio canônico dos deep links de email/push em follow-up operacional para consistência."
+
+waiver: { active: false }
+
+# ── Notas operacionais (smoke pós-deploy, fora do gate de código) ───────────
+operational_notes:
+  - "Telefones de corretores/gestores/clientes devem estar em E.164 sem '+' no banco (dependência operacional #20) — esta story passa phone as-is ao template."
+  - "Smoke pós-deploy: validar status 'sent' no painel Meta para os 3 templates fora da janela de 24h."

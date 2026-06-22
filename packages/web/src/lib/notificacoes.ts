@@ -1,6 +1,7 @@
 import { sendEmail } from "@web/lib/email"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { sendWhatsAppTemplate } from "./whatsapp/send-whatsapp-template"
 
 export type EventoNotificacao =
   | "nova_foto"
@@ -118,7 +119,7 @@ export async function notifyClientes(
       }
 
       if (pref.whatsapp_enabled && user.phone && orgId) {
-        sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao, link).catch(
+        sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao, obraId).catch(
           (err) => console.error("[notificacoes] WhatsApp skip:", err)
         )
       }
@@ -143,38 +144,46 @@ async function sendWhatsApp(
   nome: string,
   obraName: string,
   descricao: string,
-  link: string
+  obraId: string
 ): Promise<void> {
+  // Story 51-8 (AC5): `.maybeSingle()` em vez de `.single()` — `.single()` lança
+  // em 0 rows, e org sem WA config não deve crashar a notificação.
   const { data: config } = await admin
     .from("whatsapp_config")
     .select("phone_number_id, access_token")
     .eq("org_id", orgId)
-    .single()
+    .maybeSingle()
 
   if (!config?.phone_number_id || !config?.access_token) {
     throw new Error("whatsapp_config não encontrada para org")
   }
 
-  const body = `Olá ${nome}! Há uma atualização na sua obra ${obraName}: ${descricao}. Acesse o portal: ${link}`
-  const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: phone,
-      type: "text",
-      text: { body },
-    }),
+  // Story 51-8 (AC5): template HSM `atualizacao_obra_cliente`. A URL base do botão
+  // (`https://crm.trifold.eng.br/cliente/`) está embutida no template Meta —
+  // enviamos apenas o sufixo (UUID da obra).
+  const res = await sendWhatsAppTemplate(config, phone, {
+    name: "atualizacao_obra_cliente",
+    languageCode: "pt_BR",
+    components: [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: nome ?? "" },
+          { type: "text", text: obraName },
+          { type: "text", text: descricao },
+        ],
+      },
+      {
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [{ type: "text", text: obraId }],
+      },
+    ],
   })
 
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`WhatsApp API error: ${res.status} ${errText}`)
+  if (!res.sent) {
+    throw new Error(res.error ?? "SEND_FAILED")
   }
 }
 

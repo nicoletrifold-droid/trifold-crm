@@ -3,6 +3,7 @@ import "server-only"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { sendWhatsAppTemplate } from "../whatsapp/send-whatsapp-template"
 
 interface NotifyBrokerParams {
   orgId: string
@@ -73,7 +74,7 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
     : Promise.resolve()
 
   const waP = config.notify_whatsapp && broker.phone
-    ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
+    ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, lead.id, context)
         .then(() => { result.whatsapp = true })
         .catch((err: unknown) => console.error("[roleta] whatsapp error:", err))
     : Promise.resolve()
@@ -89,9 +90,16 @@ async function sendBrokerWhatsApp(
   brokerName: string,
   leadName: string,
   leadPhone: string,
-  leadUrl: string,
+  leadId: string,
   context?: { title?: string; body?: string }
 ): Promise<void> {
+  // Story 51-8 (AC3): os paths com `context` (agendamento 51-3 / follow-ups 51-4)
+  // não têm template HSM aprovado para a sua copy. Enviar o template
+  // `novo_lead_corretor` ("você recebeu um novo lead") nesses casos seria
+  // confuso. Por isso o WhatsApp proativo é pulado aqui — push e email
+  // continuam sendo disparados pelo caller `notifyBroker`, intactos.
+  if (context) return
+
   const { data: waConfig } = await admin
     .from("whatsapp_config")
     .select("phone_number_id, access_token")
@@ -101,35 +109,32 @@ async function sendBrokerWhatsApp(
 
   if (!waConfig?.phone_number_id || !waConfig?.access_token) return
 
-  // Custom context (Story 51-3) overrides the default roulette message.
-  const message = context?.body
-    ? `Olá ${brokerName}! ${context.body}\n🔗 Ver lead: ${leadUrl}`
-    : `Olá ${brokerName}! Você recebeu um novo lead na roleta.\n` +
-      `👤 Nome: ${leadName}\n` +
-      `📱 Telefone: ${leadPhone}\n` +
-      `🔗 Ver lead: ${leadUrl}`
-
-  const res = await fetch(
-    `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${waConfig.access_token}`,
-        "Content-Type": "application/json",
+  // Story 51-8 (AC2): template HSM `novo_lead_corretor`. A URL base do botão
+  // (`https://crm.trifold.eng.br/broker/leads/`) está embutida no template Meta —
+  // enviamos apenas o sufixo (UUID do lead).
+  const res = await sendWhatsAppTemplate(waConfig, phone, {
+    name: "novo_lead_corretor",
+    languageCode: "pt_BR",
+    components: [
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: brokerName },
+          { type: "text", text: leadName },
+          { type: "text", text: leadPhone },
+        ],
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: phone,
-        type: "text",
-        text: { body: message },
-      }),
-      signal: AbortSignal.timeout(15000),
-    }
-  )
+      {
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [{ type: "text", text: leadId }],
+      },
+    ],
+  })
 
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
+  if (!res.sent) {
+    throw new Error(`WhatsApp template error: ${res.error}`)
   }
 }
 
@@ -150,11 +155,18 @@ export async function notifyImobiliaria(params: NotifyImobiliariaParams): Promis
   const { orgId, userId, title, messageBody, lead } = params
   const admin = createAdminClient()
 
-  const { data: user } = await admin
-    .from("users")
-    .select("name, email, phone")
-    .eq("id", userId)
-    .maybeSingle()
+  // Story 51-8 (AC4): WA config fetchada em paralelo com a query de `users`.
+  const [userRes, waConfigRes] = await Promise.all([
+    admin.from("users").select("name, email, phone").eq("id", userId).maybeSingle(),
+    admin
+      .from("whatsapp_config")
+      .select("phone_number_id, access_token")
+      .eq("org_id", orgId)
+      .eq("status", "active")
+      .maybeSingle(),
+  ])
+  const user = userRes.data
+  const waConfig = waConfigRes.data
 
   if (!user?.email) return
 
@@ -172,15 +184,34 @@ export async function notifyImobiliaria(params: NotifyImobiliariaParams): Promis
       orgId,
     }).catch((e: unknown) => console.error("[roleta] imob email error:", e)),
 
-    (user.phone as string | null)
-      ? sendBrokerWhatsApp(
-          admin, orgId,
-          user.phone as string,
-          (user.name as string) ?? "",
-          title,
-          messageBody,
-          leadUrl,
-        ).catch((e: unknown) => console.error("[roleta] imob whatsapp error:", e))
+    // Story 51-8 (AC4): template HSM `aviso_roleta_gestor`. A URL base do botão
+    // (`https://crm.trifold.eng.br/dashboard/leads/`) está embutida no template —
+    // enviamos apenas o sufixo (UUID do lead).
+    (user.phone as string | null) && waConfig?.phone_number_id && waConfig?.access_token
+      ? sendWhatsAppTemplate(waConfig, user.phone as string, {
+          name: "aviso_roleta_gestor",
+          languageCode: "pt_BR",
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: (user.name as string | null) ?? "" },
+                { type: "text", text: messageBody },
+                { type: "text", text: `${lead.name ?? "Lead"} — ${lead.phone ?? ""}`.trim() },
+              ],
+            },
+            {
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: lead.id }],
+            },
+          ],
+        })
+          .then((res) => {
+            if (!res.sent) throw new Error(res.error ?? "SEND_FAILED")
+          })
+          .catch((e: unknown) => console.error("[roleta] imob whatsapp error:", e))
       : Promise.resolve(),
   ])
 }
