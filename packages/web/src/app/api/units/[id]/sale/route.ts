@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { autoVincularClienteObra } from "@web/lib/auto-vincular-cliente-obra"
+import { normalizePhoneBR } from "@trifold/shared"
 
 export async function POST(
   request: NextRequest,
@@ -48,14 +49,18 @@ export async function POST(
       )
     }
 
-    // Check if lead with this phone already exists
-    const { data: existingLead } = await supabase
+    // Check if lead with this phone already exists (Story 75-10: phone_normalized + fallback)
+    const normalizedClientPhone = normalizePhoneBR(body.client_phone.trim())
+    const saleLeadQuery = supabase
       .from("leads")
       .select("id")
-      .eq("phone", body.client_phone.trim())
       .eq("org_id", appUser.org_id)
       .eq("is_active", true)
-      .maybeSingle()
+    const { data: existingLead } = await (
+      normalizedClientPhone
+        ? saleLeadQuery.eq("phone_normalized", normalizedClientPhone)
+        : saleLeadQuery.eq("phone", body.client_phone.trim())
+    ).maybeSingle()
 
     if (existingLead) {
       leadId = existingLead.id

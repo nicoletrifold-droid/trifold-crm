@@ -1,6 +1,6 @@
 import "server-only"
 
-import { STAGE_IDS } from "@trifold/shared"
+import { STAGE_IDS, normalizePhoneBR } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { notifyBroker, notifyImobiliaria } from "./notify-broker"
 
@@ -107,14 +107,20 @@ export async function distributeLeadToNextBroker(
   //    Se o mesmo telefone já tem um corretor atribuído em outro lead ativo,
   //    rotear para ele independente de horário ou posição na roleta.
   if (cfg.priorizar_lead_ativo && lead.phone) {
-    const { data: existingLead } = await admin
+    // Story 75-10: casa pelo telefone normalizado (fallback ao cru se inválido).
+    const normalizedLeadPhone = normalizePhoneBR(lead.phone as string)
+    const priorBase = admin
       .from("leads")
       .select("assigned_broker_id")
       .eq("org_id", orgId)
-      .eq("phone", lead.phone as string)
       .eq("is_active", true)
       .not("assigned_broker_id", "is", null)
       .neq("id", leadId)
+    const { data: existingLead } = await (
+      normalizedLeadPhone
+        ? priorBase.eq("phone_normalized", normalizedLeadPhone)
+        : priorBase.eq("phone", lead.phone as string)
+    )
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()

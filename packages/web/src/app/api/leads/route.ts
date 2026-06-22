@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -71,14 +72,18 @@ export async function POST(request: Request) {
     )
   }
 
-  // Check uniqueness by phone + org_id
-  const { data: existing } = await supabase
+  // Check uniqueness by phone + org_id (Story 75-10: por phone_normalized, fallback ao cru)
+  const normalizedPhone = normalizePhoneBR(body.phone.trim())
+  const dedupeQuery = supabase
     .from("leads")
     .select("id")
-    .eq("phone", body.phone.trim())
     .eq("org_id", appUser.org_id)
     .eq("is_active", true)
-    .maybeSingle()
+  const { data: existing } = await (
+    normalizedPhone
+      ? dedupeQuery.eq("phone_normalized", normalizedPhone)
+      : dedupeQuery.eq("phone", body.phone.trim())
+  ).maybeSingle()
 
   if (existing) {
     return NextResponse.json(
