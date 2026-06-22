@@ -14,6 +14,7 @@ import {
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
+import { sendLibraryMediaIfRequested } from "@web/lib/ai/send-library-media"
 
 export const maxDuration = 60
 
@@ -758,6 +759,24 @@ export async function POST(request: NextRequest) {
             text: { body: response },
           }),
         })
+
+        // Story 75-17 — Nicole envia mídia da biblioteca SE o lead pediu material
+        // (planta/foto/tabela do empreendimento de interesse). Aditivo e seguro:
+        // só envia com pedido claro + property_interest_id + asset ativo; nunca
+        // quebra o fluxo (helper trata erros internamente).
+        try {
+          await sendLibraryMediaIfRequested(supabase, {
+            orgId,
+            leadId: lead!.id,
+            leadPhone: fromRaw,
+            text,
+            conversationId: conversation!.id,
+            phoneNumberId: config.phone_number_id,
+            accessToken: config.access_token,
+          })
+        } catch (err) {
+          console.error("[nicole-media] send error:", err)
+        }
 
         // Story 63-15 — Handoff após agendamento: a Nicole acabou de confirmar a
         // visita; desliga is_ai_active para ela parar de responder as próximas
