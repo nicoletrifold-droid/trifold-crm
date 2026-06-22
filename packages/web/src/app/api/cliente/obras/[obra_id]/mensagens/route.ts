@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
+import { ensureConversaAtribuida } from "@web/lib/portal/conversa"
 
 const MAX_CONTENT_LENGTH = 2000
 const PAGE_SIZE = 30
@@ -102,6 +104,13 @@ export async function POST(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Story 75-16: garante a conversa atribuída ao atendente padrão (roteamento).
+  await ensureConversaAtribuida(createAdminClient(), {
+    obraId: obra_id,
+    orgId: appUser.org_id,
+    clienteId: appUser.id,
+  })
 
   return NextResponse.json({ mensagem }, { status: 201 })
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, MessageSquare, ExternalLink } from "lucide-react"
 import { AdminChatFeed } from "@web/app/dashboard/obras/[obra_id]/_components/admin-chat-feed"
+import { ConversaAtendente } from "./conversa-atendente"
 
 interface Mensagem {
   id: string
@@ -109,6 +110,9 @@ export function ConversationPanel({
           <ExternalLink className="h-4 w-4" />
         </Link>
       </div>
+
+      {/* Story 75-16/17 — atendente responsável + transferência + participantes */}
+      <ConversaAtendente obraId={obraId} clienteId={clienteId} />
 
       {/* Chat */}
       <div className="flex min-h-0 flex-1 flex-col">

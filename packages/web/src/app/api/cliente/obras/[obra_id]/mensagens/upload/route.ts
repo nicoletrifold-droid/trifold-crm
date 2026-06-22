@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
+import { ensureConversaAtribuida } from "@web/lib/portal/conversa"
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024 // 20 MB
@@ -101,6 +103,13 @@ export async function POST(
     await supabase.storage.from("obra-mensagens").remove([storagePath])
     return NextResponse.json({ error: dbError.message }, { status: 500 })
   }
+
+  // Story 75-16: garante a conversa atribuída ao atendente padrão (roteamento).
+  await ensureConversaAtribuida(createAdminClient(), {
+    obraId: obra_id,
+    orgId: appUser.org_id,
+    clienteId: appUser.id,
+  })
 
   return NextResponse.json({ mensagem }, { status: 201 })
 }
