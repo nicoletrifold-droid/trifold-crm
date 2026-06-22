@@ -1,7 +1,7 @@
 # Story 75-14 — Exclusão de foto pelo perfil obras com aprovação do supervisor
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Obras/Aprovações
 - **Branch:** main
 
@@ -43,3 +43,4 @@ Decisão: **reusar** `obra_upload_aprovacoes` com novo `tipo` `exclusao_foto` (m
 
 ## Change Log
 - @sm/@po/@dev/@qa: criada, validada, implementada, QA PASS. Pendente migration 106 + @devops push.
+- @devops (Gage): migration 106 aplicada (75-14) + push em produção (commit 7ed20c0). Status → Done.

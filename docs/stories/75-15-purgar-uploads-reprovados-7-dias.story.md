@@ -1,7 +1,7 @@
 # Story 75-15 — Uploads reprovados: manter 7 dias e purgar (arquivo + registro)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Obras/Aprovações
 - **Branch:** main
 
@@ -36,3 +36,4 @@ Antes, rejeitar um upload removia o arquivo do Storage na hora. Decisão (híbri
 
 ## Change Log
 - @sm/@po/@dev/@qa: criada, validada, implementada, QA PASS. Pendente @devops push.
+- @devops (Gage): migration 106 aplicada (75-14) + push em produção (commit 7ed20c0). Status → Done.
