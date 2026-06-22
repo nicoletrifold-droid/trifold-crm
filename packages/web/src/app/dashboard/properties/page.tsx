@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { canEditImoveis, canCreateImoveis } from "@web/lib/permissions-imoveis"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
@@ -14,16 +14,15 @@ export default async function PropertiesPage() {
     .eq("is_active", true)
     .order("created_at", { ascending: false })
 
-  // Admin/supervisor (módulo "sistema") e obras podem editar imóveis.
-  // "Novo empreendimento" continua restrito a admin/supervisor.
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
-  const canEditImoveis = isAdmin || user.role === "obras"
+  // Editar: admin/supervisor/obras. Criar: admin/supervisor (fonte única).
+  const canEdit = canEditImoveis(user.role)
+  const canCreate = canCreateImoveis(user.role)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Empreendimentos</h1>
-        {isAdmin && (
+        {canCreate && (
           <Link
             href="/dashboard/properties/new"
             className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
@@ -87,7 +86,7 @@ export default async function PropertiesPage() {
                     href={`/dashboard/properties/${p.id}`}
                     className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
                   >
-                    {canEditImoveis ? "Editar" : "Ver"}
+                    {canEdit ? "Editar" : "Ver"}
                   </Link>
                 </td>
               </tr>

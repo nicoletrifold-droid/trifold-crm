@@ -1,12 +1,13 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { now } from "@web/lib/time"
 import Link from "next/link"
 import {
-  Users, CalendarDays, Bell, ChevronRight, MapPin, Clock,
+  Users, Bell, ChevronRight, UserPlus,
   AlertCircle, Calendar, CheckCircle2, Filter, UserX, AlarmClock,
 } from "lucide-react"
-import { NewAppointmentButton } from "./_components/new-appointment-modal"
+import { SOURCE_LABELS } from "@web/lib/constants"
+
+const AGUARDANDO_STAGE_ID = "00000000-0000-0000-0001-000000000001"
 
 const MOTIVATIONAL_PHRASES = [
   "Cada lead é uma porta. Você decide qual abre hoje.",
@@ -71,16 +72,15 @@ function greeting() {
   return "Boa noite"
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    timeZone: "America/Sao_Paulo", day: "numeric", month: "short",
-  })
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", {
-    timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit",
-  })
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const min = Math.floor(diffMs / 60000)
+  if (min < 1) return "agora"
+  if (min < 60) return `há ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `há ${h}h`
+  const d = Math.floor(h / 24)
+  return `há ${d} ${d === 1 ? "dia" : "dias"}`
 }
 
 type Counts = {
@@ -97,7 +97,6 @@ type FunnelRow = {
 export default async function BrokerHomePage() {
   const user = await getServerUser()
   const supabase = await createClient()
-  const nowIso = new Date(now()).toISOString()
 
   const todayStart = new Date(new Date().toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" }))
   const todayEnd = new Date(todayStart)
@@ -108,10 +107,11 @@ export default async function BrokerHomePage() {
     funnelResult,
     roletaConfigResult,
     brokerResult,
-    upcomingAppointments,
+    novosLeads,
     pendingLogs,
     tasksAtrasadas,
     tasksHoje,
+    propertiesResult,
   ] = await Promise.all([
     supabase.rpc("get_broker_dashboard_counts", {
       p_org_id: user.orgId, p_broker_id: user.id,
@@ -126,15 +126,16 @@ export default async function BrokerHomePage() {
       .eq("user_id", user.id)
       .eq("org_id", user.orgId)
       .maybeSingle(),
+    // Novos leads disponíveis: atribuídos ao corretor, ainda na etapa "Aguardando atendimento"
     supabase
-      .from("appointments")
-      .select(`id, scheduled_at, duration_minutes, location, status, client_name,
-               lead:leads!lead_id(id, name, phone),
-               property:properties!property_id(id, name)`)
-      .eq("broker_id", user.id)
-      .in("status", ["scheduled", "confirmed"])
-      .gte("scheduled_at", nowIso)
-      .order("scheduled_at", { ascending: true })
+      .from("leads")
+      .select("id, name, phone, source, created_at")
+      .eq("org_id", user.orgId)
+      .eq("assigned_broker_id", user.id)
+      .eq("stage_id", AGUARDANDO_STAGE_ID)
+      .eq("is_active", true)
+      .is("lost_reason", null)
+      .order("created_at", { ascending: false })
       .limit(5),
     supabase
       .from("follow_up_log")
@@ -164,6 +165,12 @@ export default async function BrokerHomePage() {
       .eq("leads.assigned_broker_id", user.id)
       .order("due_at", { ascending: true })
       .limit(5),
+    // Empreendimentos (somente leitura) — disponibilidade e % vendido
+    supabase
+      .from("properties")
+      .select("id, name, status, total_units, available_units, city")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false }),
   ])
 
   type TaskItem = {
@@ -183,6 +190,13 @@ export default async function BrokerHomePage() {
   }) as Counts
 
   const funnel = (funnelResult.data ?? []) as FunnelRow[]
+
+  const properties = (propertiesResult.data ?? []) as Array<{
+    id: string; name: string; status: string
+    total_units: number | null; available_units: number | null; city: string | null
+  }>
+  const statusLabel = (s: string) =>
+    s === "selling" ? "Em venda" : s === "launching" ? "Lançamento" : s
 
   const roletaAtiva = roletaConfigResult.data?.is_active ?? false
   const broker = brokerResult.data
@@ -302,6 +316,77 @@ export default async function BrokerHomePage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Empreendimentos ──────────────────────────────────────── */}
+      {properties.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-stone-200">Empreendimentos</h2>
+            <Link href="/broker/properties" className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400">
+              Ver todos <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {properties.map((property) => {
+              const soldPct =
+                property.total_units && property.available_units != null
+                  ? Math.round(
+                      ((property.total_units - property.available_units) / property.total_units) * 100
+                    )
+                  : null
+              return (
+                <Link
+                  key={property.id}
+                  href={`/broker/properties/${property.id}`}
+                  className="rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-gray-300 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-stone-700"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-stone-400">
+                        {property.city ?? "-"}
+                        {property.total_units != null && <> &middot; {property.total_units} unidades</>}
+                        {property.available_units != null && (
+                          <>
+                            {" · "}
+                            <span className="font-medium text-emerald-600 dark:text-emerald-300">
+                              {property.available_units} disponíveis
+                            </span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        property.status === "selling"
+                          ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                          : property.status === "launching"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                          : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
+                      }`}
+                    >
+                      {statusLabel(property.status)}
+                    </span>
+                  </div>
+                  {soldPct != null && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-stone-800">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 dark:bg-emerald-400"
+                          style={{ width: `${soldPct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium tabular-nums text-gray-400 dark:text-stone-500">
+                        {soldPct}% vendido
+                      </span>
+                    </div>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Tarefas Atrasadas + Para Hoje ────────────────────────── */}
       {(atrasadasList.length > 0 || hojeList.length > 0) && (
@@ -454,60 +539,57 @@ export default async function BrokerHomePage() {
         </div>
       </div>
 
-      {/* ── Próximos compromissos + Follow-ups ───────────────────── */}
+      {/* ── Novos Leads Disponíveis + Follow-ups ─────────────────── */}
       <div className="grid gap-4 lg:grid-cols-2">
 
         <div className="flex flex-col rounded-2xl border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-stone-800">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-stone-300">Próximos compromissos</h2>
-            <Link href="/broker/agenda" className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400">
-              Ver agenda <ChevronRight className="h-3 w-3" />
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-stone-300">Novos Leads Disponíveis</h2>
+              {counts.novos > 0 && (
+                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-600 dark:bg-orange-500/20 dark:text-orange-400">
+                  {counts.novos}
+                </span>
+              )}
+            </div>
+            <Link href={`/broker/leads?stage=${AGUARDANDO_STAGE_ID}`} className="flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400">
+              Ver todos <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
-          {!upcomingAppointments.data || upcomingAppointments.data.length === 0 ? (
+          {!novosLeads.data || novosLeads.data.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10">
-              <CalendarDays className="h-8 w-8 text-gray-300 dark:text-stone-700" />
-              <p className="text-sm text-gray-400 dark:text-stone-600">Nenhum compromisso agendado.</p>
-              <NewAppointmentButton />
+              <UserPlus className="h-8 w-8 text-gray-300 dark:text-stone-700" />
+              <p className="text-sm text-gray-400 dark:text-stone-600">Nenhum lead novo no momento.</p>
             </div>
           ) : (
-            <>
-              <ul className="divide-y divide-gray-100 dark:divide-stone-800/70">
-                {upcomingAppointments.data.map((appt) => {
-                  const lead = Array.isArray(appt.lead) ? appt.lead[0] : appt.lead
-                  const property = Array.isArray(appt.property) ? appt.property[0] : appt.property
-                  const clientDisplay =
-                    (lead as { name?: string | null } | null)?.name ||
-                    appt.client_name || "Cliente não identificado"
-                  return (
-                    <li key={appt.id} className="flex items-center gap-4 px-5 py-3.5">
-                      <div className="w-14 flex-shrink-0 text-center">
-                        <p className="text-xs font-medium text-blue-500 dark:text-blue-400">{formatDate(appt.scheduled_at)}</p>
-                        <p className="text-sm font-bold text-gray-900 dark:text-stone-100">{formatTime(appt.scheduled_at)}</p>
-                      </div>
-                      <div className="h-8 w-px flex-shrink-0 bg-gray-200 dark:bg-stone-800" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-800 dark:text-stone-200">{clientDisplay}</p>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-400 dark:text-stone-500">
-                          <MapPin className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate">
-                            {appt.location ?? "Stand Trifold"}
-                            {(property as { name?: string } | null)?.name ? ` · ${(property as { name: string }).name}` : ""}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 flex items-center gap-1 text-xs text-gray-400 dark:text-stone-500">
-                        <Clock className="h-3 w-3" />
-                        {appt.duration_minutes}min
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-              <div className="border-t border-gray-100 px-5 py-3 dark:border-stone-800">
-                <NewAppointmentButton />
-              </div>
-            </>
+            <ul className="divide-y divide-gray-100 dark:divide-stone-800/70">
+              {(novosLeads.data as Array<{
+                id: string; name: string | null; phone: string | null
+                source: string | null; created_at: string
+              }>).map((lead) => (
+                <li key={lead.id}>
+                  <Link
+                    href={`/broker/leads/${lead.id}`}
+                    className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/50"
+                  >
+                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-500/15">
+                      <UserPlus className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-800 dark:text-stone-200">
+                        {lead.name || lead.phone || "Lead sem nome"}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-stone-500">
+                        {lead.source ? (SOURCE_LABELS[lead.source] ?? lead.source) : "Origem não informada"}
+                      </p>
+                    </div>
+                    <span className="flex-shrink-0 text-xs text-gray-400 dark:text-stone-500">
+                      {timeAgo(lead.created_at)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

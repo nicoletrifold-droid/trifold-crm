@@ -15,6 +15,9 @@
 ## Feedback
 - [feedback_remote_only_pattern.md](feedback_remote_only_pattern.md) — Pattern for SQL applied via Studio (CONCURRENTLY indexes etc.): ghost migration `NNN_*_remote_only.sql` + manual INSERT in `supabase_migrations.schema_migrations`
 - [feedback_properties_smoke_test_required_columns.md](feedback_properties_smoke_test_required_columns.md) — INSERT em `properties` para smoke tests precisa de address/city/state (NOT NULL avaliado antes do CHECK, confunde error code 23502 vs 23514)
+- [feedback_role_source_user_role_not_jwt.md](feedback_role_source_user_role_not_jwt.md) — Checagem de role admin em RLS/funções usa `public.user_role()` (lê users.role), NÃO `auth.jwt() -> app_metadata` (só existe para role='cliente')
+- [feedback_audit_actor_from_auth_uid.md](feedback_audit_actor_from_auth_uid.md) — Audit/log functions: derive actor user id from public.public_user_id(), never a parameter (SEC-003 fix); DROP FUNCTION when changing arg count
+- [feedback_supabase_grant_all_default_revoke.md](feedback_supabase_grant_all_default_revoke.md) — Supabase concede GRANT ALL default a authenticated+anon; append-only/read-only exige REVOKE explicito (TRUNCATE bypassa RLS)
 
 ## Reference
 - [reference_supabase_management_api_tx.md](reference_supabase_management_api_tx.md) — Multi-statement transactions work via Management API; `text[]` arrays via PG dollar-quoted strings ($MIG_X$...$MIG_X$)

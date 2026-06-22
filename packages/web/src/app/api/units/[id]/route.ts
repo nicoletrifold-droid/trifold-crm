@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { buildUpdatePayload } from "@web/lib/api-utils"
+import { IMOVEIS_EDIT_ROLES } from "@web/lib/permissions-imoveis"
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   available: ["reserved", "sold"],
@@ -83,7 +84,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = requireRole(appUser, [...IMOVEIS_EDIT_ROLES])
   if (forbidden) return forbidden
 
   // Verify unit exists and belongs to user's org

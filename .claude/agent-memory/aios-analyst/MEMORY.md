@@ -1,0 +1,2 @@
+- [Trifold brand identity tokens](project_trifold_brand.md) — Locked palette (black + orange #F27A5E), Space Grotesk type, voice vocabulary
+- [Trifold public site asset references](reference_trifold_site_assets.md) — URLs for official logo, fonts, and CSS source of truth

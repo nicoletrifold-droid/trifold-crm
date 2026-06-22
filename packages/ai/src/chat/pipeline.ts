@@ -25,8 +25,10 @@ import {
   shouldHandoff,
   generateHandoffSummary,
   updateLeadMemory,
+  guardStageForAssignedLead,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
+import { parseDayParts, parseTimeParts, evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -188,6 +190,17 @@ export interface PipelineEvent {
   metadata?: Record<string, unknown>
 }
 
+/** Cria um evento no Google Calendar e devolve o event id (ou null). Injetado pela
+ *  camada web (mantém packages/ai desacoplado de packages/web). Story 73-1. */
+export interface CalendarEventInput {
+  title: string
+  description?: string
+  startAt: Date
+  endAt: Date
+  attendeeEmail?: string
+}
+export type CreateCalendarEvent = (input: CalendarEventInput) => Promise<string | null>
+
 export interface ProcessMessageParams {
   supabase: SupabaseClient
   anthropic: Anthropic
@@ -196,6 +209,8 @@ export interface ProcessMessageParams {
   orgId: string
   mediaBlock?: MediaBlock
   onEvent?: (event: PipelineEvent) => void
+  /** Opcional: empurra a visita criada pela Nicole para o Google Calendar. */
+  createCalendarEvent?: CreateCalendarEvent
 }
 
 export interface ProcessMessageResult {
@@ -226,6 +241,17 @@ export interface ProcessMessageResult {
  * 12. Update conversation state with new collected data
  * 13. Return response with metadata
  */
+/** Formata um instante UTC como "quinta-feira, 18 de junho às 15:00" (BRT). */
+function formatBrtDateTime(d: Date): string {
+  const dia = d.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long",
+  })
+  const hora = d.toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit",
+  })
+  return `${dia} às ${hora}`
+}
+
 export async function processMessage(
   params: ProcessMessageParams
 ): Promise<string> {
@@ -238,6 +264,7 @@ export async function processMessageWithMetadata(
 ): Promise<ProcessMessageResult> {
   const { supabase, anthropic, conversationId, message, orgId } = params
   const emit = params.onEvent ?? (() => {})
+  const createCalendarEvent = params.createCalendarEvent
 
   // 1. Load conversation state
   const state = await loadConversationState(supabase, conversationId)
@@ -440,41 +467,71 @@ export async function processMessageWithMetadata(
 
   // Inject visit context directly into the message — only if relevant
   let messageWithContext = message
+  // Story 73-1: slot pedido pelo cliente que está LIVRE e pode ser agendado neste turno.
+  let bookableSlotUtc: Date | null = null
   if (state?.visit_proposed && conversation?.lead_id) {
-    // Check if there's an active future appointment (only relevant after explicit confirmation)
-    const clientConfirmed = Boolean((collectedData as Record<string, unknown>).visit_explicitly_confirmed)
+    // 1) Já existe visita futura para este lead? → só lembrar (nunca duplicar).
+    const { data: activeAppointment } = await supabase
+      .from("appointments")
+      .select("scheduled_at, status")
+      .eq("lead_id", conversation.lead_id)
+      .in("status", ["scheduled", "confirmed"])
+      .gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
 
-    if (clientConfirmed) {
-      const { data: activeAppointment } = await supabase
-        .from("appointments")
-        .select("scheduled_at, status")
-        .eq("lead_id", conversation.lead_id)
-        .in("status", ["scheduled", "confirmed"])
-        .gte("scheduled_at", new Date().toISOString())
-        .order("scheduled_at", { ascending: true })
-        .limit(1)
-        .maybeSingle()
+    if (activeAppointment) {
+      const visitDate = new Date(activeAppointment.scheduled_at)
+      const formatted = visitDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" })
+      const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+      messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
+    } else {
+      // 2) Sem visita ainda → entende o dia/horário pedido (combinando com o que
+      //    ficou pendente de turnos anteriores), confere a agenda interna (que inclui
+      //    Calendly) e injeta o contexto para a Nicole responder certo na MESMA mensagem.
+      const cd = collectedData as Record<string, unknown>
+      const now = new Date()
+      const curDay = parseDayParts(message, now)
+      const curTime = parseTimeParts(message)
+      const pendingDay = typeof cd.visit_pending_date === "string" ? isoToDayParts(cd.visit_pending_date) : null
+      const pendingTime = typeof cd.visit_pending_hour === "number"
+        ? { hour: cd.visit_pending_hour as number, minute: (cd.visit_pending_minute as number | undefined) ?? 0 }
+        : null
+      const day = curDay ?? pendingDay
+      const time = curTime ?? pendingTime
 
-      if (activeAppointment) {
-        // Visita futura agendada — lembrar o modelo
-        const visitDate = new Date(activeAppointment.scheduled_at)
-        const formatted = visitDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" })
-        const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
-        messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
-      } else {
-        // Visita confirmada pelo cliente mas passou/foi cancelada — resetar estado
-        const cleanedData = { ...collectedData }
-        delete cleanedData.visit_availability
-        delete (cleanedData as Record<string, unknown>).visit_explicitly_confirmed
-        await supabase
-          .from("conversation_state")
-          .update({ visit_proposed: false, collected_data: cleanedData })
-          .eq("conversation_id", conversationId)
-        delete collectedData.visit_availability
-        delete (collectedData as Record<string, unknown>).visit_explicitly_confirmed
+      if (day && time) {
+        // Dia + hora completos (no turno ou combinando com o pendente) → resolve e limpa pendência.
+        delete cd.visit_pending_date
+        delete cd.visit_pending_hour
+        delete cd.visit_pending_minute
+        const { startUtc, outsideHours } = evaluateSlot(day, time, now)
+        if (startUtc) {
+          const { free, alternatives } = await checkSlotAvailability(supabase, orgId, startUtc)
+          const whenStr = formatBrtDateTime(startUtc)
+          if (free) {
+            bookableSlotUtc = startUtc
+            messageWithContext = `[SISTEMA: O cliente quer a visita em ${whenStr}. Esse horário está LIVRE. Confirme a visita reafirmando o dia e o horário (${whenStr}) e diga que vai deixar o café preparado.]\n\n${message}`
+          } else {
+            const alts = alternatives.map(formatBrtDateTime).join(" ou ")
+            messageWithContext = `[SISTEMA: O cliente pediu ${whenStr}, mas JÁ existe uma visita nesse horário. NÃO confirme esse horário. Com simpatia, avise que esse horário já está reservado e ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"}. Pergunte qual prefere.]\n\n${message}`
+          }
+        } else {
+          messageWithContext = `[SISTEMA: O horário pedido não serve (já passou ou está fora do atendimento). Informe com gentileza que atendemos de segunda a sexta das 8h às 18h e sábado das 8h às 12h, e peça um horário válido.]\n\n${message}`
+        }
+      } else if (day && !time) {
+        // Só o dia → guarda o dia e pergunta o horário.
+        cd.visit_pending_date = dayPartsToIso(day)
+        messageWithContext = `[SISTEMA: O cliente indicou o dia mas não o horário. Pergunte qual horário prefere (atendemos seg–sex 8h–18h, sáb 8h–12h).]\n\n${message}`
+      } else if (time && !day) {
+        // Só a hora → guarda a hora e pergunta a data (depois confirme "tal dia às tal hora").
+        cd.visit_pending_hour = time.hour
+        cd.visit_pending_minute = time.minute
+        const horaStr = `${time.hour}h${time.minute ? String(time.minute).padStart(2, "0") : ""}`
+        messageWithContext = `[SISTEMA: O cliente indicou o horário (${horaStr}) mas não o dia. Guarde esse horário, pergunte qual dia prefere e, quando ele disser, confirme reafirmando o dia e o horário. Atendemos seg–sex 8h–18h, sáb 8h–12h.]\n\n${message}`
       }
     }
-    // If visit_proposed=true but no visit_explicitly_confirmed yet: Nicole asked, awaiting client reply — keep state
   }
 
   userContent.push({ type: "text", text: messageWithContext })
@@ -679,61 +736,61 @@ export async function processMessageWithMetadata(
       .limit(1)
       .maybeSingle()
 
-    // Only schedule when the client explicitly confirmed a date (visit_explicitly_confirmed)
-    // after Nicole already asked (visit_proposed = true). Handoff takes priority.
-    if (finalData.visit_explicitly_confirmed && !existingAppt && conversation.org_id && !handoffResult.trigger) {
-      // Find a free 1-hour slot starting from tomorrow 10h Maringá (13h UTC),
-      // checking that the broker doesn't already have an appointment at that time.
-      const SLOT_HOURS_UTC = [13, 14, 15, 16, 17] // 10h–14h Maringá
-      const base = new Date()
-      base.setDate(base.getDate() + 1)
-      if (base.getDay() === 0) base.setDate(base.getDate() + 1) // skip Sunday
-
+    // Story 73-1: agenda no HORÁRIO pedido pelo cliente (bookableSlotUtc só é setado
+    // quando o cliente pediu um dia+hora explícito que está LIVRE na agenda interna —
+    // que já inclui Calendly). Handoff NÃO bloqueia mais a visita. Horário ocupado →
+    // bookableSlotUtc fica null (a Nicole já ofereceu outro horário na resposta).
+    // bookableSlotUtc só é setado quando o cliente forneceu (no turno ou combinando turnos)
+    // um dia+hora concreto, LIVRE e dentro do horário — em modo de agendamento (visit_proposed).
+    // Isso é confirmação suficiente; não exige day-ref no turno atual (cobre conclusão só-hora).
+    if (bookableSlotUtc && !existingAppt && conversation.org_id) {
+      const scheduledAt = bookableSlotUtc
+      const endAt = new Date(scheduledAt.getTime() + VISIT_DURATION_MIN * 60_000)
       const propertyId = identifiedPropertyId ?? state?.current_property_id
-
       const assignedBrokerId: string | null = currentLead?.assigned_broker_id ?? null
+      const whenStr = formatBrtDateTime(scheduledAt)
+      const clientEmail = (finalData.email as string | undefined) ?? null
 
-      // Find a free slot for the broker (avoid double-booking)
-      let scheduledAt: Date = new Date(base)
-      scheduledAt.setUTCHours(SLOT_HOURS_UTC[0]!, 0, 0, 0)
+      const { data: createdAppt } = await supabase
+        .from("appointments")
+        .insert({
+          org_id: conversation.org_id,
+          lead_id: leadId,
+          broker_id: assignedBrokerId,
+          scheduled_at: scheduledAt.toISOString(),
+          duration_minutes: VISIT_DURATION_MIN,
+          location: "Sede Trifold - Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby",
+          status: "scheduled",
+          created_by: "nicole",
+          client_name: leadName,
+          client_phone: leadPhone,
+          client_email: clientEmail,
+          notes: `Visita confirmada pelo cliente para ${whenStr}.`,
+        })
+        .select("id")
+        .maybeSingle()
 
-      if (assignedBrokerId) {
-        for (const utcHour of SLOT_HOURS_UTC) {
-          const candidate = new Date(base)
-          candidate.setUTCHours(utcHour, 0, 0, 0)
-          const slotStart = candidate.toISOString()
-          const slotEnd = new Date(candidate.getTime() + 60 * 60 * 1000).toISOString()
-
-          const { data: clash } = await supabase
-            .from("appointments")
-            .select("id")
-            .eq("broker_id", assignedBrokerId)
-            .in("status", ["scheduled", "confirmed"])
-            .gte("scheduled_at", slotStart)
-            .lt("scheduled_at", slotEnd)
-            .limit(1)
-            .maybeSingle()
-
-          if (!clash) {
-            scheduledAt = candidate
-            break
+      // Empurra para o Google Calendar (fecha a brecha de duplicação com o Calendly).
+      // Injetado pela camada web; best-effort — nunca derruba o agendamento.
+      if (createdAppt?.id && createCalendarEvent) {
+        try {
+          const googleEventId = await createCalendarEvent({
+            title: `Visita ao decorado${leadName ? ` — ${leadName}` : ""}`,
+            description: `Visita agendada pela Nicole.${leadPhone ? ` Telefone: ${leadPhone}.` : ""}`,
+            startAt: scheduledAt,
+            endAt,
+            attendeeEmail: clientEmail ?? undefined,
+          })
+          if (googleEventId) {
+            await supabase.from("appointments").update({ google_event_id: googleEventId }).eq("id", createdAppt.id)
           }
+        } catch (err) {
+          emit({ level: "warn", category: "ai", event_type: "GOOGLE_CALENDAR_PUSH_FAILED", message: "Failed to push Nicole appointment to Google Calendar", metadata: { lead_id: leadId, appointment_id: createdAppt.id, error: String(err) } })
         }
       }
 
-      await supabase.from("appointments").insert({
-        org_id: conversation.org_id,
-        lead_id: leadId,
-        broker_id: assignedBrokerId,
-        scheduled_at: scheduledAt.toISOString(),
-        location: "Sede Trifold - Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby",
-        status: "scheduled",
-        created_by: "nicole",
-        notes: `Visita confirmada pelo cliente. Data informada: ${String(finalData.visit_explicitly_confirmed)}`,
-      })
-
+      // Story 73-1: NÃO move o lead para "Visita Agendada" — o corretor move manualmente.
       leadPatch.visit_scheduled_at = scheduledAt.toISOString()
-      leadPatch.stage_id = STAGE_IDS.visita_agendada
 
       // ADR-001: pipeline only sets lead owner when lead has no owner yet (roleta not yet run).
       if (shouldAssignPipelineBroker(assignedBrokerId, currentLead?.assigned_broker_id)) {
@@ -744,7 +801,7 @@ export async function processMessageWithMetadata(
         org_id: conversation.org_id,
         lead_id: leadId,
         type: "visit_scheduled",
-        description: `Nicole agendou visita com confirmação do cliente. Data: ${String(finalData.visit_explicitly_confirmed)}${assignedBrokerId ? ". Corretor designado automaticamente." : ""}`,
+        description: `Nicole agendou visita para ${whenStr}${assignedBrokerId ? " (corretor designado)" : ""}.`,
       })
 
       const notificationBrokerUserId = assignedBrokerId
@@ -755,11 +812,10 @@ export async function processMessageWithMetadata(
       }
     }
 
-    // Handoff — highest priority, overrides visit and qualification stage
+    // Handoff — entrega ao corretor. Story 73-1: NÃO move para "Visita Agendada"
+    // (mesmo com visita confirmada) — o corretor reposiciona o card manualmente.
     if (handoffResult.trigger && conversation.org_id) {
-      leadPatch.stage_id = finalData.visit_explicitly_confirmed
-        ? STAGE_IDS.visita_agendada
-        : STAGE_IDS.qualificado
+      leadPatch.stage_id = STAGE_IDS.qualificado
       leadPatch.ai_summary = handoffSummary
 
 
@@ -781,6 +837,11 @@ export async function processMessageWithMetadata(
         .update({ is_ai_active: false, handoff_at: new Date().toISOString(), handoff_reason: handoffResult.reason })
         .eq("id", conversationId)
     }
+
+    // Regra interna (Story 65-1): lead já distribuído a um corretor permanece
+    // em "Aguardando atendimento". A Nicole não reposiciona no kanban um lead
+    // que já tem dono — remove qualquer mudança de stage do patch.
+    guardStageForAssignedLead(leadPatch, currentLead?.assigned_broker_id)
 
     // ONE single update with all accumulated changes
     if (Object.keys(leadPatch).length > 0) {

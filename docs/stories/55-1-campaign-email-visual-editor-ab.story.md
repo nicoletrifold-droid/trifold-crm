@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 55 — Campaign Email Visual Editor & A/B Creative Performance
 - **Story:** 55-1
-- **Status:** Ready
+- **Status:** InReview
 - **Priority:** P1 — feature estratégica; bloqueada apenas por migration de schema
 - **Complexity:** L (schema + storage + editor + UI nova) — estimativa 8-12h @dev + 2h @data-engineer
 - **Created:** 2026-06-10

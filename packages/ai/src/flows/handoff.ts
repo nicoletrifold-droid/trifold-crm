@@ -20,6 +20,35 @@ interface HandoffMessage {
   content: string
 }
 
+// Padrões que identificam contatos que NAO são leads de compra.
+// Nunca encaminhar para corretor nem distribuir via roleta — Nicole responde
+// com o telefone comercial (44) 3222-9698.
+// Alta precisão por desenho: só marcamos como não-lead quando o sinal é
+// inequívoco. Casos ambíguos (ex.: "tem vaga disponível?") ficam como lead —
+// o custo de não distribuir um comprador real é maior que o de distribuir um
+// não-lead ocasional. "vaga" sozinha NUNCA marca (é vaga de garagem).
+const NON_LEAD_PATTERNS = [
+  // Emprego
+  /(?:emprego|curr[íi]culo|processo seletivo|recrutamento|contrata[çc][aã]o|\brh\b)/i,
+  /oportunidade\s+de\s+(?:trabalho|emprego)/i,
+  /vagas?\s+(?:de\s+)?(?:emprego|trabalho)/i,
+  /(?:trabalhar|fazer parte)\b.*\b(?:voc[êe]s|equipe|empresa|time)/i,
+  // Parceria / fornecedor
+  /(?:parceria|fornecedor|fornecimento|proposta comercial|presta[çc][aã]o de servi[çc]o)/i,
+  // Mídia / publicidade
+  /(?:anunciar|publicidade|patroc[íi]nio)/i,
+  /m[íi]dia\s+(?:exterior|externa|paga|out\s?of\s?home|ooh)/i,
+]
+
+/**
+ * Identifica contatos que NÃO são leads de compra de imóvel — candidatos a
+ * vaga, parcerias, fornecedores, propostas de mídia. Usado tanto no handoff
+ * (não encaminhar para corretor) quanto na roleta (não distribuir).
+ */
+export function isNonLeadContact(message: string): boolean {
+  return NON_LEAD_PATTERNS.some((pattern) => pattern.test(message))
+}
+
 const OUT_OF_SCOPE_PATTERNS = [
   /(?:falar|conversar)\s+(?:com|c\/)\s+(?:um|uma|o|a)?\s*(?:corretor|corretora|pessoa|humano|atendente)/i,
   /(?:preciso|quero|gostaria)\s+(?:de)?\s+(?:ajuda|suporte)\s+(?:humano|real|pessoal)/i,
@@ -44,6 +73,11 @@ const PRICE_SIMULATION_PATTERNS = [
 export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
   const { qualificationScore, message, conversationState } = params
   const lowerMessage = message.toLowerCase()
+
+  // Non-lead contacts (job seekers, partners, vendors) — never hand off to broker
+  if (isNonLeadContact(lowerMessage)) {
+    return { trigger: false }
+  }
 
   // Visit scheduled is NOT a handoff trigger anymore
   // Nicole continues attending until a broker actually sends a message

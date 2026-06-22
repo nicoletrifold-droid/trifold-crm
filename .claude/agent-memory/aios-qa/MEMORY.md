@@ -65,3 +65,4 @@
 - [project_epic_31_qa_patterns.md](project_epic_31_qa_patterns.md) — Epic 31 (Nicole Data Layer) QA patterns + lint web pré-existente conhecido (eslint-plugin-import no Next 16)
 - [project_story_31_2_gate_passed.md](project_story_31_2_gate_passed.md) — Story 31.2 (migration 043 CHECK constraint) PASS — 9 patterns para validar DDL JSON CHECK em produção (Management API + convalidated + post-rollback verify)
 - [project_epic_35_qa_patterns.md](project_epic_35_qa_patterns.md) — Epic 35 (Roles & Permissions) QA patterns: 17 módulos canônicos, fallback hardcoded espelhado, grep patterns p/ validar migração completa de guards
+- [project_epic_52_qa_patterns.md](project_epic_52_qa_patterns.md) — Epic 52 (agente CRM read-only) QA: 52-1/52-4 PASS validado em runtime DEV; user_role() (NÃO JWT app_metadata); REVOKE deterministico p/ append-only no Supabase (TRUNCATE não passa RLS); admin-only testado c/ non-admin da MESMA org; SEC-002 forward-gate da 52-2

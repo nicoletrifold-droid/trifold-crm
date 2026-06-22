@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 import Link from "next/link"
 import { AlertCircle, Calendar, CheckCircle2, Filter, Users, UserX } from "lucide-react"
 
@@ -26,11 +27,18 @@ export default async function DashboardPage() {
   monday.setDate(monday.getDate() - monday.getDay() + 1)
 
 
-  const [leadsToday, pipeline, properties, stageTotalsResult, gerenteCountsResult, gerenteFunnelResult] = await Promise.all([
+  const [leadsToday, activeLeadsResult, pipeline, properties, stageTotalsResult, gerenteCountsResult, gerenteFunnelResult] = await Promise.all([
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
       .gte("created_at", today.toISOString()),
+    // Leads ativos = MESMA regra da lista "Em atendimento" (fonte única)
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .not("stage_id", "in", `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`),
     supabase
       .from("kanban_stages")
       .select("id, name, slug, color, position")
@@ -65,12 +73,9 @@ export default async function DashboardPage() {
     .filter(([id]) => activeStageIds.has(id))
     .reduce((a, [, b]) => a + b, 0)
 
-  // Leads ativos = pipeline total excluindo represamento e banco histórico
-  const excludedSlugs = new Set(["represamento", "corretores-antigo"])
-  const excludedCount = stages
-    .filter((s) => excludedSlugs.has(s.slug))
-    .reduce((a, s) => a + (stageCounts[s.id] ?? 0), 0)
-  const activeLeads = totalLeads - excludedCount
+  // Leads ativos = contagem direta com a MESMA regra da lista "Em atendimento"
+  // (is_active=true + exclusão de perdidos/acervo). Fonte única → números batem.
+  const activeLeads = activeLeadsResult.count ?? 0
 
   const gerenteCounts = (gerenteCountsResult.data ?? null) as Counts | null
   const gerenteFunnel = (gerenteFunnelResult.data ?? []) as FunnelRow[]
@@ -160,30 +165,42 @@ export default async function DashboardPage() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <Link
+          href="/dashboard/leads?criados=hoje"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads hoje</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
             {leadsToday.count ?? 0}
           </p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        </Link>
+        <Link
+          href="/dashboard/leads"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads ativos</p>
           <p className="mt-1 text-3xl font-bold text-orange-600 dark:text-orange-400">{activeLeads}</p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        </Link>
+        <Link
+          href="/dashboard/pipeline"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Total no pipeline</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">{totalLeads}</p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        </Link>
+        <Link
+          href="/dashboard/properties"
+          className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+        >
           <p className="text-sm text-gray-500 dark:text-stone-400">Empreendimentos</p>
           <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
             {properties.data?.length ?? 0}
           </p>
-        </div>
+        </Link>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Unidades totais</p>
-          <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-stone-100">
-            {properties.data?.reduce((a, p) => a + (p.total_units ?? 0), 0) ?? 0}
+          <p className="text-sm text-gray-500 dark:text-stone-400">Unidades disponíveis</p>
+          <p className="mt-1 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+            {properties.data?.reduce((a, p) => a + (p.available_units ?? 0), 0) ?? 0}
           </p>
         </div>
       </div>
@@ -228,43 +245,66 @@ export default async function DashboardPage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {properties.data?.map((property) => (
+          {properties.data?.map((property) => {
+            const soldPct =
+              property.total_units && property.available_units != null
+                ? Math.round(
+                    ((property.total_units - property.available_units) / property.total_units) * 100
+                  )
+                : null
+            return (
             <Link
               key={property.id}
               href={`/dashboard/properties/${property.id}`}
-              className="flex items-center justify-between rounded-md border p-4 hover:bg-gray-50 dark:border-stone-800 dark:hover:bg-stone-800/40"
+              className="rounded-md border p-4 hover:bg-gray-50 dark:border-stone-800 dark:hover:bg-stone-800/40"
             >
-              <div>
-                <p className="font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
-                <p className="text-sm text-gray-500 dark:text-stone-400">
-                  {property.city} &middot; {property.total_units} unidades
-                  {property.available_units != null && (
-                    <>
-                      {" · "}
-                      <span className="font-medium text-emerald-600 dark:text-emerald-300">
-                        {property.available_units} disponíveis
-                      </span>
-                    </>
-                  )}
-                </p>
-              </div>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  property.status === "selling"
-                    ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-stone-100">{property.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-stone-400">
+                    {property.city} &middot; {property.total_units} unidades
+                    {property.available_units != null && (
+                      <>
+                        {" · "}
+                        <span className="font-medium text-emerald-600 dark:text-emerald-300">
+                          {property.available_units} disponíveis
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    property.status === "selling"
+                      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                      : property.status === "launching"
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+                      : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
+                  }`}
+                >
+                  {property.status === "selling"
+                    ? "Em venda"
                     : property.status === "launching"
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-                    : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
-                }`}
-              >
-                {property.status === "selling"
-                  ? "Em venda"
-                  : property.status === "launching"
-                  ? "Lançamento"
-                  : property.status}
-              </span>
+                    ? "Lançamento"
+                    : property.status}
+                </span>
+              </div>
+              {soldPct != null && (
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-stone-800">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 dark:bg-emerald-400"
+                      style={{ width: `${soldPct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium tabular-nums text-gray-400 dark:text-stone-500">
+                    {soldPct}% vendido
+                  </span>
+                </div>
+              )}
             </Link>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>

@@ -91,7 +91,7 @@ export default async function LeadDetailPage({
     .select(
       `
       id, channel, status, last_message_at,
-      messages:messages(id, role, content, created_at)
+      messages:messages(id, role, content, created_at, metadata)
     `
     )
     .eq("lead_id", id)
@@ -99,6 +99,26 @@ export default async function LeadDetailPage({
     .order("created_at", { referencedTable: "messages", ascending: false })
     .limit(5)
     .limit(20, { referencedTable: "messages" })
+
+  // Resolve broker names for messages with role='broker'
+  const brokerUserIds = [
+    ...new Set(
+      (conversations ?? [])
+        .flatMap((c) => c.messages ?? [])
+        .filter((m) => m.role === "broker" && (m.metadata as Record<string, unknown>)?.sent_by)
+        .map((m) => (m.metadata as Record<string, unknown>).sent_by as string)
+    ),
+  ]
+  const brokerNames: Record<string, string> = {}
+  if (brokerUserIds.length > 0) {
+    const { data: brokerUsers } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", brokerUserIds)
+    brokerUsers?.forEach((u) => {
+      if (u.id) brokerNames[u.id] = ((u.name as string) ?? "").split(" ")[0] ?? (u.name as string)
+    })
+  }
 
   // Fetch conversation state (collected_data)
   const { data: convState } = await supabase
@@ -291,6 +311,7 @@ export default async function LeadDetailPage({
                   role: string
                   content: string
                   created_at: string
+                  metadata: Record<string, unknown> | null
                 }>
                 const sortedMessages = [...messages].sort(
                   (a, b) =>
@@ -338,7 +359,7 @@ export default async function LeadDetailPage({
                                   : msg.role === "assistant"
                                     ? "IA"
                                     : msg.role === "broker"
-                                      ? "Corretor"
+                                      ? `Corretor${brokerNames[msg.metadata?.sent_by as string] ? " · " + brokerNames[msg.metadata?.sent_by as string] : ""}`
                                       : msg.role}
                               </div>
                               <p className="whitespace-pre-wrap">{msg.content}</p>

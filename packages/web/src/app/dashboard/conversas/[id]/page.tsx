@@ -64,11 +64,38 @@ export default async function ConversationDetailPage({
   } | null
 
   // Fetch all messages ordered by created_at ascending
-  const { data: messages } = await supabase
+  const { data: rawMessages } = await supabase
     .from("messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, created_at, metadata")
     .eq("conversation_id", id)
     .order("created_at", { ascending: true })
+
+  const messages = (rawMessages ?? []) as Array<{
+    id: string
+    role: string
+    content: string
+    created_at: string
+    metadata: Record<string, unknown> | null
+  }>
+
+  // Resolve broker names (single query, no N+1)
+  const brokerUserIds = [
+    ...new Set(
+      messages
+        .filter((m) => m.role === "broker" && m.metadata?.sent_by)
+        .map((m) => m.metadata!.sent_by as string)
+    ),
+  ]
+  const brokerNames: Record<string, string> = {}
+  if (brokerUserIds.length > 0) {
+    const { data: brokerUsers } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", brokerUserIds)
+    brokerUsers?.forEach((u) => {
+      if (u.id) brokerNames[u.id] = ((u.name as string) ?? "").split(" ")[0] ?? (u.name as string)
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -123,6 +150,10 @@ export default async function ConversationDetailPage({
                 align: "justify-start",
                 bubble: "bg-gray-100 text-gray-800 dark:bg-stone-800 dark:text-stone-200",
               }
+              const displayLabel =
+                msg.role === "broker"
+                  ? `Corretor${brokerNames[msg.metadata?.sent_by as string] ? " · " + brokerNames[msg.metadata?.sent_by as string] : ""}`
+                  : config.label
 
               return (
                 <div key={msg.id} className={`flex ${config.align}`}>
@@ -130,7 +161,7 @@ export default async function ConversationDetailPage({
                     className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${config.bubble}`}
                   >
                     <div className="mb-1 text-[10px] font-medium uppercase opacity-60">
-                      {config.label}
+                      {displayLabel}
                     </div>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                     <div className="mt-1 text-[10px] opacity-50">

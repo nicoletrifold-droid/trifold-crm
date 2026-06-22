@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { softDelete } from "@web/lib/api-utils"
+import { IMOVEIS_EDIT_ROLES, IMOVEIS_CREATE_ROLES } from "@web/lib/permissions-imoveis"
 
 export async function GET(
   _req: NextRequest,
@@ -37,7 +38,8 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  // Editar empreendimento: admin/supervisor/obras (fonte única).
+  const forbidden = requireRole(appUser, [...IMOVEIS_EDIT_ROLES])
   if (forbidden) return forbidden
 
   const body = await request.json()
@@ -113,7 +115,8 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  // Excluir empreendimento: admin/supervisor (fonte única).
+  const forbidden = requireRole(appUser, [...IMOVEIS_CREATE_ROLES])
   if (forbidden) return forbidden
 
   const result = await softDelete(supabase, "properties", id, appUser.org_id)

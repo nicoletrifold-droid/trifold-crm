@@ -5,7 +5,6 @@ import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
 import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
-import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
 import { shouldReactivateAi } from "@web/lib/broker/broker-takeover-status"
@@ -424,7 +423,7 @@ export async function POST(request: NextRequest) {
   // will enrich the row's metadata if media is downloaded. Worst case: text
   // is empty for media-only messages — Nicole still has the conversation.
   if (text || mediaMetadata.media_type) {
-    await supabase.from("messages").insert({
+    const { error: insertErr } = await supabase.from("messages").insert({
       conversation_id: conversation.id,
       role: "user",
       content: text || "",
@@ -434,10 +433,28 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Unique constraint violation (PG 23505) = duplicate wamid that slipped
+    // past the application-level check due to a race condition. Discard
+    // silently — returning here prevents the after() block (Nicole) from
+    // being scheduled for this duplicate request.
+    if (insertErr?.code === "23505") {
+      logEvent({
+        level: "info",
+        category: "webhook",
+        event_type: "duplicate_wamid_skipped",
+        message: `Duplicate wamid ${messageId} caught at INSERT — race condition discarded`,
+        metadata: { wamid: messageId, conversation_id: conversation.id },
+        source: "api/webhook/whatsapp",
+      })
+      return NextResponse.json({ status: "ok" })
+    }
+
     // Story 63-12 — push ao corretor quando o lead responde. `after()` dedicado
     // e independente do bloco da Nicole (abaixo): uma falha no push não afeta o
     // pipeline e vice-versa. O gate (corretor já assumiu) + Q3 (sem corretor →
     // nada) vivem dentro do helper. Fire-and-forget: não bloqueia o HTTP 200.
+    // Vem APÓS o early-return de wamid duplicado (23505): uma reentrega não
+    // dispara push repetido ao corretor.
     after(async () => {
       await notifyBrokerOnReply({
         supabase: getSupabaseAdmin(),
@@ -604,9 +621,11 @@ export async function POST(request: NextRequest) {
           phone: phoneNormalized,
           org_id: orgId,
         })
-        void distributeLeadToNextBroker(lead.id, orgId).catch((err) =>
-          console.error("[roleta] distribution error:", err)
-        )
+
+        // NÃO distribuímos na primeira mensagem (Story 71-1). A Nicole conduz a
+        // conversa; o cron `roleta-retry` distribui só depois que a conversa
+        // esfria (≥5 min sem nova mensagem do lead), classificando o diálogo
+        // inteiro — evita distribuir um "Olá" que vira "vaga de emprego".
       }
 
       // Story 63-13 — Reativação automática da Nicole após 24h de inatividade do
@@ -644,6 +663,8 @@ export async function POST(request: NextRequest) {
         const { processMessage, createAnthropicClient } = await import(
           "@trifold/ai"
         )
+        // Story 73-1: injeta o push pro Google Calendar (mantém packages/ai desacoplado).
+        const { createCalendarEvent } = await import("@web/lib/google-calendar")
 
         const anthropic = createAnthropicClient()
 
@@ -654,6 +675,7 @@ export async function POST(request: NextRequest) {
           message: asyncText,
           orgId,
           mediaBlock: asyncMediaBlock,
+          createCalendarEvent,
           onEvent: (event) => {
             logEvent({
               ...event,

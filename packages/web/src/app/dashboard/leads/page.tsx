@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
+import { PERDIDO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 
 const PAGE_SIZE = 50
 
@@ -27,15 +28,10 @@ function buildPageHref(
   return `?${p.toString()}`
 }
 
-const PERDIDO_STAGE_IDS = [
-  "00000000-0000-0000-0001-000000000008", // Represamento
-  "95327bd7-3e88-4038-aa16-250a74ab085c", // Não Qualificado
-]
-
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; criados?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -74,8 +70,9 @@ export default async function LeadsPage({
     countQuery = countQuery.in("stage_id", PERDIDO_STAGE_IDS)
     void inList
   } else {
-    query = query.not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
-    countQuery = countQuery.not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
+    const excluded = `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`
+    query = query.not("stage_id", "in", excluded)
+    countQuery = countQuery.not("stage_id", "in", excluded)
   }
 
   if (params.search) {
@@ -103,6 +100,16 @@ export default async function LeadsPage({
     const daysAgo = new Date(Date.now() - Number(params.days) * 86400000).toISOString()
     query = query.lt("updated_at", daysAgo)
     countQuery = countQuery.lt("updated_at", daysAgo)
+  }
+
+  // "criados=hoje" — leads criados a partir da meia-noite de hoje.
+  // Mesma lógica do card "Leads hoje" do dashboard (setHours(0,0,0,0)).
+  if (params.criados === "hoje") {
+    const todayMidnight = new Date()
+    todayMidnight.setHours(0, 0, 0, 0)
+    const iso = todayMidnight.toISOString()
+    query = query.gte("created_at", iso)
+    countQuery = countQuery.gte("created_at", iso)
   }
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
