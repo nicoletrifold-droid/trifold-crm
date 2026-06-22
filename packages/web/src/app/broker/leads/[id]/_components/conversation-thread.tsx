@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
 import { BrokerMessageInput, type OptimisticMessage } from "./broker-message-input"
 import { getBubbleStyle } from "./bubble-styles"
@@ -71,7 +72,29 @@ export function ConversationThread({
   notifyOnReply = false,
   conversationIds = [],
 }: ConversationThreadProps) {
+  const router = useRouter()
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
+
+  // Story 63-14 — estado local de `is_ai_active` para transição instantânea do
+  // banner (Estado B → A) ao clicar "Devolver para Nicole", sem aguardar o
+  // `router.refresh()`. Sincroniza quando o prop muda (pós-refresh do servidor).
+  const [localIsAiActive, setLocalIsAiActive] = useState(isAiActive)
+  useEffect(() => {
+    setLocalIsAiActive(isAiActive)
+  }, [isAiActive])
+
+  // Story 63-14 — devolve o atendimento à Nicole. Atualiza o estado local
+  // imediatamente (banner transiciona) e dispara `router.refresh()` para
+  // sincronizar com o servidor. Lança em falha → o `AiStatusBanner` captura
+  // no try/catch e restaura o botão.
+  const handleResumeAi = async () => {
+    const res = await fetch(`/api/leads/${lead.id}/resume-ai`, {
+      method: "POST",
+    })
+    if (!res.ok) throw new Error(`resume-ai failed: ${res.status}`)
+    setLocalIsAiActive(true)
+    router.refresh()
+  }
 
   // Story 63-11 — mensagens recebidas via Supabase Realtime (lead respondeu /
   // Nicole respondeu / corretor enviou em outra aba), antes de o `router.refresh()`
@@ -148,7 +171,7 @@ export function ConversationThread({
   // é a mesma do cron de follow-up (brokerSentRecently), não o is_ai_active.
   // Story 63-11 — usa a lista combinada: se um `role='broker'` chega de outra
   // aba, o banner transiciona Estado A → Estado B sem reload (AC7).
-  const brokerActive = deriveBrokerActive(serverPlusRealtime, isAiActive)
+  const brokerActive = deriveBrokerActive(serverPlusRealtime, localIsAiActive)
 
   const allMessages = mergeMessages(serverPlusRealtime, optimistic)
 
@@ -160,7 +183,7 @@ export function ConversationThread({
           <WindowStatusBadge lastMessageAt={localLastMessageAt} isWhatsApp={isWhatsApp} />
         </div>
         <div className="px-5 pb-3">
-          <AiStatusBanner brokerActive={brokerActive} />
+          <AiStatusBanner brokerActive={brokerActive} onResumeAi={handleResumeAi} />
         </div>
       </div>
 
