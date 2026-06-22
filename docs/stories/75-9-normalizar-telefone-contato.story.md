@@ -1,7 +1,7 @@
 # Story 75-9 — Normalizar telefones de contato (corretor/usuário/cliente CRM) com normalizePhoneBR
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 
@@ -64,3 +64,4 @@ Telefones de contato passam a ficar em formato canônico → WhatsApp ao correto
 - @po (Pax): validação → GO. Status Draft → Ready.
 - @dev (Dex): normalização nos 6 endpoints de contato. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (dry-run do backfill validado). Pronta para @devops *push + backfill.
+- @devops (Gage): backfill (34 registros) aplicado em prod + push (commit fc85b45). Status → Done.
