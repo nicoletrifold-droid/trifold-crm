@@ -149,8 +149,8 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
           </span>
 
           {/* Story 50-2 (Epic 50): CreativeChip substitui SourceBadge quando há criativo Meta resolvido.
-              Fallback gracioso para SourceBadge + utm_campaign quando creative === null ou thumbnail falha (degradação no próprio CreativeChip via onError). */}
-          {lead.creative && lead.creative.thumbnailUrl ? (
+              Fallback gracioso para SourceBadge + utm_content (ad_name) quando creative === null. */}
+          {lead.creative ? (
             <CreativeChip
               adId={lead.creative.adId}
               adName={lead.creative.adName}
@@ -164,7 +164,7 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
               {lead.source && (
                 <SourceBadge
                   source={lead.source}
-                  label={lead.source === "website" && lead.utm_content ? lead.utm_content : undefined}
+                  label={lead.utm_content ?? undefined}
                   size="xs"
                 />
               )}
