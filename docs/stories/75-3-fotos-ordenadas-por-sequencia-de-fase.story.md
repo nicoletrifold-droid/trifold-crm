@@ -1,7 +1,7 @@
 # Story 75-3 — Fotos ordenadas pela sequência das fases (portal + admin)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente
 - **Branch:** main
 
@@ -68,3 +68,4 @@ O cliente acompanha a evolução da obra na ordem real das fases; o admin gerenc
 - @po (Pax): validação 10/10 → GO. Status Draft → Ready.
 - @dev (Dex): helper + portal + admin implementados. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (inclui validação em dados de produção). Pronta para @devops *push.
+- @devops (Gage): push em produção (commit cb16784). Status → Done.

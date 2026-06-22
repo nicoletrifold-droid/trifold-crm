@@ -1,7 +1,7 @@
 # Story 75-5 — Notificações do cliente: defaults sem opt-in, evento de progresso e disparo na aprovação
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente
 - **Branch:** main
 
@@ -68,3 +68,4 @@ Faz as notificações realmente chegarem (e-mail por padrão para todos os clien
 - @po (Pax): validação 10/10 → GO (riscos de volume de e-mail documentados). Status Draft → Ready.
 - @dev (Dex): Fix 1/2/3 implementados. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (simulação 0→43 em prod). Pronta para @devops *push.
+- @devops (Gage): push em produção (commit cb16784). Status → Done.

@@ -1,7 +1,7 @@
 # Story 75-2 — Datas de fase obrigatórias (uso interno) e ocultas no portal do cliente
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente
 - **Branch:** main
 
@@ -89,3 +89,4 @@ type-check: 0 erros nos 6 arquivos (remanescentes pré-existentes em `email-temp
 - @po (Pax): validação 10/10 → GO. Status Draft → Ready.
 - @dev (Dex): implementados os 6 arquivos (admin obrigatório + portal oculta datas). Status Ready → InReview.
 - @qa (Quinn): QA gate PASS. Pronta para @devops *push.
+- @devops (Gage): push em produção (commit cb16784). Status → Done.

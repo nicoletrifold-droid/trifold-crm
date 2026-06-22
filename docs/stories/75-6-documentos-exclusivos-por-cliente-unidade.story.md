@@ -1,7 +1,7 @@
 # Story 75-6 — Documentos exclusivos por cliente/unidade (além dos gerais da obra)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente
 - **Branch:** main
 
@@ -88,3 +88,4 @@ Permite enviar documentos sensíveis e individuais (contratos, distratos, recibo
 - @data-engineer (Dara): migration 104 (coluna + índice + helper + RLS).
 - @dev (Dex): form/página/tabs/API/aprovação implementados. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (estático + dados reais); RLS a verificar pós-deploy. Pronta para @devops *push (aplicar migration 104).
+- @devops (Gage): push em produção (commit cb16784). Status → Done.

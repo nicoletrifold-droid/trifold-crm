@@ -59,4 +59,4 @@ Linguagem mais clara pro cliente ("Chat" comunica melhor a conversa em tempo rea
 - @po (Pax): validação 10/10 → GO. Status Draft → Ready.
 - @dev (Dex): rename + reorder + badge por rota no sidebar. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS. Pronta para @devops *push.
-- @devops: pendente de push (acumulando com 75-2, 75-3).
+- @devops (Gage): push em produção (commit cb16784). Status → Done.
