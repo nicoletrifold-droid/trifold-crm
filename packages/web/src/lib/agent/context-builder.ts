@@ -82,7 +82,7 @@ type AbsolutePattern = { pattern: RegExp; resolve: (m: RegExpMatchArray) => Date
 const DATE_RANGE_PATTERNS: AbsolutePattern[] = [
   // "de 01/06/2026 a 15/06/2026" (com ano explícito)
   {
-    pattern: /(?:de|entre)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:at[eé]?|e)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
+    pattern: /(?:de|entre)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:at[eé]?|[ae])\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
     resolve: (m) => ({
       startDate: _isoDate(+m[3]!, +m[2]!, +m[1]!),
       endDate:   _isoDate(+m[6]!, +m[5]!, +m[4]!),
@@ -90,7 +90,7 @@ const DATE_RANGE_PATTERNS: AbsolutePattern[] = [
   },
   // "de 1 a 15 de junho [de 2026]" / "entre 1 e 15 de junho"
   {
-    pattern: /(?:de|entre)\s+(\d{1,2})\s+(?:at[eé]?|e)\s+(\d{1,2})\s+de\s+([\wçã]+)(?:\s+de\s+(\d{4}))?/i,
+    pattern: /(?:de|entre)\s+(\d{1,2})\s+(?:at[eé]?|[ae])\s+(\d{1,2})\s+de\s+([\wçã]+)(?:\s+de\s+(\d{4}))?/i,
     resolve: (m) => {
       const mn = _monthNum(m[3]!)
       if (!mn) return null
@@ -108,7 +108,7 @@ const DATE_RANGE_PATTERNS: AbsolutePattern[] = [
   },
   // "de 01/06 a 15/06" / "01/06 a 15/06" / "01/06 até 15/06"
   {
-    pattern: /(?:de\s+)?(\d{1,2})\/(\d{1,2})\s+(?:at[eé]?|e)\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/i,
+    pattern: /(?:de\s+)?(\d{1,2})\/(\d{1,2})\s+(?:at[eé]?|[ae])\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/i,
     resolve: (m) => {
       const today = new Date()
       const year = m[5] ? +m[5] : today.getFullYear()
