@@ -67,6 +67,28 @@ interface LogEntry {
   users: { name: string; role: string } | null
 }
 
+// ─── FunnelBar component (Story 52-5) ──────────────────────────────────────
+
+function FunnelBar({ stages }: { stages: { label: string; value: number }[] }) {
+  const max = Math.max(...stages.map((s) => s.value), 1)
+  return (
+    <div className="my-2 space-y-1.5">
+      {stages.map((s, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <span className="w-24 shrink-0 truncate text-right text-gray-500 dark:text-stone-400">{s.label}</span>
+          <div className="h-4 flex-1 overflow-hidden rounded-sm bg-gray-100 dark:bg-stone-700">
+            <div
+              className="h-full rounded-sm bg-orange-500 dark:bg-orange-600"
+              style={{ width: `${(s.value / max) * 100}%` }}
+            />
+          </div>
+          <span className="w-10 text-right text-gray-600 dark:text-stone-300">{s.value}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Inline markdown renderer ───────────────────────────────────────────────
 
 function renderMarkdown(text: string): React.ReactNode[] {
@@ -75,6 +97,24 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
   segments.forEach((block, bi) => {
     const lines = block.split("\n")
+
+    // Funnel bar (Story 52-5): ```funnel code fence → FunnelBar component
+    if (lines[0]?.trim() === "```funnel" && lines[lines.length - 1]?.trim() === "```") {
+      const stages = lines
+        .slice(1, -1)
+        .filter((l) => l.trim() && l.includes(":"))
+        .map((l) => {
+          const sep = l.indexOf(":")
+          const label = l.slice(0, sep).trim()
+          const value = parseFloat(l.slice(sep + 1).replace("%", "").trim())
+          return { label, value }
+        })
+        .filter((s) => s.label && !isNaN(s.value))
+      if (stages.length > 0) {
+        result.push(<FunnelBar key={bi} stages={stages} />)
+        return
+      }
+    }
 
     // Table detection: lines with | separators
     if (lines.length >= 2 && lines[0]?.includes("|") && lines[1]?.includes("---")) {
@@ -753,7 +793,7 @@ export default function AgentChatPanel({
                   ? `Analisando "${contextName}"`
                   : "Análise do portfólio Meta Ads"}
               </p>
-              <p className="mt-1 text-xs">Pergunte sobre performance, CPL, criativos ou solicite recomendações.</p>
+              <p className="mt-1 text-xs">{"Pergunte sobre performance, CPL, criativos ou funil. Ex.: \"Qual campanha traz mais leads que fecham?\" ou \"Onde os leads travam no funil?\""}</p>
             </div>
           )}
 

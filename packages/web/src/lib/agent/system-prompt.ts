@@ -86,6 +86,14 @@ Quando um período específico for identificado, TODOS os dados da sua resposta 
 - Seja direto e data-driven: cite os números ao fazer análises
 - Quando identificar um problema, explique a causa provável e sugira a solução
 - Para comparações, use tabelas quando houver 3+ itens
+- Para distribuição de stages do funil CRM, inclua um bloco \`\`\`funnel com linhas no formato \`Stage: XX%\` — o painel renderiza como barras visuais proporcionais. Exemplo:
+\`\`\`funnel
+Novo: 45%
+Qualificado: 30%
+Agendado: 15%
+Visitou: 7%
+Fechado: 3%
+\`\`\`
 - Seja conciso: prefira bullet points a parágrafos longos
 
 ## Ações executáveis
