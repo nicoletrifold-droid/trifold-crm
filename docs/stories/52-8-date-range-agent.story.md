@@ -975,7 +975,32 @@ Localizar a seção `## Análise por período` em `system-prompt.ts` e adicionar
 
 ## QA Results
 
-_(a preencher por @qa)_
+**Data:** 2026-06-22 | **Agente:** @qa (Quinn) | **Verdict:** ✅ PASS with CONCERNS
+
+### Gate Decision: PASS
+
+Todos os 17 ACs verificados. Sem issues CRITICAL ou HIGH.
+
+| Check | Resultado | Notas |
+|-------|-----------|-------|
+| Code review | ✅ PASS | Bugfix regex aplicado em T10 (conectores `[ae]`) |
+| Unit tests | ✅ PASS | TSC/lint clean; NL extraction validada via script |
+| Acceptance criteria | ✅ PASS | 16/17 full + 1 parcial (AC15) |
+| Regressões | ✅ PASS | extractPeriodDays preservada; overload INTEGER intacto |
+| Performance | ✅ PASS | Cache keys isoladas por startDate:endDate |
+| Segurança | ✅ PASS | REVOKE/GRANT corretos; SECURITY INVOKER; sem SQL injection |
+| Documentação | ✅ PASS | System prompt e change log atualizados |
+
+### Issues Documentados
+
+| ID | Severidade | AC | Descrição | Recomendação |
+|----|-----------|-----|-----------|--------------|
+| QA-52-8-1 | MEDIUM | AC15 | Cap de 90 dias aplicado silenciosamente pelo servidor — o agente não recebe sinal explícito de truncamento; "com aviso" do system prompt depende de inferência do LLM | Story futura: injetar campo `date_window_capped: true` no contexto quando truncamento ocorrer |
+| QA-52-8-2 | LOW | — | JSDoc de `fetchPipelineAggregates` (linha 681) e `fetchCreativePerformance` (linha 976) ainda referenciam `@param pDays` | Atualizar em manutenção normal |
+| QA-52-8-3 | LOW | — | `buildGlobalContext` cacheia todos os intervalos; `fetchPipelineAggregates`/`fetchCreativePerformance` só cacheiam default 30d | Inconsistência menor; pré-existente; alinhar em refactor futuro |
+
+### Aprovado para push
+Story pode avançar para `@devops *push`.
 
 ---
 
