@@ -1,7 +1,7 @@
 # Story 75-10 — Unificar lookups de lead por telefone para usar phone_normalized
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 
@@ -66,3 +66,4 @@ Matching/dedup de lead mais confiável independente do formato digitado/recebido
 - @po (Pax): validação → GO. Status Draft → Ready.
 - @dev (Dex): 3 lookups migrados p/ phone_normalized + fallback; escopo reduzido (webhooks→backlog). Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (TS↔DB validado em prod). Pronta para @devops *push.
+- @devops (Gage): push em produção (commit b59ca96). Status → Done.
