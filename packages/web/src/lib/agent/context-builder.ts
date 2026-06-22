@@ -348,6 +348,89 @@ export function formatProvenanceBlock(block: ProvenanceBlock, today: string): st
   return lines.join("\n")
 }
 
+/** Status de proveniência consumido pela UI do chat (Story 76-3). */
+export interface ProvenanceStatus {
+  /** true quando a última sync terminou há mais de STALENESS_THRESHOLD_HOURS. */
+  isStale: boolean
+  /** true quando o status do último ciclo indica erro. */
+  isError: boolean
+  /** finished_at do último ciclo de sync (null quando indisponível). */
+  lastSyncAt: string | null
+  /** error_message do último ciclo de sync (null quando ausente). */
+  errorMessage: string | null
+}
+
+/**
+ * fetchProvenance — executa as 3 queries de proveniência e deriva o status via
+ * `computeProvenance` (Story 76-1, sem duplicar a lógica de staleness/erro). Usado
+ * pelo endpoint GET /api/agent/context-meta (Story 76-3). NULL-safe e fail-transparente:
+ * cada query é envolvida por `safeProvenanceData`; qualquer erro vira null (sem aviso).
+ *
+ * Lê apenas dados da org informada (mesmas tabelas/colunas de `buildGlobalContext`);
+ * o isolamento multi-tenant vem do client autenticado passado pelo caller (AC7).
+ *
+ * @param days Janela usada no MAX(synced_at) (default 30, alinhado a buildGlobalContext).
+ */
+export async function fetchProvenance(
+  supabase: SupabaseClient,
+  orgId: string,
+  days = 30,
+): Promise<ProvenanceStatus> {
+  const today = new Date().toISOString().split("T")[0]!
+  const dateNdAgo = (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split("T")[0]! })()
+
+  const [maxSyncedRow, accountRow, syncLogRow] = await Promise.all([
+    safeProvenanceData<{ synced_at: string | null }>(
+      supabase
+        .from("meta_insights_daily")
+        .select("synced_at")
+        .eq("org_id", orgId)
+        .eq("level", "campaign")
+        .gte("date", dateNdAgo)
+        .lte("date", today)
+        .order("synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+    safeProvenanceData<{ last_synced_at: string | null }>(
+      supabase
+        .from("meta_ad_accounts")
+        .select("last_synced_at")
+        .eq("org_id", orgId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+    safeProvenanceData<{
+      status: string | null
+      finished_at: string | null
+      started_at: string | null
+      error_message: string | null
+    }>(
+      supabase
+        .from("meta_sync_log")
+        .select("status, finished_at, started_at, error_message")
+        .eq("org_id", orgId)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+  ])
+
+  const block = computeProvenance({
+    maxSyncedAt: maxSyncedRow?.synced_at ?? null,
+    lastAccountSync: accountRow?.last_synced_at ?? null,
+    syncLog: syncLogRow ?? null,
+  })
+
+  return {
+    isStale: block.isStale,
+    isError: block.isError,
+    lastSyncAt: block.lastSyncFinishedAt,
+    errorMessage: syncLogRow?.error_message ?? null,
+  }
+}
+
 /**
  * safeProvenanceData — resolve uma query de proveniência para `data` ou null,
  * engolindo qualquer erro (NFR-OBS-1: proveniência nunca derruba a montagem do
