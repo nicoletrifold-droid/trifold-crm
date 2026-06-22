@@ -42,7 +42,7 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim() || !startDate || !endDate) return
     setError(null)
     setSaving(true)
     try {
@@ -147,24 +147,26 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
-                Data de início
+              <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600 dark:text-stone-400">
+                Data de início <span className="text-red-400">*</span>
               </label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                required
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
-                Data de término
+              <label className="mb-1 flex items-center gap-0.5 text-xs font-medium text-gray-600 dark:text-stone-400">
+                Data de término <span className="text-red-400">*</span>
               </label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                required
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
               />
             </div>
@@ -182,7 +184,7 @@ export function FaseEditModal({ obraId, fase, onClose }: FaseEditModalProps) {
             </button>
             <button
               type="submit"
-              disabled={saving || !name.trim()}
+              disabled={saving || !name.trim() || !startDate || !endDate}
               className="flex-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
             >
               {saving ? "Salvando..." : "Salvar"}

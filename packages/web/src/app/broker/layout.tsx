@@ -52,15 +52,44 @@ export default async function BrokerLayout({
     getBrokerUnreadTotal(supabase, user.orgId, user.id),
   ])
 
-  const navItems = NAV_ITEMS
-    .map((item) =>
-      item.href === "/broker/agenda" ? { ...item, badge: agendaCount ?? 0 } : item
-    )
-    .map((item) =>
-      item.href === "/broker/chat"
-        ? { ...item, badge: chatUnread, badgeTone: "green" as const }
-        : item
-    )
+  // Story 75-8 — badge de novos leads distribuídos desde a última visita a "Meus Leads".
+  // Fonte: lead_distribution_log (broker_id = brokers.id; created_at > seen_at).
+  let leadsCount = 0
+  const { data: brokerRow } = await supabase
+    .from("brokers")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (brokerRow) {
+    const { data: seenRow } = await supabase
+      .from("users")
+      .select("leads_notifications_seen_at")
+      .eq("id", user.id)
+      .maybeSingle()
+    const seenAt =
+      (seenRow as { leads_notifications_seen_at: string | null } | null)
+        ?.leads_notifications_seen_at ?? "1970-01-01T00:00:00Z"
+
+    const { count } = await supabase
+      .from("lead_distribution_log")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", user.orgId)
+      .eq("broker_id", brokerRow.id)
+      .eq("status", "distributed")
+      .gt("created_at", seenAt)
+    leadsCount = count ?? 0
+  }
+
+  // Badges: Agenda (compromissos), Chat (não-lidas, verde — Story 63-19),
+  // Meus Leads (novos distribuídos — Story 75-8).
+  const navItems = NAV_ITEMS.map((item) => {
+    if (item.href === "/broker/agenda") return { ...item, badge: agendaCount ?? 0 }
+    if (item.href === "/broker/chat")
+      return { ...item, badge: chatUnread, badgeTone: "green" as const }
+    if (item.href === "/broker/leads") return { ...item, badge: leadsCount }
+    return item
+  })
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">

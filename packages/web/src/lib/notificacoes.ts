@@ -29,8 +29,7 @@ const EVENTO_URL_PATH: Record<EventoNotificacao, string> = {
   progresso: "",
 }
 
-interface ObraNotificacaoPrefs {
-  user_id: string
+interface NotifPrefs {
   email_enabled: boolean
   whatsapp_enabled: boolean
   push_enabled: boolean
@@ -38,10 +37,19 @@ interface ObraNotificacaoPrefs {
   notify_novo_documento: boolean
   notify_nova_mensagem: boolean
   notify_progresso: boolean
-  users:
-    | { name: string; email: string; phone: string | null }
-    | { name: string; email: string; phone: string | null }[]
-    | null
+}
+
+// Story 75-5: cliente que nunca salvou preferências não tem linha em
+// `obra_notificacao_prefs`. Usamos estes defaults (espelham a UI e a API) para
+// que e-mail e todos os eventos cheguem por padrão; WhatsApp/push seguem opt-in.
+const DEFAULT_PREFS: NotifPrefs = {
+  email_enabled: true,
+  whatsapp_enabled: false,
+  push_enabled: false,
+  notify_nova_foto: true,
+  notify_novo_documento: true,
+  notify_nova_mensagem: true,
+  notify_progresso: true,
 }
 
 export async function notifyClientes(
@@ -65,26 +73,36 @@ export async function notifyClientes(
 
     const userIds = vinculos.map((v) => v.user_id)
 
-    const { data: prefs } = await admin
-      .from("obra_notificacao_prefs")
-      .select(
-        "user_id, email_enabled, whatsapp_enabled, push_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso, users(name, email, phone)"
-      )
-      .in("user_id", userIds)
+    // Story 75-5: considerar TODOS os vinculados; quem não tem linha de prefs
+    // usa DEFAULT_PREFS (e-mail + eventos ligados por padrão).
+    const [usersRes, prefsRes] = await Promise.all([
+      admin.from("users").select("id, name, email, phone").in("id", userIds),
+      admin
+        .from("obra_notificacao_prefs")
+        .select(
+          "user_id, email_enabled, whatsapp_enabled, push_enabled, notify_nova_foto, notify_novo_documento, notify_nova_mensagem, notify_progresso"
+        )
+        .in("user_id", userIds),
+    ])
 
-    const prefKey = EVENTO_PREF_KEY[evento] as keyof ObraNotificacaoPrefs
+    const prefsMap = new Map(
+      ((prefsRes.data as (NotifPrefs & { user_id: string })[]) ?? []).map((p) => [
+        p.user_id,
+        p,
+      ])
+    )
+
+    const prefKey = EVENTO_PREF_KEY[evento] as keyof NotifPrefs
     const descricao = EVENTO_LABEL[evento]
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
     const link = `${appUrl}/cliente/${obraId}`
 
-    for (const pref of (prefs as ObraNotificacaoPrefs[]) ?? []) {
+    for (const user of usersRes.data ?? []) {
+      const pref = prefsMap.get(user.id) ?? DEFAULT_PREFS
       if (!pref[prefKey]) continue
 
-      const user = Array.isArray(pref.users) ? pref.users[0] : pref.users
-      if (!user) continue
-
-      if (pref.email_enabled) {
+      if (pref.email_enabled && user.email) {
         sendEmail({
           to: user.email,
           subject: `Atualização na sua obra — ${obraName}`,
@@ -106,7 +124,7 @@ export async function notifyClientes(
       }
 
       if (pref.push_enabled) {
-        sendPushToUser(admin, pref.user_id, {
+        sendPushToUser(admin, user.id, {
           title: descricao,
           body: `Atualização em ${obraName}`,
           url: `${appUrl}/cliente/${obraId}${EVENTO_URL_PATH[evento]}`,

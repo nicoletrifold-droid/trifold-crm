@@ -124,6 +124,10 @@ export default async function ObraPage({
 
   const statusLabel = STATUS_LABEL[obra.status] ?? obra.status
 
+  // Story 75-1 — obra Yarden não exibe o % de progresso ao cliente.
+  // Match por nome (decisão consciente; ver story 75-1 para o trade-off).
+  const hideProgress = obra.name === "Yarden"
+
   const proximosMarcos = fases
     .flatMap((f) => {
       const items: { label: string; date: string }[] = []
@@ -196,14 +200,22 @@ export default async function ObraPage({
           <h1 className="mb-6 text-3xl font-bold text-white lg:text-4xl">
             {obra.name}
           </h1>
-          <AnimatedProgressBar pct={obra.progress_pct} className="mb-2.5" />
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-white/60">
-              Progresso geral:{" "}
-              <span className="font-semibold text-[#F27A5E]">
-                {obra.progress_pct}%
+          {!hideProgress && (
+            <AnimatedProgressBar pct={obra.progress_pct} className="mb-2.5" />
+          )}
+          <div
+            className={`flex items-center text-sm ${
+              hideProgress ? "justify-end" : "justify-between"
+            }`}
+          >
+            {!hideProgress && (
+              <span className="text-white/60">
+                Progresso geral:{" "}
+                <span className="font-semibold text-[#F27A5E]">
+                  {obra.progress_pct}%
+                </span>
               </span>
-            </span>
+            )}
             <span className="text-white/60">
               Entrega prevista:{" "}
               <span className="font-medium text-white">
@@ -226,25 +238,31 @@ export default async function ObraPage({
             <p className="truncate text-[17px] font-bold text-white leading-tight">
               {currentPhase?.name ?? "—"}
             </p>
-            {currentPhase?.end_date && (
-              <p className="mt-1 text-xs font-medium text-white/60">
-                Prev. conclusão: {formatShortDate(currentPhase.end_date)}
-              </p>
-            )}
-            {!currentPhase?.end_date && currentPhase && (
+            {/* Story 75-2: datas de fase não são exibidas ao cliente — só o status. */}
+            {currentPhase && (
               <p className="mt-1 text-xs font-medium text-white/60">
                 {FASE_STATUS_LABEL[currentPhase.status] ?? currentPhase.status}
               </p>
             )}
           </Link>
 
-          {/* Progresso — não clicável */}
-          <StatCard
-            label="Progresso"
-            value={`${obra.progress_pct}%`}
-            sub={obra.status === "em_andamento" ? "↑ No prazo" : statusLabel}
-            subVariant={obra.status === "em_andamento" ? "success" : "muted"}
-          />
+          {/* Progresso / Cronograma — não clicável.
+              Story 75-1: Yarden vê só o status de prazo, sem o %. */}
+          {hideProgress ? (
+            <StatCard
+              label="Cronograma"
+              value={obra.status === "em_andamento" ? "No prazo" : statusLabel}
+              sub=""
+              valueVariant={obra.status === "em_andamento" ? "success" : "default"}
+            />
+          ) : (
+            <StatCard
+              label="Progresso"
+              value={`${obra.progress_pct}%`}
+              sub={obra.status === "em_andamento" ? "↑ No prazo" : statusLabel}
+              subVariant={obra.status === "em_andamento" ? "success" : "muted"}
+            />
+          )}
 
           {/* "Etapa Atual" clicável */}
           <Link
@@ -257,16 +275,12 @@ export default async function ObraPage({
             <p className="line-clamp-2 text-sm font-bold text-white leading-snug">
               {currentPhase?.description ?? currentPhase?.name ?? statusLabel}
             </p>
+            {/* Story 75-2: sem data de previsão — só o nome da fase. */}
             {currentPhase && (
-              <div className="mt-1 space-y-0.5">
+              <div className="mt-1">
                 <p className="truncate text-[10px] font-medium text-white/50 uppercase tracking-wide">
                   {currentPhase.name}
                 </p>
-                {currentPhase.end_date && (
-                  <p className="text-[10px] font-medium text-[#F27A5E]">
-                    Prev. {formatShortDate(currentPhase.end_date)}
-                  </p>
-                )}
               </div>
             )}
           </Link>
@@ -321,7 +335,7 @@ export default async function ObraPage({
                           </span>{" "}
                           disponibilizado{ativ.tipo === "foto" ? "a" : ""}.
                         </p>
-                        <p className="mt-0.5 text-xs text-stone-500">
+                        <p className="mt-0.5 text-xs text-stone-400">
                           {formatRelativeDate(ativ.created_at)}
                         </p>
                       </div>
@@ -355,11 +369,9 @@ export default async function ObraPage({
                       key={idx}
                       className={`rounded-lg border border-stone-800/60 border-l-4 bg-stone-950/50 px-4 py-3 ${borders[idx % borders.length]}`}
                     >
+                      {/* Story 75-2: marco listado em ordem (por data interna), sem exibir a data. */}
                       <p className="text-sm font-semibold text-white">
                         {marco.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-stone-500">
-                        {formatShortDate(marco.date)}
                       </p>
                     </li>
                   )
@@ -378,11 +390,13 @@ function StatCard({
   value,
   sub,
   subVariant = "muted",
+  valueVariant = "default",
 }: {
   label: string
   value: string
   sub: string
   subVariant?: "muted" | "highlight" | "success"
+  valueVariant?: "default" | "success"
 }) {
   const subClass =
     subVariant === "highlight"
@@ -391,12 +405,14 @@ function StatCard({
         ? "text-green-400"
         : "text-white/60"
 
+  const valueClass = valueVariant === "success" ? "text-green-400" : "text-white"
+
   return (
     <div className="rounded-xl border border-stone-800 bg-stone-900 p-4">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-stone-500">
         {label}
       </p>
-      <p className="truncate text-[17px] font-bold text-white leading-tight">
+      <p className={`truncate text-[17px] font-bold leading-tight ${valueClass}`}>
         {value}
       </p>
       {sub && (

@@ -59,8 +59,27 @@ export async function PATCH(
   ) {
     updates.progress_pct = body.progress_pct
   }
-  if ("start_date" in body) updates.start_date = body.start_date ?? null
-  if ("end_date" in body) updates.end_date = body.end_date ?? null
+  // Datas são obrigatórias: se vierem no body, não podem ser esvaziadas (Story 75-2).
+  if ("start_date" in body) {
+    const v = typeof body.start_date === "string" ? body.start_date.trim() : ""
+    if (!v) {
+      return NextResponse.json(
+        { error: "Data de início é obrigatória" },
+        { status: 400 }
+      )
+    }
+    updates.start_date = v
+  }
+  if ("end_date" in body) {
+    const v = typeof body.end_date === "string" ? body.end_date.trim() : ""
+    if (!v) {
+      return NextResponse.json(
+        { error: "Data de término é obrigatória" },
+        { status: 400 }
+      )
+    }
+    updates.end_date = v
+  }
   if ("expected_start_date" in body) {
     updates.expected_start_date = body.expected_start_date ?? null
   }

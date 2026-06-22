@@ -2,18 +2,6 @@ import { redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
 import { FASE_STATUS_BADGE, FASE_STATUS_LABEL } from "@web/lib/status-badge"
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—"
-  const d = new Date(dateStr)
-  const day = d.getUTCDate().toString().padStart(2, "0")
-  const rawMonth = d.toLocaleDateString("pt-BR", { month: "short", timeZone: "UTC" })
-  const month =
-    rawMonth.replace(".", "").charAt(0).toUpperCase() +
-    rawMonth.replace(".", "").slice(1)
-  const year = d.getUTCFullYear()
-  return `${day}/${month}/${year}`
-}
-
 interface Fase {
   id: string
   name: string
@@ -233,25 +221,7 @@ export default async function FasesPage({
                             </div>
                           </div>
 
-                          {/* Dates */}
-                          <div className="flex gap-6 text-xs text-stone-500">
-                            <div>
-                              <p className="font-medium text-white/60">
-                                {formatDate(fase.start_date)}
-                              </p>
-                              <p>Início</p>
-                            </div>
-                            <div>
-                              <p className="font-medium text-white/60">
-                                {formatDate(fase.end_date)}
-                              </p>
-                              <p>
-                                {fase.status === "concluida"
-                                  ? "Conclusão"
-                                  : "Previsão"}
-                              </p>
-                            </div>
-                          </div>
+                          {/* Story 75-2: datas de fase não exibidas ao cliente (uso interno). */}
                         </div>
                       )
                     })}

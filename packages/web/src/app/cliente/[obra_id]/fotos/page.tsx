@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { createClient } from "@web/lib/supabase/server"
+import { groupFotosByFaseOrder } from "@web/lib/obra-fotos-grouping"
 
 function formatPhaseDate(dateStr: string | null): string {
   if (!dateStr) return ""
@@ -54,37 +55,15 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
     ? allFotos.filter((f) => f.fase_id === faseFilter)
     : allFotos
 
-  const faseMap = new Map(fases.map((f) => [f.id, f.name]))
-
-  type FaseGroup = {
-    faseId: string | null
-    faseName: string
-    fotos: typeof allFotos
-    latestDate: string | null
-  }
-
-  const groups: FaseGroup[] = []
-  const groupMap = new Map<string | null, FaseGroup>()
-
-  for (const foto of fotosFiltradas) {
-    const key = foto.fase_id ?? null
-    if (!groupMap.has(key)) {
-      const group: FaseGroup = {
-        faseId: key,
-        faseName: key ? (faseMap.get(key) ?? "Fase desconhecida") : "Sem fase",
-        fotos: [],
-        latestDate: null,
-      }
-      groupMap.set(key, group)
-      groups.push(group)
+  // Story 75-3: grupos ordenados pela sequência das fases (order_index), "Sem fase" no fim.
+  const groups = groupFotosByFaseOrder(fotosFiltradas, fases).map((g) => {
+    let latestDate: string | null = null
+    for (const foto of g.fotos) {
+      const dateVal = foto.taken_at ?? foto.created_at
+      if (!latestDate || dateVal > latestDate) latestDate = dateVal
     }
-    const g = groupMap.get(key)!
-    g.fotos.push(foto)
-    const dateVal = foto.taken_at ?? foto.created_at
-    if (!g.latestDate || dateVal > g.latestDate) {
-      g.latestDate = dateVal
-    }
-  }
+    return { ...g, latestDate }
+  })
 
   return (
     <div className="min-h-screen bg-stone-950">

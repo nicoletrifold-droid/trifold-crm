@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
+import { notifyClientes } from "@web/lib/notificacoes"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
 const ADMIN_ONLY = ["admin"]
@@ -69,7 +70,7 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("obras")
-    .select("id, name, status")
+    .select("id, name, status, progress_pct")
     .eq("id", obra_id)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
@@ -109,6 +110,14 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Story 75-5: notifica clientes quando o progresso da obra muda.
+  if (
+    typeof updates.progress_pct === "number" &&
+    updates.progress_pct !== existing.progress_pct
+  ) {
+    notifyClientes(obra_id, "progresso", obra.name).catch(() => {})
   }
 
   // Differentiate obra.reativar (body.deleted_at === null) from obra.update

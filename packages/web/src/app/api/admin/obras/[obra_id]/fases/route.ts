@@ -73,6 +73,15 @@ export async function POST(
     return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
   }
 
+  const start_date = typeof body.start_date === "string" ? body.start_date.trim() : ""
+  const end_date = typeof body.end_date === "string" ? body.end_date.trim() : ""
+  if (!start_date || !end_date) {
+    return NextResponse.json(
+      { error: "Data de início e término são obrigatórias" },
+      { status: 400 }
+    )
+  }
+
   const VALID_STATUS = ["a_iniciar", "em_andamento", "pausada", "concluida", "pendente"]
   const status = VALID_STATUS.includes(body.status) ? body.status : "a_iniciar"
   const progress_pct =
@@ -100,8 +109,8 @@ export async function POST(
       order_index,
       status,
       progress_pct,
-      start_date: body.start_date ?? null,
-      end_date: body.end_date ?? null,
+      start_date,
+      end_date,
     })
     .select("id, name, description, order_index, status, progress_pct, start_date, end_date")
     .single()
