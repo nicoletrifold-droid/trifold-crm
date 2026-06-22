@@ -356,8 +356,6 @@ export interface ProvenanceStatus {
   isError: boolean
   /** finished_at do último ciclo de sync (null quando indisponível). */
   lastSyncAt: string | null
-  /** error_message do último ciclo de sync (null quando ausente). */
-  errorMessage: string | null
 }
 
 /**
@@ -427,7 +425,6 @@ export async function fetchProvenance(
     isStale: block.isStale,
     isError: block.isError,
     lastSyncAt: block.lastSyncFinishedAt,
-    errorMessage: syncLogRow?.error_message ?? null,
   }
 }
 

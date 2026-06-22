@@ -1,0 +1,60 @@
+schema: 1
+story: '76.3'
+gate: CONCERNS
+status_reason: 'Os 3 checks do gate (ui_staleness_check, non_blocking_check, tenant_isolation_check) passam — isolamento multi-tenant sólido (anon key + RLS + .eq(org_id) da sessão, sem service_role), aviso comprovadamente não-bloqueante (componente/hook independentes do streaming, fail-safe em servidor e cliente) e lógica de staleness reusa computeProvenance da 76-1. Aprovado não-bloqueante. Concerns: duplicação do plumbing das 3 queries de proveniência entre buildGlobalContext e fetchProvenance (débito de manutenção) e exposição do errorMessage cru no contrato do endpoint sem consumo na UI (info-disclosure menor). Validação visual WCAG AA com @ux fica como follow-up.'
+reviewer: 'Aria'
+updated: '2026-06-22T18:55:00Z'
+
+waiver: { active: false }
+
+# Os 3 checks nomeados no quality_gate da story
+gate_checks:
+  ui_staleness_check: 'PASS — SyncStatusBanner renderiza nada quando !isStale && !isError (AC4); âmbar para stale, vermelho para erro com erro tendo prioridade (isError ? ERROR_TEXT : STALE_TEXT); textos canônicos batem com AC2/AC3. O estado vem de fetchProvenance, que deriva isStale/isError via computeProvenance da 76-1 (mesma semântica: staleness = finished_at do último ciclo > 36h). Coerência total com a proveniência da 76-1.'
+  non_blocking_check: 'PASS — banner é componente isolado (role="status", live region polite) renderizado acima da context bar, não-modal, dispensável via X (AC5). useProvenanceStatus(isOpen) usa effect/setInterval próprios, sem tocar no loop de streaming (R2). Fail-safe em DUAS camadas: servidor retorna FAIL_SAFE (200, sem aviso) em qualquer erro de query; cliente faz catch silencioso em !res.ok/throw mantendo estado anterior. Um erro de backend nunca quebra o chat.'
+  tenant_isolation_check: 'PASS (CRÍTICO) — endpoint usa requireAuth() → createClient() (createServerClient com ANON KEY + cookies, RLS-enforced; confirmado em supabase/server.ts), NÃO service_role. orgId vem de appUser.org_id (lookup por auth_id na tabela users), nunca de input do cliente. As 3 queries filtram .eq("org_id", orgId) + RLS como 2a camada (defense in depth). Sem vazamento cross-org. Padrão de auth idêntico ao POST /api/agent/chat (requireAuth + appUser.org_id).'
+
+top_issues:
+  - id: 'ARCH-001'
+    severity: medium
+    finding: 'Duplicação de plumbing: as 3 query builders de proveniência (meta_insights_daily.synced_at, meta_ad_accounts.last_synced_at, meta_sync_log) existem idênticas em buildGlobalContext (context-builder.ts:~322) e no novo fetchProvenance. A lógica de DERIVAÇÃO (computeProvenance/safeProvenanceData/STALENESS_THRESHOLD_HOURS) — a parte que a story pede explicitamente para não duplicar — foi corretamente reusada; mas o plumbing de query não. Mudança de coluna/tabela exige editar dois pontos.'
+    suggested_action: 'Follow-up (não bloqueia): extrair um helper provenanceQueryBuilders(supabase, orgId, {dateNdAgo, today}) que retorne os 3 query builders (não-awaited), consumido por SPREAD tanto no Promise.all de buildGlobalContext (preservando o batching/cache da 76-1 AC7) quanto em fetchProvenance. Remove a duplicação sem regressão de round-trips. O tradeoff atual é defensável e foi documentado pelo @dev (evitar mexer no batching da 76-1), por isso é débito e não bloqueio.'
+  - id: 'SEC-001'
+    severity: low
+    status: resolved
+    resolved_by: 'Dex (@dev)'
+    resolved_at: '2026-06-22T22:13:00Z'
+    finding: 'O endpoint retorna meta_sync_log.error_message cru no contrato (AC1), porém a UI usa apenas texto canônico (AC3) — o campo é não-consumido ("disponível para uso futuro"). error_message pode carregar detalhes internos do ciclo de sync (resposta crua da Meta API, trechos de stack) expostos a qualquer usuário autenticado da org. Escopado por org_id (multi-tenant seguro), mas é info-disclosure menor e YAGNI sob Article IV.'
+    suggested_action: 'Follow-up (não bloqueia): omitir errorMessage do payload até haver consumidor real na UI, ou sanitizar/whitelistar o conteúdo antes de retornar. Risco baixo porque é intra-org e autenticado.'
+    resolution: 'Removido o campo errorMessage do contrato do endpoint (opção preferida — nenhum consumidor). Grep confirmou que use-provenance-status.ts, sync-status-banner.tsx e agent-chat-panel.tsx não leem .errorMessage (UI usa só isStale/isError/lastSyncAt). Alterações: (1) removido errorMessage da interface ProvenanceStatus; (2) removido do retorno de fetchProvenance; (3) removido errorMessage:null do FAIL_SAFE em context-meta/route.ts. isError (booleano) intacto — é o que dispara o banner vermelho. Selects internos de error_message em buildGlobalContext (contexto AI server-side, não exposto) deixados intocados (fora de escopo). typecheck/lint sem novos problemas; 565/565 testes passam.'
+  - id: 'UX-001'
+    severity: low
+    finding: 'Validação visual de cores (WCAG AA) com @ux-design-expert (Uma) ficou pendente (subtask T3, DoD). Baseline de acessibilidade já é boa: role="status", aria-label no botão dismiss, aria-hidden nos ícones. Pares Tailwind amber-800/amber-50 e red-800/red-50 têm contraste alto (tipicamente passam AA para texto).'
+    suggested_action: 'Aceitável como follow-up downstream — não bloqueia o push. Story é P2/COULD (melhoria de UX); a 76-1 já cobre o alerta textual. Solicitar revisão da Uma antes de considerar o DoD 100% fechado.'
+
+validation_evidence:
+  typecheck: 'web tsc --noEmit: zero erros nos 5 arquivos da story. Únicos erros (3) são pré-existentes e não-relacionados em email-templates/_components/visual-editor.tsx (módulo react-email-editor ausente). Confirmado em runtime pelo @architect.'
+  eslint: 'zero erros nos 5 arquivos da story; 1 warning pré-existente (today unused) em buildCampaignContext:459 — confirmado via git show df42f0e que já existia no commit pai (linha 376), apenas deslocado pelo código aditivo da 76-3. Não introduzido aqui.'
+  vitest_full_suite: '565/565 passed, 44 test files — sem regressão. Inclui os 12 testes de proveniência da 76-1. Confirmado em runtime pelo @architect (não apenas relatado pelo @dev).'
+
+ac_traceability:
+  AC1: 'PASS — GET /api/agent/context-meta retorna {isStale, isError, lastSyncAt} via fetchProvenance, reusando computeProvenance/safeProvenanceData da 76-1 (sem duplicar lógica de derivação). Acesso autenticado, sem RLS bypass. (SEC-001 resolvido: errorMessage removido do contrato por não ter consumidor)'
+  AC2: 'PASS — banner âmbar com texto "Dados de Meta Ads possivelmente desatualizados — última sincronização há mais de 36h." quando isStale; renderizado no topo da view de chat (acima da context bar), visível sem scroll.'
+  AC3: 'PASS — banner vermelho com texto "Falha na última sincronização com a Meta. Os dados podem estar incompletos." quando isError; erro tem prioridade sobre staleness.'
+  AC4: 'PASS — SyncStatusBanner retorna null quando !isStale && !isError; painel mantém aparência padrão.'
+  AC5: 'PASS — banner não-modal, não bloqueia input nem respostas; dismiss via X. Dismiss guarda a REFERÊNCIA do objeto status (derivado, sem setState em effect); reaparece no próximo poll de 5min (novo objeto). Padrão limpo que evita o lint react-hooks de cascading renders.'
+  AC6: 'PASS — useProvenanceStatus(isOpen): fetch ao montar + setInterval 5min (alinhado ao TTL do context-builder); gated por painel aberto; clearInterval + flag cancelled no cleanup. Independente do streaming.'
+  AC7: 'PASS (CRÍTICO) — ver tenant_isolation_check. createClient() com sessão do usuário (anon key + RLS), sem service_role, filtro org_id da sessão.'
+  AC8: 'PASS — zero erros TS/ESLint nos arquivos da story (verificado em runtime).'
+
+nfr_validation:
+  NFR-TENANCY-1: 'PASS — anon key + RLS + .eq(org_id) da sessão em todas as 3 queries; org_id nunca vem de input do cliente.'
+  NFR-OBS-1: 'PASS — fail-safe em servidor (FAIL_SAFE 200) e cliente (catch silencioso); nunca exibe aviso falso; mantém estado anterior em erro de rede.'
+  NFR-PERF-1: 'PASS — polling leve gated por painel aberto; intervalo separado do streaming; endpoint reusa o mesmo padrão de queries batched. Sem impacto no streaming de chat.'
+  NFR-COMPAT-1: 'PASS — mudança aditiva; buildGlobalContext/buildCampaignContext intocados (preserva batching/AC7 da 76-1); 565/565 sem regressão.'
+
+article_iv_compliance: 'PASS com nota — implementação dentro do escopo das AC, sem feature inventada. A lógica de derivação de staleness é reusada da 76-1 (IDS respeitado). Exceção menor: errorMessage retornado mas não consumido (SEC-001) é tecnicamente fora do uso atual — recomendado remover sob YAGNI. A duplicação de query plumbing (ARCH-001) é débito de manutenção, não invenção de escopo.'
+
+next_steps:
+  - 'Aprovado não-bloqueante → @devops (Gage) pode fazer push.'
+  - 'Follow-up Epic 76: refatorar plumbing de proveniência para helper compartilhado (ARCH-001).'
+  - 'Follow-up: validar cores WCAG AA com @ux-design-expert (UX-001); avaliar omitir/sanitizar errorMessage (SEC-001).'

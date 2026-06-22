@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 76 — Proveniência e Performance dos Dados Meta Ads no Agente de Tráfego
 - **Story:** 76-3
-- **Status:** Ready for Review
+- **Status:** InReview — Architect Gate: CONCERNS (aprovado, não-bloqueante)
 - **Priority:** P2 — COULD (melhoria de UX; o agente já alerta textualmente via 76-1, esta story adiciona sinal visual proativo na interface)
 - **Complexity:** S (2-3h)
 - **Story Points:** 2
@@ -179,7 +179,8 @@ Claude Opus 4.8 (1M context) — @dev (Dex), modo YOLO
 - `packages/web/src/components/agent/sync-status-banner.tsx` — banner não-modal
 
 **Modificados:**
-- `packages/web/src/lib/agent/context-builder.ts` — adicionado `fetchProvenance()` + tipo `ProvenanceStatus` (aditivo; reusa `computeProvenance`/`safeProvenanceData` da 76-1; `buildGlobalContext`/`buildCampaignContext` intocados)
+- `packages/web/src/lib/agent/context-builder.ts` — adicionado `fetchProvenance()` + tipo `ProvenanceStatus` (aditivo; reusa `computeProvenance`/`safeProvenanceData` da 76-1; `buildGlobalContext`/`buildCampaignContext` intocados). SEC-001: removido o campo `errorMessage` da interface `ProvenanceStatus` e do retorno de `fetchProvenance`.
+- `packages/web/src/app/api/agent/context-meta/route.ts` — SEC-001: removido `errorMessage` do `FAIL_SAFE` (campo retirado do contrato de resposta).
 - `packages/web/src/components/agent/agent-chat-panel.tsx` — integra hook + banner no topo da view de chat
 
 ### Completion Notes
@@ -191,7 +192,7 @@ Claude Opus 4.8 (1M context) — @dev (Dex), modo YOLO
 - **AC5 (reaparecer após dismiss):** o dismiss guarda a *referência* do objeto `status` dispensado e deriva `dismissed = dismissedFor === status`. Como o hook produz um novo objeto a cada poll, o aviso reaparece no próximo refresh de 5 min sem `setState` dentro de effect (evita o lint error `react-hooks` de cascading renders).
 - **AC6:** polling só ativo com o painel aberto (`useProvenanceStatus(isOpen)`); refetch imediato a cada reabertura + intervalo de 5 min; `clearInterval` no cleanup. Independente do streaming (R2).
 - **AC7:** endpoint usa `requireAuth()` → `createClient()` com sessão do usuário; filtro por `appUser.org_id`; sem `service_role`.
-- **errorMessage** é retornado no contrato do endpoint (AC1) mas o banner usa texto canônico (AC3); o campo fica disponível para depuração/uso futuro.
+- **errorMessage (SEC-001 — RESOLVIDO 2026-06-22):** o campo foi **removido** do contrato do endpoint. O @architect levantou SEC-001 (info-disclosure menor) no gate: `meta_sync_log.error_message` cru era exposto a usuários autenticados da org sem nenhum consumo na UI (YAGNI + menor privilégio). Grep confirmou que `use-provenance-status.ts`, `sync-status-banner.tsx` e `agent-chat-panel.tsx` não leem `.errorMessage` — a UI usa apenas `isStale`/`isError`/`lastSyncAt`. Aplicada a opção preferida (remoção): removido `errorMessage` da interface `ProvenanceStatus`, do retorno de `fetchProvenance` e do `FAIL_SAFE` em `context-meta/route.ts`. `isError` (booleano) intacto — é o que dispara o banner vermelho. Selects internos de `error_message` em `buildGlobalContext` (contexto AI server-side, nunca exposto ao cliente) deixados intocados por estarem fora de escopo. Validação: type-check/lint sem novos problemas, 565/565 testes passam.
 
 ### Validação executada
 - `npm run type-check` (packages/web): zero erros nos arquivos da story. Únicos erros são pré-existentes e não relacionados (`email-templates/_components/visual-editor.tsx` — módulo `react-email-editor` ausente).
@@ -237,9 +238,37 @@ Claude Opus 4.8 (1M context) — @dev (Dex), modo YOLO
 
 ---
 
+## Architect Quality Gate (@architect — Aria)
+
+**Verdict:** CONCERNS — aprovado, não-bloqueante. Gate file: `docs/qa/gates/76.3-aviso-staleness-ui-chat.yml`
+
+| Check | Resultado | Resumo |
+|-------|-----------|--------|
+| `ui_staleness_check` | PASS | Banner âmbar/vermelho/nada coerente com AC2-AC4; erro tem prioridade; reusa `computeProvenance` da 76-1 (mesma semântica de staleness). |
+| `non_blocking_check` | PASS | Componente/hook independentes do streaming (R2); fail-safe em servidor (FAIL_SAFE 200) e cliente (catch silencioso); dispensável; não-modal. |
+| `tenant_isolation_check` (CRÍTICO) | PASS | `requireAuth()` → `createClient()` anon key + RLS (sem service_role); `org_id` da sessão (nunca do cliente); `.eq("org_id")` nas 3 queries. Sem vazamento cross-org. Mesmo padrão do `POST /api/agent/chat`. |
+| Reuso vs duplicação (Article IV/IDS) | CONCERNS | Lógica de derivação reusada (correto). Plumbing das 3 queries duplicado entre `buildGlobalContext` e `fetchProvenance` (ARCH-001, médio) — débito de manutenção defensável (preserva batching da 76-1). |
+| Consistência arquitetural | PASS | `export async function GET()` padrão; imports absolutos `@web/*` (Article VI); rota dinâmica por cookies (igual ao chat route); sem `force-dynamic` desnecessário. |
+
+**Validações executadas em runtime pelo @architect (não apenas relatadas pelo @dev):**
+- `web tsc --noEmit`: zero erros nos arquivos da story (3 erros pré-existentes não-relacionados em `visual-editor.tsx`).
+- `eslint` nos 5 arquivos: 0 erros; 1 warning `today` unused pré-existente em `buildCampaignContext:459` (confirmado no commit pai `df42f0e:376`).
+- `vitest run` (raiz): 565/565 passed, 44 arquivos — sem regressão.
+
+**Concerns (todos follow-up, nenhum bloqueia o push):**
+- ARCH-001 (médio): extrair plumbing de proveniência para helper compartilhado.
+- SEC-001 (baixo): `errorMessage` cru retornado mas não consumido pela UI — omitir/sanitizar sob YAGNI. **[RESOLVIDO 2026-06-22 por @dev: campo removido do contrato do endpoint — ver Completion Notes]**
+- UX-001 (baixo): validação visual WCAG AA com @ux-design-expert pendente (baseline a11y já boa: `role="status"`, `aria-label`, `aria-hidden`).
+
+**Próximo passo:** @devops (Gage) pode fazer push.
+
+---
+
 ## Change Log
 
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Epic 76, COULD, aviso de staleness/erro na UI do chat; depende de 76-1 | @sm (River) |
 | 2026-06-22 | v1.1 | Implementação: endpoint `context-meta` (reusa 76-1 via novo `fetchProvenance`), hook `useProvenanceStatus`, `SyncStatusBanner` integrado ao painel. type-check/lint limpos; 565 testes ok. Status → Ready for Review | @dev (Dex) |
+| 2026-06-22 | v1.2 | Architect Quality Gate: CONCERNS (aprovado, não-bloqueante). 3 checks nomeados PASS; isolamento multi-tenant validado (anon key + RLS + org_id da sessão). 3 follow-ups (ARCH-001/SEC-001/UX-001). Validações reais: typecheck/lint limpos, 565/565 testes. Status → InReview | @architect (Aria) |
+| 2026-06-22 | v1.3 | SEC-001 resolvido: removido o campo `errorMessage`/`error_message` do contrato de resposta do endpoint `context-meta` (interface `ProvenanceStatus`, retorno de `fetchProvenance`, `FAIL_SAFE`). Sem consumidor na UI (grep confirmado); `isError` intacto. type-check/lint sem novos problemas; 565/565 testes passam | @dev (Dex) |

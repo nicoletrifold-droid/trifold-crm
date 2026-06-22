@@ -14,7 +14,6 @@ const FAIL_SAFE: ProvenanceStatus = {
   isStale: false,
   isError: false,
   lastSyncAt: null,
-  errorMessage: null,
 }
 
 export async function GET() {
