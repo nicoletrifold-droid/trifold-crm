@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2, Eye, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { FotoUploadForm } from "./foto-upload-form"
 import { FotoDeleteButton } from "./foto-delete-button"
+import { FotoEditModal } from "./foto-edit-modal"
 import { DocUploadForm } from "./doc-upload-form"
 import { DocDeleteButton } from "./doc-delete-button"
 import { FaseCreateForm } from "./fase-create-form"
@@ -448,6 +449,7 @@ export function ObraDetailTabs({
 
   // Fotos — lightbox
   const [lightboxFoto, setLightboxFoto] = useState<Foto | null>(null)
+  const [editingFoto, setEditingFoto] = useState<Foto | null>(null)
 
   useEffect(() => {
     if (!lightboxFoto) return
@@ -616,6 +618,16 @@ export function ObraDetailTabs({
                           unoptimized
                           className="object-cover"
                         />
+                        {/* Story 75-13 — editar legenda/fase (livre p/ todos os perfis) */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setEditingFoto(foto) }}
+                          title="Editar foto"
+                          aria-label="Editar foto"
+                          className="absolute left-1.5 top-1.5 z-10 rounded-full bg-black/55 p-1.5 text-white hover:bg-black/75"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                         {/* Botão de exclusão apenas para admin/supervisor */}
                         {isAdminOrSupervisor && (
                           <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
@@ -861,6 +873,16 @@ export function ObraDetailTabs({
             <p className="mt-3 text-sm text-white/80">{lightboxFoto.caption}</p>
           )}
         </div>
+      )}
+
+      {/* Story 75-13 — modal de edição de foto (legenda + fase) */}
+      {editingFoto && (
+        <FotoEditModal
+          obraId={obraId}
+          foto={{ id: editingFoto.id, caption: editingFoto.caption ?? null, fase_id: editingFoto.fase_id ?? null }}
+          fases={fases.map((f) => ({ id: f.id, name: f.name }))}
+          onClose={() => setEditingFoto(null)}
+        />
       )}
     </div>
   )

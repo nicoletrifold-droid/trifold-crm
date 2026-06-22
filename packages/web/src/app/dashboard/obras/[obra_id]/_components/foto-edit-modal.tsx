@@ -1,0 +1,119 @@
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { X } from "lucide-react"
+
+interface FaseOption {
+  id: string
+  name: string
+}
+
+interface FotoEditModalProps {
+  obraId: string
+  foto: { id: string; caption: string | null; fase_id: string | null }
+  fases: FaseOption[]
+  onClose: () => void
+}
+
+// Story 75-13 — editar legenda e fase de uma foto (livre p/ admin/supervisor/obras).
+export function FotoEditModal({ obraId, foto, fases, onClose }: FotoEditModalProps) {
+  const router = useRouter()
+  const [caption, setCaption] = useState(foto.caption ?? "")
+  const [faseId, setFaseId] = useState(foto.fase_id ?? "")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/obras/${obraId}/fotos/${foto.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption: caption.trim() || null, fase_id: faseId || null }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? "Erro ao salvar")
+      }
+      router.refresh()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 dark:bg-black/70"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl dark:border-stone-800 dark:bg-stone-900">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-stone-800">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">Editar foto</h2>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-3 p-5">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
+              Legenda
+            </label>
+            <input
+              type="text"
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Descrição da foto"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
+              Fase
+            </label>
+            <select
+              value={faseId}
+              onChange={(e) => setFaseId(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            >
+              <option value="">— Sem fase —</option>
+              {fases.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {error && <p className="text-xs text-red-600 dark:text-red-300">{error}</p>}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+            >
+              {saving ? "Salvando…" : "Salvar"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
