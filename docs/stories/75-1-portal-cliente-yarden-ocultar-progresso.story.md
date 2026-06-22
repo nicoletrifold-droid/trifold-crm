@@ -1,7 +1,7 @@
 # Story 75-1 — Portal do cliente: ocultar % de progresso para a obra Yarden
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 58 — Portal do Cliente
 - **Branch:** main
 
@@ -61,3 +61,4 @@ Atende solicitação direta do negócio para a obra Yarden: o cliente acompanha 
 - @po (Pax): validação 10/10 → GO. Status Draft → Ready.
 - @dev (Dex): implementado em `cliente/[obra_id]/page.tsx` (hero + card Cronograma + prop `valueVariant` no StatCard). Status Ready → InReview.
 - @qa (Quinn): QA gate PASS. Pronta para @devops *push.
+- @devops (Gage): rebase em origin/main + push (commit 30b0767). Inclui também o ajuste de contraste das datas (fluxo leve, sem story). Status InReview → Done.
