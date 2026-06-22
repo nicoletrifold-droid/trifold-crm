@@ -5,6 +5,7 @@ import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
 import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsListWithDrawer } from "./_components/leads-list-with-drawer"
+import { LeadsSeenMarker } from "./_components/leads-seen-marker"
 import { selectLatestMessageAt, type ConversationRef } from "@web/lib/broker/leads-window"
 
 const TASK_LABELS: Record<string, string> = {
@@ -138,6 +139,8 @@ export default async function BrokerLeadsPage({
 
   return (
     <div className="space-y-4">
+      {/* Story 75-8: zera o badge de novos leads ao abrir "Meus Leads". */}
+      <LeadsSeenMarker />
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meus Leads</h1>
