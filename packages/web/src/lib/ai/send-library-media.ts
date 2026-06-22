@@ -57,13 +57,38 @@ export async function sendLibraryMediaIfRequested(
   if (!tipo) return 0
 
   try {
-    // Empreendimento de interesse do lead (sem isso, não adivinha).
+    // 1) Empreendimento de interesse do lead (preferencial).
     const { data: lead } = await admin
       .from("leads")
       .select("property_interest_id")
       .eq("id", args.leadId)
       .maybeSingle()
-    const propertyId = lead?.property_interest_id
+    let propertyId: string | null = lead?.property_interest_id ?? null
+
+    // 2) Fallback: identifica o empreendimento pelo NOME citado no texto, entre
+    //    os que têm mídia ativa. Só usa se houver exatamente 1 match (sem adivinhar).
+    if (!propertyId) {
+      const { data: assetProps } = await admin
+        .from("agent_media_assets")
+        .select("property_id, property:properties(name)")
+        .eq("org_id", args.orgId)
+        .eq("is_active", true)
+        .not("property_id", "is", null)
+      const norm = (s: string) =>
+        s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+      const t = norm(args.text)
+      const nomes = new Map<string, string>()
+      for (const a of assetProps ?? []) {
+        const p = a.property as { name?: string } | { name?: string }[] | null
+        const name = Array.isArray(p) ? p[0]?.name : p?.name
+        if (a.property_id && name) nomes.set(a.property_id as string, name)
+      }
+      const matches = [...nomes.entries()].filter(
+        ([, name]) => name.length >= 4 && t.includes(norm(name))
+      )
+      if (matches.length === 1 && matches[0]) propertyId = matches[0][0]
+    }
+
     if (!propertyId) return 0
 
     let query = admin

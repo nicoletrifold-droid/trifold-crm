@@ -11,6 +11,7 @@ A biblioteca de mídia da Nicole (`agent_media_assets`, Config → Nicole → M�
 Abordagem (segura): passo **aditivo** após a resposta de texto da Nicole no webhook do WhatsApp — não altera o texto/raciocínio dela. Casamento **preciso** por `agent_media_assets.property_id = leads.property_interest_id` (sem adivinhação). Reaproveita o envio de mídia via WhatsApp (image/document por link).
 
 ## Acceptance Criteria
+- [x] AC1b: Fallback — se o lead não tem `property_interest_id`, identifica o empreendimento pelo NOME citado no texto (entre os que têm mídia ativa), só se houver match único (normaliza acentos/caixa).
 - [x] AC1: Helper `lib/ai/send-library-media.ts` — `detectMaterialRequest(text)` retorna planta/tabela/fachada/qualquer/null (conservador; ignora saudações). `sendLibraryMediaIfRequested` só envia se: pedido claro + `leads.property_interest_id` presente + asset ATIVO daquele `property_id`.
 - [x] AC2: Filtra por categoria quando o tipo é específico (planta→planta, tabela→tabela, fachada→fachada; "qualquer"→sem filtro). Envia no máx. 2 assets.
 - [x] AC3: Integrado no `webhook/whatsapp/route.ts` APÓS o envio do texto da Nicole, em try/catch — nunca quebra a resposta. Envia image/document por link (mesmo mecanismo do envio do corretor). Registra em `messages` (role assistant, metadata is_media, source nicole_library).
@@ -18,7 +19,7 @@ Abordagem (segura): passo **aditivo** após a resposta de texto da Nicole no web
 
 ## Out of Scope
 - Tool-calling no agente (a decisão é heurística pós-resposta, não LLM). Pode evoluir depois.
-- Match por empreendimento citado em texto livre quando o lead não tem property_interest_id (hoje exige o interesse setado, para não adivinhar).
+(implementado) Match por empreendimento citado no texto agora existe como fallback quando o lead não tem property_interest_id.
 
 ## Dependencies
 - `agent_media_assets` (property_id, category, file_type, file_url) + `leads.property_interest_id` + `whatsapp_config`. Tudo já existe.
@@ -35,3 +36,4 @@ Abordagem (segura): passo **aditivo** após a resposta de texto da Nicole no web
 
 ## Change Log
 - @sm/@po/@dev/@qa: criada, implementada, QA PASS.
+- @dev: fallback de empreendimento por nome no texto (match único, conservador). Push incremental.
