@@ -1,7 +1,7 @@
 # Story 75-8 — Corretor: "pontinho laranja" de novos leads distribuídos (badge no menu)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 51/63 — Corretor / Roleta
 - **Branch:** main
 
@@ -66,3 +66,4 @@ O corretor passa a ver de forma persistente que recebeu novos leads (no menu, PW
 - @data-engineer (Dara): migration 105 (coluna seen_at + seed dos corretores).
 - @dev (Dex): badge + action + marker. Status Ready → InReview.
 - @qa (Quinn): QA gate PASS (validado em prod). Pronta para @devops *push (aplicar migration 105).
+- @devops (Gage): migration 105 aplicada em prod; push (commit 2a07b2e). Status → Done.
