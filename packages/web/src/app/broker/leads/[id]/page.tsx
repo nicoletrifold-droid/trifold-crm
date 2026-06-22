@@ -4,6 +4,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { LeadDetailsPanel } from "./_components/lead-details-panel"
 import { ConversationThread } from "./_components/conversation-thread"
+import { markLeadConversationsRead } from "./_actions/mark-read"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
@@ -28,6 +29,14 @@ export default async function BrokerLeadDetailPage({
     .single()
 
   if (!lead) notFound()
+
+  // Story 63-19 — abrir o thread marca as conversas do lead como lidas (zera o
+  // badge verde no próximo request do layout). Best-effort: nunca derruba a página.
+  try {
+    await markLeadConversationsRead(id)
+  } catch {
+    // silencioso
+  }
 
   const { data: properties } = await supabase
     .from("properties")

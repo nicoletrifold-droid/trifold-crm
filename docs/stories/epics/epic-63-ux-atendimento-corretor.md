@@ -19,7 +19,7 @@ related:
   - packages/web/src/app/broker/leads/[id]/_components/broker-message-input.tsx (composer atual)
   - packages/web/src/app/broker/leads/_components/leads-list-with-drawer.tsx (lista de leads mobile+desktop)
   - packages/web/src/components/leads/lead-detail-drawer.tsx (drawer alternativo — duplicação a unificar na S5)
-stories_planned: [63-1, 63-2, 63-3, 63-4, 63-5, 63-6, 63-7, 63-8, 63-9, 63-10, 63-11, 63-12, 63-13, 63-14]
+stories_planned: [63-1, 63-2, 63-3, 63-4, 63-5, 63-6, 63-7, 63-8, 63-9, 63-10, 63-11, 63-12, 63-13, 63-14, 63-15, 63-16, 63-17, 63-18, 63-19, 63-20]
 ---
 
 # Epic 63 — UX do Atendimento do Corretor: Chat Mobile-First
@@ -156,6 +156,43 @@ No webhook (`api/webhook/whatsapp/route.ts`), após o INSERT da mensagem inbound
 Inverte a regra de negócio da CON-3 anterior: ao gravar a 1ª msg `role='broker'` (ou qualquer envio enquanto `is_ai_active=true`), `send-message/route.ts` seta `is_ai_active=false` + `handoff_at` + `handoff_reason='broker_reply'`. Nicole para imediatamente. No webhook, bloco de reativação automática: inbound com `is_ai_active=false` + última msg `role='broker'` há > 24h → reativa `is_ai_active=true` (Nicole reassume). Reutiliza `BROKER_WINDOW_MS` de `broker-takeover-status.ts`. Sem migration. Compatível com banner 63-8 (`deriveBrokerActive = brokerSentRecently || !isAiActive` permanece correto). Decisão de produto X=24h (default, confirmar @po).
 **Depende de:** Epic 51 Done, Story 63-8 Done; bloqueia 63-14
 
+### Story 63-15 — Handoff Pós-Agendamento (P0)
+**Executor:** @dev | **QG:** @qa | **Complexity:** S (2h) | **Prioridade:** P0 | **Fase:** 5
+Ao gravar um agendamento confirmado pela Nicole, o campo `is_ai_active` é setado para `false` com `handoff_reason='post_scheduling'`. Nicole para de responder imediatamente após confirmar a visita, passando o controle ao corretor para follow-up.
+**Depende de:** 63-13 (padrão de handoff estabelecido); **Status:** Done (commit 5ae3b2f)
+
+---
+
+### Story 63-16 — Infra de Não-Lidas: `broker_last_read_at` + Action "Marcar Lido" (P0)
+**Executor:** @data-engineer (migration + RPC) + @dev (helper TS + server action) | **QG:** @qa | **Complexity:** S+S | **Prioridade:** P0 | **Fase:** 6
+Migration `104_conversations_broker_last_read_at.sql`: `ADD COLUMN broker_last_read_at TIMESTAMPTZ NULL` + índice parcial + RPC `get_broker_unread_total`. Helper puro `countUnreadForLead`. Server action `markLeadConversationsRead`. Vitest para o helper. Fundação de toda a Fase 6.
+**Depende de:** nenhuma story do Epic 63 (é a fundação da Fase 6)
+**Bloqueia:** 63-17, 63-19
+⚠️ **Drift:** migration deve ser aplicada manualmente via Supabase Management API (não `supabase db push`)
+
+### Story 63-17 — Rota `/broker/chat` — Inbox de Conversas Estilo WhatsApp (P0)
+**Executor:** @dev | **QG:** @qa | **Complexity:** M (4-6h) | **Prioridade:** P0 | **Fase:** 6
+Server Component listando conversas do corretor por `last_message_at desc`. Cards mobile: avatar/inicial, nome, preview com prefixo ("Você:" / "🤖" / sem prefixo para lead), timestamp relativo (`formatRelativeTime`), chip de canal, empreendimento·etapa, badge verde de não-lidas. Busca `?q=` + filtros. Estados vazios. Tap → `/broker/leads/[id]`.
+**Depende de:** 63-16 Done
+
+### Story 63-18 — Reorg da Nav Mobile: 4 Tabs + Botão "Mais" com Bottom Sheet (P0)
+**Executor:** @dev | **QG:** @qa | **Complexity:** M (3-5h) | **Prioridade:** P0 | **Fase:** 6
+Reordenar `NAV_ITEMS` para `[Início, Pipeline, Agenda, Chat, Meus Leads, Imóveis, Fluxo, Instalar, Suporte]`. `sidebar-nav.tsx` mobile: `slice(0,4)` (4 tabs) + botão "Mais" → bottom sheet com `slice(4)`. A11y: focus-trap, Esc, tap-fora, ≥44px. Desktop inalterado. `badgeTone?: 'orange'|'green'` na interface `NavItem`.
+**Depende de:** 63-17 Done (rota /broker/chat precisa existir)
+
+### Story 63-19 — Badge Verde da Aba Chat + Marcar Lido ao Abrir Thread (P1)
+**Executor:** @dev | **QG:** @qa | **Complexity:** S/M (3-4h) | **Prioridade:** P1 | **Fase:** 6
+Badge verde (`bg-green-700`, WCAG ≥4.5:1) injetado no NAV_ITEM do Chat em `broker/layout.tsx` via `getBrokerUnreadTotal` (padrão badge Agenda L37-48). `aria-live` para leitores de tela. `markLeadConversationsRead(leadId)` chamado em `broker/leads/[id]/page.tsx` antes do return.
+**Depende de:** 63-16 Done + 63-18 Done
+
+### Story 63-20 — Realtime da Lista: Inbox Atualiza ao Vivo (P2)
+**Executor:** @data-engineer (migration 105) + @dev (InboxClient) | **QG:** @qa | **Complexity:** M | **Prioridade:** P2 | **Fase:** 6
+Migration `105_realtime_conversations.sql`: ADD TABLE `conversations` na publicação `supabase_realtime` (idempotente). `InboxClient` Client Component: subscribe a UPDATE de `conversations` filtrado por `org_id`, re-sort ao topo, incrementa badge de não-lidas localmente. Padrão: `conversation-thread.tsx` L141-142 (`realtime.setAuth`).
+**Depende de:** 63-17 Done + 63-16 Done + 63-19 Done
+⚠️ **Pré-condição bloqueante:** migration 105 deve ser aplicada antes do deploy
+
+---
+
 ### Story 63-14 — Botão "Devolver para a Nicole" — Reativação Manual da IA (P1)
 **Executor:** @dev | **QG:** @qa | **Complexity:** M (3-5h) | **Prioridade:** P1 | **Fase:** 5
 Novo endpoint `POST /api/leads/[id]/resume-ai` (permissão: corretor dono OU admin/supervisor/gerente-comercial) que seta `is_ai_active=true`. Botão "Devolver para Nicole" (ícone `RotateCcw`, alvo ≥44px) no Estado B do `AiStatusBanner` — visível apenas quando `brokerActive=true`. `ConversationThread` adiciona `localIsAiActive` state e callback; banner transiciona Estado B→A sem reload completo. Sem confirmação (ação reversível). Activity log `type='ai_resumed'`. Decisão de permissão pendente @po.
@@ -196,6 +233,24 @@ FASE 5 — Sequencial (controle de handoff IA↔Corretor):
     ↓
   63-14 (Botão "Devolver para Nicole") — M, P1
     PRÉ-CONDIÇÃO: 63-13 Done; permissão do botão confirmada pelo @po
+    ↓
+  63-15 (Handoff pós-agendamento) — S, P0 [DONE]
+
+FASE 6 — Caixa de Entrada de Conversas (Inbox):
+
+  PRIMEIRA LEVA — caminho crítico (P0/P1):
+  63-16 (Infra não-lidas: migration 104 + RPC + helper TS + server action) — S+S, P0
+    PRÉ-CONDIÇÃO: migration 104 aplicada manualmente via Management API
+    ↓
+  [Paralelo após 63-16 Done]
+  63-17 (Rota /broker/chat — inbox) — M, P0   depende de: 63-16
+  63-18 (Reorg nav + "Mais" sheet) — M, P0    depende de: 63-17 (rota /broker/chat existe)
+    ↓ [63-17 + 63-18 Done]
+  63-19 (Badge verde + marcar lido) — S/M, P1  depende de: 63-16 + 63-18
+
+  SEGUNDA LEVA (P2 — executar após Primeira Leva em produção):
+  63-20 (Realtime da lista) — M, P2
+    PRÉ-CONDIÇÃO: migration 105 aplicada manualmente; 63-17 + 63-16 + 63-19 Done
 ```
 
 ---
@@ -211,6 +266,9 @@ FASE 5 — Sequencial (controle de handoff IA↔Corretor):
 - **CON-7 (FASE 4 — mantida):** A notificação push (63-12), o realtime (63-11) e o banner leitura (63-8) NÃO alteram `is_ai_active` — são observação pura, não intervenção. Esta constraint se mantém inalterada para as stories 63-8, 63-11, 63-12.
 - **CON-8 (FASE 4):** O service worker (`lib/pwa/sw-source.js`) NÃO deve ser modificado por nenhuma story da Fase 4 — o deep-link já funciona com o payload `url` existente
 - **CON-9 (FASE 5 — sem migration):** Stories 63-13 e 63-14 NÃO criam migration — todos os campos necessários já existem em `conversations` (`is_ai_active`, `handoff_at`, `handoff_reason`, `last_message_at`; confirmados em `001_base_schema.sql` L152-164)
+- **CON-10 (FASE 6 — migrations manuais obrigatórias):** As migrations `104_conversations_broker_last_read_at.sql` (63-16) e `105_realtime_conversations.sql` (63-20) DEVEM ser aplicadas manualmente via Supabase Management API. O comando `supabase db push` está proibido por causa do drift 074→103 no remote. @data-engineer deve instruir @devops com o SQL exato antes de cada deploy
+- **CON-11 (FASE 6 — badge cor):** O badge de não-lidas usa VERDE (`bg-green-700 text-white` para badge com número, WCAG AA ≥4.5:1). NÃO usar `bg-green-500` com texto branco (contraste ≈3.0:1 — reprovar). O dot sem número (slot "Mais") pode usar `bg-green-500` pois é elemento gráfico (WCAG 1.4.11 ≥3:1)
+- **CON-12 (FASE 6 — desktop inalterado):** A story 63-18 altera APENAS a bottom bar mobile (< `lg:` breakpoint). A sidebar desktop (`lg:` e acima) deve continuar exibindo TODOS os itens sem nenhum corte, sheet ou "Mais"
 
 ---
 
@@ -221,6 +279,8 @@ FASE 5 — Sequencial (controle de handoff IA↔Corretor):
 - **NFR-3:** Contraste ≥ 3:1 para texto não-essencial (timestamps, rótulos), ≥ 4.5:1 para conteúdo primário — em modo claro e escuro
 - **NFR-4:** Nenhuma story de FASE 1 deve adicionar queries adicionais ao banco — usar apenas dados já disponíveis na tela
 - **NFR-5:** O `ConversationThread` unificado (63-5) deve renderizar corretamente em mobile (< 1024px) e desktop (≥ 1024px)
+- **NFR-6 (FASE 6):** A query de inbox (`/broker/chat`) deve completar em < 500ms p95 — usar apenas dados desnormalizados de `conversations` (sem N+1 em `messages`); `last_message_preview` e `last_message_role` já são desnormalizados via trigger `trg_messages_update_conv` (mig 038)
+- **NFR-7 (FASE 6):** O helper `countUnreadForLead` (63-16) deve ser coberto por Vitest (mínimo 4 cenários). O helper `formatRelativeTime` (63-17) deve ser coberto por Vitest (mínimo 5 cenários)
 
 ---
 
@@ -244,6 +304,11 @@ FASE 5 — Sequencial (controle de handoff IA↔Corretor):
 - [ ] Zero regressão no brokerSentRecently (usado como sinal complementar; continua correto)
 - [ ] Zero regressão no webhook WhatsApp (HTTP 200 imediato; Nicole continua processando quando is_ai_active=true)
 - [ ] Banner 63-8 (`deriveBrokerActive`) reflete corretamente o novo modelo: Estado B quando is_ai_active=false; Estado A quando is_ai_active=true e sem broker msg <24h
+- [ ] Story 63-16 Done → `conversations.broker_last_read_at` existe no remote; helper puro + server action funcionais; Vitest verde
+- [ ] Story 63-17 Done → `/broker/chat` acessível; lista ordenada por recência; cards com avatar, preview prefixado, timestamp relativo, badge verde; estados vazios
+- [ ] Story 63-18 Done → mobile: 4 tabs (Início, Pipeline, Agenda, Chat) + "Mais" abre bottom sheet; desktop: sidebar inalterada com todos os itens; a11y do sheet ok
+- [ ] Story 63-19 Done → badge verde na aba Chat aparece/some corretamente; abrir lead zera não-lidas daquele lead; `aria-live` anunciando total
+- [ ] Story 63-20 Done → inbox atualiza ao vivo; lead com nova mensagem sobe ao topo; badge de não-lidas incrementa sem reload
 
 ---
 
@@ -260,6 +325,10 @@ FASE 5 — Sequencial (controle de handoff IA↔Corretor):
 | GR-7 | Push spam por rajada de mensagens do lead (Q2 da 63-12) | Média | Médio | Debounce via `metadata.last_reply_push_at`; tempo definido pelo @po antes de Ready |
 | GR-8 | 63-13 inverte comportamento de `is_ai_active` em produção — Nicole pode parar de responder leads ativos se bug | Alta | Crítico | Smoke obrigatório pré-deploy em conversa de teste; rollback = `UPDATE conversations SET is_ai_active=true` (SQL admin); monitorar logs do webhook nas primeiras 2h após deploy |
 | GR-9 | Race condition 63-13: broker envia + lead responde simultaneamente → webhook pode ler `is_ai_active=true` antes do update do send-message | Baixa | Baixo | Eventual consistency aceitável — Nicole responde uma vez a mais; próxima mensagem do lead já encontrará `is_ai_active=false` |
+| GR-10 | Migration 104/105 aplicada sem `IF NOT EXISTS` → erro em re-execução | Baixa | Médio | Checklist de @data-engineer: sempre usar `ADD COLUMN IF NOT EXISTS` e bloco `DO $$ IF NOT EXISTS ... $$` para ALTER PUBLICATION |
+| GR-11 | `conversations` adicionada ao realtime (63-20) sem filtro no servidor → broker recebe eventos de conversas de OUTROS brokers da org | Média | Baixo | Aceitável — filtro client-side verifica `lead_id` contra state local. Risco: volume de eventos em org grande. Mitigação: política de realtime restrita pode ser configurada no Supabase Dashboard se necessário |
+| GR-12 | Badge de não-lidas com cor `green-500` (texto muito pequeno) falha WCAG AA | Baixa | Médio | CON-11 é explícita: usar `green-700` para texto; @qa verificar contraste na validação visual |
+| GR-13 | 63-18: `slice(0,4)` quebra se NAV_ITEMS tiver menos de 4 itens | Baixa | Baixo | NAV_ITEMS tem 9 itens — risco zero. Verificar se algum item é removido condicionalmente |
 
 ---
 
@@ -270,3 +339,4 @@ FASE 5 — Sequencial (controle de handoff IA↔Corretor):
 | 2026-06-18 | @sm (River) | Epic criado após auditoria de UX da área do corretor (10 problemas identificados em código; 3 fases; 10 stories) |
 | 2026-06-21 | @sm (River) | Fase 4 adicionada (Tempo Real & Notificações): stories 63-11 (realtime chat) e 63-12 (push lead respondeu). CON-7/CON-8, GR-6/GR-7, 3 novos Critérios de Done. 12 stories no total. |
 | 2026-06-21 | @sm (River) | Fase 5 adicionada (Controle de Handoff IA↔Corretor): stories 63-13 (handoff explícito ao responder + reativação 24h) e 63-14 (botão "Devolver para Nicole"). CON-3 REESCRITA (de proibição total a "apenas 3 mecanismos autorizados"). CON-9 adicionada (sem migration). GR-8/GR-9 adicionados. Compatibilidade de `deriveBrokerActive` (63-8), `getWindowStatus` (63-4), `notifyBrokerOnReply` (63-12) e realtime (63-11) com novo modelo verificada e documentada. 14 stories no total. Decisões pendentes @po: X=24h para reativação; permissão do botão resume-ai. |
+| 2026-06-22 | @sm (River) | Fase 6 adicionada (Caixa de Entrada de Conversas / Inbox): stories 63-16 a 63-20. 5 stories, 2 migrations (104 `broker_last_read_at`, 105 `realtime conversations`). CON-10/11/12 adicionadas. NFR-6/7 adicionadas. GR-10 a GR-13 adicionados. Novos Critérios de Done para Fase 6. Ordem de execução: Primeira Leva P0/P1 (63-16→17→18→19) caminho crítico; Segunda Leva P2 (63-20) após prod. 20 stories no total (15 done/review + 5 draft novas). |
