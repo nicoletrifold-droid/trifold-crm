@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { ensureConversaAtribuida } from "@web/lib/portal/conversa"
+import { ensureConversaAtribuida, notifyEquipeNovaMensagem } from "@web/lib/portal/conversa"
 
 const MAX_CONTENT_LENGTH = 2000
 const PAGE_SIZE = 30
@@ -106,10 +106,23 @@ export async function POST(
   }
 
   // Story 75-16: garante a conversa atribuída ao atendente padrão (roteamento).
-  await ensureConversaAtribuida(createAdminClient(), {
+  const adminCli = createAdminClient()
+  const conversaId = await ensureConversaAtribuida(adminCli, {
     obraId: obra_id,
     orgId: appUser.org_id,
     clienteId: appUser.id,
+  })
+  // Story 75-18: avisa a equipe (atendente + participantes) — fire-and-forget.
+  const { data: obraRow } = await adminCli
+    .from("obras")
+    .select("name")
+    .eq("id", obra_id)
+    .maybeSingle()
+  void notifyEquipeNovaMensagem(adminCli, {
+    conversaId,
+    obraNome: obraRow?.name ?? "Obra",
+    clienteNome: appUser.name ?? "Cliente",
+    trecho: content,
   })
 
   return NextResponse.json({ mensagem }, { status: 201 })

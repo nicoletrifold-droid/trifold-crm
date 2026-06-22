@@ -21,10 +21,10 @@ Modelo (migration 107): `obra_conversas` (obra+cliente, `assigned_to`, `status`)
 - [x] AC5: Endpoint `POST/DELETE /api/admin/mensagens/conversa/participants` adiciona/remove participante. UI: chips + "Adicionar" na barra da conversa.
 
 ### Fase 3 — aviso à equipe (PENDENTE — próximo bloco)
-- [ ] AC6: Quando o cliente envia mensagem, notificar (push/e-mail) o atendente responsável (+ participantes).
+- [x] AC6: Ao cliente enviar mensagem (texto), notifica o atendente responsável (push + e-mail) e os participantes (push). Helper `notifyEquipeNovaMensagem`.
 
-### Config (PENDENTE — próximo bloco)
-- [ ] AC7: Tela de Config para escolher o atendente padrão (por ora semeado direto no banco = Samara).
+### Config (PENDENTE — polimento)
+- [ ] AC7: Tela de Config para escolher o atendente padrão (atendente padrão JÁ semeado = Samara; falta só a UI de troca).
 
 ## Out of Scope (por ora)
 - Filtro "minhas/não atribuídas/todas" e exibição do atendente na LISTA da caixa (mostra na conversa aberta). Pode entrar depois.
@@ -59,3 +59,4 @@ Modelo (migration 107): `obra_conversas` (obra+cliente, `assigned_to`, `status`)
 
 ## Change Log
 - @sm/@po/@dev/@qa: Fase 1+2 criada, implementada, QA PASS (estático). Pendente migration 107 + push.
+- @devops (Gage): migration 107 aplicada via Management API + Samara setada como atendente padrão + Fase 1+2+3 em produção (commits 98e1bb1, +). Falta só a Config UI (AC7).
