@@ -62,8 +62,14 @@ export default async function ObraDetailPage({
 
   const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
 
-  const [fasesRes, fotosRes, documentosRes, clientesRes, aprovacoesRes] =
-    await Promise.all([
+  const [
+    fasesRes,
+    fotosRes,
+    documentosRes,
+    clientesRes,
+    aprovacoesRes,
+    clienteObrasRes,
+  ] = await Promise.all([
       supabase
         .from("obra_fases")
         .select(
@@ -78,7 +84,7 @@ export default async function ObraDetailPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("obra_documentos")
-        .select("id, name, filename, category, file_size_bytes, created_at")
+        .select("id, name, filename, category, file_size_bytes, created_at, cliente_obra_id")
         .eq("obra_id", obra_id)
         .order("created_at", { ascending: false }),
       supabase
@@ -106,6 +112,11 @@ export default async function ObraDetailPage({
             .eq("enviado_por", user.id)
             .in("status", ["pendente", "rejeitado"])
             .order("created_at", { ascending: false }),
+      // Story 75-6: vínculos de portal (cliente/unidade) para o seletor "Destinatário"
+      supabase
+        .from("cliente_obras")
+        .select("id, numero_unidade, users(name, email)")
+        .eq("obra_id", obra_id),
     ])
 
   const fases = fasesRes.data ?? []
@@ -150,6 +161,17 @@ export default async function ObraDetailPage({
       sienge_customer_id: (c as { sienge_customer_id?: number | null } | null)?.sienge_customer_id ?? null,
       portalUserId: portalUsersMap[email] ?? null,
     }
+  })
+
+  // Story 75-6: destinatários para documentos exclusivos (vínculos de portal).
+  const docDestinatarios = (clienteObrasRes.data ?? []).map((row) => {
+    const u = Array.isArray(row.users) ? row.users[0] : row.users
+    const nome =
+      (u as { name?: string } | null)?.name ??
+      (u as { email?: string } | null)?.email ??
+      "Cliente"
+    const label = row.numero_unidade ? `${nome} — ${row.numero_unidade}` : nome
+    return { id: row.id, label }
   })
 
 
@@ -291,6 +313,7 @@ export default async function ObraDetailPage({
         documentos={documentos}
         mensagens={mensagens}
         clientes={clientes}
+        docDestinatarios={docDestinatarios}
         supabaseUrl={supabaseUrl}
         userRole={user.role}
         initialAprovacoes={initialAprovacoes}

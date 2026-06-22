@@ -33,15 +33,16 @@ const NAV_ITEMS = [
     exact: false,
   },
   {
-    label: "Mensagens",
-    href: (id: string) => `/cliente/${id}/mensagens`,
-    icon: MessageSquare,
-    exact: false,
-  },
-  {
     label: "Financeiro",
     href: (id: string) => `/cliente/${id}/financeiro`,
     icon: Wallet,
+    exact: false,
+  },
+  {
+    // Story 75-4: "Mensagens" renomeado para "Chat" e movido para penúltima posição.
+    label: "Chat",
+    href: (id: string) => `/cliente/${id}/mensagens`,
+    icon: MessageSquare,
     exact: false,
   },
   {
@@ -120,7 +121,7 @@ export function Sidebar({ obraId, userName, userEmail, obraName, numeroUnidade, 
         {NAV_ITEMS.map(({ label, href, icon: Icon, exact }) => {
           const to = href(obraId)
           const isActive = exact ? pathname === to : pathname.startsWith(to)
-          const isMensagens = label === "Mensagens"
+          const isMensagens = to.endsWith("/mensagens")
           const onMensagensPage = pathname.startsWith(`/cliente/${obraId}/mensagens`)
           const badge = isMensagens && !onMensagensPage && effectiveUnread > 0 ? effectiveUnread : 0
           return (

@@ -238,12 +238,8 @@ export default async function ObraPage({
             <p className="truncate text-[17px] font-bold text-white leading-tight">
               {currentPhase?.name ?? "—"}
             </p>
-            {currentPhase?.end_date && (
-              <p className="mt-1 text-xs font-medium text-white/60">
-                Prev. conclusão: {formatShortDate(currentPhase.end_date)}
-              </p>
-            )}
-            {!currentPhase?.end_date && currentPhase && (
+            {/* Story 75-2: datas de fase não são exibidas ao cliente — só o status. */}
+            {currentPhase && (
               <p className="mt-1 text-xs font-medium text-white/60">
                 {FASE_STATUS_LABEL[currentPhase.status] ?? currentPhase.status}
               </p>
@@ -279,16 +275,12 @@ export default async function ObraPage({
             <p className="line-clamp-2 text-sm font-bold text-white leading-snug">
               {currentPhase?.description ?? currentPhase?.name ?? statusLabel}
             </p>
+            {/* Story 75-2: sem data de previsão — só o nome da fase. */}
             {currentPhase && (
-              <div className="mt-1 space-y-0.5">
+              <div className="mt-1">
                 <p className="truncate text-[10px] font-medium text-white/50 uppercase tracking-wide">
                   {currentPhase.name}
                 </p>
-                {currentPhase.end_date && (
-                  <p className="text-[10px] font-medium text-[#F27A5E]">
-                    Prev. {formatShortDate(currentPhase.end_date)}
-                  </p>
-                )}
               </div>
             )}
           </Link>
@@ -377,11 +369,9 @@ export default async function ObraPage({
                       key={idx}
                       className={`rounded-lg border border-stone-800/60 border-l-4 bg-stone-950/50 px-4 py-3 ${borders[idx % borders.length]}`}
                     >
+                      {/* Story 75-2: marco listado em ordem (por data interna), sem exibir a data. */}
                       <p className="text-sm font-semibold text-white">
                         {marco.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-stone-400">
-                        {formatShortDate(marco.date)}
                       </p>
                     </li>
                   )

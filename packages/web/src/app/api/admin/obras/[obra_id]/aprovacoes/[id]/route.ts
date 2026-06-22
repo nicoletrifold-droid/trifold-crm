@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { logAudit } from "@web/lib/audit"
 import { sendEmail } from "@web/lib/email"
+import { notifyClientes } from "@web/lib/notificacoes"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 const ALLOWED_ROLES = ["admin", "supervisor"]
@@ -113,6 +114,7 @@ export async function PATCH(
         filename?: string
         category: string
         file_size_bytes: number
+        cliente_obra_id?: string | null
       }
       const { error: insertErr } = await supabase.from("obra_documentos").insert({
         obra_id: aprovacao.obra_id,
@@ -123,6 +125,7 @@ export async function PATCH(
         filename: meta.filename ?? meta.name,
         category: meta.category,
         file_size_bytes: meta.file_size_bytes,
+        cliente_obra_id: meta.cliente_obra_id ?? null,
       })
       if (insertErr) {
         return NextResponse.json({ error: insertErr.message }, { status: 500 })
@@ -146,6 +149,15 @@ export async function PATCH(
     .single()
 
   const obraName = obra?.name ?? "Obra"
+
+  // Story 75-5: ao aprovar, notifica os clientes (foto/documento agora publicado).
+  if (acao === "aprovar") {
+    notifyClientes(
+      obra_id,
+      aprovacao.tipo === "foto" ? "nova_foto" : "novo_documento",
+      obraName
+    ).catch(() => {})
+  }
 
   // Fire-and-forget: email para o usuário obras que enviou
   notificarResultadoUpload({

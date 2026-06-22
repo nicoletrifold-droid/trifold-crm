@@ -13,6 +13,7 @@ import { FaseEditModal } from "./fase-edit-modal"
 import { AdminChatFeed } from "./admin-chat-feed"
 import { ClientesTab } from "./clientes-tab"
 import { AprovacoesTab, type AprovacaoItem } from "./aprovacoes-tab"
+import { groupFotosByFaseOrder } from "@web/lib/obra-fotos-grouping"
 
 interface Fase {
   id: string
@@ -43,6 +44,12 @@ interface Documento {
   category: string
   file_size_bytes: number | null
   created_at: string
+  cliente_obra_id?: string | null
+}
+
+interface DocDestinatario {
+  id: string
+  label: string
 }
 
 interface Mensagem {
@@ -75,6 +82,7 @@ interface ObraDetailTabsProps {
   documentos: Documento[]
   mensagens: Mensagem[]
   clientes: Cliente[]
+  docDestinatarios?: DocDestinatario[]
   supabaseUrl: string
   userRole: string
   initialAprovacoes: AprovacaoItem[]
@@ -391,6 +399,7 @@ export function ObraDetailTabs({
   documentos,
   mensagens,
   clientes,
+  docDestinatarios = [],
   supabaseUrl,
   userRole,
   initialAprovacoes,
@@ -398,6 +407,12 @@ export function ObraDetailTabs({
 }: ObraDetailTabsProps) {
   const isAdminOrSupervisor = userRole === "admin" || userRole === "supervisor"
   const isObras = userRole === "obras"
+
+  // Story 75-3: fotos publicadas agrupadas por fase, na sequência das fases (order_index).
+  const fotoGroups = groupFotosByFaseOrder(fotos, fases)
+
+  // Story 75-6: mapa vínculo → rótulo para o selo de destinatário dos documentos.
+  const destinatarioLabel = new Map(docDestinatarios.map((d) => [d.id, d.label]))
 
   // initialTab vem da URL (?tab=aprovacoes) — validado contra o tipo Tab
   const validTabs: Tab[] = ["fases", "fotos", "documentos", "mensagens", "clientes", "aprovacoes"]
@@ -574,9 +589,18 @@ export function ObraDetailTabs({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {/* Fotos publicadas */}
-                {fotos.map((foto) => {
+              <div className="space-y-6">
+                {/* Fotos publicadas, agrupadas por fase na sequência das fases (Story 75-3) */}
+                {fotoGroups.map((group) => (
+                  <div key={group.faseId ?? "sem-fase"}>
+                    <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
+                      {group.faseName}
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium normal-case text-gray-600 dark:bg-stone-800 dark:text-stone-300">
+                        {group.fotos.length}
+                      </span>
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {group.fotos.map((foto) => {
                   const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
                   return (
                     <div
@@ -605,9 +629,18 @@ export function ObraDetailTabs({
                     </div>
                   )
                 })}
+                    </div>
+                  </div>
+                ))}
 
                 {/* Fotos pendentes/rejeitadas do próprio usuário obras */}
-                {isObras && pendenteFotos.map((item) => {
+                {isObras && pendenteFotos.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
+                      Aguardando aprovação
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {pendenteFotos.map((item) => {
                   const isPendente = item.status === "pendente"
                   const isRejeitado = item.status === "rejeitado"
                   const meta = item.metadata as { caption?: string }
@@ -657,6 +690,9 @@ export function ObraDetailTabs({
                     </div>
                   )
                 })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -670,7 +706,7 @@ export function ObraDetailTabs({
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
               Adicionar documento
             </h2>
-            <DocUploadForm obraId={obraId} />
+            <DocUploadForm obraId={obraId} destinatarios={docDestinatarios} />
           </section>
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
@@ -695,6 +731,16 @@ export function ObraDetailTabs({
                           {doc.category} · {formatBytes(doc.file_size_bytes)} ·{" "}
                           {formatDate(doc.created_at)}
                         </p>
+                        {/* Story 75-6: destinatário (geral x exclusivo) */}
+                        {doc.cliente_obra_id ? (
+                          <span className="mt-1 inline-block rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+                            Exclusivo: {destinatarioLabel.get(doc.cliente_obra_id) ?? "cliente/unidade"}
+                          </span>
+                        ) : (
+                          <span className="mt-1 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-stone-700/50 dark:text-stone-400">
+                            Geral
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-1">
                         <button

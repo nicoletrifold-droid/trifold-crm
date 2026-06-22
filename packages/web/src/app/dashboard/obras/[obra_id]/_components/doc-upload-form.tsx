@@ -5,15 +5,22 @@ import { useRouter } from "next/navigation"
 
 const CATEGORIES = ["ART/RRT", "Contratos", "Memoriais", "Outros"] as const
 
-interface DocUploadFormProps {
-  obraId: string
+interface Destinatario {
+  id: string
+  label: string
 }
 
-export function DocUploadForm({ obraId }: DocUploadFormProps) {
+interface DocUploadFormProps {
+  obraId: string
+  destinatarios?: Destinatario[]
+}
+
+export function DocUploadForm({ obraId, destinatarios = [] }: DocUploadFormProps) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState("")
   const [category, setCategory] = useState<string>("Outros")
+  const [clienteObraId, setClienteObraId] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
@@ -38,6 +45,7 @@ export function DocUploadForm({ obraId }: DocUploadFormProps) {
       formData.append("file", file)
       formData.append("name", name.trim())
       formData.append("category", category)
+      if (clienteObraId) formData.append("cliente_obra_id", clienteObraId)
 
       const res = await fetch(`/api/admin/obras/${obraId}/documentos`, {
         method: "POST",
@@ -51,6 +59,7 @@ export function DocUploadForm({ obraId }: DocUploadFormProps) {
 
       setName("")
       setCategory("Outros")
+      setClienteObraId("")
       setFileName(null)
       if (fileRef.current) fileRef.current.value = ""
       router.refresh()
@@ -94,6 +103,31 @@ export function DocUploadForm({ obraId }: DocUploadFormProps) {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Story 75-6: documento geral (todos) ou exclusivo de um cliente/unidade */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400">
+          Destinatário
+        </label>
+        <select
+          value={clienteObraId}
+          onChange={(e) => setClienteObraId(e.target.value)}
+          disabled={loading || destinatarios.length === 0}
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+        >
+          <option value="">Geral — todos da obra</option>
+          {destinatarios.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.label}
+            </option>
+          ))}
+        </select>
+        {clienteObraId && (
+          <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">
+            Visível só para este cliente/unidade.
+          </p>
+        )}
       </div>
 
       <div>

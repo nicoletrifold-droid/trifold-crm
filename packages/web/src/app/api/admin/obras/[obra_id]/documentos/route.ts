@@ -125,6 +125,25 @@ export async function POST(
       ? categoryRaw
       : "Outros"
 
+  // Story 75-6: destinatário opcional (documento exclusivo de um cliente/unidade).
+  const clienteObraIdRaw = formData.get("cliente_obra_id")
+  let clienteObraId: string | null = null
+  if (typeof clienteObraIdRaw === "string" && clienteObraIdRaw.trim()) {
+    const { data: vinculo } = await supabase
+      .from("cliente_obras")
+      .select("id")
+      .eq("id", clienteObraIdRaw.trim())
+      .eq("obra_id", obra_id)
+      .maybeSingle()
+    if (!vinculo) {
+      return NextResponse.json(
+        { error: "Destinatário inválido para esta obra" },
+        { status: 400 }
+      )
+    }
+    clienteObraId = vinculo.id
+  }
+
   const ext = file.name.includes(".") ? file.name.split(".").pop() : ""
   const filename = file.name
   const storagePath = `obra-docs/${obra_id}/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`
@@ -156,6 +175,7 @@ export async function POST(
           filename,
           category,
           file_size_bytes: file.size,
+          cliente_obra_id: clienteObraId,
         },
         enviado_por: appUser.id,
       })
@@ -191,8 +211,9 @@ export async function POST(
       storage_path: storagePath,
       category,
       file_size_bytes: file.size,
+      cliente_obra_id: clienteObraId,
     })
-    .select("id, name, category, filename, file_size_bytes, created_at")
+    .select("id, name, category, filename, file_size_bytes, created_at, cliente_obra_id")
     .single()
 
   if (dbError) {
