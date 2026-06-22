@@ -7,6 +7,7 @@ import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
 import { WeatherWidget } from "@web/components/weather-widget"
+import { getBrokerUnreadTotal } from "@web/lib/broker/unread-count"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -38,21 +39,37 @@ export default async function BrokerLayout({
 
   const supabase = await createClient()
 
-  // Compromissos futuros e ativos do corretor — alimenta o badge do menu "Agenda".
-  const { count: agendaCount } = await supabase
-    .from("appointments")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .eq("broker_id", user.id)
-    .in("status", ["scheduled", "confirmed"])
-    .gte("scheduled_at", new Date().toISOString())
+  // Compromissos futuros/ativos (badge "Agenda") + total de conversas não-lidas
+  // (badge verde "Chat", Story 63-19). Queries independentes → Promise.all.
+  const [{ count: agendaCount }, chatUnread] = await Promise.all([
+    supabase
+      .from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", user.orgId)
+      .eq("broker_id", user.id)
+      .in("status", ["scheduled", "confirmed"])
+      .gte("scheduled_at", new Date().toISOString()),
+    getBrokerUnreadTotal(supabase, user.orgId, user.id),
+  ])
 
-  const navItems = NAV_ITEMS.map((item) =>
-    item.href === "/broker/agenda" ? { ...item, badge: agendaCount ?? 0 } : item
-  )
+  const navItems = NAV_ITEMS
+    .map((item) =>
+      item.href === "/broker/agenda" ? { ...item, badge: agendaCount ?? 0 } : item
+    )
+    .map((item) =>
+      item.href === "/broker/chat"
+        ? { ...item, badge: chatUnread, badgeTone: "green" as const }
+        : item
+    )
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      {/* Story 63-19 — anúncio de não-lidas para leitores de tela (badge visual é aria-hidden). */}
+      <span aria-live="polite" className="sr-only">
+        {chatUnread > 0
+          ? `${chatUnread} conversa${chatUnread === 1 ? "" : "s"} não lida${chatUnread === 1 ? "" : "s"}`
+          : ""}
+      </span>
       <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 hidden lg:flex" />
       <SidebarNav
         items={navItems}

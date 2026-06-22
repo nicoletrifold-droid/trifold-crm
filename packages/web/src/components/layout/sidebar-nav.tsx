@@ -144,7 +144,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                         <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                         <span className="flex-1">{item.label}</span>
                         {item.badge != null && item.badge > 0 && !active && (
-                          <span className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
+                          <span aria-hidden="true" className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
                             {item.badge > 99 ? "99+" : item.badge}
                           </span>
                         )}
@@ -223,7 +223,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                 <span className="relative flex h-5 w-5 items-center justify-center">
                   {item.icon}
                   {item.badge != null && item.badge > 0 && !active && (
-                    <span className={`absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full ${badgeBg(item)} px-1 text-[9px] font-bold text-white`}>
+                    <span aria-hidden="true" className={`absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full ${badgeBg(item)} px-1 text-[9px] font-bold text-white`}>
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
@@ -300,7 +300,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                         <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                         <span className="flex-1">{item.label}</span>
                         {item.badge != null && item.badge > 0 && !active && (
-                          <span className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
+                          <span aria-hidden="true" className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
                             {item.badge > 99 ? "99+" : item.badge}
                           </span>
                         )}
