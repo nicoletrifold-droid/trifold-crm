@@ -85,7 +85,8 @@ export function LeadFilters({
       {showAtendimento && (
         <select value={activeIa} onChange={(e) => setParam(iaParam, e.target.value)} className={selectClass}>
           <option value="">Atendimento: Todos</option>
-          <option value="ia">Nicole (IA)</option>
+          <option value="ia">Apenas IA</option>
+          <option value="humano_ia">Humano + IA</option>
           <option value="humano">Humano</option>
         </select>
       )}

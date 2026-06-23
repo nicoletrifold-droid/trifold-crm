@@ -82,6 +82,37 @@ export default async function ConversasPage({
     .map((u) => ({ id: u.id, name: u.name as string }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  // Mensagens de TODAS as conversas ativas em um fetch (sem N+1). Usado para:
+  // (1) contar não-lidas; (2) detectar se a Nicole participou (msg role='assistant')
+  // — necessário para distinguir "Humano + IA" de "Humano" no filtro de atendimento.
+  const allIds = rows.map((c) => c.id)
+  const { data: messages } = allIds.length
+    ? await supabase
+        .from("messages")
+        .select("conversation_id, role, created_at")
+        .in("conversation_id", allIds)
+    : { data: [] }
+
+  const msgsByConv = new Map<string, { conversation_id: string; role: string; created_at: string }[]>()
+  for (const m of (messages ?? []) as { conversation_id: string; role: string; created_at: string }[]) {
+    const list = msgsByConv.get(m.conversation_id)
+    if (list) list.push(m)
+    else msgsByConv.set(m.conversation_id, [m])
+  }
+
+  // A Nicole participou da conversa? (existe mensagem dela, role='assistant')
+  const nicoleParticipou = (convId: string) =>
+    (msgsByConv.get(convId) ?? []).some((m) => m.role === "assistant")
+
+  // Classificação de atendimento (3 estados):
+  //  - "ia"        → Apenas IA: ainda com a Nicole, nunca repassado (is_ai_active=true)
+  //  - "humano_ia" → Humano + IA: houve handoff E a Nicole participou
+  //  - "humano"    → Humano: houve handoff E a Nicole NUNCA participou (lead manual)
+  function atendimentoDe(conv: ConversationRow): "ia" | "humano_ia" | "humano" {
+    if (conv.is_ai_active) return "ia"
+    return nicoleParticipou(conv.id) ? "humano_ia" : "humano"
+  }
+
   // Corte do filtro "Sem contato" (parado N dias). 0 = sem filtro.
   const staleCutoff = staleCutoffMs(days ? parseInt(days, 10) : 0)
 
@@ -93,8 +124,7 @@ export default async function ConversasPage({
     if (stage && lead.stage_id !== stage) return false
     if (property && lead.property_interest_id !== property) return false
     if (broker_id && lead.assigned_broker_id !== broker_id) return false
-    if (ia === "ia" && !conv.is_ai_active) return false
-    if (ia === "humano" && conv.is_ai_active) return false
+    if (ia && atendimentoDe(conv) !== ia) return false
     if (staleCutoff) {
       // Mantém só conversas paradas: last_message_at mais antigo que o corte
       // (sem mensagem = sem contato → mantém).
@@ -108,24 +138,6 @@ export default async function ConversasPage({
     }
     return true
   })
-
-  // Não-lidas por card (sem N+1): um fetch batch das mensagens das conversas exibidas.
-  // Aqui broker_last_read_at reflete a leitura do CORRETOR responsável — útil para o
-  // gestor identificar conversas em que o corretor está atrasado.
-  const conversationIds = filtered.map((c) => c.id)
-  const { data: messages } = conversationIds.length
-    ? await supabase
-        .from("messages")
-        .select("conversation_id, role, created_at")
-        .in("conversation_id", conversationIds)
-    : { data: [] }
-
-  const msgsByConv = new Map<string, { conversation_id: string; role: string; created_at: string }[]>()
-  for (const m of (messages ?? []) as { conversation_id: string; role: string; created_at: string }[]) {
-    const list = msgsByConv.get(m.conversation_id)
-    if (list) list.push(m)
-    else msgsByConv.set(m.conversation_id, [m])
-  }
 
   const hasFilter = Boolean(search || stage || property || broker_id || days || ia)
 
@@ -173,6 +185,7 @@ export default async function ConversasPage({
             const stageData = one(lead.kanban_stages)
             const propertyData = one(lead.properties)
             const brokerData = one(lead.assigned_broker)
+            const atend = atendimentoDe(conv)
             const displayName = lead.name || lead.phone
             const initial = (lead.name ?? lead.phone ?? "?").trim().charAt(0).toUpperCase() || "?"
 
@@ -249,9 +262,13 @@ export default async function ConversasPage({
                       >
                         {channel.label}
                       </span>
-                      {conv.is_ai_active ? (
+                      {atend === "ia" ? (
                         <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/15 dark:text-purple-300">
-                          🤖 Nicole
+                          🤖 Apenas IA
+                        </span>
+                      ) : atend === "humano_ia" ? (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                          🤖 Humano + IA
                         </span>
                       ) : (
                         <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">

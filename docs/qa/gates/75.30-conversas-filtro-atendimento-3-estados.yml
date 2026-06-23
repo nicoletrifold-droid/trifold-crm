@@ -1,0 +1,20 @@
+schema: 1
+story: "75.30"
+storyId: "75.30"
+title: "Filtro Atendimento com 3 estados (Apenas IA / Humano + IA / Humano)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Filtro de Atendimento refinado para 3 estados conforme definição do usuário.
+  conversas/page.tsx busca mensagens de todas as conversas ativas antes do filtro
+  e classifica via atendimentoDe(): 'ia' (is_ai_active), 'humano_ia' (handoff +
+  Nicole participou — existe msg role='assistant'), 'humano' (handoff sem Nicole).
+  Selo do card com 3 variações. lead-filters com opções Apenas IA / Humano + IA /
+  Humano. Validado em prod: 65 apenas IA, 6 humano+IA, 0 humano puro — exatamente
+  como o usuário descreveu. typecheck e lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 93
+waiver: { active: false }
