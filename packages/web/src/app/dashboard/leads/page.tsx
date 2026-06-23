@@ -7,6 +7,7 @@ import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
 import { PERDIDO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
+import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 
 const PAGE_SIZE = 50
 
@@ -97,9 +98,12 @@ export default async function LeadsPage({
   }
 
   if (params.days) {
-    const daysAgo = new Date(Date.now() - Number(params.days) * 86400000).toISOString()
-    query = query.lt("updated_at", daysAgo)
-    countQuery = countQuery.lt("updated_at", daysAgo)
+    const cutoff = staleCutoffMs(Number(params.days))
+    if (cutoff) {
+      const daysAgo = new Date(cutoff).toISOString()
+      query = query.lt("updated_at", daysAgo)
+      countQuery = countQuery.lt("updated_at", daysAgo)
+    }
   }
 
   // "criados=hoje" — leads criados a partir da meia-noite de hoje.

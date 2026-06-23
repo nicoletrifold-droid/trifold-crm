@@ -1,0 +1,28 @@
+schema: 1
+story: "75.27"
+storyId: "75.27"
+title: "'Sem contato' na lista de Leads via helper (lint-clean)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  dashboard/leads/page.tsx e broker/leads/page.tsx passam a calcular o corte do
+  filtro "Sem contato" via staleCutoffMs (helper que isola Date.now fora do render).
+  Comportamento inalterado (filtro por updated_at < corte; dashboard via query.lt,
+  broker via filtro JS). Os erros react-hooks/purity (Date.now no render) das duas
+  páginas foram eliminados. Resta apenas 1 warning PRÉ-EXISTENTE e alheio
+  ('isAdmin' não usado em dashboard/leads:43) — não introduzido por esta story.
+  typecheck limpo.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 93
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "filtro por updated_at preservado (query.lt no dashboard; filtro JS no broker)"
+  - ac: 2
+    note: "Date.now isolado em staleCutoffMs; componentes usam new Date(cutoff)"
+  - ac: 3
+    note: "erro de purity removido nas 2 páginas; resta só warning pré-existente isAdmin"
