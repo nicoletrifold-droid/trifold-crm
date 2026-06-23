@@ -1,0 +1,23 @@
+schema: 1
+story: "76.2"
+storyId: "76.2"
+title: "Wiring no webhook + handoff de relacionamento (cliente → Samara)"
+epic: 76
+gate: PASS
+verdict: PASS
+status_reason: >
+  Gate maybeRouteInboundToRelationship no webhook do WhatsApp, antes do pipeline da Nicole.
+  Só roda enquanto a conversa não foi classificada (relationship_checked) e ignora lead já
+  atribuído a corretor (não sequestra lead real). Em phone_match: marca conversa
+  is_relationship + handoff (is_ai_active=false, handoff_reason=relationship) com cliente/obra
+  (obra única já gravada), arquiva o lead (is_active=false → sai do funil/roleta), envia msg
+  curta de encaminhamento ao cliente (registrada em messages) e notifica gerente(s) de
+  relacionamento por push+e-mail. Migration 110 aplicada (4 colunas + índice parcial). Helper
+  puro actionFromIdentify testado (phone_match→route, none→mark_checked, name/ambiguous→skip).
+  20 testes vitest em lib/relacionamento; typecheck e lint limpos. name/ambíguo, perguntar
+  obra (múltiplas) e resumo de contexto ficam p/ 76-3; Chat/UI+resposta Samara p/ 76-4.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 89
+waiver: { active: false }
