@@ -1,0 +1,24 @@
+schema: 1
+story: "75.41"
+storyId: "75.41"
+title: "Perfil Gerente de Relacionamento (clone do perfil Obras)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Novo role gerente-relacionamento criado na org (id 6a551e91…) com role_permissions =
+  matriz exata da obras (obras/brindes/chamados=true). Código: "gerente-relacionamento"
+  adicionado em TODAS as ~37 checagens de role com "obras" (34 arquivos via arrays
+  ALLOWED_ROLES/STAFF_ROLES/requireRole/IMOVEIS_EDIT_ROLES/includes) + 5 inline
+  (documentos/fotos → fila de aprovação; solicitar-exclusão; login redirect /dashboard/obras;
+  middleware de paths) + case no getHardcodedPermissions (fallback). Invariante verificado:
+  nenhuma checagem de role com "obras" ficou sem "gerente-relacionamento" (só sobra a linha
+  module-based do layout, que trata obras e o novo role igual). Exceções individuais da Samara
+  (configuracoes/mensagens) são do usuário e seguem valendo. obras/Ana Luiza/Teste Obras
+  inalterados. typecheck limpo; lint sem erros novos (os existentes são do worker minificado).
+  PENDENTE pós-deploy: trocar users.role da Samara obras→gerente-relacionamento.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 90
+waiver: { active: false }

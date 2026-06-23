@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { notifyClientes } from "@web/lib/notificacoes"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "broker", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "broker", "obras", "gerente-relacionamento"]
 
 export async function GET(
   req: NextRequest,
@@ -50,7 +50,7 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const canSeeSenderName = ["admin", "supervisor", "obras"].includes(appUser.role)
+  const canSeeSenderName = ["admin", "supervisor", "obras", "gerente-relacionamento"].includes(appUser.role)
   const result = (mensagens ?? []).map((m) => ({
     ...m,
     sender_display_name: canSeeSenderName ? m.sender_display_name : null,

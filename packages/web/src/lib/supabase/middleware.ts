@@ -140,7 +140,7 @@ export async function updateSession(request: NextRequest) {
   // Obras role: restricted to /dashboard/obras, /dashboard/brindes,
   // /dashboard/mensagens, /dashboard/chamados e /dashboard/configuracoes/clientes
   if (
-    role === "obras" &&
+    (role === "obras" || role === "gerente-relacionamento") &&
     pathname.startsWith("/dashboard") &&
     !pathname.startsWith("/dashboard/obras") &&
     !pathname.startsWith("/dashboard/brindes") &&

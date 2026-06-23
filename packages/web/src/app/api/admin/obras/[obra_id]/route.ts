@@ -3,7 +3,7 @@ import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const ADMIN_ONLY = ["admin"]
 
 export async function GET(

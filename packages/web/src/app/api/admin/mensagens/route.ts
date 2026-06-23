@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 const PAGE_LIMIT_DEFAULT = 30
 const PAGE_LIMIT_MAX = 100

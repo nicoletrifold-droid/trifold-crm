@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 // Nota: o parâmetro se chama "user_id" por compatibilidade de rota,
 // mas agora representa o ID do vínculo em clientes_obras_vinculos.

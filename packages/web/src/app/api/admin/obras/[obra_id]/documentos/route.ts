@@ -5,7 +5,7 @@ import { notifyClientes } from "@web/lib/notificacoes"
 import { sendEmail } from "@web/lib/email"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 const VALID_CATEGORIES = ["ART/RRT", "Contratos", "Memoriais", "Outros"]
 
@@ -161,7 +161,7 @@ export async function POST(
   }
 
   // Role obras: entra em fila de aprovação
-  if (appUser.role === "obras") {
+  if (appUser.role === "obras" || appUser.role === "gerente-relacionamento") {
     const { data: aprovacao, error: insertError } = await supabase
       .from("obra_upload_aprovacoes")
       .insert({

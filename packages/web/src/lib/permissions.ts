@@ -82,6 +82,8 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
       }
 
     case "obras":
+    // Gerente de Relacionamento (Story 75-41): mesmos privilégios da obras.
+    case "gerente-relacionamento":
       return {
         ...emptyMatrix(),
         obras: true,

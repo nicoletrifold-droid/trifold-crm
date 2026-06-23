@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 export async function GET(
   req: Request,

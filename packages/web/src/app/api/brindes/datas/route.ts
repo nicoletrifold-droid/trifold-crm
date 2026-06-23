@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "obras"])
+  const roleError = requireRole(appUser, ["admin", "supervisor", "obras", "gerente-relacionamento"])
   if (roleError) return roleError
 
   let body: Record<string, unknown>

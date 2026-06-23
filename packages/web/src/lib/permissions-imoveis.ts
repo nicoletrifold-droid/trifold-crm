@@ -10,7 +10,7 @@
  * Módulo puro (sem código server-side) — pode ser importado em Server e Client Components.
  */
 
-export const IMOVEIS_EDIT_ROLES = ["admin", "supervisor", "obras"] as const
+export const IMOVEIS_EDIT_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"] as const
 export const IMOVEIS_CREATE_ROLES = ["admin", "supervisor"] as const
 
 /** Pode editar empreendimentos, unidades (exceto status) e tipologias. */

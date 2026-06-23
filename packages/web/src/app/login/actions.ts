@@ -76,7 +76,7 @@ export async function login(formData: FormData) {
     } else {
       destination = "/cliente/selecionar"
     }
-  } else if (appUser?.role === "obras") {
+  } else if (appUser?.role === "obras" || appUser?.role === "gerente-relacionamento") {
     destination = "/dashboard/obras"
   } else {
     // admin, supervisor, or anything else: dashboard.
