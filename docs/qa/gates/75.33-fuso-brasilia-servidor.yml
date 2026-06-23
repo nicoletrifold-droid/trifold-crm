@@ -1,0 +1,19 @@
+schema: 1
+story: "75.33"
+storyId: "75.33"
+title: "Padronizar fuso horário do servidor em Brasília"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  src/instrumentation.ts register() seta process.env.TZ=America/Sao_Paulo no runtime
+  nodejs (guard NEXT_RUNTIME). Vercel reserva o env var TZ, então a abordagem por código
+  é a viável. Node honra a mudança de TZ em runtime → datas server-side passam a renderizar
+  em BRT (UTC-3 fixo; Brasil sem horário de verão). DB segue em UTC (correto). typecheck,
+  lint e next build limpos (instrumentation reconhecido). Varredura dos ~100 toLocale*
+  fica como melhoria futura (acessos de outro fuso); navegador já usa fuso local.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 90
+waiver: { active: false }
