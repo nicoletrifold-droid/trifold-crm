@@ -153,6 +153,13 @@ GROUP BY a.meta_ad_id, ...
   (`entity_id =` + `date` range + `ORDER BY date DESC LIMIT 1`). O índice
   `idx_meta_insights_entity_date (entity_id, date DESC)` serve esse padrão **perfeitamente** (igualdade no
   prefixo + ordenação descendente coberta → Index Scan ... LIMIT 1 sem Sort).
+  > **Nota (DOC-001) — índice candidato co-igual:** o `UNIQUE (org_id, level, entity_id, date)` da
+  > migration 015 é candidato **igual ou superior** para esta subquery. As subqueries também filtram
+  > `org_id =` e `level = 'ad'`, que o UNIQUE inclui no prefixo (`org_id, level, entity_id`) antes de
+  > `date` — cobrindo o predicado de igualdade **completo** mais a ordenação `date DESC`, enquanto o
+  > `idx_meta_insights_entity_date` só cobre `entity_id`+`date` (org_id/level viram Filter). Ambos evitam
+  > Sort e nenhum gap existe; qual dos dois o planner escolhe depende de seletividade/estatísticas. O
+  > veredito (sem DDL nova) **não muda** — apenas registra o UNIQUE como índice servível co-igual neste alvo.
 - **Cardinalidade:** 500 linhas em `level='ad'`, 581 ads.
 - **Veredito (inferido):** **USANDO_INDICE (a escala) / parcialmente Seq Scan agora.** Índices corretos
   para todos os acessos. Sem gap.
@@ -217,7 +224,7 @@ Este é o alvo de maior risco (R1). Comparação literal:
 |--------|-----------------|----------|:----:|
 | AC1a — global `meta_insights_daily` | `idx_meta_insights_org_level_date` | USANDO_INDICE (a escala) / Seq Scan ótimo agora | ❌ Não |
 | AC1b — campanha `meta_insights_daily` | `UNIQUE(org_id,level,entity_id,date)` | USANDO_INDICE (a escala) | ❌ Não |
-| AC2 — `creative_performance` | `idx_meta_insights_entity_date` | USANDO_INDICE (a escala) | ❌ Não |
+| AC2 — `creative_performance` | `idx_meta_insights_entity_date` **ou** `UNIQUE(org_id,level,entity_id,date)` (co-igual, DOC-001) | USANDO_INDICE (a escala) | ❌ Não |
 | AC3 — `creative_performance_with_crm` (`ad_id`) | `idx_leads_metadata_ad_id` (parcial) | USANDO_INDICE — **forma alinhada** (R1 mitigado) | ❌ Não |
 | AC4 — `pipeline_funnel_by_campaign` | `idx_meta_insights_org_level_entity` | USANDO_INDICE (a escala) | ❌ Não |
 

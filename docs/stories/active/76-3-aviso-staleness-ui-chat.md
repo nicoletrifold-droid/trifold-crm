@@ -99,7 +99,8 @@ O projeto usa `fixed inset-0 z-60 flex items-center justify-center` para overlay
   - [x] Banner âmbar para `isStale = true`, banner vermelho para `isError = true` (erro tem prioridade)
   - [x] Botão X para dispensar o banner (dismiss por referência — volta no próximo refresh de 5min)
   - [x] Posicionar acima do histórico do chat, abaixo do cabeçalho do painel (não sobrepõe conteúdo)
-  - [ ] Validar visual com @ux-design-expert (Uma) antes de marcar AC completo — PENDENTE (gate downstream)
+  - [x] Validar contraste WCAG AA dos pares de cor (UX-001): amber-800 (#92400e) sobre amber-50 (#fffbeb) = **6.84:1**; red-800 (#991b1b) sobre red-50 (#fef2f2) = **7.60:1**. Ambos passam AA para texto normal (≥4.5:1) com folga. Cálculo via fórmula WCAG 2.x de luminância relativa (ver Dev Notes).
+  - [ ] Validação visual ampla (tamanho/posicionamento/dark-mode) com @ux-design-expert (Uma) — PENDENTE (gate downstream, não-bloqueante)
 
 - [x] **T4 — Integrar banner no `agent-chat-panel.tsx` (AC2, AC3, AC5, AC6)**
   - [x] Importar/usar `SyncStatusBanner` + `useProvenanceStatus` no painel
@@ -179,9 +180,12 @@ Claude Opus 4.8 (1M context) — @dev (Dex), modo YOLO
 - `packages/web/src/components/agent/sync-status-banner.tsx` — banner não-modal
 
 **Modificados:**
-- `packages/web/src/lib/agent/context-builder.ts` — adicionado `fetchProvenance()` + tipo `ProvenanceStatus` (aditivo; reusa `computeProvenance`/`safeProvenanceData` da 76-1; `buildGlobalContext`/`buildCampaignContext` intocados). SEC-001: removido o campo `errorMessage` da interface `ProvenanceStatus` e do retorno de `fetchProvenance`.
+- `packages/web/src/lib/agent/context-builder.ts` — adicionado `fetchProvenance()` + tipo `ProvenanceStatus` (aditivo; reusa `computeProvenance`/`safeProvenanceData` da 76-1; `buildGlobalContext`/`buildCampaignContext` intocados). SEC-001: removido o campo `errorMessage` da interface `ProvenanceStatus` e do retorno de `fetchProvenance`. **ARCH-001 (2026-06-23):** extraído o helper exportado `provenanceQueryBuilders(supabase, orgId, { startDate, endDate })` — fonte única do plumbing das 3 queries de proveniência, consumido por SPREAD em `buildGlobalContext` (mesmo `Promise.all`, batching/AC7 preservados) e em `fetchProvenance`. Janela passada como parâmetro mantém o casamento de janela do AC2 e a independência do caminho standalone (`days`→`dateNdAgo`).
 - `packages/web/src/app/api/agent/context-meta/route.ts` — SEC-001: removido `errorMessage` do `FAIL_SAFE` (campo retirado do contrato de resposta).
 - `packages/web/src/components/agent/agent-chat-panel.tsx` — integra hook + banner no topo da view de chat
+
+**Criados (hardening dos concerns, 2026-06-23):**
+- `packages/web/src/lib/agent/__tests__/provenance-queries.test.ts` — testes de plumbing das queries: org_id scoping (TEST-001/AC6) e casamento de janela insights×P1 (TEST-002/AC2), via helper direto e via `buildGlobalContext` com mock leve do Supabase.
 
 ### Completion Notes
 
@@ -192,6 +196,10 @@ Claude Opus 4.8 (1M context) — @dev (Dex), modo YOLO
 - **AC5 (reaparecer após dismiss):** o dismiss guarda a *referência* do objeto `status` dispensado e deriva `dismissed = dismissedFor === status`. Como o hook produz um novo objeto a cada poll, o aviso reaparece no próximo refresh de 5 min sem `setState` dentro de effect (evita o lint error `react-hooks` de cascading renders).
 - **AC6:** polling só ativo com o painel aberto (`useProvenanceStatus(isOpen)`); refetch imediato a cada reabertura + intervalo de 5 min; `clearInterval` no cleanup. Independente do streaming (R2).
 - **AC7:** endpoint usa `requireAuth()` → `createClient()` com sessão do usuário; filtro por `appUser.org_id`; sem `service_role`.
+- **Contraste WCAG AA (UX-001 — VALIDADO 2026-06-23):** os 2 pares de cor do banner (modo claro) foram calculados pela fórmula WCAG 2.x (luminância relativa sRGB + ratio `(L1+0.05)/(L2+0.05)`):
+  - **Staleness (âmbar):** texto `amber-800` `#92400e` (L≈0.0981) sobre fundo `amber-50` `#fffbeb` (L≈0.9625) → **6.84:1**.
+  - **Erro (vermelho):** texto `red-800` `#991b1b` (L≈0.0763) sobre fundo `red-50` `#fef2f2` (L≈0.9099) → **7.60:1**.
+  - Ambos **passam WCAG AA** para texto normal (limiar ≥4.5:1) com folga; o vermelho também passa AAA (≥7:1). Nenhum ajuste de paleta necessário. Os pares de dark-mode (`amber-300`/`amber-500.10`, `red-300`/`red-500.10`) e a validação visual ampla (tamanho, posicionamento) seguem como follow-up com @ux-design-expert, mas o requisito de contraste de texto do AC já está coberto numericamente.
 - **errorMessage (SEC-001 — RESOLVIDO 2026-06-22):** o campo foi **removido** do contrato do endpoint. O @architect levantou SEC-001 (info-disclosure menor) no gate: `meta_sync_log.error_message` cru era exposto a usuários autenticados da org sem nenhum consumo na UI (YAGNI + menor privilégio). Grep confirmou que `use-provenance-status.ts`, `sync-status-banner.tsx` e `agent-chat-panel.tsx` não leem `.errorMessage` — a UI usa apenas `isStale`/`isError`/`lastSyncAt`. Aplicada a opção preferida (remoção): removido `errorMessage` da interface `ProvenanceStatus`, do retorno de `fetchProvenance` e do `FAIL_SAFE` em `context-meta/route.ts`. `isError` (booleano) intacto — é o que dispara o banner vermelho. Selects internos de `error_message` em `buildGlobalContext` (contexto AI server-side, nunca exposto ao cliente) deixados intocados por estarem fora de escopo. Validação: type-check/lint sem novos problemas, 565/565 testes passam.
 
 ### Validação executada
@@ -272,3 +280,4 @@ Claude Opus 4.8 (1M context) — @dev (Dex), modo YOLO
 | 2026-06-22 | v1.1 | Implementação: endpoint `context-meta` (reusa 76-1 via novo `fetchProvenance`), hook `useProvenanceStatus`, `SyncStatusBanner` integrado ao painel. type-check/lint limpos; 565 testes ok. Status → Ready for Review | @dev (Dex) |
 | 2026-06-22 | v1.2 | Architect Quality Gate: CONCERNS (aprovado, não-bloqueante). 3 checks nomeados PASS; isolamento multi-tenant validado (anon key + RLS + org_id da sessão). 3 follow-ups (ARCH-001/SEC-001/UX-001). Validações reais: typecheck/lint limpos, 565/565 testes. Status → InReview | @architect (Aria) |
 | 2026-06-22 | v1.3 | SEC-001 resolvido: removido o campo `errorMessage`/`error_message` do contrato de resposta do endpoint `context-meta` (interface `ProvenanceStatus`, retorno de `fetchProvenance`, `FAIL_SAFE`). Sem consumidor na UI (grep confirmado); `isError` intacto. type-check/lint sem novos problemas; 565/565 testes passam | @dev (Dex) |
+| 2026-06-23 | v1.4 | ARCH-001 resolvido: extraído helper `provenanceQueryBuilders` (fonte única do plumbing das 3 queries), consumido por SPREAD em `buildGlobalContext` (batching/AC7 preservado) e `fetchProvenance`. UX-001 resolvido: contraste WCAG AA calculado (amber 6.84:1, red 7.60:1 — ambos passam AA). Novo `provenance-queries.test.ts` (org_id scoping + casamento de janela). typecheck só com 3 erros pré-existentes de react-email-editor; lint exit 0; 562/562 testes (44 arquivos) | @dev (Dex) |

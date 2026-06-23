@@ -208,9 +208,10 @@ Esta story é **apenas TypeScript** — zero migrations SQL. Lê apenas colunas/
 
 **Criados:**
 - `packages/web/src/lib/agent/__tests__/provenance.test.ts` — 12 testes Vitest (pura, sem mock de Supabase)
+- `packages/web/src/lib/agent/__tests__/provenance-queries.test.ts` — (hardening 2026-06-23, TEST-001/TEST-002) 5 testes de plumbing das queries com mock leve do Supabase: org_id scoping nas 3 queries de proveniência (AC6) e casamento de janela insights×P1 dentro de `buildGlobalContext` (AC2)
 
 **Modificados:**
-- `packages/web/src/lib/agent/context-builder.ts` — constante `STALENESS_THRESHOLD_HOURS`, tipos `ProvenanceQueryResult`/`ProvenanceBlock`, funções puras `computeProvenance` + `formatProvenanceBlock`, helper `safeProvenanceData`; 3 queries de proveniência integradas ao `Promise.all` de `buildGlobalContext`; header `CONTEXTO META ADS` agora emite o bloco `[PROVENIÊNCIA DOS DADOS META ADS]`
+- `packages/web/src/lib/agent/context-builder.ts` — constante `STALENESS_THRESHOLD_HOURS`, tipos `ProvenanceQueryResult`/`ProvenanceBlock`, funções puras `computeProvenance` + `formatProvenanceBlock`, helper `safeProvenanceData`; 3 queries de proveniência integradas ao `Promise.all` de `buildGlobalContext`; header `CONTEXTO META ADS` agora emite o bloco `[PROVENIÊNCIA DOS DADOS META ADS]`. **ARCH-001 (2026-06-23):** plumbing das 3 queries extraído para o helper exportado `provenanceQueryBuilders(supabase, orgId, { startDate, endDate })`, consumido por SPREAD no mesmo `Promise.all` de `buildGlobalContext` (batching/AC7 preservado, sem round-trip extra) e em `fetchProvenance` (76-3). A janela é parâmetro, mantendo o casamento de janela do AC2.
 - `packages/web/src/lib/agent/system-prompt.ts` — nova seção "## Proveniência e recência dos dados (obrigatório)" (datação + alerta de staleness/erro), aditiva, sem alterar regras existentes
 
 **Verificado (não modificado):**
@@ -269,6 +270,7 @@ Esta story é **apenas TypeScript** — zero migrations SQL. Lê apenas colunas/
 | 2026-06-22 | v1.1 | Implementação completa (T1–T6, AC1–AC9). Bloco de proveniência + alerta de staleness/erro; 12 testes Vitest; suíte 565/565. Status → Ready for Review | @dev (Dex) |
 | 2026-06-22 | v1.2 | Quality gate executado — verdict CONCERNS (AC1-AC9 atendidas, validações verdes em runtime; débito de escopo: buildCampaignContext sem proveniência → follow-up) | @qa (Quinn) |
 | 2026-06-23 | v1.3 | Reconciliação com o `main` atual (modelo `DateWindow` da 52-8): P1 de proveniência migrada de `dateNdAgo..today` para `startDate..endDate` (mesma janela dos insights), preservando AC2. type-check/lint/Vitest verdes (557/557 na raiz) | @dev (Dex) |
+| 2026-06-23 | v1.4 | Hardening dos concerns não-bloqueantes do gate: TEST-001 (org_id scoping) e TEST-002 (casamento de janela) cobertos por `provenance-queries.test.ts` (5 testes, mock leve do Supabase). Plumbing das queries extraído para o helper `provenanceQueryBuilders` (ARCH-001), preservando batching/AC7. typecheck só com 3 erros pré-existentes (react-email-editor); lint exit 0; 562/562 testes (44 arquivos) | @dev (Dex) |
 
 ---
 
@@ -332,3 +334,69 @@ Gate: CONCERNS → docs/qa/gates/76.1-provenancia-staleness-contexto-agente.yml
 - TEST-001 (low): AC6 (org_id) validada só por inspeção → considerar teste de integração em hardening futuro
 
 **Recomendação de status:** aprovável para prosseguir ao @devops com ciência dos itens acima. As AC estão 100% atendidas e as validações verdes — os concerns são informativos/follow-up, não correções obrigatórias.
+
+---
+
+### Re-Review Date: 2026-06-23 (RE-GATE pós-reconciliação)
+
+### Reviewed By: Quinn (Test Architect & Quality Advisor)
+
+### Motivo do re-gate
+
+A implementação original foi feita contra uma base do `main` ~299 commits desatualizada. O Epic 76 foi reconciliado contra o `origin/main` atual na branch `feat/epic-76-meta-data-proveniencia-performance` (commit `98e6a38`). A reconciliação MUDOU a semântica de janela do AC2: a Story 52-8 (period chips) refatorou `buildGlobalContext` para o modelo `DateWindow` (`startDate`/`endDate`) e REMOVEU a variável `dateNdAgo`. A query P1 de proveniência foi migrada para acompanhar essa janela.
+
+### Validação do foco — AC2 (janela)
+
+**CONFIRMADO por leitura do código (não só do relatório do @dev):** a query P1 de proveniência (`context-builder.ts:499-510`) agora usa `.gte("date", startDate).lte("date", endDate)` — EXATAMENTE as mesmas variáveis `startDate` (l.451) e `endDate` (l.452) consumidas pela query de insights de campanha (l.475-481). Ambas derivam do mesmo `DateWindow` opcional. **Zero descasamento de janela** entre a query de dados e a query de recência.
+
+**Parecer:** AC2 não só preservado como **MELHORADO**. Antes a recência era calculada sobre uma janela fixa de N dias (`dateNdAgo..today`); agora reflete o período que o agente está efetivamente analisando (a janela do period-chip selecionado). Quando o usuário restringe o período, a recência reportada acompanha — `NFR-ACC-1` fica mais fiel, não menos. A afirmação do @dev confere com o código.
+
+`dateNdAgo` foi corretamente isolado: vive APENAS no caminho standalone `fetchProvenance(days)` (l.378/387) usado pelo banner/hook da 76-3, que computa a própria janela a partir do param `days` — caminho independente, não afetado.
+
+### Não-regressão verificada
+
+- **Bloco de proveniência:** ainda injetado — header `CONTEXTO META ADS` (l.577) emite `formatProvenanceBlock(provenance, today)` (l.578). Intacto.
+- **NFR-OBS-1 (fail-transparente):** `safeProvenanceData` (l.436) resolve `data ?? null` + `.catch(() => null)`; `computeProvenance` jamais fabrica data; ciclo `running` não marca stale. Intacto.
+- **System prompt (AC4/AC5):** seção `## Proveniência e recência dos dados (obrigatório)` (`system-prompt.ts:83-90`) com datação obrigatória + alerta de staleness (>36h)/erro + sugestão de painel. Intacto.
+- **Trabalho do main (52-8 period-chips):** o commit `98e6a38` alterou só 2 linhas dentro de `buildGlobalContext`; `DateWindow`, query de insights, period-chips e a cache key (`global:orgId:startDate:endDate`) preservados. Nenhum outro arquivo do epic foi tocado pelo commit (`system-prompt`, `agent-chat-panel`, `sync-status-banner`, `use-provenance-status`, `context-meta/route`).
+
+### 7 Quality Checks (AIOS) — estado reconciliado
+
+| # | Check | Verdict | Nota |
+|---|-------|---------|------|
+| 1 | Code review | PASS | Mudança cirúrgica de 2 linhas, comentada, reutiliza as vars de janela compartilhadas |
+| 2 | Unit tests | PASS | 12/12 proveniência (puras, independentes da janela SQL) + 557/557 suíte. Casamento de janela entre as 2 queries segue por inspeção (TEST-001; novo TEST-002 low) |
+| 3 | Acceptance criteria | PASS | AC1-AC9 atendidas; AC2 revalidado e melhorado |
+| 4 | No regressions | PASS | 557/557; 52-8 intacto; commit tocou só 2 linhas; demais arquivos do epic não modificados |
+| 5 | Performance | PASS | 3 queries no mesmo `Promise.all`; bloco cacheado (key agora inclui a janela); zero round-trip extra |
+| 6 | Security / multi-tenancy | PASS | `.eq("org_id", orgId)` nas 3 queries intacto; sem `service_role` |
+| 7 | Documentation | PASS | Dev Notes + Change Log (v1.3) documentam a reconciliação; system-prompt aditivo intacto |
+
+### Validações re-executadas por mim em 2026-06-23 (branch reconciliada)
+
+- `vitest run provenance.test.ts` → **12/12 passed**
+- `vitest run` (suíte completa, da raiz) → **557/557 passed, 43 arquivos** — sem regressão. O delta vs a v1 (565/44) vem da reconciliação ampla com o `main`, NÃO do commit `98e6a38` (que não tocou nenhum teste).
+- `tsc --noEmit` (web) → **zero erros nos arquivos da story**; apenas os 3 erros TS pré-existentes e não-relacionados em `email-templates/visual-editor.tsx` (`react-email-editor` ausente).
+- `eslint` nos 3 arquivos da story → **exit code 0**.
+
+### Gap de teste introduzido pela reconciliação?
+
+Não há gap NOVO bloqueante. Os 12 testes cobrem as funções puras (`computeProvenance`/`formatProvenanceBlock`), que independem da janela SQL — cobertura intacta. Registro uma observação **TEST-002 (low)**: a janela do AC2 passou de fixa (constante módulo-local) para dinâmica (`startDate`/`endDate`), e o casamento entre a query de insights e a P1 de proveniência continua garantido apenas por inspeção/adjacência. Com janela dinâmica, um refactor futuro poderia desincronizá-las mais facilmente. Sugestão (baixíssima prioridade): teste de contrato afirmando que ambas compartilham a mesma janela. Não bloqueia — hoje são literalmente adjacentes no mesmo `Promise.all` e usam as mesmas variáveis.
+
+### Comparação com o gate anterior
+
+| Aspecto | Gate v1 (2026-06-22) | Re-gate v2 (2026-06-23) |
+|---|---|---|
+| AC2 (janela) | Janela fixa `dateNdAgo..today` | Janela dinâmica casada `startDate..endDate` — **melhorou** |
+| REQ-001 (campaign gap) | medium, aberto | medium, **inalterado** |
+| TEST-001 (org_id) | low, aberto | low, **inalterado** |
+| Suíte | 565/565 (44) | 557/557 (43) — composição mudou pela reconciliação, sem regressão |
+| Risco geral | CONCERNS | **CONCERNS** (mantido; AC2 marginalmente melhor) |
+
+A reconciliação **melhorou** a fidelidade do AC2 e **não introduziu** nenhum issue bloqueante. O veredito permanece **CONCERNS** pelos MESMOS débitos pré-existentes e independentes (REQ-001, TEST-001) — não pela reconciliação, que em isolamento seria PASS.
+
+### Gate Status (re-gate)
+
+Gate: **CONCERNS** → docs/qa/gates/76.1-provenancia-staleness-contexto-agente.yml (entrada v2, `gate_history`)
+
+**Recomendação de status:** aprovável para prosseguir ao @devops com ciência de REQ-001/TEST-001 (follow-up) e da observação TEST-002 (low). As AC seguem 100% atendidas, as validações verdes na branch reconciliada, e a mudança de janela do AC2 foi validada como segura e melhor.

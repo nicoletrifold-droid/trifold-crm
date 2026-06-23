@@ -1,11 +1,25 @@
 schema: 1
 story: '76.3'
-gate: CONCERNS
-status_reason: 'Os 3 checks do gate (ui_staleness_check, non_blocking_check, tenant_isolation_check) passam — isolamento multi-tenant sólido (anon key + RLS + .eq(org_id) da sessão, sem service_role), aviso comprovadamente não-bloqueante (componente/hook independentes do streaming, fail-safe em servidor e cliente) e lógica de staleness reusa computeProvenance da 76-1. Aprovado não-bloqueante. Concerns: duplicação do plumbing das 3 queries de proveniência entre buildGlobalContext e fetchProvenance (débito de manutenção) e exposição do errorMessage cru no contrato do endpoint sem consumo na UI (info-disclosure menor). Validação visual WCAG AA com @ux fica como follow-up.'
-reviewer: 'Aria'
-updated: '2026-06-22T18:55:00Z'
+gate: PASS
+status_reason: 'RE-GATE: os 3 concerns FECHADOS. ARCH-001 (duplicação do plumbing das 3 queries) resolvido — @dev extraiu o helper exportado provenanceQueryBuilders(supabase, orgId, {startDate, endDate}) como FONTE ÚNICA do plumbing, consumido por SPREAD no mesmo Promise.all de buildGlobalContext (batching/cache da 76-1 AC7 preservado, zero round-trip extra — confirmado em context-builder.ts:534) e em fetchProvenance (caminho standalone days→dateNdAgo intacto). SEC-001 (errorMessage cru) já estava resolvido (campo removido do contrato). UX-001 (contraste WCAG AA) resolvido — cálculo documentado: amber-800/amber-50 = 6.84:1, red-800/red-50 = 7.60:1 (ambos passam AA, vermelho passa AAA). Os 3 checks do gate continuam PASS (tenant isolation, non-blocking, staleness). PASS.'
+reviewer: 'Quinn'
+updated: '2026-06-23T12:35:00Z'
 
 waiver: { active: false }
+
+# ─── Histórico de gates ──────────────────────────────────────────────────────
+gate_history:
+  - version: v1
+    date: '2026-06-22T18:55:00Z'
+    gate: CONCERNS
+    reviewer: 'Aria'
+    summary: 'Os 3 checks passam (tenant isolation crítico OK). Concerns: ARCH-001 (duplicação de plumbing das 3 queries) medium; SEC-001 (errorMessage cru — depois resolvido pelo @dev); UX-001 (WCAG AA pendente).'
+  - version: v2
+    date: '2026-06-23T12:35:00Z'
+    gate: PASS
+    reviewer: 'Quinn'
+    trigger: 'Re-gate pós-fix: @dev fechou ARCH-001 (helper) e UX-001 (cálculo WCAG); SEC-001 já estava resolvido.'
+    summary: 'ARCH-001 FECHADO — helper provenanceQueryBuilders extraído (context-builder.ts:387-427), consumido por spread em buildGlobalContext (l.534, mesmo Promise.all → batching/AC7 preservado) e fetchProvenance (l.451). Mudança de coluna/tabela agora em 1 ponto. UX-001 FECHADO — contraste WCAG calculado (amber 6.84:1, red 7.60:1, ambos AA). SEC-001 já resolvido. Validações reais re-executadas pelo @qa: typecheck só com 3 erros pré-existentes de react-email-editor; eslint exit 0; 562/562 testes (44 arquivos) incl. 5 novos de provenance-queries. PASS.'
 
 # Os 3 checks nomeados no quality_gate da story
 gate_checks:
@@ -16,8 +30,11 @@ gate_checks:
 top_issues:
   - id: 'ARCH-001'
     severity: medium
-    finding: 'Duplicação de plumbing: as 3 query builders de proveniência (meta_insights_daily.synced_at, meta_ad_accounts.last_synced_at, meta_sync_log) existem idênticas em buildGlobalContext (context-builder.ts:~322) e no novo fetchProvenance. A lógica de DERIVAÇÃO (computeProvenance/safeProvenanceData/STALENESS_THRESHOLD_HOURS) — a parte que a story pede explicitamente para não duplicar — foi corretamente reusada; mas o plumbing de query não. Mudança de coluna/tabela exige editar dois pontos.'
-    suggested_action: 'Follow-up (não bloqueia): extrair um helper provenanceQueryBuilders(supabase, orgId, {dateNdAgo, today}) que retorne os 3 query builders (não-awaited), consumido por SPREAD tanto no Promise.all de buildGlobalContext (preservando o batching/cache da 76-1 AC7) quanto em fetchProvenance. Remove a duplicação sem regressão de round-trips. O tradeoff atual é defensável e foi documentado pelo @dev (evitar mexer no batching da 76-1), por isso é débito e não bloqueio.'
+    status: resolved
+    resolved_by: 'Dex (@dev)'
+    resolved_at: '2026-06-23T11:36:00Z'
+    finding: 'Duplicação de plumbing: as 3 query builders de proveniência (meta_insights_daily.synced_at, meta_ad_accounts.last_synced_at, meta_sync_log) existiam idênticas em buildGlobalContext e no novo fetchProvenance. A lógica de DERIVAÇÃO já era reusada; o plumbing de query não.'
+    suggested_action: 'FECHADO: extraído helper exportado provenanceQueryBuilders(supabase, orgId, {startDate, endDate}) em context-builder.ts:387-427 como FONTE ÚNICA do plumbing das 3 queries (não-awaited, já envoltas por safeProvenanceData). Consumido por SPREAD no MESMO Promise.all de buildGlobalContext (l.534 — batching/cache da 76-1 AC7 preservado, zero round-trip extra) e em fetchProvenance (l.451, caminho standalone days→dateNdAgo..today intacto). A P1 recebe a janela como parâmetro = casamento de janela do AC2 garantido na fonte. Mudança de coluna/tabela agora em 1 ponto. Verificado pelo @qa por leitura do código + 562/562 testes.'
   - id: 'SEC-001'
     severity: low
     status: resolved
@@ -28,13 +45,16 @@ top_issues:
     resolution: 'Removido o campo errorMessage do contrato do endpoint (opção preferida — nenhum consumidor). Grep confirmou que use-provenance-status.ts, sync-status-banner.tsx e agent-chat-panel.tsx não leem .errorMessage (UI usa só isStale/isError/lastSyncAt). Alterações: (1) removido errorMessage da interface ProvenanceStatus; (2) removido do retorno de fetchProvenance; (3) removido errorMessage:null do FAIL_SAFE em context-meta/route.ts. isError (booleano) intacto — é o que dispara o banner vermelho. Selects internos de error_message em buildGlobalContext (contexto AI server-side, não exposto) deixados intocados (fora de escopo). typecheck/lint sem novos problemas; 565/565 testes passam.'
   - id: 'UX-001'
     severity: low
-    finding: 'Validação visual de cores (WCAG AA) com @ux-design-expert (Uma) ficou pendente (subtask T3, DoD). Baseline de acessibilidade já é boa: role="status", aria-label no botão dismiss, aria-hidden nos ícones. Pares Tailwind amber-800/amber-50 e red-800/red-50 têm contraste alto (tipicamente passam AA para texto).'
-    suggested_action: 'Aceitável como follow-up downstream — não bloqueia o push. Story é P2/COULD (melhoria de UX); a 76-1 já cobre o alerta textual. Solicitar revisão da Uma antes de considerar o DoD 100% fechado.'
+    status: resolved
+    resolved_by: 'Dex (@dev)'
+    resolved_at: '2026-06-23T11:38:00Z'
+    finding: 'Validação de contraste de cores (WCAG AA) dos pares do banner estava pendente (subtask T3, DoD). Baseline de acessibilidade já boa: role="status", aria-label no botão dismiss, aria-hidden nos ícones.'
+    suggested_action: 'FECHADO (requisito de contraste de texto): cálculo WCAG 2.x documentado na story 76-3 (l.199-202) e DoD. Staleness amber-800 #92400e sobre amber-50 #fffbeb = 6.84:1; erro red-800 #991b1b sobre red-50 #fef2f2 = 7.60:1. Ambos passam AA (≥4.5:1) com folga; o vermelho também passa AAA (≥7:1). Nenhum ajuste de paleta. Nota: validação visual ampla com @ux (tamanho/posicionamento e pares de dark-mode) segue como polimento downstream não-bloqueante — o requisito numérico de contraste do AC está coberto.'
 
 validation_evidence:
-  typecheck: 'web tsc --noEmit: zero erros nos 5 arquivos da story. Únicos erros (3) são pré-existentes e não-relacionados em email-templates/_components/visual-editor.tsx (módulo react-email-editor ausente). Confirmado em runtime pelo @architect.'
-  eslint: 'zero erros nos 5 arquivos da story; 1 warning pré-existente (today unused) em buildCampaignContext:459 — confirmado via git show df42f0e que já existia no commit pai (linha 376), apenas deslocado pelo código aditivo da 76-3. Não introduzido aqui.'
-  vitest_full_suite: '565/565 passed, 44 test files — sem regressão. Inclui os 12 testes de proveniência da 76-1. Confirmado em runtime pelo @architect (não apenas relatado pelo @dev).'
+  typecheck: 'web tsc --noEmit re-executado pelo @qa: os ÚNICOS erros (3) são pré-existentes e não-relacionados em email-templates/_components/visual-editor.tsx (módulo react-email-editor ausente). Zero erros nos arquivos da story.'
+  eslint: 'exit code 0 nos arquivos tocados (context-builder.ts + provenance-queries.test.ts) — re-executado pelo @qa.'
+  vitest_full_suite: '562/562 passed, 44 test files — re-executado pelo @qa da raiz. Inclui os 12 testes de proveniência da 76-1 + 5 novos de provenance-queries.test.ts (org_id scoping + casamento de janela). Delta 565→562 é da reconciliação ampla com o main, não de regressão.'
 
 ac_traceability:
   AC1: 'PASS — GET /api/agent/context-meta retorna {isStale, isError, lastSyncAt} via fetchProvenance, reusando computeProvenance/safeProvenanceData da 76-1 (sem duplicar lógica de derivação). Acesso autenticado, sem RLS bypass. (SEC-001 resolvido: errorMessage removido do contrato por não ter consumidor)'
@@ -55,6 +75,5 @@ nfr_validation:
 article_iv_compliance: 'PASS com nota — implementação dentro do escopo das AC, sem feature inventada. A lógica de derivação de staleness é reusada da 76-1 (IDS respeitado). Exceção menor: errorMessage retornado mas não consumido (SEC-001) é tecnicamente fora do uso atual — recomendado remover sob YAGNI. A duplicação de query plumbing (ARCH-001) é débito de manutenção, não invenção de escopo.'
 
 next_steps:
-  - 'Aprovado não-bloqueante → @devops (Gage) pode fazer push.'
-  - 'Follow-up Epic 76: refatorar plumbing de proveniência para helper compartilhado (ARCH-001).'
-  - 'Follow-up: validar cores WCAG AA com @ux-design-expert (UX-001); avaliar omitir/sanitizar errorMessage (SEC-001).'
+  - 'PASS → @devops (Gage) pode fazer push. Todos os 3 concerns (ARCH-001/SEC-001/UX-001) fechados.'
+  - 'Polimento downstream não-bloqueante: validação visual ampla com @ux-design-expert (tamanho/posicionamento, pares de dark-mode). Requisito numérico de contraste já coberto (UX-001 fechado).'

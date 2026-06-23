@@ -200,7 +200,7 @@ Esta story não tem código de aplicação — a entrega é o relatório de audi
 ### File List
 
 **Criados:**
-- `docs/audits/76-2-explain-indices-meta.md` — relatório de auditoria (estática fundamentada + cardinalidade real)
+- `docs/audits/76-2-explain-indices-meta.md` — relatório de auditoria (estática fundamentada + cardinalidade real). **DOC-001 (2026-06-23):** adicionada nota no alvo AC2 e na tabela-resumo registrando o `UNIQUE(org_id,level,entity_id,date)` como índice candidato co-igual/superior (inclui `org_id`+`level` no prefixo) — sem alterar o veredito (ambos cobrem; zero gap, zero DDL).
 
 **Modificados:**
 - `docs/stories/active/76-2-auditoria-explain-indices-meta.md` — status, ACs, tasks, notes (este arquivo)
@@ -266,9 +266,30 @@ e roda os comandos da seção "Como Executar o EXPLAIN Real" do relatório.
 
 ---
 
+## QA Results (@dev — Quality Gate)
+
+**Verdict: CONCERNS** (não-bloqueante) — gate file: `docs/qa/gates/76.2-auditoria-explain-indices-meta.yml`
+
+| Check | Verdito | Resumo |
+|-------|---------|--------|
+| `explain_analysis_check` | PASS (com concern) | Raciocínio estático correto para os 4 alvos, validado contra o código real (context-builder.ts + RPCs 101/096). Concern: vereditos INFERIDOS, EXPLAIN real não executado (PAT expirado + db-plan-enabled off). Imprecisão menor em AC2 (UNIQUE é candidato co-igual a entity_date). |
+| `index_redundancy_check` | PASS | Decisão de zero DDL correta — nenhum índice proposto/redundante; nenhum gap óbvio ignorado (cardinalidade ≤1.172 → Seq Scan ótimo). R1 verificado em código: índice parcial 075 ≡ join 101:122 (`->>` puro, igualdade implica IS NOT NULL). |
+| `migration_concurrently_check` | N/A | Nenhuma migration 106_* criada. |
+
+**Parecer sobre a ausência do EXPLAIN real:** ACEITÁVEL com follow-up registrado (não bloqueio). O objetivo da story — decidir se há gap exigindo índice novo — depende da cardinalidade, que foi medida de fato em produção. Em ≤1.172 linhas o planner prefere Seq Scan legitimamente; o EXPLAIN real NÃO mudaria o desfecho "zero DDL". Como nenhuma DDL é entregue, não há mudança a regredir e o risco é nulo; criar índice "por precaução" seria a ação errada (Article IV). O EXPLAIN inferido é suficiente para a DECISÃO; a confirmação empírica é upgrade de evidência desejável, não load-bearing.
+
+- **Fechado:** decisão de zero DDL (final); R1 mitigado; CON-6/Article IV respeitados; cardinalidade real medida.
+- **Follow-up (não-bloqueante, EVID-001):** @devops/operador renova PAT (`supabase login`) e roda os comandos da seção "Como Executar o EXPLAIN Real" do relatório, promovendo vereditos de "inferido" → "confirmado".
+
+Reviewer: Dex (@dev) · 2026-06-22
+
+---
+
 ## Change Log
 
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Epic 76, SHOULD, auditoria EXPLAIN dos índices Meta nas queries do agente; story de auditoria (não criação) após correção obrigatória do @po em FR-5/v0.3 do epic | @sm (River) |
 | 2026-06-22 | v1.1 | Auditoria executada. Relatório `docs/audits/76-2-explain-indices-meta.md` criado. Cardinalidade real medida; EXPLAIN ANALYZE real bloqueado (PAT expirado + db-plan-enabled off) → vereditos fundamentados/inferidos. 4 targets `USANDO_INDICE`, **nenhum gap**, **zero migrações** (CON-6/Article IV). Status → InProgress. | @data-engineer (Dara) |
+| 2026-06-22 | v1.2 | Quality gate @dev executado: **CONCERNS** (não-bloqueante). `index_redundancy_check` PASS (zero DDL correto, R1 verificado em código), `explain_analysis_check` PASS com concern (vereditos inferidos; EXPLAIN real é follow-up não-bloqueante EVID-001). Gate: `docs/qa/gates/76.2-auditoria-explain-indices-meta.yml`. | @dev (Dex) |
+| 2026-06-23 | v1.3 | DOC-001 (concern low) resolvido: nota no relatório registrando o `UNIQUE(org_id,level,entity_id,date)` como índice candidato co-igual em AC2. Veredito inalterado (zero gap, zero DDL). EVID-001 (EXPLAIN real) permanece follow-up bloqueado por PAT expirado. | @dev (Dex) |
