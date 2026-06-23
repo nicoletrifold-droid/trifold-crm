@@ -123,7 +123,11 @@ export default async function ConversasPage({
     if (!lead) return false
     if (stage && lead.stage_id !== stage) return false
     if (property && lead.property_interest_id !== property) return false
-    if (broker_id && lead.assigned_broker_id !== broker_id) return false
+    if (broker_id === "none") {
+      if (lead.assigned_broker_id) return false
+    } else if (broker_id && lead.assigned_broker_id !== broker_id) {
+      return false
+    }
     if (ia && atendimentoDe(conv) !== ia) return false
     if (staleCutoff) {
       // Mantém só conversas paradas: last_message_at mais antigo que o corte
@@ -155,6 +159,7 @@ export default async function ConversasPage({
         stages={(stages ?? []).map((s) => ({ id: s.id, name: s.name, color: s.color }))}
         properties={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
         brokers={brokers}
+        includeUnassigned
         showAtendimento
         stageParam="stage"
         propertyParam="property"
