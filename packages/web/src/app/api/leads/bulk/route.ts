@@ -31,11 +31,14 @@ export async function POST(request: NextRequest) {
 
   if (broker_id !== undefined) {
     update.assigned_broker_id = broker_id || null
+    // Transferência de corretor → o lead volta para "Aguardando atendimento"
+    // (STAGE_IDS.novo), independente do estágio em que estava com o corretor anterior.
+    update.stage_id = STAGE_IDS.novo
   }
 
   if (lost_reason) {
     update.lost_reason = lost_reason
-    update.stage_id = STAGE_IDS.perdido
+    update.stage_id = STAGE_IDS.perdido // finalizar como perdido prevalece sobre a transferência
   }
 
   const { error, count } = await supabase
