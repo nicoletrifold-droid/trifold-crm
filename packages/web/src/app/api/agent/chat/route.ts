@@ -16,6 +16,10 @@ import {
 import { isAdmin, isAdminOrSupervisor } from "@web/lib/agent/auth-helpers"
 import { AGENT_SYSTEM_PROMPT } from "@web/lib/agent/system-prompt"
 
+// Cap de duração da função (Vercel). Sem isto, a função fica pendurada caso a
+// chamada ao LLM trave — o SDK Anthropic tem timeout default ~10min + retries.
+export const maxDuration = 60
+
 // ─── On-demand extraction helpers (Story 52-2) ────────────────────────────────
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 const STAGE_TYPES = [
@@ -245,16 +249,23 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      // Timeout server-side de 45s na chamada ao LLM. Se o Anthropic travar/demorar,
+      // abortamos para falhar rápido em vez de pendurar a função até o maxDuration.
+      const ac = new AbortController()
+      const llmTimeout = setTimeout(() => ac.abort(), 45000)
       try {
-        const claudeStream = anthropic.messages.stream({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2048,
-          system: `${AGENT_SYSTEM_PROMPT}\n\n---\n\n${contextText}`,
-          messages: [
-            ...history,
-            { role: "user", content: message },
-          ],
-        })
+        const claudeStream = anthropic.messages.stream(
+          {
+            model: "claude-sonnet-4-6",
+            max_tokens: 2048,
+            system: `${AGENT_SYSTEM_PROMPT}\n\n---\n\n${contextText}`,
+            messages: [
+              ...history,
+              { role: "user", content: message },
+            ],
+          },
+          { signal: ac.signal },
+        )
 
         for await (const chunk of claudeStream) {
           if (
@@ -267,6 +278,9 @@ export async function POST(request: NextRequest) {
             )
           }
         }
+
+        // Stream concluído com sucesso — desarma o timeout do LLM.
+        clearTimeout(llmTimeout)
 
         // Extract action card from full text before saving
         const { cleanText, actionCard } = extractActionCard(fullText)
@@ -292,9 +306,19 @@ export async function POST(request: NextRequest) {
         )
         controller.close()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        clearTimeout(llmTimeout)
+        const isAbort =
+          err instanceof Error &&
+          (err.name === "AbortError" || ac.signal.aborted)
+        // Log detalhado no servidor para diagnóstico (sempre).
+        console.error("[agent/chat] stream error:", err)
+        const clientMsg = isAbort
+          ? "O agente demorou demais para responder (timeout). Tente novamente ou reduza o período consultado."
+          : err instanceof Error
+            ? err.message
+            : String(err)
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`),
+          encoder.encode(`data: ${JSON.stringify({ error: clientMsg })}\n\n`),
         )
         controller.close()
       }

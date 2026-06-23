@@ -450,6 +450,11 @@ export default function AgentChatPanel({
 
     abortRef.current = new AbortController()
 
+    // Watchdog de inatividade do stream (FIX 3): se nenhum chunk chegar a tempo,
+    // marcamos timeout e abortamos para nunca travar em "carregando".
+    let watchdogTimedOut = false
+    let inactivityTimer: ReturnType<typeof setTimeout> | null = null
+
     try {
       const res = await fetch("/api/agent/chat", {
         method: "POST",
@@ -491,10 +496,22 @@ export default function AgentChatPanel({
       let fullText  = ""
       let newSessionId: string | null = null
       let hasAction = false
+      let streamError: string | null = null
+
+      // (Re)arma o timer de inatividade — 60s sem qualquer chunk dispara o abort.
+      const armWatchdog = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer)
+        inactivityTimer = setTimeout(() => {
+          watchdogTimedOut = true
+          abortRef.current?.abort()
+        }, 60000)
+      }
+      armWatchdog()
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
+        armWatchdog() // recebeu dados — rearma o watchdog (streaming saudável)
 
         const raw = decoder.decode(value, { stream: true })
         for (const line of raw.split("\n")) {
@@ -507,6 +524,10 @@ export default function AgentChatPanel({
               has_action?: boolean
               error?: string
             }
+            if (event.error) {
+              streamError = event.error
+              break
+            }
             if (event.text) {
               fullText += event.text
               setStreamingContent(fullText)
@@ -517,6 +538,26 @@ export default function AgentChatPanel({
             }
           } catch { /* ignore parse errors */ }
         }
+        if (streamError) break
+      }
+
+      if (inactivityTimer) clearTimeout(inactivityTimer)
+
+      // Backend sinalizou erro no stream (FIX 2): exibe a mensagem e encerra.
+      if (streamError) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            role: "assistant",
+            content: streamError ?? "Erro ao processar a resposta do agente.",
+            action_card: null,
+            action_status: null,
+            action_executed_at: null,
+            created_at: new Date().toISOString(),
+          },
+        ])
+        return
       }
 
       // Update session ID if new session was created
@@ -550,13 +591,16 @@ export default function AgentChatPanel({
         ])
       }
     } catch (err) {
-      if ((err as Error).name === "AbortError") return
+      // Abort por escolha do usuário (não pelo watchdog) é silencioso.
+      if ((err as Error).name === "AbortError" && !watchdogTimedOut) return
       setMessages((prev) => [
         ...prev,
         {
           id: `error-${Date.now()}`,
           role: "assistant",
-          content: "Erro ao conectar com o agente. Tente novamente.",
+          content: watchdogTimedOut
+            ? "O agente não respondeu a tempo. Tente novamente."
+            : "Erro ao conectar com o agente. Tente novamente.",
           action_card: null,
           action_status: null,
           action_executed_at: null,
@@ -564,6 +608,7 @@ export default function AgentChatPanel({
         },
       ])
     } finally {
+      if (inactivityTimer) clearTimeout(inactivityTimer)
       setIsStreaming(false)
       setStreamingContent("")
     }
