@@ -54,12 +54,32 @@ const DEFAULT_PREFS: NotifPrefs = {
   notify_progresso: true,
 }
 
+/**
+ * Story 75-39 — Kill switch das notificações do portal do cliente.
+ * Com `PORTAL_NOTIF_PAUSED=1` (ou `true`), `notifyClientes` não dispara NENHUM canal
+ * (WhatsApp, e-mail, push). Usado durante o rollout de logins, quando nem todos os
+ * clientes têm acesso ainda. Retomar = remover a variável no Vercel e redeployar.
+ * Não afeta notificações de corretor/roleta nem o `whatsapp_config` compartilhado.
+ */
+export function portalNotificacoesPausadas(): boolean {
+  const v = process.env.PORTAL_NOTIF_PAUSED
+  return v === "1" || v === "true"
+}
+
 export async function notifyClientes(
   obraId: string,
   evento: EventoNotificacao,
   obraName: string
 ): Promise<void> {
   try {
+    if (portalNotificacoesPausadas()) {
+      console.log(
+        "[notificacoes] portal pausado (PORTAL_NOTIF_PAUSED) — pulando envio",
+        { obraId, evento }
+      )
+      return
+    }
+
     const admin = createAdminClient()
 
     // Buscar org_id da obra + clientes vinculados em paralelo
