@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { href: "/broker/leads", label: "Meus Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/broker/properties", label: "Imóveis", icon: <Building2 className={ICON_SIZE} /> },
   { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true },
-  { href: "/broker/instalar", label: "Instalar app", icon: <Smartphone className={ICON_SIZE} /> },
+  { href: "/broker/instalar", label: "App e Notificações", icon: <Smartphone className={ICON_SIZE} /> },
   { href: "/broker/suporte", label: "Suporte", icon: <MessageSquarePlus className={ICON_SIZE} /> },
 ]
 

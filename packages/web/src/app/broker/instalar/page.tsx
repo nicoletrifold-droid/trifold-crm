@@ -4,6 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Share, Plus, MoreVertical, Download, Globe } from "lucide-react"
+import { NotificationToggle } from "./_components/notification-toggle"
 
 type Platform = "ios" | "android"
 
@@ -23,10 +24,13 @@ export default function InstalarPWAPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-stone-100">Instalar o app</h1>
-            <p className="text-xs text-gray-500 dark:text-stone-500">Adicionar à tela inicial</p>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-stone-100">App e Notificações</h1>
+            <p className="text-xs text-gray-500 dark:text-stone-500">Ative os avisos e instale na tela inicial</p>
           </div>
         </div>
+
+        {/* Toggle de notificações (Story 75-34) — topo, antes do install */}
+        <NotificationToggle />
 
         {/* App card */}
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-900">
