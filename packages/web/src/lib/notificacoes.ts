@@ -44,7 +44,9 @@ interface NotifPrefs {
 // que e-mail e todos os eventos cheguem por padrão; WhatsApp/push seguem opt-in.
 const DEFAULT_PREFS: NotifPrefs = {
   email_enabled: true,
-  whatsapp_enabled: false,
+  // WhatsApp ligado por padrão (Story 75-22): clientes sem linha de prefs recebem
+  // WhatsApp além de e-mail. Depende de users.phone preenchido + whatsapp_config da org.
+  whatsapp_enabled: true,
   push_enabled: false,
   notify_nova_foto: true,
   notify_novo_documento: true,
