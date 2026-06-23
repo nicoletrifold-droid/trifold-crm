@@ -26,6 +26,12 @@ export interface AnalyticsReportData {
   leadsToday: number
   leadsWeek: number
   leadsMonth: number
+  /** Story 75-32: quando true, o PDF é de um período (cards/rótulos do período). */
+  isPeriod?: boolean
+  periodTotal?: number
+  mediaDiaria?: number
+  conversao?: number
+  perdidos?: number
   stages: { name: string; color: string; count: number }[]
   properties: { name: string; count: number }[]
   sources: { label: string; count: number }[]
@@ -160,29 +166,52 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           <Text style={s.headerDate}>Gerado em {data.generatedAt}</Text>
         </View>
 
-        {/* Metric cards */}
+        {/* Metric cards — período (Story 75-32) ou snapshots fixos (cron) */}
         <View style={s.cardsRow}>
-          <View style={s.card}>
-            <Text style={s.cardLabel}>Total de Leads</Text>
-            <Text style={s.cardValueDefault}>{data.totalLeads}</Text>
-          </View>
-          <View style={s.card}>
-            <Text style={s.cardLabel}>Esta Semana</Text>
-            <Text style={s.cardValueBlue}>{data.leadsWeek}</Text>
-          </View>
-          <View style={s.card}>
-            <Text style={s.cardLabel}>Este Mês</Text>
-            <Text style={s.cardValueOrange}>{data.leadsMonth}</Text>
-          </View>
-          <View style={s.cardLast}>
-            <Text style={s.cardLabel}>Hoje</Text>
-            <Text style={s.cardValueGreen}>{data.leadsToday}</Text>
-          </View>
+          {data.isPeriod ? (
+            <>
+              <View style={s.card}>
+                <Text style={s.cardLabel}>Total no período</Text>
+                <Text style={s.cardValueDefault}>{data.periodTotal ?? data.totalLeads}</Text>
+              </View>
+              <View style={s.card}>
+                <Text style={s.cardLabel}>Média diária</Text>
+                <Text style={s.cardValueBlue}>{(data.mediaDiaria ?? 0).toFixed(1)}</Text>
+              </View>
+              <View style={s.card}>
+                <Text style={s.cardLabel}>Conversão</Text>
+                <Text style={s.cardValueGreen}>{data.conversao ?? 0}%</Text>
+              </View>
+              <View style={s.cardLast}>
+                <Text style={s.cardLabel}>Perdidos</Text>
+                <Text style={s.cardValueOrange}>{data.perdidos ?? 0}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={s.card}>
+                <Text style={s.cardLabel}>Total de Leads</Text>
+                <Text style={s.cardValueDefault}>{data.totalLeads}</Text>
+              </View>
+              <View style={s.card}>
+                <Text style={s.cardLabel}>Esta Semana</Text>
+                <Text style={s.cardValueBlue}>{data.leadsWeek}</Text>
+              </View>
+              <View style={s.card}>
+                <Text style={s.cardLabel}>Este Mês</Text>
+                <Text style={s.cardValueOrange}>{data.leadsMonth}</Text>
+              </View>
+              <View style={s.cardLast}>
+                <Text style={s.cardLabel}>Hoje</Text>
+                <Text style={s.cardValueGreen}>{data.leadsToday}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Funnel */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Funil de Conversão (mês atual)</Text>
+          <Text style={s.sectionTitle}>Funil de Conversão{data.isPeriod ? "" : " (mês atual)"}</Text>
           {data.stages.map((stage, i) => (
             <View key={i} style={s.funnelRow}>
               <Text style={s.funnelLabel}>{stage.name}</Text>
@@ -213,7 +242,7 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
             {data.properties.length === 0 && <Text style={s.noData}>Sem dados</Text>}
           </View>
           <View style={s.colRight}>
-            <Text style={s.sectionTitle}>Origens (mês)</Text>
+            <Text style={s.sectionTitle}>Origens{data.isPeriod ? "" : " (mês)"}</Text>
             {data.sources.map((src, i) => (
               <View key={i} style={i === data.sources.length - 1 ? s.tableRowLast : s.tableRow}>
                 <Text style={s.rowLabel}>{src.label}</Text>

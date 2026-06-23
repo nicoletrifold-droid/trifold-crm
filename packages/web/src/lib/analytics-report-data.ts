@@ -327,6 +327,21 @@ export async function buildAnalyticsReportData(
     ? `${fmtDate(compCurrStart)} – ${fmtDate(aggUntil)}`
     : `${fmtDate(oneWeekAgo)} – ${fmtDate(now)}`
 
+  // ── Métricas do período (cards do PDF sob demanda) ─────────────────────────
+  let perdidos = 0
+  if (period) {
+    const { count } = await supabase
+      .from("leads").select("id", { count: "exact", head: true })
+      .eq("org_id", orgId).eq("is_active", true)
+      .not("lost_reason", "is", null)
+      .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
+    perdidos = count ?? 0
+  }
+  const periodTotal = stages.reduce((sum, st) => sum + st.count, 0)
+  const fechamentoCount = stages.find((st) => /fechamento|ganho|fechado/i.test(st.name))?.count ?? 0
+  const conversao = periodTotal > 0 ? Math.round((fechamentoCount / periodTotal) * 100) : 0
+  const mediaDiaria = period && period.days > 0 ? periodTotal / period.days : 0
+
   return {
     generatedAt,
     weekRange,
@@ -334,6 +349,11 @@ export async function buildAnalyticsReportData(
     leadsToday: leadsToday ?? 0,
     leadsWeek: leadsWeek ?? 0,
     leadsMonth: leadsMonth ?? 0,
+    isPeriod: !!period,
+    periodTotal,
+    mediaDiaria,
+    conversao,
+    perdidos,
     stages,
     properties,
     sources,
