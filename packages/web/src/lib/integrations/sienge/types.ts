@@ -1,9 +1,19 @@
+export interface SiengePhone {
+  type: string | null
+  number: string | null
+  main: boolean
+  note?: string | null
+  idd?: string | null
+  ddd?: string | null
+}
+
 export interface SiengeCustomer {
   id: number
   name: string
   cpf: string | null
   email: string | null
-  phone: string | null
+  /** A API do Sienge retorna telefones num array (`phones`), não num campo plano. */
+  phones?: SiengePhone[] | null
 }
 
 export interface SiengeCustomersResponse {

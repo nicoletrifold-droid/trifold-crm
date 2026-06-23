@@ -1,0 +1,39 @@
+schema: 1
+story: "75.20"
+storyId: "75.20"
+title: "Sincronizar telefone/WhatsApp do Sienge no cadastro de clientes"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Dois bugs corrigidos na sync do Sienge. (1) Origem: a API devolve telefone em
+  phones[] (confirmado em chamada real: phones=[{type:'Celular',number:'(44)...',main:true}]),
+  não num campo phone plano — novo tipo SiengePhone + helper extractCustomerPhone
+  (prioriza main → Celular → primeiro, normaliza via normalizePhoneBR). (2) Destino:
+  o código gravava na coluna inexistente `phone`; agora grava em `telefone` e
+  `whatsapp` no insert, e preenche ambos nos caminhos de vínculo (CPF/email) apenas
+  quando vazios (phoneBackfillUpdates — não sobrescreve preenchimento manual).
+  Backfill executado em prod: 59 clientes atualizados, 3 sem telefone no Sienge,
+  0 erros; cobertura subiu de 11→67 (telefone) e 8→67 (whatsapp) dos 70 vinculados,
+  formato 55DDD9XXXXXXXX verificado. typecheck (tsc --noEmit) e lint limpos.
+  Pronto para @devops *push (o fix de código vale para sincronizações futuras;
+  backfill dos existentes já aplicado direto nos dados).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 95
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "extractCustomerPhone retorna 55DDD9XXXXXXXX a partir de phones[] ou null"
+  - ac: 2
+    note: "insert grava telefone+whatsapp; coluna phone removida do payload"
+  - ac: 3
+    note: "caminhos CPF/email aplicam phoneBackfillUpdates quando campos vazios"
+  - ac: 4
+    note: "phoneBackfillUpdates só preenche campo vazio — não sobrescreve manual"
+  - ac: 5
+    note: "backfill: 59 atualizados, cobertura 67/70 verificada em prod"
+  - ac: 6
+    note: "typecheck + lint limpos nos 2 arquivos"

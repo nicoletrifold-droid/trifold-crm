@@ -1,10 +1,30 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { normalizePhoneBR } from "@trifold/shared"
 import {
   getAllSalesContracts,
   getCustomerById,
 } from "./client"
 import type { SiengeContract, SiengeCustomer } from "./types"
+
+/**
+ * Extrai o telefone de um cliente Sienge a partir do array `phones[]`.
+ * Prioriza o marcado como `main`, depois o tipo "Celular", depois o primeiro
+ * com número. Normaliza para o formato canônico BR (`55DDD9XXXXXXXX`).
+ * Retorna `null` se não houver número válido.
+ */
+export function extractCustomerPhone(customer: SiengeCustomer): string | null {
+  const phones = customer.phones ?? []
+  const withNumber = phones.filter((p) => p.number && p.number.trim().length > 0)
+  if (withNumber.length === 0) return null
+
+  const chosen =
+    withNumber.find((p) => p.main) ??
+    withNumber.find((p) => (p.type ?? "").toLowerCase().includes("celular")) ??
+    withNumber[0]
+
+  return chosen ? normalizePhoneBR(chosen.number) : null
+}
 
 export interface SyncResult {
   success: boolean
@@ -187,7 +207,28 @@ interface ClienteRow {
   id: string
   cpf: string | null
   email: string | null
+  telefone: string | null
+  whatsapp: string | null
   sienge_customer_id: number | null
+}
+
+/**
+ * Monta os updates de telefone/whatsapp apenas para os campos que estão vazios
+ * no registro existente — nunca sobrescreve preenchimento manual.
+ */
+function phoneBackfillUpdates(
+  existing: ClienteRow,
+  phone: string | null
+): { telefone?: string; whatsapp?: string } {
+  const updates: { telefone?: string; whatsapp?: string } = {}
+  if (!phone) return updates
+  if (!existing.telefone || existing.telefone.trim().length === 0) {
+    updates.telefone = phone
+  }
+  if (!existing.whatsapp || existing.whatsapp.trim().length === 0) {
+    updates.whatsapp = phone
+  }
+  return updates
 }
 
 async function findOrCreateCliente(
@@ -197,22 +238,27 @@ async function findOrCreateCliente(
   orgId: string,
   supabaseAdmin: SupabaseClient
 ): Promise<{ clienteId: string; created: boolean }> {
+  const phone = extractCustomerPhone(customer)
+
   // Busca por CPF primeiro
   if (cpfSanitized) {
     const { data: byCpf } = await supabaseAdmin
       .from("clientes")
-      .select("id, cpf, email, sienge_customer_id")
+      .select("id, cpf, email, telefone, whatsapp, sienge_customer_id")
       .eq("org_id", orgId)
       .eq("cpf", cpfSanitized)
       .maybeSingle()
 
     const existing = byCpf as ClienteRow | null
     if (existing) {
+      const updates: Record<string, unknown> = {
+        ...phoneBackfillUpdates(existing, phone),
+      }
       if (!existing.sienge_customer_id) {
-        await supabaseAdmin
-          .from("clientes")
-          .update({ sienge_customer_id: customer.id })
-          .eq("id", existing.id)
+        updates.sienge_customer_id = customer.id
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabaseAdmin.from("clientes").update(updates).eq("id", existing.id)
       }
       return { clienteId: existing.id, created: false }
     }
@@ -222,14 +268,16 @@ async function findOrCreateCliente(
   if (email) {
     const { data: byEmail } = await supabaseAdmin
       .from("clientes")
-      .select("id, cpf, email, sienge_customer_id")
+      .select("id, cpf, email, telefone, whatsapp, sienge_customer_id")
       .eq("org_id", orgId)
       .eq("email", email)
       .maybeSingle()
 
     const existing = byEmail as ClienteRow | null
     if (existing) {
-      const updates: Record<string, unknown> = {}
+      const updates: Record<string, unknown> = {
+        ...phoneBackfillUpdates(existing, phone),
+      }
       if (!existing.sienge_customer_id) {
         updates.sienge_customer_id = customer.id
       }
@@ -251,7 +299,8 @@ async function findOrCreateCliente(
       nome: customer.name,
       cpf: cpfSanitized,
       email,
-      phone: customer.phone,
+      telefone: phone,
+      whatsapp: phone,
       sienge_customer_id: customer.id,
     })
     .select("id")
