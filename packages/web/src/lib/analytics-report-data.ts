@@ -344,6 +344,20 @@ export async function buildAnalyticsReportData(
   const conversao = periodTotal > 0 ? Math.round((fechamentoCount / periodTotal) * 100) : 0
   const mediaDiaria = period && period.days > 0 ? periodTotal / period.days : 0
 
+  // Rótulos do comparativo (período-aware). Sem período (cron) → undefined → o
+  // PDF cai no texto "semanal" padrão.
+  let comparisonTitle: string | undefined
+  let currentLabel: string | undefined
+  let previousLabel: string | undefined
+  if (period) {
+    comparisonTitle =
+      period.range === "custom"
+        ? "Comparativo — período atual vs período anterior"
+        : `Comparativo — últimos ${period.days} dias vs ${period.days} dias anteriores`
+    currentLabel = "Atual"
+    previousLabel = "Anterior"
+  }
+
   return {
     generatedAt,
     weekRange,
@@ -356,6 +370,9 @@ export async function buildAnalyticsReportData(
     mediaDiaria,
     conversao,
     perdidos,
+    comparisonTitle,
+    currentLabel,
+    previousLabel,
     stages,
     properties,
     sources,

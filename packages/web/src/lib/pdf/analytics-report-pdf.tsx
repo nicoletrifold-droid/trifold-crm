@@ -32,6 +32,10 @@ export interface AnalyticsReportData {
   mediaDiaria?: number
   conversao?: number
   perdidos?: number
+  /** Rótulos do comparativo (período-aware). Ausentes → resumo semanal (cron). */
+  comparisonTitle?: string
+  currentLabel?: string
+  previousLabel?: string
   stages: { name: string; color: string; count: number }[]
   properties: { name: string; count: number }[]
   sources: { label: string; count: number }[]
@@ -268,12 +272,12 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
         {/* Week-over-week comparison table */}
         {data.comparison.length > 0 && (
           <View style={s.compSection}>
-            <Text style={s.compSectionTitle}>Comparativo Semanal — últimos 7 dias vs semana anterior</Text>
+            <Text style={s.compSectionTitle}>{data.comparisonTitle ?? "Comparativo Semanal — últimos 7 dias vs semana anterior"}</Text>
             {/* Column headers */}
             <View style={s.compHeaderRow}>
               <Text style={s.compHeaderLabel}>Métrica</Text>
-              <Text style={s.compHeaderCell}>Esta sem.</Text>
-              <Text style={s.compHeaderCell}>Sem. ant.</Text>
+              <Text style={s.compHeaderCell}>{data.currentLabel ?? "Esta sem."}</Text>
+              <Text style={s.compHeaderCell}>{data.previousLabel ?? "Sem. ant."}</Text>
               <Text style={s.compHeaderDelta}>Var.</Text>
             </View>
             {data.comparison.map((group) => (
