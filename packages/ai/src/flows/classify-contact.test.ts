@@ -50,6 +50,12 @@ describe("parseContactClassification", () => {
     const r = parseContactClassification('{"is_lead": false, "category": "xpto", "reason": "x"}')
     expect(r.category).toBe("outro")
   })
+
+  it("aceita a categoria cliente_existente (Story 76-3)", () => {
+    const r = parseContactClassification('{"is_lead": false, "category": "cliente_existente", "reason": "fala da obra dele"}')
+    expect(r.isLead).toBe(false)
+    expect(r.category).toBe("cliente_existente")
+  })
 })
 
 describe("classifyContactIntent", () => {

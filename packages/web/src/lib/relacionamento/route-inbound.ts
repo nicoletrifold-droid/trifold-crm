@@ -93,17 +93,46 @@ export async function maybeRouteInboundToRelationship(
   }
 
   const cliente = result.candidates[0]!
-  // Obra única já é gravada; múltiplas obras → a Nicole pergunta na 76-3.
+  // Obra única já é gravada; múltiplas obras → a Samara escolhe no Chat / Nicole pergunta.
   const obra = cliente.obras.length === 1 ? cliente.obras[0]! : null
 
-  // Marca relacionamento + handoff (Nicole para de responder).
+  await applyRelationshipRouting(admin, {
+    conversationId: params.conversationId,
+    leadId: params.leadId,
+    orgId: params.orgId,
+    cliente: { cliente_id: cliente.cliente_id, nome: cliente.nome },
+    obra: obra ? { obra_id: obra.obra_id, obra_name: obra.obra_name } : null,
+    forward: { fromRaw: params.fromRaw, waConfig: params.waConfig },
+  })
+
+  return true
+}
+
+/**
+ * Aplica o roteamento de relacionamento (compartilhado entre o webhook (76-2) e o
+ * gate do `roleta-retry` (76-3)): marca a conversa como relacionamento + handoff,
+ * tira o lead do funil, opcionalmente envia a msg de encaminhamento ao cliente e
+ * notifica a gerente de relacionamento. `cliente`/`obra` podem ser null (ex.: cliente
+ * confirmado pelo diálogo mas sem cadastro casado — a Samara identifica no Chat).
+ */
+export async function applyRelationshipRouting(
+  admin: ReturnType<typeof createAdminClient>,
+  params: {
+    conversationId: string
+    leadId: string
+    orgId: string
+    cliente: { cliente_id: string; nome: string | null } | null
+    obra: { obra_id: string; obra_name: string | null } | null
+    forward: { fromRaw: string; waConfig: { phone_number_id: string; access_token: string } } | null
+  }
+): Promise<void> {
   await admin
     .from("conversations")
     .update({
       is_relationship: true,
       relationship_checked: true,
-      relationship_cliente_id: cliente.cliente_id,
-      relationship_obra_id: obra?.obra_id ?? null,
+      relationship_cliente_id: params.cliente?.cliente_id ?? null,
+      relationship_obra_id: params.obra?.obra_id ?? null,
       is_ai_active: false,
       handoff_at: new Date().toISOString(),
       handoff_reason: RELATIONSHIP_HANDOFF_REASON,
@@ -113,39 +142,92 @@ export async function maybeRouteInboundToRelationship(
   // Tira do funil de leads (é cliente, não lead).
   await admin.from("leads").update({ is_active: false }).eq("id", params.leadId)
 
-  // Mensagem curta de encaminhamento ao cliente + registro no histórico.
-  try {
-    await fetch(
-      `https://graph.facebook.com/v21.0/${params.waConfig.phone_number_id}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${params.waConfig.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: params.fromRaw,
-          type: "text",
-          text: { body: RELATIONSHIP_FORWARD_MESSAGE },
-        }),
-      }
-    )
-    await admin.from("messages").insert({
-      conversation_id: params.conversationId,
-      role: "assistant",
-      content: RELATIONSHIP_FORWARD_MESSAGE,
-      metadata: { relationship_handoff: true },
-    })
-  } catch (e) {
-    console.error("[relacionamento] erro ao enviar msg de encaminhamento:", e)
+  // Mensagem curta de encaminhamento ao cliente + registro no histórico (best-effort).
+  if (params.forward) {
+    try {
+      await fetch(
+        `https://graph.facebook.com/v21.0/${params.forward.waConfig.phone_number_id}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${params.forward.waConfig.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: params.forward.fromRaw,
+            type: "text",
+            text: { body: RELATIONSHIP_FORWARD_MESSAGE },
+          }),
+        }
+      )
+      await admin.from("messages").insert({
+        conversation_id: params.conversationId,
+        role: "assistant",
+        content: RELATIONSHIP_FORWARD_MESSAGE,
+        metadata: { relationship_handoff: true },
+      })
+    } catch (e) {
+      console.error("[relacionamento] erro ao enviar msg de encaminhamento:", e)
+    }
   }
 
-  // Notifica a gerente de relacionamento (Samara).
   await notifyRelationshipManagers(admin, params.orgId, {
-    clienteNome: cliente.nome,
-    obraNome: obra?.obra_name ?? null,
+    clienteNome: params.cliente?.nome ?? null,
+    obraNome: params.obra?.obra_name ?? null,
   })
+}
 
+/**
+ * Story 76-3 — Orquestra o roteamento a partir do `roleta-retry` (idle), quando o
+ * diálogo foi classificado como `cliente_existente`. Reúne conversa/telefone/config,
+ * tenta casar o cadastro (best-effort) e aplica o roteamento de relacionamento.
+ * Retorna true se roteou. NÃO faz match por nome de forma decisiva — a classificação
+ * por diálogo explícito é quem decide (evita falso-positivo de comprador real).
+ */
+export async function routeLeadIdToRelationship(
+  admin: ReturnType<typeof createAdminClient>,
+  leadId: string,
+  orgId: string
+): Promise<boolean> {
+  const [{ data: lead }, { data: conv }] = await Promise.all([
+    admin.from("leads").select("phone").eq("id", leadId).maybeSingle(),
+    admin
+      .from("conversations")
+      .select("id, is_relationship")
+      .eq("lead_id", leadId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+  if (!conv || conv.is_relationship) return false
+
+  // Best-effort: tenta casar o cadastro (telefone) p/ anexar cliente/obra; opcional.
+  const ident = await identifyClientByContact(orgId, lead?.phone ?? null, null)
+  const c = ident.candidates[0] ?? null
+  const obra = c && c.obras.length === 1 ? c.obras[0]! : null
+
+  const { data: wa } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  await applyRelationshipRouting(admin, {
+    conversationId: conv.id as string,
+    leadId,
+    orgId,
+    cliente: c ? { cliente_id: c.cliente_id, nome: c.nome } : null,
+    obra: obra ? { obra_id: obra.obra_id, obra_name: obra.obra_name } : null,
+    forward:
+      lead?.phone && wa?.phone_number_id && wa?.access_token
+        ? {
+            fromRaw: lead.phone as string,
+            waConfig: { phone_number_id: wa.phone_number_id, access_token: wa.access_token },
+          }
+        : null,
+  })
   return true
 }
