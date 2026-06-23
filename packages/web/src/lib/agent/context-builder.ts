@@ -492,15 +492,18 @@ export async function buildGlobalContext(
       .select("id, utm_campaign, last_response_at, status, metadata")
       .eq("org_id", orgId)
       .in("source", ["meta_ads", "whatsapp_click_to_ad"]),
-    // P1 — MAX(synced_at) na janela consultada (AC2): order desc + limit 1 = máximo
+    // P1 — MAX(synced_at) na janela consultada (AC2): order desc + limit 1 = máximo.
+    // Usa a MESMA janela (startDate/endDate) da query de insights acima para que a
+    // recência reportada reflita exatamente o período que o agente está analisando
+    // (modelo DateWindow da Story 52-8), em vez de uma janela fixa de N dias.
     safeProvenanceData<{ synced_at: string | null }>(
       supabase
         .from("meta_insights_daily")
         .select("synced_at")
         .eq("org_id", orgId)
         .eq("level", "campaign")
-        .gte("date", dateNdAgo)
-        .lte("date", today)
+        .gte("date", startDate)
+        .lte("date", endDate)
         .order("synced_at", { ascending: false })
         .limit(1)
         .maybeSingle(),

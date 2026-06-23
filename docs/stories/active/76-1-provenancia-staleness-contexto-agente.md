@@ -219,13 +219,14 @@ Esta story é **apenas TypeScript** — zero migrations SQL. Lê apenas colunas/
 ### Completion Notes
 
 - **Arquitetura:** lógica isolada em funções puras (`computeProvenance`, `formatProvenanceBlock`) para testabilidade sem mock de banco, seguindo o padrão de `window-status.ts`. As queries vivem em `buildGlobalContext` (efeito colateral), a lógica/formatação são puras (testáveis em memória).
-- **AC2 (MAX na janela):** implementado como `order("synced_at", desc).limit(1).maybeSingle()` com os MESMOS filtros de data da janela (`dateNdAgo..today`) — equivale a `MAX(synced_at)` sobre a janela, sem RPC nova.
+- **AC2 (MAX na janela):** implementado como `order("synced_at", desc).limit(1).maybeSingle()` com os MESMOS filtros de data da janela da query de insights — equivale a `MAX(synced_at)` sobre a janela, sem RPC nova. Após a reconciliação com o `main` (ver nota de reconciliação abaixo), a janela é `startDate..endDate` do `DateWindow` (52-8), não mais `dateNdAgo..today`.
 - **NFR-OBS-1 (fail-transparente):** cada query de proveniência é envolvida por `safeProvenanceData` (resolve `data` ou `null`, engole erro) — uma falha de proveniência NUNCA derruba a montagem do contexto nem inventa recência. Campo ausente → "indisponível"; `meta_sync_log` vazio → "recência indisponível".
 - **AC7 (cache/latência):** as 3 queries entram no `Promise.all` existente e o bloco faz parte do `text` cacheado (TTL 5min) — zero round-trip extra após cache quente.
 - **Staleness:** `isStale` deriva de `finished_at` do último ciclo (> 36h). `isError` deriva de `status === 'error'`. Os dois são independentes; o system prompt instrui alertar em qualquer um dos casos. Ciclo `running` (finished_at null) não marca stale sem evidência.
 - **[DECISÃO DE ESCOPO]** A proveniência foi adicionada apenas a `buildGlobalContext` (header `CONTEXTO META ADS`, anchor l.135 das AC). `buildCampaignContext` (header `CONTEXTO CAMPANHA`) NÃO recebeu o bloco — as AC referenciam explicitamente o cabeçalho Meta Ads global. Adicionar ao contexto de campanha seria fora do escopo desta story (Article IV). **Débito técnico sugerido:** estender proveniência ao contexto de campanha em story futura, se desejado.
 - **Validações:** Vitest 12/12 passam; suíte completa 565/565 (sem regressão). `type-check` e `lint` com zero erros nos arquivos da story (warning pré-existente de `today` não usado em `buildCampaignContext` — linha 376, não tocado por esta story; erros de type-check pré-existentes em `email-templates/visual-editor.tsx`, módulo `react-email-editor`, não relacionados).
 - **CodeRabbit:** Disabled para esta story (validação manual pelo @architect, conforme metadata).
+- **[RECONCILIAÇÃO COM main / modelo DateWindow]** A implementação original foi feita contra uma base do `main` ~299 commits desatualizada. Enquanto isso, a Story 52-8 ("period chips") refatorou `buildGlobalContext` para receber `window?: DateWindow` (`startDate`/`endDate`) e REMOVEU a variável local `dateNdAgo`. No rebase para o `main` atual, a query de proveniência P1 (MAX(synced_at)) ainda referenciava `dateNdAgo`, causando `TS2552: Cannot find name 'dateNdAgo'`. **Correção:** a P1 passou a filtrar por `startDate`/`endDate` — a MESMA janela que a query de insights de campanha usa agora —, preservando exatamente a semântica do AC2 ("MAX(synced_at) na janela consultada"): a recência reportada reflete o período que o agente está efetivamente analisando (não uma janela fixa de N dias). A função standalone `fetchProvenance(days=30)` (Story 76-3, usada pelo banner/hook) é um caminho independente que computa sua própria `dateNdAgo` a partir do param `days` e NÃO foi afetada. Revisados também `system-prompt.ts` (seção de proveniência apenas anexada após a seção de períodos da 52-8, sem sobrescrever), `agent-chat-panel.tsx` (banner integrado limpo, period-chips intactos), `sync-status-banner.tsx`, `use-provenance-status.ts` e `context-meta/route.ts` — nenhuma outra divergência semântica encontrada além do `dateNdAgo`. Testes puros de proveniência não dependem da janela da query SQL, então cobertura dos 4 cenários (fresco, >36h, erro, sync_log vazio) permanece intacta. Validações reais pós-reconciliação: `type-check` OK (só os 3 erros pré-existentes de `react-email-editor` em `visual-editor.tsx`); `lint` zero erros nos arquivos do epic; Vitest 12/12 (proveniência) e suíte raiz 557/557.
 
 ---
 
@@ -266,3 +267,68 @@ Esta story é **apenas TypeScript** — zero migrations SQL. Lê apenas colunas/
 |------|--------|-----------|-------|
 | 2026-06-22 | v1.0 | Story criada — Epic 76, MUST, proveniência + staleness no context-builder e system-prompt | @sm (River) |
 | 2026-06-22 | v1.1 | Implementação completa (T1–T6, AC1–AC9). Bloco de proveniência + alerta de staleness/erro; 12 testes Vitest; suíte 565/565. Status → Ready for Review | @dev (Dex) |
+| 2026-06-22 | v1.2 | Quality gate executado — verdict CONCERNS (AC1-AC9 atendidas, validações verdes em runtime; débito de escopo: buildCampaignContext sem proveniência → follow-up) | @qa (Quinn) |
+| 2026-06-23 | v1.3 | Reconciliação com o `main` atual (modelo `DateWindow` da 52-8): P1 de proveniência migrada de `dateNdAgo..today` para `startDate..endDate` (mesma janela dos insights), preservando AC2. type-check/lint/Vitest verdes (557/557 na raiz) | @dev (Dex) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-06-22
+
+### Reviewed By: Quinn (Test Architect & Quality Advisor)
+
+### Resumo
+
+Story bem executada: lógica isolada em funções puras testáveis (`computeProvenance` / `formatProvenanceBlock`), efeitos colaterais (queries) confinados a `buildGlobalContext`, e fail-transparência genuína via `safeProvenanceData`. Todas as 9 AC foram verificadas no código real (não apenas no relatório do @dev) e as validações foram re-executadas por mim em runtime.
+
+### 7 Quality Checks (AIOS)
+
+| # | Check | Verdict | Nota |
+|---|-------|---------|------|
+| 1 | Code review (padrões, legibilidade) | PASS | Funções puras bem documentadas; segue padrão `window-status.ts`; tipos explícitos `ProvenanceQueryResult`/`ProvenanceBlock` |
+| 2 | Unit tests (cobertura, passando) | PASS | 12/12 cobrem dado fresco, defasado >36h, erro de sync, sync_log vazio, ciclo running. Gap menor: AC6 só por inspeção (TEST-001) |
+| 3 | Acceptance criteria (AC1–AC9) | PASS | Todas atendidas — ver rastreabilidade no gate file |
+| 4 | No regressions | PASS | Suíte completa 565/565 (44 arquivos) verde |
+| 5 | Performance (NFR-PERF-1) | PASS | 3 queries no mesmo `Promise.all`; bloco cacheado junto (TTL 5min); zero round-trip extra |
+| 6 | Security / multi-tenancy | PASS | `.eq("org_id", orgId)` nas 3 queries + cache key por org; sem `service_role`; RLS preservada; sem injeção |
+| 7 | Documentation | PASS | System prompt documenta o comportamento; story completa |
+
+### Validações executadas por mim (não confiando só no @dev)
+
+- `vitest run provenance.test.ts` → **12/12 passed**
+- `vitest run` (suíte completa) → **565/565 passed, 44 arquivos** — sem regressão (AC8)
+- `tsc --noEmit` (web) → **zero erros nos arquivos da story**. Há 3 erros TS pré-existentes e não-relacionados em `email-templates/visual-editor.tsx` (módulo `react-email-editor` ausente) — confirmados fora do diff
+- `eslint` nos 3 arquivos → **zero erros**. 1 warning pré-existente (`today` não usado) em `buildCampaignContext:376`, fora do diff desta story (confirmado via `git show a9c4cb0`)
+
+### Validação de destaque — AC2 e NFR-OBS-1
+
+- **AC2 (recência da janela, não da tabela inteira):** verifiquei que a query P1 de proveniência usa **exatamente os mesmos filtros** da query de insights principal (`level="campaign"`, `gte(dateNdAgo)`, `lte(today)`) + `order synced_at desc` + `limit 1`. Logo `MAX(synced_at)` reflete o dado efetivamente em mãos. Genuinamente atendida, não só declarada.
+- **NFR-OBS-1 (fail-transparente, nunca inventa recência):** `safeProvenanceData` resolve `data ?? null` e `.catch(() => null)` — uma falha de proveniência nunca derruba a montagem do contexto. `computeProvenance` jamais fabrica data; ciclo `running` (`finished_at` null) não marca stale sem evidência. Confirmado por teste e inspeção.
+
+### Parecer sobre o débito técnico do `buildCampaignContext` (REQ-001)
+
+A proveniência foi adicionada **apenas** a `buildGlobalContext`. Quando o usuário pergunta sobre uma **campanha específica**, o agente usa `buildCampaignContext` (header `CONTEXTO CAMPANHA`), que **não emite** o bloco de proveniência — e portanto a instrução de alerta de staleness/erro do system prompt fica sem dado para acionar nesse caminho. É um **gap funcional real**: o valor pleno da feature (alertar sobre dado defasado) não cobre 100% das interações do agente.
+
+**Veredito sobre o débito: ACEITÁVEL como escopado, mas deve virar follow-up rastreado.**
+
+Justificativa:
+- As AC1–AC9 ancoram explicitamente o cabeçalho Meta Ads global (`context-builder.ts:135`). Nenhuma AC exige cobertura do contexto de campanha.
+- Estender a `buildCampaignContext` sem AC seria **scope creep** — o @dev acertou ao não inventar escopo (Article IV — No Invention respeitado).
+- O Epic 76 continua (esta story bloqueia a 76-3); o vínculo natural para a extensão é uma story futura, não um patch silencioso.
+
+Recomendação: abrir story de follow-up no Epic 76 para levar o bloco de proveniência ao contexto de campanha. **Não bloqueia o merge desta story.**
+
+### Article IV (No Invention)
+
+PASS. A implementação está estritamente dentro do escopo das AC; nenhuma feature inventada. A decisão de não estender a `buildCampaignContext` é a aplicação correta do Article IV (evita invenção de escopo) e foi documentada como débito pelo @dev.
+
+### Gate Status
+
+Gate: CONCERNS → docs/qa/gates/76.1-provenancia-staleness-contexto-agente.yml
+
+**Itens rastreados (não-bloqueantes):**
+- REQ-001 (medium): proveniência ausente em `buildCampaignContext` → follow-up no Epic 76
+- TEST-001 (low): AC6 (org_id) validada só por inspeção → considerar teste de integração em hardening futuro
+
+**Recomendação de status:** aprovável para prosseguir ao @devops com ciência dos itens acima. As AC estão 100% atendidas e as validações verdes — os concerns são informativos/follow-up, não correções obrigatórias.
