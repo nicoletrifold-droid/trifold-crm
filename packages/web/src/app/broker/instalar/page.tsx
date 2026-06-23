@@ -4,7 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Share, Plus, MoreVertical, Download, Globe } from "lucide-react"
-import { NotificationToggle } from "./_components/notification-toggle"
+import { NotificationToggle } from "@web/components/notification-toggle"
 
 type Platform = "ios" | "android"
 

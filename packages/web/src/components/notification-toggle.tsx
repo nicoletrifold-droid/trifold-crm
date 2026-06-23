@@ -18,9 +18,9 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 type State = "loading" | "unsupported" | "off" | "on" | "denied"
 
 /**
- * Story 75-34 — Liga/desliga as notificações push do corretor manualmente,
- * sem depender do card automático (que some por 7 dias se recusado). Mostra o
- * estado atual e trata bloqueio/iOS.
+ * Story 75-34/75-35 — Liga/desliga as notificações push do usuário logado.
+ * Compartilhado por todos os perfis (corretor + gestores no /dashboard); a API
+ * de push usa o usuário autenticado. Theme-aware (light/dark).
  */
 export function NotificationToggle() {
   const [state, setState] = useState<State>("loading")
@@ -109,37 +109,37 @@ export function NotificationToggle() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-900">
+    <div className="rounded-lg border border-gray-200 bg-white px-5 py-4 shadow-sm dark:border-stone-800 dark:bg-stone-900">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/15">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-500/15">
           {state === "on" ? (
-            <BellRing className="h-5 w-5 text-orange-400" />
+            <BellRing className="h-5 w-5 text-orange-600 dark:text-orange-300" />
           ) : (
-            <BellOff className="h-5 w-5 text-stone-400" />
+            <BellOff className="h-5 w-5 text-gray-400 dark:text-stone-400" />
           )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900 dark:text-stone-100">Notificações</p>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">
-            Avisos de novos leads no celular, mesmo com o app fechado.
+            Receba avisos (novos leads, agenda, atualizações) no celular, mesmo com o app fechado.
           </p>
 
           <div className="mt-3">
             {state === "loading" && (
-              <span className="inline-flex items-center gap-2 text-xs text-stone-400">
+              <span className="inline-flex items-center gap-2 text-xs text-gray-400 dark:text-stone-500">
                 <Loader2 className="h-4 w-4 animate-spin" /> Verificando…
               </span>
             )}
 
             {state === "on" && (
               <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
                   <Check className="h-3.5 w-3.5" /> Ativadas
                 </span>
                 <button
                   onClick={() => void disable()}
                   disabled={busy}
-                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-stone-400 hover:text-stone-200 disabled:opacity-50"
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-200"
                 >
                   {busy ? "…" : "Desativar"}
                 </button>
@@ -158,18 +158,18 @@ export function NotificationToggle() {
             )}
 
             {state === "denied" && (
-              <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
                 Notificações bloqueadas neste navegador. Toque no 🔒 ao lado do endereço → Notificações → Permitir, e recarregue a página.
               </p>
             )}
 
             {state === "unsupported" && (
-              <p className="rounded-lg bg-stone-800 px-3 py-2 text-xs text-stone-400">
-                Para receber notificações no iPhone, instale o app na tela inicial (passos abaixo). No computador, use Chrome ou Edge.
+              <p className="rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-600 dark:bg-stone-800 dark:text-stone-400">
+                Para receber notificações no iPhone, instale o app na tela inicial. No computador, use Chrome ou Edge.
               </p>
             )}
 
-            {error && <p className="mt-2 text-xs text-amber-300">{error}</p>}
+            {error && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{error}</p>}
           </div>
         </div>
       </div>
