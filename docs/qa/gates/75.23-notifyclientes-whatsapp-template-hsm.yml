@@ -1,0 +1,39 @@
+schema: 1
+story: "75.23"
+storyId: "75.23"
+title: "Notificação de obra do cliente via template HSM (WhatsApp proativo)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  sendWhatsApp em lib/notificacoes.ts trocado de type:"text" para type:"template"
+  usando o template HSM aprovado `atualizacao_obra_cliente` (pt_BR), body com 3
+  parâmetros (nome/obra/descrição). Smoke test real contra a Graph API entregou
+  message_status:"accepted" (id wamid retornado) para número de teste (Marcos).
+  typecheck e lint limpos.
+  DESCOBERTA (ajuste de AC): o botão "Ver no Portal" do template foi criado como
+  URL ESTÁTICA com `{{1}}` literal (sem example de variável dinâmica) — a Meta
+  recusa parâmetros de botão (erro 132018). Por isso o envio NÃO inclui componente
+  de botão (Meta renderiza a URL fixa do template). AC3 (botão recebe obra_id)
+  revisado: não aplicável enquanto o botão for estático. CAVEAT operacional: a URL
+  do botão hoje aponta para `https://crm.trifold.eng.br/cliente/{{1}}` (literal,
+  link quebrado) — recomendado corrigir o template na Meta para botão URL dinâmico
+  (base + variável obra_id) ou estático para `…/cliente` (home do portal). Quando
+  vira dinâmico, reintroduzir o componente button com o obra_id no código.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 88
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "type:template, name atualizacao_obra_cliente, language pt_BR"
+  - ac: 2
+    note: "body params na ordem nome/obra/descrição"
+  - ac: 3
+    note: "REVISADO — botão é estático no template; não recebe parâmetro (Meta 132018)"
+  - ac: 4
+    note: "smoke test real: message_status accepted"
+  - ac: 5
+    note: "typecheck + lint limpos"
