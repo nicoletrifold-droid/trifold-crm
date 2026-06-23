@@ -48,6 +48,7 @@ const NAV_ITEMS_BASE = [
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
 const NAV_ITEM_BRINDES = { href: "/dashboard/brindes", label: "Brindes", icon: <Gift className={ICON_SIZE} /> }
 const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
+const NAV_ITEM_CHAT = { href: "/dashboard/chat", label: "Chat", icon: <MessageSquare className={ICON_SIZE} /> }
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
@@ -200,6 +201,7 @@ export default async function DashboardLayout({
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
       : []),
+    ...(permissions["chat"] ? [NAV_ITEM_CHAT] : []),
     // Grupo inferior: Chamados → Config → Email → Sistema
     // O separator é colocado no primeiro item visível do grupo (linha divisória após Mensagens)
     ...(() => {
