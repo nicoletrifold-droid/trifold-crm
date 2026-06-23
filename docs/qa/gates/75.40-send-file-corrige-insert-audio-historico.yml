@@ -1,0 +1,20 @@
+schema: 1
+story: "75.40"
+storyId: "75.40"
+title: "Áudio/arquivo do corretor não gravava no histórico (org_id inexistente)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  send-file inseria em messages com org_id, mas a tabela não tem essa coluna → insert
+  falhava silenciosamente (rota não checava o erro) → WhatsApp enviava mas nada no
+  histórico. Fix: removido org_id (isolamento de org é via conversation_id/RLS); populadas
+  as colunas dedicadas media_url/media_type; erro do insert agora é checado (log +
+  MESSAGE_INSERT_FAILED) e retorna messageId. Texto (send-message) já era correto.
+  Envio ao WhatsApp e janela 24h inalterados. typecheck e lint limpos. Fix correlato (não
+  código): bucket nicole-media passou a aceitar audio/* (config de storage).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 93
+waiver: { active: false }

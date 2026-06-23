@@ -192,25 +192,46 @@ export async function POST(
     }
   }
 
-  // Grava em messages independente do resultado do envio
-  await supabase.from("messages").insert({
-    conversation_id: conversation.id,
-    org_id: appUser.org_id,
-    role: "broker",
-    content: isAudio
-      ? "[Áudio]"
-      : caption
-      ? `[Arquivo] ${file.name} — ${caption}`
-      : `[Arquivo] ${file.name}`,
-    metadata: {
-      is_media: true,
+  // Grava em messages independente do resultado do envio externo.
+  // NOTA: `messages` NÃO tem coluna `org_id` (o isolamento de org é via
+  // conversation_id → conversations.org_id, inclusive na RLS). Setar org_id aqui
+  // fazia o insert falhar ("column does not exist") silenciosamente (Story 75-40).
+  const mediaType = isAudio ? "audio" : isImage ? "image" : "document"
+  const { data: insertedMsg, error: insertErr } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: conversation.id,
+      role: "broker",
+      content: isAudio
+        ? "[Áudio]"
+        : caption
+        ? `[Arquivo] ${file.name} — ${caption}`
+        : `[Arquivo] ${file.name}`,
       media_url: fileUrl,
-      media_type: isAudio ? "audio" : isImage ? "image" : "document",
-      file_name: file.name,
-      sent_via_whatsapp: sent,
-      source: "broker_upload",
-    },
-  })
+      media_type: mediaType,
+      metadata: {
+        is_media: true,
+        media_url: fileUrl,
+        media_type: mediaType,
+        file_name: file.name,
+        sent_via_whatsapp: sent,
+        source: "broker_upload",
+      },
+    })
+    .select("id")
+    .single()
 
-  return NextResponse.json({ success: true, sent, error: sendError })
+  // Não falhar em silêncio: o WhatsApp pode ter sido enviado, mas se não gravou
+  // no histórico precisamos saber (log + resposta de erro).
+  if (insertErr || !insertedMsg) {
+    console.error(
+      `[send-file] insert em messages falhou (lead=${leadId}): ${insertErr?.message}`
+    )
+    return NextResponse.json(
+      { success: false, error: "MESSAGE_INSERT_FAILED", message: insertErr?.message, sent },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ success: true, sent, error: sendError, messageId: insertedMsg.id })
 }
