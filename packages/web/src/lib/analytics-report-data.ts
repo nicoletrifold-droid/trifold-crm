@@ -196,7 +196,6 @@ export async function buildAnalyticsReportData(
       : supabase.from("leads")
           .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
           .eq("org_id", orgId)
-          .eq("is_active", true).is("lost_reason", null)
           .gte("created_at", twoWeeksAgo.toISOString())
           .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),

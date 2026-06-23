@@ -4,7 +4,6 @@ import { createElement } from "react"
 import { Resend } from "resend"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { buildAnalyticsReportData } from "@web/lib/analytics-report-data"
-import { resolvePeriod } from "@web/lib/analytics/period"
 import { AnalyticsReportPDF } from "@web/lib/pdf/analytics-report-pdf"
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -42,12 +41,11 @@ export async function GET(request: NextRequest) {
   let sent = 0
   let errors = 0
 
-  // Relatório automático = últimos 30 dias (período + comparativo com os 30 dias anteriores).
-  const period = resolvePeriod("30d")
-
   for (const org of orgs) {
     try {
-      const data = await buildAnalyticsReportData(supabase, org.id, period)
+      // Relatório AUTOMÁTICO é sempre o comparativo SEMANAL (7 dias vs 7 dias
+      // anteriores) — sem período (cai no caminho semanal original).
+      const data = await buildAnalyticsReportData(supabase, org.id)
       const pdfElement = createElement(AnalyticsReportPDF, { data })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const buffer = await renderToBuffer(pdfElement as any)
@@ -63,16 +61,15 @@ export async function GET(request: NextRequest) {
       const { error } = await resend.emails.send({
         from: SENDER,
         to: REPORT_RECIPIENTS,
-        subject: `Resumo de leads (últimos 30 dias) · ${data.weekRange}`,
+        subject: `Resumo semanal de leads · ${data.weekRange}`,
         html: `
           <p>Olá!</p>
-          <p>Segue o relatório de analytics (últimos 30 dias) da plataforma Trifold CRM.</p>
+          <p>Segue o relatório semanal de analytics da plataforma Trifold CRM.</p>
           <p><strong>Período:</strong> ${data.weekRange}</p>
           <ul>
-            <li>Total no período: <strong>${data.periodTotal ?? data.totalLeads}</strong></li>
-            <li>Média diária: <strong>${(data.mediaDiaria ?? 0).toFixed(1)}</strong></li>
-            <li>Conversão: <strong>${data.conversao ?? 0}%</strong></li>
-            <li>Perdidos: <strong>${data.perdidos ?? 0}</strong></li>
+            <li>Total de leads: <strong>${data.totalLeads}</strong></li>
+            <li>Novos esta semana: <strong>${data.leadsWeek}</strong></li>
+            <li>Novos este mês: <strong>${data.leadsMonth}</strong></li>
           </ul>
           <p>O relatório completo está em anexo.</p>
         `,
