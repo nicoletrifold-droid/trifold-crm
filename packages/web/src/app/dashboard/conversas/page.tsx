@@ -7,6 +7,7 @@ import { LeadFilters } from "@web/components/lead-filters"
 import { countUnreadForLead } from "@web/lib/broker/unread-count"
 import { formatRelativeTime } from "@web/lib/broker/format-relative-time"
 import { getChannelLabel } from "@web/lib/broker/channel-labels"
+import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 
 interface LeadEmbed {
   id: string
@@ -40,11 +41,11 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 export default async function ConversasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; property?: string; broker_id?: string }>
+  searchParams: Promise<{ q?: string; stage?: string; property?: string; broker_id?: string; days?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
-  const { q, stage, property, broker_id } = await searchParams
+  const { q, stage, property, broker_id, days } = await searchParams
   const search = q?.trim().toLowerCase() ?? ""
 
   // RLS `conversations_select` amplia para admin/supervisor/gerente-comercial
@@ -81,6 +82,9 @@ export default async function ConversasPage({
     .map((u) => ({ id: u.id, name: u.name as string }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  // Corte do filtro "Sem contato" (parado N dias). 0 = sem filtro.
+  const staleCutoff = staleCutoffMs(days ? parseInt(days, 10) : 0)
+
   // Filtros AND aplicados em JS (PostgREST não filtra de forma confiável em
   // relações embedded). Conjunto da org é pequeno.
   const filtered = rows.filter((conv) => {
@@ -89,6 +93,12 @@ export default async function ConversasPage({
     if (stage && lead.stage_id !== stage) return false
     if (property && lead.property_interest_id !== property) return false
     if (broker_id && lead.assigned_broker_id !== broker_id) return false
+    if (staleCutoff) {
+      // Mantém só conversas paradas: last_message_at mais antigo que o corte
+      // (sem mensagem = sem contato → mantém).
+      const last = conv.last_message_at ? new Date(conv.last_message_at).getTime() : 0
+      if (last > staleCutoff) return false
+    }
     if (search) {
       const name = (lead.name ?? "").toLowerCase()
       const phone = (lead.phone ?? "").toLowerCase()
@@ -115,7 +125,7 @@ export default async function ConversasPage({
     else msgsByConv.set(m.conversation_id, [m])
   }
 
-  const hasFilter = Boolean(search || stage || property || broker_id)
+  const hasFilter = Boolean(search || stage || property || broker_id || days)
 
   return (
     <div className="space-y-4">
