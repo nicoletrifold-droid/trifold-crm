@@ -72,14 +72,79 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
         .catch((err: unknown) => console.error("[roleta] email error:", err))
     : Promise.resolve()
 
+  // Roleta → corretor (sem context): WhatsApp proativo via template HSM aprovado
+  // `novo_lead_corretor`. Fluxos com context (agendamento 51-3 / gestor) mantêm
+  // o texto livre (sem template dedicado) — entrega só na janela de 24h.
   const waP = config.notify_whatsapp && broker.phone
-    ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
+    ? (context
+        ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
+        : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone))
         .then(() => { result.whatsapp = true })
         .catch((err: unknown) => console.error("[roleta] whatsapp error:", err))
     : Promise.resolve()
 
   await Promise.allSettled([pushP, emailP, waP])
   return result
+}
+
+/**
+ * Notificação proativa de novo lead da roleta ao corretor via template HSM
+ * aprovado `novo_lead_corretor` (pt_BR): body {{1}}=nome corretor, {{2}}=nome
+ * lead, {{3}}=telefone lead. Entrega dentro e fora da janela de 24h. O botão do
+ * template é estático (issue #26) — envio sem componente de botão.
+ */
+async function sendBrokerLeadTemplate(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  phone: string,
+  brokerName: string,
+  leadName: string,
+  leadPhone: string
+): Promise<void> {
+  const { data: waConfig } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (!waConfig?.phone_number_id || !waConfig?.access_token) return
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${waConfig.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: phone,
+        type: "template",
+        template: {
+          name: "novo_lead_corretor",
+          language: { code: "pt_BR" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: brokerName },
+                { type: "text", text: leadName },
+                { type: "text", text: leadPhone },
+              ],
+            },
+          ],
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    }
+  )
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
+  }
 }
 
 async function sendBrokerWhatsApp(

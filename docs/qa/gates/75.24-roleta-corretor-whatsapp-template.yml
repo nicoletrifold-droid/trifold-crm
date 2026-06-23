@@ -1,0 +1,36 @@
+schema: 1
+story: "75.24"
+storyId: "75.24"
+title: "Roleta → corretor: notificação de novo lead via template HSM (WhatsApp)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  notify-broker.ts: nova função sendBrokerLeadTemplate envia o template HSM aprovado
+  novo_lead_corretor (pt_BR, body=nome/lead/telefone, sem componente de botão —
+  botão estático, issue #26). Em notifyBroker, o envio de WhatsApp passa a usar o
+  template quando NÃO há context (= distribuição da roleta); quando há context
+  (agendamento 51-3 / gestor notifyImobiliaria) mantém sendBrokerWhatsApp (texto) —
+  sem regressão. Push e e-mail inalterados. broker.phone narrowed pelo guard
+  config.notify_whatsapp && broker.phone. Smoke test real do template
+  novo_lead_corretor já entregue (message_status accepted, confirmado pelo usuário)
+  — mesmo payload que o código produz. typecheck e lint limpos.
+  PRÉ-CONDIÇÃO operacional p/ disparo real: corretores precisam de users.phone
+  (0/10 hoje) — fora do escopo desta story.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 92
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "sendBrokerLeadTemplate: type:template novo_lead_corretor, body nome/lead/telefone"
+  - ac: 2
+    note: "branch por context — agendamento/gestor seguem em sendBrokerWhatsApp (texto)"
+  - ac: 3
+    note: "pushP e emailP inalterados"
+  - ac: 4
+    note: "smoke test real accepted (confirmado pelo usuário)"
+  - ac: 5
+    note: "typecheck + lint limpos"
