@@ -11,20 +11,25 @@ interface LeadFiltersProps {
   stages: Stage[]
   properties: Property[]
   brokers?: Broker[]
+  /** Mostra o filtro "Atendimento" (Nicole IA / Humano) — usado nas Conversas. */
+  showAtendimento?: boolean
   stageParam?: string
   propertyParam?: string
   daysParam?: string
   brokerParam?: string
+  iaParam?: string
 }
 
 export function LeadFilters({
   stages,
   properties,
   brokers,
+  showAtendimento = false,
   stageParam = "stage",
   propertyParam = "property",
   daysParam = "days",
   brokerParam = "broker_id",
+  iaParam = "ia",
 }: LeadFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -34,6 +39,7 @@ export function LeadFilters({
   const activeProperty = searchParams.get(propertyParam) ?? ""
   const activeDays = searchParams.get(daysParam) ?? ""
   const activeBroker = searchParams.get(brokerParam) ?? ""
+  const activeIa = searchParams.get(iaParam) ?? ""
 
   const setParam = useCallback(
     (key: string, value: string) => {
@@ -49,7 +55,7 @@ export function LeadFilters({
   const selectClass =
     "h-8 rounded-lg border border-gray-300 bg-white px-2.5 py-0 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:focus:border-orange-500 dark:focus:ring-orange-500"
 
-  const hasFilters = activeStage || activeProperty || activeDays || activeBroker
+  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeIa
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -75,6 +81,15 @@ export function LeadFilters({
         </select>
       )}
 
+      {/* Atendimento (Nicole IA / Humano) — só aparece quando habilitado (Conversas) */}
+      {showAtendimento && (
+        <select value={activeIa} onChange={(e) => setParam(iaParam, e.target.value)} className={selectClass}>
+          <option value="">Atendimento: Todos</option>
+          <option value="ia">Nicole (IA)</option>
+          <option value="humano">Humano</option>
+        </select>
+      )}
+
       {/* Sem contato */}
       <select value={activeDays} onChange={(e) => setParam(daysParam, e.target.value)} className={selectClass}>
         <option value="">Sem contato: Qualquer</option>
@@ -92,6 +107,7 @@ export function LeadFilters({
             params.delete(propertyParam)
             params.delete(daysParam)
             params.delete(brokerParam)
+            params.delete(iaParam)
             params.delete("page")
             router.push(`${pathname}?${params.toString()}`)
           }}

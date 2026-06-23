@@ -41,11 +41,11 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 export default async function ConversasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; property?: string; broker_id?: string; days?: string }>
+  searchParams: Promise<{ q?: string; stage?: string; property?: string; broker_id?: string; days?: string; ia?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
-  const { q, stage, property, broker_id, days } = await searchParams
+  const { q, stage, property, broker_id, days, ia } = await searchParams
   const search = q?.trim().toLowerCase() ?? ""
 
   // RLS `conversations_select` amplia para admin/supervisor/gerente-comercial
@@ -93,6 +93,8 @@ export default async function ConversasPage({
     if (stage && lead.stage_id !== stage) return false
     if (property && lead.property_interest_id !== property) return false
     if (broker_id && lead.assigned_broker_id !== broker_id) return false
+    if (ia === "ia" && !conv.is_ai_active) return false
+    if (ia === "humano" && conv.is_ai_active) return false
     if (staleCutoff) {
       // Mantém só conversas paradas: last_message_at mais antigo que o corte
       // (sem mensagem = sem contato → mantém).
@@ -125,7 +127,7 @@ export default async function ConversasPage({
     else msgsByConv.set(m.conversation_id, [m])
   }
 
-  const hasFilter = Boolean(search || stage || property || broker_id || days)
+  const hasFilter = Boolean(search || stage || property || broker_id || days || ia)
 
   return (
     <div className="space-y-4">
@@ -141,6 +143,7 @@ export default async function ConversasPage({
         stages={(stages ?? []).map((s) => ({ id: s.id, name: s.name, color: s.color }))}
         properties={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
         brokers={brokers}
+        showAtendimento
         stageParam="stage"
         propertyParam="property"
       />
@@ -246,6 +249,15 @@ export default async function ConversasPage({
                       >
                         {channel.label}
                       </span>
+                      {conv.is_ai_active ? (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/15 dark:text-purple-300">
+                          🤖 Nicole
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+                          Atendimento humano
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">
                         <User className="h-3 w-3" aria-hidden="true" />
                         {brokerData?.name ?? "Sem corretor"}
