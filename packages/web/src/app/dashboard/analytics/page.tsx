@@ -2,10 +2,11 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
+import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
+import { resolvePeriod } from "@web/lib/analytics/period"
 
-// Story 30.1: shape do retorno da RPC public.get_analytics_summary(uuid, timestamptz)
-// bigints (count, total_leads, new_leads) podem chegar como string — castar via Number().
+// Story 30.1 / 75-31: shape do retorno da RPC get_analytics_summary_ranged.
 type AnalyticsFunnelEntry = {
   stage_id: string
   name: string
@@ -14,17 +15,8 @@ type AnalyticsFunnelEntry = {
   position: number
   count: number | string
 }
-type AnalyticsPropertyEntry = {
-  property_id: string
-  name: string
-  count: number | string
-}
-type AnalyticsBrokerEntry = {
-  user_id: string
-  name: string
-  count: number | string
-  avg_score: number | null
-}
+type AnalyticsPropertyEntry = { property_id: string; name: string; count: number | string }
+type AnalyticsBrokerEntry = { user_id: string; name: string; count: number | string; avg_score: number | null }
 type AnalyticsSummary = {
   funnel: AnalyticsFunnelEntry[] | null
   by_property: AnalyticsPropertyEntry[] | null
@@ -43,22 +35,28 @@ const toCount = (v: number | string | null | undefined): number => {
 
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
 
+const RANGE_LABEL: Record<string, string> = {
+  "7d": "últimos 7 dias",
+  "30d": "últimos 30 dias",
+  "90d": "últimos 90 dias",
+  custom: "período selecionado",
+}
+
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property_id?: string }>
+  searchParams: Promise<{ property_id?: string; range?: string; from?: string; to?: string }>
 }) {
   const appUser = await getServerUser()
   const supabase = await createClient()
   const params = await searchParams
   const propertyId = params.property_id || null
 
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const weekStart = new Date(now)
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1)
-  weekStart.setHours(0, 0, 0, 0)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  // Período global (Story 75-31) — aplica à página inteira.
+  const period = resolvePeriod(params.range, params.from, params.to)
+  const sinceISO = period.sinceISO
+  const untilISO = period.untilISO
+  const rangeLabel = RANGE_LABEL[period.range] ?? "período"
 
   // Properties (sempre carregar para o seletor)
   const { data: allProperties } = await supabase
@@ -67,43 +65,30 @@ export default async function AnalyticsPage({
     .eq("is_active", true)
     .order("name")
 
-  // IDs dos corretores ativos (têm entrada na tabela brokers)
+  // IDs dos corretores ativos
   const { data: activeBrokersData } = await supabase
     .from("brokers")
     .select("user_id")
     .eq("org_id", appUser.orgId)
-  const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
+  const activeBrokerIds = new Set((activeBrokersData ?? []).map((b) => b.user_id as string))
 
-  // Período — is_active=true AND lost_reason IS NULL (uniformidade com Pipeline/Dashboard)
-  // totalLeads é calculado após as stages serem construídas (soma das stages ativas)
-  // para garantir exatamente o mesmo número que o Dashboard "Total no pipeline"
-  const todayQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", todayStart.toISOString())
-  const weekQ  = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", weekStart.toISOString())
-  const monthQ = supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).is("lost_reason", null).gte("created_at", monthStart.toISOString())
-  const lpYardenQ = supabase.from("leads").select("id", { count: "exact", head: true })
+  // Landing Pages do período (extraídas do utm_campaign e subtraídas do "other")
+  const lpYardenQ = supabase
+    .from("leads").select("id", { count: "exact", head: true })
     .eq("is_active", true).is("lost_reason", null)
-    .gte("created_at", monthStart.toISOString())
+    .gte("created_at", sinceISO).lt("created_at", untilISO)
     .ilike("utm_campaign", "%LP Yarden%")
-  const lpVindQ = supabase.from("leads").select("id", { count: "exact", head: true })
+  const lpVindQ = supabase
+    .from("leads").select("id", { count: "exact", head: true })
     .eq("is_active", true).is("lost_reason", null)
-    .gte("created_at", monthStart.toISOString())
+    .gte("created_at", sinceISO).lt("created_at", untilISO)
     .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
 
-  const [
-    { count: leadsToday },
-    { count: leadsWeek },
-    { count: leadsMonth },
-    { count: lpYardenCount },
-    { count: lpVindCount },
-  ] = await Promise.all([
-    propertyId ? todayQ.eq("property_interest_id", propertyId) : todayQ,
-    propertyId ? weekQ.eq("property_interest_id", propertyId) : weekQ,
-    propertyId ? monthQ.eq("property_interest_id", propertyId) : monthQ,
+  const [{ count: lpYardenCount }, { count: lpVindCount }] = await Promise.all([
     propertyId ? lpYardenQ.eq("property_interest_id", propertyId) : lpYardenQ,
     propertyId ? lpVindQ.eq("property_interest_id", propertyId) : lpVindQ,
   ])
 
-  // Quando filtra por empreendimento, faz queries diretas em vez de usar RPC
   let stages: { id: string; name: string; slug: string; color: string; position: number; count: number }[] = []
   let properties: { id: string; name: string; count: number }[] = []
   let brokers: { id: string; name: string; count: number; avgScore: number }[] = []
@@ -111,12 +96,13 @@ export default async function AnalyticsPage({
   const lostReasons: Record<string, number> = {}
 
   if (!propertyId) {
-    // SEM filtro — usa RPC
-    const { data: analytics, error: analyticsError } = await supabase.rpc("get_analytics_summary", {
+    // SEM filtro de empreendimento — usa o RPC período-aware
+    const { data: analytics, error: analyticsError } = await supabase.rpc("get_analytics_summary_ranged", {
       p_org_id: appUser.orgId,
-      p_since: monthStart.toISOString(),
+      p_since: sinceISO,
+      p_until: untilISO,
     })
-    if (analyticsError) console.error("[ANALYTICS] get_analytics_summary RPC failed", analyticsError)
+    if (analyticsError) console.error("[ANALYTICS] get_analytics_summary_ranged RPC failed", analyticsError)
     const summary = (analytics as AnalyticsSummary | null) ?? null
 
     stages = (summary?.funnel ?? []).map((s) => ({
@@ -129,7 +115,7 @@ export default async function AnalyticsPage({
     for (const [k, v] of Object.entries(summary?.source_counts ?? {})) sourceCounts[k] = toCount(v)
     for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) lostReasons[k] = toCount(v)
   } else {
-    // COM filtro — queries diretas
+    // COM filtro de empreendimento — queries diretas, limitadas ao período
     const [stagesData, leadsForAggData] = await Promise.all([
       supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
       supabase
@@ -138,18 +124,9 @@ export default async function AnalyticsPage({
         .eq("org_id", appUser.orgId)
         .eq("is_active", true)
         .is("lost_reason", null)
-        .eq("property_interest_id", propertyId),
+        .eq("property_interest_id", propertyId)
+        .gte("created_at", sinceISO).lt("created_at", untilISO),
     ])
-
-    // Sources do mês (separado por período)
-    const monthSourcesData = await supabase
-      .from("leads")
-      .select("source")
-      .eq("org_id", appUser.orgId)
-      .eq("is_active", true)
-      .is("lost_reason", null)
-      .eq("property_interest_id", propertyId)
-      .gte("created_at", monthStart.toISOString())
 
     const allLeads = (leadsForAggData.data ?? []) as Array<{
       stage_id: string | null
@@ -181,28 +158,32 @@ export default async function AnalyticsPage({
       .filter(([id]) => activeBrokerIds.has(id))
       .map(([id, v]) => ({ id, name: v.name, count: v.count, avgScore: 0 }))
 
-    // Sources (do mês)
-    for (const l of (monthSourcesData.data ?? []) as { source: string | null }[]) {
-      const k = l.source ?? "other"
-      sourceCounts[k] = (sourceCounts[k] ?? 0) + 1
+    // Sources do período
+    for (const l of allLeads) {
+      if (l.source) sourceCounts[l.source] = (sourceCounts[l.source] ?? 0) + 1
     }
 
-    // Lost reasons (todos perdidos do empreendimento)
-    for (const l of allLeads) {
-      if (l.lost_reason) {
-        lostReasons[l.lost_reason] = (lostReasons[l.lost_reason] ?? 0) + 1
-      }
+    // Lost reasons — perdidos do empreendimento no período (query separada, pois
+    // allLeads exclui lost_reason)
+    const lostData = await supabase
+      .from("leads").select("lost_reason")
+      .eq("org_id", appUser.orgId).eq("is_active", true)
+      .not("lost_reason", "is", null)
+      .eq("property_interest_id", propertyId)
+      .gte("created_at", sinceISO).lt("created_at", untilISO)
+    for (const l of (lostData.data ?? []) as { lost_reason: string | null }[]) {
+      if (l.lost_reason) lostReasons[l.lost_reason] = (lostReasons[l.lost_reason] ?? 0) + 1
     }
   }
 
-  // by_property aparece em "Leads por Empreendimento" — sempre mostra ambos sem filtrar
+  // "Leads por Empreendimento" — sempre ambos, limitado ao período
   if (propertyId) {
-    // Carrega counts diretamente
     const counts = await Promise.all((allProperties ?? []).map(async (p) => {
       const { count } = await supabase
         .from("leads").select("id", { count: "exact", head: true })
-        .eq("org_id", appUser.orgId).eq("is_active", true)
+        .eq("org_id", appUser.orgId).eq("is_active", true).is("lost_reason", null)
         .eq("property_interest_id", p.id)
+        .gte("created_at", sinceISO).lt("created_at", untilISO)
       return { id: p.id, name: p.name, count: count ?? 0 }
     }))
     properties = counts
@@ -221,21 +202,25 @@ export default async function AnalyticsPage({
   }
   if (sourceCounts.other === 0) delete sourceCounts.other
 
-  // Total = soma das stages ativas — idêntico ao "Total no pipeline" do Dashboard
+  // ── Métricas do período (cards de topo) ────────────────────────────────────
   const totalLeads = stages.reduce((sum, s) => sum + s.count, 0)
+  const perdidos = Object.values(lostReasons).reduce((sum, n) => sum + n, 0)
+  const fechamento = stages.find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count ?? 0
+  const conversao = totalLeads > 0 ? Math.round((fechamento / totalLeads) * 100) : 0
+  const mediaDiaria = period.days > 0 ? (totalLeads / period.days) : 0
 
-  // ── Tempo médio de 1º atendimento por corretor ────────────────────────────
+  // ── Tempo médio de 1º atendimento por corretor (no período) ────────────────
   const responseLeads = await supabase
     .from("leads")
     .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
     .eq("org_id", appUser.orgId)
     .not("assigned_broker_id", "is", null)
-    .gte("created_at", new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
-    .limit(500)
+    .gte("created_at", sinceISO).lt("created_at", untilISO)
+    .limit(1000)
 
   type ResponseLead = { id: string; created_at: string; assigned_broker_id: string; broker: { id: string; name: string } | { id: string; name: string }[] | null }
   const responseLeadList = (responseLeads.data ?? []) as ResponseLead[]
-  const responseLeadIds = responseLeadList.map(l => l.id)
+  const responseLeadIds = responseLeadList.map((l) => l.id)
 
   let brokerResponseTimes: { id: string; name: string; avgMinutes: number; count: number }[] = []
 
@@ -277,7 +262,6 @@ export default async function AnalyticsPage({
   }
 
   const sourceLabels = SOURCE_LABELS_SHORT
-  // Escala raiz quadrada para diferenciar valores pequenos sem esmagar os grandes
   const maxFunnelSqrt = Math.max(...stages.map((s) => Math.sqrt(s.count)), 1)
 
   const selectedPropertyName = propertyId
@@ -290,107 +274,82 @@ export default async function AnalyticsPage({
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">
             Analytics{selectedPropertyName && (
-              <span className="ml-2 text-base font-normal text-orange-600 dark:text-orange-300">
-                · {selectedPropertyName}
-              </span>
+              <span className="ml-2 text-base font-normal text-orange-600 dark:text-orange-300">· {selectedPropertyName}</span>
             )}
           </h1>
           <div className="flex items-center gap-2">
-            <a
-              href="/api/analytics/report"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-            >
+            <a href="/api/analytics/report" target="_blank" rel="noopener noreferrer"
+              className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
               Relatório PDF
             </a>
-            <a
-              href="/api/analytics/report"
-              download
-              className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600"
-            >
+            <a href="/api/analytics/report" download
+              className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600">
               Baixar PDF
             </a>
           </div>
         </div>
-        {/* Seletor de empreendimento */}
         <ScrollableX>
-        <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800 min-w-max">
-          <a
-            href="/dashboard/analytics"
-            className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
-              !propertyId
-                ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
-                : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
-            }`}
-          >
-            Todos
-          </a>
-          {(allProperties ?? []).map((p) => (
-            <a
-              key={p.id}
-              href={`/dashboard/analytics?property_id=${p.id}`}
-              className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
-                propertyId === p.id
-                  ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
-                  : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
-              }`}
-            >
-              {p.name}
+          <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800 min-w-max">
+            <a href={`/dashboard/analytics${period.range !== "30d" ? `?range=${period.range}` : ""}`}
+              className={`rounded px-3 py-1 text-sm font-medium transition-colors ${!propertyId ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100" : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"}`}>
+              Todos
             </a>
-          ))}
-        </div>
+            {(allProperties ?? []).map((p) => (
+              <a key={p.id} href={`/dashboard/analytics?property_id=${p.id}${period.range !== "30d" ? `&range=${period.range}` : ""}`}
+                className={`rounded px-3 py-1 text-sm font-medium transition-colors ${propertyId === p.id ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100" : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"}`}>
+                {p.name}
+              </a>
+            ))}
+          </div>
         </ScrollableX>
       </div>
 
-      {/* Leads por Período — gráfico interativo com filtros (AC3-AC7) */}
-      <LeadsChart
-        properties={(allProperties ?? []).map((p) => ({ id: p.id, name: p.name }))}
-        initialPropertyId={propertyId ?? undefined}
-      />
+      {/* Seletor de período GLOBAL — aplica à página inteira (Story 75-31) */}
+      <AnalyticsPeriodSelector />
 
-      {/* Period Cards */}
+      {/* Cards do período */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Total de leads</p>
-          <p className="mt-1 text-3xl font-bold dark:text-stone-100">{totalLeads ?? 0}</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Total no período</p>
+          <p className="mt-1 text-3xl font-bold dark:text-stone-100">{totalLeads}</p>
+          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{rangeLabel}</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Hoje</p>
-          <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-300">{leadsToday ?? 0}</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Média diária</p>
+          <p className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-300">{mediaDiaria.toFixed(1)}</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Esta semana</p>
-          <p className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-300">{leadsWeek ?? 0}</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Conversão</p>
+          <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-300">{conversao}%</p>
+          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{fechamento} fechados</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Este mês</p>
-          <p className="mt-1 text-3xl font-bold text-orange-600 dark:text-orange-300">{leadsMonth ?? 0}</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Perdidos</p>
+          <p className="mt-1 text-3xl font-bold text-red-600 dark:text-red-300">{perdidos}</p>
         </div>
       </div>
 
+      {/* Leads por Período — gráfico (granularidade local; período vem da URL) */}
+      <LeadsChart
+        properties={(allProperties ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        initialPropertyId={propertyId ?? undefined}
+        from={sinceISO}
+        to={untilISO}
+      />
+
       {/* Funnel */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Funil de Conversão</h2>
+        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
         <div className="space-y-2">
           {stages.map((stage) => {
-            const widthPct = stage.count > 0
-              ? Math.max((Math.sqrt(stage.count) / maxFunnelSqrt) * 100, 4)
-              : 0
+            const widthPct = stage.count > 0 ? Math.max((Math.sqrt(stage.count) / maxFunnelSqrt) * 100, 4) : 0
             return (
               <div key={stage.id} className="flex items-center gap-3">
                 <span className="w-32 shrink-0 text-sm text-gray-600 dark:text-stone-300">{stage.name}</span>
                 <div className="flex-1 min-w-0">
                   <div className="relative h-7 rounded bg-stone-100 dark:bg-stone-800/60">
                     {stage.count > 0 && (
-                      <div
-                        className="absolute inset-y-0 left-0 rounded transition-all"
-                        style={{
-                          width: `${widthPct}%`,
-                          backgroundColor: stage.color,
-                          opacity: 0.85,
-                        }}
-                      />
+                      <div className="absolute inset-y-0 left-0 rounded transition-all" style={{ width: `${widthPct}%`, backgroundColor: stage.color, opacity: 0.85 }} />
                     )}
                   </div>
                 </div>
@@ -409,9 +368,7 @@ export default async function AnalyticsPage({
             {properties.map((p) => (
               <div key={p.id} className="flex items-center justify-between">
                 <span className="text-sm text-gray-600 dark:text-stone-300">{p.name}</span>
-                <span className="rounded-full bg-orange-100 px-3 py-0.5 text-sm font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
-                  {p.count}
-                </span>
+                <span className="rounded-full bg-orange-100 px-3 py-0.5 text-sm font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">{p.count}</span>
               </div>
             ))}
           </div>
@@ -419,22 +376,18 @@ export default async function AnalyticsPage({
 
         {/* By Source */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Leads por Origem (mês)</h2>
+          <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Leads por Origem <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
           <div className="space-y-3">
             {Object.entries(sourceCounts)
               .sort(([, a], [, b]) => b - a)
               .map(([source, count]) => (
                 <div key={source} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-stone-300">
-                    {sourceLabels[source] ?? source}
-                  </span>
-                  <span className="rounded-full bg-blue-100 px-3 py-0.5 text-sm font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-                    {count}
-                  </span>
+                  <span className="text-sm text-gray-600 dark:text-stone-300">{sourceLabels[source] ?? source}</span>
+                  <span className="rounded-full bg-blue-100 px-3 py-0.5 text-sm font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">{count}</span>
                 </div>
               ))}
             {Object.keys(sourceCounts).length === 0 && (
-              <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum lead este mês.</p>
+              <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum lead no período.</p>
             )}
           </div>
         </div>
@@ -446,13 +399,11 @@ export default async function AnalyticsPage({
             {brokers.map((broker) => (
               <div key={broker.id} className="flex items-center justify-between">
                 <span className="text-sm text-gray-600 dark:text-stone-300">{broker.name}</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-stone-100">
-                  {broker.count} leads
-                </span>
+                <span className="text-sm font-medium text-gray-900 dark:text-stone-100">{broker.count} leads</span>
               </div>
             ))}
             {brokers.length === 0 && (
-              <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum corretor cadastrado.</p>
+              <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum corretor com leads no período.</p>
             )}
           </div>
         </div>
@@ -460,23 +411,15 @@ export default async function AnalyticsPage({
         {/* Tempo médio de 1º atendimento */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Tempo Médio de Atendimento</h2>
-          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o 1º contato registrado — últimos 7 dias</p>
+          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o 1º contato registrado — {rangeLabel}</p>
           {brokerResponseTimes.length > 0 ? (
             <div className="space-y-3">
               {brokerResponseTimes.map((b) => {
                 const h = Math.floor(b.avgMinutes / 60)
                 const m = b.avgMinutes % 60
                 const label = h > 0 ? `${h}h ${m}min` : `${m}min`
-                const color = b.avgMinutes <= 30
-                  ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                  : b.avgMinutes <= 120
-                  ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
-                  : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-                const dot = b.avgMinutes <= 30
-                  ? "bg-green-500"
-                  : b.avgMinutes <= 120
-                  ? "bg-orange-500"
-                  : "bg-red-500"
+                const color = b.avgMinutes <= 30 ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : b.avgMinutes <= 120 ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                const dot = b.avgMinutes <= 30 ? "bg-green-500" : b.avgMinutes <= 120 ? "bg-orange-500" : "bg-red-500"
                 return (
                   <div key={b.id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -485,37 +428,31 @@ export default async function AnalyticsPage({
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-                      <span className={`rounded-full px-3 py-0.5 text-sm font-semibold ${color}`}>
-                        {label}
-                      </span>
+                      <span className={`rounded-full px-3 py-0.5 text-sm font-semibold ${color}`}>{label}</span>
                     </div>
                   </div>
                 )
               })}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 dark:text-stone-500">
-              Nenhum atendimento registrado via &quot;+ Novo Histórico&quot; nos últimos 7 dias.
-            </p>
+            <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum atendimento registrado via &quot;+ Novo Histórico&quot; no período.</p>
           )}
         </div>
 
         {/* Lost Reasons */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Motivos de Perda</h2>
+          <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Motivos de Perda <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
           <div className="space-y-3">
             {Object.entries(lostReasons)
               .sort(([, a], [, b]) => b - a)
               .map(([reason, count]) => (
                 <div key={reason} className="flex items-center justify-between">
                   <span className="text-sm text-gray-600 dark:text-stone-300">{reason}</span>
-                  <span className="rounded-full bg-red-100 px-3 py-0.5 text-sm font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
-                    {count}
-                  </span>
+                  <span className="rounded-full bg-red-100 px-3 py-0.5 text-sm font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">{count}</span>
                 </div>
               ))}
             {Object.keys(lostReasons).length === 0 && (
-              <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum lead perdido.</p>
+              <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum lead perdido no período.</p>
             )}
           </div>
         </div>
