@@ -11,6 +11,7 @@ import {
   MessageSquarePlus,
 } from "lucide-react"
 import { MediaPickerModal } from "./media-picker-modal"
+import { AudioRecorder } from "./audio-recorder"
 
 const MAX_MESSAGE_LENGTH = 4096
 
@@ -212,6 +213,11 @@ export function BrokerMessageInput({
             placeholder="Digite sua mensagem para o lead…"
             disabled={loading || disabledByWindow}
             className="min-h-[44px] flex-1 resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+          />
+          <AudioRecorder
+            leadId={leadId}
+            disabled={disabledByWindow || loading}
+            onSent={onSent}
           />
           <button
             type="button"

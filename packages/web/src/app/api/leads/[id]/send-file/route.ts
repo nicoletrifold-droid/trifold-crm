@@ -131,6 +131,9 @@ export async function POST(
   const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(storagePath)
   const fileUrl = pub.publicUrl
   const isImage = IMAGE_TYPES.includes(file.type)
+  // Áudio (mensagem de voz). WhatsApp toca OGG/Opus como voz; o composer grava
+  // nesse formato (opus-recorder). type:audio NÃO aceita caption na Cloud API.
+  const isAudio = file.type.startsWith("audio/")
 
   // Envio via WhatsApp Cloud API
   let sent = false
@@ -146,7 +149,14 @@ export async function POST(
 
     if (waConfig?.phone_number_id && waConfig?.access_token) {
       try {
-        const waBody = isImage
+        const waBody = isAudio
+          ? {
+              messaging_product: "whatsapp",
+              to: lead.phone,
+              type: "audio",
+              audio: { link: fileUrl },
+            }
+          : isImage
           ? {
               messaging_product: "whatsapp",
               to: lead.phone,
@@ -187,11 +197,15 @@ export async function POST(
     conversation_id: conversation.id,
     org_id: appUser.org_id,
     role: "broker",
-    content: caption ? `[Arquivo] ${file.name} — ${caption}` : `[Arquivo] ${file.name}`,
+    content: isAudio
+      ? "[Áudio]"
+      : caption
+      ? `[Arquivo] ${file.name} — ${caption}`
+      : `[Arquivo] ${file.name}`,
     metadata: {
       is_media: true,
       media_url: fileUrl,
-      media_type: isImage ? "image" : "document",
+      media_type: isAudio ? "audio" : isImage ? "image" : "document",
       file_name: file.name,
       sent_via_whatsapp: sent,
       source: "broker_upload",
