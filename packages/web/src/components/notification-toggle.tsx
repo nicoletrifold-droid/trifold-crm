@@ -63,10 +63,12 @@ export function NotificationToggle() {
         setState(perm === "denied" ? "denied" : "off")
         return
       }
+      const vapidKey = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "").trim()
+      if (!vapidKey) throw new Error("Chave VAPID ausente na configuração (NEXT_PUBLIC_VAPID_PUBLIC_KEY)")
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
@@ -77,10 +79,12 @@ export function NotificationToggle() {
           auth: arrayBufferToBase64(sub.getKey("auth")!),
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error(`Falha ao registrar a inscrição (HTTP ${res.status})`)
       setState("on")
-    } catch {
-      setError("Não foi possível ativar. Tente novamente.")
+    } catch (err) {
+      console.error("[push] Falha ao ativar notificações:", err)
+      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      setError(`Não foi possível ativar (${detail}). Tente novamente.`)
     } finally {
       setBusy(false)
     }
@@ -101,8 +105,10 @@ export function NotificationToggle() {
         await sub.unsubscribe()
       }
       setState("off")
-    } catch {
-      setError("Não foi possível desativar. Tente novamente.")
+    } catch (err) {
+      console.error("[push] Falha ao desativar notificações:", err)
+      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      setError(`Não foi possível desativar (${detail}). Tente novamente.`)
     } finally {
       setBusy(false)
     }

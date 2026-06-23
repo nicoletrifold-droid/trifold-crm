@@ -1,0 +1,22 @@
+storyId: 75-40
+title: Expor erro real no toggle de notificações + sanitizar VAPID key
+verdict: PASS
+quality_score: 92
+reviewer: "@qa (Quinn)"
+date: 2026-06-23
+checks:
+  code_review: pass        # console.error preserva o erro; mensagem amigável + detalhe curto
+  unit_tests: n/a          # componente client de UI; sem lógica unitária nova testável isolada
+  acceptance_criteria: pass # ACs 1-4 por leitura do diff; AC5 por execução
+  regressions: pass        # caminho de sucesso (subscribe + POST) inalterado
+  performance: pass        # sem impacto
+  security: pass           # VAPID public key não é segredo; nada exposto além do já público
+  documentation: pass      # story + change log atualizados
+tools:
+  type_check: clean
+  lint_file: clean         # 13 erros de lint do projeto são pré-existentes, em outros arquivos
+  build: ok
+issues: []
+notes:
+  - "Confirmação final do comportamento de push depende do navegador/device (iOS PWA)."
+  - "Follow-up opcional: aplicar o mesmo padrão em broker-push-prompt.tsx e portal/push-prompt.tsx."
