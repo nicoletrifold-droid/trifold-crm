@@ -9,7 +9,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * GET   ?obra_id=&cliente_id=  → { assigned_to, assigned_name, participants[] } (cria preguiçosamente)
  * PATCH { obra_id, cliente_id, assigned_to } → transfere/atribui
  */
-const STAFF_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento", "gerente-comercial"]
+const STAFF_ROLES = ["admin", "supervisor", "gerente-relacionamento", "gerente-comercial"]
 
 async function ensureConversa(
   admin: ReturnType<typeof createAdminClient>,
