@@ -1,0 +1,38 @@
+schema: 1
+story: "75.29"
+storyId: "75.29"
+title: "Microfone: corretor/gestor grava e envia áudio (voz) ao lead via WhatsApp"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Microfone adicionado ao composer à direita (separado do clips). AudioRecorder
+  (client) grava OGG/Opus via opus-recorder (worker WASM vendorizado em
+  public/opus/encoderWorker.min.js, importado dinamicamente p/ evitar SSR), com
+  tempo, cancelar e pré-ouvir antes de enviar; envia via /api/leads/[id]/send-file.
+  send-file estendido: detecta audio/* → WhatsApp type:"audio" (link), grava messages
+  com media_type='audio' e conteúdo "[Áudio]". Respeita janela 24h e limite 4 MB.
+  Vale p/ corretor e gestor (mesmo BrokerMessageInput). typecheck, lint e next build
+  LIMPOS. RESSALVA: gravação depende de microfone/navegador → validação final
+  (gravar→enviar→chegar como áudio no WhatsApp) é teste manual do usuário, não
+  verificável via CLI. Player inline no thread fica como follow-up (mídia hoje
+  aparece como texto, igual ao 📎).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 88
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "AudioRecorder renderizado entre textarea e botão enviar (direita), clips à esquerda"
+  - ac: 2
+    note: "estados idle/recording(timer)/preview(audio)/sending; discard e pré-ouvir"
+  - ac: 3
+    note: "opus-recorder → audio/ogg; send-file → type:audio"
+  - ac: 4
+    note: "send-file: isAudio → type:audio, media_type='audio', content '[Áudio]'"
+  - ac: 5
+    note: "disabled por disabledByWindow; MAX_BYTES 4MB no client e no server"
+  - ac: 6
+    note: "typecheck + lint + build limpos"

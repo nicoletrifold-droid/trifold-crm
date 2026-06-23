@@ -1,0 +1,31 @@
+schema: 1
+story: "75.22"
+storyId: "75.22"
+title: "WhatsApp ligado por padrão nas notificações de obra dos clientes"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Flip de DEFAULT_PREFS.whatsapp_enabled false→true em lib/notificacoes.ts. Como
+  não há linhas em obra_notificacao_prefs (prefs_total=0), todos os clientes usam
+  o default — então WhatsApp passa a disparar nos eventos de obra para clientes
+  com users.phone preenchido (68/72 após 75-21) e org com whatsapp_config (1 ok).
+  E-mail e demais defaults inalterados. typecheck e lint limpos. Envio em massa /
+  consentimento LGPD: consideração explicitamente aceita pelo usuário; cliente pode
+  desativar nas preferências. Recomendação operacional registrada: validar com um
+  disparo de teste real antes de um evento de obra em massa.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 90
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "DEFAULT_PREFS.whatsapp_enabled = true"
+  - ac: 2
+    note: "notifyClientes envia WhatsApp quando phone + whatsapp_config presentes"
+  - ac: 3
+    note: "email_enabled e notify_* inalterados"
+  - ac: 4
+    note: "typecheck + lint limpos"

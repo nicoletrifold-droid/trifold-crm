@@ -7,6 +7,7 @@ import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsListWithDrawer } from "./_components/leads-list-with-drawer"
 import { LeadsSeenMarker } from "./_components/leads-seen-marker"
 import { selectLatestMessageAt, type ConversationRef } from "@web/lib/broker/leads-window"
+import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 
 const TASK_LABELS: Record<string, string> = {
   atrasadas: "Tarefas atrasadas",
@@ -88,7 +89,8 @@ export default async function BrokerLeadsPage({
     return null
   })()
 
-  const daysAgo = days ? new Date(Date.now() - Number(days) * 86400000).toISOString() : null
+  const daysCutoff = days ? staleCutoffMs(Number(days)) : 0
+  const daysAgo = daysCutoff ? new Date(daysCutoff).toISOString() : null
 
   const filtered = (leads ?? []).filter((lead) => {
     if (stage && lead.stage_id !== stage) return false

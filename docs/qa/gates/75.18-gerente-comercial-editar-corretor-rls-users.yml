@@ -1,0 +1,39 @@
+schema: 1
+story: "75.18"
+storyId: "75.18"
+title: "gerente-comercial consegue salvar edição de corretor (telefone + ativar/desativar)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Causa raiz confirmada em código: API (/api/users/[id] e /api/brokers/[id])
+  autoriza ['admin','gerente-comercial'] via requireRole, mas a policy de UPDATE
+  da tabela users (users_update_admin, migrations 004/062) era admin-only,
+  enquanto brokers_manage (074) já liberava gerente-comercial. UPDATE bloqueado
+  por RLS afeta 0 linhas sem erro e o frontend (handleSave) só lê a resposta do
+  PATCH de brokers — daí o "Salvo com sucesso!" enganoso. A migration 108 recria
+  users_update_admin permitindo gerente-comercial escopado a usuários que são
+  corretores (EXISTS em brokers por user_id), mantendo admin irrestrito e
+  isolamento por org. Subquery correlacionada segue o padrão de broker_assign_select;
+  brokers_select permite o SELECT na mesma org. Sem WITH CHECK (paridade com a
+  policy original) — comportamento do admin inalterado. AC3 satisfeito: usuário
+  sem registro de corretor não é alcançado pela policy. ÚNICA pendência é de INFRA:
+  aplicar a migration 108 em produção (Supabase dsopqkqjkmhytudaaolv). Pronto para
+  @devops *push após aplicação da migration.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 95
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "telefone persiste — users.phone atualizável por gerente-comercial (broker)"
+  - ac: 2
+    note: "ativar/desativar — users.is_active atualizável por gerente-comercial (broker)"
+  - ac: 3
+    note: "não-corretor não alcançado pela policy (EXISTS em brokers falha) → 0 linhas"
+  - ac: 4
+    note: "admin mantém ramo user_role()='admin' irrestrito na org"
+  - ac: 5
+    note: "org_id = public.user_org_id() preservado em todos os ramos"

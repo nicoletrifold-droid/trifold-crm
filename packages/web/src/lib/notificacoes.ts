@@ -44,7 +44,9 @@ interface NotifPrefs {
 // que e-mail e todos os eventos cheguem por padrão; WhatsApp/push seguem opt-in.
 const DEFAULT_PREFS: NotifPrefs = {
   email_enabled: true,
-  whatsapp_enabled: false,
+  // WhatsApp ligado por padrão (Story 75-22): clientes sem linha de prefs recebem
+  // WhatsApp além de e-mail. Depende de users.phone preenchido + whatsapp_config da org.
+  whatsapp_enabled: true,
   push_enabled: false,
   notify_nova_foto: true,
   notify_novo_documento: true,
@@ -118,7 +120,7 @@ export async function notifyClientes(
       }
 
       if (pref.whatsapp_enabled && user.phone && orgId) {
-        sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao, link).catch(
+        sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao).catch(
           (err) => console.error("[notificacoes] WhatsApp skip:", err)
         )
       }
@@ -142,8 +144,7 @@ async function sendWhatsApp(
   phone: string,
   nome: string,
   obraName: string,
-  descricao: string,
-  link: string
+  descricao: string
 ): Promise<void> {
   const { data: config } = await admin
     .from("whatsapp_config")
@@ -155,9 +156,12 @@ async function sendWhatsApp(
     throw new Error("whatsapp_config não encontrada para org")
   }
 
-  const body = `Olá ${nome}! Há uma atualização na sua obra ${obraName}: ${descricao}. Acesse o portal: ${link}`
   const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
 
+  // Notificação proativa (fora da janela de 24h) → exige template HSM aprovado.
+  // Template `atualizacao_obra_cliente` (pt_BR): body {{1}}=nome, {{2}}=obra,
+  // {{3}}=descrição. O botão "Ver no Portal" é ESTÁTICO no template (não recebe
+  // parâmetro), por isso não entra em components — a Meta renderiza a URL fixa.
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -167,8 +171,21 @@ async function sendWhatsApp(
     body: JSON.stringify({
       messaging_product: "whatsapp",
       to: phone,
-      type: "text",
-      text: { body },
+      type: "template",
+      template: {
+        name: "atualizacao_obra_cliente",
+        language: { code: "pt_BR" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: nome },
+              { type: "text", text: obraName },
+              { type: "text", text: descricao },
+            ],
+          },
+        ],
+      },
     }),
   })
 

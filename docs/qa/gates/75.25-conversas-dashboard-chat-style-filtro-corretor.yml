@@ -1,0 +1,38 @@
+schema: 1
+story: "75.25"
+storyId: "75.25"
+title: "Conversas (dashboard) estilo chat + filtro por corretor"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  /dashboard/conversas reescrita no estilo chat (cards) espelhando /broker/chat,
+  listando TODAS as conversas ativas (RLS conversations_select via
+  is_admin_or_supervisor cobre admin/supervisor/gerente-comercial). Reusa LeadSearch
+  e LeadFilters (que já suportava o filtro de Corretor via prop brokers/param
+  broker_id) + helpers countUnreadForLead/formatRelativeTime/getChannelLabel. Embed
+  do corretor responsável (leads.assigned_broker_id → users) validado em prod via
+  PostgREST. Cards mostram o corretor e linkam para /dashboard/conversas/[id] (detalhe
+  + resposta já existentes; gerente-comercial em CAN_SEND_ROLES). Filtro de dias
+  ("Sem contato") deixado como no-op igual ao /broker/chat (evita Date.now no render,
+  que dispara react-hooks/purity — erro pré-existente na leads/page). typecheck e lint
+  limpos no arquivo. Vale para gerente-comercial, supervisor e admin (mesma página).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 90
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "cards (avatar/nome/preview/horário/badges) listando todas as conversas ativas"
+  - ac: 2
+    note: "LeadFilters com brokers → filtro Corretor; JS filtra por lead.assigned_broker_id"
+  - ac: 3
+    note: "busca + Etapa + Empreendimento via JS (days = no-op, igual broker chat)"
+  - ac: 4
+    note: "card mostra corretor (embed users) e linka /dashboard/conversas/[id]"
+  - ac: 5
+    note: "mesma página p/ gerente-comercial/supervisor/admin (RLS + permissão conversas)"
+  - ac: 6
+    note: "typecheck + lint limpos"

@@ -1,0 +1,32 @@
+schema: 1
+story: "75.26"
+storyId: "75.26"
+title: "Filtro 'Sem contato' (parado N dias) funcional no chat (corretor + gestor)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Novo helper lib/broker/stale-cutoff.ts encapsula Date.now() fora do corpo do
+  Server Component (evita react-hooks/purity). /broker/chat e /dashboard/conversas
+  passam a ler o param `days` e filtrar conversas paradas: mantém quando
+  last_message_at é mais antigo que o corte; conversas sem mensagem (null) são
+  tratadas como "sem contato" e mantidas. `days` entra no hasFilter das duas telas.
+  typecheck e lint limpos nos 3 arquivos. LeadFilters já renderizava o dropdown —
+  agora ele funciona. Não toca o Date.now() pré-existente da leads/page (fora de escopo).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 92
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "staleCutoffMs(days); filtro mantém last_message_at < corte (null = mantém)"
+  - ac: 2
+    note: "aplicado em /broker/chat e /dashboard/conversas"
+  - ac: 3
+    note: "days vazio → staleCutoffMs retorna 0 → sem filtro"
+  - ac: 4
+    note: "days incluído em hasFilter nas duas telas"
+  - ac: 5
+    note: "typecheck + lint limpos (helper + 2 páginas)"
