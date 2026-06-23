@@ -135,8 +135,13 @@ export default async function CorretoresPage() {
 
               return (
                 <tr key={broker.id} className="hover:bg-gray-50 dark:hover:bg-stone-800/30">
-                  <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900 dark:text-stone-100">
-                    {brokerUser?.name ?? "Sem nome"}
+                  <td className="whitespace-nowrap px-6 py-4 font-medium">
+                    <Link
+                      href={`/dashboard/configuracoes/corretores/${broker.id}`}
+                      className="text-gray-900 hover:text-orange-600 hover:underline dark:text-stone-100 dark:hover:text-orange-400"
+                    >
+                      {brokerUser?.name ?? "Sem nome"}
+                    </Link>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     {brokerUser?.email ?? "-"}

@@ -1,0 +1,39 @@
+schema: 1
+story: "75.19"
+storyId: "75.19"
+title: "Nome do corretor clicável → ficha de consulta + lápis para editar"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Refator do detalhe do corretor em server wrapper (page.tsx) + client
+  (_detail.tsx). O server calcula canEdit via canAccess('sistema') ||
+  canAccess('corretores') — mesma regra da coluna de ações da lista — e passa ao
+  client. Modo consulta read-only com todos os campos (email, telefone, CRECI,
+  tipo, limite, status ativo/disponível, empreendimentos). Lápis 'Editar' só
+  renderiza quando canEdit; ao clicar, entra no formulário existente (dados,
+  empreendimentos interativos, senha, ativar/desativar). Cancelar volta à consulta
+  restaurando o phone; salvar persiste, recarrega o broker (loadBroker) e volta à
+  consulta. Nome na lista virou Link para [id], preservando o botão 'Editar' da
+  última coluna (redundância pedida). typecheck (tsc --noEmit) e lint (eslint) sem
+  erros nos 3 arquivos da story. Sem mudança de permissão de escrita (a API já
+  enforça requireRole; a 75-18 cobriu o RLS). Frontend-only — sem migration.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 95
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "nome envolto em <Link href=/corretores/[id]> em page.tsx da lista"
+  - ac: 2
+    note: "modo consulta (editing=false) é o default; dl com todos os campos"
+  - ac: 3
+    note: "botão Pencil renderiza só se canEdit; setEditing(true) abre o form"
+  - ac: 4
+    note: "canEdit=false → sem lápis; ficha permanece consultável"
+  - ac: 5
+    note: "Cancelar restaura phone e volta à consulta; handleSave faz loadBroker + setEditing(false)"
+  - ac: 6
+    note: "coluna 'Editar' da lista intacta (mesmo href)"
