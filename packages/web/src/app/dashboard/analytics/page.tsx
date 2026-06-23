@@ -268,6 +268,14 @@ export default async function AnalyticsPage({
     ? (allProperties ?? []).find((p) => p.id === propertyId)?.name ?? "Empreendimento"
     : null
 
+  // PDF sob demanda segue o período selecionado na tela (Story 75-31).
+  const reportParams = new URLSearchParams({ range: period.range })
+  if (period.range === "custom" && period.from && period.to) {
+    reportParams.set("from", period.from)
+    reportParams.set("to", period.to)
+  }
+  const reportHref = `/api/analytics/report?${reportParams.toString()}`
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -278,11 +286,11 @@ export default async function AnalyticsPage({
             )}
           </h1>
           <div className="flex items-center gap-2">
-            <a href="/api/analytics/report" target="_blank" rel="noopener noreferrer"
+            <a href={reportHref} target="_blank" rel="noopener noreferrer"
               className="rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
               Relatório PDF
             </a>
-            <a href="/api/analytics/report" download
+            <a href={reportHref} download
               className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600">
               Baixar PDF
             </a>

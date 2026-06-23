@@ -3,6 +3,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
+import type { ResolvedPeriod } from "@web/lib/analytics/period"
 
 type AnalyticsFunnelEntry = { stage_id: string; name: string; slug: string; color: string; position: number; count: number | string }
 type AnalyticsPropertyEntry = { property_id: string; name: string; count: number | string }
@@ -123,7 +124,14 @@ function buildComparison(
 
 export async function buildAnalyticsReportData(
   supabase: SupabaseClient,
-  orgId: string
+  orgId: string,
+  /**
+   * Período opcional (Story 75-31). Quando informado (PDF sob demanda, segue o
+   * filtro da tela), o relatório reflete [since, until] e compara com o período
+   * anterior de mesma duração. Quando ausente (cron), mantém o resumo semanal
+   * (comportamento original inalterado).
+   */
+  period?: ResolvedPeriod
 ): Promise<AnalyticsReportData> {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -133,6 +141,18 @@ export async function buildAnalyticsReportData(
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+
+  // ── Janela do relatório ────────────────────────────────────────────────────
+  // Com período: [since, until] + período anterior de mesma duração para o
+  // comparativo. Sem período: semana atual vs anterior (original).
+  const periodSince = period ? new Date(period.sinceISO) : null
+  const periodUntil = period ? new Date(period.untilISO) : null
+  const durationMs = period ? periodUntil!.getTime() - periodSince!.getTime() : 0
+  // Início da agregação (RPC/sources) e do comparativo
+  const aggSince = period ? periodSince! : monthStart
+  const aggUntil = period ? periodUntil! : now
+  const compCurrStart = period ? periodSince! : oneWeekAgo
+  const compPrevStart = period ? new Date(periodSince!.getTime() - durationMs) : twoWeeksAgo
 
   // IDs dos corretores ativos
   const { data: activeBrokersData } = await supabase
@@ -157,22 +177,39 @@ export async function buildAnalyticsReportData(
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", todayStart.toISOString()),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", weekStart.toISOString()),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()),
-    supabase.rpc("get_analytics_summary", { p_org_id: orgId, p_since: monthStart.toISOString() }),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
-    supabase.from("leads")
-      .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
-      .eq("org_id", orgId)
-      .gte("created_at", twoWeeksAgo.toISOString())
-      .order("created_at"),
+    period
+      ? supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: aggSince.toISOString(), p_until: aggUntil.toISOString() })
+      : supabase.rpc("get_analytics_summary", { p_org_id: orgId, p_since: monthStart.toISOString() }),
+    period
+      ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%")
+      : supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
+    period
+      ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
+      : supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    period
+      ? supabase.from("leads")
+          .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId)
+          .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
+          .order("created_at")
+      : supabase.from("leads")
+          .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId)
+          .gte("created_at", twoWeeksAgo.toISOString())
+          .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),
-    // Para cálculo de tempo de atendimento: leads dos últimos 7 dias com broker
-    supabase.from("leads")
-      .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
-      .eq("org_id", orgId)
-      .not("assigned_broker_id", "is", null)
-      .gte("created_at", oneWeekAgo.toISOString())
-      .limit(500),
+    // Tempo de atendimento: leads do período (com período) ou últimos 7 dias (cron)
+    period
+      ? supabase.from("leads")
+          .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId).not("assigned_broker_id", "is", null)
+          .gte("created_at", compCurrStart.toISOString()).lt("created_at", aggUntil.toISOString())
+          .limit(1000)
+      : supabase.from("leads")
+          .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId).not("assigned_broker_id", "is", null)
+          .gte("created_at", oneWeekAgo.toISOString())
+          .limit(500),
   ])
 
   const summary = (analytics as AnalyticsSummary | null) ?? null
@@ -265,8 +302,8 @@ export async function buildAnalyticsReportData(
   const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
 
   const allRecent = (recentLeadsRaw ?? []) as RawLead[]
-  const currLeads = allRecent.filter((l) => new Date(l.created_at) >= oneWeekAgo)
-  const prevLeads = allRecent.filter((l) => new Date(l.created_at) < oneWeekAgo)
+  const currLeads = allRecent.filter((l) => new Date(l.created_at) >= compCurrStart)
+  const prevLeads = allRecent.filter((l) => new Date(l.created_at) < compCurrStart)
 
   const comparison = buildComparison(currLeads, prevLeads, propNames)
 
@@ -286,7 +323,9 @@ export async function buildAnalyticsReportData(
   const fmtDate = (d: Date) =>
     d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short" })
 
-  const weekRange = `${fmtDate(oneWeekAgo)} – ${fmtDate(now)}`
+  const weekRange = period
+    ? `${fmtDate(compCurrStart)} – ${fmtDate(aggUntil)}`
+    : `${fmtDate(oneWeekAgo)} – ${fmtDate(now)}`
 
   return {
     generatedAt,

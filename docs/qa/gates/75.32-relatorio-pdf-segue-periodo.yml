@@ -1,0 +1,20 @@
+schema: 1
+story: "75.32"
+storyId: "75.32"
+title: "PDF sob demanda segue o período da tela (cron mantém semanal)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  buildAnalyticsReportData ganhou param opcional `period`. Sem período (cron) →
+  comportamento ORIGINAL idêntico (resumo semanal, função antiga) — sem regressão no
+  e-mail automático. Com período (PDF sob demanda) → RPC ranged + comparativo período
+  atual × anterior de mesma duração + LPs/tempo de atendimento/label do período. Rota
+  /api/analytics/report lê range/from/to e resolve o período; página passa o período
+  nos links. typecheck, lint e build limpos. Layout do PDF inalterado (mesma estrutura,
+  dados do período). RESSALVA: render do PDF não verificável por CLI.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 88
+waiver: { active: false }
