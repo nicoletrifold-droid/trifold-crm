@@ -196,6 +196,7 @@ async function syncContract(
       obra.org_id,
       obra.id,
       vinculoId,
+      extractCustomerPhone(customer),
       supabaseAdmin
     )
   }
@@ -371,6 +372,7 @@ async function maybeInviteCliente(
   orgId: string,
   obraId: string,
   vinculoId: string,
+  phone: string | null,
   supabaseAdmin: SupabaseClient
 ): Promise<boolean> {
   // Checa se vínculo já tem convite enviado
@@ -387,7 +389,7 @@ async function maybeInviteCliente(
   // Checa se já existe portal user com esse email
   const { data: existingUser } = await supabaseAdmin
     .from("users")
-    .select("id, auth_id, sienge_customer_id")
+    .select("id, auth_id, phone, sienge_customer_id")
     .eq("email", email)
     .eq("role", "cliente")
     .maybeSingle()
@@ -396,6 +398,12 @@ async function maybeInviteCliente(
 
   if (existingUser) {
     userId = (existingUser as { id: string }).id
+    // Preenche o telefone do portal user quando vazio (fonte do disparo de
+    // WhatsApp em notifyClientes) — nunca sobrescreve preenchimento existente.
+    const currentPhone = (existingUser as { phone?: string | null }).phone
+    if (phone && (!currentPhone || currentPhone.trim().length === 0)) {
+      await supabaseAdmin.from("users").update({ phone }).eq("id", userId)
+    }
     // Mirror sienge_customer_id se ainda não tiver
     if (!(existingUser as { sienge_customer_id?: number | null }).sienge_customer_id) {
       await supabaseAdmin
@@ -468,6 +476,7 @@ async function maybeInviteCliente(
             name,
             email,
             role: "cliente",
+            phone,
             sienge_customer_id: siengeCustomerId,
           })
           .select("id")

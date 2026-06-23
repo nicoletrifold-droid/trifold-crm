@@ -1,0 +1,38 @@
+schema: 1
+story: "75.21"
+storyId: "75.21"
+title: "Preencher users.phone do portal do cliente (fechar disparo de WhatsApp)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Ao conferir os disparos, confirmado que notifyClientes (lib/notificacoes.ts) lê
+  users.phone (conta de portal), não clientes.whatsapp. Em prod havia 0/72 portal
+  users vinculados a obra com phone. Fix: maybeInviteCliente passou a receber o
+  telefone (extractCustomerPhone) e gravá-lo no insert do users (role=cliente) e
+  no branch de user existente quando vazio (sem sobrescrever). Backfill aplicado:
+  68 users atualizados a partir de clientes.whatsapp/telefone (match por
+  sienge_customer_id, fallback email); cobertura 0→68 de 72 (4 sem número na
+  ficha de origem). typecheck e lint limpos.
+  OBSERVAÇÃO (fora do escopo desta story, reportada ao usuário): o envio de
+  WhatsApp ainda depende da preferência `obra_notificacao_prefs.whatsapp_enabled`,
+  cujo DEFAULT_PREFS é `false` e não há nenhuma linha de prefs (prefs_total=0) →
+  hoje o WhatsApp NÃO dispara por padrão (e-mail sim). whatsapp_config da org está
+  presente (1 org configurada). Decisão de produto pendente.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 92
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "insert do users(role=cliente) agora inclui phone"
+  - ac: 2
+    note: "branch de user existente preenche phone quando vazio"
+  - ac: 3
+    note: "guarda currentPhone — não sobrescreve preenchimento existente"
+  - ac: 4
+    note: "backfill: 68 atualizados, cobertura 68/72 verificada em prod"
+  - ac: 5
+    note: "typecheck + lint limpos"
