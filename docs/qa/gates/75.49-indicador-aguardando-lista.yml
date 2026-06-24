@@ -1,0 +1,18 @@
+storyId: 75-49
+title: "Indicador '⏱ aguardando há X' na lista de leads"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks:
+  typecheck: pass
+  lint: pass
+acceptance_criteria:
+  AC1_so_aguardando: pass
+  AC2_business_time: pass
+  AC3_mobile_desktop_aditivo: pass
+  AC4_gated_qualidade: pass
+notes: >
+  Fecha o pacote SLA (#4). Badge aditivo na lista do corretor (mobile + desktop), tempo de
+  expediente desde a distribuição (businessMinutesBetween, 75-48). Gated: só consulta
+  distribuição/config quando há leads aguardando. Admin client p/ ler distribution log/config.

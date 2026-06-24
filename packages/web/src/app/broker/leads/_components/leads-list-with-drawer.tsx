@@ -23,6 +23,26 @@ interface Lead {
   last_message_at: string | null
   kanban_stages: { name: string; color: string | null } | { name: string; color: string | null }[] | null
   properties: { name: string } | { name: string }[] | null
+  /** Story 75-49 — minutos de expediente aguardando atendimento (só p/ leads em "Aguardando"). */
+  waitingMinutes?: number | null
+}
+
+/** Story 75-49 — "⏱ aguardando há X" nos leads ainda não atendidos. Cor escala com o SLA (60 min). */
+function WaitingBadge({ minutes }: { minutes: number | null | undefined }) {
+  if (minutes == null) return null
+  const label = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`
+  const tone =
+    minutes <= 30
+      ? "text-amber-600 dark:text-amber-400"
+      : minutes <= 60
+      ? "text-orange-600 dark:text-orange-400"
+      : "text-red-600 dark:text-red-400"
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${tone}`} title="Tempo aguardando atendimento (horário comercial)">
+      <Clock className="h-3 w-3" aria-hidden="true" />
+      aguardando há {label}
+    </span>
+  )
 }
 
 /** Story 63-9 — estilo do badge compacto de janela de 24h por status. */
@@ -139,6 +159,7 @@ export function LeadsListWithDrawer({ leads }: Props) {
                     </span>
                   )}
                   <LeadWindowBadge lead={lead} />
+                  <WaitingBadge minutes={lead.waitingMinutes} />
                   <p className="text-[11px] text-stone-600">
                     {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
                   </p>
@@ -203,6 +224,9 @@ export function LeadsListWithDrawer({ leads }: Props) {
                         {(stageData as { name: string }).name}
                       </span>
                     ) : "—"}
+                    {lead.waitingMinutes != null && (
+                      <div className="mt-1"><WaitingBadge minutes={lead.waitingMinutes} /></div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {score != null ? (

@@ -1,5 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
+import { businessMinutesBetween, type BusinessHoursCfg } from "@web/lib/roleta/business-time"
 import Link from "next/link"
 import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
@@ -47,7 +49,7 @@ export default async function BrokerLeadsPage({
           // sem N+1) para o badge de janela de 24h na lista. Um lead pode ter várias
           // conversas; a mais recente é selecionada em JS via `selectLatestMessageAt`.
           `id, name, phone, email, qualification_score, interest_level,
-           stage_id, property_interest_id, created_at, updated_at,
+           stage_id, property_interest_id, created_at, updated_at, primeiro_atendimento_em,
            kanban_stages:stage_id(name, color),
            properties:property_interest_id(name),
            conversations(last_message_at)`
@@ -72,6 +74,55 @@ export default async function BrokerLeadsPage({
       supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
       supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
     ])
+
+  // Story 75-49 — tempo (de expediente) aguardando atendimento, só p/ leads em
+  // "Aguardando atendimento" ainda não atendidos. Distribuição → agora, via business-time.
+  const aguardandoIds = (leads ?? [])
+    .filter(
+      (l) =>
+        l.stage_id === AGUARDANDO_STAGE_ID &&
+        !(l as { primeiro_atendimento_em?: string | null }).primeiro_atendimento_em
+    )
+    .map((l) => l.id)
+  const waitingByLead: Record<string, number> = {}
+  if (aguardandoIds.length > 0) {
+    const admin = createAdminClient()
+    const [{ data: cfgRow }, { data: distLog }] = await Promise.all([
+      admin
+        .from("roleta_config")
+        .select("business_days, business_hour_start, business_hour_end, weekend_hour_start, weekend_hour_end, timezone")
+        .eq("org_id", user.orgId)
+        .maybeSingle(),
+      admin
+        .from("lead_distribution_log")
+        .select("lead_id, created_at")
+        .eq("org_id", user.orgId)
+        .eq("status", "distributed")
+        .in("lead_id", aguardandoIds),
+    ])
+    if (cfgRow) {
+      const bh: BusinessHoursCfg = {
+        business_days: cfgRow.business_days ?? [1, 2, 3, 4, 5],
+        business_hour_start: cfgRow.business_hour_start ?? "08:00",
+        business_hour_end: cfgRow.business_hour_end ?? "20:00",
+        weekend_hour_start: cfgRow.weekend_hour_start,
+        weekend_hour_end: cfgRow.weekend_hour_end,
+        timezone: cfgRow.timezone ?? "America/Sao_Paulo",
+      }
+      const now = new Date()
+      const distByLead = new Map<string, number[]>()
+      for (const d of (distLog ?? []) as Array<{ lead_id: string; created_at: string }>) {
+        const arr = distByLead.get(d.lead_id) ?? []
+        arr.push(new Date(d.created_at).getTime())
+        distByLead.set(d.lead_id, arr)
+      }
+      for (const id of aguardandoIds) {
+        const dists = (distByLead.get(id) ?? []).filter((t) => t <= now.getTime())
+        if (dists.length === 0) continue
+        waitingByLead[id] = businessMinutesBetween(new Date(Math.max(...dists)), now, bh)
+      }
+    }
+  }
 
   // Build sets for task-based filtering
   const taskLeadIds = (() => {
@@ -277,6 +328,8 @@ export default async function BrokerLeadsPage({
               last_message_at: selectLatestMessageAt(
                 (lead as { conversations?: ConversationRef[] | null }).conversations
               ),
+              // Story 75-49 — minutos aguardando atendimento (só leads em "Aguardando").
+              waitingMinutes: waitingByLead[lead.id] ?? null,
             })) as Parameters<typeof LeadsListWithDrawer>[0]["leads"]
           }
           stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}
