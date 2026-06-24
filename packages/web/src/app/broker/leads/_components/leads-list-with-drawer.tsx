@@ -110,9 +110,10 @@ export function LeadsListWithDrawer({ leads }: Props) {
           const propertyData = getProperty(lead)
           return (
             <div key={lead.id} className="flex items-center gap-2">
-              <Link
-                href={`/broker/leads/${lead.id}`}
-                className="flex flex-1 items-center gap-3 rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200 active:bg-gray-50 dark:bg-stone-900 dark:ring-stone-800 dark:active:bg-stone-800"
+              <button
+                type="button"
+                onClick={() => setSelectedLeadId(lead.id)}
+                className="flex flex-1 items-center gap-3 rounded-xl bg-white px-4 py-3.5 text-left ring-1 ring-gray-200 active:bg-gray-50 dark:bg-stone-900 dark:ring-stone-800 dark:active:bg-stone-800"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-gray-900 dark:text-stone-100">
@@ -142,14 +143,14 @@ export function LeadsListWithDrawer({ leads }: Props) {
                     {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
                   </p>
                 </div>
-              </Link>
-              <button
-                onClick={() => setSelectedLeadId(lead.id)}
-                aria-label="Responder"
+              </button>
+              <Link
+                href={`/broker/leads/${lead.id}`}
+                aria-label="Abrir conversa"
                 className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl bg-orange-50 p-3 text-orange-500 ring-1 ring-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:ring-orange-500/30 dark:hover:bg-orange-500/20"
               >
                 <MessageCircle className="h-5 w-5" />
-              </button>
+              </Link>
             </div>
           )
         })}
@@ -176,12 +177,16 @@ export function LeadsListWithDrawer({ leads }: Props) {
               return (
                 <tr key={lead.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/40">
                   <td className="px-4 py-3">
-                    <Link href={`/broker/leads/${lead.id}`} className="block">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLeadId(lead.id)}
+                      className="block w-full text-left"
+                    >
                       <p className="font-medium text-gray-900 dark:text-stone-100">
                         {lead.name || lead.phone}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-stone-500">{lead.phone}</p>
-                    </Link>
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-stone-400">
                     {(propertyData as { name?: string } | null)?.name ?? "—"}
@@ -216,13 +221,13 @@ export function LeadsListWithDrawer({ leads }: Props) {
                     {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => setSelectedLeadId(lead.id)}
-                      aria-label="Responder"
+                    <Link
+                      href={`/broker/leads/${lead.id}`}
+                      aria-label="Abrir conversa"
                       className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 text-stone-400 hover:bg-orange-50 hover:text-orange-500 transition-colors dark:text-stone-600 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
                     >
                       <MessageCircle className="h-4 w-4" />
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               )

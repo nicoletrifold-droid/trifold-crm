@@ -1,0 +1,16 @@
+schema: 1
+story: "75.43"
+storyId: "75.43"
+title: "Meus Leads: inverter clique nome/balão"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Invertido o comportamento de clique em leads-list-with-drawer.tsx (mobile + desktop): nome
+  agora abre o drawer de detalhe (setSelectedLeadId) e o balão (MessageCircle) abre a conversa
+  (Link /broker/leads/[id]). Estava o contrário. typecheck e lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-24"
+updated: "2026-06-24T00:00:00Z"
+quality_score: 96
+waiver: { active: false }
