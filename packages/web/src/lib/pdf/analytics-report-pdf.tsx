@@ -303,7 +303,7 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
         {/* Tempo médio de atendimento por corretor */}
         {data.brokerResponseTimes.length > 0 && (
           <View style={{ ...s.section, marginTop: 12 }}>
-            <Text style={s.sectionTitle}>Tempo Médio de 1º Atendimento por Corretor (últimos 7 dias)</Text>
+            <Text style={s.sectionTitle}>Tempo Médio de Atendimento por Corretor (da distribuição ao atendimento)</Text>
             <View style={{ ...s.compHeaderRow, borderRadius: 2, marginBottom: 0 }}>
               <Text style={{ ...s.compHeaderLabel, flex: 1 }}>Corretor</Text>
               <Text style={{ ...s.compHeaderCell, width: 40 }}>Leads</Text>

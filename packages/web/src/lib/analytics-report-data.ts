@@ -199,17 +199,19 @@ export async function buildAnalyticsReportData(
           .gte("created_at", twoWeeksAgo.toISOString())
           .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),
-    // Tempo de atendimento: leads do período (com período) ou últimos 7 dias (cron)
+    // Tempo de atendimento (Story 75-51): leads ATENDIDOS no período (com período)
+    // ou últimos 7 dias (cron). Mede distribuição → atendimento (primeiro_atendimento_em),
+    // igual à tela do analytics (75-47). Só mede desde 24/06/2026.
     period
       ? supabase.from("leads")
-          .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
-          .eq("org_id", orgId).not("assigned_broker_id", "is", null)
-          .gte("created_at", compCurrStart.toISOString()).lt("created_at", aggUntil.toISOString())
+          .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId).not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
+          .gte("primeiro_atendimento_em", compCurrStart.toISOString()).lt("primeiro_atendimento_em", aggUntil.toISOString())
           .limit(1000)
       : supabase.from("leads")
-          .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
-          .eq("org_id", orgId).not("assigned_broker_id", "is", null)
-          .gte("created_at", oneWeekAgo.toISOString())
+          .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId).not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
+          .gte("primeiro_atendimento_em", oneWeekAgo.toISOString())
           .limit(500),
   ])
 
@@ -251,40 +253,40 @@ export async function buildAnalyticsReportData(
     .sort(([, a], [, b]) => b - a)
     .map(([key, count]) => ({ label: SOURCE_LABELS_SHORT[key] ?? key, count }))
 
-  // ── Tempo médio de 1º atendimento por corretor ───────────────────────────
-  type ResponseLead = { id: string; created_at: string; assigned_broker_id: string | null; broker: { id: string; name: string } | { id: string; name: string }[] | null }
+  // ── Tempo médio de atendimento por corretor (Story 75-51) ────────────────
+  // DISTRIBUIÇÃO → ATENDIMENTO (primeiro_atendimento_em), igual à tela (75-47).
+  type ResponseLead = { id: string; primeiro_atendimento_em: string; assigned_broker_id: string | null; broker: { id: string; name: string } | { id: string; name: string }[] | null }
   const responseLeads = (responseLeadsRaw ?? []) as ResponseLead[]
   const leadIds = responseLeads.map(l => l.id)
 
   let brokerResponseTimes: { name: string; avgMinutes: number; count: number }[] = []
 
   if (leadIds.length > 0) {
-    const { data: firstNotes } = await supabase
-      .from("activities")
+    const { data: distLog } = await supabase
+      .from("lead_distribution_log")
       .select("lead_id, created_at")
       .eq("org_id", orgId)
-      .eq("type", "broker_note")
+      .eq("status", "distributed")
       .in("lead_id", leadIds)
-      .order("created_at", { ascending: true })
 
-    // First note per lead
-    const firstNoteByLead = new Map<string, string>()
-    for (const note of (firstNotes ?? [])) {
-      if (!firstNoteByLead.has(note.lead_id as string)) {
-        firstNoteByLead.set(note.lead_id as string, note.created_at as string)
-      }
+    const distByLead = new Map<string, number[]>()
+    for (const d of (distLog ?? [])) {
+      const arr = distByLead.get(d.lead_id as string) ?? []
+      arr.push(new Date(d.created_at as string).getTime())
+      distByLead.set(d.lead_id as string, arr)
     }
 
-    // Group by broker and calculate avg
+    // Group by broker and calculate avg (distribuição mais recente antes do atendimento)
     const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
     for (const lead of responseLeads) {
-      const firstNote = firstNoteByLead.get(lead.id)
-      if (!firstNote) continue
+      const atendido = new Date(lead.primeiro_atendimento_em).getTime()
+      const dists = (distByLead.get(lead.id) ?? []).filter((t) => t <= atendido)
+      if (dists.length === 0) continue
       const bArr = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
       if (!bArr) continue
       const bName = bArr.name
       if (HIDDEN_BROKERS.has(bName.toLowerCase().trim())) continue
-      const diffMs = new Date(firstNote).getTime() - new Date(lead.created_at).getTime()
+      const diffMs = atendido - Math.max(...dists)
       if (diffMs < 0) continue
       const diffMin = diffMs / 60000
       const cur = brokerMap.get(bArr.id) ?? { name: bName, totalMinutes: 0, count: 0 }
