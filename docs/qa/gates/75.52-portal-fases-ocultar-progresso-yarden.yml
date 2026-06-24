@@ -1,0 +1,14 @@
+storyId: 75-52
+title: "Portal Fases: ocultar progresso geral no Yarden"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks: { typecheck: pass, lint: pass }
+acceptance_criteria:
+  AC1_yarden_oculto: pass
+  AC2_outras_obras_normal: pass
+  AC3_progresso_por_fase_visivel: pass
+notes: >
+  Gating por NOME (obra.name === "Yarden"), consistente com a Story 75-1 (home). Oculta só o
+  card "Cronograma da obra / Progresso geral" na pagina Fases; progresso por fase segue visivel.
