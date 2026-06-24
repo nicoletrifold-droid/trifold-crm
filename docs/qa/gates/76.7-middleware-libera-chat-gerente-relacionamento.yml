@@ -1,0 +1,16 @@
+schema: 1
+story: "76.7"
+storyId: "76.7"
+title: "Middleware libera /dashboard/chat p/ gerente-relacionamento"
+epic: 76
+gate: PASS
+verdict: PASS
+status_reason: >
+  Adicionado /dashboard/chat à allow-list da middleware p/ obras/gerente-relacionamento.
+  Antes, clicar em Chat redirecionava pra /dashboard/obras (path não permitido). typecheck e
+  lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-24"
+updated: "2026-06-24T00:00:00Z"
+quality_score: 96
+waiver: { active: false }
