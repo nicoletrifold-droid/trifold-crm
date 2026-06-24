@@ -1,0 +1,13 @@
+storyId: 75-55
+title: "Tooltip no X/3 do card do pipeline"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks: { typecheck: pass, lint: pass }
+acceptance_criteria:
+  AC1_tooltip_hover: pass
+  AC2_completo: pass
+notes: >
+  title nativo no container do X/3 (helper getMissingMandatoryLabels lista os obrigatorios
+  faltantes: Nome/Telefone/Empreendimento de interesse). Aditivo, sem mudanca de comportamento.
