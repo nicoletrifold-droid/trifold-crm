@@ -4,6 +4,7 @@ import crypto from "crypto"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
+import { detectPropertyInterestId } from "@web/lib/roleta/detect-property"
 
 const META_API_BASE = "https://graph.facebook.com/v21.0"
 
@@ -168,10 +169,11 @@ async function processLeadAsync(
     // AC8: Verificar lead existente pelo phone
     let leadId: string | null = null
     let existingUtmCampaign: string | null = null
+    let existingPropertyId: string | null = null
     if (phone) {
       const { data: existing } = await supabase
         .from("leads")
-        .select("id, utm_campaign")
+        .select("id, utm_campaign, property_interest_id")
         .eq("phone", phone)
         .eq("org_id", orgId)
         .single()
@@ -179,8 +181,21 @@ async function processLeadAsync(
       if (existing) {
         leadId = existing.id
         existingUtmCampaign = existing.utm_campaign ?? null
+        existingPropertyId = existing.property_interest_id ?? null
       }
     }
+
+    // Story 75-44: detectar empreendimento no texto resolvido (campanha/anúncio/
+    // formulário) para preencher property_interest_id → a roleta passa a filtrar
+    // por corretor habilitado naquele empreendimento. Não identificado → null.
+    const detectedPropertyId = await detectPropertyInterestId(
+      supabase,
+      orgId,
+      resolvedCampaign,
+      (webhookValue.ad_name as string | undefined) ?? null,
+      campaignName,
+      formName,
+    )
 
     const utmData = {
       utm_source: "meta_ads",
@@ -210,6 +225,11 @@ async function processLeadAsync(
         .update({
           metadata: metaMetadata,
           ...(existingUtmCampaign === null ? utmData : {}),
+          // Story 75-44: só preenche se ainda não houver empreendimento definido
+          // (não sobrescreve seleção manual/anterior).
+          ...(existingPropertyId === null && detectedPropertyId
+            ? { property_interest_id: detectedPropertyId }
+            : {}),
         })
         .eq("id", leadId)
     } else {
@@ -224,6 +244,7 @@ async function processLeadAsync(
           channel: "meta_ads",
           source: "meta_ads",
           stage_id: defaultStageId,
+          property_interest_id: detectedPropertyId, // Story 75-44
           ...utmData,
           metadata: metaMetadata,
         })

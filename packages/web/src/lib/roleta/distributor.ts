@@ -229,7 +229,25 @@ export async function distributeLeadToNextBroker(
     return { status: "sem_corretor_disponivel" }
   }
 
-  const result = Array.isArray(picked) ? picked[0] : null
+  let result = Array.isArray(picked) ? picked[0] : null
+
+  // Story 75-44 (AC4): empreendimento identificado mas nenhum corretor habilitado
+  // disponível → cai pro pool geral (2ª passada sem filtro de property). Cada chamada
+  // da RPC é sua própria transação/advisory lock; após a 1ª passada vazia o lead
+  // segue sem corretor, então a 2ª pode atribuir normalmente.
+  if (!result && propertyId) {
+    const { data: pickedAny, error: retryError } = await admin.rpc("roleta_pick_and_advance", {
+      p_org_id: orgId,
+      p_lead_id: leadId,
+      p_property_id: null,
+      p_max_leads_per_day: cfg.max_leads_per_day,
+    })
+    if (retryError) {
+      console.error("[roleta] RPC error (fallback pool geral):", retryError)
+    } else {
+      result = Array.isArray(pickedAny) ? pickedAny[0] : null
+    }
+  }
 
   if (!result) {
     await admin.from("lead_distribution_log").insert({

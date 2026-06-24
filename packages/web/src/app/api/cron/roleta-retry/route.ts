@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { loadLeadInboundForClassification } from "@web/lib/roleta/classify-lead"
+import { detectPropertyInterestId } from "@web/lib/roleta/detect-property"
 import { classifyContactIntent, createAnthropicClient } from "@trifold/ai"
 import { routeLeadIdToRelationship } from "@web/lib/relacionamento/route-inbound"
 
@@ -113,6 +114,20 @@ export async function GET(request: NextRequest) {
         )
         results.nao_lead++
         continue
+      }
+    }
+
+    // Story 75-44: detectar empreendimento mencionado no diálogo e gravar
+    // property_interest_id (só se ainda não definido) ANTES de distribuir → a
+    // roleta passa a filtrar pelos corretores habilitados. Não identificado → null.
+    if (convo.text) {
+      const detectedPropertyId = await detectPropertyInterestId(admin, lead.org_id, convo.text)
+      if (detectedPropertyId) {
+        await admin
+          .from("leads")
+          .update({ property_interest_id: detectedPropertyId })
+          .eq("id", lead.id)
+          .is("property_interest_id", null)
       }
     }
 
