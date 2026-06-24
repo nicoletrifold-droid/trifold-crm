@@ -57,13 +57,15 @@ export default async function BrokerLeadsPage({
         .is("lost_reason", null)
         .order("updated_at", { ascending: false }),
 
-      // Tarefas pendentes do corretor — para filtro por status (tasks) e por data (td)
+      // Tarefas pendentes — para filtro por status (tasks) e por data (td).
+      // NÃO filtra por `assigned_to`: as tarefas criadas pelo corretor gravam
+      // `assigned_to = NULL` (Story 75-42). O escopo do corretor já vem da interseção
+      // com os leads dele (a lista só traz `assigned_broker_id = user.id`).
       tasks || td
         ? supabase
             .from("lead_tasks")
             .select("lead_id, due_at")
             .eq("org_id", user.orgId)
-            .eq("assigned_to", user.id)
             .is("completed_at", null)
         : Promise.resolve({ data: [] as { lead_id: string; due_at: string | null }[], error: null }),
 
