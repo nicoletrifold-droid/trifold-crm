@@ -74,6 +74,33 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // ===== Usuário DESATIVADO: bloqueio total (Story 75-54) =====
+  // Regra geral p/ TODOS os perfis: users.is_active=false não acessa nada do sistema.
+  // Encerra a sessão e manda pro login (cliente → /cliente; demais → /login). /api/*
+  // fica de fora (auth por rota via requireAuth, que também checa is_active).
+  if (user && !pathname.startsWith("/api/")) {
+    const { data: activeRow } = await supabase
+      .from("users")
+      .select("is_active")
+      .eq("auth_id", user.id)
+      .maybeSingle()
+    if (activeRow?.is_active === false) {
+      await supabase.auth.signOut()
+      const loginPath = pathname.startsWith("/cliente") ? "/cliente" : "/login"
+      // Já está na própria página de login → só limpa a sessão, sem redirect (evita loop).
+      if (pathname === loginPath) {
+        return supabaseResponse
+      }
+      const url = request.nextUrl.clone()
+      url.pathname = loginPath
+      url.search = "inativo=1"
+      const res = NextResponse.redirect(url)
+      // Carrega os cookies de sessão já limpos pelo signOut para a resposta de redirect.
+      supabaseResponse.cookies.getAll().forEach((c) => res.cookies.set(c.name, c.value, c))
+      return res
+    }
+  }
+
   // ===== Public routes (no auth required) =====
   // - `/login`        — admin/broker/supervisor login
   // - `/cliente`      — cliente portal login (Story 20.2 will provide the UI)

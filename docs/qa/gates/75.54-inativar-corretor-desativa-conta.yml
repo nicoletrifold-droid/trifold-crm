@@ -1,0 +1,25 @@
+storyId: 75-54
+title: "Inativar corretor desativa conta + bloqueio de usuário desativado"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks: { typecheck: pass, lint: pass }
+acceptance_criteria:
+  AC1_toggle_sincroniza: pass
+  AC2_middleware_bloqueia_paginas: pass
+  AC3_api_403: pass
+  AC4_null_true_sem_regressao: pass
+issues:
+  - severity: medium
+    category: security
+    description: "Mudança de auth (bloqueio is_active). Testar em prod: usuario desativado nao loga nem acessa; ativo acessa normal."
+    recommendation: "Validar manualmente apos deploy com 1 conta de teste. Guard anti-loop no login coberto."
+  - severity: low
+    category: requirements
+    description: "Login nao mostra msg 'conta desativada' (param ?inativo=1 enviado mas sem UI)."
+    recommendation: "Follow-up de UX opcional."
+notes: >
+  is_active enforçado no middleware (todas as paginas; signOut + redirect, /api fora) e no requireAuth
+  (403). Toggle de corretor sincroniza brokers.is_available <-> users.is_active. Bloqueio estrito
+  (=== false). Backfill dos indisponiveis atuais (Ana/Vitor/Samara) nao feito - decisao do usuario.
