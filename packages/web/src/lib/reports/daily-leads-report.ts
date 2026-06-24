@@ -114,18 +114,41 @@ export async function buildDailyLeadsReport(
     canalCounts[canal] = (canalCounts[canal] ?? 0) + 1
   }
 
-  // (6) Tempo de atendimento: leads atendidos (carimbados) na janela
+  // (6) Tempo de atendimento (Story 75-46): da DISTRIBUIÇÃO (corretor recebeu o
+  // lead) até o atendimento (saiu de "Aguardando atendimento" = primeiro_atendimento_em).
+  // Justo com o corretor — NÃO conta a espera da roleta. Considera leads atendidos
+  // na janela; lead sem distribuição registrada (ex.: atribuição manual) fica de fora.
   const { data: attended } = await admin
     .from("leads")
-    .select("created_at, primeiro_atendimento_em")
+    .select("id, primeiro_atendimento_em")
     .eq("org_id", orgId)
     .gte("primeiro_atendimento_em", sinceIso)
-  const durations = ((attended ?? []) as Array<{ created_at: string; primeiro_atendimento_em: string }>)
-    .map(
-      (a) =>
-        (new Date(a.primeiro_atendimento_em).getTime() - new Date(a.created_at).getTime()) / 60000
-    )
-    .filter((d) => Number.isFinite(d) && d >= 0)
+  const attendedRows = (attended ?? []) as Array<{ id: string; primeiro_atendimento_em: string }>
+
+  const durations: number[] = []
+  if (attendedRows.length > 0) {
+    const { data: distLog } = await admin
+      .from("lead_distribution_log")
+      .select("lead_id, created_at")
+      .eq("org_id", orgId)
+      .eq("status", "distributed")
+      .in(
+        "lead_id",
+        attendedRows.map((a) => a.id)
+      )
+    const distByLead: Record<string, number[]> = {}
+    for (const d of (distLog ?? []) as Array<{ lead_id: string; created_at: string }>) {
+      ;(distByLead[d.lead_id] ??= []).push(new Date(d.created_at).getTime())
+    }
+    for (const a of attendedRows) {
+      const atendido = new Date(a.primeiro_atendimento_em).getTime()
+      // distribuição correspondente = a mais recente ANTES do atendimento
+      const dists = (distByLead[a.id] ?? []).filter((t) => t <= atendido)
+      if (dists.length === 0) continue // sem distribuição registrada → fora da média
+      const min = (atendido - Math.max(...dists)) / 60000
+      if (Number.isFinite(min) && min >= 0) durations.push(min)
+    }
+  }
 
   // (4)(5) Distribuídos por corretor na janela + quantos saíram de "novo"
   const { data: dist } = await admin
