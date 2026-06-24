@@ -209,45 +209,51 @@ export default async function AnalyticsPage({
   const conversao = totalLeads > 0 ? Math.round((fechamento / totalLeads) * 100) : 0
   const mediaDiaria = period.days > 0 ? (totalLeads / period.days) : 0
 
-  // ── Tempo médio de 1º atendimento por corretor (no período) ────────────────
+  // ── Tempo médio de atendimento por corretor (Story 75-47) ──────────────────
+  // DISTRIBUIÇÃO (corretor recebeu, lead_distribution_log) → ATENDIMENTO (saiu de
+  // "Aguardando atendimento" = primeiro_atendimento_em, carimbado pelo trigger 75-45).
+  // Antes media 1º broker_note − created_at (entrada→nota), que inflava com a espera
+  // da roleta. Considera leads ATENDIDOS no período. Só mede desde 24/06/2026.
   const responseLeads = await supabase
     .from("leads")
-    .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+    .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
     .eq("org_id", appUser.orgId)
     .not("assigned_broker_id", "is", null)
-    .gte("created_at", sinceISO).lt("created_at", untilISO)
+    .not("primeiro_atendimento_em", "is", null)
+    .gte("primeiro_atendimento_em", sinceISO).lt("primeiro_atendimento_em", untilISO)
     .limit(1000)
 
-  type ResponseLead = { id: string; created_at: string; assigned_broker_id: string; broker: { id: string; name: string } | { id: string; name: string }[] | null }
+  type ResponseLead = { id: string; primeiro_atendimento_em: string; assigned_broker_id: string; broker: { id: string; name: string } | { id: string; name: string }[] | null }
   const responseLeadList = (responseLeads.data ?? []) as ResponseLead[]
   const responseLeadIds = responseLeadList.map((l) => l.id)
 
   let brokerResponseTimes: { id: string; name: string; avgMinutes: number; count: number }[] = []
 
   if (responseLeadIds.length > 0) {
-    const { data: firstNotes } = await supabase
-      .from("activities")
+    const { data: distLog } = await supabase
+      .from("lead_distribution_log")
       .select("lead_id, created_at")
       .eq("org_id", appUser.orgId)
-      .eq("type", "broker_note")
+      .eq("status", "distributed")
       .in("lead_id", responseLeadIds)
-      .order("created_at", { ascending: true })
 
-    const firstNoteByLead = new Map<string, string>()
-    for (const note of (firstNotes ?? [])) {
-      if (!firstNoteByLead.has(note.lead_id as string)) {
-        firstNoteByLead.set(note.lead_id as string, note.created_at as string)
-      }
+    const distByLead = new Map<string, number[]>()
+    for (const d of (distLog ?? [])) {
+      const arr = distByLead.get(d.lead_id as string) ?? []
+      arr.push(new Date(d.created_at as string).getTime())
+      distByLead.set(d.lead_id as string, arr)
     }
 
     const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
     for (const lead of responseLeadList) {
-      const firstNote = firstNoteByLead.get(lead.id)
-      if (!firstNote) continue
+      const atendido = new Date(lead.primeiro_atendimento_em).getTime()
+      // distribuição correspondente = a mais recente ANTES do atendimento
+      const dists = (distByLead.get(lead.id) ?? []).filter((t) => t <= atendido)
+      if (dists.length === 0) continue
       const bArr = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
       if (!bArr) continue
       if (HIDDEN_BROKER_NAMES.has(bArr.name.toLowerCase().trim())) continue
-      const diffMs = new Date(firstNote).getTime() - new Date(lead.created_at).getTime()
+      const diffMs = atendido - Math.max(...dists)
       if (diffMs < 0) continue
       const cur = brokerMap.get(bArr.id) ?? { name: bArr.name, totalMinutes: 0, count: 0 }
       cur.totalMinutes += diffMs / 60000
@@ -419,15 +425,16 @@ export default async function AnalyticsPage({
         {/* Tempo médio de 1º atendimento */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Tempo Médio de Atendimento</h2>
-          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o 1º contato registrado — {rangeLabel}</p>
+          <p className="mb-4 text-xs text-gray-400 dark:text-stone-500">Da distribuição até o atendimento (saída de “Aguardando atendimento”) — {rangeLabel}</p>
           {brokerResponseTimes.length > 0 ? (
             <div className="space-y-3">
               {brokerResponseTimes.map((b) => {
                 const h = Math.floor(b.avgMinutes / 60)
                 const m = b.avgMinutes % 60
                 const label = h > 0 ? `${h}h ${m}min` : `${m}min`
-                const color = b.avgMinutes <= 30 ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : b.avgMinutes <= 120 ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-                const dot = b.avgMinutes <= 30 ? "bg-green-500" : b.avgMinutes <= 120 ? "bg-orange-500" : "bg-red-500"
+                // Meta de SLA = 60 min (dentro da meta = verde; até 2x = laranja; acima = vermelho)
+                const color = b.avgMinutes <= 60 ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" : b.avgMinutes <= 120 ? "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+                const dot = b.avgMinutes <= 60 ? "bg-green-500" : b.avgMinutes <= 120 ? "bg-orange-500" : "bg-red-500"
                 return (
                   <div key={b.id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -443,7 +450,7 @@ export default async function AnalyticsPage({
               })}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum atendimento registrado via &quot;+ Novo Histórico&quot; no período.</p>
+            <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum atendimento registrado no período. (A medição começou em 24/06/2026.)</p>
           )}
         </div>
 

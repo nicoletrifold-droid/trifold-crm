@@ -1,0 +1,20 @@
+storyId: 75-47
+title: "Analytics: Tempo Médio de Atendimento = distribuição → atendimento"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks:
+  typecheck: pass
+  lint: pass
+acceptance_criteria:
+  AC1_distribuicao_atendimento: pass
+  AC2_atribuicao_filtros: pass
+  AC3_ranking_ordenado: pass
+  AC4_cor_sla_subtitulo: pass
+  AC5_qualidade: pass
+notes: >
+  Card analytics alinhado ao relatório (75-46) e ao trigger (75-45): mede
+  primeiro_atendimento_em − lead_distribution_log.created_at (distribuição mais recente
+  antes do atendimento). Serve de painel (#2) e ranking de velocidade (#3) do pacote SLA.
+  Cor verde até 60 min (meta SLA). Caveat aceito: só mede desde 24/06/2026.
