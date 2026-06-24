@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth } from "@web/lib/api-auth"
+import type { AppUser } from "@web/lib/api-auth"
+import { canAccess } from "@web/lib/permissions"
+
+// Quem pode gerenciar empreendimentos de um corretor — espelha o gate da página
+// /dashboard/configuracoes/corretores (canAccess "corretores" | "sistema").
+// Antes era requireRole(["admin"]), que divergia da página: gerente-comercial
+// via o botão clicável mas a API devolvia 403 (clicava e não salvava).
+async function canManageAssignments(appUser: AppUser): Promise<boolean> {
+  return (
+    (await canAccess(appUser.id, appUser.org_id, "corretores")) ||
+    (await canAccess(appUser.id, appUser.org_id, "sistema"))
+  )
+}
 
 export async function GET(
   _req: NextRequest,
@@ -29,8 +42,9 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
-  if (forbidden) return forbidden
+  if (!(await canManageAssignments(appUser))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   const body = await request.json()
   const { property_id } = body
@@ -59,8 +73,9 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
-  if (forbidden) return forbidden
+  if (!(await canManageAssignments(appUser))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   const body = await request.json()
   const { property_id } = body
