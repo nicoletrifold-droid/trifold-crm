@@ -1,0 +1,26 @@
+storyId: 75-48
+title: "Alerta de SLA de atendimento (corretor + escalonamento gestor)"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint, vitest]
+checks:
+  typecheck: pass
+  lint: pass
+  tests: "28 roleta (9 novos business-time: overnight, pré-abertura, fim de semana)"
+acceptance_criteria:
+  AC1_business_time: pass
+  AC2_corretor30_gestor60_idempotente: pass
+  AC3_killswitch_e_horario: pass
+  AC4_dry_run: pass
+  AC5_recent_only: pass
+  AC6_qualidade: pass
+issues:
+  - severity: low
+    category: requirements
+    description: "Alerta sai por push (e e-mail no gestor). WhatsApp do alerta exigiria template HSM."
+    recommendation: "Follow-up se quiserem WhatsApp; push cobre o caso ativo sem custo de template."
+notes: >
+  Kill-switch sla_alertas_enabled começa FALSE. Validar com dry-run (?dry=1) em prod e então
+  ligar. Relógio distribuição→atendimento contando só expediente (lê roleta_config). Idempotente
+  via marcadores. Só envia dentro do horário e só leads das últimas 48h (evita rajada inicial).
