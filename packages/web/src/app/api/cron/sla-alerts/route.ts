@@ -6,7 +6,39 @@ import {
   type BusinessHoursCfg,
 } from "@web/lib/roleta/business-time"
 import { sendPushToUser } from "@web/lib/server/push-service"
-import { notifyImobiliaria } from "@web/lib/roleta/notify-broker"
+import { formatDuration } from "@web/lib/reports/daily-leads-report"
+
+// Story 75-50 — escalonamento pro gestor por WhatsApp (template alerta_sla_gestor),
+// enviado a cada telefone de SLA_ESCALATION_PHONES (Fernanda + Alexandre).
+async function sendGestorSlaWhatsApp(
+  config: { phone_number_id: string; access_token: string },
+  phones: string[],
+  vars: { leadName: string; brokerName: string; tempo: string }
+): Promise<void> {
+  const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
+  const params = [vars.leadName, vars.brokerName, vars.tempo]
+  for (const to of phones) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${config.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "template",
+          template: {
+            name: "alerta_sla_gestor",
+            language: { code: "pt_BR" },
+            components: [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }],
+          },
+        }),
+      })
+      if (!res.ok) console.error("[sla] gestor wpp:", res.status, await res.text())
+    } catch (e) {
+      console.error("[sla] gestor wpp:", e)
+    }
+  }
+}
 
 // Story 75-48 — alerta de SLA de atendimento. Roda a cada 10 min (vercel.json).
 // Para cada lead ainda em "Aguardando atendimento": se passou X min de expediente
@@ -51,6 +83,10 @@ export async function GET(request: NextRequest) {
   }
 
   const dryRun = new URL(request.url).searchParams.get("dry") === "1"
+  const escalationPhones = (process.env.SLA_ESCALATION_PHONES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
   const admin = createAdminClient()
   const now = new Date()
 
@@ -81,6 +117,19 @@ export async function GET(request: NextRequest) {
     const corretorMin = cfg.sla_alerta_corretor_min ?? 30
     const gestorMin = cfg.sla_alerta_gestor_min ?? 60
     const gestorUserId = cfg.notify_user_on_fora_horario ?? cfg.notify_user_on_distribution ?? null
+
+    // Config do WhatsApp (uma vez por org) p/ o template de escalonamento ao gestor.
+    let wppConfig: { phone_number_id: string; access_token: string } | null = null
+    if (escalationPhones.length > 0) {
+      const { data: wc } = await admin
+        .from("whatsapp_config")
+        .select("phone_number_id, access_token")
+        .eq("org_id", orgId)
+        .maybeSingle()
+      if (wc?.phone_number_id && wc?.access_token) {
+        wppConfig = { phone_number_id: wc.phone_number_id as string, access_token: wc.access_token as string }
+      }
+    }
 
     const { data: novoStage } = await admin
       .from("kanban_stages")
@@ -159,17 +208,27 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (elapsed >= gestorMin && !lead.sla_alerta_gestor_em && gestorUserId) {
+      if (elapsed >= gestorMin && !lead.sla_alerta_gestor_em) {
         wouldAlert.push({ lead: lead.id, tipo: "gestor", elapsed })
         if (!dryRun) {
-          await notifyImobiliaria({
-            orgId,
-            userId: gestorUserId,
-            title: "Lead sem atendimento (SLA estourado)",
-            messageBody: `${lead.name ?? "Lead"} com ${brokerName.get(lead.assigned_broker_id) ?? "corretor"} está há ${elapsed} min sem atendimento.`,
-            lead: { id: lead.id, name: lead.name, phone: lead.phone },
-            brokerName: brokerName.get(lead.assigned_broker_id),
-          }).catch((e: unknown) => console.error("[sla] gestor:", e))
+          const tempo = formatDuration(elapsed)
+          const brokerNm = brokerName.get(lead.assigned_broker_id) ?? "corretor"
+          // WhatsApp (template) p/ os gestores (Fernanda + Alexandre)
+          if (wppConfig) {
+            await sendGestorSlaWhatsApp(wppConfig, escalationPhones, {
+              leadName: lead.name ?? "Lead",
+              brokerName: brokerNm,
+              tempo,
+            })
+          }
+          // Push p/ o gestor-usuário (Fernanda)
+          if (gestorUserId) {
+            await sendPushToUser(admin, gestorUserId, {
+              title: "Lead sem atendimento (SLA)",
+              body: `${lead.name ?? "Lead"} com ${brokerNm} está há ${tempo} sem atendimento.`,
+              url: `${APP_URL}/dashboard/leads/${lead.id}`,
+            }).catch((e: unknown) => console.error("[sla] push gestor:", e))
+          }
           markGestor.push(lead.id)
           escalonamentos++
         }

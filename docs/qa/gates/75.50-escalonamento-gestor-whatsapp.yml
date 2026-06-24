@@ -1,0 +1,25 @@
+storyId: 75-50
+title: "Escalonamento do SLA pro gestor via WhatsApp (Fernanda + Alexandre)"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint, vitest]
+checks:
+  typecheck: pass
+  lint: pass
+  tests: "28 roleta verdes (regressão)"
+acceptance_criteria:
+  AC1_template_a_todos_telefones: pass
+  AC2_push_fernanda_wpp_alexandre: pass
+  AC3_killswitch_horario_dryrun: pass
+  AC4_qualidade: pass
+issues:
+  - severity: low
+    category: requirements
+    description: "Envio WhatsApp do escalonamento depende do template alerta_sla_gestor aprovado na Meta."
+    recommendation: "Push pro gestor-usuário funciona já; WhatsApp ativa quando o template aprovar."
+notes: >
+  Escalonamento (>=60 min) envia template alerta_sla_gestor (lead/corretor/tempo) a cada telefone
+  de SLA_ESCALATION_PHONES (Fernanda 5518996352250 + Alexandre 5544984070700) + push pra Fernanda.
+  formatDuration p/ "1h05". Config WhatsApp lida 1x por org. Idempotente. Liga junto com os alertas
+  (amanhã 08:00 via pg_cron) e quando o template aprovar.
