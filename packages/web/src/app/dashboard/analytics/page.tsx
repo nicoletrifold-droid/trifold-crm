@@ -65,11 +65,13 @@ export default async function AnalyticsPage({
     .eq("is_active", true)
     .order("name")
 
-  // IDs dos corretores ativos
+  // IDs dos corretores ATIVOS (disponíveis na roleta) — Story 75-53. Antes a query
+  // pegava todos, então corretores indisponíveis (ex.: desligados) apareciam nos cards.
   const { data: activeBrokersData } = await supabase
     .from("brokers")
     .select("user_id")
     .eq("org_id", appUser.orgId)
+    .eq("is_available", true)
   const activeBrokerIds = new Set((activeBrokersData ?? []).map((b) => b.user_id as string))
 
   // Landing Pages do período (extraídas do utm_campaign e subtraídas do "other")
@@ -408,7 +410,7 @@ export default async function AnalyticsPage({
 
         {/* Broker Performance */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Performance por Corretor</h2>
+          <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Leads por Corretor</h2>
           <div className="space-y-3">
             {brokers.map((broker) => (
               <div key={broker.id} className="flex items-center justify-between">

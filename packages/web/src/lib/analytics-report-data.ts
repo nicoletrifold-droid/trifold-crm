@@ -154,11 +154,12 @@ export async function buildAnalyticsReportData(
   const compCurrStart = period ? periodSince! : oneWeekAgo
   const compPrevStart = period ? new Date(periodSince!.getTime() - durationMs) : twoWeeksAgo
 
-  // IDs dos corretores ativos
+  // IDs dos corretores ATIVOS (disponíveis na roleta) — Story 75-53 (consistente com a tela).
   const { data: activeBrokersData } = await supabase
     .from("brokers")
     .select("user_id")
     .eq("org_id", orgId)
+    .eq("is_available", true)
   const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
 
   const [

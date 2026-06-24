@@ -259,7 +259,7 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
 
         {/* Brokers — full width */}
         <View style={{ ...s.section, marginBottom: 12 }}>
-          <Text style={s.sectionTitle}>Performance por Corretor</Text>
+          <Text style={s.sectionTitle}>Leads por Corretor</Text>
           {data.brokers.map((b, i) => (
             <View key={i} style={i === data.brokers.length - 1 ? s.tableRowLast : s.tableRow}>
               <Text style={s.rowLabel}>{b.name}</Text>

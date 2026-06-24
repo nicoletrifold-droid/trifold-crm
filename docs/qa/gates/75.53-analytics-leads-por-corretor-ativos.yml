@@ -1,0 +1,15 @@
+storyId: 75-53
+title: "Analytics: Leads por Corretor + ocultar inativos"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks: { typecheck: pass, lint: pass }
+acceptance_criteria:
+  AC1_renomear_tela_pdf: pass
+  AC2_oculta_indisponiveis: pass
+  AC3_disponiveis_aparecem: pass
+notes: >
+  "Performance por Corretor" -> "Leads por Corretor" (tela + PDF). activeBrokerIds agora filtra
+  brokers.is_available=true na tela e em analytics-report-data.ts (consistencia). Afeta Leads por
+  Corretor e Tempo Medio (ambos filtram por activeBrokerIds). users.is_active nao distingue (todos true).
