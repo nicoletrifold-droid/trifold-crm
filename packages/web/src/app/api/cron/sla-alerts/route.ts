@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
-  businessMinutesBetween,
-  isWithinBusinessHoursNow,
-  type BusinessHoursCfg,
+  businessMinutesBetweenSchedule,
+  isOpenAtNow,
+  getOrgSchedule,
 } from "@web/lib/roleta/business-time"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { formatDuration } from "@web/lib/reports/daily-leads-report"
@@ -100,15 +100,9 @@ export async function GET(request: NextRequest) {
       continue
     }
 
-    const bh: BusinessHoursCfg = {
-      business_days: cfg.business_days ?? [1, 2, 3, 4, 5],
-      business_hour_start: cfg.business_hour_start ?? "08:00",
-      business_hour_end: cfg.business_hour_end ?? "20:00",
-      weekend_hour_start: cfg.weekend_hour_start,
-      weekend_hour_end: cfg.weekend_hour_end,
-      timezone: cfg.timezone ?? "America/Sao_Paulo",
-    }
-    const withinHours = isWithinBusinessHoursNow(bh, now)
+    // Story 75-59: horário pela AGENDA por dia (mesma fonte da distribuição/contagem).
+    const { week: schedule, timezone: scheduleTz } = await getOrgSchedule(orgId, admin)
+    const withinHours = isOpenAtNow(now, schedule, scheduleTz)
     if (!withinHours && !dryRun) {
       summary.push({ orgId, skipped: "fora do horario comercial" })
       continue
@@ -193,7 +187,7 @@ export async function GET(request: NextRequest) {
       const dists = (distByLead.get(lead.id) ?? []).filter((t) => t <= now.getTime())
       if (dists.length === 0) continue
       const distribuido = new Date(Math.max(...dists))
-      const elapsed = businessMinutesBetween(distribuido, now, bh)
+      const elapsed = businessMinutesBetweenSchedule(distribuido, now, schedule, scheduleTz)
 
       if (elapsed >= corretorMin && !lead.sla_alerta_corretor_em) {
         wouldAlert.push({ lead: lead.id, tipo: "corretor", elapsed })
