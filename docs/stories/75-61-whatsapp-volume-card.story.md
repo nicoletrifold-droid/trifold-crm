@@ -73,7 +73,7 @@ custo R$) é story futura.
 - **Confusão com o card "Mensagens (24h)" antigo** (ainda 0). Mitigação: rotular a nova seção claramente como "WhatsApp"; reconciliar o antigo é story à parte. **Baixo.**
 
 ## File List
-- `supabase/migrations/116_whatsapp_volume_rpc.sql` (novo) — RPC `get_whatsapp_volume_summary(org)` (SECURITY DEFINER + grant authenticated).
+- `supabase/migrations/117_whatsapp_volume_rpc.sql` (novo — renumerado de 116 por colisão) — RPC `get_whatsapp_volume_summary(org)` (SECURITY DEFINER + grant authenticated).
 - `packages/web/src/app/api/system-events/route.ts` — chama a RPC em paralelo e expõe `metrics.whatsapp_volume`.
 - `packages/web/src/app/dashboard/sistema/page.tsx` — tipo `WhatsappVolume` + seção "Volume de WhatsApp" (4 cards 24h/7d + subtítulo 30d).
 
@@ -101,3 +101,6 @@ custo R$) é story futura.
   Lógica validada em prod (379/383/762 30d). 265/265 testes, typecheck limpo. Status Ready → Review.
 - 2026-06-25 — @qa — Gate **PASS** (9/10). AC validados (inclui prod). Observação low (security): RPC confia em
   p_org_id como toda a família de dashboard RPCs — endurecer antes do multi-tenant. Não bloqueia (single-org hoje).
+- 2026-06-25 — @devops — PR #37 merged (`45cc6e4`); RPC aplicada em prod (idempotente). **Colisão de migration:**
+  outra branch mergeou `116_distrato_sienge_contrato_cancelado` em paralelo → renomeada a nossa para
+  `117_whatsapp_volume_rpc.sql` (chore PR; só higiene, RPC já no ar).

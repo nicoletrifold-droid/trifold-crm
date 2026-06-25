@@ -1,4 +1,5 @@
--- 116_whatsapp_volume_rpc.sql
+-- 117_whatsapp_volume_rpc.sql
+-- (renumerado de 116 → 117: colisão com 116_distrato_sienge_contrato_cancelado mergeada em paralelo)
 -- Story 75-61 — Volume de mensagens de WhatsApp (Passo 1 do contador).
 -- Conta mensagens da tabela `messages` das conversas de WhatsApp do org, por
 -- janela (24h / 7d / 30d), separando recebidas (role 'user') de enviadas
