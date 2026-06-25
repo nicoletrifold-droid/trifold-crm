@@ -97,6 +97,15 @@ export async function GET(request: NextRequest) {
     console.error("[SYSTEM_EVENTS] RPC get_whatsapp_volume_summary failed", waError)
   }
 
+  // Story 75-62 — disparos de template + custo estimado por janela.
+  const { data: waCostRaw, error: waCostError } = await supabase.rpc(
+    "get_whatsapp_cost_summary",
+    { p_org_id: user.orgId }
+  )
+  if (waCostError) {
+    console.error("[SYSTEM_EVENTS] RPC get_whatsapp_cost_summary failed", waCostError)
+  }
+
   const s: SystemEventsSummary =
     (summaryRaw as SystemEventsSummary | null) ?? emptySummary
 
@@ -125,6 +134,7 @@ export async function GET(request: NextRequest) {
       avg_claude_response_ms: avgClaudeResponseMs,
       rag_fallback_rate: ragFallbackRate,
       whatsapp_volume: waRaw ?? null,
+      whatsapp_cost: waCostRaw ?? null,
     },
     health,
   })

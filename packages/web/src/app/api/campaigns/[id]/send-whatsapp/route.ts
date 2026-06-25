@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
 async function sendWhatsAppTemplate(
   phoneNumberId: string,
@@ -124,8 +125,10 @@ export async function POST(
         event_type: "sent",
       })
 
+      void logWhatsappSend(supabase, { orgId: campaign.org_id, template: campaign.whatsapp_template_name!, category: "marketing", recipientType: "lead", toPhone: `55${entry.phone}`, status: "sent" })
       sent++
     } catch (err) {
+      void logWhatsappSend(supabase, { orgId: campaign.org_id, template: campaign.whatsapp_template_name!, category: "marketing", recipientType: "lead", toPhone: `55${entry.phone}`, status: "failed", error: err instanceof Error ? err.message.slice(0, 300) : "Unknown" })
       failed++
       await supabase
         .from("campaign_entries")
