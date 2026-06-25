@@ -16,11 +16,23 @@ interface SystemEvent {
   created_at: string
 }
 
+interface WhatsappWindow {
+  recebidas: number
+  enviadas: number
+  total: number
+}
+interface WhatsappVolume {
+  h24: WhatsappWindow
+  d7: WhatsappWindow
+  d30: WhatsappWindow
+}
+
 interface Metrics {
   errors_24h: number
   messages_24h: number
   avg_claude_response_ms: number | null
   rag_fallback_rate: number
+  whatsapp_volume: WhatsappVolume | null
 }
 
 type HealthStatus = "green" | "yellow" | "red"
@@ -199,6 +211,36 @@ export default function SistemaPage() {
           </p>
         </div>
       </div>
+
+      {/* Volume de WhatsApp — Story 75-61 */}
+      {data.metrics.whatsapp_volume && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-1">
+            <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Volume de WhatsApp</h2>
+            <p className="text-xs text-stone-400 dark:text-stone-500">
+              Últimos 30 dias: {data.metrics.whatsapp_volume.d30.recebidas} recebidas · {data.metrics.whatsapp_volume.d30.enviadas} enviadas · {data.metrics.whatsapp_volume.d30.total} total
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Recebidas (24h)</p>
+              <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.h24.recebidas}</p>
+            </div>
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Enviadas (24h)</p>
+              <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.h24.enviadas}</p>
+            </div>
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Recebidas (7d)</p>
+              <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.d7.recebidas}</p>
+            </div>
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Enviadas (7d)</p>
+              <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.d7.enviadas}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Events Table */}
       <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
