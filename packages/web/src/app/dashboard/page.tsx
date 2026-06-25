@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
+import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import Link from "next/link"
 import { AlertCircle, Calendar, CheckCircle2, Filter, Users, UserX } from "lucide-react"
 
@@ -26,13 +27,16 @@ export default async function DashboardPage() {
   const monday = new Date(today)
   monday.setDate(monday.getDate() - monday.getDay() + 1)
 
+  // "Leads hoje" usa o DIA COMERCIAL (vira no fechamento, não meia-noite) — Story 75-57.
+  const { from: commercialDayStart } = await commercialDayRangeForOrg(appUser.orgId, supabase)
+
 
   const [leadsToday, activeLeadsResult, pipeline, properties, stageTotalsResult, gerenteCountsResult, gerenteFunnelResult] = await Promise.all([
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
-      .gte("created_at", today.toISOString()),
+      .gte("created_at", commercialDayStart.toISOString()),
     // Leads ativos = MESMA regra da lista "Em atendimento" (fonte única)
     supabase
       .from("leads")

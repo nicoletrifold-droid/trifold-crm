@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { previousCommercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 
 /**
  * Story 75-45 — Relatório diário de leads (últimas 24h) para o diretor, via
@@ -89,7 +90,14 @@ export async function buildDailyLeadsReport(
   orgId: string,
   now: Date = new Date()
 ): Promise<DailyReportVars> {
-  const sinceIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+  // Janela = DIA COMERCIAL anterior COMPLETO (Story 75-57). O cron roda 07:59 BRT
+  // (antes da abertura), então reporta o último dia comercial já fechado
+  // [fechamento de anteontem, fechamento de ontem). Antes: janela rolante de 24h.
+  const { from, to } = await previousCommercialDayRangeForOrg(orgId, admin, now)
+  const sinceIso = from.toISOString()
+  const untilIso = to.toISOString()
+  // Data exibida = o dia comercial reportado (não a data de envio).
+  const reportedDay = new Date(to.getTime() - 1)
 
   // Estágio "Aguardando atendimento"
   const { data: novoStage } = await admin
@@ -105,7 +113,9 @@ export async function buildDailyLeadsReport(
     .from("leads")
     .select("channel, source")
     .eq("org_id", orgId)
+    .eq("is_active", true)
     .gte("created_at", sinceIso)
+    .lt("created_at", untilIso)
   const leadRows = (leads ?? []) as Array<{ channel: string | null; source: string | null }>
   const total = leadRows.length
   const canalCounts: Record<string, number> = {}
@@ -123,6 +133,7 @@ export async function buildDailyLeadsReport(
     .select("id, primeiro_atendimento_em")
     .eq("org_id", orgId)
     .gte("primeiro_atendimento_em", sinceIso)
+    .lt("primeiro_atendimento_em", untilIso)
   const attendedRows = (attended ?? []) as Array<{ id: string; primeiro_atendimento_em: string }>
 
   const durations: number[] = []
@@ -157,6 +168,7 @@ export async function buildDailyLeadsReport(
     .eq("org_id", orgId)
     .eq("status", "distributed")
     .gte("created_at", sinceIso)
+    .lt("created_at", untilIso)
   const distRows = (dist ?? []) as Array<{ lead_id: string; broker_id: string }>
   const totalDistribuidos = distRows.length
 
@@ -192,7 +204,7 @@ export async function buildDailyLeadsReport(
   }
 
   return {
-    data: formatDateBR(now),
+    data: formatDateBR(reportedDay),
     total: String(total),
     canais: formatChannels(canalCounts),
     corretores: formatBrokers(brokerRows),
