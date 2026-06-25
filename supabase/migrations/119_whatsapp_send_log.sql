@@ -1,4 +1,5 @@
--- 118_whatsapp_send_log.sql
+-- 119_whatsapp_send_log.sql
+-- (renumerado de 118 → 119: colisão com 118_fix_idx_cov_distrato_predicate mergeada em paralelo)
 -- Story 75-62 (Passo 2) — Log de disparos de template de WhatsApp + tabela de
 -- preços (Meta BR pesquisada) + RPC de custo estimado. Conta a partir do deploy.
 
