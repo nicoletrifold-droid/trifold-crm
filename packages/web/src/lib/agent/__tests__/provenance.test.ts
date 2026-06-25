@@ -133,3 +133,53 @@ describe("formatProvenanceBlock", () => {
     expect(text).toContain("Dados defasados (>36h): sim")
   })
 })
+
+// ─── Story 76-4: proveniência no contexto de campanha específica ───────────────
+// computeProvenance é a MESMA função pura usada pelo bloco de campanha; estes casos
+// cobrem o input que `buildCampaignContext` monta (maxSyncedAt da campanha) sem
+// precisar de mock de Supabase (a lógica de staleness/erro não muda por contexto).
+describe("computeProvenance — contexto de campanha (Story 76-4)", () => {
+  it("campanha com synced_at na janela → maxSyncedAt reflete a data DAQUELA campanha", () => {
+    const b = computeProvenance(
+      input({
+        maxSyncedAt: "2026-06-20T15:00:00.000Z", // synced_at específico da campanha
+        lastAccountSync: "2026-06-21T09:00:00.000Z",
+        syncLog: { status: "success", finished_at: new Date(NOW.getTime() - 3 * HOUR).toISOString() },
+      }),
+      NOW,
+    )
+    expect(b.maxSyncedAt).toBe("2026-06-20T15:00:00.000Z")
+    expect(b.isStale).toBe(false)
+    const text = formatProvenanceBlock(b, TODAY)
+    expect(text).toContain("[PROVENIÊNCIA DOS DADOS META ADS]")
+    expect(text).toContain("Dados coletados da Meta API em: 20/06/2026")
+  })
+
+  it("campanha SEM synced_at na janela (nova/pausada) → 'indisponível' e isStale=false (AC5/NFR-OBS-1)", () => {
+    // P1 da campanha retorna null (sem registros na janela) → maxSyncedAt null.
+    // P3 (sync da org) pode existir e estar recente → não inventa data da campanha.
+    const b = computeProvenance(
+      input({
+        maxSyncedAt: null,
+        syncLog: { status: "success", finished_at: new Date(NOW.getTime() - 2 * HOUR).toISOString() },
+      }),
+      NOW,
+    )
+    expect(b.maxSyncedAt).toBeNull()
+    expect(b.isStale).toBe(false)
+    const text = formatProvenanceBlock(b, TODAY)
+    expect(text).toContain("Dados coletados da Meta API em: indisponível")
+  })
+
+  it("staleness da campanha deriva do ciclo de sync da org (P3), coerente com o global (AC8)", () => {
+    const b = computeProvenance(
+      input({
+        maxSyncedAt: "2026-06-19T12:00:00.000Z",
+        syncLog: { status: "error", finished_at: new Date(NOW.getTime() - 48 * HOUR).toISOString(), error_message: "graph api 500" },
+      }),
+      NOW,
+    )
+    expect(b.isError).toBe(true)
+    expect(b.isStale).toBe(true)
+  })
+})

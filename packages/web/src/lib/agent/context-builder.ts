@@ -381,6 +381,15 @@ interface ProvSyncLogRow {
  * EXATAMENTE a mesma janela da query de insights do caller (casamento de janela do
  * AC2). P2 (conta) e P3 (ciclo de cron) não dependem de janela.
  *
+ * `entityId` (opcional, Story 76-4): quando informado, a P1 é adicionalmente
+ * filtrada por `.eq("entity_id", entityId)` — reflete o MAX(synced_at) de UMA
+ * campanha específica, não da org inteira. Usado por `buildCampaignContext`.
+ * Quando ausente (caso global, Story 76-1), a P1 mantém o comportamento original
+ * (MAX de todas as campanhas da org na janela). P2/P3 são idênticas em ambos os
+ * casos — o sync Meta é a nível de org, não por campanha. Manter o filtro de
+ * entity_id aqui (FONTE ÚNICA do plumbing, ARCH-001) evita duplicar a query da
+ * P1 em `buildCampaignContext`.
+ *
  * @returns Tupla [maxSynced, lastAccount, syncLog]; cada item resolve para a linha
  *          ou `null` (fail-transparente via safeProvenanceData).
  */
@@ -388,17 +397,22 @@ export function provenanceQueryBuilders(
   supabase: SupabaseClient,
   orgId: string,
   window: { startDate: string; endDate: string },
+  entityId?: string,
 ): [Promise<ProvSyncRow | null>, Promise<ProvAccountRow | null>, Promise<ProvSyncLogRow | null>] {
+  // P1 — MAX(synced_at) na janela consultada (AC2): order desc + limit 1 = máximo.
+  // Para o contexto de campanha (Story 76-4), filtra também por entity_id (AC4/AC7).
+  let p1 = supabase
+    .from("meta_insights_daily")
+    .select("synced_at")
+    .eq("org_id", orgId)
+    .eq("level", "campaign")
+    .gte("date", window.startDate)
+    .lte("date", window.endDate)
+  if (entityId) p1 = p1.eq("entity_id", entityId)
+
   return [
-    // P1 — MAX(synced_at) na janela consultada (AC2): order desc + limit 1 = máximo.
     safeProvenanceData<ProvSyncRow>(
-      supabase
-        .from("meta_insights_daily")
-        .select("synced_at")
-        .eq("org_id", orgId)
-        .eq("level", "campaign")
-        .gte("date", window.startDate)
-        .lte("date", window.endDate)
+      p1
         .order("synced_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -634,6 +648,7 @@ export async function buildCampaignContext(
   const cached = getCached(key)
   if (cached) return cached
 
+  const today      = new Date().toISOString().split("T")[0]!
   const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
   const date7dAgo  = (() => { const d = new Date(); d.setDate(d.getDate() - 7);  return d.toISOString().split("T")[0]! })()
 
@@ -647,7 +662,16 @@ export async function buildCampaignContext(
 
   const campaignName = campaignRes.data?.name ?? "__none__"
 
-  const [insightsRes, adsetInsightsRes, alertsRes, leadsRes, placementRes] = await Promise.all([
+  const [
+    insightsRes,
+    adsetInsightsRes,
+    alertsRes,
+    leadsRes,
+    placementRes,
+    provMaxSyncedRow,
+    provAccountRow,
+    provSyncLogRow,
+  ] = await Promise.all([
     supabase
       .from("meta_insights_daily")
       .select("date, spend, impressions, reach, clicks, ctr, cpm, frequency, leads, outbound_clicks, landing_page_views")
@@ -684,10 +708,23 @@ export async function buildCampaignContext(
       .eq("campaign_id", metaCampaignId)
       .order("spend", { ascending: false })
       .limit(20),
+    // As 3 queries de proveniência (Story 76-4) vêm do helper único
+    // provenanceQueryBuilders (ARCH-001) e são espalhadas AQUI, dentro do MESMO
+    // Promise.all — sem round-trip extra (NFR-PERF-1) e cacheadas junto com o
+    // contexto de campanha. A P1 recebe { date30dAgo..today } (MESMA janela das
+    // métricas acima, AC4) + entityId = metaCampaignId, refletindo a recência
+    // DAQUELA campanha (AC4/AC7). P2/P3 são idênticas ao contexto global (sync por org).
+    ...provenanceQueryBuilders(supabase, orgId, { startDate: date30dAgo, endDate: today }, metaCampaignId),
   ])
 
   const campaign = campaignRes.data
   if (!campaign) return `Campanha ${metaCampaignId} não encontrada.`
+
+  const provenance = computeProvenance({
+    maxSyncedAt: provMaxSyncedRow?.synced_at ?? null,
+    lastAccountSync: provAccountRow?.last_synced_at ?? null,
+    syncLog: provSyncLogRow ?? null,
+  })
 
   const insights = insightsRes.data ?? []
   const adsetInsights = adsetInsightsRes.data ?? []
@@ -742,6 +779,7 @@ export async function buildCampaignContext(
   const budgetStr = campaign.daily_budget ? `R$${fmtBRL(campaign.daily_budget / 100)}/dia` : "sem limite diário"
 
   lines.push(`CONTEXTO CAMPANHA: "${campaign.name}"`)
+  lines.push(formatProvenanceBlock(provenance, today))
   lines.push(`Status: ${campaign.status} | Objetivo: ${campaign.objective ?? "—"} | Budget: ${budgetStr}`)
   lines.push(`ID Meta: ${metaCampaignId}`)
   lines.push("")
