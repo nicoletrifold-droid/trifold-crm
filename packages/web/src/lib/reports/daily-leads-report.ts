@@ -2,6 +2,7 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { previousCommercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
+import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 
 /**
  * Story 75-45 — Relatório diário de leads (últimas 24h) para o diretor, via
@@ -136,6 +137,8 @@ export async function buildDailyLeadsReport(
     .lt("primeiro_atendimento_em", untilIso)
   const attendedRows = (attended ?? []) as Array<{ id: string; primeiro_atendimento_em: string }>
 
+  // Story 75-60: tempo de atendimento em HORÁRIO COMERCIAL (mesma agenda/fonte do SLA e da tela).
+  const { week: schedule, timezone: scheduleTz } = await getOrgSchedule(orgId, admin)
   const durations: number[] = []
   if (attendedRows.length > 0) {
     const { data: distLog } = await admin
@@ -156,7 +159,7 @@ export async function buildDailyLeadsReport(
       // distribuição correspondente = a mais recente ANTES do atendimento
       const dists = (distByLead[a.id] ?? []).filter((t) => t <= atendido)
       if (dists.length === 0) continue // sem distribuição registrada → fora da média
-      const min = (atendido - Math.max(...dists)) / 60000
+      const min = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), new Date(atendido), schedule, scheduleTz)
       if (Number.isFinite(min) && min >= 0) durations.push(min)
     }
   }

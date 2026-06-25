@@ -1,0 +1,47 @@
+storyId: 75-60
+title: "Tempo médio de atendimento em horário comercial (unifica com o SLA)"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      Os 3 lugares (analytics/page, analytics-report-data, daily-leads-report) trocaram o relógio cru por
+      businessMinutesBetweenSchedule + getOrgSchedule. Grep confirmou: ZERO `/60000`/diffMs restante nos 3;
+      cada um com a função+loader. SLA (sla-alerts) e broker/leads intactos (seguem business).
+  - check: unit_tests
+    result: PASS
+    notes: "businessMinutesBetweenSchedule já coberto (dia útil, pausa noturna, dia fechado). vitest web 265/265; typecheck exit 0."
+  - check: acceptance_criteria
+    result: PASS
+    notes: >
+      AC1/AC2/AC3 (3 lugares em horário comercial), AC4 (atravessa a noite → só expediente), AC5 (mesma fonte
+      roleta_schedule que o SLA) cobertos. Validado em dados: média Valeria 87h46→42h46; Iolanda 13h31→1h31.
+  - check: no_regressions
+    result: PASS
+    notes: "265/265 verdes. Janela do dia, filtro is_active e formatadores inalterados. Sem refs órfãs."
+  - check: performance
+    result: PASS
+    notes: "+1 getOrgSchedule por carga em cada (indexado). daily-report carrega schedule mesmo com 0 atendidos (1x/dia, negligível)."
+  - check: security
+    result: PASS
+    notes: "Sem superfície nova; leituras com client já autenticado."
+  - check: documentation
+    result: PASS
+    notes: "Story (File List/Dev Agent Record/Change Log)."
+
+issues: []
+
+observations:
+  - severity: low
+    category: code
+    description: "Cálculo de tempo médio duplicado entre analytics/page.tsx e analytics-report-data.ts (pré-existente). Consolidar = refactor opcional futuro."
+
+deploy_notes:
+  - "Sem migration."
+  - "Comunicar à diretoria: tempo médio de atendimento agora é em HORÁRIO COMERCIAL (números caem vs o relógio cru anterior; consistente com o SLA)."
+  - "Pós-deploy: conferir visualmente o card 'Tempo Médio de Atendimento' (Analytics) e que bate com o PDF para o mesmo período."
+  - "Fecha o pacote de decisões de SLA (project-sla-atendimento-decisoes)."
