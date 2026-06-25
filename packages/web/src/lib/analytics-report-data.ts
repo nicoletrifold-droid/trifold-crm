@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
@@ -138,7 +139,9 @@ export async function buildAnalyticsReportData(
   const weekStart = new Date(now)
   weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1)
   weekStart.setHours(0, 0, 0, 0)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  // "Leads hoje" usa o DIA COMERCIAL (vira no fechamento) — Story 75-57.
+  // weekStart/monthStart seguem em calendário (segunda-feira / dia 1), inalterados.
+  const { from: todayStart } = await commercialDayRangeForOrg(orgId, supabase, now)
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
@@ -175,7 +178,7 @@ export async function buildAnalyticsReportData(
     { data: responseLeadsRaw },
   ] = await Promise.all([
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).eq("org_id", orgId),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", todayStart.toISOString()),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("is_active", true).gte("created_at", todayStart.toISOString()),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", weekStart.toISOString()),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()),
     period

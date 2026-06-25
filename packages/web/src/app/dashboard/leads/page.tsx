@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
@@ -106,12 +107,11 @@ export default async function LeadsPage({
     }
   }
 
-  // "criados=hoje" — leads criados a partir da meia-noite de hoje.
-  // Mesma lógica do card "Leads hoje" do dashboard (setHours(0,0,0,0)).
+  // "criados=hoje" — usa o DIA COMERCIAL (vira no fechamento, não meia-noite),
+  // mesma fonte do card "Leads hoje" do dashboard (Story 75-57).
   if (params.criados === "hoje") {
-    const todayMidnight = new Date()
-    todayMidnight.setHours(0, 0, 0, 0)
-    const iso = todayMidnight.toISOString()
+    const { from } = await commercialDayRangeForOrg(user.orgId, supabase)
+    const iso = from.toISOString()
     query = query.gte("created_at", iso)
     countQuery = countQuery.gte("created_at", iso)
   }
