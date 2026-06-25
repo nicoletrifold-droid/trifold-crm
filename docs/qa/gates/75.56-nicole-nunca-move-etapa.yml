@@ -1,0 +1,50 @@
+storyId: 75-56
+title: "Regra: Nicole (IA) nunca move etapa do lead"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      pipeline.ts: removidas as 3 escritas de stage_id (score + handoff). Confirmado por grep que a ÚNICA
+      escrita em leads.stage_id ocorre via leadPatch (linha 845), com guard incondicional logo acima (839).
+      Nenhuma escrita de etapa fora do patch. Outras .update em leads (920-921) só tocam ai_summary.
+      stage-rules.ts: guard limpo e incondicional, JSDoc coerente. Comentários atualizados (Story 75-56).
+  - check: unit_tests
+    result: PASS
+    notes: "vitest packages/ai → 313/313 verdes (17 arquivos). stage-rules.test.ts: 6 casos cobrindo a regra incondicional (com/sem corretor, undefined, sem 2º arg, sem stage_id, broker vazio)."
+  - check: acceptance_criteria
+    result: PASS
+    notes: "AC1–AC4, AC6, AC7 verificados no código/testes. AC5 (data-fix) entregue como migration 114 — aplicação em prod é do @devops."
+  - check: no_regressions
+    result: PASS
+    notes: "pipeline-broker-guard.test.ts e handoff.test.ts verdes — atribuição de corretor/notificação intacta (lógica ortogonal ao stage). Handoff segue desativando IA + activity + ai_summary, só sem mudar etapa."
+  - check: performance
+    result: PASS
+    notes: "Sem impacto — remoção de escritas + 2 UPDATEs idempotentes na migration."
+  - check: security
+    result: PASS
+    notes: "Sem superfície nova. Migration sem input de usuário. Sem mudança de RLS."
+  - check: documentation
+    result: PASS
+    notes: "Story atualizada (Dev Agent Record, File List, Change Log), comentários no código, memória feedback-nicole-nunca-move-etapa registrada."
+
+issues: []
+
+observations:
+  - severity: low
+    category: scope
+    description: >
+      Pré-existente (Story 51-7, blocos B1/B2 do pipeline): o pipeline pode atribuir o corretor designado
+      do imóvel diretamente em agendamento/handoff, sem passar pela roleta. Não fere a regra de ETAPA desta
+      story (lead permanece em "Aguardando atendimento"), mas pode conflitar com a diretriz "distribuição só
+      via roleta". FORA DE ESCOPO da 75-56.
+    recommendation: "Levar ao usuário como decisão de produto; eventual story futura para unificar atribuição via roleta."
+
+deploy_notes:
+  - "Aplicar migration 114 em prod no deploy (data-fix de leads já poluídos)."
+  - "Os 2 leads do print (554488559829, 554498413368) já corrigidos manualmente em 25/06."
+  - "Status → Done somente após @devops push + migration aplicada."
