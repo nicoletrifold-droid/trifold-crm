@@ -158,3 +158,5 @@ Analytics E relatório diário **de forma consistente** (mesma definição de di
 - 2026-06-25 — @qa — Gate **CONCERNS** (AC6: is_active divergente entre superfícies) → após decisão do usuário,
   @dev alinhou `is_active=true` em API/Analytics/relatório (261/261 verdes) → Gate **PASS**. Data do relatório =
   dia reportado (confirmado).
+- 2026-06-25 — @devops — Branch `feat/75-57-dia-comercial-metricas`, **PR #32** aberto p/ main. Sem migration.
+  Pendente: merge → Status Done.
