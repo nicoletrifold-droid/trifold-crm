@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { formatBRL, formatNumber, formatPercent } from "@web/lib/meta-format"
 import { STATUS_BADGES } from "@web/lib/meta-constants"
 
@@ -23,6 +23,16 @@ interface AdCreativeMetrics {
   fatigue_drop_pct: number | null
   thumbnail_url: string | null
   ad_body: string | null
+  crm_leads_total: number
+  crm_leads_agendado: number
+  crm_leads_visitou: number
+  crm_leads_proposta: number
+  crm_leads_fechado: number
+  video_hook_rate: number | null
+  video_completion_rate: number | null
+  quality_ranking: string | null
+  engagement_rate_ranking: string | null
+  conversion_rate_ranking: string | null
 }
 
 interface CreativesApiResponse {
@@ -111,6 +121,36 @@ export default function CampaignCreatives({ campaignId, period }: Props) {
   )
 }
 
+const RANKING_BADGE: Record<string, { label: string; className: string }> = {
+  ABOVE_AVERAGE: {
+    label: "Acima da média",
+    className:
+      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  },
+  AVERAGE: {
+    label: "Na média",
+    className: "bg-gray-100 text-gray-700 dark:bg-stone-800 dark:text-stone-300",
+  },
+  BELOW_AVERAGE: {
+    label: "Abaixo da média",
+    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  },
+}
+
+function rankingBadge(value: string | null, label: string): ReactNode {
+  if (!value) return null
+  const cfg = RANKING_BADGE[value]
+  if (!cfg) return null
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cfg.className}`}
+      title={`${label}: ${cfg.label}`}
+    >
+      {label}: {cfg.label}
+    </span>
+  )
+}
+
 function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
   const [thumbBroken, setThumbBroken] = useState(false)
   const badge = STATUS_BADGES[ad.status] ?? STATUS_BADGES.ARCHIVED!
@@ -188,6 +228,65 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
             value={ad.cpl !== null ? formatBRL(ad.cpl) : "—"}
           />
         </dl>
+
+        {/* CRM funnel — leads attributed to this ad via metadata->>'ad_id' */}
+        {ad.crm_leads_total > 0 ? (
+          <p className="mt-2 text-xs text-gray-500 dark:text-stone-400">
+            <span className="text-gray-900 dark:text-stone-100 font-medium">
+              Leads CRM: {formatNumber(ad.crm_leads_total)}
+            </span>{" "}
+            · Agendou:{" "}
+            <span className="text-gray-900 dark:text-stone-100">
+              {formatNumber(ad.crm_leads_agendado)}
+            </span>{" "}
+            · Visitou:{" "}
+            <span className="text-gray-900 dark:text-stone-100">
+              {formatNumber(ad.crm_leads_visitou)}
+            </span>{" "}
+            · Proposta:{" "}
+            <span className="text-gray-900 dark:text-stone-100">
+              {formatNumber(ad.crm_leads_proposta)}
+            </span>{" "}
+            · Fechou:{" "}
+            <span className="text-gray-900 dark:text-stone-100">
+              {formatNumber(ad.crm_leads_fechado)}
+            </span>
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-gray-400 dark:text-stone-500">
+            Sem atribuição CRM
+          </p>
+        )}
+
+        {/* Video engagement — only rendered when video data exists */}
+        {ad.video_hook_rate !== null && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-stone-400">
+            <span className="font-medium text-gray-700 dark:text-stone-300">
+              Vídeo
+            </span>{" "}
+            · Hook:{" "}
+            <span className="text-gray-900 dark:text-stone-100">
+              {formatPercent(ad.video_hook_rate)}
+            </span>{" "}
+            · Conclusão:{" "}
+            <span className="text-gray-900 dark:text-stone-100">
+              {ad.video_completion_rate !== null
+                ? formatPercent(ad.video_completion_rate)
+                : "—"}
+            </span>
+          </p>
+        )}
+
+        {/* Meta delivery rankings — badges, only for non-null values */}
+        {(ad.quality_ranking ||
+          ad.engagement_rate_ranking ||
+          ad.conversion_rate_ranking) && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {rankingBadge(ad.quality_ranking, "Qualidade")}
+            {rankingBadge(ad.engagement_rate_ranking, "Engajamento")}
+            {rankingBadge(ad.conversion_rate_ranking, "Conversão")}
+          </div>
+        )}
       </div>
     </div>
   )
