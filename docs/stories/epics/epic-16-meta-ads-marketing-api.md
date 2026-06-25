@@ -1,9 +1,10 @@
 ---
 epic: 16
 title: Meta Ads Marketing API Integration
-status: InProgress
+status: Done
 created_at: 2026-04-24
-updated_at: 2026-04-24
+updated_at: 2026-06-25
+completed_at: 2026-06-25
 created_by: Morgan (@pm)
 analyst_input: Gap Analysis Report 2026-04-24 (@analyst)
 priority: High
@@ -11,8 +12,8 @@ sub_epics:
   - 16A: Fundação (Foundation)
   - 16B: Sync & Analytics
   - 16C: UX & Stories Pendentes
-stories_done: [16.0, 16.1, 16.2]
-stories_next: [16.3, 16.4, 16.5]
+stories_done: [16.0, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8, 16.9, 16.10, 16.11, 16.12, 16.13, 16.14]
+stories_next: []
 ---
 
 # Epic 16 — Meta Ads Marketing API Integration
@@ -424,3 +425,12 @@ META_API_VERSION=v21.0       # Já default no código atual
 > **Env vars novas:** `META_SYSTEM_USER_TOKEN`, `META_AD_ACCOUNT_ID`, `META_PAGE_ACCESS_TOKEN`"
 
 — Morgan, planejando o futuro 📊
+
+---
+
+## Change Log
+
+| Data | Autor | Mudança |
+|------|-------|---------|
+| 2026-04-24 | Morgan (@pm) | Criação do epic com 14 stories (16.0–16.13) em 3 sub-epics (16A/16B/16C) |
+| 2026-06-25 | Pax (@po) | **Epic concluído.** Todas as 15 stories (16-0 a 16-14, incluindo a 16-14 `synced_at` adicionada após o draft inicial) confirmadas com status `Done` nos arquivos de story em `docs/stories/active/`. Frontmatter `status` InProgress → **Done**; `stories_done` atualizado para a lista completa; `stories_next` esvaziado. |

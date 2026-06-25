@@ -6,6 +6,21 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [DB] Índice `idx_leads_metadata_leadgen_id` não recriado pela migration 075
+
+**Adicionado em:** 2026-06-25
+**Prioridade:** P3 (não urgente)
+**Origem:** Encerramento da Story 25-3 (@po Pax) — migration 063 descartada
+
+A migration `075_leads_metadata.sql` (tracked) criou a coluna `leads.metadata` + índice `idx_leads_metadata_ad_id`, mas **não** recriou o índice parcial `idx_leads_metadata_leadgen_id` (lookup por `metadata->>'leadgen_id'`). Esse índice só existia na migration `063_leads_metadata.sql` (untracked), descartada por ser redundante com a 075. A dedup por `leadgen_id` no webhook Meta Lead Forms e no `scripts/meta-backfill-leads.ts` fica sem índice dedicado. Impacto atual nulo (~124 leads, seq scan barato). Se o volume de leads Meta crescer, portar **apenas o índice** para uma migration nova tracked:
+```sql
+CREATE INDEX IF NOT EXISTS idx_leads_metadata_leadgen_id
+  ON leads ((metadata->>'leadgen_id'))
+  WHERE metadata->>'leadgen_id' IS NOT NULL;
+```
+
+---
+
 ### [UX] Portal — Página Financeiro sem conteúdo
 
 **Adicionado em:** 2026-05-26
@@ -100,4 +115,14 @@ curl -X GET https://crm.trifold.eng.br/api/cron/calendly-sync \
 
 ## Concluído
 
-_(nenhum item concluído ainda)_
+### [INFRA] Chaves Supabase legacy no .env.local
+
+**Verificado em:** 2026-06-17
+**Resolução:** Não havia ação pendente. O `.env.local` (raiz e `packages/web/`) já usa o formato novo de chaves (`sb_publishable_…` / `sb_secret_…`). Nenhuma chave JWT legacy (`eyJ…`) presente em qualquer arquivo de env, e as chaves novas estão funcionais (REST API responde HTTP 200). Item fechado como falso positivo / já resolvido.
+
+---
+
+### [INFRA] Filesystem /private/tmp/claude-501 supostamente cheio
+
+**Verificado em:** 2026-06-17
+**Resolução:** Falso positivo. O diretório tinha 696K (10 itens) e o disco ~29 GiB livres. `CLAUDE_CODE_TMPDIR` em default (unset). Nenhuma limpeza necessária — `sudo rm -rf` desaconselhado por ser desnecessário e arriscado. Item fechado.
