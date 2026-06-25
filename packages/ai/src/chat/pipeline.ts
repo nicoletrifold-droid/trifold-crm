@@ -715,15 +715,11 @@ export async function processMessageWithMetadata(
     leadPatch.qualification_status = updatedScore >= 70 ? "qualified" : updatedScore > 0 ? "in_progress" : "not_started"
     leadPatch.interest_level = updatedScore >= 70 ? "hot" : updatedScore >= 40 ? "warm" : "cold"
 
-    // Kanban stage — qualification level (lowest priority)
-
-    if (currentLead?.stage_id === STAGE_IDS.novo && updatedScore > 0) {
-      leadPatch.stage_id = STAGE_IDS.em_qualificacao
-      emit({ level: "info", category: "ai", event_type: "STAGE_CHANGE", message: `Lead moved: novo → em_qualificacao (score=${updatedScore})`, metadata: { lead_id: leadId, from: "novo", to: "em_qualificacao", score: updatedScore } })
-    } else if (currentLead?.stage_id === STAGE_IDS.em_qualificacao && updatedScore >= 70) {
-      leadPatch.stage_id = STAGE_IDS.qualificado
-      emit({ level: "info", category: "ai", event_type: "STAGE_CHANGE", message: `Lead moved: em_qualificacao → qualificado (score=${updatedScore})`, metadata: { lead_id: leadId, from: "em_qualificacao", to: "qualificado", score: updatedScore } })
-    }
+    // Kanban stage — a Nicole (IA) NUNCA move o lead de etapa (Story 75-56,
+    // generaliza a 65-1). Quem reposiciona no kanban é o corretor humano; o
+    // único lugar que seta a etapa é a distribuição da roleta (distributor.ts),
+    // que coloca em "Aguardando atendimento". A qualificação segue refletida em
+    // qualification_score/qualification_status acima — não na etapa.
 
     // Visit scheduling — requires explicit confirmation from the client (Story 61-1)
     // Double-check: no existing future appointment for this lead (prevents duplicates)
@@ -815,7 +811,8 @@ export async function processMessageWithMetadata(
     // Handoff — entrega ao corretor. Story 73-1: NÃO move para "Visita Agendada"
     // (mesmo com visita confirmada) — o corretor reposiciona o card manualmente.
     if (handoffResult.trigger && conversation.org_id) {
-      leadPatch.stage_id = STAGE_IDS.qualificado
+      // Story 75-56: handoff entrega o lead ao corretor (desativa IA, notifica,
+      // registra activity) mas NÃO muda a etapa — quem reposiciona é o corretor.
       leadPatch.ai_summary = handoffSummary
 
 
@@ -838,9 +835,9 @@ export async function processMessageWithMetadata(
         .eq("id", conversationId)
     }
 
-    // Regra interna (Story 65-1): lead já distribuído a um corretor permanece
-    // em "Aguardando atendimento". A Nicole não reposiciona no kanban um lead
-    // que já tem dono — remove qualquer mudança de stage do patch.
+    // Regra (Story 75-56, generaliza 65-1): a Nicole NUNCA escreve etapa.
+    // Defesa em profundidade — remove incondicionalmente qualquer stage_id que
+    // tenha entrado no patch, com ou sem corretor atribuído.
     guardStageForAssignedLead(leadPatch, currentLead?.assigned_broker_id)
 
     // ONE single update with all accumulated changes
