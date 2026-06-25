@@ -1,7 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
-import { businessMinutesBetween, type BusinessHoursCfg } from "@web/lib/roleta/business-time"
+import { businessMinutesBetweenSchedule, getOrgSchedule } from "@web/lib/roleta/business-time"
 import Link from "next/link"
 import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
@@ -87,12 +87,9 @@ export default async function BrokerLeadsPage({
   const waitingByLead: Record<string, number> = {}
   if (aguardandoIds.length > 0) {
     const admin = createAdminClient()
-    const [{ data: cfgRow }, { data: distLog }] = await Promise.all([
-      admin
-        .from("roleta_config")
-        .select("business_days, business_hour_start, business_hour_end, weekend_hour_start, weekend_hour_end, timezone")
-        .eq("org_id", user.orgId)
-        .maybeSingle(),
+    // Story 75-59: tempo esperando pela AGENDA por dia (mesma fonte da distribuição).
+    const [{ week, timezone }, { data: distLog }] = await Promise.all([
+      getOrgSchedule(user.orgId, admin),
       admin
         .from("lead_distribution_log")
         .select("lead_id, created_at")
@@ -100,27 +97,17 @@ export default async function BrokerLeadsPage({
         .eq("status", "distributed")
         .in("lead_id", aguardandoIds),
     ])
-    if (cfgRow) {
-      const bh: BusinessHoursCfg = {
-        business_days: cfgRow.business_days ?? [1, 2, 3, 4, 5],
-        business_hour_start: cfgRow.business_hour_start ?? "08:00",
-        business_hour_end: cfgRow.business_hour_end ?? "20:00",
-        weekend_hour_start: cfgRow.weekend_hour_start,
-        weekend_hour_end: cfgRow.weekend_hour_end,
-        timezone: cfgRow.timezone ?? "America/Sao_Paulo",
-      }
-      const now = new Date()
-      const distByLead = new Map<string, number[]>()
-      for (const d of (distLog ?? []) as Array<{ lead_id: string; created_at: string }>) {
-        const arr = distByLead.get(d.lead_id) ?? []
-        arr.push(new Date(d.created_at).getTime())
-        distByLead.set(d.lead_id, arr)
-      }
-      for (const id of aguardandoIds) {
-        const dists = (distByLead.get(id) ?? []).filter((t) => t <= now.getTime())
-        if (dists.length === 0) continue
-        waitingByLead[id] = businessMinutesBetween(new Date(Math.max(...dists)), now, bh)
-      }
+    const now = new Date()
+    const distByLead = new Map<string, number[]>()
+    for (const d of (distLog ?? []) as Array<{ lead_id: string; created_at: string }>) {
+      const arr = distByLead.get(d.lead_id) ?? []
+      arr.push(new Date(d.created_at).getTime())
+      distByLead.set(d.lead_id, arr)
+    }
+    for (const id of aguardandoIds) {
+      const dists = (distByLead.get(id) ?? []).filter((t) => t <= now.getTime())
+      if (dists.length === 0) continue
+      waitingByLead[id] = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), now, week, timezone)
     }
   }
 

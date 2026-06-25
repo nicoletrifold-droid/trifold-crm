@@ -1,0 +1,51 @@
+storyId: 75-59
+title: "Agenda comercial flexível: UI por dia + migração do SLA (fecha o épico)"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      UI 7 linhas com auto-save via PATCH /api/roleta/schedule (toggle no clique, horas no onBlur). Endpoint com
+      role guard (admin/supervisor/gerente-comercial) + validação HH:MM + upsert onConflict org_id,weekday.
+      Derivação removida do config route (só comentário restou — AC3 ok). SLA migrado sem órfãos (grep limpo).
+      Funções antigas BusinessHoursCfg sem consumidor de produção (só testes) — cleanup futuro.
+  - check: unit_tests
+    result: PASS
+    notes: "business-time.test.ts: 22 testes (inclui businessMinutesBetweenSchedule: dia útil, pausa noturna, dia fechado=120min). vitest web 265/265."
+  - check: acceptance_criteria
+    result: PASS
+    notes: >
+      AC1/AC2 (UI 7 dias salvando schedule), AC3 (config não toca agenda — confirmado por grep), AC4 (SLA usa
+      agenda por dia), AC6 (role guard) cobertos. AC5 (config atual idêntica): all-open 08–20 dá o mesmo que o
+      modelo antigo — teste de pausa noturna (30min) idêntico ao legado. AC7 verde.
+  - check: no_regressions
+    result: PASS
+    notes: "265/265 verdes. SLA preservado p/ config atual. Nenhum import quebrado; sem refs órfãs (grep)."
+  - check: performance
+    result: PASS
+    notes: "SLA: +getOrgSchedule por org no loop (indexado). broker/leads: getOrgSchedule no Promise.all. Baixo."
+  - check: security
+    result: PASS
+    notes: "Novo endpoint com mesmo role guard do config; validação de input (weekday 0-6, HH:MM). RLS roleta_schedule já existe."
+  - check: documentation
+    result: PASS
+    notes: "Story (File List/Dev Agent Record/Change Log) + memória project-agenda-comercial-flexivel."
+
+issues: []
+
+observations:
+  - severity: low
+    category: tests
+    description: "Mudança de UI (painel 7 linhas) não tem teste de renderização automatizado. typecheck + lógica revisados; recomenda-se verificação VISUAL manual da tela /dashboard/roleta (toggle aberto/fechado, salvar horário por dia, estado 'Fechado')."
+  - severity: low
+    category: code
+    description: "Funções BusinessHoursCfg (businessMinutesBetween/isWithinBusinessHoursNow) e colunas antigas de roleta_config ficaram sem consumidor de produção — DROP/remoção = cleanup futuro (fora desta story)."
+
+deploy_notes:
+  - "Sem migration (tabela roleta_schedule já criada na 115/Story 75-58)."
+  - "Pós-deploy: verificar visualmente a tela da Roleta (7 linhas por dia) e que salvar um dia reflete em roleta_schedule."
+  - "Épico fechado: distribuição, contagem por dia e SLA agora na MESMA fonte (roleta_schedule). Feriados = fase futura."

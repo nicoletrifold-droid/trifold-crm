@@ -16,6 +16,7 @@ export default async function RoletaPage() {
 
   const [
     { data: config },
+    { data: scheduleRows },
     { data: filaRaw },
     { data: brokers },
     { data: gestoresRaw },
@@ -25,6 +26,11 @@ export default async function RoletaPage() {
       .select("*")
       .eq("org_id", user.orgId)
       .maybeSingle(),
+    supabase
+      .from("roleta_schedule")
+      .select("weekday, is_open, open_time, close_time")
+      .eq("org_id", user.orgId)
+      .order("weekday"),
     supabase
       .from("roleta_fila")
       .select("id, position, is_active, broker_id, brokers!inner(id, user_id, users!inner(name, email, phone))")
@@ -85,6 +91,22 @@ export default async function RoletaPage() {
 
   const gestores: GestorUser[] = (gestoresRaw ?? []) as GestorUser[]
 
+  // Agenda por dia (Story 75-59) — 7 linhas (Dom–Sáb); default 08–20 aberto se faltar.
+  type ScheduleRow = { weekday: number; is_open: boolean; open: string; close: string }
+  const schedByDay = new Map<number, { is_open: boolean; open_time: string; close_time: string }>()
+  for (const r of (scheduleRows ?? []) as Array<{ weekday: number; is_open: boolean; open_time: string; close_time: string }>) {
+    schedByDay.set(r.weekday, r)
+  }
+  const initialSchedule: ScheduleRow[] = Array.from({ length: 7 }, (_, weekday) => {
+    const r = schedByDay.get(weekday)
+    return {
+      weekday,
+      is_open: r?.is_open ?? true,
+      open: (r?.open_time ?? "08:00").slice(0, 5),
+      close: (r?.close_time ?? "20:00").slice(0, 5),
+    }
+  })
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
@@ -105,7 +127,7 @@ export default async function RoletaPage() {
         </p>
       </div>
 
-      <RoletaConfigPanel initialConfig={config} gestores={gestores} />
+      <RoletaConfigPanel initialConfig={config} initialSchedule={initialSchedule} gestores={gestores} />
       <RoletaFilaPanel fila={fila} availableBrokers={availableBrokers} />
     </div>
   )

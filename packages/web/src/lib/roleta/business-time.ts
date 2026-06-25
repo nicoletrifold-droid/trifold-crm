@@ -217,6 +217,31 @@ export function previousCommercialDayRange(now: Date, week: WeekSchedule, tz: st
 }
 
 /**
+ * Minutos de expediente decorridos entre `from` e `to`, segundo a AGENDA por dia
+ * (Story 75-59). Pausa fora do horário e em dias fechados. Equivalente ao
+ * `businessMinutesBetween` antigo, porém usando `WeekSchedule`.
+ */
+export function businessMinutesBetweenSchedule(from: Date, to: Date, week: WeekSchedule, tz: string): number {
+  if (to.getTime() <= from.getTime()) return 0
+  let total = 0
+  let cur = tzParts(from, tz)
+  for (let i = 0; i < 120; i++) {
+    const day = week[cur.dow]
+    if (day?.isOpen) {
+      const winStart = wallToUtcMs(cur.y, cur.mo, cur.d, parseHM(day.open, 8 * 60), tz)
+      const winEnd = wallToUtcMs(cur.y, cur.mo, cur.d, parseHM(day.close, 20 * 60), tz)
+      const oStart = Math.max(from.getTime(), winStart)
+      const oEnd = Math.min(to.getTime(), winEnd)
+      if (oEnd > oStart) total += (oEnd - oStart) / 60000
+    }
+    const nextNoon = Date.UTC(cur.y, cur.mo - 1, cur.d, 12, 0) + 24 * 60 * 60 * 1000
+    cur = tzParts(new Date(nextNoon), tz)
+    if (wallToUtcMs(cur.y, cur.mo, cur.d, 0, tz) > to.getTime()) break
+  }
+  return Math.round(total)
+}
+
+/**
  * Carrega a agenda (7 linhas) + timezone do org. Fallback defensivo: deriva da
  * roleta_config se a tabela ainda não tiver linhas (pré-migração).
  */

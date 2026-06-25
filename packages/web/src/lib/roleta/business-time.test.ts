@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   businessMinutesBetween,
+  businessMinutesBetweenSchedule,
   isWithinBusinessHoursNow,
   commercialDayRange,
   previousCommercialDayRange,
@@ -140,5 +141,20 @@ describe("deriveScheduleFromConfig", () => {
     expect(wk[0]?.isOpen).toBe(false) // Dom
     expect(wk[6]?.isOpen).toBe(false) // Sáb
     expect(wk[1]).toEqual({ isOpen: true, open: "08:00", close: "20:00" })
+  })
+})
+
+describe("businessMinutesBetweenSchedule (agenda por dia)", () => {
+  it("dentro de um dia útil: 13:00→13:30 = 30 min", () => {
+    const r = businessMinutesBetweenSchedule(new Date("2026-06-24T16:00:00Z"), new Date("2026-06-24T16:30:00Z"), ALL, TZ)
+    expect(r).toBe(30)
+  })
+  it("pausa à noite: 19:50→08:20 do dia seguinte = 30 min (10+20)", () => {
+    const r = businessMinutesBetweenSchedule(new Date("2026-06-24T22:50:00Z"), new Date("2026-06-25T11:20:00Z"), ALL, TZ)
+    expect(r).toBe(30)
+  })
+  it("pula dia fechado: Sáb 13:00 → Seg 09:00 = 60 (Sáb até 14h) + 60 (Seg desde 8h) = 120 min", () => {
+    const r = businessMinutesBetweenSchedule(new Date("2026-06-27T16:00:00Z"), new Date("2026-06-29T12:00:00Z"), SAT_SHORT, TZ)
+    expect(r).toBe(120)
   })
 })
