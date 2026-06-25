@@ -33,6 +33,19 @@ interface AdCreativeMetrics {
   // Creative metadata
   thumbnail_url: string | null
   ad_body: string | null
+  // CRM funnel attribution (leads.metadata->>'ad_id' → kanban_stages.type)
+  crm_leads_total: number
+  crm_leads_agendado: number
+  crm_leads_visitou: number
+  crm_leads_proposta: number
+  crm_leads_fechado: number
+  // Video engagement (meta_insights_daily.video_metrics JSONB)
+  video_hook_rate: number | null
+  video_completion_rate: number | null
+  // Meta delivery rankings (meta_insights_daily)
+  quality_ranking: string | null
+  engagement_rate_ranking: string | null
+  conversion_rate_ranking: string | null
 }
 
 interface CreativesApiResponse {
@@ -142,7 +155,7 @@ export async function GET(
   const minus10 = shiftDays(10)
   const today = shiftDays(0)
 
-  const [periodResult, fatigueResult] = await Promise.all([
+  const [periodResult, fatigueResult, crmResult, enrichResult] = await Promise.all([
     supabase
       .from("meta_insights_daily")
       .select("entity_id, spend, impressions, clicks, leads")
@@ -159,6 +172,26 @@ export async function GET(
       .in("entity_id", adIds)
       .gte("date", minus10)
       .lte("date", today),
+    // CRM funnel — batched join leads.metadata->>'ad_id' → kanban_stages.type.
+    // Filter on the JSONB text expression so the partial expression index
+    // idx_leads_metadata_ad_id is used (no Seq Scan). Tenant-isolated by org_id.
+    supabase
+      .from("leads")
+      .select("id, metadata, kanban_stages!stage_id(type)")
+      .eq("org_id", appUser.org_id)
+      .in("metadata->>ad_id", adIds),
+    // Rankings + video_metrics enrichment (most-recent-wins per ad in JS).
+    supabase
+      .from("meta_insights_daily")
+      .select(
+        "entity_id, date, quality_ranking, engagement_rate_ranking, conversion_rate_ranking, video_metrics",
+      )
+      .eq("org_id", appUser.org_id)
+      .eq("level", "ad")
+      .in("entity_id", adIds)
+      .gte("date", from)
+      .lte("date", to)
+      .order("date", { ascending: false }),
   ])
 
   // 5. Aggregate period metrics per ad_id
@@ -209,6 +242,73 @@ export async function GET(
     fatigueMap.set(id, agg)
   }
 
+  // 6b. Aggregate CRM funnel per ad_id (counts by kanban_stages.type)
+  type CrmAgg = {
+    total: number
+    agendado: number
+    visitou: number
+    proposta: number
+    fechado: number
+  }
+  const crmMap = new Map<string, CrmAgg>()
+  for (const lead of crmResult.data ?? []) {
+    const adId = (lead.metadata as Record<string, string> | null)?.ad_id
+    if (!adId) continue
+    // stage_id is a to-one FK; PostgREST returns a single object at runtime,
+    // but the typed client may infer an array — normalize both shapes.
+    const stageRel = lead.kanban_stages as
+      | { type: string | null }
+      | { type: string | null }[]
+      | null
+    const stage = Array.isArray(stageRel) ? stageRel[0] : stageRel
+    const stageType = stage?.type ?? ""
+    const agg =
+      crmMap.get(adId) ?? { total: 0, agendado: 0, visitou: 0, proposta: 0, fechado: 0 }
+    agg.total++
+    if (stageType === "agendado") agg.agendado++
+    else if (stageType === "visitou") agg.visitou++
+    else if (stageType === "proposta") agg.proposta++
+    else if (stageType === "fechado") agg.fechado++
+    crmMap.set(adId, agg)
+  }
+
+  // 6c. Aggregate enrichment (rankings + video_metrics) per ad_id.
+  //     Rows are DESC by date → first non-null value wins (most recent).
+  type Enrichment = {
+    quality_ranking: string | null
+    engagement_rate_ranking: string | null
+    conversion_rate_ranking: string | null
+    video_hook_rate: number | null
+    video_completion_rate: number | null
+  }
+  const enrichMap = new Map<string, Enrichment>()
+  for (const row of enrichResult.data ?? []) {
+    const id = row.entity_id as string
+    const cur =
+      enrichMap.get(id) ?? {
+        quality_ranking: null,
+        engagement_rate_ranking: null,
+        conversion_rate_ranking: null,
+        video_hook_rate: null,
+        video_completion_rate: null,
+      }
+    if (!cur.quality_ranking && row.quality_ranking)
+      cur.quality_ranking = row.quality_ranking as string
+    if (!cur.engagement_rate_ranking && row.engagement_rate_ranking)
+      cur.engagement_rate_ranking = row.engagement_rate_ranking as string
+    if (!cur.conversion_rate_ranking && row.conversion_rate_ranking)
+      cur.conversion_rate_ranking = row.conversion_rate_ranking as string
+    if (cur.video_hook_rate === null && row.video_metrics) {
+      const vm = row.video_metrics as {
+        hook_rate?: number | null
+        completion_rate?: number | null
+      }
+      cur.video_hook_rate = vm.hook_rate ?? null
+      cur.video_completion_rate = vm.completion_rate ?? null
+    }
+    enrichMap.set(id, cur)
+  }
+
   // 7. Build response per ad with metrics + fatigue
   const adCreatives: AdCreativeMetrics[] = ads.map((ad) => {
     const adId = ad.meta_ad_id as string
@@ -239,6 +339,17 @@ export async function GET(
 
     const creative = parseCreative(ad.creative)
 
+    const crm =
+      crmMap.get(adId) ?? { total: 0, agendado: 0, visitou: 0, proposta: 0, fechado: 0 }
+    const enrich =
+      enrichMap.get(adId) ?? {
+        quality_ranking: null,
+        engagement_rate_ranking: null,
+        conversion_rate_ranking: null,
+        video_hook_rate: null,
+        video_completion_rate: null,
+      }
+
     return {
       ad_id: adId,
       ad_name: (ad.name as string) ?? "",
@@ -258,6 +369,16 @@ export async function GET(
       fatigue_drop_pct,
       thumbnail_url: creative.thumbnail_url ?? null,
       ad_body: creative.body ?? null,
+      crm_leads_total: crm.total,
+      crm_leads_agendado: crm.agendado,
+      crm_leads_visitou: crm.visitou,
+      crm_leads_proposta: crm.proposta,
+      crm_leads_fechado: crm.fechado,
+      video_hook_rate: enrich.video_hook_rate,
+      video_completion_rate: enrich.video_completion_rate,
+      quality_ranking: enrich.quality_ranking,
+      engagement_rate_ranking: enrich.engagement_rate_ranking,
+      conversion_rate_ranking: enrich.conversion_rate_ranking,
     }
   })
 
