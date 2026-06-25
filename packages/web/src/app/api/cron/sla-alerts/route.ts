@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 import {
   businessMinutesBetweenSchedule,
   isOpenAtNow,
@@ -11,6 +12,8 @@ import { formatDuration } from "@web/lib/reports/daily-leads-report"
 // Story 75-50 — escalonamento pro gestor por WhatsApp (template alerta_sla_gestor),
 // enviado a cada telefone de SLA_ESCALATION_PHONES (Fernanda + Alexandre).
 async function sendGestorSlaWhatsApp(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
   config: { phone_number_id: string; access_token: string },
   phones: string[],
   vars: { leadName: string; brokerName: string; tempo: string }
@@ -33,9 +36,17 @@ async function sendGestorSlaWhatsApp(
           },
         }),
       })
-      if (!res.ok) console.error("[sla] gestor wpp:", res.status, await res.text())
+      if (!res.ok) {
+        const err = await res.text()
+        console.error("[sla] gestor wpp:", res.status, err)
+        void logWhatsappSend(admin, { orgId, template: "alerta_sla_gestor", category: "utility", recipientType: "gestor", toPhone: to, status: "failed", error: `${res.status} ${err.slice(0, 300)}` })
+      } else {
+        const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+        void logWhatsappSend(admin, { orgId, template: "alerta_sla_gestor", category: "utility", recipientType: "gestor", toPhone: to, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+      }
     } catch (e) {
       console.error("[sla] gestor wpp:", e)
+      void logWhatsappSend(admin, { orgId, template: "alerta_sla_gestor", category: "utility", recipientType: "gestor", toPhone: to, status: "failed", error: String(e).slice(0, 300) })
     }
   }
 }
@@ -209,7 +220,7 @@ export async function GET(request: NextRequest) {
           const brokerNm = brokerName.get(lead.assigned_broker_id) ?? "corretor"
           // WhatsApp (template) p/ os gestores (Fernanda + Alexandre)
           if (wppConfig) {
-            await sendGestorSlaWhatsApp(wppConfig, escalationPhones, {
+            await sendGestorSlaWhatsApp(admin, orgId, wppConfig, escalationPhones, {
               leadName: lead.name ?? "Lead",
               brokerName: brokerNm,
               tempo,

@@ -1,6 +1,7 @@
 import { sendEmail } from "@web/lib/email"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
 export type EventoNotificacao =
   | "nova_foto"
@@ -260,8 +261,11 @@ async function sendWhatsApp(
 
   if (!res.ok) {
     const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
     throw new Error(`WhatsApp API error: ${res.status} ${errText}`)
   }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
 function buildEmailHtml(params: {

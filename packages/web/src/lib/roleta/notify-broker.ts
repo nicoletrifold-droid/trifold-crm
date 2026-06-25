@@ -3,6 +3,7 @@ import "server-only"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
 interface NotifyBrokerParams {
   orgId: string
@@ -143,8 +144,11 @@ async function sendBrokerLeadTemplate(
 
   if (!res.ok) {
     const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template: "novo_lead_corretor", category: "utility", recipientType: "corretor", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
     throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
   }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template: "novo_lead_corretor", category: "utility", recipientType: "corretor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
 async function sendBrokerWhatsApp(

@@ -27,12 +27,23 @@ interface WhatsappVolume {
   d30: WhatsappWindow
 }
 
+interface WhatsappCostWindow {
+  disparos: number
+  custo_brl: number
+}
+interface WhatsappCost {
+  h24: WhatsappCostWindow
+  d7: WhatsappCostWindow
+  d30: WhatsappCostWindow & { por_categoria?: Record<string, number> }
+}
+
 interface Metrics {
   errors_24h: number
   messages_24h: number
   avg_claude_response_ms: number | null
   rag_fallback_rate: number
   whatsapp_volume: WhatsappVolume | null
+  whatsapp_cost: WhatsappCost | null
 }
 
 type HealthStatus = "green" | "yellow" | "red"
@@ -239,6 +250,37 @@ export default function SistemaPage() {
               <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.d7.enviadas}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Disparos & custo de WhatsApp — Story 75-62 */}
+      {data.metrics.whatsapp_cost && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-1">
+            <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Disparos &amp; custo de WhatsApp</h2>
+            <a href="https://business.facebook.com/billing_hub/accounts" target="_blank" rel="noreferrer" className="text-xs text-[#E8856A] hover:underline">Fatura na Meta ↗</a>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Disparos pagos (24h)</p>
+              <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_cost.h24.disparos}</p>
+            </div>
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Custo est. (24h)</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-400">R$ {Number(data.metrics.whatsapp_cost.h24.custo_brl).toFixed(2).replace(".", ",")}</p>
+            </div>
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Disparos pagos (30d)</p>
+              <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_cost.d30.disparos}</p>
+            </div>
+            <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+              <p className="text-xs text-stone-500 dark:text-stone-400">Custo est. (30d)</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-400">R$ {Number(data.metrics.whatsapp_cost.d30.custo_brl).toFixed(2).replace(".", ",")}</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-stone-400 dark:text-stone-500">
+            Estimativa (preço Meta × disparos de template) — não é a fatura oficial. Conta a partir do deploy desta função. Respostas dentro da janela de 24h são grátis.
+          </p>
         </div>
       )}
 

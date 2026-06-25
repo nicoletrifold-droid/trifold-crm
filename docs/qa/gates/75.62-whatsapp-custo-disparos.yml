@@ -1,0 +1,55 @@
+storyId: 75-62
+title: "Contador de disparos e custo de WhatsApp (Passo 2)"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      11 chamadas de logWhatsappSend (notif 2, roleta-corretor 2, SLA 3, campaigns 2, campaign-poll 2) — TODAS
+      `void` (fire-and-forget, swallow interno) → não quebram o envio. Categorias corretas: utility (notif/roleta/SLA),
+      marketing (campanhas). Nenhuma alteração na lógica de envio (logs após a resposta). Helper isolado.
+  - check: unit_tests
+    result: PASS
+    notes: "vitest packages/web 265/265; tsc --noEmit exit 0. Cálculo de custo é SQL (RPC) — sem unit puro."
+  - check: acceptance_criteria
+    result: PASS
+    notes: >
+      AC1 (log por disparo, sem quebrar), AC2 (pricing semeada), AC3 (RPC custo por janela), AC4 (painel + link Meta +
+      guard null), AC5 (rótulo 'estimativa'/'desde o deploy'). AC validado por código; RPC roda só após migration (prod).
+  - check: no_regressions
+    result: PASS
+    notes: "265/265 verdes. Senders de service/text (lembrete, gestor roleta, Nicole) não tocados — seguem grátis."
+  - check: performance
+    result: PASS
+    notes: "Log = 1 insert assíncrono por disparo (não bloqueia). RPC: 1 scan (30d) indexado por (org_id, created_at)."
+  - check: security
+    result: CONCERNS
+    notes: >
+      RPC get_whatsapp_cost_summary é SECURITY DEFINER e confia em p_org_id — MESMO padrão da família de RPCs de
+      dashboard (pré-existente, single-org hoje). RLS de whatsapp_send_log = org_id=user_org_id() (insert do client
+      de campanha passa no WITH CHECK derivado). NÃO bloqueia; endurecer a família antes do multi-tenant.
+  - check: documentation
+    result: PASS
+    notes: "Story (File List/Dev Agent Record/Change Log) + preços Meta BR documentados."
+
+issues: []
+
+observations:
+  - severity: low
+    category: requirements
+    description: >
+      Categoria das CAMPANHAS está fixa em 'marketing' (R$0,35). Se uma campanha usar um template UTILITY,
+      a estimativa superestima. Aceitável p/ MVP (campanha normalmente é marketing; estimativa conservadora).
+      Futuro: derivar a categoria do template real aprovado na Meta.
+  - severity: low
+    category: security
+    description: "Mesmo hardening multi-tenant da família de RPCs (p_org_id confiável) — endurecer antes do SaaS."
+
+deploy_notes:
+  - "Aplicar migration 118 em prod (tabelas whatsapp_send_log/whatsapp_pricing + RPC). Sem ela, o painel não renderiza (guard null) e os logs falham silenciosamente (swallow) — degradação graciosa, envios seguem normais."
+  - "Pós-deploy: validar a RPC (SELECT get_whatsapp_cost_summary(org)) e disparar 1 notificação de teste → conferir 1 linha em whatsapp_send_log + card refletindo."
+  - "Counts a partir do deploy (sem histórico). Estimativa, não a fatura — link pra Meta no painel."
