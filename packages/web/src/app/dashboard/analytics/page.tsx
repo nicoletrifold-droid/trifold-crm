@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
 import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
@@ -246,6 +247,8 @@ export default async function AnalyticsPage({
       distByLead.set(d.lead_id as string, arr)
     }
 
+    // Story 75-60: tempo médio em HORÁRIO COMERCIAL (mesma agenda/fonte do SLA).
+    const { week, timezone } = await getOrgSchedule(appUser.orgId, supabase)
     const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
     for (const lead of responseLeadList) {
       const atendido = new Date(lead.primeiro_atendimento_em).getTime()
@@ -255,10 +258,9 @@ export default async function AnalyticsPage({
       const bArr = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
       if (!bArr) continue
       if (HIDDEN_BROKER_NAMES.has(bArr.name.toLowerCase().trim())) continue
-      const diffMs = atendido - Math.max(...dists)
-      if (diffMs < 0) continue
+      const min = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), new Date(atendido), week, timezone)
       const cur = brokerMap.get(bArr.id) ?? { name: bArr.name, totalMinutes: 0, count: 0 }
-      cur.totalMinutes += diffMs / 60000
+      cur.totalMinutes += min
       cur.count++
       brokerMap.set(bArr.id, cur)
     }

@@ -2,6 +2,7 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
+import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
@@ -281,6 +282,8 @@ export async function buildAnalyticsReportData(
     }
 
     // Group by broker and calculate avg (distribuição mais recente antes do atendimento)
+    // Story 75-60: tempo médio em HORÁRIO COMERCIAL (mesma agenda/fonte do SLA e da tela).
+    const { week, timezone } = await getOrgSchedule(orgId, supabase)
     const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
     for (const lead of responseLeads) {
       const atendido = new Date(lead.primeiro_atendimento_em).getTime()
@@ -290,9 +293,7 @@ export async function buildAnalyticsReportData(
       if (!bArr) continue
       const bName = bArr.name
       if (HIDDEN_BROKERS.has(bName.toLowerCase().trim())) continue
-      const diffMs = atendido - Math.max(...dists)
-      if (diffMs < 0) continue
-      const diffMin = diffMs / 60000
+      const diffMin = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), new Date(atendido), week, timezone)
       const cur = brokerMap.get(bArr.id) ?? { name: bName, totalMinutes: 0, count: 0 }
       cur.totalMinutes += diffMin
       cur.count++
