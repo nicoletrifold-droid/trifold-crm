@@ -1,0 +1,54 @@
+storyId: 75-58
+title: "Agenda comercial flexível por dia (motor + schema + migração)"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      Motor reusa os helpers tz-aware existentes (tzParts/wallToUtcMs/tzMinutesOfDay) — coerente e correto.
+      commercialDayRange com âncora (1º dia aberto ≥ hoje, fechamento > now) + from (fechamento do dia aberto
+      anterior), loops com teto 14 e fallback defensivo. distributor unificado em isOpenAtNow; função duplicada
+      removida. Sem referências órfãs (grep confirmou). commercial-day vira adaptador, assinaturas preservadas.
+  - check: unit_tests
+    result: PASS
+    notes: "business-time.test.ts: 19 testes (inclui domingo fechado, sábado 09–14, virada no fechamento, roll-forward, previousCommercialDayRange, isOpenAtNow, deriveScheduleFromConfig). vitest web 262/262."
+  - check: acceptance_criteria
+    result: PASS
+    notes: >
+      AC2/AC3/AC4/AC5 cobertos por código+testes. AC1 (seed preserva comportamento) verificado por leitura do SQL;
+      recomendação: confirmar pós-migração em prod (7 linhas, todas 08–20 abertas para o org). AC6 (config route
+      deriva schedule no save) implementado. AC7 verde.
+  - check: no_regressions
+    result: PASS
+    notes: >
+      262/262 verdes, incluindo SLA (sla-alerts) e broker/leads que usam as funções BusinessHoursCfg INTACTAS
+      (retrocompatibilidade preservada). Distribuição mantém comportamento com a config atual (seed idêntico).
+  - check: performance
+    result: PASS
+    notes: "getOrgSchedule faz 2 queries (schedule + config p/ tz) por carga — lookups por PK/indexados, impacto baixo."
+  - check: security
+    result: PASS
+    notes: "RLS roleta_schedule espelha roleta_config (USING org_id = user_org_id()). Escrita via service role. Sem input cru de usuário no motor."
+  - check: documentation
+    result: PASS
+    notes: "Story (Dev Agent Record/File List/Change Log), comentários, memórias project-agenda-comercial-flexivel."
+
+issues: []
+
+observations:
+  - severity: low
+    category: code
+    description: "RoletaConfig (distributor) ainda declara/seleciona business_days/business_hour_*/weekend_*/timezone, agora sem uso. Cleanup futuro (junto da remoção das colunas, pós-UI 75-59)."
+  - severity: low
+    category: code
+    description: "Config route re-deriva e regrava as 7 linhas de schedule em QUALQUER save (mesmo toggles não-horário). Idempotente e barato; aceitável."
+
+deploy_notes:
+  - "Aplicar migration 115 em prod no deploy (cria roleta_schedule + seed das 7 linhas/org)."
+  - "Ordem de deploy é SEGURA: se o código subir antes da migração, getOrgSchedule cai no fallback deriveScheduleFromConfig (lê roleta_config) → comportamento idêntico. Sem janela de quebra."
+  - "Pós-migração: confirmar seed (7 linhas, todas open 08–20 para o org de prod) — validação do AC1."
+  - "Fast-follow (fora desta story): migrar SLA (sla-alerts, broker/leads) p/ a agenda por dia. UI por dia = Story 75-59."
