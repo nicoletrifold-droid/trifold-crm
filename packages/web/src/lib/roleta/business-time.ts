@@ -3,8 +3,15 @@
  * horário de funcionamento da roleta (pausa à noite/fora dos dias úteis). Usado
  * pelo alerta de SLA para não punir o corretor pelo tempo em que ninguém trabalha.
  *
+ * Story 75-58 — Motor de AGENDA POR DIA DA SEMANA (WeekSchedule), fonte única
+ * consumida pela distribuição (isOpenAtNow) e pela contagem por dia comercial
+ * (commercialDayRange). Mantém as funções `BusinessHoursCfg` acima para o SLA
+ * (retrocompatível). Puro/testável; `getOrgSchedule` é o único com I/O.
+ *
  * Lê a config da roleta (mesmos campos de `roleta_config`). Puro/testável.
  */
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 export interface BusinessHoursCfg {
   business_days: number[] // 0=Dom … 6=Sáb
   business_hour_start: string // "08:00" ou "08:00:00"
@@ -106,4 +113,138 @@ export function isWithinBusinessHoursNow(cfg: BusinessHoursCfg, now: Date = new 
   const { start, end } = windowMinutes(dow, cfg)
   const cur = tzMinutesOfDay(now, cfg.timezone)
   return cur >= start && cur < end
+}
+
+// ─────────────────── Agenda por dia da semana (Story 75-58) ───────────────────
+
+export interface DaySchedule {
+  isOpen: boolean
+  open: string // "HH:MM"
+  close: string // "HH:MM"
+}
+/** 7 posições; índice = dia da semana no fuso (0=Dom … 6=Sáb). */
+export type WeekSchedule = DaySchedule[]
+
+export interface DayRange {
+  /** Início inclusivo (use `.gte`). */
+  from: Date
+  /** Fim exclusivo (use `.lt`). */
+  to: Date
+}
+
+const DEFAULT_DAY: DaySchedule = { isOpen: true, open: "08:00", close: "20:00" }
+
+type CalParts = { y: number; mo: number; d: number; dow: number }
+
+/** Deriva as 7 linhas a partir da config antiga (transição/fallback). Puro. */
+export function deriveScheduleFromConfig(cfg: BusinessHoursCfg | null | undefined): WeekSchedule {
+  return Array.from({ length: 7 }, (_, dow): DaySchedule => {
+    if (!cfg) return { ...DEFAULT_DAY }
+    const isWeekend = dow === 0 || dow === 6
+    const open = isWeekend && cfg.weekend_hour_start ? cfg.weekend_hour_start : cfg.business_hour_start
+    const close = isWeekend && cfg.weekend_hour_end ? cfg.weekend_hour_end : cfg.business_hour_end
+    return {
+      isOpen: cfg.business_days.includes(dow),
+      open: (open ?? "08:00").slice(0, 5),
+      close: (close ?? "20:00").slice(0, 5),
+    }
+  })
+}
+
+function stepParts(p: CalParts, dir: 1 | -1, tz: string): CalParts {
+  const noon = Date.UTC(p.y, p.mo - 1, p.d, 12, 0) + dir * 24 * 60 * 60 * 1000
+  return tzParts(new Date(noon), tz)
+}
+
+function closeMsOf(p: CalParts, day: DaySchedule, tz: string): number {
+  return wallToUtcMs(p.y, p.mo, p.d, parseHM(day.close, 20 * 60), tz)
+}
+
+/** Está dentro do expediente agora, segundo a agenda por dia? (fonte única) */
+export function isOpenAtNow(now: Date, week: WeekSchedule, tz: string): boolean {
+  const p = tzParts(now, tz)
+  const day = week[p.dow]
+  if (!day?.isOpen) return false
+  const cur = tzMinutesOfDay(now, tz)
+  return cur >= parseHM(day.open, 8 * 60) && cur < parseHM(day.close, 20 * 60)
+}
+
+/**
+ * Dia comercial (fechamento→fechamento, ciente da agenda) que CONTÉM `now`.
+ * Pula dias fechados: lead em dia fechado ou após o fechamento rola pro próximo
+ * dia útil. Retorna { from (inclusivo), to (exclusivo) }.
+ */
+export function commercialDayRange(now: Date, week: WeekSchedule, tz: string): DayRange {
+  const nowMs = now.getTime()
+  // Âncora A = primeiro dia ABERTO >= hoje cujo fechamento > now.
+  let cur = tzParts(now, tz)
+  let aClose: number | null = null
+  let aParts = cur
+  for (let i = 0; i < 14; i++) {
+    const day = week[cur.dow]
+    if (day?.isOpen) {
+      const c = closeMsOf(cur, day, tz)
+      if (c > nowMs) {
+        aClose = c
+        aParts = cur
+        break
+      }
+    }
+    cur = stepParts(cur, 1, tz)
+  }
+  if (aClose === null) {
+    // Defensivo: agenda toda fechada — janela de 24h terminando "agora".
+    return { from: new Date(nowMs - 86_400_000), to: new Date(nowMs) }
+  }
+  // from = fechamento do dia aberto imediatamente ANTERIOR a A.
+  let p = stepParts(aParts, -1, tz)
+  let fromMs: number | null = null
+  for (let i = 0; i < 14; i++) {
+    const day = week[p.dow]
+    if (day?.isOpen) {
+      fromMs = closeMsOf(p, day, tz)
+      break
+    }
+    p = stepParts(p, -1, tz)
+  }
+  return { from: new Date(fromMs ?? aClose - 86_400_000), to: new Date(aClose) }
+}
+
+/** Dia comercial COMPLETO anterior ao que contém `now` (relatório roda antes da abertura). */
+export function previousCommercialDayRange(now: Date, week: WeekSchedule, tz: string): DayRange {
+  const curr = commercialDayRange(now, week, tz)
+  return commercialDayRange(new Date(curr.from.getTime() - 1), week, tz)
+}
+
+/**
+ * Carrega a agenda (7 linhas) + timezone do org. Fallback defensivo: deriva da
+ * roleta_config se a tabela ainda não tiver linhas (pré-migração).
+ */
+export async function getOrgSchedule(
+  orgId: string,
+  supabase: SupabaseClient
+): Promise<{ week: WeekSchedule; timezone: string }> {
+  const [{ data: rows }, { data: cfg }] = await Promise.all([
+    supabase.from("roleta_schedule").select("weekday, is_open, open_time, close_time").eq("org_id", orgId),
+    supabase
+      .from("roleta_config")
+      .select("business_days, business_hour_start, business_hour_end, weekend_hour_start, weekend_hour_end, timezone")
+      .eq("org_id", orgId)
+      .maybeSingle(),
+  ])
+  const timezone = (cfg?.timezone as string | undefined) || "America/Sao_Paulo"
+  if (rows && rows.length > 0) {
+    const week: WeekSchedule = Array.from({ length: 7 }, () => ({ ...DEFAULT_DAY }))
+    for (const r of rows as Array<{ weekday: number; is_open: boolean; open_time: string; close_time: string }>) {
+      if (r.weekday >= 0 && r.weekday <= 6) {
+        week[r.weekday] = {
+          isOpen: r.is_open,
+          open: String(r.open_time).slice(0, 5),
+          close: String(r.close_time).slice(0, 5),
+        }
+      }
+    }
+    return { week, timezone }
+  }
+  return { week: deriveScheduleFromConfig(cfg as unknown as BusinessHoursCfg | null), timezone }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { deriveScheduleFromConfig, type BusinessHoursCfg } from "@web/lib/roleta/business-time"
 
 export async function GET() {
   const auth = await requireAuth()
@@ -70,6 +71,21 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Story 75-58 (transição): mantém roleta_schedule (agenda por dia) derivado da
+  // config em sincronia, até a UI por dia (Story 75-59) editar a agenda direto.
+  const week = deriveScheduleFromConfig(data as unknown as BusinessHoursCfg)
+  const scheduleRows = week.map((d, weekday) => ({
+    org_id: appUser.org_id,
+    weekday,
+    is_open: d.isOpen,
+    open_time: d.open,
+    close_time: d.close,
+  }))
+  const { error: schedErr } = await admin
+    .from("roleta_schedule")
+    .upsert(scheduleRows, { onConflict: "org_id,weekday" })
+  if (schedErr) return NextResponse.json({ error: schedErr.message }, { status: 500 })
 
   return NextResponse.json({ config: data })
 }
