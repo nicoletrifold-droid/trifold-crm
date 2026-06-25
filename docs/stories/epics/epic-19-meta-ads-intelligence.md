@@ -1,9 +1,10 @@
 ---
 epic: 19
 title: Meta Ads Intelligence — CPL Real, Funil & Alertas IA
-status: Draft
+status: Done
 created_at: 2026-04-30
-updated_at: 2026-04-30
+updated_at: 2026-06-25
+completed_at: 2026-06-25
 created_by: Morgan (@pm)
 priority: High
 objetivo_negocio:
@@ -356,3 +357,12 @@ começar 19.1. Verificar: `SELECT COUNT(*) FROM meta_insights_daily` deve retorn
 > **Stack:** Next.js 14 App Router, Supabase, TypeScript, Vercel cron"
 
 — Morgan, planejando o futuro 📊
+
+---
+
+## Change Log
+
+| Data | Autor | Mudança |
+|------|-------|---------|
+| 2026-04-30 | Morgan (@pm) | Criação do epic com 3 stories (19.1/19.2/19.3) em 3 frentes (19A/19B/19C) |
+| 2026-06-25 | Pax (@po) | **Epic concluído.** Stories 19-1 (CPL Real), 19-2 (Funil de Conversão) e 19-3 (Alertas IA Telegram) confirmadas com status `Done` em `docs/stories/active/`. Frontmatter `status` Draft → **Done** (o epic nunca saiu de Draft no frontmatter apesar das stories terem sido entregues). |

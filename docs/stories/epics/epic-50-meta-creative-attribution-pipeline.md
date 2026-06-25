@@ -1,9 +1,10 @@
 ---
 epic: 50
 title: Atribuição de Criativos Meta nos Cards do Pipeline
-status: Draft
+status: Done
 created_at: 2026-06-03
-updated_at: 2026-06-03
+updated_at: 2026-06-25
+completed_at: 2026-06-25
 created_by: Morgan (@pm)
 priority: High
 objetivo_negocio:
@@ -302,3 +303,4 @@ update do lead.
 | Data | Autor | Mudança |
 |------|-------|---------|
 | 2026-06-03 | @pm (Morgan) | Criação do epic baseado em request de feature do PO + investigação técnica de Meta integration, schema atual e lead-card.tsx |
+| 2026-06-25 | @po (Pax) | **Epic concluído.** As 3 stories estão implementadas e em `main`, confirmado por evidência de código (não só pelo status do story file): `packages/web/src/components/pipeline/creative-chip.tsx` + `creative-preview-modal.tsx` presentes em `main`; subfields `creative{...thumbnail_url...}` em `meta-sync-entities/route.ts` (50-1); commit `b44360b5` "persist CTWA ad_id" (50-3). Frontmatter `status` Draft → **Done**. **Divergência registrada:** os story files `50-1` e `50-2` ficaram em `Ready for Review` — o `*close-story` formal nunca rodou, mas o código está deployado em `main`. Atualizados para `Done` por consistência documental nesta mesma data. 50-3 já estava `Done`. |

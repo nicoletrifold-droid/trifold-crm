@@ -3,7 +3,8 @@
 ## Metadata
 - **Epic:** 50 — Atribuição de Criativos Meta nos Cards do Pipeline
 - **Story:** 50-2
-- **Status:** Ready for Review
+- **Status:** Done
+- **Closed:** 2026-06-25 by @po (Pax) — `creative-chip.tsx` + `creative-preview-modal.tsx` presentes em `main` e integrados em `lead-card.tsx` / pipeline pages; status sincronizado com a realidade ao fechar o Epic 50
 - **Priority:** P0 — entrega o valor visível para o corretor
 - **Complexity:** M-L (~6-10h) — revisado pelo @po; estimativa inicial @sm de 4-6h foi otimista dado 14 ACs + 10 tasks + 2 componentes novos + helper + 3 testes + CSP + UX review. Considerar split em 50-2a (chip básico + integração) e 50-2b (preview modal) se conveniente
 - **Created:** 2026-06-03

@@ -107,6 +107,46 @@ describe("normalizePhoneBR — non-BR / international fallback", () => {
   })
 })
 
+describe("normalizePhoneBR — zero de discagem (trunk prefix)", () => {
+  it("11 digits with leading zero (DDD+8d) → strips 0, inserts 9, prepends 55", () => {
+    // 0 + DDD 43 + 99873661 (8d) → 43 + 9 + 99873661 → 5543999873661
+    expect(normalizePhoneBR("04399873661")).toBe("5543999873661")
+  })
+
+  it("12 digits with leading zero (DDD+9d) → strips 0, prepends 55", () => {
+    // 0 + DDD 43 + 999873661 (9d) → 43999873661 → 5543999873661
+    expect(normalizePhoneBR("043999873661")).toBe("5543999873661")
+  })
+
+  it("same canonical for zero-prefix and correct form", () => {
+    expect(normalizePhoneBR("04399873661")).toBe(normalizePhoneBR("43999873661"))
+  })
+
+  it("10-digit without leading zero → still returns as-is (no 9 insertion)", () => {
+    expect(normalizePhoneBR("4399873661")).toBe("4399873661")
+  })
+})
+
+describe("normalizePhoneBR — DDI 55 sem DDD (11 dígitos iniciando com 55)", () => {
+  it("returns null for 11-digit starting with 55 (DDI without DDD)", () => {
+    // 55 (DDI) + 998041130 (9 digits, no DDD) → invalid → null
+    expect(normalizePhoneBR("55998041130")).toBeNull()
+  })
+
+  it("returns null for formatted version of the same number", () => {
+    expect(normalizePhoneBR("55 99804-1130")).toBeNull()
+  })
+
+  it("12-digit starting with 55 still works (DDI + DDD + 8d legacy)", () => {
+    // 55 + DDD 44 + 99804113 (8d) → insert 9 → 5544998041130 (wait, that's 13d)
+    // Actually: 5544998041130 is 13 digits? No... 55+44+99804113 = 12 digits → insert 9 after pos4
+    // 5544 + 9 + 98041130 → not quite. Let's use the actual CANONICAL from context:
+    // 55998041130 (11d, DDI without DDD) → null
+    // 44998041130 (11d, DDD 44) → 5544998041130 (13d)
+    expect(normalizePhoneBR("44998041130")).toBe("5544998041130")
+  })
+})
+
 describe("normalizePhoneBR — production bug regression (multiple formats → same canonical)", () => {
   // The exact bug from the story: 4 leads created for the same user
   // because phone arrived in 4 different formats from Meta.

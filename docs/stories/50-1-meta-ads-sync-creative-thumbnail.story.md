@@ -3,8 +3,9 @@
 ## Metadata
 - **Epic:** 50 — Atribuição de Criativos Meta nos Cards do Pipeline
 - **Story:** 50-1
-- **Status:** Ready for Review
+- **Status:** Done
 - **Priority:** P0 — base para 50-2
+- **Closed:** 2026-06-25 by @po (Pax) — código deployado em `main` (subfields `creative{...thumbnail_url...}` em `meta-sync-entities/route.ts`); status sincronizado com a realidade ao fechar o Epic 50
 - **Complexity:** S (~2h)
 - **Created:** 2026-06-03
 - **Author:** @sm (River)
