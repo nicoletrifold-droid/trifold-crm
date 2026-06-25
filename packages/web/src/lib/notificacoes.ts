@@ -82,10 +82,29 @@ export async function notifyClientes(
 
     const admin = createAdminClient()
 
-    // Buscar org_id da obra + clientes vinculados em paralelo
-    const [obraRes, vinculosRes] = await Promise.all([
+    // Buscar org_id da obra + clientes vinculados + distratados em paralelo.
+    //
+    // Story 20.9 (AC 7): clientes em distrato (todos os contratos "Cancelado" no
+    // Sienge) NÃO podem receber notificações. O dado de distrato vive no lado CRM
+    // (`clientes_obras_vinculos.distrato`), enquanto o disparo lê do lado portal
+    // (`cliente_obras` → `users`). A ponte entre os dois é o `sienge_customer_id`:
+    //
+    //   cliente_obras.user_id → users.sienge_customer_id
+    //        == clientes.sienge_customer_id == clientes_obras_vinculos.cliente_id→clientes
+    //   (filtrado por obra_id + distrato = true)
+    //
+    // Coletamos os `sienge_customer_id` distratados nesta obra e, no loop de
+    // disparo, pulamos qualquer portal user cujo `sienge_customer_id` esteja no
+    // conjunto. É tolerante (LEFT-join lógico): user sem vínculo CRM ou com
+    // `sienge_customer_id` nulo recebe normalmente.
+    const [obraRes, vinculosRes, distratadosRes] = await Promise.all([
       admin.from("obras").select("org_id").eq("id", obraId).single(),
       admin.from("cliente_obras").select("user_id").eq("obra_id", obraId),
+      admin
+        .from("clientes_obras_vinculos")
+        .select("cliente_id")
+        .eq("obra_id", obraId)
+        .eq("distrato", true),
     ])
 
     const orgId = obraRes.data?.org_id
@@ -95,10 +114,33 @@ export async function notifyClientes(
 
     const userIds = vinculos.map((v) => v.user_id)
 
+    // Conjunto de sienge_customer_id em distrato nesta obra (ver comentário acima).
+    // 2 passos (evita embed com cardinalidade ambígua): cliente_id distratado →
+    // sienge_customer_id em `clientes`. Só consulta `clientes` se houver distrato.
+    const distratadoClienteIds = (
+      (distratadosRes.data ?? []) as { cliente_id: string }[]
+    ).map((r) => r.cliente_id)
+
+    const distratadoSiengeIds = new Set<number>()
+    if (distratadoClienteIds.length > 0) {
+      const { data: clientesDist } = await admin
+        .from("clientes")
+        .select("sienge_customer_id")
+        .in("id", distratadoClienteIds)
+      for (const c of (clientesDist ?? []) as {
+        sienge_customer_id: number | null
+      }[]) {
+        if (c.sienge_customer_id != null) distratadoSiengeIds.add(c.sienge_customer_id)
+      }
+    }
+
     // Story 75-5: considerar TODOS os vinculados; quem não tem linha de prefs
     // usa DEFAULT_PREFS (e-mail + eventos ligados por padrão).
     const [usersRes, prefsRes] = await Promise.all([
-      admin.from("users").select("id, name, email, phone").in("id", userIds),
+      admin
+        .from("users")
+        .select("id, name, email, phone, sienge_customer_id")
+        .in("id", userIds),
       admin
         .from("obra_notificacao_prefs")
         .select(
@@ -121,6 +163,13 @@ export async function notifyClientes(
     const link = `${appUrl}/cliente/${obraId}`
 
     for (const user of usersRes.data ?? []) {
+      // Story 20.9 (AC 7): pula clientes em distrato nesta obra (todos os
+      // contratos "Cancelado"). Bloqueia os 3 canais (email, WhatsApp, push) por
+      // estar antes de qualquer envio.
+      const sid = (user as { sienge_customer_id?: number | null })
+        .sienge_customer_id
+      if (sid != null && distratadoSiengeIds.has(sid)) continue
+
       const pref = prefsMap.get(user.id) ?? DEFAULT_PREFS
       if (!pref[prefKey]) continue
 
