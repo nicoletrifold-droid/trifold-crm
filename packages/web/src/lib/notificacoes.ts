@@ -213,7 +213,7 @@ export async function notifyClientes(
       }
 
       if (pref.whatsapp_enabled && user.phone && orgId) {
-        sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao).catch(
+        sendWhatsApp(admin, orgId, user.phone, user.name, obraName, descricao, obraId).catch(
           (err) => console.error("[notificacoes] WhatsApp skip:", err)
         )
       }
@@ -237,7 +237,8 @@ async function sendWhatsApp(
   phone: string,
   nome: string,
   obraName: string,
-  descricao: string
+  descricao: string,
+  obraId: string
 ): Promise<void> {
   const { data: config } = await admin
     .from("whatsapp_config")
@@ -252,9 +253,10 @@ async function sendWhatsApp(
   const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
 
   // Notificação proativa (fora da janela de 24h) → exige template HSM aprovado.
-  // Template `atualizacao_obra_cliente` (pt_BR): body {{1}}=nome, {{2}}=obra,
-  // {{3}}=descrição. O botão "Ver no Portal" é ESTÁTICO no template (não recebe
-  // parâmetro), por isso não entra em components — a Meta renderiza a URL fixa.
+  // Template `atualizacao_obra_cliente` (pt_BR): body {{1}}=nome, {{2}}=obra, {{3}}=descrição.
+  // Story 75-67: botão de URL dinâmica — param substitui {{1}} na URL (base
+  // https://crm.trifold.eng.br/cliente/{{1}}). Só com template APROVADO como dinâmico
+  // (param em template estático = erro 132018).
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -276,6 +278,12 @@ async function sendWhatsApp(
               { type: "text", text: obraName },
               { type: "text", text: descricao },
             ],
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: "0",
+            parameters: [{ type: "text", text: obraId }],
           },
         ],
       },
