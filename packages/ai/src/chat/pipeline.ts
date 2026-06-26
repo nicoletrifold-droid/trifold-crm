@@ -1274,7 +1274,7 @@ async function updateConversationState(
   }
 }
 
-function buildPropertyDataContext(
+export function buildPropertyDataContext(
   properties: Property[],
   identifiedPropertyId: string | null
 ): string {
@@ -1303,8 +1303,18 @@ function buildPropertyDataContext(
       parts.push(`Previsao de entrega: ${semester} semestre de ${d.getFullYear()} (NUNCA diga data exata, sempre diga "previsao" ou "estimativa")`)
     }
 
-    // Unidades disponíveis (SEMPRE mostrar)
-    parts.push(`Unidades: ${p.available_units ?? 0} disponiveis, ${p.reserved_units ?? 0} reservadas, ${p.sold_units ?? 0} vendidas (total: ${p.total_units ?? 0})`)
+    // Estoque (SEMPRE mostrar) — enquadrado como escassez/exclusividade, nunca como abundancia.
+    // A copy fica a cargo do prompt (PROPERTY_PRESENTATION_PROMPT, secao ESCASSEZ E EXCLUSIVIDADE);
+    // aqui entregamos o dado ja "mastigado": ancora no quanto JA FOI VENDIDO (Story 75-64).
+    const totalU = p.total_units ?? 0
+    const soldU = p.sold_units ?? 0
+    const availU = p.available_units ?? 0
+    if (totalU > 0) {
+      const pctSold = Math.round((soldU / totalU) * 100)
+      parts.push(`Estoque (use com SUTILEZA para exclusividade/escassez, NUNCA como abundancia nem numero cru): ${soldU} de ${totalU} unidades ja vendidas (${pctSold}% vendido), restam apenas ${availU} disponiveis`)
+    } else if (availU > 0) {
+      parts.push(`Estoque (use com SUTILEZA, NUNCA como abundancia): restam apenas ${availU} unidades disponiveis`)
+    }
 
     if (p.total_floors) parts.push(`Andares: ${p.total_floors} total (${p.units_per_floor ?? 0} por andar)`)
 
