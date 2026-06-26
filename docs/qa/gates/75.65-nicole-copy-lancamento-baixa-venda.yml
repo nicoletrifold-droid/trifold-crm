@@ -1,0 +1,38 @@
+storyId: 75-65
+title: "Nicole — copy de lançamento p/ empreendimento com poucas vendas"
+verdict: PASS
+readiness: 9/10
+date: 2026-06-26
+reviewer: "@qa"
+
+checks:
+  code_review: OK         # ramificação clara por estágio; constante nomeada e comentada; segue padrão da 75-64
+  unit_tests: OK          # 321/321 verdes; +4 casos (regressão maduro, lançamento <40%, pré-lançamento, esgotado)
+  acceptance_criteria: OK # AC1-AC6 cobertos (AC1/AC2/AC3 por teste; AC4 por inspeção do prompt; AC5 guard NOT LIKE; AC6 typecheck/lint)
+  regressions: OK         # caso maduro (75-64) preservado por teste explícito; suíte completa verde
+  performance: OK         # O(1) por empreendimento
+  security: OK            # migration é UPDATE parametrizado na própria tabela, sem input externo
+  documentation: OK       # story + gate atualizados
+
+issues:
+  - severity: low
+    category: code
+    description: >
+      Threshold de 40% é heurístico. Empreendimento maduro com <40% vendido cairia no enquadramento de
+      lançamento — lado SEGURO do erro (nunca sinaliza abundância), mas pode subestimar escassez.
+    recommendation: "Aceitável. Constante nomeada (SCARCITY_SOLD_THRESHOLD), fácil ajustar; futura UI se necessário."
+  - severity: low
+    category: requirements
+    description: >
+      Regra é preventiva — nenhum empreendimento atual tem baixa venda (Vind 73%, Yarden 85%), então o branch
+      de lançamento não dispara hoje. Ativa automaticamente quando um empreendimento de baixa venda for cadastrado.
+    recommendation: "Validar comportamento real no primeiro lançamento futuro."
+
+notes: >
+  Continuação da Story 75-64. Sem mudança de dados. Tom sutil mantido. O sistema já é org-wide (todos os
+  empreendimentos), faltava só adaptar o enquadramento ao estágio de vendas.
+
+pending_devops:
+  - "Aplicar migration 122 em prod (Supabase Management API + PAT)."
+  - "Deploy do código (pipeline.ts + property-presentation.ts)."
+  - "Status → Done somente após push/deploy."

@@ -48,4 +48,41 @@ describe("buildPropertyDataContext — estoque/escassez (Story 75-64)", () => {
   it("lista vazia → string vazia", () => {
     expect(buildPropertyDataContext([], null)).toBe("")
   })
+
+  // Story 75-65 — enquadramento por estagio de vendas
+  it("AC1 (regressão): empreendimento maduro (>=40% vendido) mantém o formato 75-64", () => {
+    const ctx = buildPropertyDataContext([{ ...VIND, total_units: 60, sold_units: 51, available_units: 9 }], VIND.id)
+    expect(ctx).toContain("51 de 60 unidades ja vendidas (85% vendido)")
+    expect(ctx).toContain("restam apenas 9 disponiveis")
+    expect(ctx).not.toContain("LANCAMENTO")
+  })
+
+  it("AC2: poucas vendas (<40%) → enquadramento de lançamento, sem % vendido nem 'restam apenas'", () => {
+    const ctx = buildPropertyDataContext(
+      [{ ...VIND, name: "Novo Empreendimento", total_units: 60, sold_units: 0, available_units: 60, status: "selling" }],
+      VIND.id
+    )
+    expect(ctx).toMatch(/LANCAMENTO\/fase inicial/)
+    expect(ctx).not.toMatch(/\d+% vendido/) // sem percentual numerico (a instrucao menciona "% vendido baixo" em texto)
+    expect(ctx).not.toContain("restam apenas 60")
+    expect(ctx).not.toContain("0 de 60")
+  })
+
+  it("AC2: status pré-lançamento força enquadramento de lançamento mesmo com vendas", () => {
+    const ctx = buildPropertyDataContext(
+      [{ ...VIND, total_units: 60, sold_units: 30, available_units: 30, status: "launching" }],
+      VIND.id
+    )
+    expect(ctx).toMatch(/LANCAMENTO\/fase inicial/)
+    expect(ctx).not.toContain("50% vendido")
+  })
+
+  it("AC3: esgotado (available=0) → sinaliza ESGOTADO, sem 'restam apenas 0'", () => {
+    const ctx = buildPropertyDataContext(
+      [{ ...VIND, total_units: 48, sold_units: 48, available_units: 0 }],
+      VIND.id
+    )
+    expect(ctx).toContain("ESGOTADO")
+    expect(ctx).not.toContain("restam apenas 0")
+  })
 })

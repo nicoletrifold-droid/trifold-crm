@@ -1274,6 +1274,10 @@ async function updateConversationState(
   }
 }
 
+// Abaixo deste % vendido, "ja vendemos X" nao gera escassez (soaria abundancia):
+// usar enquadramento de oportunidade de lancamento (Story 75-65). Ajustavel.
+const SCARCITY_SOLD_THRESHOLD = 40
+
 export function buildPropertyDataContext(
   properties: Property[],
   identifiedPropertyId: string | null
@@ -1303,15 +1307,22 @@ export function buildPropertyDataContext(
       parts.push(`Previsao de entrega: ${semester} semestre de ${d.getFullYear()} (NUNCA diga data exata, sempre diga "previsao" ou "estimativa")`)
     }
 
-    // Estoque (SEMPRE mostrar) — enquadrado como escassez/exclusividade, nunca como abundancia.
-    // A copy fica a cargo do prompt (PROPERTY_PRESENTATION_PROMPT, secao ESCASSEZ E EXCLUSIVIDADE);
-    // aqui entregamos o dado ja "mastigado": ancora no quanto JA FOI VENDIDO (Story 75-64).
+    // Estoque (SEMPRE mostrar) — enquadrado por estagio de vendas, nunca como abundancia.
+    // A copy fica a cargo do prompt (PROPERTY_PRESENTATION_PROMPT, secao ESCASSEZ E EXCLUSIVIDADE).
+    // - maduro/bem vendido (>= SCARCITY_SOLD_THRESHOLD): ancora no quanto JA FOI VENDIDO (Story 75-64).
+    // - lancamento/poucas vendas (< threshold ou pre-lancamento): enquadra como oportunidade de lancamento,
+    //   pois "0% vendido / restam N" soaria abundancia (Story 75-65).
     const totalU = p.total_units ?? 0
     const soldU = p.sold_units ?? 0
     const availU = p.available_units ?? 0
-    if (totalU > 0) {
-      const pctSold = Math.round((soldU / totalU) * 100)
+    const isPreLaunch = p.status === "planning" || p.status === "launching"
+    const pctSold = totalU > 0 ? Math.round((soldU / totalU) * 100) : 0
+    if (totalU > 0 && availU === 0) {
+      parts.push("Estoque: ESGOTADO (sem unidades disponiveis) — ofereca lista de espera / proximos lancamentos.")
+    } else if (totalU > 0 && !isPreLaunch && pctSold >= SCARCITY_SOLD_THRESHOLD) {
       parts.push(`Estoque (use com SUTILEZA para exclusividade/escassez, NUNCA como abundancia nem numero cru): ${soldU} de ${totalU} unidades ja vendidas (${pctSold}% vendido), restam apenas ${availU} disponiveis`)
+    } else if (totalU > 0) {
+      parts.push("Estoque (LANCAMENTO/fase inicial — NUNCA cite quantas restam nem o % vendido baixo, soa abundancia): enquadre como oportunidade de entrar cedo (melhores plantas/andares/condicoes de lancamento), exclusividade e valorizacao.")
     } else if (availU > 0) {
       parts.push(`Estoque (use com SUTILEZA, NUNCA como abundancia): restam apenas ${availU} unidades disponiveis`)
     }
