@@ -1,0 +1,40 @@
+storyId: 75-66
+title: "Notificações do portal: anti-flood (coalescing) + guard de env (REST API)"
+verdict: PASS
+readiness: 9/10
+date: 2026-06-26
+reviewer: "@qa"
+
+checks:
+  code_review: OK         # guard pequeno e bem posicionado (pausa→admin→claim→queries); constante nomeada; fallback explícito
+  unit_tests: OK          # notificacoes.test.ts 4/4 (coalescido, pausa, claim=true segue, erro→fallback); broker 109/109
+  acceptance_criteria: OK # AC1/AC4 por teste; AC2 (chave por evento) garantido pela PK (obra,evento); AC3 atomicidade ON CONFLICT...WHERE; AC5 doc+script; AC6 typecheck
+  regressions: OK         # pausa preservada; pnpm type-check 8/8 tasks; nenhum teste existente quebrado
+  performance: OK         # 1 RPC O(1) por evento; coalescido pula as queries (economiza)
+  security: OK            # RPC sem input de usuário não confiável; script lê token local; sem exposição
+  documentation: OK       # CLAUDE.md (gotcha env) + script documentado + story
+
+issues:
+  - severity: medium
+    category: requirements
+    description: >
+      O código chama claim_obra_notif; se a migration 123 não estiver em prod quando o deploy subir, a RPC não
+      existe. Mitigado pelo FALLBACK (erro → envia, não bloqueia) e porque o portal está PAUSADO. Ainda assim,
+      aplicar a migration 123 no MESMO deploy.
+    recommendation: "@devops aplicar migration 123 antes/junto do merge. Fallback cobre a janela."
+  - severity: low
+    category: requirements
+    description: >
+      Coalescing suprime eventos do mesmo tipo dentro de 15 min (ex.: 2ª foto 5 min depois não notifica).
+      Decisão de design (cliente vê tudo no portal). Janela ajustável (COALESCE_WINDOW_SECONDS).
+    recommendation: "Aceitável. Revisar a janela após religar, se necessário."
+
+notes: >
+  Remediação do incidente 26/06. NÃO religa as notificações (PORTAL_NOTIF_PAUSED segue "1"). Atende ao pedido
+  do usuário: (1) acabar com o flood e (2) blindar o env (nunca `vercel env add`, sempre REST API) de forma
+  durável no repositório.
+
+pending_devops:
+  - "Aplicar migration 123 em prod (Supabase Management API + PAT)."
+  - "Merge do PR → deploy. NÃO alterar PORTAL_NOTIF_PAUSED (manter pausado)."
+  - "Status → Done após push."
