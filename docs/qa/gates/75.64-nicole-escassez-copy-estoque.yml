@@ -1,0 +1,39 @@
+storyId: 75-64
+title: "Nicole — copy de escassez ao falar de estoque (tom sutil)"
+verdict: PASS
+readiness: 9/10
+date: 2026-06-26
+reviewer: "@qa"
+
+checks:
+  code_review: OK         # mudança localizada e legível; segue padrão do buildPropertyDataContext; comentário cita a story
+  unit_tests: OK          # 317/317 verdes; novo property-data-context.test.ts (4 casos)
+  acceptance_criteria: OK # AC1-AC6 cobertos (AC1/AC2/AC2b por teste; AC3/AC5 por inspeção do prompt; AC4 pelo guard NOT LIKE; AC6 typecheck/lint)
+  regressions: OK         # suíte completa packages/ai verde; nenhum teste dependia do formato antigo "Unidades: ..."
+  performance: OK         # cálculo O(1) por empreendimento; sem impacto
+  security: OK            # migration é UPDATE parametrizado na própria tabela, sem input externo / sem injeção
+  documentation: OK       # story (File List, Dev Record, Change Log) + gate atualizados
+
+issues:
+  - severity: low
+    category: requirements
+    description: >
+      A migration 120 usa guard 'content NOT LIKE %ESCASSEZ E EXCLUSIVIDADE%' (idempotente p/ não duplicar).
+      Como efeito colateral, uma futura ALTERAÇÃO do texto da seção exigirá nova migration — re-rodar a 120
+      não regrava conteúdo.
+    recommendation: "Aceitável. Se a copy for ajustada depois, criar nova migration (não editar a 120)."
+  - severity: low
+    category: code
+    description: >
+      A copy de escassez só vale em PROD após a migration 120 ser aplicada no banco (bank-with-fallback:
+      agent_prompts mascara o .ts). Sem o deploy/aplicação, prod segue com o prompt antigo.
+    recommendation: "@devops aplicar migration 120 no deploy (Supabase Management API + PAT)."
+
+notes: >
+  Dado de estoque confirmado correto antes da implementação (Vind 13 avail / 35 sold / 48 total) — não houve
+  bug de dados; escopo foi exclusivamente copywriting. Tom SUTIL conforme decisão do usuário (2026-06-26).
+
+pending_devops:
+  - "Aplicar migration 120 em prod (faz a copy valer em produção)."
+  - "Deploy do código (pipeline.ts + property-presentation.ts)."
+  - "Status → Done somente após push/deploy."
