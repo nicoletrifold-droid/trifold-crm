@@ -1,7 +1,7 @@
 # Story 75-64 — Nicole: copy de escassez ao falar de estoque (todos os empreendimentos)
 
 ## Metadata
-- **Status:** Review · **Epic:** 75 · **Branch:** main · **Complexidade:** S (2-3 pontos)
+- **Status:** Done · **Epic:** 75 · **Branch:** main · **Complexidade:** S (2-3 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, vitest]
 
 ## Story
@@ -148,3 +148,7 @@ A disponibilidade e um argumento de venda — use de forma SUTIL, sem pressao e 
   `agent_prompts`); novo teste `property-data-context.test.ts`. 317/317 verdes, type-check/lint limpos. `buildPropertyDataContext` exportada. Status Ready → Review.
 - 2026-06-26 — @qa — Gate **PASS** (9/10), 7/7 checagens OK, 317/317 testes. 2 observações low (migration não
   regrava texto; copy depende de aplicar a migration em prod). Pendente @devops: migration 120 + deploy. Status segue Review até push.
+- 2026-06-26 — @devops — PR #45 (squash) merged na main → deploy Vercel. **Migration 121** (era 120, renumerada
+  no PR #46 por colisão com `120_phone_normalization_zero_fix.sql` da Story 25-4) **aplicada em prod** via
+  Management API; verificado: seção ESCASSEZ presente 1× em `agent_prompts` (idempotência confirmada re-rodando).
+  Copy da Nicole **LIVE em prod**. Status Review → **Done**.
