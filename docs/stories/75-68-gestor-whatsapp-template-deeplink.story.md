@@ -1,7 +1,7 @@
 # Story 75-68 — WhatsApp do gestor via template `aviso_roleta_gestor` (deep-link)
 
 ## Metadata
-- **Status:** Review · **Epic:** 75 · **Branch:** main · **Complexidade:** S (2-3 pontos)
+- **Status:** Done · **Epic:** 75 · **Branch:** main · **Complexidade:** S (2-3 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, vitest]
 
 ## Story
@@ -95,3 +95,5 @@ botão → `https://crm.trifold.eng.br/dashboard/leads/{{1}}`. Body: {{1}}=nome 
 - 2026-06-26 — @dev — Implementado: `sendImobiliariaTemplate` (template aviso_roleta_gestor + botão lead.id);
   `notifyImobiliaria` migrado de texto → template; +2 testes. notify-broker 4/4, roleta 43/43, type-check 8/8. Status Ready → Review.
 - 2026-06-26 — @qa — Gate **PASS** (9/10), AC1-AC5 OK, sem regressão. 1 obs low (1º envio real valida). Pendente @devops: merge+deploy.
+- 2026-06-26 — @devops — PR #55 (squash) merged na main (commit b2c8885) → deploy Vercel. Sem migration/Meta. WhatsApp
+  do gestor agora é template proativo com botão deep-link. Status Review → **Done**.
