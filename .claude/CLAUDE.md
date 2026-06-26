@@ -394,5 +394,15 @@ npm run trace -- workflow-name
 - Verificar numeração antes de criar nova migration — existe conflito histórico em torno de 074/075.
 - Para aplicar migration direto em prod sem CLI: usar Supabase Management API com PAT (ver memória `project-migrations`).
 
+### Vercel — variáveis de ambiente (GOTCHA crítico)
+- **NUNCA use `vercel env add` via stdin/pipe** (`echo x | vercel env add ...`): grava **valor VAZIO**
+  silenciosamente. Já causou 2 incidentes: VAPID key corrompida (Story 75-40) e a pausa do portal que não
+  pegou (`PORTAL_NOTIF_PAUSED=""`, Story 75-66).
+- **Sempre use a REST API** para criar/atualizar: `POST /v10/projects/{id}/env` (criar, `type:"encrypted"`) ou
+  `PATCH /v9/projects/{id}/env/{envId}` (atualizar). Token em `~/Library/Application Support/com.vercel.cli/auth.json`;
+  `projectId`/`teamId` em `.vercel/project.json`. Helper pronto: **`scripts/vercel-env-set.sh`**.
+- `vercel env rm` e `vercel env pull` funcionam normalmente. Mudança de env **só vale após `vercel redeploy`**.
+- Evite `type:"sensitive"` (write-only/ilegível) para flags simples — atrapalha conferência.
+
 ---
 *Synkra AIOS Claude Code Configuration v2.0*

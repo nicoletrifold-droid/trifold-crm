@@ -3,6 +3,10 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
+// Story 75-66: janela de coalescing anti-flood por (obra, evento). Dentro dela, só a 1ª
+// notificação do mesmo evento dispara envio (lote de fotos → 1 mensagem). Ajustável.
+const COALESCE_WINDOW_SECONDS = 15 * 60
+
 export type EventoNotificacao =
   | "nova_foto"
   | "novo_documento"
@@ -82,6 +86,25 @@ export async function notifyClientes(
     }
 
     const admin = createAdminClient()
+
+    // Story 75-66: coalescing anti-flood. Só o 1º evento (obra, evento) dentro da janela dispara
+    // envio; os demais (ex.: várias fotos no mesmo lote) são suprimidos — o cliente vê tudo no portal.
+    // Fallback seguro: se a RPC falhar (ex.: ainda não aplicada), NÃO bloqueia — segue e envia.
+    const { data: claimed, error: claimError } = await admin.rpc("claim_obra_notif", {
+      p_obra_id: obraId,
+      p_evento: evento,
+      p_window_seconds: COALESCE_WINDOW_SECONDS,
+    })
+    if (!claimError && claimed !== true) {
+      console.log(
+        "[notificacoes] coalescido (janela anti-flood) — pulando envio",
+        { obraId, evento }
+      )
+      return
+    }
+    if (claimError) {
+      console.error("[notificacoes] claim_obra_notif falhou — enviando sem coalescing:", claimError)
+    }
 
     // Buscar org_id da obra + clientes vinculados + distratados em paralelo.
     //
