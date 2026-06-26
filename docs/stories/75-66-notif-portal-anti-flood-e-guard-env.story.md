@@ -1,7 +1,7 @@
 # Story 75-66 — Notificações do portal: anti-flood (coalescing) + guard de env (REST API)
 
 ## Metadata
-- **Status:** Review · **Epic:** 75 · **Branch:** main · **Complexidade:** M (3-5 pontos)
+- **Status:** Done · **Epic:** 75 · **Branch:** main · **Complexidade:** M (3-5 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, vitest]
 
 ## Story
@@ -145,3 +145,6 @@ $$;
   teste novo 4/4. type-check 8/8. NÃO religa (PORTAL_NOTIF_PAUSED="1"). Status Ready → Review.
 - 2026-06-26 — @qa — Gate **PASS** (9/10), 7/7 OK. 1 obs medium (aplicar migration junto do deploy — fallback +
   pausa cobrem), 1 low (janela ajustável). Pendente @devops: migration 123 + merge sem religar. Status segue Review.
+- 2026-06-26 — @devops — Migration 123 aplicada em prod (Management API) e testada (claim 1ª=true, 2ª=null; linha
+  de teste removida). PR #50 (squash) merged → deploy. `PORTAL_NOTIF_PAUSED` **mantido "1"** (NÃO religado).
+  Coalescing ativo no código p/ quando religarem. Status Review → **Done**.
