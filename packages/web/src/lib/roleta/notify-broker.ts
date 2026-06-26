@@ -79,7 +79,7 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const waP = config.notify_whatsapp && broker.phone
     ? (context
         ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
-        : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone))
+        : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone, lead.id))
         .then(() => { result.whatsapp = true })
         .catch((err: unknown) => console.error("[roleta] whatsapp error:", err))
     : Promise.resolve()
@@ -100,7 +100,8 @@ async function sendBrokerLeadTemplate(
   phone: string,
   brokerName: string,
   leadName: string,
-  leadPhone: string
+  leadPhone: string,
+  leadId: string
 ): Promise<void> {
   const { data: waConfig } = await admin
     .from("whatsapp_config")
@@ -134,6 +135,15 @@ async function sendBrokerLeadTemplate(
                 { type: "text", text: leadName },
                 { type: "text", text: leadPhone },
               ],
+            },
+            // Story 75-67: botão de URL dinâmica — o param substitui {{1}} na URL do template
+            // (base https://crm.trifold.eng.br/broker/leads/{{1}}). Só funciona com o template
+            // APROVADO como dinâmico; param em template estático = erro 132018.
+            {
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: leadId }],
             },
           ],
         },
