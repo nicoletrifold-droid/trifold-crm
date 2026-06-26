@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { isUuid } from "@web/lib/uuid"
 import { getFinancialStatement } from "@web/lib/integrations/sienge/client"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
 
@@ -56,6 +57,8 @@ function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
 
 export default async function BoletoPage({ params }: PageProps) {
   const { obra_id } = await params
+  // Story 75-67: link malformado (botão de template WhatsApp com "{{1}}" literal) → home, não 404.
+  if (!isUuid(obra_id)) redirect("/cliente")
   const supabase = await createClient()
 
   const {
