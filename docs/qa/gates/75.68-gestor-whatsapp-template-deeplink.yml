@@ -1,0 +1,32 @@
+storyId: 75-68
+title: "WhatsApp do gestor via template aviso_roleta_gestor (deep-link)"
+verdict: PASS
+readiness: 9/10
+date: 2026-06-26
+reviewer: "@qa"
+
+checks:
+  code_review: OK         # sendImobiliariaTemplate espelha sendBrokerLeadTemplate; sendBrokerWhatsApp preservada p/ fluxo com context
+  unit_tests: OK          # notify-broker 4/4 (2 novos: payload template+botão lead.id; sem telefone → sem WhatsApp); roleta 43/43
+  acceptance_criteria: OK # AC1 (template não texto), AC2 (button param=lead.id), AC3 (body params), AC4 (sem phone) cobertos por teste; AC5 typecheck
+  regressions: OK         # distributor 43/43; sendBrokerWhatsApp ainda usada por notifyBroker(context); type-check 8/8
+  performance: OK         # 1 request por canal, como antes
+  security: OK            # token de whatsapp_config; sem input não confiável no payload
+  documentation: OK       # story + gate
+
+issues:
+  - severity: low
+    category: requirements
+    description: >
+      Template `aviso_roleta_gestor` agora é efetivamente usado pela 1ª vez no código. Embora APPROVED/dinâmico,
+      o 1º envio real é a validação definitiva (params do body + botão).
+    recommendation: "Conferir o 1º aviso real de roleta ao gestor (recebe proativo + botão abre o lead)."
+
+notes: >
+  Fecha a paridade do gestor com o corretor: push/email já deep-linkavam; agora o WhatsApp do gestor é template
+  proativo (fora da janela 24h) com botão que abre /dashboard/leads/{id}. Sem dependência da Meta (já aprovado na
+  Story 75-67) nem migration → deploy direto.
+
+pending_devops:
+  - "Merge do PR → deploy. Sem migration, sem ação na Meta."
+  - "Status → Done após push."
