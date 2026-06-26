@@ -1,7 +1,7 @@
 # Story 75-65 — Nicole: copy de lançamento p/ empreendimento com poucas vendas
 
 ## Metadata
-- **Status:** Review · **Epic:** 75 · **Branch:** main · **Complexidade:** S (2-3 pontos)
+- **Status:** Done · **Epic:** 75 · **Branch:** main · **Complexidade:** S (2-3 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, vitest]
 
 ## Story
@@ -130,3 +130,6 @@ exige migration além do `.ts`. Ver [[nicole-guardrails-db]] e [[project-nicole-
   lançamento/fallback); bullet de lançamento no prompt; migration 122; +4 testes. 321/321 verdes. Status Ready → Review.
 - 2026-06-26 — @qa — Gate **PASS** (9/10), 7/7 OK, 321/321 testes. 2 obs low (threshold heurístico; regra
   preventiva). Pendente @devops: migration 122 + deploy. Status segue Review até push.
+- 2026-06-26 — @devops — PR #48 (squash) merged na main → deploy Vercel. **Migration 122** aplicada em prod via
+  Management API; verificado: bullet de lançamento presente 1× em `agent_prompts` (idempotente). Sem colisão de
+  numeração (122 único). Regra **LIVE** (preventiva, ativa em lançamento futuro). Status Review → **Done**.
