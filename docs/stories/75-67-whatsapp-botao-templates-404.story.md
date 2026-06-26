@@ -1,7 +1,7 @@
 # Story 75-67 — Corrigir botão dos templates WhatsApp (404) + redirect defensivo
 
 ## Metadata
-- **Status:** Review · **Epic:** 75 · **Branch:** main · **Complexidade:** M (3-5 pontos)
+- **Status:** Done · **Epic:** 75 · **Branch:** main · **Complexidade:** M (3-5 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, vitest]
 
 ## Story
@@ -130,3 +130,6 @@ reincidência. Ver caveat histórico em [[project-notificacoes-portal]] (issue #
   após aprovação. Status Ready → Review.
 - 2026-06-26 — @qa — Gate **PASS** (9/10). Camada 1 OK. 1 obs HIGH: deploy faseado (Camada 2 código só após
   APPROVED, senão 132018). Pendente @devops: merge Camada 1 + PR Camada 2 pós-aprovação.
+- 2026-06-26 — @devops — Camada 1 merged (PR #52, deployada). Os 4 templates ficaram **APPROVED** na Meta
+  (monitorado). Camada 2 merged (PR #53, commit 3b82e2e) → deploy do Vercel disparado pelo merge. Deep-link do
+  botão agora abre o lead/obra exato. Loop de monitoramento (cron 57c5b073) encerrado. Status Review → **Done**.
