@@ -1,7 +1,8 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { isUuid } from "@web/lib/uuid"
 import { LeadDetailsPanel } from "./_components/lead-details-panel"
 import { ConversationThread } from "./_components/conversation-thread"
 import { markLeadConversationsRead } from "./_actions/mark-read"
@@ -14,6 +15,8 @@ export default async function BrokerLeadDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  // Story 75-67: link malformado (ex.: botão de template WhatsApp com "{{1}}" literal) → lista, não 404.
+  if (!isUuid(id)) redirect("/broker/leads")
   const user = await getServerUser()
   const supabase = await createClient()
 

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Bell, FileText, Camera } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
+import { isUuid } from "@web/lib/uuid"
 import { logoutCliente } from "@web/app/cliente/actions"
 import { AnimatedProgressBar } from "./_components/animated-progress-bar"
 import { ServicosSection } from "./_components/servicos-section"
@@ -51,6 +52,8 @@ export default async function ObraPage({
   params: Promise<{ obra_id: string }>
 }) {
   const { obra_id } = await params
+  // Story 75-67: link malformado (ex.: botão de template WhatsApp com "{{1}}" literal) → home, não 404.
+  if (!isUuid(obra_id)) redirect("/cliente")
   const supabase = await createClient()
 
   const { data: obra } = await supabase
