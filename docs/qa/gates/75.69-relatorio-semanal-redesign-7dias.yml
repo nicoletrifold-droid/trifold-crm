@@ -1,0 +1,48 @@
+storyId: "75-69"
+title: "Relatório semanal: janela única de 7 dias + redesign Movimento da semana"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-06-29
+
+checks:
+  code_review: PASS        # caminho único, sem branches duplicados; tokens reusados; remoção limpa do código morto
+  unit_tests: PASS         # vitest 629/629 (raiz); nenhum teste tocava o caminho semanal sem-período
+  acceptance_criteria: PASS # AC1-8 atendidos (ver abaixo)
+  regressions: PASS        # grep: zero refs a símbolos removidos; nenhum consumidor usa campos antigos; sob-demanda não regride
+  performance: PASS        # -4 queries no caminho do relatório (removidas Total/Hoje/Semana/Mês); +1 contagem de perdidos
+  security: PASS           # sem novas superfícies; requireRole(admin/supervisor) intacto no sob-demanda
+  documentation: PASS      # story Dev Agent Record + memória project-relatorio-semanal-redesign atualizadas
+
+acceptance_criteria_trace:
+  AC1: "7 dias em todos os blocos — via get_analytics_summary_ranged + comparativo. Confirmado no render."
+  AC2: "Cabeçalho com chip 'Últimos 7 dias' + intervalo. Confirmado no render."
+  AC3: "4 cards novos (Novos leads+Δ, Fechamentos, Perdidos, Tempo médio); antigos removidos. Confirmado."
+  AC4: "Bug getDay() ELIMINADO (ramo sem-período removido; period obrigatório). Domingo não zera mais."
+  AC5: "wrap={false} — tabela de tempo pulou inteira p/ pág.2 no render. Confirmado visualmente."
+  AC6: "Comparativo é o bloco central (eyebrow DESTAQUE DO PERÍODO) logo após os cards. Confirmado."
+  AC7: "Sob-demanda continua refletindo o período da tela (default 30d sem params). Não regride."
+  AC8: "tsc 0 / lint 0 / render real sem exceção em @react-pdf/renderer."
+
+issues:
+  - severity: low
+    category: requirements
+    description: "'Novos leads' exclui leads criados no período já marcados perdidos (recentLeadsRaw filtra lost_reason is null), para casar 1:1 com a linha Total do comparativo. Comportamento herdado do comparativo pré-existente."
+    recommendation: "Aceitar; é intencional (card = linha Total). Reavaliar só se gestão pedir 'novos brutos incl. perdidos'."
+  - severity: low
+    category: requirements
+    description: "Card 'Fechamentos' = leads criados no período atualmente no estágio Fechamento (não 'fechou no período'). Herdado do card isPeriod anterior."
+    recommendation: "Aceitar; consistente com comportamento prévio."
+  - severity: medium
+    category: code
+    description: "wrap={false} aplicado por GRUPO do comparativo. Se um único grupo exceder a altura de uma página (ex.: 'Por Corretor' num relatório sob-demanda de 90 dias com muitos corretores), pode haver clip/overflow."
+    recommendation: "OK para o semanal (7d). Monitorar o sob-demanda 90d; se ocorrer, trocar wrap por grupo->linha."
+  - severity: low
+    category: code
+    description: "Campos properties/sources/brokers seguem computados mas não renderizados (comparativo os cobre)."
+    recommendation: "Mantidos de propósito (lógica de reclassificação LP Vind/Yarden; reuso futuro). Limpeza opcional."
+
+notes: |
+  Verificação independente: tsc exit 0, vitest 629/629, eslint 0, e RENDER REAL do PDF com dados de 28/06
+  (header/cards/comparativo/funil/tempo) — sem exceção e sem corte de tabela. Recomenda-se verificação visual
+  do e-mail/anexo no 1º envio real pós-deploy (cron 23:00). Diff na branch feature, não commitado.

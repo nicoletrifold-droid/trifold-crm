@@ -5,6 +5,7 @@ import { Resend } from "resend"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { buildAnalyticsReportData } from "@web/lib/analytics-report-data"
 import { AnalyticsReportPDF } from "@web/lib/pdf/analytics-report-pdf"
+import { resolvePeriod } from "@web/lib/analytics/period"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -43,9 +44,9 @@ export async function GET(request: NextRequest) {
 
   for (const org of orgs) {
     try {
-      // Relatório AUTOMÁTICO é sempre o comparativo SEMANAL (7 dias vs 7 dias
-      // anteriores) — sem período (cai no caminho semanal original).
-      const data = await buildAnalyticsReportData(supabase, org.id)
+      // Relatório AUTOMÁTICO é sempre a janela de 7 dias (7 dias vs 7 dias
+      // anteriores) — Story 75-69: todos os blocos seguem o mesmo período.
+      const data = await buildAnalyticsReportData(supabase, org.id, resolvePeriod("7d"))
       const pdfElement = createElement(AnalyticsReportPDF, { data })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const buffer = await renderToBuffer(pdfElement as any)
@@ -61,15 +62,15 @@ export async function GET(request: NextRequest) {
       const { error } = await resend.emails.send({
         from: SENDER,
         to: REPORT_RECIPIENTS,
-        subject: `Resumo semanal de leads · ${data.weekRange}`,
+        subject: `Resumo semanal de leads · ${data.periodRange}`,
         html: `
           <p>Olá!</p>
           <p>Segue o relatório semanal de analytics da plataforma Trifold CRM.</p>
-          <p><strong>Período:</strong> ${data.weekRange}</p>
+          <p><strong>Período:</strong> ${data.rangeLabel} (${data.periodRange})</p>
           <ul>
-            <li>Total de leads: <strong>${data.totalLeads}</strong></li>
-            <li>Novos esta semana: <strong>${data.leadsWeek}</strong></li>
-            <li>Novos este mês: <strong>${data.leadsMonth}</strong></li>
+            <li>Novos leads: <strong>${data.novosLeads}</strong> (${data.novosLeadsDelta >= 0 ? "+" : ""}${data.novosLeadsDelta} vs. período anterior)</li>
+            <li>Fechamentos: <strong>${data.fechamentos}</strong></li>
+            <li>Perdidos: <strong>${data.perdidos}</strong></li>
           </ul>
           <p>O relatório completo está em anexo.</p>
         `,
