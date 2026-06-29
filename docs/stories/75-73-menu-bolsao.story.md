@@ -12,8 +12,8 @@ acessem a funcionalidade (a definir). Por ora, só o item de menu + rota placeho
 ## Escopo
 **IN:**
 - **Sidebar do dashboard** (`dashboard/layout.tsx`): item "Bolsão" (ícone `Boxes`) inserido **logo abaixo da Roleta**,
-  gate hardcoded `admin || gerente-comercial` (mesmo padrão do "Fluxo de Pagamento"; não passa pelo sistema de
-  permissões de módulo enquanto a função não existe).
+  gate hardcoded `admin || supervisor || gerente-comercial`. (Gate do "Fluxo de Pagamento" permanece
+  `admin || gerente-comercial` — sem regressão.)
 - **Nav do corretor** (`broker/layout.tsx`): item "Bolsão" entre "Imóveis" e "Fluxo de Pagamento" (índice ≥ 4 →
   vai pro sheet "Mais" no mobile, sem alterar as 4 tabs do bottom bar). Visível a todo `broker`.
 - **Páginas placeholder:** `/dashboard/bolsao` (tema light/dark) e `/broker/bolsao` (dark) — "Em breve".
@@ -25,9 +25,9 @@ acessem a funcionalidade (a definir). Por ora, só o item de menu + rota placeho
   inofensivo no placeholder; endurecer quando a função existir).
 
 ## Acceptance Criteria
-1. **Given** admin ou gerente-comercial em `/dashboard`, **then** vê "Bolsão" na sidebar logo abaixo de "Roleta".
+1. **Given** admin, supervisor ou gerente-comercial em `/dashboard`, **then** vê "Bolsão" na sidebar logo abaixo de "Roleta".
 2. **Given** um corretor em `/broker`, **then** vê "Bolsão" no nav (grupo "Mais" no mobile).
-3. **Given** outros perfis no dashboard (ex.: obras, supervisor), **then** NÃO veem "Bolsão" na sidebar.
+3. **Given** perfil "obras" no dashboard, **then** NÃO vê "Bolsão". E o "Fluxo de Pagamento" permanece só admin/gerente-comercial (supervisor não passa a vê-lo).
 4. **Given** o clique no menu, **then** abre a página placeholder (sem 404).
 5. typecheck/lint limpos.
 

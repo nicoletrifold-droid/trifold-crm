@@ -187,12 +187,13 @@ export default async function DashboardLayout({
   // Itens inseridos logo ABAIXO da Roleta, só para admin/gerente-comercial:
   // Bolsão (Story 75-73) e Fluxo de Pagamento. Gate hardcoded (não passa pelo
   // sistema de permissões de módulo enquanto a função do Bolsão é definida).
-  const isAdminOrGerente = user.role === "admin" || user.role === "gerente-comercial"
+  const showBolsao = user.role === "admin" || user.role === "supervisor" || user.role === "gerente-comercial"
+  const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
   const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Boxes className={ICON_SIZE} /> }
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
   const afterRoleta = [
-    ...(isAdminOrGerente ? [bolsaoItem] : []),
-    ...(isAdminOrGerente ? [fluxoItem] : []),
+    ...(showBolsao ? [bolsaoItem] : []),
+    ...(showFluxo ? [fluxoItem] : []),
   ]
   const roletaIdx = baseFiltered.findIndex((item) => item.href === "/dashboard/roleta")
   const baseWithExtras = afterRoleta.length === 0
