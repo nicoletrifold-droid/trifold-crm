@@ -15,12 +15,11 @@ export async function GET(req: NextRequest) {
   const roleError = requireRole(appUser, ["admin", "supervisor"])
   if (roleError) return roleError
 
-  // Story 75-31: o PDF sob demanda segue o período da tela (range/from/to na URL).
-  // Sem esses params (ex.: cron/link antigo), gera o resumo semanal padrão.
+  // Story 75-31/75-69: o PDF sob demanda segue o período da tela (range/from/to
+  // na URL). Sem esses params, resolvePeriod cai no padrão (30 dias) — o relatório
+  // sempre reflete um período (não existe mais caminho "sem período").
   const sp = req.nextUrl.searchParams
-  const period = sp.get("range")
-    ? resolvePeriod(sp.get("range") ?? undefined, sp.get("from") ?? undefined, sp.get("to") ?? undefined)
-    : undefined
+  const period = resolvePeriod(sp.get("range") ?? undefined, sp.get("from") ?? undefined, sp.get("to") ?? undefined)
 
   const data = await buildAnalyticsReportData(auth.supabase, appUser.org_id, period)
 
