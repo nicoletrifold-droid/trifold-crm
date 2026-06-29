@@ -305,7 +305,18 @@ export async function buildAnalyticsReportData(
     .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
   const perdidos = perdidosCount ?? 0
 
-  const fechamentos = stages.find((st) => /fechamento|ganho|fechado/i.test(st.name))?.count ?? 0
+  // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
+  const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
+
+  // Card 2: VISITAS REALIZADAS no período — agendamentos (appointments) com
+  // scheduled_at na janela e status ≠ cancelado/no-show ("visita que aconteceu",
+  // independente de quando o lead entrou). Story 75-71.
+  const { count: visitasCount } = await supabase
+    .from("appointments").select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
+    .not("status", "in", "(cancelled,no_show)")
+  const visitasRealizadas = visitasCount ?? 0
 
   // "Novos leads" e sua variação saem da linha Total do comparativo — assim o
   // card casa 1:1 com a tabela de comparação (mesma fonte/filtro).
@@ -332,7 +343,8 @@ export async function buildAnalyticsReportData(
     rangeLabel,
     novosLeads,
     novosLeadsDelta,
-    fechamentos,
+    visitou,
+    visitasRealizadas,
     perdidos,
     tempoMedioMin,
     comparisonTitle,
