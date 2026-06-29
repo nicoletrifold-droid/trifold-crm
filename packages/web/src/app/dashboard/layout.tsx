@@ -24,6 +24,7 @@ import {
   MessageSquarePlus,
   Shuffle,
   CreditCard,
+  Boxes,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -183,17 +184,25 @@ export default async function DashboardLayout({
     item.href === "/dashboard/agenda" ? { ...item, badge: agendaCount } : item
   )
 
-  const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
+  // Itens inseridos logo ABAIXO da Roleta, só para admin/gerente-comercial:
+  // Bolsão (Story 75-73) e Fluxo de Pagamento. Gate hardcoded (não passa pelo
+  // sistema de permissões de módulo enquanto a função do Bolsão é definida).
+  const isAdminOrGerente = user.role === "admin" || user.role === "gerente-comercial"
+  const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Boxes className={ICON_SIZE} /> }
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
+  const afterRoleta = [
+    ...(isAdminOrGerente ? [bolsaoItem] : []),
+    ...(isAdminOrGerente ? [fluxoItem] : []),
+  ]
   const roletaIdx = baseFiltered.findIndex((item) => item.href === "/dashboard/roleta")
-  const baseWithFluxo = showFluxo && roletaIdx >= 0
-    ? [...baseFiltered.slice(0, roletaIdx + 1), fluxoItem, ...baseFiltered.slice(roletaIdx + 1)]
-    : showFluxo
-    ? [...baseFiltered, fluxoItem]
-    : baseFiltered
+  const baseWithExtras = afterRoleta.length === 0
+    ? baseFiltered
+    : roletaIdx >= 0
+    ? [...baseFiltered.slice(0, roletaIdx + 1), ...afterRoleta, ...baseFiltered.slice(roletaIdx + 1)]
+    : [...baseFiltered, ...afterRoleta]
 
   const navItems = [
-    ...baseWithFluxo,
+    ...baseWithExtras,
     ...(permissions["obras"]
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),
