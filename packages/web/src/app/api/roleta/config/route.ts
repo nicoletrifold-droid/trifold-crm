@@ -33,13 +33,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 })
   }
 
+  // Story 75-74: o HORÁRIO é definido EXCLUSIVAMENTE pela agenda por dia
+  // (roleta_schedule, via PATCH /api/roleta/schedule) — fonte única. Os campos
+  // legados de horário (business_hour_*/weekend_hour_*/business_days) NÃO são mais
+  // editáveis aqui, pra não criar divergência com a agenda. (O painel ainda envia
+  // o config inteiro; estes campos são simplesmente ignorados.)
   const allowed = [
     "is_active",
-    "business_days",
-    "business_hour_start",
-    "business_hour_end",
-    "weekend_hour_start",
-    "weekend_hour_end",
     "timezone",
     "notify_push",
     "notify_email",
