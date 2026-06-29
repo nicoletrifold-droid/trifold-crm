@@ -29,7 +29,9 @@ export interface AnalyticsReportData {
   // Cards de topo — todos referentes ao período.
   novosLeads: number
   novosLeadsDelta: number
-  fechamentos: number
+  visitou: number
+  /** Visitas realizadas (agendamentos ≠ cancelado/no-show) no período. */
+  visitasRealizadas: number
   perdidos: number
   /** Tempo médio de atendimento (min), ponderado por corretor. null = sem dados. */
   tempoMedioMin: number | null
@@ -85,6 +87,8 @@ const s = StyleSheet.create({
   cardLast: { flex: 1, backgroundColor: LIGHT, borderRadius: 4, padding: 10 },
   cardHero: { flex: 1, backgroundColor: BRAND_SOFT, borderRadius: 4, padding: 10, marginRight: 8 },
   cardLabel: { fontSize: 7, color: GRAY, marginBottom: 4 },
+  cardSub: { fontSize: 7, color: GRAY, marginTop: 4 },
+  cardSubStrong: { fontFamily: "Helvetica-Bold", color: DARK },
   cardValueRow: { flexDirection: "row", alignItems: "baseline" },
   cardValueDefault: { fontFamily: "Helvetica-Bold", fontSize: 20, color: DARK },
   cardValueBlue: { fontFamily: "Helvetica-Bold", fontSize: 20, color: "#2563EB" },
@@ -209,8 +213,11 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
             </View>
           </View>
           <View style={s.card}>
-            <Text style={s.cardLabel}>Fechamentos</Text>
-            <Text style={s.cardValueGreen}>{data.fechamentos}</Text>
+            <Text style={s.cardLabel}>Visitas (7d)</Text>
+            <Text style={s.cardValueGreen}>{data.visitasRealizadas}</Text>
+            <Text style={s.cardSub}>
+              <Text style={s.cardSubStrong}>{data.visitou}</Text> na etapa Visitou
+            </Text>
           </View>
           <View style={s.card}>
             <Text style={s.cardLabel}>Perdidos</Text>

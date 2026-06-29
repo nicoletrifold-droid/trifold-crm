@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
           <p><strong>Período:</strong> ${data.rangeLabel} (${data.periodRange})</p>
           <ul>
             <li>Novos leads: <strong>${data.novosLeads}</strong> (${data.novosLeadsDelta >= 0 ? "+" : ""}${data.novosLeadsDelta} vs. período anterior)</li>
-            <li>Fechamentos: <strong>${data.fechamentos}</strong></li>
+            <li>Visitas realizadas (7d): <strong>${data.visitasRealizadas}</strong> (${data.visitou} na etapa Visitou)</li>
             <li>Perdidos: <strong>${data.perdidos}</strong></li>
           </ul>
           <p>O relatório completo está em anexo.</p>
