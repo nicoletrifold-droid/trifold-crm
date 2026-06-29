@@ -74,20 +74,9 @@ export async function POST(
     )
   }
 
-  // Create activity log
-  await supabase.from("activities").insert({
-    org_id: appUser.org_id,
-    lead_id: id,
-    user_id: appUser.id,
-    type: "stage_change",
-    description: `Etapa alterada de "${fromStage?.name ?? "Nenhuma"}" para "${newStage.name}"`,
-    metadata: {
-      from_stage: fromStage
-        ? { id: fromStage.id, name: fromStage.name }
-        : null,
-      to_stage: { id: newStage.id, name: newStage.name },
-    },
-  })
+  // O log em `activities` (type 'stage_change') é gravado pelo trigger
+  // trg_log_lead_stage_change no UPDATE acima (migration 124, Story 75-72).
+  // Mantemos abaixo apenas o audit_logs (tabela distinta) e as automações.
 
   void triggerAutomations("lead.status_changed", {
     id: updatedLead.id,
