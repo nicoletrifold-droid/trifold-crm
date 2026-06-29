@@ -24,7 +24,7 @@ import {
   MessageSquarePlus,
   Shuffle,
   CreditCard,
-  Boxes,
+  Container,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -189,7 +189,7 @@ export default async function DashboardLayout({
   // sistema de permissões de módulo enquanto a função do Bolsão é definida).
   const showBolsao = user.role === "admin" || user.role === "supervisor" || user.role === "gerente-comercial"
   const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
-  const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Boxes className={ICON_SIZE} /> }
+  const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} /> }
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
   const afterRoleta = [
     ...(showBolsao ? [bolsaoItem] : []),
