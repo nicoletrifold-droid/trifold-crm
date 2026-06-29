@@ -3,7 +3,7 @@
 import { useActionState, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, KeyRound } from "lucide-react"
 import { login, requestPasswordReset } from "./actions"
 
 type RecoveryState = { error?: string; sent?: boolean; email?: string } | null
@@ -56,6 +56,15 @@ function LoginContent() {
             <p className="mt-1 text-sm text-stone-500">
               {view === "recovery" ? "Recuperação de senha" : "Entre com suas credenciais"}
             </p>
+            {view === "login" && (
+              <>
+                <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[13px] text-stone-400">
+                  <KeyRound className="h-3.5 w-3.5 text-[#F27A5E]" aria-hidden />
+                  <span>Todos seus imóveis em <span className="font-medium text-[#F27A5E]">um único acesso</span></span>
+                </p>
+                <div className="mx-auto mt-3 h-px w-10 bg-gradient-to-r from-transparent via-[#F27A5E]/50 to-transparent" />
+              </>
+            )}
           </div>
 
           {/* Success banner */}
