@@ -48,6 +48,10 @@ export async function PATCH(req: NextRequest) {
     "max_leads_per_day",
     "notify_user_on_distribution",
     "notify_user_on_fora_horario",
+    // Story 75-78: tempos de SLA editáveis pela tela da Roleta (self-service).
+    "sla_alertas_enabled",
+    "sla_alerta_corretor_min",
+    "sla_alerta_gestor_min",
   ] as const
 
   const patch: Record<string, unknown> = {}
@@ -60,6 +64,46 @@ export async function PATCH(req: NextRequest) {
   }
 
   const admin = createAdminClient()
+
+  // Story 75-78: validação dos tempos de SLA — inteiros > 0 e corretor < gestor
+  // (o alerta ao corretor tem que vir ANTES da escalada ao gestor). Como o painel
+  // envia o config inteiro, normalmente ambos vêm no patch; se vier só um, buscamos
+  // o outro no config atual para a comparação.
+  const touchesSla =
+    "sla_alerta_corretor_min" in patch || "sla_alerta_gestor_min" in patch
+  if (touchesSla) {
+    const isPosInt = (v: unknown): v is number =>
+      typeof v === "number" && Number.isInteger(v) && v > 0
+
+    let { data: current } = await admin
+      .from("roleta_config")
+      .select("sla_alerta_corretor_min, sla_alerta_gestor_min")
+      .eq("org_id", appUser.org_id)
+      .maybeSingle()
+    current = current ?? { sla_alerta_corretor_min: 30, sla_alerta_gestor_min: 60 }
+
+    const corretor =
+      "sla_alerta_corretor_min" in patch
+        ? patch.sla_alerta_corretor_min
+        : current.sla_alerta_corretor_min
+    const gestor =
+      "sla_alerta_gestor_min" in patch
+        ? patch.sla_alerta_gestor_min
+        : current.sla_alerta_gestor_min
+
+    if (!isPosInt(corretor) || !isPosInt(gestor)) {
+      return NextResponse.json(
+        { error: "Tempos de SLA devem ser inteiros maiores que zero (minutos)." },
+        { status: 400 }
+      )
+    }
+    if (corretor >= gestor) {
+      return NextResponse.json(
+        { error: "O alerta ao corretor deve ser menor que a escalada ao gestor." },
+        { status: 400 }
+      )
+    }
+  }
   const { data, error } = await admin
     .from("roleta_config")
     .upsert(
