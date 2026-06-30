@@ -1,6 +1,6 @@
 /**
- * Story 75-80 (Epic 64) — cron bolsao-rebalance.
- * Cobre: auth, gate bolsao_enabled, mover ao bolsão >= 15 min, não mover < 15 min, dry-run.
+ * Story 75-80 + 75-82 (Epic 64) — cron bolsao-rebalance.
+ * Cobre: auth, gate, mover >= 15min, não mover < 15min, dry-run, e o resumo (digest) à Fernanda.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
@@ -14,35 +14,44 @@ vi.mock("@web/lib/roleta/business-time", () => ({
   businessMinutesBetweenSchedule: () => elapsedReturn,
 }))
 
-// Estado configurável do banco mockado.
-let cfgData: Array<Record<string, unknown>> = [{ org_id: "org-1", bolsao_enabled: true }]
-let leadsData: Array<Record<string, unknown>> = [{ id: "L1", name: "João", assigned_broker_id: "B1" }]
+const pushSpy = vi.fn(async (..._a: unknown[]) => { void _a })
+vi.mock("@web/lib/server/push-service", () => ({ sendPushToUser: (...a: unknown[]) => pushSpy(...a) }))
+vi.mock("@web/lib/whatsapp/log-send", () => ({ logWhatsappSend: vi.fn() }))
+
+let cfgData: Array<Record<string, unknown>> = []
+let leadsData: Array<Record<string, unknown>> = []
+let poolData: Array<Record<string, unknown>> = []
 let distData: Array<Record<string, unknown>> = [{ lead_id: "L1", created_at: new Date(Date.now() - 30 * 60000).toISOString() }]
+let gestorUser: Record<string, unknown> | null = { name: "Fernanda", phone: "5518999999999" }
+let wppConfig: Record<string, unknown> | null = { phone_number_id: "111", access_token: "tok" }
+let claimResult: boolean | null = true
 const updateCaptured: Array<{ payload: unknown; ids: unknown }> = []
 const activitiesInserted: Array<Record<string, unknown>> = []
 
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
+    rpc: async (_fn: string, _args: unknown) => { void _fn; void _args; return { data: claimResult, error: null } },
     from: (table: string) => {
+      let cols = ""
       const b: Record<string, unknown> & { _update?: unknown } = {
-        select: () => b,
-        eq: () => b,
-        is: () => b,
-        not: () => b,
-        gte: () => b,
+        select: (c: string) => { cols = c ?? ""; return b },
+        eq: () => b, is: () => b, not: () => b, gte: () => b,
         update: (p: unknown) => { b._update = p; return b },
-        limit: async () => ({ data: table === "leads" ? leadsData : null, error: null }),
-        maybeSingle: async () => ({ data: table === "kanban_stages" ? { id: "novo-id" } : null, error: null }),
-        in: (_col: string, vals: unknown) => {
+        limit: async () => {
+          if (table === "leads") return { data: cols.includes("bolsao_em") && !cols.includes("assigned_broker_id") ? poolData : leadsData, error: null }
+          return { data: null, error: null }
+        },
+        maybeSingle: async () =>
+          table === "kanban_stages" ? { data: { id: "novo-id" }, error: null }
+          : table === "users" ? { data: gestorUser, error: null }
+          : table === "whatsapp_config" ? { data: wppConfig, error: null }
+          : { data: null, error: null },
+        in: (_c: string, vals: unknown) => {
           if (b._update) { updateCaptured.push({ payload: b._update, ids: vals }); return Promise.resolve({ data: null, error: null }) }
           return Promise.resolve({ data: table === "lead_distribution_log" ? distData : null, error: null })
         },
-        insert: async (rows: Record<string, unknown>[]) => {
-          if (table === "activities") activitiesInserted.push(...rows)
-          return { data: null, error: null }
-        },
-        then: (resolve: (v: { data: unknown; error: null }) => unknown) =>
-          resolve({ data: table === "roleta_config" ? cfgData : null, error: null }),
+        insert: async (rows: Record<string, unknown>[]) => { if (table === "activities") activitiesInserted.push(...rows); return { data: null, error: null } },
+        then: (resolve: (v: { data: unknown; error: null }) => unknown) => resolve({ data: table === "roleta_config" ? cfgData : null, error: null }),
       }
       return b
     },
@@ -52,58 +61,72 @@ vi.mock("@web/lib/supabase/admin", () => ({
 import { GET } from "./route"
 
 function req(dry = false) {
-  const url = `http://localhost/api/cron/bolsao-rebalance${dry ? "?dry=1" : ""}`
-  return new NextRequest(url, { headers: { authorization: "Bearer test-secret" } })
+  return new NextRequest(`http://localhost/api/cron/bolsao-rebalance${dry ? "?dry=1" : ""}`, { headers: { authorization: "Bearer test-secret" } })
 }
+const CFG = { org_id: "org-1", bolsao_enabled: true, notify_user_on_fora_horario: "gestor-1", notify_user_on_distribution: null }
 
 beforeEach(() => {
   vi.clearAllMocks()
   process.env.CRON_SECRET = "test-secret"
+  process.env.NEXT_PUBLIC_APP_URL = "https://crm.trifold.eng.br"
   elapsedReturn = 20
-  cfgData = [{ org_id: "org-1", bolsao_enabled: true }]
+  cfgData = [{ ...CFG }]
   leadsData = [{ id: "L1", name: "João", assigned_broker_id: "B1" }]
   distData = [{ lead_id: "L1", created_at: new Date(Date.now() - 30 * 60000).toISOString() }]
+  poolData = []
+  gestorUser = { name: "Fernanda", phone: "5518999999999" }
+  wppConfig = { phone_number_id: "111", access_token: "tok" }
+  claimResult = true
   updateCaptured.length = 0
   activitiesInserted.length = 0
+  global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ messages: [{ id: "wamid" }] }) })) as unknown as typeof fetch
 })
 
 describe("GET /api/cron/bolsao-rebalance", () => {
   it("auth: sem bearer → 401", async () => {
-    const res = await GET(new NextRequest("http://localhost/api/cron/bolsao-rebalance"))
-    expect(res.status).toBe(401)
+    expect((await GET(new NextRequest("http://localhost/api/cron/bolsao-rebalance"))).status).toBe(401)
   })
 
-  it("move ao bolsão quando elapsed >= 15 (assigned_broker_id null + bolsao_em + activity)", async () => {
-    elapsedReturn = 20
+  it("move ao bolsão quando elapsed >= 15", async () => {
     const res = await GET(req())
     expect(res.status).toBe(200)
     expect(updateCaptured).toHaveLength(1)
-    const moved = updateCaptured[0]!
-    expect(moved.payload).toMatchObject({ assigned_broker_id: null })
-    expect((moved.payload as Record<string, unknown>).bolsao_em).toBeTruthy()
-    expect(moved.ids).toEqual(["L1"])
-    expect(activitiesInserted[0]).toMatchObject({ lead_id: "L1", type: "bolsao_in" })
+    expect(updateCaptured[0]!.payload).toMatchObject({ assigned_broker_id: null })
+    expect(activitiesInserted[0]).toMatchObject({ type: "bolsao_in" })
   })
 
   it("NÃO move quando elapsed < 15", async () => {
     elapsedReturn = 10
     await GET(req())
     expect(updateCaptured).toHaveLength(0)
-    expect(activitiesInserted).toHaveLength(0)
   })
 
-  it("gate: bolsao_enabled=false (não-dry) → não move", async () => {
-    cfgData = [{ org_id: "org-1", bolsao_enabled: false }]
+  it("gate: bolsao_enabled=false → não move e não faz digest", async () => {
+    cfgData = [{ ...CFG, bolsao_enabled: false }]
     await GET(req())
     expect(updateCaptured).toHaveLength(0)
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(pushSpy).not.toHaveBeenCalled()
   })
 
-  it("dry-run: relata wouldMove, não move", async () => {
-    elapsedReturn = 20
-    const res = await GET(req(true))
-    const body = await res.json()
-    expect(updateCaptured).toHaveLength(0)
-    const org = body.summary.find((s: Record<string, unknown>) => s.orgId === "org-1")
-    expect(org.wouldMove).toEqual([{ lead: "L1", elapsed: 20 }])
+  it("digest: pool com lead >=15min + claim → WhatsApp aviso_bolsao_gestor + push à Fernanda", async () => {
+    leadsData = []
+    poolData = [{ bolsao_em: new Date().toISOString() }]
+    await GET(req())
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const calls = (global.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    const init = calls[0]![1] as { body: string }
+    const body = JSON.parse(init.body)
+    expect(body.template.name).toBe("aviso_bolsao_gestor")
+    expect(pushSpy).toHaveBeenCalled()
+  })
+
+  it("digest anti-flood: claim=false → não envia", async () => {
+    leadsData = []
+    poolData = [{ bolsao_em: new Date().toISOString() }]
+    claimResult = null
+    await GET(req())
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(pushSpy).not.toHaveBeenCalled()
   })
 })

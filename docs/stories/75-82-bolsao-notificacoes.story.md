@@ -1,7 +1,7 @@
 # Story 75-82 — Bolsão: notificações (resumo à Fernanda + escalada 60 min só Alexandre)
 
 ## Metadata
-- **Status:** Ready · **Epic:** 64 · **Branch:** feat/75-82-bolsao-notificacoes · **Complexidade:** M (3-5 pontos)
+- **Status:** Done · **Epic:** 64 · **Branch:** feat/75-82-bolsao-notificacoes · **Complexidade:** M (3-5 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, teste do cron/resumo, teste do escalonamento]
 - **depends_on:** 75-80 (`bolsao_em`), template `aviso_bolsao_gestor` (submetido 2026-06-30, id 1028034540162372, PENDING).
 
@@ -46,7 +46,15 @@
 - testes.
 
 ## QA Results
-_(a preencher por @qa)_
+- **Verdict: PASS.** (1) Digest no cron `bolsao-rebalance`: conta leads no pool ≥15min (business-time), anti-flood via
+  `claim_obra_notif(org,'bolsao_digest',30min)`, envia template `aviso_bolsao_gestor` (APPROVED) + push à Fernanda
+  (gestor de `notify_user_on_fora_horario`). (2) `sla-alerts`: inclui leads do bolsão na escalada; corretor usa
+  ÚLTIMA distribuição, gestor usa PRIMEIRA (60min ABSOLUTO); push da Fernanda no 60min só com `bolsao_enabled=false`.
+- **Não-regressão (chave):** com bolsão OFF + leads de 1 só distribuição, `min==max` e `!bolsao_enabled`=true →
+  `sla-alerts` se comporta IDÊNTICO ao anterior. A mudança só ativa quando o bolsão ligar.
+- 6 testes do cron (move + digest + anti-flood) + 5 do 75-80. type-check 0, lint 0. Dry-run em prod pós-deploy.
+- **GO-LIVE do épico (pendente, com OK do usuário):** (a) `update roleta_config set bolsao_enabled=true`;
+  (b) `SLA_ESCALATION_PHONES` → só Alexandre (tira Fernanda). Antes: dry-run dos 2 crons.
 
 ## Change Log
 - 2026-06-30 — @sm — Story criada (Epic 64). Resumo à Fernanda (template novo) + escalada 60 min só Alexandre.
