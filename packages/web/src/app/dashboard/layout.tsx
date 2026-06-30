@@ -26,6 +26,7 @@ import {
   Shuffle,
   CreditCard,
   Container,
+  Handshake,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -232,9 +233,15 @@ export default async function DashboardLayout({
     : 0
   const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} />, badge: bolsaoCount }
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
+  // Story 75-87 — módulo IMOB (imobiliárias externas que ajudam na venda dos
+  // empreendimentos). Só admin/supervisor. Gate hardcoded por ora (placeholder);
+  // migrar p/ permissões de módulo quando a função for definida (como o Bolsão).
+  const showImob = user.role === "admin" || user.role === "supervisor"
+  const imobItem = { href: "/dashboard/imob", label: "IMOB", icon: <Handshake className={ICON_SIZE} /> }
   const afterRoleta = [
     ...(showBolsao ? [bolsaoItem] : []),
     ...(showFluxo ? [fluxoItem] : []),
+    ...(showImob ? [imobItem] : []),
   ]
   const roletaIdx = baseFiltered.findIndex((item) => item.href === "/dashboard/roleta")
   const baseWithExtras = afterRoleta.length === 0
