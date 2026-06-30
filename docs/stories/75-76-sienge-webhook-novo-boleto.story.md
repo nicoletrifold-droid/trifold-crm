@@ -85,7 +85,17 @@ notificação (confirmado: nenhuma referência de envio no código). Investigaç
 - **Validação de origem:** segredo `?token=` na URL registrada no hook (controlamos a URL no `POST /hooks`).
 
 ## QA Results
-_(a preencher por @qa)_
+- **Verdict: PASS.** Validação do caminho REAL (não só mock — fechando o furo da 75-72):
+  - **Mapeamento real (bill 11045):** `/accounts-receivable/receivable-bills/11045` → customerId 1510, enterpriseCode 8.
+    No nosso banco: obra "Vind Residence" (`sienge_enterprise_id=8`), cliente Claudenice (`sienge_customer_id=1510`,
+    com telefone), vínculo `cliente_obras` presente. Cadeia completa resolve.
+  - **Idempotência:** `claim_sienge_webhook` testado via DDL da migration 126 em transação com rollback →
+    `primeira=true, repetida=null (coalescido), outra_parcela=true`. Dedup atômico OK contra os retries do Sienge.
+  - **Template:** `novo_boleto_cliente` APPROVED (Graph API) — 3 vars corpo + botão dinâmico `/cliente/boleto/{{1}}`.
+  - **Testes:** 6/6 (401, ignora REJECTED/evento, disparo, dedup, sem-vínculo). type-check 0, lint 0.
+  - **Regressão:** `notifyClientes` (fan-out) intocado — boleto usa função dedicada `notifyNovoBoleto`. Migration aditiva.
+- AC1-6 atendidos. ⚠️ Mudança concorrente em `notificacoes.ts` (coalescing 12h) é de OUTRO esforço, não-commitada,
+  não faz parte desta story — convive sem conflito com `notifyNovoBoleto`.
 
 ## Change Log
 - 2026-06-30 — @sm — Story criada. Webhook `PAYMENT_SLIP_REGISTERED` (status=CONFIRMED) → notificação `novo_boleto_cliente`.
