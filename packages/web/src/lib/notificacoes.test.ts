@@ -73,4 +73,24 @@ describe("notifyClientes — coalescing (Story 75-66)", () => {
     await notifyClientes("obra-1", "nova_foto", "Vind Residence")
     expect(fromSpy).toHaveBeenCalled() // seguiu (degradou seguro)
   })
+
+  // Story 75-77 — agrupamento de tipos + janela ampliada
+  it("agrupamento: foto/documento/progresso usam a mesma chave de coalescing ('atualizacao_obra')", async () => {
+    rpcResult = { data: null, error: null } // coalescido → curto-circuita, suficiente p/ inspecionar o claim
+    for (const evento of ["nova_foto", "novo_documento", "progresso"] as const) {
+      rpcSpy.mockClear()
+      await notifyClientes("obra-1", evento, "Vind Residence")
+      expect(rpcSpy).toHaveBeenCalledWith(
+        "claim_obra_notif",
+        expect.objectContaining({ p_obra_id: "obra-1", p_evento: "atualizacao_obra" })
+      )
+    }
+  })
+
+  it("nova_mensagem: nunca coalesce → pula o claim e segue direto para as queries", async () => {
+    // from lança de propósito → prova que o fluxo seguiu sem passar pelo claim.
+    await notifyClientes("obra-1", "nova_mensagem", "Vind Residence")
+    expect(rpcSpy).not.toHaveBeenCalled()
+    expect(fromSpy).toHaveBeenCalled()
+  })
 })
