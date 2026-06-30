@@ -68,6 +68,19 @@ export interface SiengePaymentSlipResponse {
   results: SiengePaymentSlipResult[]
 }
 
+// GET /accounts-receivable/receivable-bills/{id} — título do contas a receber.
+// Usado pelo webhook de boleto (Story 75-76) para mapear receivableBillId → cliente/obra.
+export interface SiengeReceivableBill {
+  receivableBillId: number
+  customerId: number
+  documentNumber?: string
+  issueDate?: string
+  receivableBillValue?: number
+  enterpriseCode?: number
+  enterpriseName?: string
+  unityName?: string
+}
+
 export type InstallmentStatus = "PAGO" | "BOLETO_GERADO" | "EM_ABERTO"
 
 export interface FormattedInstallment {
