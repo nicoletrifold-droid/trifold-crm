@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Clock, SlidersHorizontal, Bell, Users, ShieldCheck } from "lucide-react"
+import { Clock, SlidersHorizontal, Bell, Users, ShieldCheck, Timer } from "lucide-react"
 import type { GestorUser } from "../page"
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
@@ -21,6 +21,9 @@ interface RoletaConfig {
   max_leads_per_day: number
   notify_user_on_distribution: string | null
   notify_user_on_fora_horario: string | null
+  sla_alertas_enabled: boolean
+  sla_alerta_corretor_min: number
+  sla_alerta_gestor_min: number
 }
 
 interface ScheduleRow {
@@ -52,6 +55,9 @@ export function RoletaConfigPanel({ initialConfig, initialSchedule, gestores }: 
     max_leads_per_day: 50,
     notify_user_on_distribution: null,
     notify_user_on_fora_horario: null,
+    sla_alertas_enabled: false,
+    sla_alerta_corretor_min: 30,
+    sla_alerta_gestor_min: 60,
   }
 
   const [config, setConfig] = useState<RoletaConfig>(initialConfig ?? defaults)
@@ -59,6 +65,21 @@ export function RoletaConfigPanel({ initialConfig, initialSchedule, gestores }: 
   const [saving, setSaving]     = useState(false)
   const [saved, setSaved]       = useState(false)
   const [saveError, setSaveError] = useState(false)
+  const [slaError, setSlaError] = useState<string | null>(null)
+
+  // Story 75-78: salva um tempo de SLA validando corretor < gestor (espelha a regra da API).
+  function persistSlaMin(field: "sla_alerta_corretor_min" | "sla_alerta_gestor_min", v: number) {
+    if (!Number.isInteger(v) || v <= 0) return
+    const corretor = field === "sla_alerta_corretor_min" ? v : config.sla_alerta_corretor_min
+    const gestor = field === "sla_alerta_gestor_min" ? v : config.sla_alerta_gestor_min
+    if (corretor >= gestor) {
+      setSlaError("O alerta ao corretor deve ser menor que a escalada ao gestor.")
+      setConfig((c) => ({ ...c })) // mantém estado; usuário corrige
+      return
+    }
+    setSlaError(null)
+    void persist({ [field]: v })
+  }
 
   async function persist(patch: Partial<RoletaConfig>) {
     const next = { ...config, ...patch }
@@ -360,6 +381,100 @@ export function RoletaConfigPanel({ initialConfig, initialSchedule, gestores }: 
           </div>
 
         </div>
+      </section>
+
+      <div className="border-t border-stone-200 dark:border-stone-800" />
+
+      {/* ── SLA / Tempo de atendimento (Story 75-78) ── */}
+      <section aria-label="SLA e tempo de atendimento">
+        <p className={`${sectionLabel} mb-3 flex items-center gap-1.5`}>
+          <Timer className="h-3.5 w-3.5" /> SLA / Tempo de atendimento
+        </p>
+
+        <div className="rounded-lg border border-stone-200 bg-stone-50 divide-y divide-stone-200 dark:border-stone-800 dark:bg-stone-800/30 dark:divide-stone-800">
+
+          {/* Liga/desliga os alertas de SLA — auto-salva */}
+          <div className="p-4 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">Alertas de SLA</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                Avisa o corretor (e escala ao gestor) quando um lead distribuído fica sem atendimento. O relógio
+                conta da distribuição até o 1º atendimento, só dentro do horário da roleta.
+              </p>
+            </div>
+            <button
+              onClick={() => void persist({ sla_alertas_enabled: !config.sla_alertas_enabled })}
+              disabled={saving}
+              aria-label={config.sla_alertas_enabled ? "Desativar alertas de SLA" : "Ativar alertas de SLA"}
+              aria-pressed={config.sla_alertas_enabled}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                config.sla_alertas_enabled ? "bg-[#E8856A]" : "bg-stone-300 dark:bg-stone-700"
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                config.sla_alertas_enabled ? "translate-x-6" : "translate-x-1"
+              }`} />
+            </button>
+          </div>
+
+          {/* Alertar corretor após (min) — salva ao sair do campo */}
+          <div className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <label htmlFor="sla-corretor-min" className="text-sm font-semibold text-gray-900 dark:text-white block leading-snug">
+                Alertar corretor após (min)
+              </label>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                Tempo sem atendimento até o corretor receber o aviso (push).
+              </p>
+            </div>
+            <input
+              id="sla-corretor-min"
+              type="number"
+              min={1}
+              max={1440}
+              value={config.sla_alerta_corretor_min}
+              onChange={(e) => {
+                const v = parseInt(e.target.value)
+                if (!isNaN(v) && v > 0) setConfig((c) => ({ ...c, sla_alerta_corretor_min: v }))
+              }}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value)
+                if (!isNaN(v)) persistSlaMin("sla_alerta_corretor_min", v)
+              }}
+              className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 text-center focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+            />
+          </div>
+
+          {/* Escalar p/ gestor após (min) — salva ao sair do campo */}
+          <div className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <label htmlFor="sla-gestor-min" className="text-sm font-semibold text-gray-900 dark:text-white block leading-snug">
+                Escalar p/ gestor após (min)
+              </label>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                Tempo até escalar ao gestor (WhatsApp) — é a meta de SLA.
+              </p>
+            </div>
+            <input
+              id="sla-gestor-min"
+              type="number"
+              min={1}
+              max={1440}
+              value={config.sla_alerta_gestor_min}
+              onChange={(e) => {
+                const v = parseInt(e.target.value)
+                if (!isNaN(v) && v > 0) setConfig((c) => ({ ...c, sla_alerta_gestor_min: v }))
+              }}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value)
+                if (!isNaN(v)) persistSlaMin("sla_alerta_gestor_min", v)
+              }}
+              className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-gray-900 text-center focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+            />
+          </div>
+        </div>
+
+        {slaError && <p className="mt-2 text-xs text-red-500">{slaError}</p>}
       </section>
 
     </div>
