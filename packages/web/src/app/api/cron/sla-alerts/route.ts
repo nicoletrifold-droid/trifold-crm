@@ -64,6 +64,7 @@ const RECENT_HOURS = 48 // evita rajada: só leads distribuídos recentemente
 type CfgRow = {
   org_id: string
   sla_alertas_enabled: boolean
+  bolsao_enabled: boolean
   sla_alerta_corretor_min: number | null
   sla_alerta_gestor_min: number | null
   notify_user_on_fora_horario: string | null
@@ -80,7 +81,8 @@ type LeadRow = {
   id: string
   name: string | null
   phone: string | null
-  assigned_broker_id: string
+  assigned_broker_id: string | null
+  bolsao_em: string | null
   sla_alerta_corretor_em: string | null
   sla_alerta_gestor_em: string | null
 }
@@ -151,12 +153,14 @@ export async function GET(request: NextRequest) {
     const recentIso = new Date(now.getTime() - RECENT_HOURS * 3600 * 1000).toISOString()
     const { data: leads } = await admin
       .from("leads")
-      .select("id, name, phone, assigned_broker_id, sla_alerta_corretor_em, sla_alerta_gestor_em")
+      .select("id, name, phone, assigned_broker_id, bolsao_em, sla_alerta_corretor_em, sla_alerta_gestor_em")
       .eq("org_id", orgId)
       .eq("is_active", true)
       .eq("stage_id", novoId)
       .is("primeiro_atendimento_em", null)
-      .not("assigned_broker_id", "is", null)
+      // Story 75-82: inclui leads no bolsão (sem dono) → a escalada de 60min (absoluta)
+      // continua valendo pra lead que caiu no pool e segue sem atendimento.
+      .or("assigned_broker_id.not.is.null,bolsao_em.not.is.null")
       .gte("created_at", recentIso)
       .limit(500)
     const leadRows = (leads ?? []) as LeadRow[]
@@ -181,7 +185,7 @@ export async function GET(request: NextRequest) {
       distByLead.set(d.lead_id, arr)
     }
 
-    const brokerIds = [...new Set(leadRows.map((l) => l.assigned_broker_id))]
+    const brokerIds = [...new Set(leadRows.map((l) => l.assigned_broker_id).filter((x): x is string => !!x))]
     const { data: brokerUsers } = await admin.from("users").select("id, name").in("id", brokerIds)
     const brokerName = new Map<string, string>()
     for (const u of (brokerUsers ?? []) as Array<{ id: string; name: string }>) {
@@ -197,15 +201,18 @@ export async function GET(request: NextRequest) {
     for (const lead of leadRows) {
       const dists = (distByLead.get(lead.id) ?? []).filter((t) => t <= now.getTime())
       if (dists.length === 0) continue
-      const distribuido = new Date(Math.max(...dists))
-      const elapsed = businessMinutesBetweenSchedule(distribuido, now, schedule, scheduleTz)
+      // Corretor: relógio da ÚLTIMA distribuição (clock do dono atual). Gestor: relógio
+      // da PRIMEIRA distribuição (60min ABSOLUTO desde a 1ª entrega — Story 75-82).
+      const corretorElapsed = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), now, schedule, scheduleTz)
+      const gestorElapsed = businessMinutesBetweenSchedule(new Date(Math.min(...dists)), now, schedule, scheduleTz)
 
-      if (elapsed >= corretorMin && !lead.sla_alerta_corretor_em) {
-        wouldAlert.push({ lead: lead.id, tipo: "corretor", elapsed })
+      // Alerta ao corretor: só p/ lead COM dono (lead no bolsão não tem corretor a avisar).
+      if (lead.assigned_broker_id && corretorElapsed >= corretorMin && !lead.sla_alerta_corretor_em) {
+        wouldAlert.push({ lead: lead.id, tipo: "corretor", elapsed: corretorElapsed })
         if (!dryRun) {
           await sendPushToUser(admin, lead.assigned_broker_id, {
             title: "⏱ Lead aguardando atendimento",
-            body: `${lead.name ?? "Um lead"} está há ${elapsed} min sem atendimento. Atenda agora.`,
+            body: `${lead.name ?? "Um lead"} está há ${corretorElapsed} min sem atendimento. Atenda agora.`,
             url: `${APP_URL}/broker/leads/${lead.id}`,
           }).catch((e: unknown) => console.error("[sla] push corretor:", e))
           markCorretor.push(lead.id)
@@ -213,12 +220,12 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (elapsed >= gestorMin && !lead.sla_alerta_gestor_em) {
-        wouldAlert.push({ lead: lead.id, tipo: "gestor", elapsed })
+      if (gestorElapsed >= gestorMin && !lead.sla_alerta_gestor_em) {
+        wouldAlert.push({ lead: lead.id, tipo: "gestor", elapsed: gestorElapsed })
         if (!dryRun) {
-          const tempo = formatDuration(elapsed)
-          const brokerNm = brokerName.get(lead.assigned_broker_id) ?? "corretor"
-          // WhatsApp (template) p/ os gestores (Fernanda + Alexandre)
+          const tempo = formatDuration(gestorElapsed)
+          const brokerNm = lead.assigned_broker_id ? (brokerName.get(lead.assigned_broker_id) ?? "corretor") : "bolsão"
+          // WhatsApp (template) p/ os gestores em SLA_ESCALATION_PHONES.
           if (wppConfig) {
             await sendGestorSlaWhatsApp(admin, orgId, wppConfig, escalationPhones, {
               leadName: lead.name ?? "Lead",
@@ -226,11 +233,12 @@ export async function GET(request: NextRequest) {
               tempo,
             })
           }
-          // Push p/ o gestor-usuário (Fernanda)
-          if (gestorUserId) {
+          // Push p/ o gestor-usuário (Fernanda) — Story 75-82: SÓ enquanto o bolsão está
+          // OFF. Com o bolsão ligado, a Fernanda recebe o resumo do bolsão (30min) no lugar.
+          if (gestorUserId && !cfg.bolsao_enabled) {
             await sendPushToUser(admin, gestorUserId, {
               title: "Lead sem atendimento (SLA)",
-              body: `${lead.name ?? "Lead"} com ${brokerNm} está há ${tempo} sem atendimento.`,
+              body: `${lead.name ?? "Lead"} (${brokerNm}) está há ${tempo} sem atendimento.`,
               url: `${APP_URL}/dashboard/leads/${lead.id}`,
             }).catch((e: unknown) => console.error("[sla] push gestor:", e))
           }
