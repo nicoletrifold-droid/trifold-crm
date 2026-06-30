@@ -1,5 +1,6 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { getUserPermissions } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
@@ -176,6 +177,35 @@ export default async function DashboardLayout({
       ).count ?? 0
     : 0
 
+  // Story 75-86 — badge do menu "Chat": nº de conversas de relacionamento com
+  // mensagens não-lidas (role='user' após broker_last_read_at). Admin client porque
+  // a RLS de conversations não libera a gerente-relacionamento.
+  let chatUnread = 0
+  if (permissions["chat"]) {
+    const admin = createAdminClient()
+    const { data: rConvs } = await admin
+      .from("conversations")
+      .select("id, broker_last_read_at")
+      .eq("org_id", user.orgId)
+      .eq("is_relationship", true)
+      .limit(300)
+    const rIds = (rConvs ?? []).map((c) => c.id as string)
+    if (rIds.length > 0) {
+      const readAt = new Map((rConvs ?? []).map((c) => [c.id as string, c.broker_last_read_at as string | null]))
+      const { data: msgs } = await admin
+        .from("messages")
+        .select("conversation_id, created_at")
+        .in("conversation_id", rIds)
+        .eq("role", "user")
+      const unreadConvs = new Set<string>()
+      for (const m of (msgs ?? []) as Array<{ conversation_id: string; created_at: string }>) {
+        const r = readAt.get(m.conversation_id)
+        if (!r || new Date(m.created_at) > new Date(r)) unreadConvs.add(m.conversation_id)
+      }
+      chatUnread = unreadConvs.size
+    }
+  }
+
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
     if (!permissions[NAV_MODULE_MAP[item.href]!]) return false
@@ -222,7 +252,7 @@ export default async function DashboardLayout({
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
       : []),
-    ...(permissions["chat"] ? [NAV_ITEM_CHAT] : []),
+    ...(permissions["chat"] ? [{ ...NAV_ITEM_CHAT, badge: chatUnread }] : []),
     // Grupo inferior: Chamados → Config → Email → Sistema
     // O separator é colocado no primeiro item visível do grupo (linha divisória após Mensagens)
     ...(() => {

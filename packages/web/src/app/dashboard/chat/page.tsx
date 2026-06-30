@@ -21,7 +21,7 @@ export default async function ChatPage() {
   const { data: convs } = await admin
     .from("conversations")
     .select(
-      `id, last_message_at, lead_id,
+      `id, last_message_at, broker_last_read_at, lead_id,
        cliente:clientes!relationship_cliente_id(nome),
        obra:obras!relationship_obra_id(name),
        lead:leads!lead_id(name, phone)`
@@ -33,6 +33,7 @@ export default async function ChatPage() {
   const conversas = (convs ?? []) as Array<{
     id: string
     last_message_at: string | null
+    broker_last_read_at: string | null
     lead_id: string
     cliente: { nome: string | null } | { nome: string | null }[] | null
     obra: { name: string | null } | { name: string | null }[] | null
@@ -44,14 +45,23 @@ export default async function ChatPage() {
   // Prévia da última mensagem (uma query só).
   const ids = conversas.map((c) => c.id)
   const lastByConv = new Map<string, { content: string; created_at: string }>()
+  // Story 75-86 — não-lidas por conversa: msgs do cliente (role='user') após o último read.
+  const unreadByConv = new Map<string, number>()
+  const readAtByConv = new Map(conversas.map((c) => [c.id, c.broker_last_read_at]))
   if (ids.length > 0) {
     const { data: msgs } = await admin
       .from("messages")
-      .select("conversation_id, content, created_at")
+      .select("conversation_id, role, content, created_at")
       .in("conversation_id", ids)
       .order("created_at", { ascending: false })
-    for (const m of (msgs ?? []) as Array<{ conversation_id: string; content: string; created_at: string }>) {
+    for (const m of (msgs ?? []) as Array<{ conversation_id: string; role: string; content: string; created_at: string }>) {
       if (!lastByConv.has(m.conversation_id)) lastByConv.set(m.conversation_id, m)
+      if (m.role === "user") {
+        const readAt = readAtByConv.get(m.conversation_id)
+        if (!readAt || new Date(m.created_at) > new Date(readAt)) {
+          unreadByConv.set(m.conversation_id, (unreadByConv.get(m.conversation_id) ?? 0) + 1)
+        }
+      }
     }
   }
 
@@ -79,33 +89,42 @@ export default async function ChatPage() {
             const lead = one(c.lead)
             const nome = cliente?.nome ?? lead?.name ?? "Cliente"
             const last = lastByConv.get(c.id)
+            const unread = unreadByConv.get(c.id) ?? 0
             return (
               <Link
                 key={c.id}
                 href={`/dashboard/chat/${c.id}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-stone-800/50"
+                className={`flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-stone-800/50 ${unread > 0 ? "bg-orange-50/40 dark:bg-stone-800/30" : ""}`}
               >
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-gray-900 dark:text-stone-100">
-                    {nome}
-                    {obra?.name ? (
-                      <span className="ml-2 text-xs font-normal text-orange-500">{obra.name}</span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-sm text-gray-500 dark:text-stone-400">
-                    {last?.content ?? lead?.phone ?? ""}
-                  </p>
+                <div className="flex min-w-0 items-center gap-2">
+                  {unread > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-orange-500" aria-label="não lida" />}
+                  <div className="min-w-0">
+                    <p className={`truncate text-gray-900 dark:text-stone-100 ${unread > 0 ? "font-bold" : "font-medium"}`}>
+                      {nome}
+                      {obra?.name ? (
+                        <span className="ml-2 text-xs font-normal text-orange-500">{obra.name}</span>
+                      ) : null}
+                    </p>
+                    <p className={`truncate text-sm ${unread > 0 ? "text-gray-700 dark:text-stone-200" : "text-gray-500 dark:text-stone-400"}`}>
+                      {last?.content ?? lead?.phone ?? ""}
+                    </p>
+                  </div>
                 </div>
-                {c.last_message_at && (
-                  <span className="shrink-0 text-xs text-gray-400 dark:text-stone-500">
-                    {new Date(c.last_message_at).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                )}
+                <div className="flex shrink-0 items-center gap-2">
+                  {unread > 0 && (
+                    <span className="rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{unread > 99 ? "99+" : unread}</span>
+                  )}
+                  {c.last_message_at && (
+                    <span className="text-xs text-gray-400 dark:text-stone-500">
+                      {new Date(c.last_message_at).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  )}
+                </div>
               </Link>
             )
           })}
