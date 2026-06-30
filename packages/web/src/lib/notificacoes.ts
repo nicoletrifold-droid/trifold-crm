@@ -18,14 +18,16 @@ export type EventoNotificacao =
   | "nova_mensagem"
   | "progresso"
 
-// Story 75-77: chave de coalescing por evento. Foto/documento/progresso compartilham UM slot
-// ("atualizacao_obra") → um lote variado de atualizações vira 1 só aviso por janela.
-// `nova_mensagem` mapeia para null: é comunicação direta 1:1 da equipe e NUNCA é
-// coalescida — sempre passa (decisão do diretor).
+// Chave de coalescing por evento (janela COALESCE_WINDOW_SECONDS por obra+grupo):
+// - `atualizacao_obra`: foto + fase de obra (progresso) — atualização visual, agrupadas num só aviso.
+// - `novo_documento` (Story 75-79): slot PRÓPRIO → documento não é mais suprimido por uma foto na mesma
+//   janela (nem a suprime); um lote de documentos ainda vira 1 aviso (anti-flood).
+// - `null` (nova_mensagem): comunicação direta 1:1 da equipe, NUNCA coalesce — sempre passa.
+// (Boleto não passa por aqui: tem caminho próprio `notifyNovoBoleto`, sempre dispara.)
 const COALESCE_GROUP: Record<EventoNotificacao, string | null> = {
   nova_foto: "atualizacao_obra",
-  novo_documento: "atualizacao_obra",
   progresso: "atualizacao_obra",
+  novo_documento: "novo_documento",
   nova_mensagem: null,
 }
 
