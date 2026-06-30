@@ -408,6 +408,7 @@ Nota CRÍTICA de implementar a partir de branch novo de `origin/main` (não `fea
 | 2026-06-30 | 1.2 | @sm required-fixes: migration 121→129 consistente em toda a story (FIX 1); nota CRITICO branch origin/main em Deps+DevNotes (FIX 2); semântica active-contract-wins todos-os-vínculos com AC 5a novo + ACs 3/4 corrigidos + Tasks 2-3 atualizadas para lógica 2-queries (FIX 3) | River (@sm) |
 | 2026-06-30 | 1.3 | Re-validação PO pós-fixes: **GO (9/10)** — FIX 1 (slot 129 livre confirmado em origin/main) e FIX 3 (active-contract-wins/multi-obra com AC 5a) verificados. **Status Draft → Ready**. Primeira da cadeia 20-10→20-11→20-12 | Pax (@po) |
 | 2026-06-30 | 1.4 | Implementação @dev: migration `130_leads_distrato.sql` (renumerada 129→130, slot 129 ocupado por `129_imob_kanban.sql` em origin/main) + helper `is-contato-distratado.ts` com `isContatoDistratado()` (3-pass active-contract-wins) e `propagateDistratosToLeads()` (diff em JS, idempotente). Branch `fix/distrato-bloqueio-canais-20-10` de origin/main. typecheck+lint limpos no arquivo; build full bloqueado por pré-existente `react-email-editor` (fora de escopo). **Status Ready → Ready for Review** | Dex (@dev) |
+| 2026-06-30 | 1.5 | @dev QA-fixes (gate CONCERNS 20.10): **SEC-001** resolvido — `orgId?` opcional em `DistratoCheckParams` escopa o lookup real-time de `clientes` por org (alinha com `propagateDistratosToLeads`), elimina falso-positivo cross-org; também mitiga PERF-001 quando `orgId` é passado. **REL-001** resolvido — match de email case-insensitive em `propagateDistratosToLeads` (compare `lower(email)` em JS, query em lote única, sem N+1). Semântica todos-os-vínculos inalterada (4 cenários do QA mantidos). typecheck+lint limpos no arquivo. Call-sites intactos (a 20-12 passará `org_id`). | Dex (@dev) |
 
 ---
 
@@ -429,6 +430,14 @@ Dex (@dev) — Claude Opus 4.8 (1M context)
 - **Limitação conhecida (documentada):** match por email é case-insensitive no helper; em `propagateDistratosToLeads` o filtro de email usa `.in('email', [...emails lowercased])` (telefone é a ponte canônica, email é fallback — alinhado ao Risk da story). Clientes com `sienge_customer_id = NULL` continuam detectáveis pela ponte telefone/email.
 - **Build full não validado de ponta a ponta** por blocker pré-existente e fora de escopo (`react-email-editor`). O helper ainda não é importado por nenhum módulo (Story 20-12 o consumirá), portanto não tem impacto no grafo de build. `import "server-only"` (AC 8) presente na 1ª linha — a proteção de bundle será exercida em build time quando um Client Component o importar (20-12).
 
+### QA Fixes aplicados (@dev, pós-gate CONCERNS) — 2026-06-30
+
+Os 2 findings LOW do gate (`docs/qa/gates/20.10-distrato-ponte-leads-sienge-helper.yml`) foram endereçados no helper antes da 20-12 cablar nos canais. Semântica active-contract-wins (todos-os-vínculos) NÃO foi alterada — os 4 cenários do QA permanecem válidos (só-distratado→true, só-ativo→false, misto→false, sem-match→false).
+
+- **SEC-001 (RESOLVIDO)** — escopo de org no caminho real-time. Adicionado campo opcional `orgId?: string | null` em `DistratoCheckParams`. Quando fornecido, o Passo 2 (`isContatoDistratado`) escopa o lookup de `clientes` por `.eq("org_id", orgId)` — mesmo padrão já usado em `propagateDistratosToLeads` — eliminando o falso-positivo cross-org (cliente distratado da org A bloqueando lead de mesmo telefone/email na org B). Como o match é restringido aos clientes da org, os `matchedClienteIds` e o Passo 3 (vínculos ativos) já ficam org-scoped por transitividade. Compatibilidade preservada: sem `orgId`, comportamento legado single-tenant (premissa documentada na interface). Call-sites NÃO alterados — a 20-12 passará o `org_id` do lead (param pronto e documentado). PERF-001 é mitigado pelo mesmo escopo quando `orgId` é passado.
+- **REL-001 (RESOLVIDO)** — match de email case-insensitive consistente. `propagateDistratosToLeads` já lowercaseia os emails-alvo (`targetEmails`), mas o filtro `.in("email", emailsArr)` fazia match exato no DB → falso-negativo com case divergente. Alinhado ao compare case-insensitive de `isContatoDistratado`: agora busca os leads da org com email (`.not("email","is",null)`) numa query em lote única e compara `lower(email)` em JS contra o `Set` de emails-alvo. Sem N+1 (continua 1 query), sem risco de wildcard (evita `ilike`), telefone mantido como match primário (email é fallback).
+- **Gates locais (arquivo da story):** `tsc --noEmit` → 0 erros no arquivo (só os pré-existentes de `react-email-editor` em `visual-editor.tsx`, fora de escopo); `eslint src/lib/distrato/is-contato-distratado.ts` → exit 0.
+
 ### File List
 - `supabase/migrations/130_leads_distrato.sql` (criado — Task 1; renumerado de 129 → 130, slot 129 ocupado em origin/main)
 - `packages/web/src/lib/distrato/is-contato-distratado.ts` (criado — @dev, Tasks 2-3)
@@ -437,4 +446,48 @@ Dex (@dev) — Claude Opus 4.8 (1M context)
 
 ## QA Results
 
-_A preencher pelo @qa após implementação_
+### Review Date: 2026-06-30
+
+### Reviewed By: Quinn (Test Architect)
+
+**Gate: CONCERNS** → `docs/qa/gates/20.10-distrato-ponte-leads-sienge-helper.yml`
+**Decisão da cadeia: LIBERADA para 20-11.** Volta ao @dev NÃO é exigida; concerns são não-bloqueantes e rastreados.
+
+#### Foco crítico — semântica todos-os-vínculos (active-contract-wins): VERIFICADA CORRETA ✓
+Reconstruí a lógica de `isContatoDistratado` por código contra os 4 cenários:
+- (a) só distratado → cliente entra no Passo 1, bate no Passo 2, Passo 3 não acha vínculo ativo → **true** ✓
+- (b) só ativo → cliente NÃO tem vínculo `distrato=true`, não entra em `distClienteIds` → `matchedClienteIds` vazio → **false** ✓
+- (c) misto (distratado + ativo) → cliente entra no Passo 1 e bate no Passo 2, mas Passo 3 (`distrato=false IN matchedClienteIds`) acha o vínculo ativo → **false (NÃO bloqueia)** ✓ — esta é a regra de stakeholder que não pode regredir
+- (d) sem vínculo / phone sem match → **false** (fail-open) ✓
+
+`propagateDistratosToLeads` aplica a mesma agregação: `totalmenteDistratado = hasDistrato AND NOT hasActive` (L210-212). Consistente com o helper e com AC 3/4/5/5a.
+
+#### Quality gates executados
+- `tsc --noEmit` (packages/web): **0 erros no arquivo da story**. Os 3 erros tsc totais são todos em `visual-editor.tsx` (`react-email-editor` — dep não instalada), **pré-existentes e fora de escopo → WAIVED** (nenhum arquivo da 20-10 no trace).
+- `eslint src/lib/distrato/is-contato-distratado.ts`: **exit 0**.
+- Migration slot **130 livre e único** (129 ocupado por `129_imob_kanban.sql`; renumeração 129→130 do @dev está correta).
+- Schema/imports validados — zero referência hallucinada: `clientes_obras_vinculos.distrato` (mig 116), `clientes.{org_id,email,telefone,whatsapp}` (mig 041), `createAdminClient` (admin.ts L6), `normalizePhoneBR` (@trifold/shared via index.ts L7).
+
+#### Migration 130 — não-breaking confirmado
+`ADD COLUMN IF NOT EXISTS distrato BOOLEAN NOT NULL DEFAULT FALSE` é metadata-only no PG11+ (DEFAULT não-volátil, sem table rewrite). Índice parcial `WHERE distrato=TRUE` é construído como índice plano mas, como toda linha nasce `FALSE`, o predicado casa **zero linhas no momento da criação** → build efetivamente instantâneo e não-bloqueante. Idempotência via `IF NOT EXISTS`. Sem DOWN migration — alinhado à convenção forward-only do projeto.
+
+#### Findings (todos LOW, não-bloqueantes)
+| ID | Sev | Arquivo:linha | Achado | Ação |
+|----|-----|---------------|--------|------|
+| SEC-001 | low | `is-contato-distratado.ts:79-99` | Helper sem `orgId` — Passos 1/2 consultam `clientes_obras_vinculos`/`clientes` sem filtro de org → risco de falso-positivo cross-org em multi-tenant. `propagateDistratosToLeads` ESTÁ escopado por org. | Antes de 20-12 cablar nos canais: adicionar `orgId?` opcional para escopar, ou documentar premissa single-tenant. Impacto real baixo (Trifold ≈ org única). |
+| REL-001 | low | `is-contato-distratado.ts:219-246` | `propagate` lowercaseia emails-alvo mas filtra `leads` via `.in("email", ...)` (match exato no DB) → leads com email em case diferente são perdidos (falso-negativo). Helper real-time faz compare case-insensitive em JS (sem o gap). | Email é fallback (telefone é a ponte canônica). Documentar limitação ou normalizar `leads.email`. Acompanhar em 20-11/20-12. |
+| PERF-001 | low | `is-contato-distratado.ts:79-82` | Passo 1 sem bound de org a cada chamada real-time; coberto pelo índice parcial (mig 118) mas a lista IN do Passo 2 cresce com o nº de distratados. | Aceitável no volume atual; resolver junto com SEC-001 escopando por org. |
+| TEST-001 | low | — | Smoke (Task 4) não executado contra prod do QA (read-only seguro indisponível). ACs validados por código + schema; sem testes unitários (padrão 20-9). | Smoke deferido ao @devops pós-deploy (passos no gate file). Aplicar migration 130 ANTES do código da 20-12. |
+
+#### AC → evidência (10/10 cobertos)
+AC1 (mig L30-31), AC2 (mig L40-42), AC3 (helper L75-136), AC4 (L116-118), AC5 (L92/L122), AC5a (L124-136 — Passo 3), AC6 (L50-66 fast path), AC7 (L46+L73), AC8 (L1 `server-only`), AC9 (L227-295), AC10 (L268-270 diff). Detalhe completo no gate file.
+
+#### Smoke deferido (@devops pós-deploy)
+1. `isContatoDistratado({ phone: <distratado real> })` → esperar `true`.
+2. `isContatoDistratado({ phone: <lead ativo> })` → esperar `false`.
+3. `propagateDistratosToLeads(orgId)` → `leads.distrato=true` apenas para contatos totalmente distratados; re-run → `{updated:0, cleared:0}`.
+Pré-requisito: aplicar `supabase/migrations/130_leads_distrato.sql` via Management API ANTES do deploy do código da Story 20-12.
+
+### Gate Status
+
+Gate: CONCERNS → docs/qa/gates/20.10-distrato-ponte-leads-sienge-helper.yml

@@ -27,6 +27,17 @@ export interface DistratoCheckParams {
   phone?: string | null
   /** Email do contato (match case-insensitive contra `clientes.email`). */
   email?: string | null
+  /**
+   * Org do lead/contato (SEC-001, QA 20.10). Quando fornecido, o lookup de `clientes`
+   * é escopado por `org_id` — mesmo padrão de escopo de `propagateDistratosToLeads`,
+   * evitando falso-positivo cross-org em multi-tenant (cliente distratado da org A
+   * bloqueando um lead de mesmo telefone/email na org B).
+   *
+   * Premissa quando AUSENTE: comportamento legado single-tenant — o match ignora a org.
+   * Seguro hoje (Trifold opera como org única), mas os call-sites da 20-12 devem passar
+   * o `org_id` do lead sempre que disponível.
+   */
+  orgId?: string | null
 }
 
 /**
@@ -43,7 +54,7 @@ export interface DistratoCheckParams {
 export async function isContatoDistratado(
   params: DistratoCheckParams
 ): Promise<boolean> {
-  const { leadId, phone, email } = params ?? {}
+  const { leadId, phone, email, orgId } = params ?? {}
   const admin = createAdminClient()
 
   // ── Fast path: leadId → leads.distrato (AC 6) ──────────────────────────────
@@ -93,10 +104,14 @@ export async function isContatoDistratado(
 
     // Passo 2: dentre os clientes distratados, quais batem com o contato (phone/email).
     // Os phones de `clientes` podem NÃO estar normalizados → normalizar em JS antes do match.
-    const { data: distClientes, error: cliErr } = await admin
+    // SEC-001 (QA 20.10): quando `orgId` é fornecido, escopa o lookup por org (mesmo padrão
+    // de `propagateDistratosToLeads`) — sem `orgId`, mantém o match legado single-tenant.
+    let cliQuery = admin
       .from("clientes")
       .select("id, telefone, whatsapp, email")
       .in("id", distClienteIds)
+    if (orgId) cliQuery = cliQuery.eq("org_id", orgId)
+    const { data: distClientes, error: cliErr } = await cliQuery
     if (cliErr) {
       console.error("[isContatoDistratado] erro lendo clientes distratados:", cliErr)
       return false
@@ -239,16 +254,25 @@ export async function propagateDistratosToLeads(
       for (const l of (byPhone ?? []) as { id: string }[]) shouldBeDistratado.add(l.id)
     }
     if (emailsArr.length > 0) {
+      // REL-001 (QA 20.10): `targetEmails` está lowercased, mas `leads.email` pode estar
+      // armazenado com case divergente → `.in("email", ...)` (match exato no DB) perderia
+      // esses leads (falso-negativo). Alinha com o compare case-insensitive de
+      // `isContatoDistratado`: busca os leads da org com email e compara `lower(email)` em JS
+      // (query em lote única — sem N+1; email é fallback, telefone continua a ponte primária).
+      const targetEmailSet = new Set(emailsArr)
       const { data: byEmail, error } = await admin
         .from("leads")
-        .select("id")
+        .select("id, email")
         .eq("org_id", orgId)
-        .in("email", emailsArr)
+        .not("email", "is", null)
       if (error) {
         console.error("[propagateDistratosToLeads] erro buscando leads por email:", error)
         return { updated: 0, cleared: 0 }
       }
-      for (const l of (byEmail ?? []) as { id: string }[]) shouldBeDistratado.add(l.id)
+      for (const l of (byEmail ?? []) as { id: string; email: string | null }[]) {
+        const normalized = l.email?.trim().toLowerCase()
+        if (normalized && targetEmailSet.has(normalized)) shouldBeDistratado.add(l.id)
+      }
     }
 
     // Passo 3: leads atualmente marcados distratado na org.
