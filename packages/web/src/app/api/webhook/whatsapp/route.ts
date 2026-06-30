@@ -23,6 +23,37 @@ function getSupabaseAdmin() {
   return createAdminClient()
 }
 
+// Story 75-85 — sobe a mídia recebida (imagem/documento) ao bucket público e grava
+// media_url na mensagem do lead (achada pelo whatsapp_message_id). DEFENSIVO: qualquer
+// falha é logada e ignorada — NUNCA quebra o fluxo de inbound/IA.
+async function persistInboundMedia(
+  admin: SupabaseClient,
+  buffer: ArrayBuffer,
+  mimeType: string,
+  mediaType: "image" | "document",
+  leadId: string,
+  wamid: string
+): Promise<void> {
+  try {
+    const ext = (mimeType.split("/")[1] || "bin").split(";")[0]
+    const path = `whatsapp-inbound/${leadId}/${crypto.randomUUID()}.${ext}`
+    const { error: upErr } = await admin.storage
+      .from("nicole-media")
+      .upload(path, Buffer.from(buffer), { contentType: mimeType, upsert: false })
+    if (upErr) {
+      console.error("[75-85] upload de mídia recebida falhou (ignorado):", upErr.message)
+      return
+    }
+    const { data: pub } = admin.storage.from("nicole-media").getPublicUrl(path)
+    await admin
+      .from("messages")
+      .update({ metadata: { whatsapp_message_id: wamid, media_type: mediaType, media_url: pub.publicUrl } })
+      .eq("metadata->>whatsapp_message_id", wamid)
+  } catch (e) {
+    console.error("[75-85] persistInboundMedia erro (ignorado):", e)
+  }
+}
+
 // GET — Webhook verification (Meta sends this to verify the endpoint)
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -250,7 +281,10 @@ export async function POST(request: NextRequest) {
     text = "[Mensagem de voz recebida]"
     mediaMetadata = { media_type: "voice" }
   } else if (msg.type === "image" || msg.type === "document") {
-    // Will be handled inside `after()` where we have access_token from config
+    // Story 75-85: marca o tipo já no sync → a mensagem do lead é inserida (cria a
+    // bolha mesmo sem legenda). A URL (media_url) é gravada no async, após baixar e
+    // subir a mídia ao bucket. (access_token só existe dentro do after().)
+    mediaMetadata = { media_type: msg.type }
   } else {
     return NextResponse.json({ status: "ok" })
   }
@@ -507,6 +541,8 @@ export async function POST(request: NextRequest) {
                 fileRes.headers.get("content-type") ||
                 "image/jpeg"
               asyncMediaBlock = { type: "image", base64, mimeType }
+              // Story 75-85: persiste a imagem no bucket + grava media_url na mensagem.
+              await persistInboundMedia(getSupabaseAdmin(), buffer, mimeType, "image", lead.id, messageId)
             }
           }
         } catch (err) {
@@ -545,6 +581,9 @@ export async function POST(request: NextRequest) {
               } else if (mimeType === "application/pdf") {
                 asyncMediaBlock = { type: "document", base64, mimeType }
               }
+              // Story 75-85: persiste o anexo no bucket + grava media_url na mensagem.
+              const mt = IMAGE_MIME_TYPES.has(mimeType) ? "image" : "document"
+              await persistInboundMedia(getSupabaseAdmin(), buffer, mimeType, mt, lead.id, messageId)
             }
           }
         } catch (err) {

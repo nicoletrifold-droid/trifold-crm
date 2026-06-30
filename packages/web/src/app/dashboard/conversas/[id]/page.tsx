@@ -4,6 +4,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broker-message-input"
 import { TransferConversa, type TargetUser } from "./_components/transfer-conversa"
+import { MessageMedia } from "@web/components/conversas/message-media"
 
 const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial"]
 const CAN_TRANSFER_ROLES = ["admin", "supervisor"]
@@ -191,7 +192,11 @@ export default async function ConversationDetailPage({
                     <div className="mb-1 text-[10px] font-medium uppercase opacity-60">
                       {displayLabel}
                     </div>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                    <MessageMedia
+                      mediaType={msg.metadata?.media_type as string | undefined}
+                      mediaUrl={msg.metadata?.media_url as string | undefined}
+                    />
                     <div className="mt-1 text-[10px] opacity-50">
                       {new Date(msg.created_at).toLocaleTimeString("pt-BR", {
                         hour: "2-digit",

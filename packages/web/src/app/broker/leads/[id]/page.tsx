@@ -59,7 +59,7 @@ export default async function BrokerLeadDetailPage({
   const { data: messages } = conversationIds.length
     ? await supabase
         .from("messages")
-        .select("id, role, content, created_at")
+        .select("id, role, content, created_at, metadata")
         .in("conversation_id", conversationIds)
         .order("created_at", { ascending: true })
         .limit(50)

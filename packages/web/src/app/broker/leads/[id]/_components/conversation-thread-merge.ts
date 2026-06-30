@@ -20,6 +20,7 @@ export interface ThreadMessage {
   role: string
   content: string
   created_at: string
+  metadata?: Record<string, unknown> | null
 }
 
 export function mergeMessages(
