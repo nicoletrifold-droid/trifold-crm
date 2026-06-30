@@ -9,6 +9,7 @@ import { WindowStatusBadge } from "./window-status-badge"
 import { AiStatusBanner } from "./ai-status-banner"
 import { ChatScrollArea } from "./chat-scroll-area"
 import { mergeMessages, type ThreadMessage } from "./conversation-thread-merge"
+import { MessageMedia } from "@web/components/conversas/message-media"
 import {
   dedupeById,
   hasStaleRealtime,
@@ -254,7 +255,11 @@ export function ConversationThread({
                   <div
                     className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${style.bubbleClass}`}
                   >
-                    <p className="whitespace-pre-line">{msg.content}</p>
+                    {msg.content && <p className="whitespace-pre-line">{msg.content}</p>}
+                    <MessageMedia
+                      mediaType={msg.metadata?.media_type as string | undefined}
+                      mediaUrl={msg.metadata?.media_url as string | undefined}
+                    />
                     <div className="mt-1 flex items-center justify-end gap-1">
                       <span className="text-[10px] text-stone-500 dark:text-stone-400">
                         {time}
