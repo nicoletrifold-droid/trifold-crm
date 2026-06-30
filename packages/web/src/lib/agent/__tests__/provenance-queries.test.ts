@@ -208,6 +208,34 @@ describe("buildCampaignContext — bloco de proveniência da campanha (Story 76-
     expect(provP1.lte).toEqual(["date", today])
   })
 
+  it("janela custom: insights de campanha E P1 herdam o MESMO startDate/endDate, não os 30d default (Story 76-4 / anti-regressão)", async () => {
+    const { client, recorded } = makeSupabaseMock({}, { meta_campaigns: CAMPAIGN_ROW })
+    const window = { startDate: "2026-06-01", endDate: "2026-06-10", label: "01/06 a 10/06" }
+    await buildCampaignContext(client, "org-window-custom", "camp-window-custom", window)
+
+    // Query de insights da campanha = meta_insights_daily, level=campaign, com select de métricas.
+    const insightsQ = recorded.find(
+      (r) =>
+        r.table === "meta_insights_daily" &&
+        r.eqs.some(([c, v]) => c === "level" && v === "campaign") &&
+        r.select?.includes("spend"),
+    )
+    // P1 de proveniência = meta_insights_daily com select "synced_at".
+    const provP1 = recorded.find(
+      (r) => r.table === "meta_insights_daily" && r.select === "synced_at",
+    )
+
+    expect(insightsQ, "query de insights da campanha não encontrada").toBeTruthy()
+    expect(provP1, "P1 de proveniência não encontrada").toBeTruthy()
+
+    // A janela custom é honrada (não os 30d hardcoded antigos).
+    expect(insightsQ!.gte).toEqual(["date", "2026-06-01"])
+    expect(insightsQ!.lte).toEqual(["date", "2026-06-10"])
+    // Casamento de janela: a P1 usa EXATAMENTE a mesma janela das métricas.
+    expect(provP1!.gte).toEqual(insightsQ!.gte)
+    expect(provP1!.lte).toEqual(insightsQ!.lte)
+  })
+
   it("sem synced_at na janela → 'indisponível', sem inventar data (AC5)", async () => {
     // singleData não define synced_at p/ meta_insights_daily → P1 retorna null.
     const { client } = makeSupabaseMock({}, { meta_campaigns: CAMPAIGN_ROW })
