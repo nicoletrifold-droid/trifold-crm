@@ -1,7 +1,7 @@
 # Story 75-76 — Notificação de "novo boleto" via webhook do Sienge
 
 ## Metadata
-- **Status:** InReview · **Epic:** 75 · **Branch:** feat/75-76-sienge-webhook-novo-boleto · **Complexidade:** M (3-5 pontos)
+- **Status:** Done (dormente — hook pendente) · **Epic:** 75 · **Branch:** feat/75-76-sienge-webhook-novo-boleto · **Complexidade:** M (3-5 pontos)
 - **executor:** @dev (+ @architect p/ validar contrato do webhook) · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, teste do endpoint com payload simulado, dedup]
 - **Depende de:** template `novo_boleto_cliente` (✅ aprovado/dinâmico na Meta) + rota de deep-link `cliente/boleto/[obra_id]` (✅ existe). Fecha a última parte da issue #27. Ver [[project-notificacoes-portal]], [[project-sienge-webhook-boleto]].
 
@@ -105,3 +105,5 @@ notificação (confirmado: nenhuma referência de envio no código). Investigaç
 - 2026-06-30 — @dev — Implementado. Mapeamento resolvido ao vivo (`/accounts-receivable/receivable-bills/{id}` →
   customerId+enterpriseCode). Migration 126 (dedup), endpoint, `notifyNovoBoleto`, `getReceivableBill`, 6 testes.
   type-check 0 / lint 0 / testes 6/6. Status → InReview.
+- 2026-06-30 — @devops — Decisão do usuário: subir código+migration+env DORMENTE; registro do hook (go-live) fica
+  para um OK separado (notificações do portal estão ligadas → 1º boleto real dispararia na hora). Passos 1–3 abaixo.
