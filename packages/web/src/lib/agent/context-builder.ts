@@ -643,13 +643,15 @@ export async function buildCampaignContext(
   supabase: SupabaseClient,
   orgId: string,
   metaCampaignId: string,
+  window?: DateWindow,
 ): Promise<string> {
-  const key = `campaign:${orgId}:${metaCampaignId}`
+  const today     = new Date().toISOString().split("T")[0]!
+  const startDate = window?.startDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
+  const endDate   = window?.endDate ?? today
+  const key = `campaign:${orgId}:${metaCampaignId}:${startDate}:${endDate}`
   const cached = getCached(key)
   if (cached) return cached
 
-  const today      = new Date().toISOString().split("T")[0]!
-  const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
   const date7dAgo  = (() => { const d = new Date(); d.setDate(d.getDate() - 7);  return d.toISOString().split("T")[0]! })()
 
   // Fetch campaign first — need name for leads join
@@ -678,14 +680,16 @@ export async function buildCampaignContext(
       .eq("org_id", orgId)
       .eq("level", "campaign")
       .eq("entity_id", metaCampaignId)
-      .gte("date", date30dAgo)
+      .gte("date", startDate)
+      .lte("date", endDate)
       .order("date", { ascending: false }),
     supabase
       .from("meta_insights_daily")
       .select("entity_id, spend, impressions, clicks, ctr, leads, quality_ranking")
       .eq("org_id", orgId)
       .eq("level", "adset")
-      .gte("date", date30dAgo)
+      .gte("date", startDate)
+      .lte("date", endDate)
       .order("date", { ascending: false }),
     supabase
       .from("meta_alerts")
@@ -711,10 +715,10 @@ export async function buildCampaignContext(
     // As 3 queries de proveniência (Story 76-4) vêm do helper único
     // provenanceQueryBuilders (ARCH-001) e são espalhadas AQUI, dentro do MESMO
     // Promise.all — sem round-trip extra (NFR-PERF-1) e cacheadas junto com o
-    // contexto de campanha. A P1 recebe { date30dAgo..today } (MESMA janela das
+    // contexto de campanha. A P1 recebe { startDate..endDate } (MESMA janela das
     // métricas acima, AC4) + entityId = metaCampaignId, refletindo a recência
     // DAQUELA campanha (AC4/AC7). P2/P3 são idênticas ao contexto global (sync por org).
-    ...provenanceQueryBuilders(supabase, orgId, { startDate: date30dAgo, endDate: today }, metaCampaignId),
+    ...provenanceQueryBuilders(supabase, orgId, { startDate, endDate }, metaCampaignId),
   ])
 
   const campaign = campaignRes.data
@@ -777,13 +781,14 @@ export async function buildCampaignContext(
   // Build text
   const lines: string[] = []
   const budgetStr = campaign.daily_budget ? `R$${fmtBRL(campaign.daily_budget / 100)}/dia` : "sem limite diário"
+  const periodLabel = window?.label ?? `${startDate.split("-").reverse().join("/")} a ${endDate.split("-").reverse().join("/")}`
 
   lines.push(`CONTEXTO CAMPANHA: "${campaign.name}"`)
   lines.push(formatProvenanceBlock(provenance, today))
   lines.push(`Status: ${campaign.status} | Objetivo: ${campaign.objective ?? "—"} | Budget: ${budgetStr}`)
   lines.push(`ID Meta: ${metaCampaignId}`)
   lines.push("")
-  lines.push("=== MÉTRICAS (30 dias) ===")
+  lines.push(`=== MÉTRICAS (${periodLabel}) ===`)
   lines.push(`Spend: R$${fmtBRL(tot30.spend)} | Impressões: ${tot30.impressions.toLocaleString()} | Cliques: ${tot30.clicks}`)
   lines.push(`CTR médio: ${avgCtr.toFixed(2)}% | CPM médio: R$${fmtBRL(avgCpm)} | Frequência média: ${avgFreq.toFixed(2)}`)
   lines.push(`Leads Meta: ${tot30.leads} | CPL Meta: ${cplMeta ? `R$${fmtBRL(cplMeta)}` : "—"}`)
@@ -796,7 +801,7 @@ export async function buildCampaignContext(
 
   if (adsetAgg.size > 0) {
     lines.push("")
-    lines.push("=== ADSETS (30d agregado) ===")
+    lines.push(`=== ADSETS (${periodLabel}) ===`)
     const sorted = [...adsetAgg.entries()].sort((a, b) => b[1].spend - a[1].spend)
     for (const [id, m] of sorted.slice(0, 10)) {
       const cpl = m.leads > 0 ? `R$${fmtBRL(m.spend / m.leads)}` : "—"
@@ -814,8 +819,9 @@ export async function buildCampaignContext(
     }
   }
 
-  // 7-day timeseries
-  const recent7 = insights.filter((r) => r.date >= date7dAgo).sort((a, b) => a.date.localeCompare(b.date))
+  // 7-day timeseries — limite inferior nunca sai da janela [startDate, endDate]
+  const trendFrom = date7dAgo > startDate ? date7dAgo : startDate
+  const recent7 = insights.filter((r) => r.date >= trendFrom).sort((a, b) => a.date.localeCompare(b.date))
   if (recent7.length > 0) {
     lines.push("")
     lines.push("=== TENDÊNCIA (últimos 7 dias) ===")
@@ -847,7 +853,7 @@ export function buildContext(
   window?: DateWindow,
 ): Promise<string> {
   if (contextType === "campaign" && contextId) {
-    return buildCampaignContext(supabase, orgId, contextId)
+    return buildCampaignContext(supabase, orgId, contextId, window)
   }
   return buildGlobalContext(supabase, orgId, window)
 }
