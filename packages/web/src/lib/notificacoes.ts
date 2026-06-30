@@ -3,15 +3,31 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
-// Story 75-66: janela de coalescing anti-flood por (obra, evento). Dentro dela, só a 1ª
-// notificação do mesmo evento dispara envio (lote de fotos → 1 mensagem). Ajustável.
-const COALESCE_WINDOW_SECONDS = 15 * 60
+// Janela de coalescing anti-flood. Dentro dela, só o 1º evento do mesmo GRUPO (ver
+// COALESCE_GROUP) dispara envio; os demais são suprimidos (o cliente vê tudo no portal).
+//
+// Story 75-66: introduzido com 15 min. Story 75-77: ampliado para 12 horas (feedback do diretor): o
+// time de obras sobe fotos/documentos em vários horários ao longo do dia, e 15 min reabria a janela
+// a cada lote → várias notificações/dia. 12h = no máximo 1 aviso de "atualização da obra" a cada
+// 12h por obra (janela deslizante, event-driven — sem horário fixo, sem espera até o dia seguinte).
+const COALESCE_WINDOW_SECONDS = 12 * 60 * 60
 
 export type EventoNotificacao =
   | "nova_foto"
   | "novo_documento"
   | "nova_mensagem"
   | "progresso"
+
+// Story 75-77: chave de coalescing por evento. Foto/documento/progresso compartilham UM slot
+// ("atualizacao_obra") → um lote variado de atualizações vira 1 só aviso por janela.
+// `nova_mensagem` mapeia para null: é comunicação direta 1:1 da equipe e NUNCA é
+// coalescida — sempre passa (decisão do diretor).
+const COALESCE_GROUP: Record<EventoNotificacao, string | null> = {
+  nova_foto: "atualizacao_obra",
+  novo_documento: "atualizacao_obra",
+  progresso: "atualizacao_obra",
+  nova_mensagem: null,
+}
 
 const EVENTO_LABEL: Record<EventoNotificacao, string> = {
   nova_foto: "Nova foto adicionada à sua obra",
@@ -87,23 +103,27 @@ export async function notifyClientes(
 
     const admin = createAdminClient()
 
-    // Story 75-66: coalescing anti-flood. Só o 1º evento (obra, evento) dentro da janela dispara
-    // envio; os demais (ex.: várias fotos no mesmo lote) são suprimidos — o cliente vê tudo no portal.
+    // Story 75-66/75-77: coalescing anti-flood. Só o 1º evento do mesmo GRUPO (obra, grupo) dentro
+    // da janela dispara envio; os demais (ex.: várias fotos/docs no mesmo período) são suprimidos —
+    // o cliente vê tudo no portal. `nova_mensagem` tem grupo null → nunca coalesce, sempre passa.
     // Fallback seguro: se a RPC falhar (ex.: ainda não aplicada), NÃO bloqueia — segue e envia.
-    const { data: claimed, error: claimError } = await admin.rpc("claim_obra_notif", {
-      p_obra_id: obraId,
-      p_evento: evento,
-      p_window_seconds: COALESCE_WINDOW_SECONDS,
-    })
-    if (!claimError && claimed !== true) {
-      console.log(
-        "[notificacoes] coalescido (janela anti-flood) — pulando envio",
-        { obraId, evento }
-      )
-      return
-    }
-    if (claimError) {
-      console.error("[notificacoes] claim_obra_notif falhou — enviando sem coalescing:", claimError)
+    const coalesceKey = COALESCE_GROUP[evento]
+    if (coalesceKey) {
+      const { data: claimed, error: claimError } = await admin.rpc("claim_obra_notif", {
+        p_obra_id: obraId,
+        p_evento: coalesceKey,
+        p_window_seconds: COALESCE_WINDOW_SECONDS,
+      })
+      if (!claimError && claimed !== true) {
+        console.log(
+          "[notificacoes] coalescido (janela anti-flood) — pulando envio",
+          { obraId, evento, coalesceKey }
+        )
+        return
+      }
+      if (claimError) {
+        console.error("[notificacoes] claim_obra_notif falhou — enviando sem coalescing:", claimError)
+      }
     }
 
     // Buscar org_id da obra + clientes vinculados + distratados em paralelo.
