@@ -1,6 +1,7 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { identifyClientByContact, type IdentifyClientResult } from "./identify-client"
 import { notifyRelationshipManagers } from "./notify-relationship"
+import { notifyRelationshipOnReply } from "./notify-relationship-on-reply"
 
 /**
  * Story 76-2 (Épico 76) — Roteia a entrada do WhatsApp para RELACIONAMENTO quando o
@@ -66,8 +67,19 @@ export async function maybeRouteInboundToRelationship(
       .maybeSingle(),
   ])
 
-  // Já é relacionamento → Nicole continua silente; Samara cuida (sem re-notificar).
-  if (conv?.is_relationship) return true
+  // Já é relacionamento → Nicole continua silente; Samara cuida. Story 75-86: notifica
+  // a gerente de relacionamento por push (o 1º roteamento já notifica via
+  // notifyRelationshipManagers; isto cobre as mensagens SEGUINTES, com deep-link p/ a conversa).
+  if (conv?.is_relationship) {
+    await notifyRelationshipOnReply({
+      supabase: admin,
+      conversationId: params.conversationId,
+      orgId: params.orgId,
+      contactName: params.name,
+      messageExcerpt: "",
+    })
+    return true
+  }
   // Já checado (não é cliente) → fluxo normal.
   if (conv?.relationship_checked) return false
   // Lead já em atendimento por um corretor → não sequestra um lead real.

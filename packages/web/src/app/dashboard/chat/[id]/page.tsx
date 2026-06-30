@@ -45,6 +45,13 @@ export default async function ChatDetailPage({
     notFound()
   }
 
+  // Story 75-86 — abrir a conversa marca como lida (reusa broker_last_read_at; a
+  // caixa de relacionamento é compartilhada → lido por qualquer um = lido).
+  await admin
+    .from("conversations")
+    .update({ broker_last_read_at: new Date().toISOString() })
+    .eq("id", id)
+
   const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v)
   const cliente = one(conversation.cliente as { nome: string | null; telefone: string | null } | { nome: string | null; telefone: string | null }[] | null)
   const obra = one(conversation.obra as { name: string | null } | { name: string | null }[] | null)
