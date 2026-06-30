@@ -3,6 +3,7 @@ import type {
   SiengeCustomersResponse,
   SiengeFinancialStatementsResponse,
   SiengePaymentSlipResponse,
+  SiengeReceivableBill,
   FormattedInstallment,
   InstallmentStatus,
   SiengeEnterprise,
@@ -234,6 +235,27 @@ export function computeInformeFromStatements(
     monthlyBreakdown,
     contractNumbers,
     source: "calculated",
+  }
+}
+
+/**
+ * Busca um título do contas a receber pelo ID. Retorna `customerId` (dono do
+ * título) + empreendimento/unidade — usado pelo webhook de boleto (Story 75-76)
+ * para mapear o `receivableBillId` do evento ao cliente/obra do portal.
+ * Retorna null se 404.
+ */
+export async function getReceivableBill(
+  billReceivableId: number
+): Promise<SiengeReceivableBill | null> {
+  try {
+    return await siengeRequest<SiengeReceivableBill>(
+      `/accounts-receivable/receivable-bills/${billReceivableId}`
+    )
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("HTTP 404")) {
+      return null
+    }
+    throw err
   }
 }
 
