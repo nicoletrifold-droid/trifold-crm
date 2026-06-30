@@ -75,14 +75,19 @@ describe("notifyClientes — coalescing (Story 75-66)", () => {
   })
 
   // Story 75-77 — agrupamento de tipos + janela ampliada
-  it("agrupamento: foto/documento/progresso usam a mesma chave de coalescing ('atualizacao_obra')", async () => {
+  it("agrupamento: foto/progresso usam 'atualizacao_obra'; documento tem slot próprio 'novo_documento' (Story 75-79)", async () => {
     rpcResult = { data: null, error: null } // coalescido → curto-circuita, suficiente p/ inspecionar o claim
-    for (const evento of ["nova_foto", "novo_documento", "progresso"] as const) {
+    const esperado = {
+      nova_foto: "atualizacao_obra",
+      progresso: "atualizacao_obra",
+      novo_documento: "novo_documento",
+    } as const
+    for (const [evento, grupo] of Object.entries(esperado)) {
       rpcSpy.mockClear()
-      await notifyClientes("obra-1", evento, "Vind Residence")
+      await notifyClientes("obra-1", evento as keyof typeof esperado, "Vind Residence")
       expect(rpcSpy).toHaveBeenCalledWith(
         "claim_obra_notif",
-        expect.objectContaining({ p_obra_id: "obra-1", p_evento: "atualizacao_obra" })
+        expect.objectContaining({ p_obra_id: "obra-1", p_evento: grupo })
       )
     }
   })
