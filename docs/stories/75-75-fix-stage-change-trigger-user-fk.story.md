@@ -1,7 +1,7 @@
 # Story 75-75 — Hotfix: mudança de etapa quebrada (FK user_id no trigger de stage_change)
 
 ## Metadata
-- **Status:** InReview · **Epic:** 75 · **Branch:** fix/75-75-stage-change-trigger-user-fk · **Complexidade:** S (1-2 pontos)
+- **Status:** Done · **Epic:** 75 · **Branch:** fix/75-75-stage-change-trigger-user-fk · **Complexidade:** S (1-2 pontos)
 - **executor:** @dev + @data-engineer (migration) · **quality_gate:** @qa · **quality_gate_tools:** [teste de banco com JWT humano, typecheck, lint]
 - **Prioridade:** 🔴 URGENTE — produção: nenhum usuário consegue mover card no kanban.
 
@@ -64,3 +64,4 @@ Confirmado: `0` eventos `stage_change` reais em `activities` desde o deploy. Ver
   Sem mudança de TS → typecheck/lint não afetados. Branch `fix/75-75-...` criado. Status → InReview.
 - 2026-06-30 — @qa — Gate PASS. Reproduzido o bug e validada a correção sob JWT humano (Valeria/Fernanda) +
   service-role, em prod com rollback. Pronto para @devops (push + aplicar migration 125 em prod).
+- 2026-06-30 — @devops — Branch pushado, PR #63 (squash merge na main). Migration 125 aplicada em prod via Management API. Verificado live (JWT Valeria → Atendimento OK). Status → Done. **LIVE.**
