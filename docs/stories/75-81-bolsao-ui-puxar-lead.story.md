@@ -1,7 +1,7 @@
 # Story 75-81 — Bolsão: UI do pool + puxar lead (teto + empreendimento)
 
 ## Metadata
-- **Status:** Ready · **Epic:** 64 · **Branch:** feat/75-81-bolsao-ui-puxar-lead · **Complexidade:** M (3-5 pontos)
+- **Status:** Done · **Epic:** 64 · **Branch:** feat/75-81-bolsao-ui-puxar-lead · **Complexidade:** M (3-5 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, teste do endpoint puxar (atômico, teto/empreendimento), realtime]
 - **depends_on:** 75-80 (estado `bolsao_em`), 75-73/PR #61 (menu + páginas placeholder).
 
@@ -49,7 +49,13 @@ rápido; **and as a** gestor, ver o bolsão no dashboard.
 - testes do endpoint.
 
 ## QA Results
-_(a preencher por @qa)_
+- **Verdict: PASS.** PR #61 (menu) mergeado; placeholders trocados por listas reais (broker `Pegar` + dashboard read-only),
+  componente `BolsaoList` com realtime (router.refresh em UPDATE de leads da org). Endpoint `POST /api/bolsao/[id]/pegar`
+  → RPC `pegar_lead_bolsao` (migration 128, SECURITY DEFINER, advisory lock por lead + teto + empreendimento, atômico).
+  RLS nova `leads_select_bolsao` (org vê leads do pool — necessária senão o corretor não enxerga leads sem dono).
+- **Caminho real (txn rollback, prod):** 1ª pegada `ok`, 2ª `gone` (atômico), lead atribuído, `bolsao_em` limpo,
+  1 distribuição registrada (ciclo reinicia). 7 testes do endpoint (status→HTTP) + 5 do cron (75-80). type-check 0, lint 0.
+- Observação: pool fica vazio até ligar `bolsao_enabled` (cron 75-80) — feature visível mas dormente até o go-live.
 
 ## Change Log
 - 2026-06-30 — @sm — Story criada (Epic 64). UI do bolsão + puxar lead com teto+empreendimento, atômico, realtime.

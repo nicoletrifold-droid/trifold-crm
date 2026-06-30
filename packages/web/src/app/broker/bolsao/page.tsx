@@ -1,14 +1,45 @@
-import { Container } from "lucide-react"
+import { createClient } from "@web/lib/supabase/server"
+import { getServerUser } from "@web/lib/auth"
+import { BolsaoList, type BolsaoLead } from "@web/components/bolsao/bolsao-list"
 
-// Story 75-73 — Bolsão (placeholder) na área do corretor. Função a definir.
-export default function BrokerBolsaoPage() {
+// Story 75-81 (Epic 64) — Bolsão na área do corretor: lista do pool + "Pegar".
+export const dynamic = "force-dynamic"
+
+type RawLead = {
+  id: string
+  name: string | null
+  phone: string | null
+  bolsao_em: string
+  properties: { name: string } | { name: string }[] | null
+}
+
+function normalize(l: RawLead): BolsaoLead {
+  const prop = Array.isArray(l.properties) ? l.properties[0] : l.properties
+  return { id: l.id, name: l.name, phone: l.phone, bolsao_em: l.bolsao_em, property_name: prop?.name ?? null }
+}
+
+export default async function BrokerBolsaoPage() {
+  const user = await getServerUser()
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from("leads")
+    .select("id, name, phone, bolsao_em, properties:property_interest_id(name)")
+    .eq("org_id", user.orgId)
+    .eq("is_active", true)
+    .not("bolsao_em", "is", null)
+    .order("bolsao_em", { ascending: true })
+    .limit(200)
+
+  const leads = ((data ?? []) as unknown as RawLead[]).map(normalize)
+
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight text-white">Bolsão</h1>
-      <div className="mt-10 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-stone-700 py-20 text-center">
-        <Container className="h-10 w-10 text-stone-500" />
-        <p className="text-sm text-stone-400">Em breve — funcionalidade em definição.</p>
-      </div>
+      <p className="mt-1 text-sm text-stone-400">
+        Leads disponíveis para atendimento — pegue um para começar.
+      </p>
+      <BolsaoList initialLeads={leads} orgId={user.orgId} canPull dark />
     </div>
   )
 }
