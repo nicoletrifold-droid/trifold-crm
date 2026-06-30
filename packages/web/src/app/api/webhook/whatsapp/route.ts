@@ -15,6 +15,7 @@ import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
 import { sendLibraryMediaIfRequested } from "@web/lib/ai/send-library-media"
+import { maybeRouteInboundToRelationship } from "@web/lib/relacionamento/route-inbound"
 
 export const maxDuration = 60
 
@@ -677,6 +678,26 @@ export async function POST(request: NextRequest) {
             .eq("id", conversation!.id)
           isAiActive = true
         }
+      }
+
+      // Story 76-2 — Cliente da base de obras? Se a Nicole identificar (alta confiança
+      // por telefone) que quem escreveu já é nosso cliente, a conversa vira RELACIONAMENTO:
+      // sai do funil de leads, a Nicole para de responder (handoff) e a Samara assume pelo
+      // módulo Chat. Roda só enquanto a conversa não foi classificada (relationship_checked).
+      if (isAiActive) {
+        const handledAsRelationship = await maybeRouteInboundToRelationship(supabase, {
+          conversationId: conversation!.id,
+          leadId: lead!.id,
+          orgId,
+          phone: phoneNormalized,
+          name: null, // 76-2 é só por telefone; nome (76-3) entra depois
+          fromRaw,
+          waConfig: {
+            phone_number_id: config.phone_number_id,
+            access_token: config.access_token,
+          },
+        })
+        if (handledAsRelationship) isAiActive = false
       }
 
       // Nicole pipeline

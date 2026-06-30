@@ -1,0 +1,104 @@
+schema: 1
+story: '20.9'
+slug: fix-distrato-contrato-cancelado-sienge
+gate: CONCERNS
+status_reason: >-
+  Todos os 11 ACs estão implementados e corretos no código; typecheck limpo
+  (único erro = react-email-editor pré-existente, não-relacionado). O gate é
+  CONCERNS porque a eficácia do filtro de privacidade (AC 7) depende de
+  `users.sienge_customer_id` estar populado em runtime — risco de falso-negativo
+  que DEVE ser verificado no smoke pós-deploy (Task 6) antes de considerar o bug
+  de produção realmente sanado.
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-06-25T00:00:00Z'
+
+verification:
+  typecheck: PASS  # 3 erros, todos em visual-editor.tsx (react-email-editor ausente, pré-existente)
+  build: BLOCKED_PREEXISTING  # next build bloqueia só por react-email-editor — fora do escopo (@devops pnpm install)
+  unit_tests: N/A  # integração externa Sienge; abordagem = smoke manual (definida na story)
+  migration_applied: PENDING  # migration 109 aplicar ANTES do deploy do código (@devops)
+
+ac_traceability:
+  AC1_migration_colunas: PASS       # JSONB '{}' + boolean false, ADD COLUMN IF NOT EXISTS, não-breaking/idempotente
+  AC2_merge_jsonb_por_contrato: PASS # merge preserva outros contratos; chave contract.number (documentId não existe no tipo)
+  AC3_distrato_calculado: PASS       # computeDistrato: length>0 && every(=== 'Cancelado')
+  AC4_invite_suprimido: PASS         # guard `if (email && vinculoId && !distrato)`; invite_sent_at fica NULL
+  AC5_contratos_mistos_ativo: PASS   # 1 Emitido + 1 Cancelado → every() false → distrato=false
+  AC6_denylist_valores_novos: PASS   # só "Cancelado" bloqueia; "Rescindido"/desconhecidos → false
+  AC7_notify_filtra_distratados: CONCERNS # correto no código, mas depende de users.sienge_customer_id populado (ver DATA-001)
+  AC8_reconcile_recalcula: PASS      # reconstrói situations a partir de sienge_contract_numbers × Sienge atual
+  AC9_endpoint_remediacao: PASS      # requireAuth + requireRole(['admin','supervisor']) + org_id check
+  AC10_reversao_admin: PASS          # requireAuth + requireRole(['admin']) + org_id + validação typeof boolean
+  AC11_reversao_nao_altera_dados: PASS # update só do boolean, escopo id+obra_id; nada deletado/criado
+
+top_issues:
+  - id: 'DATA-001'
+    severity: medium
+    category: reliability
+    ac: 'AC 7'
+    finding: >-
+      O filtro de distrato em notifyClientes() bloqueia um portal user APENAS se
+      users.sienge_customer_id estiver populado E coincidir com um cliente
+      distratado. A ponte CRM→portal é exclusivamente sienge_customer_id (não há
+      FK direta). Se algum dos 39 distratados existentes tiver
+      users.sienge_customer_id = NULL, ele CONTINUARÁ recebendo notificações — o
+      exato bug de privacidade que a story corrige (falso-negativo).
+    suggested_action: >-
+      Tornar a Task 6 (smoke pós-deploy) BLOQUEANTE para o deploy: após
+      reconcile-distratos, asseverar que cada vínculo com distrato=true tem o
+      clientes.sienge_customer_id espelhado no users.sienge_customer_id do portal
+      user correspondente, e confirmar via teste real que esses clientes NÃO
+      recebem. Considerar ponte de fallback (email/CPF) em iteração futura para
+      robustez.
+  - id: 'PERF-001'
+    severity: low
+    category: performance
+    ac: 'AC 1 / AC 7'
+    finding: >-
+      A migration 109 cria idx_cov_distrato WHERE distrato = FALSE (desenhado
+      para uma query de vínculos ATIVOS), mas notifyClientes() implementado
+      consulta clientes_obras_vinculos WHERE obra_id AND distrato = true (seleção
+      dos distratados). O índice parcial sobre distrato=FALSE não serve à query
+      distrato=true. Intenção divergiu entre @data-engineer e @dev.
+    suggested_action: >-
+      Index sobre (obra_id) WHERE distrato = TRUE, ou índice composto
+      (obra_id, distrato). Tabela pequena → impacto desprezível; não bloqueia.
+  - id: 'MNT-001'
+    severity: low
+    category: maintainability
+    ac: 'AC 8'
+    finding: >-
+      reconcileDistratosForObra() carrega a obra só por id, sem filtro org_id; a
+      isolação de tenant é garantida apenas pela rota chamadora (que checa
+      org_id). Função exportada → risco latente de cross-tenant se reusada fora
+      da rota.
+    suggested_action: >-
+      Adicionar parâmetro org_id (ou documentar explicitamente o contrato de que
+      a validação de tenant é responsabilidade do chamador).
+  - id: 'DOC-001'
+    severity: low
+    category: docs
+    ac: 'AC 7'
+    finding: >-
+      Comentário da migration 109 afirma que notifyClientes() filtra
+      `distrato IS NOT TRUE`, mas a implementação consulta `distrato = true`
+      (constrói conjunto de exclusão). Drift de documentação, ligado a PERF-001.
+    suggested_action: 'Alinhar comentário da migration com a query real.'
+
+acknowledged_debts:
+  - id: 'INFO-janela-transitoria'
+    note: >-
+      Durante sync multi-contrato, o vínculo fica momentaneamente distrato=true
+      entre processar o 1º contrato (Cancelado) e o 2º (Emitido). Estado FINAL
+      correto. Só relevante se notificação disparar no meio de um sync —
+      improvável. Já reconhecido por @dev e @po.
+  - id: 'INFO-reconcile-orfao'
+    note: >-
+      Contrato presente no vínculo mas ausente do Sienge atual é omitido do mapa
+      reconstruído (não inferimos situação). Se TODOS sumirem → {} → distrato=false
+      (conservador, não bloqueia indevidamente). Validar no smoke pós-deploy.
+
+regression_check:
+  non_sienge_clients: PASS  # sid == null → `if (sid != null && ...)` falso → NÃO pulado → recebe normalmente. Sem regressão.
+
+waiver: { active: false }

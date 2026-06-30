@@ -39,6 +39,13 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
+  // Story 76-4 — o grupo privilegiado (inclui gerente-relacionamento, p/ o Chat de
+  // relacionamento) lê/escreve via ADMIN client. A RLS de leads/conversations exige
+  // admin/supervisor/corretor-dono e a gerente-relacionamento não passa; para
+  // admin/supervisor/gerente-comercial é neutro (já passavam). Corretor → client de sessão.
+  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "gerente-relacionamento"].includes(appUser.role)
+  const db = isPrivileged ? createAdminClient() : supabase
+
   // --- Validação do payload (AC8) ---
   const body = await request.json().catch(() => null)
   const rawMessage = body?.message
@@ -67,7 +74,7 @@ export async function POST(
   }
 
   // --- Lead + validação de ownership (RLS já filtra por org; checagem explícita de broker) ---
-  const { data: lead } = await supabase
+  const { data: lead } = await db
     .from("leads")
     .select("id, name, phone, assigned_broker_id")
     .eq("id", id)
@@ -81,7 +88,7 @@ export async function POST(
     )
   }
 
-  const isAdmin = ["admin", "supervisor", "gerente-comercial"].includes(appUser.role)
+  const isAdmin = isPrivileged
   if (!isAdmin) {
     // Corretor só pode enviar para o próprio lead. `leads.assigned_broker_id`
     // armazena o user_id do corretor (ver RLS migration 085 e broker page,
@@ -96,7 +103,7 @@ export async function POST(
 
   // --- Conversation (AC2 / R3: criar se não existir) ---
   const channel = resolveChannel(lead.phone)
-  let { data: conversation } = await supabase
+  let { data: conversation } = await db
     .from("conversations")
     .select("id, last_message_at, is_ai_active")
     .eq("lead_id", id)
@@ -105,7 +112,7 @@ export async function POST(
     .maybeSingle()
 
   if (!conversation) {
-    const { data: created, error: createErr } = await supabase
+    const { data: created, error: createErr } = await db
       .from("conversations")
       .insert({
         org_id: appUser.org_id,
@@ -149,7 +156,7 @@ export async function POST(
   // conversa antes do insert atual. A transição é gravada com `role='assistant'`
   // + metadata.is_transition (AUTO-DECISION 51-2), portanto NÃO se conta a si
   // mesma — apenas mensagens role='broker' marcam a conversa como assumida.
-  const { data: existingBrokerMsg } = await supabase
+  const { data: existingBrokerMsg } = await db
     .from("messages")
     .select("id")
     .eq("conversation_id", conversation.id)
@@ -180,7 +187,7 @@ export async function POST(
       // Grava a transição em messages independentemente do envio externo, para
       // manter o histórico consistente e garantir a idempotência (AC3): mesmo
       // com falha de envio, a conversa registra que a apresentação ocorreu.
-      const { error: transitionInsertErr } = await supabase
+      const { error: transitionInsertErr } = await db
         .from("messages")
         .insert({
           conversation_id: conversation.id,
@@ -248,7 +255,7 @@ export async function POST(
     metadata.send_error = dispatch.error ?? "SEND_FAILED"
   }
 
-  const { data: inserted, error: insertErr } = await supabase
+  const { data: inserted, error: insertErr } = await db
     .from("messages")
     .insert({
       conversation_id: conversation.id,

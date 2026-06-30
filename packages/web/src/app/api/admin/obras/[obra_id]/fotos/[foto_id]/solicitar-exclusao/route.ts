@@ -18,7 +18,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (appUser.role !== "obras") {
+  if (appUser.role !== "obras" && appUser.role !== "gerente-relacionamento") {
     return NextResponse.json(
       { error: "Apenas o perfil obras solicita exclusão; admin/supervisor excluem direto." },
       { status: 403 }

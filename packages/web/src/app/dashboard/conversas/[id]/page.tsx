@@ -3,8 +3,10 @@ import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broker-message-input"
+import { TransferConversa, type TargetUser } from "./_components/transfer-conversa"
 
 const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial"]
+const CAN_TRANSFER_ROLES = ["admin", "supervisor"]
 
 const roleConfig: Record<
   string,
@@ -97,6 +99,32 @@ export default async function ConversationDetailPage({
     })
   }
 
+  // Story 75-84 — destinos de transferência (corretores + usuários com módulo chat).
+  // Só busca para quem pode transferir (admin/supervisor).
+  let transferTargets: TargetUser[] = []
+  if (lead?.id && CAN_TRANSFER_ROLES.includes(user.role)) {
+    const { data: chatRows } = await supabase
+      .from("role_permissions")
+      .select("roles!inner(name)")
+      .eq("org_id", user.orgId)
+      .eq("module", "chat")
+      .eq("can_access", true)
+    // Fallback seguro (caso RLS esconda role_permissions): roles de chat conhecidos.
+    const chatRoleNames = new Set<string>(["admin", "supervisor", "gerente-relacionamento"])
+    for (const r of (chatRows ?? []) as Array<{ roles: { name: string } | { name: string }[] }>) {
+      const nm = Array.isArray(r.roles) ? r.roles[0]?.name : r.roles?.name
+      if (nm) chatRoleNames.add(nm)
+    }
+    const { data: us } = await supabase
+      .from("users")
+      .select("id, name, role")
+      .eq("org_id", user.orgId)
+      .eq("is_active", true)
+      .in("role", [...chatRoleNames, "broker"])
+      .order("name")
+    transferTargets = ((us ?? []) as TargetUser[]).filter((u) => u.id !== user.id)
+  }
+
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -181,6 +209,10 @@ export default async function ConversationDetailPage({
 
         {lead?.id && CAN_SEND_ROLES.includes(user.role) && (
           <BrokerMessageInput leadId={lead.id} />
+        )}
+
+        {lead?.id && CAN_TRANSFER_ROLES.includes(user.role) && (
+          <TransferConversa leadId={lead.id} targets={transferTargets} />
         )}
       </div>
     </div>

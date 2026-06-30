@@ -1,0 +1,22 @@
+{
+  "name": "@trifold/video",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Vídeos gerados com Remotion (exploração)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts HelloWorld out/hello.mp4",
+    "upgrade": "remotion upgrade"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.482",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "remotion": "4.0.482"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}

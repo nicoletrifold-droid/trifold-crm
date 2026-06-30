@@ -1,0 +1,25 @@
+schema: 1
+story: "75.31"
+storyId: "75.31"
+title: "Analytics: filtro de período global (aplica à página inteira)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Migration 109: nova função get_analytics_summary_ranged(p_org_id, p_since, p_until)
+  que limita TODAS as seções por created_at no intervalo — aplicada em prod e testada
+  (30d=770, 7d=43). Função antiga get_analytics_summary intacta (PDF/API sem regressão).
+  Página /dashboard/analytics agora lê período da URL (range 7d/30d/90d/custom + from/to)
+  via helper resolvePeriod (Date.now isolado, lint-clean), chama o RPC ranged e recalcula
+  funil, empreendimento, origem, perda, performance e cards. Cards de topo trocados por
+  métricas do período (Total no período, Média diária, Conversão %, Perdidos). Novo
+  AnalyticsPeriodSelector (client) no topo escreve range/from/to na URL. LeadsChart perdeu
+  os botões de preset (agora globais) e recebe from/to via props; granularidade renomeada
+  "Agrupar por". Branch por empreendimento também limitado ao período. typecheck, lint e
+  next build LIMPOS. RESSALVA: render visual não verificável por CLI — usuário deve conferir
+  a página após deploy (trocar período e ver tudo refletir).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 90
+waiver: { active: false }

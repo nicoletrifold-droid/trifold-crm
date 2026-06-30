@@ -1,0 +1,21 @@
+schema: 1
+story: "76.1"
+storyId: "76.1"
+title: "Identificação de cliente da base (Nicole/Relacionamento)"
+epic: 76
+gate: PASS
+verdict: PASS
+status_reason: >
+  Helper identifyClientByContact(orgId, phone, name?) em lib/relacionamento/identify-client.ts:
+  consulta a tabela `clientes` da org e retorna phone_match | name_match | ambiguous | none +
+  candidatos com obras (clientes_obras_vinculos). Match por telefone via normalizePhoneBR
+  (tolera 9º dígito ausente do Meta), em telefone/whatsapp; fallback por nome normalizado
+  (sem acento/caixa, ignora <3 chars); múltiplos → ambiguous. Helpers puros
+  (normalizeName/selectByPhone/selectByName/resolveStatus) cobertos por 16 testes vitest
+  (todos passam). Story isolada: NENHUM wiring no webhook ainda → zero mudança de
+  comportamento em produção. typecheck e lint limpos. Base do épico 76.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 94
+waiver: { active: false }

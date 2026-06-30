@@ -1,0 +1,39 @@
+storyId: 75-67
+title: "Corrigir botão dos templates WhatsApp (404) + redirect defensivo"
+verdict: PASS
+readiness: 9/10
+date: 2026-06-26
+reviewer: "@qa"
+
+checks:
+  code_review: OK         # isUuid simples e ancorado; redirect ANTES da query nas 4 rotas; rota de redirect do boleto limpa
+  unit_tests: OK          # uuid.test.ts 4/4 (UUID, {{1}}, %7B%7B1%7D%7D, vazio/nulo/lixo, âncora)
+  acceptance_criteria: OK # AC1/AC2 (Camada 1) cobertos; AC3 verificado por Graph API (4 templates DINÂMICOS/PENDING); AC4/AC5 dependem de approval (Camada 2 código gated)
+  regressions: OK         # id legítimo (UUID) segue fluxo normal/notFound; type-check 8/8
+  performance: OK         # validação O(1) antes de qualquer fetch
+  security: OK            # redirect só para destinos internos fixos; sem open-redirect (não usa input no destino)
+  documentation: OK       # story + gate; caveat de deploy faseado destacado
+
+issues:
+  - severity: high
+    category: requirements
+    description: >
+      Camada 2 (código que envia param de botão) NÃO pode ser deployada antes de os templates ficarem APPROVED.
+      Enviar param de botão para template com botão estático = erro 132018 e o envio FALHA (corretor/cliente não
+      recebe). Os 4 templates estão PENDING.
+    recommendation: "Deploy faseado: Camada 1 agora. Camada 2 (código) em PR separado, merge só após APPROVED."
+  - severity: low
+    category: requirements
+    description: >
+      Boleto e gestor não enviam template hoje (texto/sem gatilho). Templates corrigidos preventivamente; código
+      de envio desses dois não muda nesta story.
+    recommendation: "Ao ligar gestor/boleto via template, incluir o componente button (param=id)."
+
+notes: >
+  Camada 1 entrega o fim do 404 imediatamente (redirect defensivo). Camada 2 entrega o deep-link exato após a
+  Meta aprovar os botões dinâmicos. Causa raiz confirmada por evidência (Graph API: {{1}} literal, example:null).
+
+pending_devops:
+  - "Merge do PR da Camada 1 → deploy (mata o 404 já)."
+  - "Templates Meta já editados (PENDING). Monitorar aprovação."
+  - "Após APPROVED: PR da Camada 2 (param de botão) → deploy. Status → Done."

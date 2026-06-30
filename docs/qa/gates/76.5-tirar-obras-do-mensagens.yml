@@ -1,0 +1,18 @@
+schema: 1
+story: "76.5"
+storyId: "76.5"
+title: "Tirar o perfil Obras do inbox central de Mensagens"
+epic: 76
+gate: PASS
+verdict: PASS
+status_reason: >
+  Removido "obras" de ALLOWED_ROLES/STAFF_ROLES nas 3 APIs do inbox central
+  (api/admin/mensagens/route.ts, conversa, conversa/participants); mantido
+  gerente-relacionamento/supervisor/admin. Perfil obras já tinha mensagens=false
+  (página oculta) — esta story fecha a defesa em profundidade na API. Mensagens por
+  obra (obra detail) inalteradas. typecheck e lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 95
+waiver: { active: false }

@@ -330,15 +330,9 @@ export function KanbanBoard({
         return
       }
 
-      await supabase.from("activities").insert({
-        lead_id: leadId,
-        type: "stage_change",
-        description: `Lead movido para ${targetStage.name}`,
-        metadata: {
-          from_stage_id: previousStageId,
-          to_stage_id: newStageId,
-        },
-      })
+      // O log de mudança de etapa (activities type 'stage_change') é gravado
+      // automaticamente pelo trigger trg_log_lead_stage_change no UPDATE acima
+      // (migration 124, Story 75-72) — captura todos os caminhos com org_id correto.
     },
     [stageMap, initialStages]
   )

@@ -1,0 +1,18 @@
+schema: 1
+story: "75.42"
+storyId: "75.42"
+title: "Fix filtro Data da Tarefa (assigned_to nulo)"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Removido .eq("assigned_to", user.id) da query de lead_tasks em broker/leads/page.tsx. As
+  tarefas do corretor têm assigned_to=NULL, então a trava zerava o resultado (quebrava o
+  filtro td novo e o tasks antigo). Escopo do corretor mantido pela interseção com os leads
+  dele (assigned_broker_id=user.id). Verificado: 128 tarefas pendentes do Robson passam a
+  aparecer (ex.: Tammy 24/jun). typecheck e lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-24"
+updated: "2026-06-24T00:00:00Z"
+quality_score: 95
+waiver: { active: false }

@@ -37,12 +37,17 @@ export async function requireAuth(): Promise<AuthResult> {
 
   const { data: appUser } = await supabase
     .from('users')
-    .select('id, name, role, org_id')
+    .select('id, name, role, org_id, is_active')
     .eq('auth_id', user.id)
     .single();
 
   if (!appUser) {
     return { error: NextResponse.json({ error: 'User not found' }, { status: 404 }) };
+  }
+
+  // Story 75-54 — usuário desativado não acessa nada (regra geral p/ todos os perfis).
+  if ((appUser as { is_active?: boolean }).is_active === false) {
+    return { error: NextResponse.json({ error: 'Conta desativada' }, { status: 403 }) };
   }
 
   return { supabase, user, appUser };

@@ -1,5 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
+import { businessMinutesBetweenSchedule, getOrgSchedule } from "@web/lib/roleta/business-time"
 import Link from "next/link"
 import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
@@ -8,6 +10,8 @@ import { LeadsListWithDrawer } from "./_components/leads-list-with-drawer"
 import { LeadsSeenMarker } from "./_components/leads-seen-marker"
 import { selectLatestMessageAt, type ConversationRef } from "@web/lib/broker/leads-window"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
+import { TaskDateFilter } from "./_components/task-date-filter"
+import { taskDateRange, taskDateLabel } from "@web/lib/broker/task-date-range"
 
 const TASK_LABELS: Record<string, string> = {
   atrasadas: "Tarefas atrasadas",
@@ -25,12 +29,13 @@ const AGUARDANDO_STAGE_ID = "00000000-0000-0000-0001-000000000001"
 export default async function BrokerLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string; tasks?: string; filter?: string }>
+  searchParams: Promise<{ q?: string; stage?: string; property?: string; days?: string; tasks?: string; filter?: string; td?: string; tdfrom?: string; tdto?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
-  const { q, stage, property, days, tasks, filter } = await searchParams
+  const { q, stage, property, days, tasks, filter, td, tdfrom, tdto } = await searchParams
   const search = q?.trim().toLowerCase() ?? ""
+  const tdRange = taskDateRange(td, tdfrom, tdto)
 
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
   const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1)
@@ -44,7 +49,7 @@ export default async function BrokerLeadsPage({
           // sem N+1) para o badge de janela de 24h na lista. Um lead pode ter várias
           // conversas; a mais recente é selecionada em JS via `selectLatestMessageAt`.
           `id, name, phone, email, qualification_score, interest_level,
-           stage_id, property_interest_id, created_at, updated_at,
+           stage_id, property_interest_id, created_at, updated_at, primeiro_atendimento_em,
            kanban_stages:stage_id(name, color),
            properties:property_interest_id(name),
            conversations(last_message_at)`
@@ -54,8 +59,11 @@ export default async function BrokerLeadsPage({
         .is("lost_reason", null)
         .order("updated_at", { ascending: false }),
 
-      // Tarefas pendentes do broker — para filtro por status
-      tasks
+      // Tarefas pendentes — para filtro por status (tasks) e por data (td).
+      // NÃO filtra por `assigned_to`: as tarefas criadas pelo corretor gravam
+      // `assigned_to = NULL` (Story 75-42). O escopo do corretor já vem da interseção
+      // com os leads dele (a lista só traz `assigned_broker_id = user.id`).
+      tasks || td
         ? supabase
             .from("lead_tasks")
             .select("lead_id, due_at")
@@ -66,6 +74,42 @@ export default async function BrokerLeadsPage({
       supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
       supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
     ])
+
+  // Story 75-49 — tempo (de expediente) aguardando atendimento, só p/ leads em
+  // "Aguardando atendimento" ainda não atendidos. Distribuição → agora, via business-time.
+  const aguardandoIds = (leads ?? [])
+    .filter(
+      (l) =>
+        l.stage_id === AGUARDANDO_STAGE_ID &&
+        !(l as { primeiro_atendimento_em?: string | null }).primeiro_atendimento_em
+    )
+    .map((l) => l.id)
+  const waitingByLead: Record<string, number> = {}
+  if (aguardandoIds.length > 0) {
+    const admin = createAdminClient()
+    // Story 75-59: tempo esperando pela AGENDA por dia (mesma fonte da distribuição).
+    const [{ week, timezone }, { data: distLog }] = await Promise.all([
+      getOrgSchedule(user.orgId, admin),
+      admin
+        .from("lead_distribution_log")
+        .select("lead_id, created_at")
+        .eq("org_id", user.orgId)
+        .eq("status", "distributed")
+        .in("lead_id", aguardandoIds),
+    ])
+    const now = new Date()
+    const distByLead = new Map<string, number[]>()
+    for (const d of (distLog ?? []) as Array<{ lead_id: string; created_at: string }>) {
+      const arr = distByLead.get(d.lead_id) ?? []
+      arr.push(new Date(d.created_at).getTime())
+      distByLead.set(d.lead_id, arr)
+    }
+    for (const id of aguardandoIds) {
+      const dists = (distByLead.get(id) ?? []).filter((t) => t <= now.getTime())
+      if (dists.length === 0) continue
+      waitingByLead[id] = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), now, week, timezone)
+    }
+  }
 
   // Build sets for task-based filtering
   const taskLeadIds = (() => {
@@ -89,6 +133,22 @@ export default async function BrokerLeadsPage({
     return null
   })()
 
+  // Leads com tarefa pendente vencendo no intervalo selecionado (filtro "Data da Tarefa")
+  const taskDateLeadIds = (() => {
+    if (!tdRange || !pendingTasks) return null
+    const set = new Set<string>()
+    for (const t of pendingTasks) {
+      if (tdRange === "any") {
+        set.add(t.lead_id) // Todo Período: qualquer tarefa pendente (com ou sem due_at)
+        continue
+      }
+      if (!t.due_at) continue
+      const d = new Date(t.due_at)
+      if (d >= tdRange.from && d < tdRange.to) set.add(t.lead_id)
+    }
+    return set
+  })()
+
   const daysCutoff = days ? staleCutoffMs(Number(days)) : 0
   const daysAgo = daysCutoff ? new Date(daysCutoff).toISOString() : null
 
@@ -104,6 +164,8 @@ export default async function BrokerLeadsPage({
     } else if (taskLeadIds) {
       if (!taskLeadIds.has(lead.id as string)) return false
     }
+    // Filtro "Data da Tarefa"
+    if (taskDateLeadIds && !taskDateLeadIds.has(lead.id as string)) return false
     if (!search) return true
     const name = ((lead.name as string) ?? "").toLowerCase()
     const phone = ((lead.phone as string) ?? "").toLowerCase()
@@ -115,6 +177,8 @@ export default async function BrokerLeadsPage({
     return name.includes(search) || phone.includes(search) || email.includes(search) || stageName.includes(search)
   })
 
+  const tdLabel = taskDateLabel(td, tdfrom, tdto)
+
   // URL sem o filtro de tasks (para o botão ×)
   const clearTasksUrl = (() => {
     const params = new URLSearchParams()
@@ -122,6 +186,22 @@ export default async function BrokerLeadsPage({
     if (stage) params.set("stage", stage)
     if (property) params.set("property", property)
     if (days) params.set("days", days)
+    if (filter) params.set("filter", filter)
+    if (td) params.set("td", td)
+    if (tdfrom) params.set("tdfrom", tdfrom)
+    if (tdto) params.set("tdto", tdto)
+    const qs = params.toString()
+    return `/broker/leads${qs ? `?${qs}` : ""}`
+  })()
+
+  // URL sem o filtro de data da tarefa (para o botão ×)
+  const clearTaskDateUrl = (() => {
+    const params = new URLSearchParams()
+    if (q) params.set("q", q)
+    if (stage) params.set("stage", stage)
+    if (property) params.set("property", property)
+    if (days) params.set("days", days)
+    if (tasks) params.set("tasks", tasks)
     if (filter) params.set("filter", filter)
     const qs = params.toString()
     return `/broker/leads${qs ? `?${qs}` : ""}`
@@ -135,6 +215,9 @@ export default async function BrokerLeadsPage({
     if (property) params.set("property", property)
     if (days) params.set("days", days)
     if (tasks) params.set("tasks", tasks)
+    if (td) params.set("td", td)
+    if (tdfrom) params.set("tdfrom", tdfrom)
+    if (tdto) params.set("tdto", tdto)
     const qs = params.toString()
     return `/broker/leads${qs ? `?${qs}` : ""}`
   })()
@@ -147,7 +230,7 @@ export default async function BrokerLeadsPage({
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Meus Leads</h1>
           <p className="text-sm text-gray-500 dark:text-stone-500">
-            {filtered.length}{(search || stage || tasks || filter) ? ` de ${leads?.length ?? 0}` : ""} leads
+            {filtered.length}{(search || stage || tasks || filter || td) ? ` de ${leads?.length ?? 0}` : ""} leads
           </p>
         </div>
         <NewLeadModal
@@ -165,9 +248,25 @@ export default async function BrokerLeadsPage({
         daysParam="days"
       />
 
+      <div className="flex flex-wrap items-center gap-2">
+        <TaskDateFilter />
+      </div>
+
       {/* Chip de filtro por tarefa ativo */}
-      {(tasks && TASK_LABELS[tasks]) || (filter && FILTER_LABELS[filter]) ? (
+      {(tasks && TASK_LABELS[tasks]) || (filter && FILTER_LABELS[filter]) || tdLabel ? (
         <div className="flex flex-wrap items-center gap-2">
+          {tdLabel && (
+            <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
+              {tdLabel}
+              <Link
+                href={clearTaskDateUrl}
+                className="ml-1 text-orange-400/60 hover:text-orange-300"
+                aria-label="Remover filtro"
+              >
+                ×
+              </Link>
+            </span>
+          )}
           {tasks && TASK_LABELS[tasks] && (
             <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
               {TASK_LABELS[tasks]}
@@ -216,6 +315,8 @@ export default async function BrokerLeadsPage({
               last_message_at: selectLatestMessageAt(
                 (lead as { conversations?: ConversationRef[] | null }).conversations
               ),
+              // Story 75-49 — minutos aguardando atendimento (só leads em "Aguardando").
+              waitingMinutes: waitingByLead[lead.id] ?? null,
             })) as Parameters<typeof LeadsListWithDrawer>[0]["leads"]
           }
           stages={(stages ?? []).map(s => ({ id: s.id, name: s.name, color: s.color }))}

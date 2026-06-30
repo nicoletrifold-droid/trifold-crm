@@ -1,0 +1,63 @@
+storyId: 75-57
+title: "Dia comercial para métricas de leads (corte no fechamento)"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+resolution: >
+  CONCERNS resolvido (2026-06-25): usuário optou por alinhar is_active=true nas 3 superfícies (fold-in) e manter
+  a data do dia reportado no relatório. @dev aplicou os 3 alinhamentos; 261/261 testes web verdes, typecheck limpo.
+  AC6 agora fecha; decisão da data resolvida.
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      Helper bem isolado e puro (now injetável). *ForOrg lê roleta_config com fallback 20:00. Call sites trocados
+      corretamente; weekStart/monthStart preservados conforme escopo. Bug de fuso UTC em /api/dashboard/metrics
+      corrigido de brinde.
+  - check: unit_tests
+    result: PASS
+    notes: "commercial-day.test.ts: 9 casos (bordas 19:59/20:00, madrugada, HH:MM:SS, string vazia→fallback, to exclusivo, encaixe prev↔atual). Suíte web 261/261 verde."
+  - check: acceptance_criteria
+    result: CONCERNS
+    notes: >
+      AC1-AC5, AC7-AC9 atendidos. AC6 (consistência "mesmo número") PARCIAL: o corte do dia foi unificado, mas o
+      filtro is_active DIVERGE entre as superfícies (ver issue). Pré-existente, porém impede o "mesmo número".
+  - check: no_regressions
+    result: PASS
+    notes: "261/261 testes web verdes. daily-leads-report.test.ts (formatadores) intacto. Grupo C não tocado."
+  - check: performance
+    result: CONCERNS
+    notes: >
+      commercialDayRangeForOrg adiciona 1 query a roleta_config por carga (dashboard/metrics/analytics). É lookup
+      indexado leve; no dashboard roda serial ANTES do Promise.all (poderia entrar no batch). Impacto baixo.
+  - check: security
+    result: PASS
+    notes: "Sem superfície nova; sem input de usuário no helper."
+  - check: documentation
+    result: PASS
+    notes: "Story (Dev Agent Record/File List/Change Log), comentários nos call sites, memória project-dia-comercial-metricas."
+
+issues:
+  - severity: medium
+    category: requirements
+    description: >
+      AC6 não fecha: "Leads hoje" do dashboard filtra is_active=true, mas /api/dashboard/metrics (leads_today),
+      Analytics (leadsToday) e o relatório diário (query de leads) NÃO filtram is_active — contam até leads
+      classificados como não-lead (is_active=false). Logo os números não batem exatamente. Pré-existente, mas
+      relevante agora que prometemos consistência.
+    recommendation: >
+      Alinhar as 3 superfícies a is_active=true (o card do dashboard é o comportamento "correto" — não contar lixo).
+      3 adições de 1 linha: metrics route leads_today, analytics leadsToday, daily-leads-report query de leads.
+      Baixo risco. Decidir com o usuário (fold-in nesta story vs story separada).
+
+decisions_pending:
+  - id: data-label
+    description: >
+      No relatório diário, @dev mudou a data do cabeçalho de "data de envio" (now) para o dia comercial reportado
+      (reportedDay = to-1ms). Aguardando confirmação do usuário (manter vs reverter).
+
+deploy_notes:
+  - "Sem migration. Mudança só de código (cálculo de janela)."
+  - "Comunicar à diretoria: definição de 'dia' mudou (comercial, não calendário) — números vão diferir do anterior."

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logEvent } from "@web/lib/logger"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 import {
   refreshTokenIfNeeded,
   getFormsClient,
@@ -419,7 +420,10 @@ export async function GET(request: NextRequest) {
                 channel: "whatsapp",
                 event_type: "sent",
               })
+
+              void logWhatsappSend(supabase, { orgId: campaign.org_id, template: campaign.whatsapp_template_name, category: "marketing", recipientType: "lead", toPhone: `55${fields.phone}`, status: "sent" })
             } catch (waError) {
+              void logWhatsappSend(supabase, { orgId: campaign.org_id, template: campaign.whatsapp_template_name, category: "marketing", recipientType: "lead", toPhone: `55${fields.phone}`, status: "failed", error: waError instanceof Error ? waError.message.slice(0, 300) : "Unknown" })
               await supabase
                 .from("campaign_entries")
                 .update({ whatsapp_status: "failed" })

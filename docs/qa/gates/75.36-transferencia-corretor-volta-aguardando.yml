@@ -1,0 +1,19 @@
+schema: 1
+story: "75.36"
+storyId: "75.36"
+title: "Transferir lead a outro corretor volta para Aguardando atendimento"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Ao transferir corretor, o lead passa a "Aguardando atendimento" (STAGE_IDS.novo, id
+  ...001). Bulk (/api/leads/bulk): quando broker_id é alterado, stage_id=novo; perdido
+  prevalece (lost_reason → stage perdido depois). Individual (/api/leads/[id] PATCH):
+  só reseta se assigned_broker_id REALMENTE mudou (compara com o atual) E o stage não
+  foi enviado explicitamente (protege o drag do kanban). Consistente com a roleta, que
+  já reseta para novo na distribuição. typecheck e lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 92
+waiver: { active: false }

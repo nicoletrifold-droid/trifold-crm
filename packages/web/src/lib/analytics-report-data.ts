@@ -1,8 +1,10 @@
 import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
+import type { ResolvedPeriod } from "@web/lib/analytics/period"
 
 type AnalyticsFunnelEntry = { stage_id: string; name: string; slug: string; color: string; position: number; count: number | string }
 type AnalyticsPropertyEntry = { property_id: string; name: string; count: number | string }
@@ -123,29 +125,36 @@ function buildComparison(
 
 export async function buildAnalyticsReportData(
   supabase: SupabaseClient,
-  orgId: string
+  orgId: string,
+  /**
+   * Período do relatório (Story 75-31 / 75-69). O relatório SEMPRE reflete
+   * [since, until] e compara com o período anterior de mesma duração. O cron
+   * semanal passa `resolvePeriod("7d")`; o PDF sob demanda passa o período
+   * selecionado na tela. (Caminho único — não há mais "resumo semanal" fixo.)
+   */
+  period: ResolvedPeriod
 ): Promise<AnalyticsReportData> {
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const weekStart = new Date(now)
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1)
-  weekStart.setHours(0, 0, 0, 0)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-  // IDs dos corretores ativos
+  // ── Janela do relatório ────────────────────────────────────────────────────
+  // [since, until] + período anterior de mesma duração para o comparativo.
+  const periodSince = new Date(period.sinceISO)
+  const periodUntil = new Date(period.untilISO)
+  const durationMs = periodUntil.getTime() - periodSince.getTime()
+  const aggSince = periodSince
+  const aggUntil = periodUntil
+  const compCurrStart = periodSince
+  const compPrevStart = new Date(periodSince.getTime() - durationMs)
+
+  // IDs dos corretores ATIVOS (disponíveis na roleta) — Story 75-53 (consistente com a tela).
   const { data: activeBrokersData } = await supabase
     .from("brokers")
     .select("user_id")
     .eq("org_id", orgId)
+    .eq("is_available", true)
   const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
 
   const [
-    { count: totalLeads },
-    { count: leadsToday },
-    { count: leadsWeek },
-    { count: leadsMonth },
     { data: analytics },
     { count: lpYardenCount },
     { count: lpVindCount },
@@ -153,26 +162,24 @@ export async function buildAnalyticsReportData(
     { data: propertiesRaw },
     { data: responseLeadsRaw },
   ] = await Promise.all([
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("is_active", true).eq("org_id", orgId),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", todayStart.toISOString()),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", weekStart.toISOString()),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()),
-    supabase.rpc("get_analytics_summary", { p_org_id: orgId, p_since: monthStart.toISOString() }),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: aggSince.toISOString(), p_until: aggUntil.toISOString() }),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
     supabase.from("leads")
       .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
       .eq("org_id", orgId)
-      .gte("created_at", twoWeeksAgo.toISOString())
+      .eq("is_active", true).is("lost_reason", null)
+      .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
       .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),
-    // Para cálculo de tempo de atendimento: leads dos últimos 7 dias com broker
+    // Tempo de atendimento (Story 75-51): leads ATENDIDOS no período. Mede
+    // distribuição → atendimento (primeiro_atendimento_em), igual à tela (75-47).
+    // Só mede desde 24/06/2026.
     supabase.from("leads")
-      .select("id, created_at, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
-      .eq("org_id", orgId)
-      .not("assigned_broker_id", "is", null)
-      .gte("created_at", oneWeekAgo.toISOString())
-      .limit(500),
+      .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+      .eq("org_id", orgId).not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
+      .gte("primeiro_atendimento_em", compCurrStart.toISOString()).lt("primeiro_atendimento_em", aggUntil.toISOString())
+      .limit(1000),
   ])
 
   const summary = (analytics as AnalyticsSummary | null) ?? null
@@ -213,42 +220,42 @@ export async function buildAnalyticsReportData(
     .sort(([, a], [, b]) => b - a)
     .map(([key, count]) => ({ label: SOURCE_LABELS_SHORT[key] ?? key, count }))
 
-  // ── Tempo médio de 1º atendimento por corretor ───────────────────────────
-  type ResponseLead = { id: string; created_at: string; assigned_broker_id: string | null; broker: { id: string; name: string } | { id: string; name: string }[] | null }
+  // ── Tempo médio de atendimento por corretor (Story 75-51) ────────────────
+  // DISTRIBUIÇÃO → ATENDIMENTO (primeiro_atendimento_em), igual à tela (75-47).
+  type ResponseLead = { id: string; primeiro_atendimento_em: string; assigned_broker_id: string | null; broker: { id: string; name: string } | { id: string; name: string }[] | null }
   const responseLeads = (responseLeadsRaw ?? []) as ResponseLead[]
   const leadIds = responseLeads.map(l => l.id)
 
   let brokerResponseTimes: { name: string; avgMinutes: number; count: number }[] = []
 
   if (leadIds.length > 0) {
-    const { data: firstNotes } = await supabase
-      .from("activities")
+    const { data: distLog } = await supabase
+      .from("lead_distribution_log")
       .select("lead_id, created_at")
       .eq("org_id", orgId)
-      .eq("type", "broker_note")
+      .eq("status", "distributed")
       .in("lead_id", leadIds)
-      .order("created_at", { ascending: true })
 
-    // First note per lead
-    const firstNoteByLead = new Map<string, string>()
-    for (const note of (firstNotes ?? [])) {
-      if (!firstNoteByLead.has(note.lead_id as string)) {
-        firstNoteByLead.set(note.lead_id as string, note.created_at as string)
-      }
+    const distByLead = new Map<string, number[]>()
+    for (const d of (distLog ?? [])) {
+      const arr = distByLead.get(d.lead_id as string) ?? []
+      arr.push(new Date(d.created_at as string).getTime())
+      distByLead.set(d.lead_id as string, arr)
     }
 
-    // Group by broker and calculate avg
+    // Group by broker and calculate avg (distribuição mais recente antes do atendimento)
+    // Story 75-60: tempo médio em HORÁRIO COMERCIAL (mesma agenda/fonte do SLA e da tela).
+    const { week, timezone } = await getOrgSchedule(orgId, supabase)
     const brokerMap = new Map<string, { name: string; totalMinutes: number; count: number }>()
     for (const lead of responseLeads) {
-      const firstNote = firstNoteByLead.get(lead.id)
-      if (!firstNote) continue
+      const atendido = new Date(lead.primeiro_atendimento_em).getTime()
+      const dists = (distByLead.get(lead.id) ?? []).filter((t) => t <= atendido)
+      if (dists.length === 0) continue
       const bArr = Array.isArray(lead.broker) ? lead.broker[0] : lead.broker
       if (!bArr) continue
       const bName = bArr.name
       if (HIDDEN_BROKERS.has(bName.toLowerCase().trim())) continue
-      const diffMs = new Date(firstNote).getTime() - new Date(lead.created_at).getTime()
-      if (diffMs < 0) continue
-      const diffMin = diffMs / 60000
+      const diffMin = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), new Date(atendido), week, timezone)
       const cur = brokerMap.get(bArr.id) ?? { name: bName, totalMinutes: 0, count: 0 }
       cur.totalMinutes += diffMin
       cur.count++
@@ -265,8 +272,8 @@ export async function buildAnalyticsReportData(
   const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
 
   const allRecent = (recentLeadsRaw ?? []) as RawLead[]
-  const currLeads = allRecent.filter((l) => new Date(l.created_at) >= oneWeekAgo)
-  const prevLeads = allRecent.filter((l) => new Date(l.created_at) < oneWeekAgo)
+  const currLeads = allRecent.filter((l) => new Date(l.created_at) >= compCurrStart)
+  const prevLeads = allRecent.filter((l) => new Date(l.created_at) < compCurrStart)
 
   const comparison = buildComparison(currLeads, prevLeads, propNames)
 
@@ -280,21 +287,69 @@ export async function buildAnalyticsReportData(
     minute: "2-digit",
   })
 
-  const weekEnd = new Date(oneWeekAgo)
-  weekEnd.setDate(weekEnd.getDate() + 6)
-
   const fmtDate = (d: Date) =>
     d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "short" })
 
-  const weekRange = `${fmtDate(oneWeekAgo)} – ${fmtDate(now)}`
+  const periodRange = `${fmtDate(compCurrStart)} – ${fmtDate(aggUntil)}`
+  const rangeLabel =
+    period.range === "7d" ? "Últimos 7 dias"
+      : period.range === "30d" ? "Últimos 30 dias"
+        : period.range === "90d" ? "Últimos 90 dias"
+          : "Período"
+
+  // ── Métricas dos cards do PDF ──────────────────────────────────────────────
+  const { count: perdidosCount } = await supabase
+    .from("leads").select("id", { count: "exact", head: true })
+    .eq("org_id", orgId).eq("is_active", true)
+    .not("lost_reason", "is", null)
+    .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
+  const perdidos = perdidosCount ?? 0
+
+  // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
+  const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
+
+  // Card 2: VISITAS REALIZADAS no período — agendamentos (appointments) com
+  // scheduled_at na janela e status ≠ cancelado/no-show ("visita que aconteceu",
+  // independente de quando o lead entrou). Story 75-71.
+  const { count: visitasCount } = await supabase
+    .from("appointments").select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
+    .not("status", "in", "(cancelled,no_show)")
+  const visitasRealizadas = visitasCount ?? 0
+
+  // "Novos leads" e sua variação saem da linha Total do comparativo — assim o
+  // card casa 1:1 com a tabela de comparação (mesma fonte/filtro).
+  const totalItem = comparison.find((g) => g.title === "Total")?.items[0]
+  const novosLeads = totalItem?.current ?? 0
+  const novosLeadsDelta = (totalItem?.current ?? 0) - (totalItem?.previous ?? 0)
+
+  // Tempo médio agregado, ponderado pelo nº de leads de cada corretor (mesma
+  // fonte da tabela por corretor). null quando não houve atendimentos no período.
+  const tempoLeads = brokerResponseTimes.reduce((sum, b) => sum + b.count, 0)
+  const tempoMedioMin =
+    tempoLeads > 0
+      ? Math.round(brokerResponseTimes.reduce((sum, b) => sum + b.avgMinutes * b.count, 0) / tempoLeads)
+      : null
+
+  const comparisonTitle =
+    period.range === "custom"
+      ? "Comparativo — período atual vs período anterior"
+      : `Comparativo — últimos ${period.days} dias vs ${period.days} dias anteriores`
 
   return {
     generatedAt,
-    weekRange,
-    totalLeads: totalLeads ?? 0,
-    leadsToday: leadsToday ?? 0,
-    leadsWeek: leadsWeek ?? 0,
-    leadsMonth: leadsMonth ?? 0,
+    periodRange,
+    rangeLabel,
+    novosLeads,
+    novosLeadsDelta,
+    visitou,
+    visitasRealizadas,
+    perdidos,
+    tempoMedioMin,
+    comparisonTitle,
+    currentLabel: "Atual",
+    previousLabel: "Anterior",
     stages,
     properties,
     sources,

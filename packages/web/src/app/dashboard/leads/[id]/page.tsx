@@ -1,7 +1,8 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { isUuid } from "@web/lib/uuid"
 import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
 
@@ -24,6 +25,8 @@ export default async function LeadDetailPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { id } = await params
+  // Story 75-67: link malformado (botão de template WhatsApp com "{{1}}" literal) → lista, não 404.
+  if (!isUuid(id)) redirect("/dashboard/leads")
   const { tab: rawTab } = await searchParams
   const activeTab: TabKey = (
     ["info", "conversa", "timeline", "resumo"] as TabKey[]

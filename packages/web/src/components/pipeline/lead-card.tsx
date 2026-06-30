@@ -53,6 +53,16 @@ function getMandatoryFieldsFilled(lead: LeadCardProps["lead"]): number {
   return filled
 }
 
+// Story 75-55 — rótulos dos campos obrigatórios ainda NÃO preenchidos (p/ o tooltip do X/3).
+function getMissingMandatoryLabels(lead: LeadCardProps["lead"]): string[] {
+  const missing: string[] = []
+  for (const field of MANDATORY_FIELDS) {
+    const value = (lead as Record<string, unknown>)[field.key]
+    if (value === null || value === undefined || value === "") missing.push(field.label)
+  }
+  return missing
+}
+
 export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardProps) {
   // Story 50-2: estado do modal de preview do criativo (cada card gerencia o próprio)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -93,6 +103,12 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
   const filledCount = getMandatoryFieldsFilled(lead)
   const totalMandatory = MANDATORY_FIELDS.length
   const fillPercent = Math.round((filledCount / totalMandatory) * 100)
+  // Story 75-55 — tooltip explicando o X/3 (cadastro do lead) e o que falta.
+  const missingMandatory = getMissingMandatoryLabels(lead)
+  const fillTitle =
+    missingMandatory.length === 0
+      ? `Cadastro do lead completo (${filledCount} de ${totalMandatory} obrigatórios)`
+      : `Cadastro do lead: ${filledCount} de ${totalMandatory} obrigatórios · Faltando: ${missingMandatory.join(", ")}`
 
   const interestKey = propertyName?.toLowerCase().includes("vind") ? "vind" :
     propertyName?.toLowerCase().includes("yarden") ? "yarden" : "unknown"
@@ -176,7 +192,7 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
             </>
           )}
 
-          <div className="flex flex-1 items-center gap-1.5">
+          <div className="flex flex-1 items-center gap-1.5" title={fillTitle}>
             <div className="h-1 flex-1 rounded-full bg-stone-100 dark:bg-stone-700">
               <div
                 className="h-1 rounded-full bg-orange-400 transition-all"

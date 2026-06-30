@@ -1,0 +1,21 @@
+storyId: 75-46
+title: "Fix: tempo de atendimento = distribuição → atendimento"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint, vitest]
+checks:
+  typecheck: pass
+  lint: pass
+  tests: "14 passed (formatadores inalterados)"
+acceptance_criteria:
+  AC1_calculo_distribuicao: pass
+  AC2_sem_distribuicao_fora_media: pass
+  AC3_formatadores_intactos: pass
+  AC4_qualidade: pass
+notes: >
+  Corrige o ponto de partida do tempo de atendimento no relatório diário (75-45): de
+  created_at (entrada do lead, inflava com a espera da roleta) para
+  lead_distribution_log.created_at (quando o corretor recebeu). Fim segue sendo
+  primeiro_atendimento_em (trigger 75-45). Pega a distribuição mais recente antes do
+  atendimento; lead sem distribuição fica fora da média.

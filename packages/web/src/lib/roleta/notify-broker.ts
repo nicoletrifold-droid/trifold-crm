@@ -3,6 +3,7 @@ import "server-only"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
 interface NotifyBrokerParams {
   orgId: string
@@ -78,7 +79,7 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const waP = config.notify_whatsapp && broker.phone
     ? (context
         ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
-        : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone))
+        : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone, lead.id))
         .then(() => { result.whatsapp = true })
         .catch((err: unknown) => console.error("[roleta] whatsapp error:", err))
     : Promise.resolve()
@@ -99,7 +100,8 @@ async function sendBrokerLeadTemplate(
   phone: string,
   brokerName: string,
   leadName: string,
-  leadPhone: string
+  leadPhone: string,
+  leadId: string
 ): Promise<void> {
   const { data: waConfig } = await admin
     .from("whatsapp_config")
@@ -134,6 +136,15 @@ async function sendBrokerLeadTemplate(
                 { type: "text", text: leadPhone },
               ],
             },
+            // Story 75-67: botão de URL dinâmica — o param substitui {{1}} na URL do template
+            // (base https://crm.trifold.eng.br/broker/leads/{{1}}). Só funciona com o template
+            // APROVADO como dinâmico; param em template estático = erro 132018.
+            {
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: leadId }],
+            },
           ],
         },
       }),
@@ -143,8 +154,11 @@ async function sendBrokerLeadTemplate(
 
   if (!res.ok) {
     const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template: "novo_lead_corretor", category: "utility", recipientType: "corretor", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
     throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
   }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template: "novo_lead_corretor", category: "utility", recipientType: "corretor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
 async function sendBrokerWhatsApp(
@@ -237,17 +251,89 @@ export async function notifyImobiliaria(params: NotifyImobiliariaParams): Promis
       orgId,
     }).catch((e: unknown) => console.error("[roleta] imob email error:", e)),
 
+    // Story 75-68: WhatsApp do gestor via template HSM `aviso_roleta_gestor` (proativo, fora da
+    // janela de 24h) com botão dinâmico que abre o lead exato — em vez de texto (só janela de 24h).
     (user.phone as string | null)
-      ? sendBrokerWhatsApp(
+      ? sendImobiliariaTemplate(
           admin, orgId,
           user.phone as string,
           (user.name as string) ?? "",
-          title,
           messageBody,
-          leadUrl,
+          `${lead.name ?? "Lead"}${lead.phone ? " — " + lead.phone : ""}`,
+          lead.id,
         ).catch((e: unknown) => console.error("[roleta] imob whatsapp error:", e))
       : Promise.resolve(),
   ])
+}
+
+/**
+ * Story 75-68 — Notificação proativa ao gestor via template HSM aprovado `aviso_roleta_gestor`
+ * (pt_BR): body {{1}}=nome gestor, {{2}}=mensagem do evento, {{3}}=lead (nome — telefone). Botão de
+ * URL dinâmica (base /dashboard/leads/{{1}}) → param = leadId abre o lead exato. O template já está
+ * APPROVED como dinâmico (Story 75-67), então o param de botão NÃO causa 132018.
+ */
+async function sendImobiliariaTemplate(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  phone: string,
+  gestorName: string,
+  messageBody: string,
+  leadLabel: string,
+  leadId: string
+): Promise<void> {
+  const { data: waConfig } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (!waConfig?.phone_number_id || !waConfig?.access_token) return
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${waConfig.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: phone,
+        type: "template",
+        template: {
+          name: "aviso_roleta_gestor",
+          language: { code: "pt_BR" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: gestorName },
+                { type: "text", text: messageBody },
+                { type: "text", text: leadLabel },
+              ],
+            },
+            {
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: leadId }],
+            },
+          ],
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    }
+  )
+
+  if (!res.ok) {
+    const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template: "aviso_roleta_gestor", category: "utility", recipientType: "gestor", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
+    throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
+  }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template: "aviso_roleta_gestor", category: "utility", recipientType: "gestor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
 function buildImobiliariaEmailHtml(p: { title: string; body: string; leadUrl: string }): string {

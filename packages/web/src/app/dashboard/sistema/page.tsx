@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
-import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket, History } from "lucide-react"
+import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket, History, Activity, Gauge, MessageCircle, type LucideIcon } from "lucide-react"
 
 interface SystemEvent {
   id: string
@@ -16,11 +16,34 @@ interface SystemEvent {
   created_at: string
 }
 
+interface WhatsappWindow {
+  recebidas: number
+  enviadas: number
+  total: number
+}
+interface WhatsappVolume {
+  h24: WhatsappWindow
+  d7: WhatsappWindow
+  d30: WhatsappWindow
+}
+
+interface WhatsappCostWindow {
+  disparos: number
+  custo_brl: number
+}
+interface WhatsappCost {
+  h24: WhatsappCostWindow
+  d7: WhatsappCostWindow
+  d30: WhatsappCostWindow & { por_categoria?: Record<string, number> }
+}
+
 interface Metrics {
   errors_24h: number
   messages_24h: number
   avg_claude_response_ms: number | null
   rag_fallback_rate: number
+  whatsapp_volume: WhatsappVolume | null
+  whatsapp_cost: WhatsappCost | null
 }
 
 type HealthStatus = "green" | "yellow" | "red"
@@ -48,6 +71,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   ai: "AI / Claude",
   webhook: "Webhooks",
   cron: "Cron Jobs",
+}
+
+function SectionHeader({ icon: Icon, title, meta }: { icon: LucideIcon; title: string; meta?: string }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <Icon className="h-4 w-4 text-orange-600" />
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">{title}</h2>
+      {meta && <div className="ml-auto text-xs text-stone-400 dark:text-stone-500">{meta}</div>}
+    </div>
+  )
 }
 
 export default function SistemaPage() {
@@ -160,45 +193,116 @@ export default function SistemaPage() {
         </div>
       </div>
 
-      {/* Health Status Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {Object.entries(data.health).map(([cat, status]) => {
-          const style = HEALTH_STYLES[status]
-          return (
-            <div key={cat} className={`rounded-lg border p-4 ${style.bg}`}>
-              <div className="flex items-center gap-2">
-                <div className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
-                <span className="text-sm font-medium text-stone-700 dark:text-stone-300">{CATEGORY_LABELS[cat] ?? cat}</span>
+      {/* Saúde do sistema */}
+      <div>
+        <SectionHeader icon={Activity} title="Saúde do sistema" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Object.entries(data.health).map(([cat, status]) => {
+            const style = HEALTH_STYLES[status]
+            return (
+              <div key={cat} className={`rounded-lg border p-4 ${style.bg}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
+                  <span className="text-sm font-medium text-stone-700 dark:text-stone-300">{CATEGORY_LABELS[cat] ?? cat}</span>
+                </div>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{style.label}</p>
               </div>
-              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">{style.label}</p>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-          <p className="text-xs text-stone-500 dark:text-stone-400">Mensagens (24h)</p>
-          <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.messages_24h}</p>
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-          <p className="text-xs text-stone-500 dark:text-stone-400">Tempo Claude (avg)</p>
-          <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            {data.metrics.avg_claude_response_ms != null ? `${(data.metrics.avg_claude_response_ms / 1000).toFixed(1)}s` : "—"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-          <p className="text-xs text-stone-500 dark:text-stone-400">Fallback RAG</p>
-          <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.rag_fallback_rate}%</p>
-        </div>
-        <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
-          <p className="text-xs text-stone-500 dark:text-stone-400">Erros (24h)</p>
-          <p className={`mt-1 text-2xl font-semibold ${data.metrics.errors_24h > 0 ? "text-red-600" : "text-stone-900 dark:text-stone-100"}`}>
-            {data.metrics.errors_24h}
-          </p>
+      {/* Métricas (24h) */}
+      <div>
+        <SectionHeader icon={Gauge} title="Métricas · últimas 24h" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+            <p className="text-xs text-stone-500 dark:text-stone-400">Mensagens (24h)</p>
+            <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.messages_24h}</p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+            <p className="text-xs text-stone-500 dark:text-stone-400">Tempo Claude (avg)</p>
+            <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+              {data.metrics.avg_claude_response_ms != null ? `${(data.metrics.avg_claude_response_ms / 1000).toFixed(1)}s` : "—"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+            <p className="text-xs text-stone-500 dark:text-stone-400">Fallback RAG</p>
+            <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.rag_fallback_rate}%</p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+            <p className="text-xs text-stone-500 dark:text-stone-400">Erros (24h)</p>
+            <p className={`mt-1 text-2xl font-semibold ${data.metrics.errors_24h > 0 ? "text-red-600" : "text-stone-900 dark:text-stone-100"}`}>
+              {data.metrics.errors_24h}
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* WhatsApp — volume + disparos & custo (Stories 75-61 / 75-62) */}
+      {(data.metrics.whatsapp_volume || data.metrics.whatsapp_cost) && (
+        <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-900/40">
+          <SectionHeader
+            icon={MessageCircle}
+            title="WhatsApp"
+            meta={data.metrics.whatsapp_volume ? `Últimos 30 dias · ${data.metrics.whatsapp_volume.d30.recebidas} recebidas · ${data.metrics.whatsapp_volume.d30.enviadas} enviadas` : undefined}
+          />
+          <div className="space-y-5">
+            {data.metrics.whatsapp_volume && (
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">Volume — mensagens trocadas</p>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Recebidas (24h)</p>
+                    <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.h24.recebidas}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Enviadas (24h)</p>
+                    <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.h24.enviadas}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Recebidas (7d)</p>
+                    <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.d7.recebidas}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Enviadas (7d)</p>
+                    <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_volume.d7.enviadas}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {data.metrics.whatsapp_cost && (
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">Disparos &amp; custo estimado</p>
+                  <a href="https://business.facebook.com/billing_hub/accounts" target="_blank" rel="noreferrer" className="text-xs font-medium text-[#E8856A] hover:underline">Fatura na Meta ↗</a>
+                </div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Disparos pagos (24h)</p>
+                    <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_cost.h24.disparos}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Custo est. (24h)</p>
+                    <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-400">R$ {Number(data.metrics.whatsapp_cost.h24.custo_brl).toFixed(2).replace(".", ",")}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Disparos pagos (30d)</p>
+                    <p className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">{data.metrics.whatsapp_cost.d30.disparos}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+                    <p className="text-xs text-stone-500 dark:text-stone-400">Custo est. (30d)</p>
+                    <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-400">R$ {Number(data.metrics.whatsapp_cost.d30.custo_brl).toFixed(2).replace(".", ",")}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-stone-400 dark:text-stone-500">
+                  Estimativa (preço Meta × disparos de template) — não é a fatura oficial. Conta a partir do deploy desta função. Respostas dentro da janela de 24h são grátis.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Events Table */}
       <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">

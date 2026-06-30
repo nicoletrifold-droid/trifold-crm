@@ -112,6 +112,11 @@ export default async function FasesPage({
 
   if (!obra) redirect("/cliente/sem-obra")
 
+  // Story 75-52 — ocultar "Cronograma da obra / Progresso geral" exclusivamente para a
+  // obra Yarden (mesmo gating por NOME da 75-1, que já oculta o % na home). Se renomear
+  // a obra, o card volta a aparecer.
+  const hideProgress = obra.name === "Yarden"
+
   const { data: fases } = await supabase
     .from("obra_fases")
     .select(
@@ -133,24 +138,26 @@ export default async function FasesPage({
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-6 lg:py-8">
-        {/* Cronograma card */}
-        <div className="mb-6 rounded-2xl border border-stone-800 bg-stone-900 p-5">
-          <h2 className="mb-3 text-base font-semibold text-white">
-            Cronograma da obra
-          </h2>
-          <div className="mb-1.5 flex items-center justify-between text-sm">
-            <span className="text-white/60">Progresso geral</span>
-            <span className="font-semibold text-[#F27A5E]">
-              {obra.progress_pct}%
-            </span>
+        {/* Cronograma card — oculto p/ Yarden (Story 75-52) */}
+        {!hideProgress && (
+          <div className="mb-6 rounded-2xl border border-stone-800 bg-stone-900 p-5">
+            <h2 className="mb-3 text-base font-semibold text-white">
+              Cronograma da obra
+            </h2>
+            <div className="mb-1.5 flex items-center justify-between text-sm">
+              <span className="text-white/60">Progresso geral</span>
+              <span className="font-semibold text-[#F27A5E]">
+                {obra.progress_pct}%
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-stone-800">
+              <div
+                className="h-2 rounded-full bg-[#F27A5E] transition-all"
+                style={{ width: `${obra.progress_pct}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2 w-full rounded-full bg-stone-800">
-            <div
-              className="h-2 rounded-full bg-[#F27A5E] transition-all"
-              style={{ width: `${obra.progress_pct}%` }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Phases list */}
         {allFases.length === 0 ? (

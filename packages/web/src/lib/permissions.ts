@@ -89,6 +89,16 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         chamados: true,
       }
 
+    // Gerente de Relacionamento (Story 75-41): privilégios da obras + módulo Chat (76-4).
+    case "gerente-relacionamento":
+      return {
+        ...emptyMatrix(),
+        obras: true,
+        brindes: true,
+        chamados: true,
+        chat: true,
+      }
+
     case "cliente":
       // Portal do cliente — sem acesso ao dashboard nem aos seus módulos
       return emptyMatrix()

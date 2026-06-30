@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 
 export async function GET() {
   const auth = await requireAuth()
@@ -9,10 +10,10 @@ export async function GET() {
   const orgId = appUser.org_id
   const now = new Date()
 
-  // Start of today (UTC)
-  const todayStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  ).toISOString()
+  // "Leads hoje" usa o DIA COMERCIAL (vira no fechamento) em BRT — Story 75-57.
+  // Corrige também o bug anterior, que usava meia-noite UTC (= 21h BRT do dia anterior).
+  const { from: commercialDayStart } = await commercialDayRangeForOrg(orgId, supabase, now)
+  const todayStart = commercialDayStart.toISOString()
 
   // Start of this week (Monday)
   const dayOfWeek = now.getUTCDay()
@@ -80,11 +81,12 @@ export async function GET() {
       pipelineCountsResult,
       leadsByPropertyResult,
     ] = await Promise.all([
-      // Leads created today
+      // Leads created today (dia comercial). is_active=true p/ bater com o card e o relatório (Story 75-57).
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
+        .eq("is_active", true)
         .gte("created_at", todayStart),
 
       // Qualified leads this week

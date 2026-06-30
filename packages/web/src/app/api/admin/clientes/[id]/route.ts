@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { normalizePhoneBR } from "@trifold/shared"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 const UPDATABLE_FIELDS = [
   "nome",

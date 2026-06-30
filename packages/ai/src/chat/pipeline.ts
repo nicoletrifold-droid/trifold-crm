@@ -715,15 +715,11 @@ export async function processMessageWithMetadata(
     leadPatch.qualification_status = updatedScore >= 70 ? "qualified" : updatedScore > 0 ? "in_progress" : "not_started"
     leadPatch.interest_level = updatedScore >= 70 ? "hot" : updatedScore >= 40 ? "warm" : "cold"
 
-    // Kanban stage — qualification level (lowest priority)
-
-    if (currentLead?.stage_id === STAGE_IDS.novo && updatedScore > 0) {
-      leadPatch.stage_id = STAGE_IDS.em_qualificacao
-      emit({ level: "info", category: "ai", event_type: "STAGE_CHANGE", message: `Lead moved: novo → em_qualificacao (score=${updatedScore})`, metadata: { lead_id: leadId, from: "novo", to: "em_qualificacao", score: updatedScore } })
-    } else if (currentLead?.stage_id === STAGE_IDS.em_qualificacao && updatedScore >= 70) {
-      leadPatch.stage_id = STAGE_IDS.qualificado
-      emit({ level: "info", category: "ai", event_type: "STAGE_CHANGE", message: `Lead moved: em_qualificacao → qualificado (score=${updatedScore})`, metadata: { lead_id: leadId, from: "em_qualificacao", to: "qualificado", score: updatedScore } })
-    }
+    // Kanban stage — a Nicole (IA) NUNCA move o lead de etapa (Story 75-56,
+    // generaliza a 65-1). Quem reposiciona no kanban é o corretor humano; o
+    // único lugar que seta a etapa é a distribuição da roleta (distributor.ts),
+    // que coloca em "Aguardando atendimento". A qualificação segue refletida em
+    // qualification_score/qualification_status acima — não na etapa.
 
     // Visit scheduling — requires explicit confirmation from the client (Story 61-1)
     // Double-check: no existing future appointment for this lead (prevents duplicates)
@@ -815,7 +811,8 @@ export async function processMessageWithMetadata(
     // Handoff — entrega ao corretor. Story 73-1: NÃO move para "Visita Agendada"
     // (mesmo com visita confirmada) — o corretor reposiciona o card manualmente.
     if (handoffResult.trigger && conversation.org_id) {
-      leadPatch.stage_id = STAGE_IDS.qualificado
+      // Story 75-56: handoff entrega o lead ao corretor (desativa IA, notifica,
+      // registra activity) mas NÃO muda a etapa — quem reposiciona é o corretor.
       leadPatch.ai_summary = handoffSummary
 
 
@@ -838,9 +835,9 @@ export async function processMessageWithMetadata(
         .eq("id", conversationId)
     }
 
-    // Regra interna (Story 65-1): lead já distribuído a um corretor permanece
-    // em "Aguardando atendimento". A Nicole não reposiciona no kanban um lead
-    // que já tem dono — remove qualquer mudança de stage do patch.
+    // Regra (Story 75-56, generaliza 65-1): a Nicole NUNCA escreve etapa.
+    // Defesa em profundidade — remove incondicionalmente qualquer stage_id que
+    // tenha entrado no patch, com ou sem corretor atribuído.
     guardStageForAssignedLead(leadPatch, currentLead?.assigned_broker_id)
 
     // ONE single update with all accumulated changes
@@ -1277,7 +1274,11 @@ async function updateConversationState(
   }
 }
 
-function buildPropertyDataContext(
+// Abaixo deste % vendido, "ja vendemos X" nao gera escassez (soaria abundancia):
+// usar enquadramento de oportunidade de lancamento (Story 75-65). Ajustavel.
+const SCARCITY_SOLD_THRESHOLD = 40
+
+export function buildPropertyDataContext(
   properties: Property[],
   identifiedPropertyId: string | null
 ): string {
@@ -1306,8 +1307,25 @@ function buildPropertyDataContext(
       parts.push(`Previsao de entrega: ${semester} semestre de ${d.getFullYear()} (NUNCA diga data exata, sempre diga "previsao" ou "estimativa")`)
     }
 
-    // Unidades disponíveis (SEMPRE mostrar)
-    parts.push(`Unidades: ${p.available_units ?? 0} disponiveis, ${p.reserved_units ?? 0} reservadas, ${p.sold_units ?? 0} vendidas (total: ${p.total_units ?? 0})`)
+    // Estoque (SEMPRE mostrar) — enquadrado por estagio de vendas, nunca como abundancia.
+    // A copy fica a cargo do prompt (PROPERTY_PRESENTATION_PROMPT, secao ESCASSEZ E EXCLUSIVIDADE).
+    // - maduro/bem vendido (>= SCARCITY_SOLD_THRESHOLD): ancora no quanto JA FOI VENDIDO (Story 75-64).
+    // - lancamento/poucas vendas (< threshold ou pre-lancamento): enquadra como oportunidade de lancamento,
+    //   pois "0% vendido / restam N" soaria abundancia (Story 75-65).
+    const totalU = p.total_units ?? 0
+    const soldU = p.sold_units ?? 0
+    const availU = p.available_units ?? 0
+    const isPreLaunch = p.status === "planning" || p.status === "launching"
+    const pctSold = totalU > 0 ? Math.round((soldU / totalU) * 100) : 0
+    if (totalU > 0 && availU === 0) {
+      parts.push("Estoque: ESGOTADO (sem unidades disponiveis) — ofereca lista de espera / proximos lancamentos.")
+    } else if (totalU > 0 && !isPreLaunch && pctSold >= SCARCITY_SOLD_THRESHOLD) {
+      parts.push(`Estoque (use com SUTILEZA para exclusividade/escassez, NUNCA como abundancia nem numero cru): ${soldU} de ${totalU} unidades ja vendidas (${pctSold}% vendido), restam apenas ${availU} disponiveis`)
+    } else if (totalU > 0) {
+      parts.push("Estoque (LANCAMENTO/fase inicial — NUNCA cite quantas restam nem o % vendido baixo, soa abundancia): enquadre como oportunidade de entrar cedo (melhores plantas/andares/condicoes de lancamento), exclusividade e valorizacao.")
+    } else if (availU > 0) {
+      parts.push(`Estoque (use com SUTILEZA, NUNCA como abundancia): restam apenas ${availU} unidades disponiveis`)
+    }
 
     if (p.total_floors) parts.push(`Andares: ${p.total_floors} total (${p.units_per_floor ?? 0} por andar)`)
 

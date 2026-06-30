@@ -1,0 +1,58 @@
+storyId: 75-61
+title: "Card de volume de WhatsApp no /sistema (Passo 1)"
+gate_date: 2026-06-25
+reviewer: "@qa (Quinn)"
+verdict: PASS
+implementation_readiness: 9
+
+quality_checks:
+  - check: code_review
+    result: PASS
+    notes: >
+      RPC get_whatsapp_volume_summary: join messages⋈conversations, escopo org + channel='whatsapp', janelas
+      24h/7d/30d via COUNT FILTER (uma varredura). Rota chama em paralelo e expõe metrics.whatsapp_volume
+      (mantém gate admin-only). Página: guard null + 4 cards no padrão visual existente (light/dark).
+  - check: unit_tests
+    result: PASS
+    notes: "Sem lógica pura nova (SQL + render). vitest packages/web 265/265; tsc --noEmit exit 0."
+  - check: acceptance_criteria
+    result: PASS
+    notes: >
+      AC1 (RPC recebidas=user, enviadas=assistant+broker, por janela, só whatsapp/org) validado em PROD via
+      SELECT inline: 30d=379/383/762, 24h=57, 7d=288. AC2 (mostra número real, não 0) ok. AC3 (admin-only) ok.
+      AC4 (polling reaproveita a mesma rota) ok. AC5 (uma varredura indexada) ok.
+  - check: no_regressions
+    result: PASS
+    notes: "265/265 verdes; card antigo 'Mensagens (24h)' e demais métricas intactos."
+  - check: performance
+    result: PASS
+    notes: "RPC: 1 query (30d) com join por PK + idx_messages_created_at. +1 RPC por carga do /sistema (já fazia 1)."
+  - check: security
+    result: CONCERNS
+    notes: >
+      RPC é SECURITY DEFINER e CONFIA no parâmetro p_org_id (não deriva do auth.uid). Um usuário authenticated
+      poderia, em tese, chamar a RPC direto passando o org de outra empresa e obter contagens agregadas.
+      MITIGAÇÃO/CONTEXTO: é o MESMO padrão de toda a família de RPCs de dashboard do projeto (pré-existente,
+      não regressão); hoje Trifold é single-org (sem cross-tenant possível); dado é só contagem agregada de
+      mensagens; a tela é admin-only. NÃO bloqueia.
+  - check: documentation
+    result: PASS
+    notes: "Story (File List/Dev Agent Record/Change Log) atualizada."
+
+issues: []
+
+observations:
+  - severity: low
+    category: security
+    description: >
+      Hardening multi-tenant: a RPC (como toda a família de RPCs de dashboard) confia em p_org_id. ANTES do pivô
+      para SaaS multi-tenant, endurecer a família inteira (derivar org do auth.uid ou validar p_org_id contra o
+      org do caller, ou usar SECURITY INVOKER + RLS). Item de épico futuro, não desta story.
+  - severity: low
+    category: scope
+    description: "Card antigo 'Mensagens (24h)' (system_events, mostra 0) segue intacto — reconciliar é separado. Pode confundir vs a nova seção 'Volume de WhatsApp'."
+
+deploy_notes:
+  - "Aplicar migration 116 em prod no deploy (cria a RPC). Sem isso, a seção não renderiza (guard null) — degradação graciosa."
+  - "Logo após aplicar: a seção 'Volume de WhatsApp' deve mostrar ~379 recebidas / 383 enviadas (30d)."
+  - "Passo 2 (futuro): log de disparos de templates + estimativa de custo R$ + link p/ WhatsApp Manager."

@@ -1,0 +1,18 @@
+schema: 1
+story: "75.39"
+storyId: "75.39"
+title: "Kill switch para pausar notificações do portal do cliente"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  Flag PORTAL_NOTIF_PAUSED (env): quando "1"/"true", notifyClientes retorna cedo e não
+  dispara nenhum canal (WhatsApp, e-mail, push), independente das preferências do cliente.
+  Helper portalNotificacoesPausadas() exportado; log informativo ao pular. whatsapp_config
+  compartilhado intocado; notificações de corretor/roleta inalteradas. Reversível: remover
+  a variável no Vercel e redeployar. typecheck e lint limpos.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 95
+waiver: { active: false }

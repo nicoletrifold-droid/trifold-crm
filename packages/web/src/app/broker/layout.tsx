@@ -2,7 +2,7 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { LayoutDashboard, Users, Kanban, CalendarDays, Building2, Smartphone, CreditCard, MessageSquarePlus, MessageCircle } from "lucide-react"
+import { LayoutDashboard, Users, Kanban, CalendarDays, Building2, Smartphone, CreditCard, MessageSquarePlus, MessageCircle, Container } from "lucide-react"
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
@@ -21,8 +21,9 @@ const NAV_ITEMS = [
   { href: "/broker/chat", label: "Chat", icon: <MessageCircle className={ICON_SIZE} /> },
   { href: "/broker/leads", label: "Meus Leads", icon: <Users className={ICON_SIZE} /> },
   { href: "/broker/properties", label: "Imóveis", icon: <Building2 className={ICON_SIZE} /> },
+  { href: "/broker/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} /> },
   { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true, separator: true },
-  { href: "/broker/instalar", label: "Instalar app", icon: <Smartphone className={ICON_SIZE} /> },
+  { href: "/broker/instalar", label: "App e Notificações", icon: <Smartphone className={ICON_SIZE} /> },
   { href: "/broker/suporte", label: "Suporte", icon: <MessageSquarePlus className={ICON_SIZE} /> },
 ]
 
@@ -81,13 +82,23 @@ export default async function BrokerLayout({
     leadsCount = count ?? 0
   }
 
+  // Story 75-83 — contador de leads no bolsão (pool = bolsao_em not null). RLS
+  // leads_select_bolsao (migration 128) libera o pool p/ o corretor enxergar/contar.
+  const { count: bolsaoCount } = await supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", user.orgId)
+    .eq("is_active", true)
+    .not("bolsao_em", "is", null)
+
   // Badges: Agenda (compromissos), Chat (não-lidas, verde — Story 63-19),
-  // Meus Leads (novos distribuídos — Story 75-8).
+  // Meus Leads (novos distribuídos — Story 75-8), Bolsão (pool — Story 75-83).
   const navItems = NAV_ITEMS.map((item) => {
     if (item.href === "/broker/agenda") return { ...item, badge: agendaCount ?? 0 }
     if (item.href === "/broker/chat")
       return { ...item, badge: chatUnread, badgeTone: "green" as const }
     if (item.href === "/broker/leads") return { ...item, badge: leadsCount }
+    if (item.href === "/broker/bolsao") return { ...item, badge: bolsaoCount ?? 0 }
     return item
   })
 

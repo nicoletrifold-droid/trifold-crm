@@ -1,0 +1,20 @@
+schema: 1
+story: "75.34"
+storyId: "75.34"
+title: "Botão Ativar/Desativar notificações no menu do corretor"
+epic: 75
+gate: PASS
+verdict: PASS
+status_reason: >
+  NotificationToggle (client) no topo de /broker/instalar: detecta suporte/permissão/
+  inscrição e permite Ativar (Notification.requestPermission + pushManager.subscribe +
+  POST /api/push/subscribe) e Desativar (DELETE + sub.unsubscribe). Estados tratados:
+  on/off/denied (instrução p/ desbloquear no navegador)/unsupported (iOS instalar).
+  Menu e título renomeados "App e Notificações". Reusa a API de push existente (POST/
+  DELETE). Card automático (BrokerPushPrompt) inalterado. typecheck, lint e build limpos.
+  Permissão depende do navegador → conferência manual do usuário.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 90
+waiver: { active: false }

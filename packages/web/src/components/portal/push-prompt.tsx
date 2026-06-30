@@ -19,7 +19,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 async function subscribe() {
   const reg = await navigator.serviceWorker.ready
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+  const vapidKey = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '').trim()
+  if (!vapidKey) throw new Error('Chave VAPID ausente na configuração (NEXT_PUBLIC_VAPID_PUBLIC_KEY)')
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(vapidKey),
@@ -47,7 +48,7 @@ export function PushPrompt() {
 
     // Permission already granted — silent re-subscription, no banner
     if (Notification.permission === 'granted') {
-      void subscribe().catch(() => {})
+      void subscribe().catch((err) => console.error('[push] Falha ao inscrever (portal):', err))
       return
     }
 
@@ -80,7 +81,7 @@ export function PushPrompt() {
     const permission = await Notification.requestPermission()
 
     if (permission === 'granted') {
-      await subscribe().catch(() => {})
+      await subscribe().catch((err) => console.error('[push] Falha ao inscrever (portal):', err))
     } else {
       sessionStorage.setItem('push-dismissed', '1')
     }

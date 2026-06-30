@@ -3,22 +3,23 @@
  */
 
 /**
- * Regra interna (Story 65-1): um lead já distribuído a um corretor permanece
- * em "Aguardando atendimento". A Nicole NUNCA reposiciona no kanban um lead que
- * já tem dono — qualificação por score, visita agendada e handoff não movem o
- * stage. Apenas o corretor humano muda de coluna.
+ * Regra interna (Story 75-56, generaliza a 65-1): a Nicole NUNCA reposiciona um
+ * lead no kanban — nem por score, nem por visita agendada, nem por handoff, com
+ * ou sem corretor atribuído. Apenas o corretor humano muda de coluna; o único
+ * lugar que seta a etapa ("Aguardando atendimento") é a distribuição da roleta.
  *
- * Remove (in-place) o `stage_id` do patch quando o lead já está atribuído.
- * Demais campos do patch (score, dados, ai_summary) seguem normalmente.
+ * Remove (in-place) e INCONDICIONALMENTE o `stage_id` do patch da IA. Demais
+ * campos do patch (score, dados, ai_summary) seguem normalmente.
  *
  * @param leadPatch        patch acumulado que será aplicado em `leads`
- * @param assignedBrokerId dono atual do lead (estado ANTES desta execução)
+ * @param assignedBrokerId dono atual do lead — mantido por compatibilidade do
+ *                         call-site; não altera mais o comportamento.
  */
 export function guardStageForAssignedLead(
   leadPatch: Record<string, unknown>,
-  assignedBrokerId: string | null | undefined
+  _assignedBrokerId?: string | null | undefined
 ): void {
-  if (assignedBrokerId && "stage_id" in leadPatch) {
+  if ("stage_id" in leadPatch) {
     delete leadPatch.stage_id
   }
 }

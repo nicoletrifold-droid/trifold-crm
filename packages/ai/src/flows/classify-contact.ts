@@ -15,6 +15,7 @@ import { isNonLeadContact } from "./handoff"
 
 export type ContactCategory =
   | "lead"
+  | "cliente_existente"
   | "emprego"
   | "parceria"
   | "fornecedor"
@@ -32,6 +33,8 @@ const CLASSIFY_PROMPT = `Voce classifica a PRIMEIRA mensagem de um contato novo 
 Decida se o contato e um LEAD (potencial comprador) ou NAO-LEAD.
 
 LEAD = qualquer pessoa interessada em comprar, conhecer, visitar ou saber sobre os apartamentos/empreendimentos. Inclui perguntas sobre preco, plantas, vaga de garagem, andar, financiamento, localizacao, agendar visita. NA DUVIDA, e LEAD.
+
+CLIENTE_EXISTENTE = a pessoa indica claramente que JA E CLIENTE da Trifold: ja comprou / ja tem um imovel, apartamento ou OBRA com a gente; fala da SUA obra/unidade; pergunta sobre o ANDAMENTO da construcao dela, fotos/documentos/boleto da obra dela; menciona contrato/financiamento JA firmado; ou responde que sim, ja e cliente. NAO confundir com quem quer COMPRAR (esse e LEAD). So marque cliente_existente com sinal EXPLICITO de que ja e cliente.
 
 NAO-LEAD = contatos que NAO querem comprar imovel:
 - "emprego": busca vaga de trabalho, envio de curriculo, quer fazer parte da equipe, oferece experiencia profissional para ajudar a empresa
@@ -99,6 +102,7 @@ Mensagem do contato:
 
 const VALID_CATEGORIES: ContactCategory[] = [
   "lead",
+  "cliente_existente",
   "emprego",
   "parceria",
   "fornecedor",

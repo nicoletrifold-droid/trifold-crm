@@ -7,7 +7,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * GET   → { atendente_padrao_id, staff[] }
  * PATCH { atendente_padrao_id } → define (null = nenhum)
  */
-const STAFF_ROLES = ["admin", "supervisor", "obras", "gerente-comercial"]
+const STAFF_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento", "gerente-comercial"]
 const CONFIG_ROLES = ["admin", "supervisor"]
 
 export async function GET() {

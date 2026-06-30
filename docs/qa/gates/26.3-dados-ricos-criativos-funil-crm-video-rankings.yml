@@ -1,0 +1,16 @@
+schema: 1
+story: '26.3'
+gate: PASS
+status_reason: 'Extensão read-only de surfacing validada: funil CRM por kanban_stages.type (else-if mutuamente exclusivo, sem dupla contagem, embed to-one normalizado), rankings/vídeo most-recent-wins, tenant isolation org_id nas 2 queries novas, graceful degradation completa, zero regressão na 26.1, admin-only intacto. AC2 EXPLAIN confirmado em prod (Bitmap Index Scan em idx_leads_metadata_ad_id, 26.45ms, sem Seq Scan). type-check limpo nos 2 arquivos da story.'
+reviewer: 'Quinn'
+updated: '2026-06-25T00:00:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'O cron meta-sync-insights/route.ts:305-307 grava o ranking cru da Meta (`i.quality_ranking ?? null`). A Meta Marketing API pode retornar variantes `BELOW_AVERAGE_10/20/35`, mas o CHECK da migration 075 só aceita os 3 valores canônicos (ABOVE_AVERAGE/AVERAGE/BELOW_AVERAGE) — inserts com variantes seriam rejeitados, de modo que ads "abaixo da média" podem nunca persistir ranking e o badge vermelho "Abaixo da média" pode nunca aparecer na prática. Issue de completude de dados na camada cron/migration (075 + meta-sync-insights), PRÉ-EXISTENTE e FORA do escopo read-only desta story.'
+    suggested_action: 'Investigar em story separada se o cron precisa normalizar BELOW_AVERAGE_* → BELOW_AVERAGE antes do upsert (ou se a Meta já retorna canônico nesta conta). O mapeamento do frontend está correto contra o contrato do banco; rankingBadge() degrada graciosamente (retorna null) para qualquer valor não-mapeado. Não-bloqueante para 26.3.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'Na agregação de enrichment (route.ts:301-308), o gate de extração de vídeo usa `cur.video_hook_rate === null`. Num cenário raro em que a linha mais recente com video_metrics tem hook_rate=null mas completion_rate preenchido, uma linha posterior com hook_rate não-null sobrescreveria o completion_rate já capturado. Edge case sem impacto real (hook e completion são gravados juntos por buildVideoMetrics), apenas nota de robustez.'
+    suggested_action: 'Opcional: extrair hook e completion com gates independentes se houver evidência de dados parciais. Sem ação obrigatória.'
+waiver: { active: false }

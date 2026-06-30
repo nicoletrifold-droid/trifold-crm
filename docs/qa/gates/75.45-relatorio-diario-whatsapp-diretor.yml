@@ -1,0 +1,31 @@
+storyId: 75-45
+title: "Relatório diário de leads via WhatsApp (diretor Alexandre)"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint, vitest]
+checks:
+  typecheck: pass
+  lint: pass
+  tests: "14 passed (daily-leads-report formatadores)"
+acceptance_criteria:
+  AC1_trigger_carimbo: pass        # migration 112 aplicada + testada (rollback): mover de 'novo' carimba primeiro_atendimento_em; idempotente
+  AC2_builder_metricas: pass       # builder replica SQL validado manualmente; formatadores unit-testados
+  AC3_cron_0759: pass              # vercel.json 59 10 UTC = 07:59 BRT; protegido por CRON_SECRET
+  AC4_template_entrega: pending    # depende de aprovação do template HSM na Meta (externo) + env DAILY_REPORT_RECIPIENTS; smoke test após aprovação
+  AC5_edge_sem_dados: pass         # formatTempo([]) → texto; sem divisão por zero; lead nunca em 'novo' não entra na média
+  AC6_qualidade: pass
+issues:
+  - severity: low
+    category: tests
+    description: "Caminho completo do builder (queries DB) não roda em teste automatizado; só os formatadores."
+    recommendation: "SQL subjacente validado manualmente em prod + join 'users!inner' segue padrão do distributor. Smoke test real cobre pós-aprovação do template."
+  - severity: low
+    category: requirements
+    description: "Envio real (AC4) bloqueado por aprovação externa do template na Meta."
+    recommendation: "Código em prod aguarda template ativo (igual 75-23/24). Ao aprovar: setar DAILY_REPORT_RECIPIENTS + smoke test."
+notes: >
+  Trigger no banco (migration 112) carimba leads.primeiro_atendimento_em na 1a saída de
+  'Aguardando atendimento' — captura todos os ~20 caminhos de mudança de estágio. Builder +
+  envio por template relatorio_diario_leads + cron 07:59 BRT. Tempo de atendimento começa a
+  medir a partir da aplicação do trigger (2026-06-24).

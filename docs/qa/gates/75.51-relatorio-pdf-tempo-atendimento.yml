@@ -1,0 +1,17 @@
+storyId: 75-51
+title: "Relatório PDF do analytics: tempo de atendimento = distribuição → atendimento"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint]
+checks:
+  typecheck: pass
+  lint: pass
+acceptance_criteria:
+  AC1_pdf_distribuicao_atendimento: pass
+  AC2_titulo_condizente: pass
+  AC3_qualidade: pass
+notes: >
+  Alinha o PDF do analytics (analytics-report-data.ts, usado pelo /api/analytics/report e pelo
+  cron analytics-report) à tela (75-47): mede primeiro_atendimento_em - lead_distribution_log.created_at.
+  Follow-up registrado na story: extrair calculo compartilhado tela<->relatorio p/ evitar nova divergencia.

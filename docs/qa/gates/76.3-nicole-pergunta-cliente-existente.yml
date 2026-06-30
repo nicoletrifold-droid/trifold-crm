@@ -1,0 +1,23 @@
+schema: 1
+story: "76.3"
+storyId: "76.3"
+title: "Nicole pergunta/identifica cliente existente pelo diálogo"
+epic: 76
+gate: PASS
+verdict: PASS
+status_reason: >
+  classify-contact ganha categoria cliente_existente (conservadora, por sinais explícitos de
+  já-cliente). roleta-retry: category cliente_existente → routeLeadIdToRelationship (handoff +
+  notifica Samara + arquiva lead) em vez de distribuir. route-inbound: extraído
+  applyRelationshipRouting (compartilhado webhook 76-2 / roleta 76-3, cliente/obra opcionais) +
+  routeLeadIdToRelationship (orquestra do lead no idle; best-effort casa cadastro p/ obra).
+  Guardrail RN11 (guardrails.ts + override no banco agent_prompts) faz a Nicole perguntar na
+  dúvida e encaminhar clientes ao relacionamento sem forçar (comprador segue como lead — evita
+  falso-positivo; match por nome NÃO é decisivo). typecheck web+ai, lint e 32 testes limpos.
+  ATENÇÃO: RN11 muda comportamento conversacional da Nicole (prompt em prod) — validar em
+  teste real antes/depois do deploy. Não deployado (push do épico após revisão).
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-06-23"
+updated: "2026-06-23T00:00:00Z"
+quality_score: 86
+waiver: { active: false }

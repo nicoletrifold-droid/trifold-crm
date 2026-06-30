@@ -23,6 +23,26 @@ interface Lead {
   last_message_at: string | null
   kanban_stages: { name: string; color: string | null } | { name: string; color: string | null }[] | null
   properties: { name: string } | { name: string }[] | null
+  /** Story 75-49 — minutos de expediente aguardando atendimento (só p/ leads em "Aguardando"). */
+  waitingMinutes?: number | null
+}
+
+/** Story 75-49 — "⏱ aguardando há X" nos leads ainda não atendidos. Cor escala com o SLA (60 min). */
+function WaitingBadge({ minutes }: { minutes: number | null | undefined }) {
+  if (minutes == null) return null
+  const label = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`
+  const tone =
+    minutes <= 30
+      ? "text-amber-600 dark:text-amber-400"
+      : minutes <= 60
+      ? "text-orange-600 dark:text-orange-400"
+      : "text-red-600 dark:text-red-400"
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${tone}`} title="Tempo aguardando atendimento (horário comercial)">
+      <Clock className="h-3 w-3" aria-hidden="true" />
+      aguardando há {label}
+    </span>
+  )
 }
 
 /** Story 63-9 — estilo do badge compacto de janela de 24h por status. */
@@ -110,9 +130,10 @@ export function LeadsListWithDrawer({ leads }: Props) {
           const propertyData = getProperty(lead)
           return (
             <div key={lead.id} className="flex items-center gap-2">
-              <Link
-                href={`/broker/leads/${lead.id}`}
-                className="flex flex-1 items-center gap-3 rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200 active:bg-gray-50 dark:bg-stone-900 dark:ring-stone-800 dark:active:bg-stone-800"
+              <button
+                type="button"
+                onClick={() => setSelectedLeadId(lead.id)}
+                className="flex flex-1 items-center gap-3 rounded-xl bg-white px-4 py-3.5 text-left ring-1 ring-gray-200 active:bg-gray-50 dark:bg-stone-900 dark:ring-stone-800 dark:active:bg-stone-800"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-gray-900 dark:text-stone-100">
@@ -138,18 +159,19 @@ export function LeadsListWithDrawer({ leads }: Props) {
                     </span>
                   )}
                   <LeadWindowBadge lead={lead} />
+                  <WaitingBadge minutes={lead.waitingMinutes} />
                   <p className="text-[11px] text-stone-600">
                     {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
                   </p>
                 </div>
-              </Link>
-              <button
-                onClick={() => setSelectedLeadId(lead.id)}
-                aria-label="Responder"
+              </button>
+              <Link
+                href={`/broker/leads/${lead.id}`}
+                aria-label="Abrir conversa"
                 className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl bg-orange-50 p-3 text-orange-500 ring-1 ring-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:ring-orange-500/30 dark:hover:bg-orange-500/20"
               >
                 <MessageCircle className="h-5 w-5" />
-              </button>
+              </Link>
             </div>
           )
         })}
@@ -176,12 +198,16 @@ export function LeadsListWithDrawer({ leads }: Props) {
               return (
                 <tr key={lead.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-stone-800/40">
                   <td className="px-4 py-3">
-                    <Link href={`/broker/leads/${lead.id}`} className="block">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLeadId(lead.id)}
+                      className="block w-full text-left"
+                    >
                       <p className="font-medium text-gray-900 dark:text-stone-100">
                         {lead.name || lead.phone}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-stone-500">{lead.phone}</p>
-                    </Link>
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-stone-400">
                     {(propertyData as { name?: string } | null)?.name ?? "—"}
@@ -198,6 +224,9 @@ export function LeadsListWithDrawer({ leads }: Props) {
                         {(stageData as { name: string }).name}
                       </span>
                     ) : "—"}
+                    {lead.waitingMinutes != null && (
+                      <div className="mt-1"><WaitingBadge minutes={lead.waitingMinutes} /></div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {score != null ? (
@@ -216,13 +245,13 @@ export function LeadsListWithDrawer({ leads }: Props) {
                     {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => setSelectedLeadId(lead.id)}
-                      aria-label="Responder"
+                    <Link
+                      href={`/broker/leads/${lead.id}`}
+                      aria-label="Abrir conversa"
                       className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 text-stone-400 hover:bg-orange-50 hover:text-orange-500 transition-colors dark:text-stone-600 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
                     >
                       <MessageCircle className="h-4 w-4" />
-                    </button>
+                    </Link>
                   </td>
                 </tr>
               )

@@ -12,7 +12,6 @@ import {
 } from "recharts"
 
 type Granularity = "day" | "week" | "month"
-type Preset = "7d" | "30d" | "90d" | "custom"
 
 interface PeriodEntry {
   period: string
@@ -45,22 +44,6 @@ const GRANULARITY_OPTIONS: { value: Granularity; label: string }[] = [
   { value: "week", label: "Semana" },
   { value: "month", label: "Mês" },
 ]
-
-const PRESET_OPTIONS: { value: Preset; label: string }[] = [
-  { value: "7d", label: "7d" },
-  { value: "30d", label: "30d" },
-  { value: "90d", label: "90d" },
-  { value: "custom", label: "Custom" },
-]
-
-function getPresetRange(preset: Preset): { from: string; to: string } | null {
-  if (preset === "custom") return null
-  const to = new Date()
-  const from = new Date()
-  const days = { "7d": 7, "30d": 30, "90d": 90 }[preset]
-  from.setDate(from.getDate() - days)
-  return { from: from.toISOString(), to: to.toISOString() }
-}
 
 function formatPeriodLabel(period: string, granularity: Granularity): string {
   if (granularity === "month") {
@@ -130,13 +113,13 @@ function CustomTooltip({ active, payload, label, granularity }: TooltipProps) {
 interface Props {
   properties: Property[]
   initialPropertyId?: string
+  /** Período global (vem da URL via Server Component, Story 75-31). ISO. */
+  from: string
+  to: string
 }
 
-export function LeadsChart({ properties, initialPropertyId }: Props) {
+export function LeadsChart({ properties, initialPropertyId, from, to }: Props) {
   const [granularity, setGranularity] = useState<Granularity>("day")
-  const [preset, setPreset] = useState<Preset>("30d")
-  const [customFrom, setCustomFrom] = useState("")
-  const [customTo, setCustomTo] = useState("")
   const [property, setProperty] = useState(initialPropertyId ?? "")
   const [source, setSource] = useState("")
   const [data, setData] = useState<PeriodEntry[]>([])
@@ -145,19 +128,6 @@ export function LeadsChart({ properties, initialPropertyId }: Props) {
   const [error, setError] = useState(false)
 
   const fetchData = useCallback(async () => {
-    let from: string
-    let to: string
-
-    if (preset === "custom") {
-      if (!customFrom || !customTo) return
-      from = new Date(customFrom).toISOString()
-      to = new Date(customTo + "T23:59:59").toISOString()
-    } else {
-      const range = getPresetRange(preset)!
-      from = range.from
-      to = range.to
-    }
-
     setLoading(true)
     setError(false)
 
@@ -176,7 +146,7 @@ export function LeadsChart({ properties, initialPropertyId }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [granularity, preset, property, source, customFrom, customTo])
+  }, [granularity, property, source, from, to])
 
   useEffect(() => {
     fetchData()
@@ -191,7 +161,8 @@ export function LeadsChart({ properties, initialPropertyId }: Props) {
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold text-gray-900 mr-auto dark:text-stone-100">Leads por Período</h2>
 
-        {/* Granularity toggle — AC3 */}
+        {/* Granularidade (só do gráfico) — período global vem do topo da página */}
+        <span className="text-sm text-stone-500 dark:text-stone-400">Agrupar por:</span>
         <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm dark:border-stone-800">
           {GRANULARITY_OPTIONS.map((opt) => (
             <button
@@ -207,44 +178,7 @@ export function LeadsChart({ properties, initialPropertyId }: Props) {
             </button>
           ))}
         </div>
-
-        {/* Preset selector — AC4 */}
-        <div className="flex rounded-md border border-gray-200 overflow-hidden text-sm dark:border-stone-800">
-          {PRESET_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setPreset(opt.value)}
-              className={`px-3 py-1.5 transition-colors ${
-                preset === opt.value
-                  ? "bg-orange-500 text-white font-medium"
-                  : "bg-white text-gray-600 hover:bg-gray-50 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
       </div>
-
-      {/* Custom date range inputs — AC4 */}
-      {preset === "custom" && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <label className="text-gray-600 dark:text-stone-400">De:</label>
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(e) => setCustomFrom(e.target.value)}
-            className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
-          />
-          <label className="text-gray-600 dark:text-stone-400">Até:</label>
-          <input
-            type="date"
-            value={customTo}
-            onChange={(e) => setCustomTo(e.target.value)}
-            className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
-          />
-        </div>
-      )}
 
       {/* Secondary filters — AC5 + AC6 */}
       <div className="flex flex-wrap gap-3 text-sm">

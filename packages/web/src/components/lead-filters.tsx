@@ -11,6 +11,8 @@ interface LeadFiltersProps {
   stages: Stage[]
   properties: Property[]
   brokers?: Broker[]
+  /** Adiciona a opção "Sem corretor" no filtro de Corretor (Conversas). */
+  includeUnassigned?: boolean
   /** Mostra o filtro "Atendimento" (Nicole IA / Humano) — usado nas Conversas. */
   showAtendimento?: boolean
   stageParam?: string
@@ -24,6 +26,7 @@ export function LeadFilters({
   stages,
   properties,
   brokers,
+  includeUnassigned = false,
   showAtendimento = false,
   stageParam = "stage",
   propertyParam = "property",
@@ -77,6 +80,7 @@ export function LeadFilters({
       {brokers && brokers.length > 0 && (
         <select value={activeBroker} onChange={(e) => setParam(brokerParam, e.target.value)} className={selectClass}>
           <option value="">Corretor: Todos</option>
+          {includeUnassigned && <option value="none">Sem corretor</option>}
           {brokers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       )}

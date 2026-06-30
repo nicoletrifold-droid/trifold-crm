@@ -3,6 +3,7 @@ import "server-only"
 import { STAGE_IDS, normalizePhoneBR } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { notifyBroker, notifyImobiliaria } from "./notify-broker"
+import { getOrgSchedule, isOpenAtNow } from "./business-time"
 
 export type DistributionStatus =
   | "distributed"
@@ -34,27 +35,6 @@ interface RoletaConfig {
   notify_user_on_fora_horario: string | null
 }
 
-function isWithinBusinessHours(config: RoletaConfig): boolean {
-  const now = new Date()
-  const locale = now.toLocaleString("en-US", { timeZone: config.timezone })
-  const tzDate = new Date(locale)
-
-  const dayOfWeek = tzDate.getDay()
-  if (!config.business_days.includes(dayOfWeek)) return false
-
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
-  const hourStart = (isWeekend && config.weekend_hour_start) ? config.weekend_hour_start : config.business_hour_start
-  const hourEnd   = (isWeekend && config.weekend_hour_end)   ? config.weekend_hour_end   : config.business_hour_end
-
-  const [startH, startM] = hourStart.split(":").map(Number)
-  const [endH, endM] = hourEnd.split(":").map(Number)
-  const current = tzDate.getHours() * 60 + tzDate.getMinutes()
-  const start = (startH ?? 8) * 60 + (startM ?? 0)
-  const end = (endH ?? 18) * 60 + (endM ?? 0)
-
-  return current >= start && current < end
-}
-
 export async function distributeLeadToNextBroker(
   leadId: string,
   orgId: string
@@ -82,6 +62,8 @@ export async function distributeLeadToNextBroker(
   }
 
   const cfg = config as unknown as RoletaConfig
+  // Story 75-58: horário vem do motor único (agenda por dia, roleta_schedule).
+  const { week: schedule, timezone: scheduleTz } = await getOrgSchedule(orgId, admin)
 
   // 2. Fetch lead — must belong to this org
   const { data: lead } = await admin
@@ -193,7 +175,7 @@ export async function distributeLeadToNextBroker(
     return { status: "roleta_inativa" }
   }
 
-  if (!isWithinBusinessHours(cfg)) {
+  if (!isOpenAtNow(new Date(), schedule, scheduleTz)) {
     await admin.from("lead_distribution_log").insert({
       org_id: orgId, lead_id: leadId, status: "fora_horario", skipped_brokers: [],
     })
@@ -229,7 +211,25 @@ export async function distributeLeadToNextBroker(
     return { status: "sem_corretor_disponivel" }
   }
 
-  const result = Array.isArray(picked) ? picked[0] : null
+  let result = Array.isArray(picked) ? picked[0] : null
+
+  // Story 75-44 (AC4): empreendimento identificado mas nenhum corretor habilitado
+  // disponível → cai pro pool geral (2ª passada sem filtro de property). Cada chamada
+  // da RPC é sua própria transação/advisory lock; após a 1ª passada vazia o lead
+  // segue sem corretor, então a 2ª pode atribuir normalmente.
+  if (!result && propertyId) {
+    const { data: pickedAny, error: retryError } = await admin.rpc("roleta_pick_and_advance", {
+      p_org_id: orgId,
+      p_lead_id: leadId,
+      p_property_id: null,
+      p_max_leads_per_day: cfg.max_leads_per_day,
+    })
+    if (retryError) {
+      console.error("[roleta] RPC error (fallback pool geral):", retryError)
+    } else {
+      result = Array.isArray(pickedAny) ? pickedAny[0] : null
+    }
+  }
 
   if (!result) {
     await admin.from("lead_distribution_log").insert({

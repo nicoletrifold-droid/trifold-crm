@@ -1,5 +1,6 @@
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
+import { NotificationToggle } from "@web/components/notification-toggle"
 
 const CONFIG_CARDS = [
   {
@@ -86,6 +87,9 @@ export default async function ConfiguracoesPage() {
           Gerencie as configurações do sistema
         </p>
       </div>
+
+      {/* Notificações push do usuário logado (Story 75-35) */}
+      <NotificationToggle />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visibleCards.map((card) => (

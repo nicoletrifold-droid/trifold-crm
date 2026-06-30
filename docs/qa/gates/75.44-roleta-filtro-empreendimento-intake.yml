@@ -1,0 +1,26 @@
+storyId: 75-44
+title: "Roleta — filtrar corretor por empreendimento (detectar na entrada Meta/WhatsApp)"
+verdict: PASS
+date: 2026-06-24
+reviewer: "@qa (Quinn)"
+quality_gate_tools: [typecheck, lint, vitest]
+checks:
+  typecheck: pass
+  lint: pass
+  tests: "19 passed (detect-property 8 novos + distributor/roleta-retry 11 regressão)"
+acceptance_criteria:
+  AC1_meta_identificado: pass
+  AC2_whatsapp_identificado: pass
+  AC3_nao_identificado_pool_geral: pass
+  AC4_sem_habilitado_pool_geral: pass
+  AC5_typecheck_lint: pass
+issues:
+  - severity: low
+    category: code
+    description: "Match por substring pode gerar falso-positivo (ex.: campanha 'Invind' contém 'vind')."
+    recommendation: "Risco baixo p/ 'vind'/'yarden', documentado na story. Futuro: usar word-boundary."
+notes: >
+  Filtro de empreendimento já existia na RPC roleta_pick_and_advance; esta story
+  preenche o property_interest_id no intake (Meta keyword + WhatsApp keyword sobre o
+  diálogo) e adiciona fallback de pool geral (AC4) via 2ª passada no distributor.ts.
+  RPC intocada. Detecção por keyword determinístico (sem custo de IA).

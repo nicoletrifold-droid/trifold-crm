@@ -26,6 +26,29 @@ export function extractCustomerPhone(customer: SiengeCustomer): string | null {
   return chosen ? normalizePhoneBR(chosen.number) : null
 }
 
+/**
+ * Story 20.9 — Deny-list explícita de distrato.
+ * SOMENTE esta situação Sienge bloqueia notificações. Qualquer outro valor
+ * (Emitido, Autorizado, Solicitado, ou valores futuros desconhecidos como
+ * "Rescindido") NÃO bloqueia — o cliente permanece ativo até revisão (AC 6).
+ * Não existe a string "Distrato" na API Sienge: distrato === situation "Cancelado".
+ */
+const SITUACAO_DISTRATO = "Cancelado"
+
+/**
+ * Story 20.9 — Calcula a flag `distrato` a partir do mapa
+ * `{contract_number: situation}` de um vínculo cliente+obra.
+ *
+ * Regra "active-contract-wins" (AC 3/AC 5): `distrato = true` apenas quando o
+ * vínculo tem ao menos um contrato E TODOS estão em "Cancelado". Se houver ao
+ * menos um contrato não-Cancelado (ex.: 1 Emitido + 1 Cancelado), retorna
+ * `false`. Mapa vazio também retorna `false`.
+ */
+function computeDistrato(situations: Record<string, string>): boolean {
+  const values = Object.values(situations)
+  return values.length > 0 && values.every((s) => s === SITUACAO_DISTRATO)
+}
+
 export interface SyncResult {
   success: boolean
   synced: number
@@ -178,17 +201,20 @@ async function syncContract(
     supabaseAdmin
   )
 
-  // 3. Upsert clientes_obras_vinculos
-  const vinculoId = await upsertVinculo(
+  // 3. Upsert clientes_obras_vinculos — persiste a situação do contrato (merge
+  //    JSONB) e recalcula a flag `distrato` do vínculo (AC 2, 3, 5, 6).
+  const { id: vinculoId, distrato } = await upsertVinculo(
     clienteId,
     obra.id,
     contract.number,
+    contract.situation,
     supabaseAdmin
   )
 
-  // 4. Convidar portal user (best-effort)
+  // 4. Convidar portal user (best-effort) — suprimido quando o vínculo está em
+  //    distrato (AC 4): nenhum convite é enviado e sienge_invite_sent_at fica NULL.
   let invited = false
-  if (email && vinculoId) {
+  if (email && vinculoId && !distrato) {
     invited = await maybeInviteCliente(
       email,
       customer.name,
@@ -319,17 +345,31 @@ async function findOrCreateCliente(
 interface VinculoRow {
   id: string
   sienge_contract_numbers: string[] | null
+  sienge_contract_situations: Record<string, string> | null
 }
 
+interface UpsertVinculoResult {
+  id: string | null
+  /** Flag `distrato` recalculada após o merge da situação deste contrato. */
+  distrato: boolean
+}
+
+/**
+ * Cria/atualiza o vínculo cliente+obra e mantém o mapa
+ * `sienge_contract_situations` por contrato via merge JSONB (não substitui —
+ * preserva situações de outros contratos do mesmo cliente+obra). Recalcula e
+ * persiste `distrato` a cada chamada (idempotente: mesmos inputs → mesmo estado).
+ */
 async function upsertVinculo(
   clienteId: string,
   obraId: string,
   contractNumber: string,
+  situation: string,
   supabaseAdmin: SupabaseClient
-): Promise<string | null> {
+): Promise<UpsertVinculoResult> {
   const { data: existing } = await supabaseAdmin
     .from("clientes_obras_vinculos")
-    .select("id, sienge_contract_numbers")
+    .select("id, sienge_contract_numbers, sienge_contract_situations")
     .eq("cliente_id", clienteId)
     .eq("obra_id", obraId)
     .maybeSingle()
@@ -337,16 +377,34 @@ async function upsertVinculo(
   const row = existing as VinculoRow | null
 
   if (row) {
-    const current = row.sienge_contract_numbers ?? []
-    if (!current.includes(contractNumber)) {
-      const merged = [...current, contractNumber]
-      await supabaseAdmin
-        .from("clientes_obras_vinculos")
-        .update({ sienge_contract_numbers: merged })
-        .eq("id", row.id)
+    const currentNumbers = row.sienge_contract_numbers ?? []
+    const mergedNumbers = currentNumbers.includes(contractNumber)
+      ? currentNumbers
+      : [...currentNumbers, contractNumber]
+
+    // Merge JSONB: preserva as situações já registradas para os demais contratos
+    // do vínculo e sobrescreve apenas a deste contrato (AC 2). Sobrescrever a
+    // entrada existente é intencional — permite transição Emitido → Cancelado.
+    const mergedSituations: Record<string, string> = {
+      ...(row.sienge_contract_situations ?? {}),
+      [contractNumber]: situation,
     }
-    return row.id
+    const distrato = computeDistrato(mergedSituations)
+
+    await supabaseAdmin
+      .from("clientes_obras_vinculos")
+      .update({
+        sienge_contract_numbers: mergedNumbers,
+        sienge_contract_situations: mergedSituations,
+        distrato,
+      })
+      .eq("id", row.id)
+
+    return { id: row.id, distrato }
   }
+
+  const situations: Record<string, string> = { [contractNumber]: situation }
+  const distrato = computeDistrato(situations)
 
   const { data: novo, error: insertErr } = await supabaseAdmin
     .from("clientes_obras_vinculos")
@@ -354,6 +412,8 @@ async function upsertVinculo(
       cliente_id: clienteId,
       obra_id: obraId,
       sienge_contract_numbers: [contractNumber],
+      sienge_contract_situations: situations,
+      distrato,
     })
     .select("id")
     .single()
@@ -362,7 +422,7 @@ async function upsertVinculo(
     throw new Error(`Falha ao criar vínculo: ${insertErr.message}`)
   }
 
-  return (novo as { id: string } | null)?.id ?? null
+  return { id: (novo as { id: string } | null)?.id ?? null, distrato }
 }
 
 async function maybeInviteCliente(
@@ -542,4 +602,104 @@ async function maybeInviteCliente(
     .eq("id", vinculoId)
 
   return true
+}
+
+export interface ReconcileResult {
+  /** Total de vínculos da obra que tiveram situação/distrato recalculados. */
+  reconciled: number
+  /** Quantos desses vínculos ficaram com `distrato = true`. */
+  distratados: number
+  /** Erros por vínculo (não-bloqueantes; o restante continua sendo processado). */
+  errors: string[]
+}
+
+/**
+ * Story 20.9 (AC 8) — Remediação/backfill: reconstrói
+ * `sienge_contract_situations` e recalcula `distrato` para TODOS os vínculos
+ * existentes de uma obra, a partir dos dados ATUAIS do Sienge.
+ *
+ * Necessário porque a coluna `sienge_contract_situations` foi criada vazia
+ * (`'{}'`) pela migration 116 — sem dados históricos. Idempotente: pode ser
+ * re-executado com segurança.
+ *
+ * Reutiliza `getAllSalesContracts()` (já rate-limited com sleep entre páginas).
+ * Mapeia cada `clientes_obras_vinculos.sienge_contract_numbers` → situação atual.
+ */
+export async function reconcileDistratosForObra(
+  obraId: string
+): Promise<ReconcileResult> {
+  const supabaseAdmin = createAdminClient()
+
+  const { data: obra, error: obraErr } = await supabaseAdmin
+    .from("obras")
+    .select("id, sienge_enterprise_id")
+    .eq("id", obraId)
+    .maybeSingle()
+
+  if (obraErr || !obra) {
+    throw new Error(obraErr?.message ?? "Obra não encontrada")
+  }
+
+  const enterpriseId = (obra as { sienge_enterprise_id?: number | null })
+    .sienge_enterprise_id
+  if (!enterpriseId) {
+    throw new Error("Obra não tem sienge_enterprise_id configurado")
+  }
+
+  // Situação atual por número de contrato (rate-limited internamente).
+  const contracts = await getAllSalesContracts(enterpriseId)
+  const situationByNumber = new Map<string, string>()
+  for (const c of contracts) {
+    situationByNumber.set(c.number, c.situation)
+  }
+
+  const { data: vinculos, error: vinculosErr } = await supabaseAdmin
+    .from("clientes_obras_vinculos")
+    .select("id, sienge_contract_numbers")
+    .eq("obra_id", obraId)
+
+  if (vinculosErr) {
+    throw new Error(`Falha ao carregar vínculos: ${vinculosErr.message}`)
+  }
+
+  const rows = (vinculos ?? []) as {
+    id: string
+    sienge_contract_numbers: string[] | null
+  }[]
+
+  const result: ReconcileResult = { reconciled: 0, distratados: 0, errors: [] }
+
+  for (const v of rows) {
+    try {
+      const numbers = v.sienge_contract_numbers ?? []
+      const situations: Record<string, string> = {}
+      for (const num of numbers) {
+        const sit = situationByNumber.get(num)
+        // Contrato presente no vínculo mas ausente no Sienge atual é ignorado
+        // (não há situação confiável). Não inferimos distrato a partir de
+        // ausência — mantém a regra conservadora da deny-list.
+        if (sit) situations[num] = sit
+      }
+      const distrato = computeDistrato(situations)
+
+      const { error: updErr } = await supabaseAdmin
+        .from("clientes_obras_vinculos")
+        .update({ sienge_contract_situations: situations, distrato })
+        .eq("id", v.id)
+
+      if (updErr) {
+        result.errors.push(`vínculo ${v.id}: ${updErr.message}`)
+        continue
+      }
+
+      result.reconciled += 1
+      if (distrato) result.distratados += 1
+    } catch (err) {
+      result.errors.push(
+        `vínculo ${v.id}: ${err instanceof Error ? err.message : "erro"}`
+      )
+    }
+  }
+
+  return result
 }

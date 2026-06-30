@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { loadLeadInboundForClassification } from "@web/lib/roleta/classify-lead"
+import { detectPropertyInterestId } from "@web/lib/roleta/detect-property"
 import { classifyContactIntent, createAnthropicClient } from "@trifold/ai"
+import { routeLeadIdToRelationship } from "@web/lib/relacionamento/route-inbound"
 
 const MAX_PER_RUN = 50
 const RETRY_WINDOW_DAYS = 30
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest) {
     skipped: 0,
     aguardando: 0,
     nao_lead: 0,
+    relacionamento: 0,
     outros: 0,
   }
 
@@ -93,6 +96,17 @@ export async function GET(request: NextRequest) {
         convo.text,
         { hasDocument: convo.hasDocument }
       )
+      // Story 76-3 — diálogo indica CLIENTE EXISTENTE → relacionamento (Samara), não roleta.
+      if (classification.category === "cliente_existente") {
+        const routed = await routeLeadIdToRelationship(admin, lead.id, lead.org_id)
+        console.log(
+          `[roleta-retry] cliente existente → relacionamento (${routed ? "ok" : "skip"}): ${lead.id} — ${classification.reason}`
+        )
+        if (routed) {
+          results.relacionamento++
+          continue
+        }
+      }
       if (!classification.isLead) {
         await admin.from("leads").update({ is_active: false }).eq("id", lead.id)
         console.log(
@@ -100,6 +114,20 @@ export async function GET(request: NextRequest) {
         )
         results.nao_lead++
         continue
+      }
+    }
+
+    // Story 75-44: detectar empreendimento mencionado no diálogo e gravar
+    // property_interest_id (só se ainda não definido) ANTES de distribuir → a
+    // roleta passa a filtrar pelos corretores habilitados. Não identificado → null.
+    if (convo.text) {
+      const detectedPropertyId = await detectPropertyInterestId(admin, lead.org_id, convo.text)
+      if (detectedPropertyId) {
+        await admin
+          .from("leads")
+          .update({ property_interest_id: detectedPropertyId })
+          .eq("id", lead.id)
+          .is("property_interest_id", null)
       }
     }
 

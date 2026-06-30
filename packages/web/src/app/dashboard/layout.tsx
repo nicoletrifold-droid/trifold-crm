@@ -24,6 +24,7 @@ import {
   MessageSquarePlus,
   Shuffle,
   CreditCard,
+  Container,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -48,6 +49,7 @@ const NAV_ITEMS_BASE = [
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
 const NAV_ITEM_BRINDES = { href: "/dashboard/brindes", label: "Brindes", icon: <Gift className={ICON_SIZE} /> }
 const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
+const NAV_ITEM_CHAT = { href: "/dashboard/chat", label: "Chat", icon: <MessageSquare className={ICON_SIZE} /> }
 const NAV_ITEM_EMAIL = { href: "/dashboard/sistema/email", label: "Email", icon: <Mail className={ICON_SIZE} /> }
 const NAV_ITEM_SISTEMA = { href: "/dashboard/sistema", label: "Sistema", icon: <Shield className={ICON_SIZE} /> }
 const NAV_ITEM_CONFIG = { href: "/dashboard/configuracoes", label: "Config", icon: <Settings className={ICON_SIZE} /> }
@@ -182,17 +184,37 @@ export default async function DashboardLayout({
     item.href === "/dashboard/agenda" ? { ...item, badge: agendaCount } : item
   )
 
+  // Itens inseridos logo ABAIXO da Roleta, só para admin/gerente-comercial:
+  // Bolsão (Story 75-73) e Fluxo de Pagamento. Gate hardcoded (não passa pelo
+  // sistema de permissões de módulo enquanto a função do Bolsão é definida).
+  const showBolsao = user.role === "admin" || user.role === "supervisor" || user.role === "gerente-comercial"
   const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
+  // Story 75-83: contador de leads no bolsão (pool = bolsao_em not null).
+  const bolsaoCount = showBolsao
+    ? (
+        await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", user.orgId)
+          .eq("is_active", true)
+          .not("bolsao_em", "is", null)
+      ).count ?? 0
+    : 0
+  const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} />, badge: bolsaoCount }
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
+  const afterRoleta = [
+    ...(showBolsao ? [bolsaoItem] : []),
+    ...(showFluxo ? [fluxoItem] : []),
+  ]
   const roletaIdx = baseFiltered.findIndex((item) => item.href === "/dashboard/roleta")
-  const baseWithFluxo = showFluxo && roletaIdx >= 0
-    ? [...baseFiltered.slice(0, roletaIdx + 1), fluxoItem, ...baseFiltered.slice(roletaIdx + 1)]
-    : showFluxo
-    ? [...baseFiltered, fluxoItem]
-    : baseFiltered
+  const baseWithExtras = afterRoleta.length === 0
+    ? baseFiltered
+    : roletaIdx >= 0
+    ? [...baseFiltered.slice(0, roletaIdx + 1), ...afterRoleta, ...baseFiltered.slice(roletaIdx + 1)]
+    : [...baseFiltered, ...afterRoleta]
 
   const navItems = [
-    ...baseWithFluxo,
+    ...baseWithExtras,
     ...(permissions["obras"]
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),
@@ -200,6 +222,7 @@ export default async function DashboardLayout({
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
       : []),
+    ...(permissions["chat"] ? [NAV_ITEM_CHAT] : []),
     // Grupo inferior: Chamados → Config → Email → Sistema
     // O separator é colocado no primeiro item visível do grupo (linha divisória após Mensagens)
     ...(() => {

@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 
 const BRAND = "#EA580C"
+const BRAND_SOFT = "#FFF1E9"
 const DARK = "#1C1917"
 const GRAY = "#78716C"
 const LIGHT = "#F5F5F4"
@@ -21,11 +22,23 @@ export interface WeekComparisonGroup {
 
 export interface AnalyticsReportData {
   generatedAt: string
-  weekRange: string
-  totalLeads: number
-  leadsToday: number
-  leadsWeek: number
-  leadsMonth: number
+  /** Intervalo de datas do período (ex.: "21 jun – 28 jun"). */
+  periodRange: string
+  /** Rótulo curto do período (ex.: "Últimos 7 dias"). */
+  rangeLabel: string
+  // Cards de topo — todos referentes ao período.
+  novosLeads: number
+  novosLeadsDelta: number
+  visitou: number
+  /** Visitas realizadas (agendamentos ≠ cancelado/no-show) no período. */
+  visitasRealizadas: number
+  perdidos: number
+  /** Tempo médio de atendimento (min), ponderado por corretor. null = sem dados. */
+  tempoMedioMin: number | null
+  // Rótulos do comparativo.
+  comparisonTitle: string
+  currentLabel: string
+  previousLabel: string
   stages: { name: string; color: string; count: number }[]
   properties: { name: string; count: number }[]
   sources: { label: string; count: number }[]
@@ -55,20 +68,39 @@ const s = StyleSheet.create({
     borderBottomStyle: "solid",
   },
   headerTitle: { fontFamily: "Helvetica-Bold", fontSize: 16, color: DARK },
-  headerSub: { fontSize: 8, color: GRAY, marginTop: 2 },
+  headerSubRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  headerSub: { fontSize: 8, color: GRAY },
+  chip: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 7,
+    color: BRAND,
+    backgroundColor: BRAND_SOFT,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 3,
+    marginHorizontal: 6,
+  },
   headerDate: { fontSize: 7, color: GRAY, textAlign: "right" },
 
   cardsRow: { flexDirection: "row", marginBottom: 16 },
   card: { flex: 1, backgroundColor: LIGHT, borderRadius: 4, padding: 10, marginRight: 8 },
   cardLast: { flex: 1, backgroundColor: LIGHT, borderRadius: 4, padding: 10 },
+  cardHero: { flex: 1, backgroundColor: BRAND_SOFT, borderRadius: 4, padding: 10, marginRight: 8 },
   cardLabel: { fontSize: 7, color: GRAY, marginBottom: 4 },
+  cardSub: { fontSize: 7, color: GRAY, marginTop: 4 },
+  cardSubStrong: { fontFamily: "Helvetica-Bold", color: DARK },
+  cardValueRow: { flexDirection: "row", alignItems: "baseline" },
   cardValueDefault: { fontFamily: "Helvetica-Bold", fontSize: 20, color: DARK },
   cardValueBlue: { fontFamily: "Helvetica-Bold", fontSize: 20, color: "#2563EB" },
   cardValueOrange: { fontFamily: "Helvetica-Bold", fontSize: 20, color: BRAND },
   cardValueGreen: { fontFamily: "Helvetica-Bold", fontSize: 20, color: GREEN },
+  cardDeltaPos: { fontFamily: "Helvetica-Bold", fontSize: 9, color: GREEN, marginLeft: 5 },
+  cardDeltaNeg: { fontFamily: "Helvetica-Bold", fontSize: 9, color: RED, marginLeft: 5 },
+  cardDeltaNeutral: { fontSize: 9, color: GRAY, marginLeft: 5 },
 
   section: { marginBottom: 12, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
-  sectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 10, color: DARK, marginBottom: 8 },
+  sectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 10, color: DARK, marginBottom: 2 },
+  sectionNote: { fontSize: 7, color: GRAY, marginBottom: 8 },
   tableRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -86,13 +118,6 @@ const s = StyleSheet.create({
   rowLabel: { fontSize: 8, color: GRAY, flex: 1, paddingRight: 8 },
   rowValue: { fontFamily: "Helvetica-Bold", fontSize: 8, color: DARK },
 
-  cols2: { flexDirection: "row", marginBottom: 12 },
-  colLeft: { flex: 1, marginRight: 6, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
-  colRight: { flex: 1, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
-  cols2Last: { flexDirection: "row", marginBottom: 12 },
-  colLeftLast: { flex: 1, marginRight: 6, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
-  colRightLast: { flex: 1, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 10 },
-
   funnelRow: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
   funnelLabel: { width: 90, fontSize: 7, color: GRAY },
   funnelBarBg: { flex: 1, height: 8, backgroundColor: BORDER, borderRadius: 2 },
@@ -100,9 +125,10 @@ const s = StyleSheet.create({
   funnelCount: { width: 24, fontSize: 7, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "right", marginLeft: 4 },
   noData: { fontSize: 8, color: GRAY },
 
-  // Comparison table
-  compSection: { borderWidth: 1, borderColor: BORDER, borderRadius: 4 },
-  compSectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 10, color: DARK, paddingHorizontal: 10, paddingTop: 10, marginBottom: 6 },
+  // Comparison table (HERO)
+  compSection: { borderWidth: 1, borderColor: BORDER, borderRadius: 4, marginBottom: 14 },
+  compEyebrow: { fontFamily: "Helvetica-Bold", fontSize: 7, color: BRAND, letterSpacing: 1, paddingHorizontal: 10, paddingTop: 10 },
+  compSectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 11, color: DARK, paddingHorizontal: 10, paddingTop: 2, marginBottom: 6 },
   compHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -145,6 +171,19 @@ function DeltaText({ current, previous }: { current: number; previous: number })
   return <Text style={s.compDeltaNeg}>{delta}</Text>
 }
 
+function CardDelta({ delta }: { delta: number }) {
+  if (delta === 0) return <Text style={s.cardDeltaNeutral}>—</Text>
+  if (delta > 0) return <Text style={s.cardDeltaPos}>+{delta}</Text>
+  return <Text style={s.cardDeltaNeg}>{delta}</Text>
+}
+
+function formatTempo(min: number | null): string {
+  if (min == null) return "—"
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  return h > 0 ? `${h}h ${m}min` : `${m}min`
+}
+
 export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
   const maxCount = Math.max(...data.stages.map((st) => st.count), 1)
 
@@ -155,34 +194,74 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
         <View style={s.header}>
           <View>
             <Text style={s.headerTitle}>Relatório de Analytics</Text>
-            <Text style={s.headerSub}>Trifold CRM · {data.weekRange}</Text>
+            <View style={s.headerSubRow}>
+              <Text style={s.headerSub}>Trifold CRM</Text>
+              <Text style={s.chip}>{data.rangeLabel}</Text>
+              <Text style={s.headerSub}>{data.periodRange}</Text>
+            </View>
           </View>
           <Text style={s.headerDate}>Gerado em {data.generatedAt}</Text>
         </View>
 
-        {/* Metric cards */}
-        <View style={s.cardsRow}>
-          <View style={s.card}>
-            <Text style={s.cardLabel}>Total de Leads</Text>
-            <Text style={s.cardValueDefault}>{data.totalLeads}</Text>
+        {/* Cards — todos referentes ao período */}
+        <View style={s.cardsRow} wrap={false}>
+          <View style={s.cardHero}>
+            <Text style={s.cardLabel}>Novos leads</Text>
+            <View style={s.cardValueRow}>
+              <Text style={s.cardValueOrange}>{data.novosLeads}</Text>
+              <CardDelta delta={data.novosLeadsDelta} />
+            </View>
           </View>
           <View style={s.card}>
-            <Text style={s.cardLabel}>Esta Semana</Text>
-            <Text style={s.cardValueBlue}>{data.leadsWeek}</Text>
+            <Text style={s.cardLabel}>Visitas (7d)</Text>
+            <Text style={s.cardValueGreen}>{data.visitasRealizadas}</Text>
+            <Text style={s.cardSub}>
+              <Text style={s.cardSubStrong}>{data.visitou}</Text> na etapa Visitou
+            </Text>
           </View>
           <View style={s.card}>
-            <Text style={s.cardLabel}>Este Mês</Text>
-            <Text style={s.cardValueOrange}>{data.leadsMonth}</Text>
+            <Text style={s.cardLabel}>Perdidos</Text>
+            <Text style={s.cardValueDefault}>{data.perdidos}</Text>
           </View>
           <View style={s.cardLast}>
-            <Text style={s.cardLabel}>Hoje</Text>
-            <Text style={s.cardValueGreen}>{data.leadsToday}</Text>
+            <Text style={s.cardLabel}>Tempo méd. atend.</Text>
+            <Text style={s.cardValueBlue}>{formatTempo(data.tempoMedioMin)}</Text>
           </View>
         </View>
 
-        {/* Funnel */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Funil de Conversão (mês atual)</Text>
+        {/* HERO: comparativo do período */}
+        {data.comparison.length > 0 && (
+          <View style={s.compSection}>
+            <Text style={s.compEyebrow}>DESTAQUE DO PERÍODO</Text>
+            <Text style={s.compSectionTitle}>{data.comparisonTitle}</Text>
+            <View style={s.compHeaderRow} wrap={false}>
+              <Text style={s.compHeaderLabel}>Métrica</Text>
+              <Text style={s.compHeaderCell}>{data.currentLabel}</Text>
+              <Text style={s.compHeaderCell}>{data.previousLabel}</Text>
+              <Text style={s.compHeaderDelta}>Var.</Text>
+            </View>
+            {data.comparison.map((group) => (
+              <View key={group.title} wrap={false}>
+                <View style={s.compGroupRow}>
+                  <Text style={s.compGroupLabel}>{group.title}</Text>
+                </View>
+                {group.items.map((item, j) => (
+                  <View key={j} style={s.compDataRow}>
+                    <Text style={s.compDataLabel}>{item.label}</Text>
+                    <Text style={s.compDataCell}>{item.current}</Text>
+                    <Text style={s.compDataCell}>{item.previous}</Text>
+                    <DeltaText current={item.current} previous={item.previous} />
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Funil — apoio */}
+        <View style={s.section} wrap={false}>
+          <Text style={s.sectionTitle}>Funil de Conversão</Text>
+          <Text style={s.sectionNote}>Entradas do período · {data.rangeLabel.toLowerCase()}</Text>
           {data.stages.map((stage, i) => (
             <View key={i} style={s.funnelRow}>
               <Text style={s.funnelLabel}>{stage.name}</Text>
@@ -200,86 +279,18 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           {data.stages.length === 0 && <Text style={s.noData}>Sem dados de funil</Text>}
         </View>
 
-        {/* 2 columns: Properties | Sources */}
-        <View style={s.cols2}>
-          <View style={s.colLeft}>
-            <Text style={s.sectionTitle}>Por Empreendimento</Text>
-            {data.properties.map((p, i) => (
-              <View key={i} style={i === data.properties.length - 1 ? s.tableRowLast : s.tableRow}>
-                <Text style={s.rowLabel}>{p.name}</Text>
-                <Text style={s.rowValue}>{p.count}</Text>
-              </View>
-            ))}
-            {data.properties.length === 0 && <Text style={s.noData}>Sem dados</Text>}
-          </View>
-          <View style={s.colRight}>
-            <Text style={s.sectionTitle}>Origens (mês)</Text>
-            {data.sources.map((src, i) => (
-              <View key={i} style={i === data.sources.length - 1 ? s.tableRowLast : s.tableRow}>
-                <Text style={s.rowLabel}>{src.label}</Text>
-                <Text style={s.rowValue}>{src.count}</Text>
-              </View>
-            ))}
-            {data.sources.length === 0 && <Text style={s.noData}>Sem dados</Text>}
-          </View>
-        </View>
-
-        {/* Brokers — full width */}
-        <View style={{ ...s.section, marginBottom: 12 }}>
-          <Text style={s.sectionTitle}>Performance por Corretor</Text>
-          {data.brokers.map((b, i) => (
-            <View key={i} style={i === data.brokers.length - 1 ? s.tableRowLast : s.tableRow}>
-              <Text style={s.rowLabel}>{b.name}</Text>
-              <Text style={s.rowValue}>{b.count} leads</Text>
-            </View>
-          ))}
-          {data.brokers.length === 0 && <Text style={s.noData}>Nenhum corretor</Text>}
-        </View>
-
-        {/* Week-over-week comparison table */}
-        {data.comparison.length > 0 && (
-          <View style={s.compSection}>
-            <Text style={s.compSectionTitle}>Comparativo Semanal — últimos 7 dias vs semana anterior</Text>
-            {/* Column headers */}
-            <View style={s.compHeaderRow}>
-              <Text style={s.compHeaderLabel}>Métrica</Text>
-              <Text style={s.compHeaderCell}>Esta sem.</Text>
-              <Text style={s.compHeaderCell}>Sem. ant.</Text>
-              <Text style={s.compHeaderDelta}>Var.</Text>
-            </View>
-            {data.comparison.map((group) => (
-              <View key={group.title}>
-                {/* Group subheader */}
-                <View style={s.compGroupRow}>
-                  <Text style={s.compGroupLabel}>{group.title}</Text>
-                </View>
-                {/* Data rows */}
-                {group.items.map((item, j) => (
-                  <View key={j} style={s.compDataRow}>
-                    <Text style={s.compDataLabel}>{item.label}</Text>
-                    <Text style={s.compDataCell}>{item.current}</Text>
-                    <Text style={s.compDataCell}>{item.previous}</Text>
-                    <DeltaText current={item.current} previous={item.previous} />
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* Tempo médio de atendimento por corretor */}
         {data.brokerResponseTimes.length > 0 && (
-          <View style={{ ...s.section, marginTop: 12 }}>
-            <Text style={s.sectionTitle}>Tempo Médio de 1º Atendimento por Corretor (últimos 7 dias)</Text>
+          <View style={s.section} wrap={false}>
+            <Text style={s.sectionTitle}>Tempo Médio de Atendimento por Corretor</Text>
+            <Text style={s.sectionNote}>Da distribuição ao 1º atendimento · horário comercial · {data.rangeLabel.toLowerCase()}</Text>
             <View style={{ ...s.compHeaderRow, borderRadius: 2, marginBottom: 0 }}>
               <Text style={{ ...s.compHeaderLabel, flex: 1 }}>Corretor</Text>
               <Text style={{ ...s.compHeaderCell, width: 40 }}>Leads</Text>
               <Text style={{ ...s.compHeaderCell, width: 90 }}>Tempo médio</Text>
             </View>
             {data.brokerResponseTimes.map((b, i) => {
-              const h = Math.floor(b.avgMinutes / 60)
-              const m = Math.round(b.avgMinutes % 60)
-              const label = h > 0 ? `${h}h ${m}min` : `${m}min`
+              const label = formatTempo(b.avgMinutes)
               const dotColor = b.avgMinutes <= 30 ? GREEN : b.avgMinutes <= 120 ? BRAND : RED
               return (
                 <View key={i} style={i === data.brokerResponseTimes.length - 1 ? s.tableRowLast : s.tableRow}>

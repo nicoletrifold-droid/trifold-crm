@@ -7,7 +7,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * POST   { obra_id, cliente_id, user_id } → adiciona participante
  * DELETE { obra_id, cliente_id, user_id } → remove participante
  */
-const STAFF_ROLES = ["admin", "supervisor", "obras", "gerente-comercial"]
+const STAFF_ROLES = ["admin", "supervisor", "gerente-relacionamento", "gerente-comercial"]
 
 async function resolveConversaId(
   admin: ReturnType<typeof createAdminClient>,

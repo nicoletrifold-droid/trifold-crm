@@ -30,6 +30,12 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
+  // Story 76-4 — grupo privilegiado (inclui gerente-relacionamento p/ o Chat) lê/escreve
+  // via ADMIN client (a RLS de leads/conversations não passa a gerente-relacionamento;
+  // p/ admin/supervisor/gerente-comercial é neutro). Corretor → client de sessão.
+  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "gerente-relacionamento"].includes(appUser.role)
+  const db = isPrivileged ? createAdminClient() : supabase
+
   let formData: FormData
   try {
     formData = await request.formData()
@@ -57,7 +63,7 @@ export async function POST(
   }
 
   // Lead + ownership
-  const { data: lead } = await supabase
+  const { data: lead } = await db
     .from("leads")
     .select("id, name, phone, assigned_broker_id")
     .eq("id", leadId)
@@ -68,7 +74,7 @@ export async function POST(
     return NextResponse.json({ success: false, error: "LEAD_NOT_FOUND" }, { status: 404 })
   }
 
-  const isAdmin = ["admin", "supervisor", "gerente-comercial"].includes(appUser.role)
+  const isAdmin = isPrivileged
   if (!isAdmin && lead.assigned_broker_id !== appUser.id) {
     return NextResponse.json(
       { success: false, error: "FORBIDDEN", message: "Este lead não está atribuído a você." },
@@ -79,7 +85,7 @@ export async function POST(
   const channel = resolveChannel(lead.phone)
 
   // Conversation: buscar ou criar
-  let { data: conversation } = await supabase
+  let { data: conversation } = await db
     .from("conversations")
     .select("id, last_message_at")
     .eq("lead_id", leadId)
@@ -88,7 +94,7 @@ export async function POST(
     .maybeSingle()
 
   if (!conversation) {
-    const { data: created } = await supabase
+    const { data: created } = await db
       .from("conversations")
       .insert({ org_id: appUser.org_id, lead_id: leadId, channel, status: "active" })
       .select("id, last_message_at")
@@ -192,25 +198,46 @@ export async function POST(
     }
   }
 
-  // Grava em messages independente do resultado do envio
-  await supabase.from("messages").insert({
-    conversation_id: conversation.id,
-    org_id: appUser.org_id,
-    role: "broker",
-    content: isAudio
-      ? "[Áudio]"
-      : caption
-      ? `[Arquivo] ${file.name} — ${caption}`
-      : `[Arquivo] ${file.name}`,
-    metadata: {
-      is_media: true,
+  // Grava em messages independente do resultado do envio externo.
+  // NOTA: `messages` NÃO tem coluna `org_id` (o isolamento de org é via
+  // conversation_id → conversations.org_id, inclusive na RLS). Setar org_id aqui
+  // fazia o insert falhar ("column does not exist") silenciosamente (Story 75-40).
+  const mediaType = isAudio ? "audio" : isImage ? "image" : "document"
+  const { data: insertedMsg, error: insertErr } = await db
+    .from("messages")
+    .insert({
+      conversation_id: conversation.id,
+      role: "broker",
+      content: isAudio
+        ? "[Áudio]"
+        : caption
+        ? `[Arquivo] ${file.name} — ${caption}`
+        : `[Arquivo] ${file.name}`,
       media_url: fileUrl,
-      media_type: isAudio ? "audio" : isImage ? "image" : "document",
-      file_name: file.name,
-      sent_via_whatsapp: sent,
-      source: "broker_upload",
-    },
-  })
+      media_type: mediaType,
+      metadata: {
+        is_media: true,
+        media_url: fileUrl,
+        media_type: mediaType,
+        file_name: file.name,
+        sent_via_whatsapp: sent,
+        source: "broker_upload",
+      },
+    })
+    .select("id")
+    .single()
 
-  return NextResponse.json({ success: true, sent, error: sendError })
+  // Não falhar em silêncio: o WhatsApp pode ter sido enviado, mas se não gravou
+  // no histórico precisamos saber (log + resposta de erro).
+  if (insertErr || !insertedMsg) {
+    console.error(
+      `[send-file] insert em messages falhou (lead=${leadId}): ${insertErr?.message}`
+    )
+    return NextResponse.json(
+      { success: false, error: "MESSAGE_INSERT_FAILED", message: insertErr?.message, sent },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ success: true, sent, error: sendError, messageId: insertedMsg.id })
 }

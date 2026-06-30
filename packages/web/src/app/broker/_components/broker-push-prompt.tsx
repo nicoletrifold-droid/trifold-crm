@@ -18,9 +18,11 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 async function subscribe() {
   const reg = await navigator.serviceWorker.ready
+  const vapidKey = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "").trim()
+  if (!vapidKey) throw new Error("Chave VAPID ausente na configuração (NEXT_PUBLIC_VAPID_PUBLIC_KEY)")
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!),
+    applicationServerKey: urlBase64ToUint8Array(vapidKey),
   })
   await fetch("/api/push/subscribe", {
     method: "POST",
@@ -40,7 +42,7 @@ export function BrokerPushPrompt() {
     if (!("serviceWorker" in navigator) || typeof Notification === "undefined") return
 
     if (Notification.permission === "granted") {
-      void subscribe().catch(() => {})
+      void subscribe().catch((err) => console.error("[push] Falha ao inscrever (broker):", err))
       return
     }
     if (Notification.permission === "denied") return
@@ -61,7 +63,7 @@ export function BrokerPushPrompt() {
   async function handleAccept() {
     setVisible(false)
     const permission = await Notification.requestPermission()
-    if (permission === "granted") void subscribe().catch(() => {})
+    if (permission === "granted") void subscribe().catch((err) => console.error("[push] Falha ao inscrever (broker):", err))
     else sessionStorage.setItem("broker-push-dismissed", "1")
   }
 

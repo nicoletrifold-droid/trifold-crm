@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { STAGE_IDS } from "@trifold/shared"
 
 export async function GET(
   _req: NextRequest,
@@ -86,6 +87,22 @@ export async function PATCH(
 
   const { fields, error: payloadError } = buildUpdatePayload(body, allowedFields)
   if (payloadError) return payloadError
+
+  // Transferência de corretor → o lead volta para "Aguardando atendimento"
+  // (STAGE_IDS.novo), independente do estágio anterior. Só aplica se o corretor
+  // REALMENTE mudou e o stage não foi definido explicitamente nesta requisição
+  // (ex.: arrastar no kanban envia stage_id e não deve ser sobrescrito).
+  if (fields.assigned_broker_id !== undefined && body.stage_id === undefined) {
+    const { data: cur } = await supabase
+      .from("leads")
+      .select("assigned_broker_id")
+      .eq("id", id)
+      .eq("org_id", appUser.org_id)
+      .single()
+    if (cur && cur.assigned_broker_id !== fields.assigned_broker_id) {
+      fields.stage_id = STAGE_IDS.novo
+    }
+  }
 
   const { data: lead, error } = await supabase
     .from("leads")

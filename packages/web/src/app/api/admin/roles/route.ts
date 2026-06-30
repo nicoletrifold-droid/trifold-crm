@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "broker", "obras"]
+const ALLOWED_ROLES = ["admin", "supervisor", "broker", "obras", "gerente-relacionamento"]
 
 export async function GET() {
   const auth = await requireAuth()

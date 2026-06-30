@@ -48,6 +48,10 @@ export function AudioRecorder({
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // Alguns navegadores (ex.: Safari) não TOCAM OGG, mas o áudio é gravado e
+  // enviado normalmente (o WhatsApp aceita OGG/Opus). Tratamos o erro do <audio>
+  // de forma graciosa, sem bloquear o envio.
+  const [previewError, setPreviewError] = useState(false)
 
   const recRef = useRef<OpusRecorderInstance | null>(null)
   const blobRef = useRef<Blob | null>(null)
@@ -64,6 +68,7 @@ export function AudioRecorder({
     stopTimer()
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
+    setPreviewError(false)
     blobRef.current = null
     recRef.current = null
     setSeconds(0)
@@ -193,7 +198,13 @@ export function AudioRecorder({
 
         {(state === "preview" || state === "sending") && previewUrl && (
           <div className="space-y-2">
-            <audio src={previewUrl} controls className="w-full" />
+            {previewError ? (
+              <p className="flex items-center gap-2 rounded-md bg-stone-100 px-2.5 py-1.5 text-[11px] text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+                <Mic className="h-3.5 w-3.5 shrink-0" /> Áudio gravado ({fmt(seconds)}). A pré-escuta não funciona neste navegador, mas o envio é normal.
+              </p>
+            ) : (
+              <audio src={previewUrl} controls className="w-full" onError={() => setPreviewError(true)} />
+            )}
             {error && (
               <p className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
                 {error}

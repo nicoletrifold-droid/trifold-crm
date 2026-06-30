@@ -8,6 +8,9 @@
  *   - Strip all non-digit characters (spaces, hyphens, parentheses, `+`)
  *   - Empty / whitespace-only / null / undefined input → `null`
  *   - Less than 10 digits after cleanup → `null`
+ *   - 11 or 12 digits starting with `0` (Brazilian trunk prefix) → strip `0`,
+ *     then insert `9` after DDD if 10 digits remain (legacy 8-digit subscriber)
+ *   - 11 digits starting with `55` (DDI without DDD) → `null` (not normalizable)
  *   - 11 digits without `55` prefix → prefix with `55` (becomes 13 digits)
  *   - 12 digits starting with `55` (legacy without 9th digit) → insert `9`
  *     after position 4 (`55DD` + `9` + last 8 digits)
@@ -27,10 +30,25 @@ export function normalizePhoneBR(
   if (raw.trim().length === 0) return null
 
   // Strip all non-digit characters
-  const digits = raw.replace(/\D/g, "")
+  let digits = raw.replace(/\D/g, "")
 
   // Less than 10 digits → invalid
   if (digits.length < 10) return null
+
+  // Strip Brazilian trunk prefix (leading zero) from 11 or 12-digit numbers.
+  // After stripping: if 10 digits remain (DDD + old 8-digit subscriber), insert
+  // the mandatory 9th mobile digit after the DDD (Anatel res. 575/2011).
+  if (digits.startsWith("0") && (digits.length === 11 || digits.length === 12)) {
+    digits = digits.slice(1)
+    if (digits.length === 10) {
+      digits = digits.slice(0, 2) + "9" + digits.slice(2)
+    }
+  }
+
+  // 11 digits starting with `55` = Brazil DDI without DDD → not normalizable
+  if (digits.length === 11 && digits.startsWith("55")) {
+    return null
+  }
 
   // 11 digits without `55` prefix → prefix with `55`
   if (digits.length === 11 && !digits.startsWith("55")) {
