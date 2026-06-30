@@ -189,7 +189,18 @@ export default async function DashboardLayout({
   // sistema de permissões de módulo enquanto a função do Bolsão é definida).
   const showBolsao = user.role === "admin" || user.role === "supervisor" || user.role === "gerente-comercial"
   const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
-  const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} /> }
+  // Story 75-83: contador de leads no bolsão (pool = bolsao_em not null).
+  const bolsaoCount = showBolsao
+    ? (
+        await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", user.orgId)
+          .eq("is_active", true)
+          .not("bolsao_em", "is", null)
+      ).count ?? 0
+    : 0
+  const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} />, badge: bolsaoCount }
   const fluxoItem = { href: "https://corretor-trifold.streamlit.app", label: "Fluxo de Pagamento", icon: <CreditCard className={ICON_SIZE} />, external: true }
   const afterRoleta = [
     ...(showBolsao ? [bolsaoItem] : []),
