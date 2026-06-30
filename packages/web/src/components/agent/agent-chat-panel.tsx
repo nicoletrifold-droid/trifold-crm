@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { type DateWindow } from "@web/lib/agent/context-builder"
+import { useProvenanceStatus } from "@web/lib/agent/use-provenance-status"
+import { SyncStatusBanner } from "@web/components/agent/sync-status-banner"
 
 // ─── Period chips config (Story 52-8) ──────────────────────────────────────
 const PERIOD_CHIPS = [
@@ -333,6 +335,9 @@ export default function AgentChatPanel({
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   const inputRef        = useRef<HTMLTextAreaElement>(null)
   const abortRef        = useRef<AbortController | null>(null)
+
+  // Proveniência/staleness dos dados Meta (Story 76-3) — só consulta com painel aberto.
+  const provenance = useProvenanceStatus(isOpen)
 
   // Auto-scroll
   useEffect(() => {
@@ -754,6 +759,9 @@ export default function AgentChatPanel({
 
         {/* Chat view: context bar + sessions + messages + input */}
         {!showLog && <>
+
+        {/* Aviso de staleness/erro de sync (Story 76-3) — não-modal, dispensável */}
+        <SyncStatusBanner status={provenance} />
 
         {/* Context bar */}
         <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2 dark:border-stone-800 dark:bg-stone-800/50">

@@ -234,6 +234,263 @@ function pct(a: number, b: number): string {
   return b > 0 ? `${Math.round((a / b) * 100)}%` : "—"
 }
 
+// ─── Proveniência e staleness dos dados Meta (Story 76-1) ─────────────────────
+/**
+ * Threshold de defasagem. Dados Meta são D-1 (puxados diariamente por cron); se a
+ * última sincronização bem-sucedida tiver mais de 36h, pelo menos um ciclo diário
+ * falhou. Constante isolada para ajuste futuro sem mexer na lógica.
+ */
+export const STALENESS_THRESHOLD_HOURS = 36
+
+/** Resultado bruto das 3 queries de proveniência (qualquer campo pode ser null). */
+export interface ProvenanceQueryResult {
+  /** MAX(synced_at) de meta_insights_daily na janela consultada (AC2). */
+  maxSyncedAt: string | null
+  /** meta_ad_accounts.last_synced_at da org. */
+  lastAccountSync: string | null
+  /** Registro mais recente de meta_sync_log, ou null quando a tabela está vazia (AC3). */
+  syncLog: {
+    status: string | null
+    finished_at: string | null
+    started_at?: string | null
+    error_message?: string | null
+  } | null
+}
+
+/** Bloco de proveniência computado (tipado, NULL-safe). */
+export interface ProvenanceBlock {
+  maxSyncedAt: string | null
+  lastAccountSync: string | null
+  lastSyncStatus: string | null
+  lastSyncFinishedAt: string | null
+  /** false quando meta_sync_log não tem registros para a org (AC3). */
+  hasSyncLog: boolean
+  /** true quando a última sync terminou há mais de STALENESS_THRESHOLD_HOURS. */
+  isStale: boolean
+  /** true quando o status do último ciclo indica erro. */
+  isError: boolean
+}
+
+/**
+ * computeProvenance — função pura que deriva o bloco de proveniência a partir dos
+ * resultados das queries. Nunca inventa recência (NFR-OBS-1): ausência de dado vira
+ * null/`indisponível` na formatação, não uma data fabricada.
+ *
+ * @param input Resultados brutos das 3 queries (qualquer um pode ser null).
+ * @param now Instante de referência para o cálculo de staleness (default: agora).
+ */
+export function computeProvenance(
+  input: ProvenanceQueryResult,
+  now: Date = new Date(),
+): ProvenanceBlock {
+  const hasSyncLog = input.syncLog !== null
+  const lastSyncStatus = input.syncLog?.status ?? null
+  const lastSyncFinishedAt = input.syncLog?.finished_at ?? null
+  const isError = lastSyncStatus === "error"
+
+  let isStale = false
+  if (lastSyncFinishedAt) {
+    const finished = new Date(lastSyncFinishedAt).getTime()
+    if (!Number.isNaN(finished)) {
+      const ageMs = now.getTime() - finished
+      isStale = ageMs > STALENESS_THRESHOLD_HOURS * 60 * 60 * 1000
+    }
+  }
+
+  return {
+    maxSyncedAt: input.maxSyncedAt,
+    lastAccountSync: input.lastAccountSync,
+    lastSyncStatus,
+    lastSyncFinishedAt,
+    hasSyncLog,
+    isStale,
+    isError,
+  }
+}
+
+/** Formata um timestamp ISO para o fuso de São Paulo; null/inválido → "indisponível". */
+function fmtProvTimestamp(iso: string | null): string {
+  if (!iso) return "indisponível"
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "indisponível"
+  return d.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+/**
+ * formatProvenanceBlock — renderiza o bloco textual de proveniência injetado no
+ * contexto. `today` (data de montagem) é mantido e rotulado como tal, separado da
+ * data de coleta real do dado (AC1).
+ */
+export function formatProvenanceBlock(block: ProvenanceBlock, today: string): string {
+  const lines: string[] = []
+  lines.push("[PROVENIÊNCIA DOS DADOS META ADS]")
+  lines.push(`Dados coletados da Meta API em: ${fmtProvTimestamp(block.maxSyncedAt)}`)
+  lines.push(`Última sync de contas: ${fmtProvTimestamp(block.lastAccountSync)}`)
+  if (!block.hasSyncLog) {
+    lines.push("Último ciclo de sincronização: recência indisponível")
+  } else {
+    lines.push(
+      `Último ciclo de sincronização: ${block.lastSyncStatus ?? "desconhecido"} em ${fmtProvTimestamp(block.lastSyncFinishedAt)}`,
+    )
+  }
+  lines.push(`Dados defasados (>${STALENESS_THRESHOLD_HOURS}h): ${block.isStale ? "sim" : "não"}`)
+  if (block.isError) {
+    lines.push("Atenção: o último ciclo de sincronização terminou com ERRO.")
+  }
+  lines.push(`Data de montagem deste contexto: ${today}`)
+  return lines.join("\n")
+}
+
+/** Status de proveniência consumido pela UI do chat (Story 76-3). */
+export interface ProvenanceStatus {
+  /** true quando a última sync terminou há mais de STALENESS_THRESHOLD_HOURS. */
+  isStale: boolean
+  /** true quando o status do último ciclo indica erro. */
+  isError: boolean
+  /** finished_at do último ciclo de sync (null quando indisponível). */
+  lastSyncAt: string | null
+}
+
+// ─── Tipos das linhas das 3 queries de proveniência ───────────────────────────
+interface ProvSyncRow { synced_at: string | null }
+interface ProvAccountRow { last_synced_at: string | null }
+interface ProvSyncLogRow {
+  status: string | null
+  finished_at: string | null
+  started_at: string | null
+  error_message: string | null
+}
+
+/**
+ * provenanceQueryBuilders — monta as 3 queries de proveniência (NÃO-awaited, já
+ * envoltas por `safeProvenanceData`) para uma janela. É a FONTE ÚNICA do plumbing
+ * de query da proveniência (ARCH-001): mudança de coluna/tabela passa a ser feita
+ * em um só ponto. Consumida por SPREAD tanto no `Promise.all` de `buildGlobalContext`
+ * (preservando o batching/cache da Story 76-1 AC7 — zero round-trip extra) quanto em
+ * `fetchProvenance` (Story 76-3).
+ *
+ * A janela (`startDate`/`endDate`) aplica-se SOMENTE à P1 (MAX(synced_at) em
+ * meta_insights_daily, AC2). Receber a janela como parâmetro garante que a P1 use
+ * EXATAMENTE a mesma janela da query de insights do caller (casamento de janela do
+ * AC2). P2 (conta) e P3 (ciclo de cron) não dependem de janela.
+ *
+ * `entityId` (opcional, Story 76-4): quando informado, a P1 é adicionalmente
+ * filtrada por `.eq("entity_id", entityId)` — reflete o MAX(synced_at) de UMA
+ * campanha específica, não da org inteira. Usado por `buildCampaignContext`.
+ * Quando ausente (caso global, Story 76-1), a P1 mantém o comportamento original
+ * (MAX de todas as campanhas da org na janela). P2/P3 são idênticas em ambos os
+ * casos — o sync Meta é a nível de org, não por campanha. Manter o filtro de
+ * entity_id aqui (FONTE ÚNICA do plumbing, ARCH-001) evita duplicar a query da
+ * P1 em `buildCampaignContext`.
+ *
+ * @returns Tupla [maxSynced, lastAccount, syncLog]; cada item resolve para a linha
+ *          ou `null` (fail-transparente via safeProvenanceData).
+ */
+export function provenanceQueryBuilders(
+  supabase: SupabaseClient,
+  orgId: string,
+  window: { startDate: string; endDate: string },
+  entityId?: string,
+): [Promise<ProvSyncRow | null>, Promise<ProvAccountRow | null>, Promise<ProvSyncLogRow | null>] {
+  // P1 — MAX(synced_at) na janela consultada (AC2): order desc + limit 1 = máximo.
+  // Para o contexto de campanha (Story 76-4), filtra também por entity_id (AC4/AC7).
+  let p1 = supabase
+    .from("meta_insights_daily")
+    .select("synced_at")
+    .eq("org_id", orgId)
+    .eq("level", "campaign")
+    .gte("date", window.startDate)
+    .lte("date", window.endDate)
+  if (entityId) p1 = p1.eq("entity_id", entityId)
+
+  return [
+    safeProvenanceData<ProvSyncRow>(
+      p1
+        .order("synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+    // P2 — última sync de entidades da conta (AC1)
+    safeProvenanceData<ProvAccountRow>(
+      supabase
+        .from("meta_ad_accounts")
+        .select("last_synced_at")
+        .eq("org_id", orgId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+    // P3 — último ciclo de cron (AC1, AC3): vazio → null → "recência indisponível"
+    safeProvenanceData<ProvSyncLogRow>(
+      supabase
+        .from("meta_sync_log")
+        .select("status, finished_at, started_at, error_message")
+        .eq("org_id", orgId)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ),
+  ]
+}
+
+/**
+ * fetchProvenance — executa as 3 queries de proveniência e deriva o status via
+ * `computeProvenance` (Story 76-1, sem duplicar a lógica de staleness/erro). Usado
+ * pelo endpoint GET /api/agent/context-meta (Story 76-3). NULL-safe e fail-transparente:
+ * cada query é envolvida por `safeProvenanceData`; qualquer erro vira null (sem aviso).
+ *
+ * Lê apenas dados da org informada (mesmas tabelas/colunas de `buildGlobalContext`);
+ * o isolamento multi-tenant vem do client autenticado passado pelo caller (AC7).
+ *
+ * @param days Janela usada no MAX(synced_at) (default 30, alinhado a buildGlobalContext).
+ */
+export async function fetchProvenance(
+  supabase: SupabaseClient,
+  orgId: string,
+  days = 30,
+): Promise<ProvenanceStatus> {
+  const today = new Date().toISOString().split("T")[0]!
+  const dateNdAgo = (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split("T")[0]! })()
+
+  // Mesmo plumbing de query do buildGlobalContext (ARCH-001): aqui a janela é o
+  // caminho standalone days→dateNdAgo..today, independente do DateWindow da 52-8.
+  const [maxSyncedRow, accountRow, syncLogRow] = await Promise.all(
+    provenanceQueryBuilders(supabase, orgId, { startDate: dateNdAgo, endDate: today }),
+  )
+
+  const block = computeProvenance({
+    maxSyncedAt: maxSyncedRow?.synced_at ?? null,
+    lastAccountSync: accountRow?.last_synced_at ?? null,
+    syncLog: syncLogRow ?? null,
+  })
+
+  return {
+    isStale: block.isStale,
+    isError: block.isError,
+    lastSyncAt: block.lastSyncFinishedAt,
+  }
+}
+
+/**
+ * safeProvenanceData — resolve uma query de proveniência para `data` ou null,
+ * engolindo qualquer erro (NFR-OBS-1: proveniência nunca derruba a montagem do
+ * contexto nem inventa recência). Mantida fora do Promise.all para fail-transparência.
+ */
+function safeProvenanceData<T = Record<string, unknown>>(
+  p: PromiseLike<{ data: T | null }>,
+): Promise<T | null> {
+  return Promise.resolve(p)
+    .then((r) => r.data ?? null)
+    .catch(() => null)
+}
+
 // ─── Global context ───────────────────────────────────────────────────────────
 export async function buildGlobalContext(
   supabase: SupabaseClient,
@@ -250,7 +507,15 @@ export async function buildGlobalContext(
   // date30dAgo usado apenas em meta_alerts (janela fixa de 30d para alertas)
   const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
 
-  const [campaignsRes, insights30dRes, alertsRes, leadsRes] = await Promise.all([
+  const [
+    campaignsRes,
+    insights30dRes,
+    alertsRes,
+    leadsRes,
+    maxSyncedRow,
+    accountRow,
+    syncLogRow,
+  ] = await Promise.all([
     supabase
       .from("meta_campaigns")
       .select("meta_campaign_id, name, status, daily_budget, objective")
@@ -275,12 +540,24 @@ export async function buildGlobalContext(
       .select("id, utm_campaign, last_response_at, status, metadata")
       .eq("org_id", orgId)
       .in("source", ["meta_ads", "whatsapp_click_to_ad"]),
+    // As 3 queries de proveniência (Story 76-1) vêm do helper único
+    // provenanceQueryBuilders (ARCH-001) e são espalhadas AQUI, dentro do MESMO
+    // Promise.all, para não adicionar round-trips sequenciais (AC7) e serem
+    // cacheadas junto com o restante. A P1 recebe { startDate, endDate } — a MESMA
+    // janela da query de insights acima — garantindo o casamento de janela do AC2.
+    ...provenanceQueryBuilders(supabase, orgId, { startDate, endDate }),
   ])
 
   const campaigns = campaignsRes.data ?? []
   const insights30d = insights30dRes.data ?? []
   const alerts = alertsRes.data ?? []
   const leads = leadsRes.data ?? []
+
+  const provenance = computeProvenance({
+    maxSyncedAt: maxSyncedRow?.synced_at ?? null,
+    lastAccountSync: accountRow?.last_synced_at ?? null,
+    syncLog: syncLogRow ?? null,
+  })
 
   // Aggregate insights by campaign
   const agg = new Map<string, { spend: number; leads: number; lp: number; clicks: number }>()
@@ -310,7 +587,8 @@ export async function buildGlobalContext(
 
   // Build lines
   const lines: string[] = []
-  lines.push(`CONTEXTO META ADS — Gerado: ${today}`)
+  lines.push("CONTEXTO META ADS")
+  lines.push(formatProvenanceBlock(provenance, today))
   lines.push("")
 
   const totalSpend  = [...agg.values()].reduce((s, v) => s + v.spend, 0)
@@ -370,6 +648,7 @@ export async function buildCampaignContext(
   const cached = getCached(key)
   if (cached) return cached
 
+  const today      = new Date().toISOString().split("T")[0]!
   const date30dAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]! })()
   const date7dAgo  = (() => { const d = new Date(); d.setDate(d.getDate() - 7);  return d.toISOString().split("T")[0]! })()
 
@@ -383,7 +662,16 @@ export async function buildCampaignContext(
 
   const campaignName = campaignRes.data?.name ?? "__none__"
 
-  const [insightsRes, adsetInsightsRes, alertsRes, leadsRes, placementRes] = await Promise.all([
+  const [
+    insightsRes,
+    adsetInsightsRes,
+    alertsRes,
+    leadsRes,
+    placementRes,
+    provMaxSyncedRow,
+    provAccountRow,
+    provSyncLogRow,
+  ] = await Promise.all([
     supabase
       .from("meta_insights_daily")
       .select("date, spend, impressions, reach, clicks, ctr, cpm, frequency, leads, outbound_clicks, landing_page_views")
@@ -420,10 +708,23 @@ export async function buildCampaignContext(
       .eq("campaign_id", metaCampaignId)
       .order("spend", { ascending: false })
       .limit(20),
+    // As 3 queries de proveniência (Story 76-4) vêm do helper único
+    // provenanceQueryBuilders (ARCH-001) e são espalhadas AQUI, dentro do MESMO
+    // Promise.all — sem round-trip extra (NFR-PERF-1) e cacheadas junto com o
+    // contexto de campanha. A P1 recebe { date30dAgo..today } (MESMA janela das
+    // métricas acima, AC4) + entityId = metaCampaignId, refletindo a recência
+    // DAQUELA campanha (AC4/AC7). P2/P3 são idênticas ao contexto global (sync por org).
+    ...provenanceQueryBuilders(supabase, orgId, { startDate: date30dAgo, endDate: today }, metaCampaignId),
   ])
 
   const campaign = campaignRes.data
   if (!campaign) return `Campanha ${metaCampaignId} não encontrada.`
+
+  const provenance = computeProvenance({
+    maxSyncedAt: provMaxSyncedRow?.synced_at ?? null,
+    lastAccountSync: provAccountRow?.last_synced_at ?? null,
+    syncLog: provSyncLogRow ?? null,
+  })
 
   const insights = insightsRes.data ?? []
   const adsetInsights = adsetInsightsRes.data ?? []
@@ -478,6 +779,7 @@ export async function buildCampaignContext(
   const budgetStr = campaign.daily_budget ? `R$${fmtBRL(campaign.daily_budget / 100)}/dia` : "sem limite diário"
 
   lines.push(`CONTEXTO CAMPANHA: "${campaign.name}"`)
+  lines.push(formatProvenanceBlock(provenance, today))
   lines.push(`Status: ${campaign.status} | Objetivo: ${campaign.objective ?? "—"} | Budget: ${budgetStr}`)
   lines.push(`ID Meta: ${metaCampaignId}`)
   lines.push("")

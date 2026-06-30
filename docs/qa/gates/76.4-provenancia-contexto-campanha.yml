@@ -1,0 +1,54 @@
+schema: 1
+story: '76.4'
+gate: PASS
+status_reason: 'Extensão da proveniência da 76-1 ao buildCampaignContext implementada SEM duplicação (ARCH-001 respeitado): em vez de copiar a P1 inline, o @dev parametrizou o helper único provenanceQueryBuilders com entityId? opcional, aplicado SOMENTE à P1 — buildGlobalContext continua chamando sem entityId (zero mudança de comportamento, backward-compat) e buildCampaignContext chama com metaCampaignId. As 3 queries entram no MESMO Promise.all via spread (NFR-PERF-1: sem round-trip extra, cacheadas em campaign:{orgId}:{metaCampaignId}/5min). Bloco [PROVENIÊNCIA...] injetado logo após CONTEXTO CAMPANHA (AC3). Isolamento multi-tenant total (org_id em todas; entity_id na P1). SEC-001 da 76-3 não regride — error_message NUNCA é renderizado no bloco (apenas aviso genérico de ERRO). Validações reais re-executadas pelo @qa: type-check só com 3 erros pré-existentes de react-email-editor (visual-editor.tsx, intocado e não-relacionado), ZERO erros nos arquivos da story; ESLint exit 0; 571/571 testes (44 arquivos) incl. 26 de proveniência (12 da 76-1 + 5 da 76-3 + 9 novos da 76-4). PASS.'
+reviewer: 'Quinn'
+updated: '2026-06-25T17:00:00Z'
+
+waiver: { active: false }
+
+# ─── Histórico de gates ──────────────────────────────────────────────────────
+gate_history:
+  - version: v1
+    date: '2026-06-25T17:00:00Z'
+    gate: PASS
+    reviewer: 'Quinn'
+    trigger: 'Gate inicial pós-implementação @dev (Dex). Story extende a proveniência da 76-1 ao contexto de campanha específica.'
+    summary: 'Os 7 quality checks passam. Code review confirmou zero duplicação (helper provenanceQueryBuilders parametrizado com entityId? em vez de query inline duplicada), 3 queries DENTRO do Promise.all via spread (sem round-trip), buildGlobalContext intocado (chamada sem entityId — backward-compat). AC1–AC9 atendidos (AC8 cobre-se via 76-1 sem alteração no system-prompt; verificação manual do agente focado numa campanha permanece como teste manual downstream não-bloqueante, conforme DoD da story). NFR-PERF-1, NFR-TENANCY-1, NFR-OBS-1 e SEC-001 da 76-3 verificados. type-check limpo nos arquivos da story; ESLint exit 0; 571/571 Vitest sem regressão. PASS.'
+
+# Os 4 quality_gate tools nomeados na story
+gate_checks:
+  provenance_campaign_context_check: 'PASS — buildCampaignContext (context-builder.ts:721+) computa computeProvenance({maxSyncedAt, lastAccountSync, syncLog}) a partir das 3 queries e injeta formatProvenanceBlock(provenance, today) em context-builder.ts:782, logo APÓS lines.push(`CONTEXTO CAMPANHA: "${campaign.name}"`) e ANTES da linha Status (ordem confirmada pelo teste "injeta o bloco [PROVENIÊNCIA...] no header da campanha"). maxSyncedAt vem da P1 filtrada por entity_id=metaCampaignId, refletindo a recência DAQUELA campanha (AC4), não o MAX global da org.'
+  staleness_alert_test: 'PASS — isStale/isError derivam de computeProvenance (76-1, mesma semântica: finished_at do último ciclo de meta_sync_log > 36h; status="error"). O sync é a nível de org (P2/P3 idênticas ao global), então o alerta de staleness/erro da campanha é coerente com o global por construção (AC8). Sem alteração em AGENT_SYSTEM_PROMPT — as instruções de datação/alerta da 76-1 cobrem qualquer bloco [PROVENIÊNCIA...] presente, incluindo o novo de campanha. Caso "sem synced_at na janela → indisponível + Dados defasados: não" coberto por teste (AC5/NFR-OBS-1).'
+  tenant_isolation_check: 'PASS (CRÍTICO) — todas as queries de buildCampaignContext filtram .eq("org_id", orgId), validado pelo teste "isolamento multi-tenant: todas as queries filtram pelo org_id informado" que itera sobre TODAS as queries gravadas. A P1 de proveniência também filtra .eq("entity_id", metaCampaignId) (teste "P1 da proveniência usa a janela 30d da campanha E entity_id"). orgId vem do parâmetro da função (sessão), nunca de input do cliente. Nenhum vazamento cross-org nem cross-campanha.'
+  no_duplication_check: 'PASS — nenhum helper de proveniência foi copiado/re-implementado. A P1 da campanha NÃO foi escrita inline (sugestão original da story); em vez disso o @dev parametrizou provenanceQueryBuilders com entityId? opcional (FONTE ÚNICA do plumbing, ARCH-001 da 76-3 preservado). P2/P3 continuam idênticas e compartilhadas; mudança de coluna/tabela permanece em 1 ponto. computeProvenance e formatProvenanceBlock reusados sem cópia. Consequência elegante: safeProvenanceData NÃO precisou ser exportada (T1/R1 contornado pelo design alternativo — menos superfície pública), apesar de a story sugerir exportá-la.'
+
+top_issues: []
+
+validation_evidence:
+  typecheck: 'pnpm --filter @trifold/web type-check re-executado pelo @qa. Os ÚNICOS erros (3) são pré-existentes e não-relacionados em email-templates/_components/visual-editor.tsx (módulo react-email-editor ausente + parâmetro implicit any) — arquivo NÃO está no diff desta story (git diff HEAD --stat confirmou). Zero erros em context-builder.ts e nos 2 arquivos de teste.'
+  eslint: 'npx eslint em context-builder.ts + provenance.test.ts + provenance-queries.test.ts → exit code 0, sem output. Re-executado pelo @qa.'
+  vitest_full_suite: '571/571 passed, 44 test files — re-executado pelo @qa da raiz (npx vitest run). Inclui 26 testes de proveniência (provenance.test.ts + provenance-queries.test.ts). Os 2 arquivos de proveniência isolados: 26/26. Delta vs. report do @dev (564) é dos commits-irmãos de fix da 76-1/2/3, não regressão. Zero falhas.'
+
+ac_traceability:
+  AC1: 'PASS — buildCampaignContext expande o Promise.all de 5→8 elementos (context-builder.ts:665-718) via ...provenanceQueryBuilders(supabase, orgId, {startDate: date30dAgo, endDate: today}, metaCampaignId). Query-prov-A (meta_insights_daily.synced_at) filtra org_id+level=campaign+entity_id+date∈[30d,today], order synced_at desc, limit 1, maybeSingle (= MAX synced_at). Query-prov-B (meta_ad_accounts.last_synced_at) e Query-prov-C (meta_sync_log) idênticas ao global. As 3 estão DENTRO do mesmo Promise.all (spread), sem round-trip extra.'
+  AC2: 'PASS — zero duplicação. computeProvenance e formatProvenanceBlock chamados com os resultados das 3 queries (context-builder.ts:723, :782); nenhuma cópia. Design alternativo do @dev (parametrizar provenanceQueryBuilders com entityId? em vez de exportar safeProvenanceData) é superior à sugestão da story: mantém FONTE ÚNICA do plumbing e reduz superfície pública. Backward-compat: buildGlobalContext (context-builder.ts:465) chama sem entityId — sem mudança de comportamento.'
+  AC3: 'PASS — formatProvenanceBlock(provenance, today) é empurrado em context-builder.ts:782, imediatamente após lines.push(`CONTEXTO CAMPANHA: "${campaign.name}"`) e antes da linha Status. Teste "bloco vem ANTES da linha de Status" verifica text.indexOf("[PROVENIÊNCIA") < text.indexOf("Status:").'
+  AC4: 'PASS — a P1 da campanha recebe entityId=metaCampaignId, gerando .eq("entity_id", metaCampaignId) (teste "P1 ... E entity_id = metaCampaignId"). maxSyncedAt reflete o MAX(synced_at) DAQUELA campanha na janela 30d, não o MAX global. Teste de computeProvenance confirma que o synced_at específico da campanha é propagado.'
+  AC5: 'PASS — quando a campanha não tem registros na janela, a P1 retorna null (via safeProvenanceData) → maxSyncedAt=null → fmtProvTimestamp → "indisponível"; isStale permanece false (deriva de meta_sync_log, não da P1). Tests: "sem synced_at na janela → indisponível, sem inventar data" e "campanha SEM synced_at na janela → indisponível e isStale=false". NFR-OBS-1 respeitado: ausência de dado ≠ dado defasado.'
+  AC6: 'PASS — as 3 queries entram no Promise.all que alimenta o cache campaign:{orgId}:{metaCampaignId} (getCached/setCache em buildCampaignContext, TTL 5min). O bloco de proveniência expira e renova junto com o restante do contexto. NFR-PERF-1.'
+  AC7: 'PASS (CRÍTICO) — ver tenant_isolation_check. Todas as 3 queries filtram org_id; P1 também entity_id. Teste itera sobre todas as queries gravadas confirmando .eq(org_id). Sem vazamento cross-org/cross-campanha.'
+  AC8: 'PASS — isStale/isError coerentes com o global (mesma derivação via computeProvenance; sync é a nível de org). AGENT_SYSTEM_PROMPT intocado — as instruções de alerta da 76-1 já cobrem qualquer bloco de proveniência. Verificação manual do agente focado numa campanha citando a data permanece como teste manual downstream (DoD da story marca como pendente não-bloqueante).'
+  AC9: 'PASS — type-check zero erros nos arquivos da story (só 3 pré-existentes de react-email-editor, não relacionados); ESLint exit 0. Verificado em runtime pelo @qa.'
+
+nfr_validation:
+  NFR-PERF-1: 'PASS — 3 queries no MESMO Promise.all (spread em context-builder.ts:717), sem round-trip extra; cacheadas junto no campaign:{orgId}:{metaCampaignId} de 5min. Índice UNIQUE (org_id, level, entity_id, date) (migration 015) cobre os filtros da P1 → index scan.'
+  NFR-TENANCY-1: 'PASS — org_id em todas as 3 queries (orgId da sessão, nunca de input); entity_id na P1. Validado por teste iterando sobre todas as queries.'
+  NFR-OBS-1: 'PASS — safeProvenanceData engole erro→null; ausência de dado vira "indisponível"; nunca inventa recência nem propaga erro que derrube a montagem.'
+  SEC-001 (herdado da 76-3): 'PASS — error_message do meta_sync_log NUNCA é renderizado no bloco textual. formatProvenanceBlock emite apenas o aviso genérico "o último ciclo de sincronização terminou com ERRO." (context-builder.ts:345). O campo error_message é selecionado para uso interno (cálculo de isError no AI server-side) mas não exposto. Sem info-disclosure.'
+
+article_iv_compliance: 'PASS — implementação 100% dentro do escopo das AC; nenhuma feature inventada. A lógica de derivação e o plumbing de query são reusados (IDS/ARCH-001 respeitado via parametrização do helper único). O design alternativo do @dev (entityId? opcional em vez de exportar safeProvenanceData) é uma redução de escopo bem-justificada e documentada nas Completion Notes.'
+
+next_steps:
+  - 'PASS → @devops (Gage) pode fazer push.'
+  - 'Teste manual não-bloqueante (DoD pendente da story): validar o agente focado numa campanha real citando a data de coleta DAQUELA campanha. Coberto logicamente pelos testes unitários; confirmação em runtime é polimento downstream.'
