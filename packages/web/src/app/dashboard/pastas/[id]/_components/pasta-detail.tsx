@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Copy, Check, Download, Loader2 } from "lucide-react"
+import { ArrowLeft, Copy, Check, Download, Loader2, Paperclip, Trash2 } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 
 interface Doc {
@@ -39,8 +39,34 @@ export function PastaDetail({
   const router = useRouter()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const inputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const link = typeof window !== "undefined" ? `${window.location.origin}/pasta/${pasta.token}` : ""
+
+  async function uploadDoc(doc: Doc, file: File) {
+    setBusyId(doc.id)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch(`/api/pastas/${pasta.id}/documentos/${doc.id}/upload`, { method: "POST", body: fd })
+      if (res.ok) router.refresh()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function deletePasta() {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/pastas/${pasta.id}`, { method: "DELETE" })
+      if (res.ok) router.push("/dashboard/pastas")
+      else setDeleting(false)
+    } catch {
+      setDeleting(false)
+    }
+  }
 
   async function copyLink() {
     try {
@@ -90,13 +116,34 @@ export function PastaDetail({
           </h1>
           {pasta.empreendimento && <p className="text-sm text-gray-500 dark:text-stone-400">{pasta.empreendimento}</p>}
         </div>
-        <button
-          onClick={copyLink}
-          className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
-        >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Copiado" : "Copiar link do interessado"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyLink}
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? "Copiado" : "Copiar link do interessado"}
+          </button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 rounded-md border border-red-200 px-2 py-1 dark:border-red-500/30">
+              <span className="text-xs text-red-600 dark:text-red-400">Excluir pasta?</span>
+              <button onClick={deletePasta} disabled={deleting} className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60">
+                {deleting ? "..." : "Sim"}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-stone-400 dark:hover:bg-stone-800">
+                Não
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir pasta
+            </button>
+          )}
+        </div>
       </div>
 
       {titulares.map((t) => (
@@ -116,6 +163,18 @@ export function PastaDetail({
                   <span className={`text-xs font-medium ${SITUACAO_CLASS[doc.situacao] ?? ""}`}>
                     {SITUACAO_LABEL[doc.situacao] ?? doc.situacao}
                   </span>
+                  <input
+                    ref={(el) => { inputs.current[doc.id] = el }}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoc(doc, f); e.target.value = "" }}
+                  />
+                  <button onClick={() => inputs.current[doc.id]?.click()} disabled={busyId === doc.id}
+                    className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
+                    {busyId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+                    {uploaded ? "Substituir" : "Anexar"}
+                  </button>
                   {uploaded && (
                     <button onClick={() => download(doc)} disabled={busyId === doc.id}
                       className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">

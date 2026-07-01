@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
-
-const MANAGER_ROLES = ["admin", "supervisor"]
+import { isPastaManager } from "@web/lib/pastas/roles"
 
 // GET — signed URL (1h) para o gestor baixar o arquivo do bucket privado `pastas`.
 export async function GET(
@@ -12,7 +11,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!MANAGER_ROLES.includes(appUser.role)) {
+  if (!isPastaManager(appUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

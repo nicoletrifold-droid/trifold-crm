@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { FolderPlus, Copy, Check, ChevronRight } from "lucide-react"
+import { FolderPlus, Copy, Check, ChevronRight, Trash2 } from "lucide-react"
 
 interface PastaRow {
   id: string
@@ -19,6 +19,7 @@ export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
   const router = useRouter()
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PastaRow | null>(null)
 
   function linkFor(token: string): string {
     const origin = typeof window !== "undefined" ? window.location.origin : ""
@@ -88,6 +89,13 @@ export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
                 >
                   Abrir <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
+                <button
+                  onClick={() => setDeleteTarget(p)}
+                  title="Excluir pasta"
+                  className="flex shrink-0 items-center rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-stone-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </li>
             ))}
           </ul>
@@ -100,6 +108,57 @@ export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
           onCreated={() => { setCreating(false); router.refresh() }}
         />
       )}
+
+      {deleteTarget && (
+        <DeleteModal
+          pasta={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); router.refresh() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function DeleteModal({ pasta, onClose, onDeleted }: { pasta: PastaRow; onClose: () => void; onDeleted: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function confirm() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/pastas/${pasta.id}`, { method: "DELETE" })
+      if (res.ok) {
+        onDeleted()
+      } else {
+        const data = await res.json().catch(() => null)
+        setError(data?.error ?? "Não foi possível excluir.")
+        setLoading(false)
+      }
+    } catch {
+      setError("Não foi possível excluir.")
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-stone-900" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Excluir pasta</h2>
+        <p className="mt-2 text-sm text-gray-500 dark:text-stone-400">
+          Excluir a pasta de <strong>{pasta.nome}</strong>? Os documentos enviados serão apagados. Esta ação não pode ser desfeita.
+        </p>
+        {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 dark:text-stone-400 dark:hover:bg-stone-800">
+            Cancelar
+          </button>
+          <button onClick={confirm} disabled={loading} className="rounded-md bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
+            {loading ? "Excluindo..." : "Excluir"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
