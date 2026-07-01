@@ -73,6 +73,8 @@ interface KanbanBoardProps {
   initialLeadsPerStage: InitialStageState[]
   initialStageFocus?: string | null
   activeFilters?: PipelineFilters
+  /** Story 75-99: 'imob' escopa o board ao mundo IMOB; default = principal. */
+  segmento?: string
 }
 
 interface StageState {
@@ -102,6 +104,7 @@ export function KanbanBoard({
   initialLeadsPerStage,
   initialStageFocus,
   activeFilters,
+  segmento,
 }: KanbanBoardProps) {
   const [stageMap, setStageMap] = useState<Map<string, StageState>>(() =>
     buildInitialStageMap(initialLeadsPerStage)
@@ -358,6 +361,7 @@ export function KanbanBoard({
         params.set("stage_id", stageId)
         params.set("offset", String(current.leads.length))
         params.set("limit", String(PAGE_SIZE))
+        if (segmento) params.set("segmento", segmento) // Story 75-99: load-more escopado ao segmento
         if (activeFilters?.property_id) params.set("property_id", activeFilters.property_id)
         if (activeFilters?.broker_id) params.set("broker_id", activeFilters.broker_id)
         if (activeFilters?.campaign_id) params.set("campaign_id", activeFilters.campaign_id)
@@ -400,7 +404,7 @@ export function KanbanBoard({
         })
       }
     },
-    [stageMap, activeFilters]
+    [stageMap, activeFilters, segmento]
   )
 
   return (
