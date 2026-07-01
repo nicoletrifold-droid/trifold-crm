@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { isPastaManager } from "@web/lib/pastas/roles"
 
-const MANAGER_ROLES = ["admin", "supervisor"]
 const VALID_SITUACOES = ["pendente", "entregue", "deferido", "recusado"]
 
 // PATCH — marca a situação de um documento (deferido/recusado/…). PROVISÓRIO até o
@@ -14,7 +14,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!MANAGER_ROLES.includes(appUser.role)) {
+  if (!isPastaManager(appUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

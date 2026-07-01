@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth } from "@web/lib/api-auth"
 import { buildDocSlots, type PastaTipo } from "@web/lib/pastas/checklist"
-
-const MANAGER_ROLES = ["admin", "supervisor"]
+import { isPastaManager } from "@web/lib/pastas/roles"
 
 // POST /api/pastas — cria uma pasta, gera o token do link público e semeia os
 // documentos exigidos conforme tipo (pf/pj) e estado civil (casado).
@@ -12,7 +11,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!MANAGER_ROLES.includes(appUser.role)) {
+  if (!isPastaManager(appUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
