@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { BolsaoList, type BolsaoLead } from "@web/components/bolsao/bolsao-list"
+import { canPullBolsaoDashboard } from "@web/lib/roles-hierarchy"
 
 // Story 75-81 (Epic 64) — Bolsão no dashboard (gestor): visão do pool (read-only).
 export const dynamic = "force-dynamic"
@@ -40,7 +41,8 @@ export default async function BolsaoPage() {
       <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
         Leads sem atendimento que caíram no bolsão. Qualquer corretor habilitado pode pegá-los.
       </p>
-      <BolsaoList initialLeads={leads} orgId={user.orgId} canPull={false} />
+      {/* Story 75-90: gerente-comercial também pode puxar e atender pelo dashboard (política interna). */}
+      <BolsaoList initialLeads={leads} orgId={user.orgId} canPull={canPullBolsaoDashboard(user.role)} />
     </div>
   )
 }
