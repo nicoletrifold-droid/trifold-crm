@@ -18,7 +18,9 @@ function buildPageHref(
   stageId?: string,
   view?: string,
   propertyId?: string,
-  days?: string
+  days?: string,
+  dateFrom?: string,
+  dateTo?: string
 ): string {
   const p = new URLSearchParams()
   p.set("page", String(targetPage))
@@ -27,13 +29,15 @@ function buildPageHref(
   if (view) p.set("view", view)
   if (propertyId) p.set("property_id", propertyId)
   if (days) p.set("days", days)
+  if (dateFrom) p.set("date_from", dateFrom)
+  if (dateTo) p.set("date_to", dateTo)
   return `?${p.toString()}`
 }
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; criados?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; criados?: string; date_from?: string; date_to?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -114,6 +118,19 @@ export default async function LeadsPage({
     const iso = from.toISOString()
     query = query.gte("created_at", iso)
     countQuery = countQuery.gte("created_at", iso)
+  }
+
+  // Story 75-94 — filtro de período de captura (created_at), fuso America/Sao_Paulo (UTC-3),
+  // mesmo padrão do Pipeline. De inclui 00:00; Até inclui 23:59:59.
+  if (params.date_from) {
+    const from = `${params.date_from}T00:00:00-03:00`
+    query = query.gte("created_at", from)
+    countQuery = countQuery.gte("created_at", from)
+  }
+  if (params.date_to) {
+    const to = `${params.date_to}T23:59:59-03:00`
+    query = query.lte("created_at", to)
+    countQuery = countQuery.lte("created_at", to)
   }
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
@@ -201,6 +218,9 @@ export default async function LeadsPage({
           propertyParam="property_id"
           daysParam="days"
           brokerParam="broker_id"
+          showDateRange
+          dateFromParam="date_from"
+          dateToParam="date_to"
         />
       </div>
 
@@ -233,7 +253,7 @@ export default async function LeadsPage({
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (
               <Link
-                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days)}
+                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -252,7 +272,7 @@ export default async function LeadsPage({
             </span>
             {page < totalPages ? (
               <Link
-                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days)}
+                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Próxima <ChevronRight className="h-4 w-4" />
