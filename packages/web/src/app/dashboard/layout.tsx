@@ -27,6 +27,7 @@ import {
   CreditCard,
   Container,
   Handshake,
+  FolderClosed,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -240,10 +241,14 @@ export default async function DashboardLayout({
   // migrar p/ permissões de módulo quando a função for definida (como o Bolsão).
   const showImob = Boolean(permissions["imob"]) // Story 75-93: via matriz de Perfil de Acesso
   const imobItem = { href: "/dashboard/imob", label: "IMOB", icon: <Handshake className={ICON_SIZE} /> }
+  // Story 75-104 — módulo Pastas (upload de documentos por link). Gate via matriz.
+  const showPastas = Boolean(permissions["pastas"])
+  const pastasItem = { href: "/dashboard/pastas", label: "Pastas", icon: <FolderClosed className={ICON_SIZE} /> }
   const afterRoleta = [
     ...(showBolsao ? [bolsaoItem] : []),
     ...(showFluxo ? [fluxoItem] : []),
     ...(showImob ? [imobItem] : []),
+    ...(showPastas ? [pastasItem] : []),
   ]
   const roletaIdx = baseFiltered.findIndex((item) => item.href === "/dashboard/roleta")
   const baseWithExtras = afterRoleta.length === 0
