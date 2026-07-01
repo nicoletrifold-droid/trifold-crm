@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { buildUpdatePayload } from "@web/lib/api-utils"
 import { deleteCalendarEvent } from "@web/lib/google-calendar"
+import { canMutateAppointment, isConflict } from "@web/lib/appointments/governance"
+
+// Campos cuja alteração exige justificativa (edição de dados do compromisso).
+// Mudança só de status (completed/confirmed/no_show) não é "edição de dados".
+const DETAIL_FIELDS = ["scheduled_at", "duration_minutes", "location", "broker_id", "property_id", "notes"] as const
 
 export async function GET(
   _req: NextRequest,
@@ -52,13 +57,22 @@ export async function PATCH(
   // Fetch current appointment to get google_event_id before updating
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id, google_event_id, lead_id")
+    .select("id, google_event_id, lead_id, broker_id, calendly_event_uri, scheduled_at, duration_minutes, location")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
 
   if (!existing) {
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
+  }
+
+  // Story 75-103: só o dono (corretor) ou admin/supervisor/gerente-comercial editam.
+  // Compromisso do Calendly (cliente marcou sozinho) é livre.
+  if (!canMutateAppointment(appUser.role, appUser.id, existing)) {
+    return NextResponse.json(
+      { error: "Sem permissão para editar este agendamento" },
+      { status: 403 }
+    )
   }
 
   const { fields: updateFields, error: payloadError } = buildUpdatePayload(body, [
@@ -72,6 +86,52 @@ export async function PATCH(
   ])
 
   if (payloadError) return payloadError
+
+  // Story 75-103: editar dados do compromisso exige justificativa (rastreável).
+  const changesDetails = DETAIL_FIELDS.some((f) => f in updateFields)
+  const reason = typeof body.reason === "string" ? body.reason.trim() : ""
+  if (changesDetails && !reason) {
+    return NextResponse.json(
+      { error: "Justificativa obrigatória para editar o agendamento" },
+      { status: 400 }
+    )
+  }
+
+  // Story 75-103: ao remarcar (muda horário/duração/local), revalida conflito.
+  const reschedules = "scheduled_at" in updateFields || "duration_minutes" in updateFields || "location" in updateFields
+  if (reschedules) {
+    const newStart = new Date((updateFields.scheduled_at as string) ?? existing.scheduled_at)
+    const newDuration = (updateFields.duration_minutes as number) ?? existing.duration_minutes ?? 30
+    const newLocation = ((updateFields.location as string) ?? existing.location ?? "Stand Trifold")
+    const newEnd = new Date(newStart.getTime() + newDuration * 60000)
+
+    const { data: others } = await supabase
+      .from("appointments")
+      .select("id, scheduled_at, duration_minutes, location, calendly_event_uri")
+      .eq("org_id", appUser.org_id)
+      .in("status", ["scheduled", "confirmed"])
+      .neq("id", id)
+      .gte("scheduled_at", new Date(newStart.getTime() - 120 * 60000).toISOString())
+      .lte("scheduled_at", newEnd.toISOString())
+
+    const conflict = (others ?? []).some((o) =>
+      isConflict(
+        { start: newStart.getTime(), end: newEnd.getTime(), location: newLocation },
+        {
+          start: new Date(o.scheduled_at).getTime(),
+          end: new Date(o.scheduled_at).getTime() + (o.duration_minutes ?? 30) * 60000,
+          location: o.location ?? "",
+          calendly_event_uri: o.calendly_event_uri,
+        }
+      )
+    )
+    if (conflict) {
+      return NextResponse.json(
+        { error: "Conflito de horário: já existe um agendamento nesse local e horário." },
+        { status: 409 }
+      )
+    }
+  }
 
   const { data: appointment, error } = await supabase
     .from("appointments")
@@ -103,6 +163,7 @@ export async function PATCH(
     metadata: {
       appointment_id: appointment.id,
       updated_fields: Object.keys(updateFields),
+      reason: reason || null,
     },
   })
 
@@ -110,7 +171,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -122,7 +183,7 @@ export async function DELETE(
   // Fetch current appointment to get google_event_id before soft-deleting
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id, google_event_id, lead_id, broker_id")
+    .select("id, google_event_id, lead_id, broker_id, calendly_event_uri")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -131,12 +192,22 @@ export async function DELETE(
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
   }
 
-  // Brokers may only delete their own appointments
-  const privilegedRoles = ["admin", "supervisor", "gerente-comercial"]
-  if (!privilegedRoles.includes(appUser.role) && existing.broker_id !== appUser.id) {
+  // Story 75-103: só o dono (corretor) ou admin/supervisor/gerente-comercial cancelam.
+  // Compromisso do Calendly (cliente marcou sozinho) é livre.
+  if (!canMutateAppointment(appUser.role, appUser.id, existing)) {
     return NextResponse.json(
       { error: "Sem permissão para excluir este agendamento" },
       { status: 403 }
+    )
+  }
+
+  // Story 75-103: cancelamento exige justificativa (rastreável).
+  const body = await req.json().catch(() => ({}))
+  const reason = typeof body?.reason === "string" ? body.reason.trim() : ""
+  if (!reason) {
+    return NextResponse.json(
+      { error: "Justificativa obrigatória para cancelar o agendamento" },
+      { status: 400 }
     )
   }
 
@@ -168,7 +239,7 @@ export async function DELETE(
     user_id: appUser.id,
     type: "appointment_cancelled",
     description: `Agendamento cancelado`,
-    metadata: { appointment_id: appointment.id },
+    metadata: { appointment_id: appointment.id, reason },
   })
 
   return NextResponse.json({ data: { message: "Appointment cancelled" } })
