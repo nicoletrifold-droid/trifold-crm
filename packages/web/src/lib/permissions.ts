@@ -65,6 +65,7 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         ...fullMatrix(),
         configuracoes: false,
         sistema: false,
+        fluxo: false, // supervisor não vê Fluxo de Pagamento (só admin/gerente-comercial) — Story 75-93
       }
 
     case "broker":

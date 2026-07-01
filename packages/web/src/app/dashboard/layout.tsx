@@ -218,8 +218,9 @@ export default async function DashboardLayout({
   // Itens inseridos logo ABAIXO da Roleta, só para admin/gerente-comercial:
   // Bolsão (Story 75-73) e Fluxo de Pagamento. Gate hardcoded (não passa pelo
   // sistema de permissões de módulo enquanto a função do Bolsão é definida).
-  const showBolsao = user.role === "admin" || user.role === "supervisor" || user.role === "gerente-comercial"
-  const showFluxo = user.role === "admin" || user.role === "gerente-comercial"
+  // Story 75-93: visibilidade pela matriz de Perfil de Acesso (não mais por nome de role fixo).
+  const showBolsao = Boolean(permissions["bolsao"])
+  const showFluxo = Boolean(permissions["fluxo"])
   // Story 75-83: contador de leads no bolsão (pool = bolsao_em not null).
   const bolsaoCount = showBolsao
     ? (
@@ -237,7 +238,7 @@ export default async function DashboardLayout({
   // Story 75-87 — módulo IMOB (imobiliárias externas que ajudam na venda dos
   // empreendimentos). Só admin/supervisor. Gate hardcoded por ora (placeholder);
   // migrar p/ permissões de módulo quando a função for definida (como o Bolsão).
-  const showImob = user.role === "admin" || user.role === "supervisor"
+  const showImob = Boolean(permissions["imob"]) // Story 75-93: via matriz de Perfil de Acesso
   const imobItem = { href: "/dashboard/imob", label: "IMOB", icon: <Handshake className={ICON_SIZE} /> }
   const afterRoleta = [
     ...(showBolsao ? [bolsaoItem] : []),
