@@ -64,7 +64,18 @@ Criar um **mundo IMOB isolado**: leads/pipeline do IMOB não se misturam com o p
 - **Rastreabilidade:** AC1 (coluna+default+CHECK) ✅; AC2 (NO-OP: contagens iguais) ✅; AC3 (roleta/distributor/bolsão excluem imob) — filtros aplicados, ativam quando existir lead imob; AC4 (leads/pipeline principais excluem imob) ✅; AC5 (rollback + tsc/lint) ✅.
 - **Observação:** cobertura da 1a = automação crítica + mundos distintos. **Fase 1b** (dashboard counts, analytics, relatórios, /broker, demais crons) deve ser concluída ANTES da Fase 2 subir (sem ela, quando existir lead imob, ele poderia aparecer em métricas/telas do corretor). Seguro agora (0 leads imob).
 
-**Gate → PASS.** Pronto para @devops (push + PR + aplicar migration 135) — mas recomendo subir junto com/ordem do epic.
+**Gate → PASS (1a).** 
+
+## Fase 1b (COMPLETA — 2026-07-01) — decisão do diretor: "IMOB não contabiliza NADA em analytics"
+Regra total: toda leitura de agregado/relatório/lista do mundo principal exclui `imob`.
+- [x] Crons que agem no lead: `followup`, `sla-alerts`, `email-automations` → `.eq("segmento","principal")`.
+- [x] Agregados/gestão: `dashboard/page.tsx` (2), `api/dashboard/metrics` (7), `daily-leads-report` (2), `analytics-report-data` (5), `analytics/page.tsx` (6), `api/leads` + `api/pipeline/leads`.
+- [x] **Migration 136** — as 4 RPCs de agregação (`get_dashboard_stage_counts`, `get_broker_funnel_stats`, `get_broker_dashboard_counts`, `get_analytics_summary_ranged`) passam a filtrar `segmento='principal'`. Testadas em rollback (compilam+rodam: stage 12, funnel 12, broker 522, analytics 520). **BÔNUS:** corrigido bug pré-existente em `get_broker_funnel_stats` (ks.name/slug/color varchar vs RETURNS TABLE text → cast `::text`; era o erro "structure of query does not match function result type" que aparecia nos logs de prod).
+- **Naturalmente isolado (não precisa filtro):** telas `/broker/*` (filtram por `assigned_broker_id`, e lead IMOB não é de corretor); crons por campanha/conversa (campaign-poll, enrich, meta-ads); rotas `/api/leads/[id]/*` (por id). Documentado.
+- **Convenção registrada** ([[feedback-nao-quebrar-o-que-funciona]] / memória): toda query nova de agregado/lista de lead do mundo principal deve ter `.eq("segmento","principal")`.
+- Checks 1b: `tsc` 0, `eslint` 0; RPCs validadas em rollback. NO-OP no dado atual.
+
+**Gate 1a+1b → PASS.** Isolamento do mundo IMOB completo. Pronto p/ Fase 2.
 
 ## Change Log
 - 2026-07-01 — @qa (Quinn) — Gate PASS (migration rollback: NO-OP 1153/1153 principal; CHECK ok; tsc/lint 0). Status → Done. Fase 1b pendente antes da Fase 2.

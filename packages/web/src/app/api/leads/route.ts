@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       { count: "exact" }
     )
     .eq("org_id", appUser.org_id)
+    .eq("segmento", "principal") // Story 75-98: lista principal (IMOB tem tela própria)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
     .range(from, to)

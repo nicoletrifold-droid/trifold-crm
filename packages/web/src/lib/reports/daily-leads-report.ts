@@ -114,6 +114,7 @@ export async function buildDailyLeadsReport(
     .from("leads")
     .select("channel, source")
     .eq("org_id", orgId)
+    .eq("segmento", "principal") // Story 75-98: relatório do mundo principal, sem IMOB
     .eq("is_active", true)
     .gte("created_at", sinceIso)
     .lt("created_at", untilIso)
@@ -133,6 +134,7 @@ export async function buildDailyLeadsReport(
     .from("leads")
     .select("id, primeiro_atendimento_em")
     .eq("org_id", orgId)
+    .eq("segmento", "principal") // Story 75-98: relatório do mundo principal, sem IMOB
     .gte("primeiro_atendimento_em", sinceIso)
     .lt("primeiro_atendimento_em", untilIso)
   const attendedRows = (attended ?? []) as Array<{ id: string; primeiro_atendimento_em: string }>

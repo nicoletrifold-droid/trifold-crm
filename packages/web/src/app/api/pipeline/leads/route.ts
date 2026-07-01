@@ -84,6 +84,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("leads")
     .select(LEADS_SELECT, { count: "exact" })
+    .eq("segmento", "principal") // Story 75-98: pipeline principal (IMOB tem tela própria)
     .eq("is_active", true)
     .eq("stage_id", stageId)
 

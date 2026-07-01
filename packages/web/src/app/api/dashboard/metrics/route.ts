@@ -81,11 +81,13 @@ export async function GET() {
       pipelineCountsResult,
       leadsByPropertyResult,
     ] = await Promise.all([
+      // Story 75-98: métricas do mundo principal — nunca contabilizam IMOB (.eq segmento principal).
       // Leads created today (dia comercial). is_active=true p/ bater com o card e o relatório (Story 75-57).
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .eq("is_active", true)
         .gte("created_at", todayStart),
 
@@ -96,6 +98,7 @@ export async function GET() {
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .eq("stage_id", qualificadoId ?? "")
         .gte("updated_at", weekStart),
 
@@ -104,6 +107,7 @@ export async function GET() {
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .eq("stage_id", visitaAgendadaId ?? "")
         .gte("visit_scheduled_at", weekStart),
 
@@ -112,6 +116,7 @@ export async function GET() {
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .gte("created_at", monthStart),
 
       // Qualified leads this month (for qualification rate)
@@ -120,6 +125,7 @@ export async function GET() {
         .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .eq("stage_id", qualificadoId ?? "")
         .gte("updated_at", monthStart),
 
@@ -128,6 +134,7 @@ export async function GET() {
         .from("leads")
         .select("stage_id")
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .eq("is_active", true),
 
       // Leads by property
@@ -135,6 +142,7 @@ export async function GET() {
         .from("leads")
         .select("property_id, properties(name)")
         .eq("org_id", orgId)
+        .eq("segmento", "principal")
         .eq("is_active", true),
     ])
 

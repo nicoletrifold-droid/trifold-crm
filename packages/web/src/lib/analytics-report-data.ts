@@ -163,11 +163,12 @@ export async function buildAnalyticsReportData(
     { data: responseLeadsRaw },
   ] = await Promise.all([
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: aggSince.toISOString(), p_until: aggUntil.toISOString() }),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
     supabase.from("leads")
       .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
       .eq("org_id", orgId)
+      .eq("segmento", "principal") // Story 75-98
       .eq("is_active", true).is("lost_reason", null)
       .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
       .order("created_at"),
@@ -177,7 +178,7 @@ export async function buildAnalyticsReportData(
     // Só mede desde 24/06/2026.
     supabase.from("leads")
       .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
-      .eq("org_id", orgId).not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
+      .eq("org_id", orgId).eq("segmento", "principal").not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
       .gte("primeiro_atendimento_em", compCurrStart.toISOString()).lt("primeiro_atendimento_em", aggUntil.toISOString())
       .limit(1000),
   ])
@@ -300,7 +301,7 @@ export async function buildAnalyticsReportData(
   // ── Métricas dos cards do PDF ──────────────────────────────────────────────
   const { count: perdidosCount } = await supabase
     .from("leads").select("id", { count: "exact", head: true })
-    .eq("org_id", orgId).eq("is_active", true)
+    .eq("org_id", orgId).eq("segmento", "principal").eq("is_active", true)
     .not("lost_reason", "is", null)
     .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
   const perdidos = perdidosCount ?? 0
