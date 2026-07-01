@@ -1,7 +1,7 @@
 # Story 75-91 — Indicador "⏱ aguardando há X" no kanban do dashboard
 
 ## Metadata
-- **Status:** InReview — implementado (@dev), pronto para @qa · **Epic:** 75 (SLA) · **Branch:** feat/75-91-kanban-waiting-badge · **Complexidade:** M (3 pontos)
+- **Status:** Done (QA PASS) — pronto para @devops (push + PR + deploy; sem migration) · **Epic:** 75 (SLA) · **Branch:** feat/75-91-kanban-waiting-badge · **Complexidade:** M (3 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [unit do helper de waiting, typecheck, lint, validação visual do badge no kanban]
 - **Prioridade:** 🟢 Média — visibilidade de gestão (pedido do diretor).
 
@@ -63,9 +63,17 @@ O indicador **"⏱ aguardando há X"** já existe (Story 75-49) na **lista** do 
 - **Checks:** `vitest` 6/6; `tsc --noEmit` (todo o web) 0; `eslint` 0 errors (1 warning `<img>` pré-existente em kanban-board:488, não meu).
 - Branch `feat/75-91-kanban-waiting-badge`, commit local (sem push).
 
-## QA Results
-_(pendente @qa)_
+## QA Results (@qa Quinn — 2026-07-01)
+**Verdict: PASS.** ✅
+- **Checks:** `vitest` (waiting.test) **6/6**; `tsc --noEmit` (todo o web) **0** — valida o wiring dos 3 tipos inline (board/column/card) ponta a ponta; `eslint` **0 errors** (1 warning `<img>` pré-existente, alheio).
+- **Caminho de dados (read-only, prod):** a query do helper roda sem erro contra o schema real; há **1 lead** em "Aguardando atendimento" não atendido com distribuição registrada → o badge aparecerá (vermelho, espera longa). Colunas (`primeiro_atendimento_em`, `lead_distribution_log.*`) e joins confirmados.
+- **Rastreabilidade:** AC1/AC2 — badge renderiza só quando `waitingMinutes != null` (leads em Aguardando não atendidos); helper testado (agrupa/max/futuro/vazio). AC3 (broker não regride) — extração **verbatim** + o broker agora usa o MESMO helper/componente (uma fonte só); `tsc` 0 e os unit tests cobrem exatamente a lógica que a lista do corretor consome. AC4 — broker/pipeline não passa `waitingMinutes` (prop opcional → sem efeito). AC5 ✅.
+- **Observação (não bloqueia):** para leads muito antigos sem atendimento o rótulo mostra horas (ex.: "48h30", vermelho) — comportamento esperado do badge; inclusive útil (revela lead encalhado à gestão).
+
+**Gate → PASS.** Pronto para @devops (push + PR + merge/deploy). Sem migration.
 
 ## Change Log
+- 2026-07-01 — @qa (Quinn) — Gate PASS (6/6 unit, tsc 0, lint 0; caminho de dados validado em prod read-only). Status InReview → Done.
+- 2026-07-01 — @dev (Dex) — Implementado + dedupe do broker; helper e badge compartilhados.
 - 2026-07-01 — @po (Pax) — GO. Escopo confirmado (levar o WaitingBadge da 75-49 pro kanban do dashboard, com extração compartilhada + dedupe). Status Draft → Approved.
 - 2026-07-01 — @sm — Story criada (Epic 75 / SLA). Reusa o indicador da Story 75-49.
