@@ -2,7 +2,6 @@ import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { canAccess } from "@web/lib/permissions"
-import { ImobTabs } from "../_components/imob-tabs"
 import { ImobiliariasManager } from "./_components/imobiliarias-manager"
 import type { Imobiliaria } from "@web/lib/imob/imobiliarias"
 
@@ -32,7 +31,6 @@ export default async function ImobiliariasPage() {
           Cadastro dos parceiros — equipe, gerente e contato com a construtora.
         </p>
       </div>
-      <ImobTabs />
       <ImobiliariasManager initial={imobiliarias} />
     </div>
   )
