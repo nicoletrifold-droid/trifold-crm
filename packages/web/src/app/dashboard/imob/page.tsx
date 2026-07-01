@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { ImobBoard, type BoardColumn } from "./_components/imob-board"
+import { ImobTabs } from "./_components/imob-tabs"
 
 // Story 75-88 — Kanban IMOB (imobiliárias externas). Board único por org. Só admin/supervisor.
 export const dynamic = "force-dynamic"
@@ -60,6 +61,7 @@ export default async function ImobPage() {
           Imobiliárias externas — acompanhe a venda dos empreendimentos.
         </p>
       </div>
+      <ImobTabs />
       <ImobBoard initialColumns={initialColumns} />
     </div>
   )
