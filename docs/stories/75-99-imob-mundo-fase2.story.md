@@ -1,7 +1,7 @@
 # Story 75-99 — Mundo IMOB · Fase 2: telas Leads + Pipeline do IMOB (+ Novo lead)
 
 ## Metadata
-- **Status:** Done (QA PASS) — epic completo, aguardando deploy · **Epic:** IMOB (mundo isolado) · **Branch:** feat/75-98-imob-segmento-fase1 · **Complexidade:** M-L (5 pontos)
+- **Status:** ✅ DONE / LIVE — merged + deploy prod success (2026-07-01)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [teste de criação de lead imob (banco rollback), typecheck, lint]
 - **Prioridade:** 🟠 ALTA — entrega visível do mundo IMOB (depende da 1a+1b, já feitas).
 

@@ -1,7 +1,7 @@
 # Story 75-98 — Mundo IMOB · Fase 1a: campo `segmento` + isolamento crítico
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (aguardando decisão de push do epic) · **Epic:** IMOB (mundo isolado) · **Branch:** feat/75-98-imob-segmento-fase1 · **Complexidade:** M (3 pontos)
+- **Status:** ✅ DONE / LIVE — merged + deploy prod success (2026-07-01)
 - **executor:** @dev + @data-engineer (migration) · **quality_gate:** @qa · **quality_gate_tools:** [migration em txn rollback, verificação NO-OP (contagens inalteradas), typecheck, lint]
 - **Prioridade:** 🟠 ALTA — fundação do "mundo IMOB" (2 empresas no mesmo sistema).
 

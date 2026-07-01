@@ -1,7 +1,7 @@
 # Story 75-97 — IMOB: coluna de Engajamento da imobiliária (Alta/Média/Baixa)
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + PR + migration 134) · **Epic:** IMOB · **Branch:** feat/75-97-imob-engajamento · **Complexidade:** S-M (2 pontos)
+- **Status:** ✅ DONE / LIVE — merged + deploy prod success (2026-07-01)
 - **executor:** @dev + @data-engineer (migration) · **quality_gate:** @qa · **quality_gate_tools:** [migration em txn rollback, typecheck, lint, teste da validação]
 - **Prioridade:** 🟢 Média — pedido do diretor (medir engajamento do parceiro na venda).
 
