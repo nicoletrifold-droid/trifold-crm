@@ -4,6 +4,7 @@ import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { NewAppointmentButton } from "@web/app/dashboard/_components/new-appointment-modal"
 import { DeleteAppointmentButton } from "@web/app/dashboard/_components/delete-appointment-button"
+import { canMutateAppointment } from "@web/lib/appointments/governance"
 
 const statusConfig: Record<
   string,
@@ -120,17 +121,25 @@ export default async function AgendaPage({
     mark_completed?: string
   }>
 }) {
-  await getServerUser()
+  const appUser = await getServerUser()
   const supabase = await createClient()
   const params = await searchParams
   const view = params.view ?? "week" // week, month, day
 
-  // Handle mark_completed action
+  // Handle mark_completed action — Story 75-103: só o dono (corretor) ou
+  // admin/supervisor/gerente-comercial podem marcar como realizado (Calendly = livre).
   if (params.mark_completed) {
-    await supabase
+    const { data: target } = await supabase
       .from("appointments")
-      .update({ status: "completed" })
+      .select("id, broker_id, calendly_event_uri")
       .eq("id", params.mark_completed)
+      .single()
+    if (target && canMutateAppointment(appUser.role, appUser.id, target)) {
+      await supabase
+        .from("appointments")
+        .update({ status: "completed" })
+        .eq("id", params.mark_completed)
+    }
   }
 
   // Determine the current week

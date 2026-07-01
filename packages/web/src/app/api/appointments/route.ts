@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createCalendarEvent } from "@web/lib/google-calendar"
 import { normalizePhoneBR } from "@trifold/shared"
+import { isConflict } from "@web/lib/appointments/governance"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -132,18 +133,19 @@ export async function POST(request: Request) {
     }
   }
 
-  // Double-booking check: same location and overlapping time window
+  // Double-booking check (Story 75-103): sobrepõe no horário E (mesmo local OU o
+  // existente é do Calendly — que ocupa o horário independente do local, pois o
+  // Calendly não sincroniza com Google/nosso sistema).
   const location = body.location?.trim() || "Stand Trifold"
   const duration = body.duration_minutes || 30
   const newStart = new Date(body.scheduled_at)
   const newEnd = new Date(newStart.getTime() + duration * 60000)
 
-  if (location) {
+  {
     const { data: conflicts } = await supabase
       .from("appointments")
-      .select("id, scheduled_at, duration_minutes")
+      .select("id, scheduled_at, duration_minutes, location, calendly_event_uri")
       .eq("org_id", appUser.org_id)
-      .eq("location", location)
       .in("status", ["scheduled", "confirmed"])
       .gte(
         "scheduled_at",
@@ -151,14 +153,17 @@ export async function POST(request: Request) {
       )
       .lte("scheduled_at", newEnd.toISOString())
 
-    const trueConflict = (conflicts ?? []).some((existing) => {
-      const existStart = new Date(existing.scheduled_at)
-      const existEnd = new Date(
-        existStart.getTime() + (existing.duration_minutes ?? 30) * 60000
+    const trueConflict = (conflicts ?? []).some((existing) =>
+      isConflict(
+        { start: newStart.getTime(), end: newEnd.getTime(), location },
+        {
+          start: new Date(existing.scheduled_at).getTime(),
+          end: new Date(existing.scheduled_at).getTime() + (existing.duration_minutes ?? 30) * 60000,
+          location: existing.location ?? "",
+          calendly_event_uri: existing.calendly_event_uri,
+        }
       )
-      // Overlap: newStart < existEnd && existStart < newEnd
-      return newStart < existEnd && existStart < newEnd
-    })
+    )
 
     if (trueConflict) {
       return NextResponse.json(
