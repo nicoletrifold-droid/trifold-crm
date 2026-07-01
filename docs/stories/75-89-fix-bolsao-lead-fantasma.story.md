@@ -1,7 +1,7 @@
 # Story 75-89 — Fix: bolsão terminal — roleta não pode re-pegar lead do bolsão (Opção B)
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + aplicar migration 130) · **Epic:** 64 · **Branch:** fix/75-89-bolsao-lead-fantasma · **Complexidade:** S-M (2-3 pontos)
+- **Status:** Deploy parcial — migration 130 LIVE em prod; app code no PR #79 aguardando merge/deploy · **Epic:** 64 · **Branch:** fix/75-89-bolsao-lead-fantasma · **Complexidade:** S-M (2-3 pontos)
 - **executor:** @dev + @data-engineer (migration) · **quality_gate:** @qa · **quality_gate_tools:** [teste de banco (caminho real: lead no bolsão NÃO é redistribuído pelo cron/distributor/RPC), typecheck, lint]
 - **Prioridade:** 🟠 ALTA — produção: corretor clica "Pegar" no bolsão e o lead "some e volta"; além disso o bolsão não cumpre o propósito (lead é arrancado do pool em ~2 min pela roleta). **Sem perda de lead** (os afetados já tinham dono).
 
@@ -118,7 +118,13 @@ Setup por clone de lead real (satisfaz NOT NULL/FK); tudo revertido (ROLLBACK ve
 
 **Gate → PASS.** Pronto para @devops (push + aplicar migration 130 em prod).
 
+## Deploy (@devops Gage — 2026-07-01)
+- **Push:** branch `fix/75-89-bolsao-lead-fantasma` → origin. **PR #79** aberto (base `main`).
+- **Migration 130:** aplicada em prod via SQL direto (Management API/execute_sql) — padrão do time (a tabela `schema_migrations` rastreada para em 2026-06-18; migrations 096–129 não estão lá, aplicadas por SQL direto; segui o mesmo caminho da 128). Guards `bolsao_em` confirmados vivos via `pg_get_functiondef`. **Efeito imediato:** a RPC `roleta_pick_and_advance` já recusa lead do bolsão — como o cron `roleta-retry` chama essa RPC, a re-distribuição automática já está bloqueada em prod mesmo antes do deploy do app.
+- **Pendente (não merge automático):** merge do PR #79 → deploy Vercel do **app code** (exclusão no cron-retry, guard do distributor incl. `priorizar_lead_ativo`, filtro das 4 queries de leitura que remove card/contador fantasma da UI, UX do `'gone'`). Até o merge, a proteção principal (RPC) já vale; falta a limpeza visual do pool e o bloqueio do atalho de continuidade (edge: mesmo telefone com dono em outro lead).
+
 ## Change Log
+- 2026-07-01 — @devops (Gage) — Push + PR #79 + migration 130 aplicada em prod (SQL direto). RPC já recusa bolsão em prod. App code aguarda merge do PR → deploy Vercel.
 - 2026-07-01 — @qa (Quinn) — Gate PASS. Teste de banco real (txn rollback) prova antes/depois: função atual pega lead do bolsão, migration 130 recusa, lead normal segue distribuído (sem regressão). 27/27 testes, tsc 0, lint 0 err. Status InReview → Done. Handoff @devops (push + migration 130).
 - 2026-07-01 — @dev (Dex) — Implementado escopo B (cron-retry + distributor + migration 130 + 4 queries de leitura + UX). 14/14 testes, tsc 0, lint 0 err. Commit local na branch fix/75-89. Status InReview. Handoff @qa.
 - 2026-07-01 — @po (Pax) — Course-correct p/ **Opção B** (bolsão terminal, sem continuidade) por decisão do dono do produto. Achado decisivo: o cron `roleta-retry` é quem re-distribui o lead do bolsão (candidatos = `assigned_broker_id IS NULL`, sem excluir `bolsao_em`). Escopo reescrito: guardar bolsão no cron-retry + distributor + RPC; leitura defensiva; UX. Re-validado GO. Handoff @dev.
