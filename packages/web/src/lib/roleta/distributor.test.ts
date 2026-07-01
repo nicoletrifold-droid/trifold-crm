@@ -58,6 +58,7 @@ const VALID_LEAD = {
   name: "Cliente Teste",
   phone: "11999999999",
   assigned_broker_id: null,
+  bolsao_em: null,
 }
 
 const RPC_RESULT = [
@@ -177,5 +178,24 @@ describe("distributor — stage assignment on distribution (Story 62-1)", () => 
     stageUpdates.forEach((u) => {
       expect(u.stage_id).toBe("00000000-0000-0000-0001-000000000001")
     })
+  })
+
+  // Story 75-89 — bolsão terminal: lead no bolsão NÃO é redistribuído pela roleta.
+  it("returns em_bolsao and does NOT distribute a lead that is in the bolsão", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient({
+        lead: { ...VALID_LEAD, bolsao_em: "2026-06-30T22:50:14.000Z" },
+        // priorizar_lead_ativo ligado + telefone com dono em outro lead: mesmo assim NÃO pode roteá-lo.
+        config: { ...VALID_CONFIG, priorizar_lead_ativo: true },
+        existingLead: { assigned_broker_id: "outro-corretor" },
+      }) as never
+    )
+
+    const result = await distributeLeadToNextBroker("lead-1", "org-1")
+
+    expect(result.status).toBe("em_bolsao")
+    // não atribui, não muda stage, não roteia por continuidade
+    expect(updateCalls.find((u) => "assigned_broker_id" in u)).toBeUndefined()
+    expect(updateCalls.find((u) => "stage_id" in u)).toBeUndefined()
   })
 })

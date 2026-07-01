@@ -38,11 +38,14 @@ export async function GET(request: NextRequest) {
   const idleCutoffMs = IDLE_MINUTES * 60 * 1000
 
   // Leads ativos sem corretor dos últimos 30 dias.
+  // Story 75-89: leads no bolsão (bolsao_em setado) NÃO são redistribuídos —
+  // o bolsão é terminal p/ a roleta; só saem via puxada manual (pegar_lead_bolsao).
   const { data: leads, error } = await admin
     .from("leads")
     .select("id, org_id, name")
     .eq("is_active", true)
     .is("assigned_broker_id", null)
+    .is("bolsao_em", null)
     .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: true })
     .limit(MAX_PER_RUN)
@@ -65,13 +68,14 @@ export async function GET(request: NextRequest) {
 
   for (const lead of leads ?? []) {
     // Guard de idempotência: re-verifica antes de distribuir (execuções concorrentes).
+    // Story 75-89: também pula se o lead entrou no bolsão nesse meio-tempo.
     const { data: current } = await admin
       .from("leads")
-      .select("assigned_broker_id")
+      .select("assigned_broker_id, bolsao_em")
       .eq("id", lead.id)
       .maybeSingle()
 
-    if (!current || current.assigned_broker_id !== null) {
+    if (!current || current.assigned_broker_id !== null || current.bolsao_em !== null) {
       results.skipped++
       continue
     }

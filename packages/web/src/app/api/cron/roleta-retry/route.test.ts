@@ -26,7 +26,10 @@ const isCalls: [string, unknown][] = []
 const gteCalls: [string, unknown][] = []
 const updateCalls: unknown[] = []
 
-function makeAdminClient(leads: { id: string; org_id: string; name: string }[]) {
+function makeAdminClient(
+  leads: { id: string; org_id: string; name: string }[],
+  current: Record<string, unknown> = { assigned_broker_id: null, bolsao_em: null },
+) {
   eqCalls.length = 0
   isCalls.length = 0
   gteCalls.length = 0
@@ -40,7 +43,7 @@ function makeAdminClient(leads: { id: string; org_id: string; name: string }[]) 
     limit: vi.fn(() => Promise.resolve({ data: leads, error: null })),
     select: vi.fn(() => chain),
     update: vi.fn((p: unknown) => { updateCalls.push(p); return chain }),
-    maybeSingle: vi.fn(() => Promise.resolve({ data: { assigned_broker_id: null }, error: null })),
+    maybeSingle: vi.fn(() => Promise.resolve({ data: current, error: null })),
     then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve),
   }
   return { from: vi.fn(() => chain) }
@@ -95,6 +98,30 @@ describe("roleta-retry cron (Story 71-1)", () => {
     const f = isCalls.find(([c]) => c === "assigned_broker_id")
     expect(f).toBeDefined()
     expect(f![1]).toBeNull()
+  })
+
+  // Story 75-89 — bolsão terminal: o cron NÃO redistribui leads do bolsão.
+  it("aplica bolsao_em IS NULL na busca de candidatos", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(makeAdminClient([]) as never)
+    await GET(makeRequest())
+    const f = isCalls.find(([c]) => c === "bolsao_em")
+    expect(f).toBeDefined()
+    expect(f![1]).toBeNull()
+  })
+
+  it("re-check: lead que entrou no bolsão no meio-tempo é pulado, NÃO distribui", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient(
+        [{ id: "l1", org_id: "o1", name: "A" }],
+        { assigned_broker_id: null, bolsao_em: "2026-06-30T22:50:14.000Z" },
+      ) as never,
+    )
+
+    const res = await GET(makeRequest())
+    const body = await res.json()
+
+    expect(distributeLeadToNextBroker).not.toHaveBeenCalled()
+    expect(body.skipped).toBe(1)
   })
 
   it("aplica filtro created_at de 30 dias via gte", async () => {

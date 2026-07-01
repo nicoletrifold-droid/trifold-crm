@@ -11,6 +11,7 @@ export type DistributionStatus =
   | "fora_horario"
   | "roleta_inativa"
   | "sem_config"
+  | "em_bolsao"
 
 export interface DistributionResult {
   status: DistributionStatus
@@ -68,7 +69,7 @@ export async function distributeLeadToNextBroker(
   // 2. Fetch lead — must belong to this org
   const { data: lead } = await admin
     .from("leads")
-    .select("property_interest_id, name, phone, assigned_broker_id")
+    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em")
     .eq("id", leadId)
     .eq("org_id", orgId)
     .maybeSingle()
@@ -83,6 +84,14 @@ export async function distributeLeadToNextBroker(
   // Guard: lead já foi atribuído por execução concorrente — não redistribuir
   if (lead.assigned_broker_id !== null) {
     return { status: "sem_corretor_disponivel" }
+  }
+
+  // Story 75-89: bolsão é terminal p/ a roleta. Um lead no bolsão (não atendido em
+  // "Aguardando atendimento") NÃO é redistribuído automaticamente — nem pelo atalho
+  // de continuidade (não houve atendimento, logo não há relação a preservar). Só sai
+  // via puxada manual (pegar_lead_bolsao). Guard ANTES de priorizar_lead_ativo/RPC.
+  if (lead.bolsao_em) {
+    return { status: "em_bolsao" }
   }
 
   // 3. Priorizar lead ativo — bypass da fila para manter continuidade de atendimento.

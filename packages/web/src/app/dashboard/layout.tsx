@@ -229,6 +229,7 @@ export default async function DashboardLayout({
           .eq("org_id", user.orgId)
           .eq("is_active", true)
           .not("bolsao_em", "is", null)
+          .is("assigned_broker_id", null) // Story 75-89: contar só o pool real (sem dono)
       ).count ?? 0
     : 0
   const bolsaoItem = { href: "/dashboard/bolsao", label: "Bolsão", icon: <Container className={ICON_SIZE} />, badge: bolsaoCount }

@@ -35,6 +35,9 @@ export function BolsaoList({ initialLeads, orgId, canPull, dark = false }: Props
   const [leads, setLeads] = useState(initialLeads)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  // Story 75-89: distingue aviso de erro (ex.: "já foi atendido por outro") de sucesso,
+  // pra dar realce visível em vez de um texto sutil que o corretor não percebe.
+  const [msgIsError, setMsgIsError] = useState(false)
   // Relógio do "tempo de espera" — atualiza a cada minuto (não depende de fetch).
   const [nowMs, setNowMs] = useState(() => initialLeads.reduce((a, l) => Math.max(a, new Date(l.bolsao_em).getTime()), 0) || 0)
 
@@ -61,18 +64,24 @@ export function BolsaoList({ initialLeads, orgId, canPull, dark = false }: Props
   const pegar = useCallback(async (id: string) => {
     setPendingId(id)
     setMsg(null)
+    setMsgIsError(false)
     try {
       const res = await fetch(`/api/bolsao/${id}/pegar`, { method: "POST" })
       const body = (await res.json().catch(() => ({}))) as { message?: string; status?: string }
       setMsg(body.message ?? (res.ok ? "Pronto!" : "Erro ao pegar o lead."))
+      setMsgIsError(!res.ok)
       if (res.ok) {
         setLeads((cur) => cur.filter((l) => l.id !== id))
         router.refresh()
       } else if (body.status === "gone") {
+        // Lead já foi puxado por outro — some da lista e o refresh confirma (não volta,
+        // pois a query do pool exige assigned_broker_id null — Story 75-89).
         setLeads((cur) => cur.filter((l) => l.id !== id))
+        router.refresh()
       }
     } catch {
       setMsg("Erro de conexão ao pegar o lead.")
+      setMsgIsError(true)
     } finally {
       setPendingId(null)
     }
@@ -95,7 +104,18 @@ export function BolsaoList({ initialLeads, orgId, canPull, dark = false }: Props
 
   return (
     <div className="mt-4 space-y-3">
-      {msg && <p className={`text-sm ${subCls}`}>{msg}</p>}
+      {msg && (
+        <p
+          role="status"
+          className={
+            msgIsError
+              ? "rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400"
+              : `text-sm ${subCls}`
+          }
+        >
+          {msg}
+        </p>
+      )}
       {leads.map((l) => (
         <div key={l.id} className={`flex items-center justify-between gap-4 ${cardCls}`}>
           <div className="min-w-0">
