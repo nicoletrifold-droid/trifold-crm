@@ -1,7 +1,7 @@
 # Story 75-90 — Bolsão: gerente-comercial pode puxar lead e atender pelo dashboard
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + PR + deploy; sem migration) · **Epic:** 64 · **Branch:** feat/75-90-bolsao-gerente-comercial-puxar · **Complexidade:** S (1-2 pontos)
+- **Status:** ✅ DONE / LIVE — PR #80 merged (c635a14), deploy Vercel prod success · **Epic:** 64 · **Branch:** feat/75-90-bolsao-gerente-comercial-puxar · **Complexidade:** S (1-2 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [teste do gate canPull por role, typecheck, lint, validação do fluxo de atendimento no dashboard]
 - **Prioridade:** 🟢 Média — pedido do diretor: a gerente comercial também ajudar a esvaziar o bolsão.
 
@@ -87,5 +87,8 @@ Setup por clone de lead real, tudo revertido (ROLLBACK).
 **Gate → PASS.** Pronto para @devops (push + PR + merge/deploy). Sem migration nesta story.
 
 ## Change Log
+- 2026-07-01 — @devops (Gage) — Push + PR #80 **merged** (squash c635a14) + deploy Vercel prod **success**. Sem migration. Story LIVE.
+- 2026-07-01 — @qa (Quinn) — Gate PASS (teste de banco real + 7/7 unit).
+- 2026-07-01 — @dev (Dex) — Implementado: lib/roles-hierarchy.ts + gate no dashboard/bolsao + testes.
 - 2026-07-01 — @po (Pax) — GO. Alcance confirmado: infra de hierarquia + gate ativo só gerente-comercial. Status Draft → Approved.
 - 2026-07-01 — @sm — Story criada (Epic 64). Libera a gerente-comercial a puxar lead do bolsão e atender pelo dashboard (backend + telas de atendimento já existem; muda só o `canPull`). Escopo só gerente-comercial; supervisor/admin viram follow-up por dependerem de perfil de corretor. Sem mexer no relógio/SLA. Gate desenhado com hierarquia em mente ([[feedback-hierarquia-perfis-comercial]]).
