@@ -1,7 +1,7 @@
 # Story 75-96 — IMOB: cadastro de imobiliárias — sócio, contatos do gerente e tipo de produto
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + PR + migration 133) · **Epic:** IMOB · **Branch:** feat/75-96-imob-cadastro-campos · **Complexidade:** M (3 pontos)
+- **Status:** ✅ DONE / LIVE — PR #85 merged (a01479b), migration 133 em prod, deploy Vercel success · **Epic:** IMOB · **Branch:** feat/75-96-imob-cadastro-campos · **Complexidade:** M (3 pontos)
 - **executor:** @dev + @data-engineer (migration) · **quality_gate:** @qa · **quality_gate_tools:** [migration em txn rollback, typecheck, lint, teste da validação]
 - **Prioridade:** 🟢 Média — pedido do diretor (completar o cadastro do parceiro).
 
@@ -64,6 +64,7 @@ Estende o cadastro da Story 75-92 (tabela `imobiliarias` + `lib/imob/imobiliaria
 **Gate → PASS.** Pronto para @devops (push + PR + aplicar migration 133).
 
 ## Change Log
+- 2026-07-01 — @devops (Gage) — PR #85 merged (a01479b) + migration 133 em prod + deploy Vercel success. Story LIVE.
 - 2026-07-01 — @qa (Quinn) — Gate PASS (migration txn rollback: tipos/CHECK/campos; validação 9/9; tsc/lint 0). Status → Done.
 - 2026-07-01 — @dev (Dex) — migration 133 + lib (TIPOS_PRODUTO) + form (sócio/gerente/pills) + badges na lista. Sem push.
 - 2026-07-01 — @po (Pax) — GO. Status Draft → Approved.

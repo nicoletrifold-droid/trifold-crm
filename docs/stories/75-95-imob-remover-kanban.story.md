@@ -1,7 +1,7 @@
 # Story 75-95 — IMOB: remover o Kanban do módulo (deixar só o cadastro)
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + PR + deploy; sem migration) · **Epic:** IMOB · **Branch:** feat/75-95-imob-remover-kanban · **Complexidade:** S (1 ponto)
+- **Status:** ✅ DONE / LIVE — PR #86 merged (86bed28), deploy Vercel success · **Epic:** IMOB · **Branch:** feat/75-95-imob-remover-kanban · **Complexidade:** S (1 ponto)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, navegação]
 - **Prioridade:** 🟢 Média — pedido do diretor: o kanban não fica no IMOB (vai pra outro local depois).
 
@@ -59,6 +59,7 @@ O IMOB tinha 2 abas (Kanban | Imobiliárias). O board (Story 75-88) **não será
 **Gate → PASS.** Pronto para @devops (push + PR + deploy). Sem migration.
 
 ## Change Log
+- 2026-07-01 — @devops (Gage) — PR #86 merged (86bed28) + deploy Vercel success. Kanban desligado do IMOB; board dormente. Story LIVE.
 - 2026-07-01 — @qa (Quinn) — Gate PASS (tsc/lint 0, sem import órfão; guard preservado). Status → Done.
 - 2026-07-01 — @dev (Dex) — imob/page redireciona p/ cadastro; ImobTabs removido; imob-tabs deletado; board dormente. Memória de reuso atualizada. Sem push.
 - 2026-07-01 — @po (Pax) — GO. Status Draft → Approved.
