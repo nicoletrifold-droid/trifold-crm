@@ -9,6 +9,17 @@ export const STATUS_LABELS: Record<ImobiliariaStatus, string> = {
   inativo: "Inativo",
 }
 
+// Story 75-96 — tipo(s) de produto que a imobiliária trabalha (múltipla escolha).
+export const TIPOS_PRODUTO = ["mcmv", "medio_padrao", "medio_alto_padrao", "alto_padrao"] as const
+export type TipoProduto = (typeof TIPOS_PRODUTO)[number]
+
+export const TIPO_PRODUTO_LABELS: Record<TipoProduto, string> = {
+  mcmv: "MCMV",
+  medio_padrao: "Médio Padrão",
+  medio_alto_padrao: "Médio Alto Padrão",
+  alto_padrao: "Alto Padrão",
+}
+
 export interface Imobiliaria {
   id: string
   nome: string
@@ -21,6 +32,12 @@ export interface Imobiliaria {
   endereco: string | null
   num_corretores: number | null
   gerente_nome: string | null
+  gerente_telefone: string | null
+  gerente_email: string | null
+  socio_nome: string | null
+  socio_telefone: string | null
+  socio_email: string | null
+  tipos_produto: string[]
   contato_nome: string | null
   contato_telefone: string | null
   contato_email: string | null
@@ -32,8 +49,10 @@ export interface Imobiliaria {
 
 // Campos de texto livres (whitelist para sanitizar o body da API).
 export const IMOBILIARIA_TEXT_FIELDS = [
-  "nome", "razao_social", "cnpj", "telefone", "email", "cidade", "estado",
-  "endereco", "gerente_nome", "contato_nome", "contato_telefone", "contato_email", "observacoes",
+  "nome", "razao_social", "cnpj", "telefone", "email", "cidade", "estado", "endereco",
+  "gerente_nome", "gerente_telefone", "gerente_email",
+  "socio_nome", "socio_telefone", "socio_email",
+  "contato_nome", "contato_telefone", "contato_email", "observacoes",
 ] as const
 
 /**
@@ -81,6 +100,21 @@ export function validateImobiliaria(
       return { ok: false, error: "Status inválido" }
     }
     out.status = b.status
+  }
+
+  if ("tipos_produto" in b) {
+    const raw = b.tipos_produto
+    if (raw != null && !Array.isArray(raw)) {
+      return { ok: false, error: "Tipos de produto inválidos" }
+    }
+    const valid = new Set<string>(TIPOS_PRODUTO)
+    const arr = Array.isArray(raw) ? raw : []
+    for (const t of arr) {
+      if (typeof t !== "string" || !valid.has(t)) {
+        return { ok: false, error: "Tipo de produto inválido" }
+      }
+    }
+    out.tipos_produto = [...new Set(arr as string[])]
   }
 
   return { ok: true, value: out }
