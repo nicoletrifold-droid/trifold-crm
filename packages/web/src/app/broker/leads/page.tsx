@@ -1,7 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
-import { businessMinutesBetweenSchedule, getOrgSchedule } from "@web/lib/roleta/business-time"
+import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
 import Link from "next/link"
 import { NewLeadModal } from "../_components/new-lead-modal"
 import { LeadSearch } from "../_components/lead-search"
@@ -23,8 +23,6 @@ const TASK_LABELS: Record<string, string> = {
 const FILTER_LABELS: Record<string, string> = {
   trabalhados: "Leads já trabalhados",
 }
-
-const AGUARDANDO_STAGE_ID = "00000000-0000-0000-0001-000000000001"
 
 export default async function BrokerLeadsPage({
   searchParams,
@@ -84,32 +82,8 @@ export default async function BrokerLeadsPage({
         !(l as { primeiro_atendimento_em?: string | null }).primeiro_atendimento_em
     )
     .map((l) => l.id)
-  const waitingByLead: Record<string, number> = {}
-  if (aguardandoIds.length > 0) {
-    const admin = createAdminClient()
-    // Story 75-59: tempo esperando pela AGENDA por dia (mesma fonte da distribuição).
-    const [{ week, timezone }, { data: distLog }] = await Promise.all([
-      getOrgSchedule(user.orgId, admin),
-      admin
-        .from("lead_distribution_log")
-        .select("lead_id, created_at")
-        .eq("org_id", user.orgId)
-        .eq("status", "distributed")
-        .in("lead_id", aguardandoIds),
-    ])
-    const now = new Date()
-    const distByLead = new Map<string, number[]>()
-    for (const d of (distLog ?? []) as Array<{ lead_id: string; created_at: string }>) {
-      const arr = distByLead.get(d.lead_id) ?? []
-      arr.push(new Date(d.created_at).getTime())
-      distByLead.set(d.lead_id, arr)
-    }
-    for (const id of aguardandoIds) {
-      const dists = (distByLead.get(id) ?? []).filter((t) => t <= now.getTime())
-      if (dists.length === 0) continue
-      waitingByLead[id] = businessMinutesBetweenSchedule(new Date(Math.max(...dists)), now, week, timezone)
-    }
-  }
+  // Story 75-91: cálculo extraído p/ helper compartilhado (lib/sla/waiting), reusado no kanban do dashboard.
+  const waitingByLead = await computeWaitingMinutes(createAdminClient(), user.orgId, aguardandoIds)
 
   // Build sets for task-based filtering
   const taskLeadIds = (() => {
