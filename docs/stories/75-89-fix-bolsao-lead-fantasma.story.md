@@ -1,7 +1,7 @@
 # Story 75-89 — Fix: bolsão terminal — roleta não pode re-pegar lead do bolsão (Opção B)
 
 ## Metadata
-- **Status:** InReview — implementado (@dev), pronto para @qa · **Epic:** 64 · **Branch:** fix/75-89-bolsao-lead-fantasma · **Complexidade:** S-M (2-3 pontos)
+- **Status:** Done (QA PASS) — pronto para @devops (push + aplicar migration 130) · **Epic:** 64 · **Branch:** fix/75-89-bolsao-lead-fantasma · **Complexidade:** S-M (2-3 pontos)
 - **executor:** @dev + @data-engineer (migration) · **quality_gate:** @qa · **quality_gate_tools:** [teste de banco (caminho real: lead no bolsão NÃO é redistribuído pelo cron/distributor/RPC), typecheck, lint]
 - **Prioridade:** 🟠 ALTA — produção: corretor clica "Pegar" no bolsão e o lead "some e volta"; além disso o bolsão não cumpre o propósito (lead é arrancado do pool em ~2 min pela roleta). **Sem perda de lead** (os afetados já tinham dono).
 
@@ -92,10 +92,34 @@ Resultado: estado inconsistente **`assigned_broker_id` preenchido + `bolsao_em` 
 - Migration NÃO aplicada em prod (deploy = @devops). Teste de banco no caminho real (AC7) = @qa gate.
 - Nada de push/PR (— @devops).
 
-## QA Results
-_(pendente @qa — validar AC7 em banco: lead no bolsão não é atribuído por cron-retry/distributor/RPC; puxada manual segue OK. Rodar migration 130 em txn rollback.)_
+## QA Results (@qa Quinn — 2026-07-01)
+**Verdict: PASS.** ✅
+
+**Teste de banco no caminho REAL (AC7) — prod, txn rollback (antes/depois, fila real da roleta):**
+| Cenário | Resultado | Esperado |
+|---|---|---|
+| Função ATUAL (pré-130) + lead no bolsão | pegou + atribuiu (`rows=1, assigned=true`) | confirma o bug |
+| Função NOVA (130) + lead no bolsão | **recusou** (`rows=0, assigned=false`) | ✅ guard OK (AC3) |
+| Função NOVA (130) + lead normal | **distribuiu** (`rows=1, assigned=true`) | ✅ sem regressão |
+Setup por clone de lead real (satisfaz NOT NULL/FK); tudo revertido (ROLLBACK verificado: DDL de função + DML). `phone_normalized` é coluna gerada — não inserível (ajuste do teste, não do produto).
+
+**Rastreabilidade dos ACs:**
+- AC1 (cron-retry não pega bolsão): unit test `roleta-retry` (candidato aplica `bolsao_em IS NULL` + re-check pula) ✅
+- AC2 (distributor `em_bolsao`, sem continuidade): unit test distributor (mesmo com `priorizar_lead_ativo=true`) ✅
+- AC3 (RPC recusa bolsão): teste de banco real ✅
+- AC4 (leitura não mostra lead com dono): revisão de código nas 4 queries (`.is("assigned_broker_id", null)`) — verificado por inspeção ✅
+- AC5 (aviso visível no `'gone'`): revisão de código (banner âmbar + `role="status"`) — UI, sem teste automatizado (aceitável) ✅
+- AC6 (puxada manual segue OK): `pegar_lead_bolsao` intocada; 7 testes do endpoint `pegar` passam ✅
+- AC7 (teste de banco real): ✅
+
+**Checks estáticos (reproduzidos pelo @qa):** `vitest` 4 arquivos, **27/27** (inclui `pegar` + `bolsao-rebalance` → sem regressão nas irmãs). `tsc --noEmit` 0 erros. `eslint` 0 errors.
+
+**Observações (não bloqueiam):** AC4/AC5 cobertos por inspeção (query filter + CSS), sem teste automatizado — proporcional a um fix S-M. Migration 130 usa `SECURITY DEFINER`/`search_path`/REVOKE+GRANT idênticos à 102 (sem nova superfície de risco); RLS intocada.
+
+**Gate → PASS.** Pronto para @devops (push + aplicar migration 130 em prod).
 
 ## Change Log
+- 2026-07-01 — @qa (Quinn) — Gate PASS. Teste de banco real (txn rollback) prova antes/depois: função atual pega lead do bolsão, migration 130 recusa, lead normal segue distribuído (sem regressão). 27/27 testes, tsc 0, lint 0 err. Status InReview → Done. Handoff @devops (push + migration 130).
 - 2026-07-01 — @dev (Dex) — Implementado escopo B (cron-retry + distributor + migration 130 + 4 queries de leitura + UX). 14/14 testes, tsc 0, lint 0 err. Commit local na branch fix/75-89. Status InReview. Handoff @qa.
 - 2026-07-01 — @po (Pax) — Course-correct p/ **Opção B** (bolsão terminal, sem continuidade) por decisão do dono do produto. Achado decisivo: o cron `roleta-retry` é quem re-distribui o lead do bolsão (candidatos = `assigned_broker_id IS NULL`, sem excluir `bolsao_em`). Escopo reescrito: guardar bolsão no cron-retry + distributor + RPC; leitura defensiva; UX. Re-validado GO. Handoff @dev.
 - 2026-07-01 — @po (Pax) — `*validate-story-draft`: GO 10/10 (versão Opção A, substituída).
