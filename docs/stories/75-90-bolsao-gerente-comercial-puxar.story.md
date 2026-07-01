@@ -1,7 +1,7 @@
 # Story 75-90 — Bolsão: gerente-comercial pode puxar lead e atender pelo dashboard
 
 ## Metadata
-- **Status:** InReview — implementado (@dev), pronto para @qa · **Epic:** 64 · **Branch:** feat/75-90-bolsao-gerente-comercial-puxar · **Complexidade:** S (1-2 pontos)
+- **Status:** Done (QA PASS) — pronto para @devops (push + PR + deploy; sem migration) · **Epic:** 64 · **Branch:** feat/75-90-bolsao-gerente-comercial-puxar · **Complexidade:** S (1-2 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [teste do gate canPull por role, typecheck, lint, validação do fluxo de atendimento no dashboard]
 - **Prioridade:** 🟢 Média — pedido do diretor: a gerente comercial também ajudar a esvaziar o bolsão.
 
@@ -63,8 +63,28 @@ Ou seja: puxou → o lead vira dela em "Aguardando atendimento" → ela atende p
 - **Sem backend:** `pegar_lead_bolsao` intocada (Fernanda já é broker+available → aceita). Atendimento reusa pipeline/conversas do dashboard (validação = @qa).
 - Branch `feat/75-90-bolsao-gerente-comercial-puxar`, commit local (sem push).
 
-## QA Results
-_(pendente @qa — validar: gate por role no dashboard/bolsao; e caminho de atendimento da gerente no dashboard, idealmente em txn rollback)_
+## QA Results (@qa Quinn — 2026-07-01)
+**Verdict: PASS.** ✅
+
+**Teste de caminho real (prod, txn rollback):**
+| Verificação | Resultado | AC |
+|---|---|---|
+| Gerente-comercial (Fernanda `c149cf2e…`) puxa lead do bolsão | `pegar_lead_bolsao` → lead `assigned_broker_id` = ela | AC2 |
+| `bolsao_em` limpo após puxar | true | AC2 |
+| Etapa preservada (não muda no ato de puxar) | true (stage_id == original) | AC2 |
+| Admin (Alexandre, sem perfil de corretor) puxa | recusado — não pegou | política/gate |
+| Lead do admin continua no bolsão | true | — |
+Setup por clone de lead real, tudo revertido (ROLLBACK).
+
+**Rastreabilidade:**
+- AC1 (gerente vê "Pegar") / AC4 (admin/sup read-only) / AC5 (corretor inalterado): `canPullBolsaoDashboard` testado (7/7) — true só p/ gerente-comercial; `/broker/bolsao` intocado.
+- AC2 (puxar → dela, bolsao null, mesma etapa): teste de banco real ✅.
+- AC3 (atende no dashboard): validado por inspeção — `/dashboard/pipeline` (kanban `@dnd-kit`, move etapa; filtro corretor inclui gerente-comercial) + `/dashboard/conversas` (lista filtra `assigned_broker_id`, `[id]` usa `BrokerMessageInput` p/ enviar). Reuso, sem tela nova.
+- AC6: `vitest` 7/7, `tsc` 0, `eslint` 0.
+
+**Observações (não bloqueiam):** capacidade ativa só p/ gerente-comercial por política; helper de hierarquia (`commercialRoleAtLeast`) fica como groundwork p/ escalonar supervisor/admin quando resolverem o pré-requisito de perfil de corretor (follow-up). Backend (`pegar_lead_bolsao`) intocado.
+
+**Gate → PASS.** Pronto para @devops (push + PR + merge/deploy). Sem migration nesta story.
 
 ## Change Log
 - 2026-07-01 — @po (Pax) — GO. Alcance confirmado: infra de hierarquia + gate ativo só gerente-comercial. Status Draft → Approved.
