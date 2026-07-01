@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
       .eq("org_id", automation.org_id)
       .eq("is_active", true)
       .eq("segmento", "principal") // Story 75-98: automação de e-mail é do mundo principal, nunca IMOB
+      .eq("distrato", false) // Story 20-12: leads distratados não recebem automação cron.daily
       .not("email", "is", null)
       .limit(50)
 
@@ -113,6 +114,32 @@ export async function GET(request: NextRequest) {
   const todayMonth = now.getUTCMonth() + 1
   const todayDay = now.getUTCDate()
 
+  // Story 20-12: clientes TOTALMENTE distratados (active-contract-wins) não recebem
+  // email de aniversário. 3 passos (mesmo padrão de isContatoDistratado/notificacoes.ts):
+  // só bloqueia quem tem >= 1 vínculo distratado E NENHUM vínculo ativo.
+  const distratadoClienteIds = new Set<string>()
+  if ((birthdayAutomations ?? []).length > 0) {
+    // Passo A: cliente_ids com ao menos um vínculo ATIVO (distrato=false)
+    const { data: vinculosAtivos } = await supabase
+      .from("clientes_obras_vinculos")
+      .select("cliente_id")
+      .eq("distrato", false)
+    const clientesComAtivo = new Set(
+      ((vinculosAtivos ?? []) as { cliente_id: string }[]).map((v) => v.cliente_id)
+    )
+
+    // Passo B: cliente_ids com ao menos um vínculo distratado (distrato=true)
+    const { data: distVinculos } = await supabase
+      .from("clientes_obras_vinculos")
+      .select("cliente_id")
+      .eq("distrato", true)
+
+    // Passo C: totalmente distratados = têm distrato=true E NENHUM vínculo ativo
+    for (const v of (distVinculos ?? []) as { cliente_id: string }[]) {
+      if (!clientesComAtivo.has(v.cliente_id)) distratadoClienteIds.add(v.cliente_id)
+    }
+  }
+
   for (const automation of birthdayAutomations ?? []) {
     const templateSlug = (automation.email_templates as unknown as { slug: string } | null)?.slug
     if (!templateSlug) continue
@@ -126,6 +153,9 @@ export async function GET(request: NextRequest) {
 
     for (const cliente of clientes ?? []) {
       if (!cliente.email || !cliente.data_nascimento) continue
+
+      // Story 20-12: cliente totalmente distratado não recebe email de aniversário
+      if (distratadoClienteIds.has(cliente.id)) { skipped++; continue }
 
       // date-only ISO strings ("YYYY-MM-DD") are parsed as UTC midnight per spec
       const bday = new Date(cliente.data_nascimento)

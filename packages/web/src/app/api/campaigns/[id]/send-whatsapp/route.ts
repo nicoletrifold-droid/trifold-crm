@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
+import { isContatoDistratado } from "@web/lib/distrato/is-contato-distratado"
 
 async function sendWhatsAppTemplate(
   phoneNumberId: string,
@@ -90,9 +91,17 @@ export async function POST(
 
   let sent = 0
   let failed = 0
+  let skipped = 0
 
   for (const entry of entries) {
     try {
+      // Story 20-12: pula entry de contato distratado (não marca failed — fica pending)
+      if (entry.phone && (await isContatoDistratado({ phone: entry.phone, orgId: campaign.org_id }))) {
+        console.warn("[CAMPAIGN-WA] entry distratada — pulando", { entryId: entry.id })
+        skipped++
+        continue
+      }
+
       const components: { type: string; parameters: { type: string; text: string }[] }[] = []
 
       if (entry.name) {
@@ -146,5 +155,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ sent, failed, total: entries.length })
+  return NextResponse.json({ sent, failed, skipped, total: entries.length })
 }

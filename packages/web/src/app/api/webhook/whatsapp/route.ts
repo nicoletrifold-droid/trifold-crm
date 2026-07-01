@@ -595,6 +595,18 @@ export async function POST(request: NextRequest) {
       // Skip Nicole if there's no text and no media at all
       if (!asyncText && !asyncMediaBlock) return
 
+      // Story 20-12 — Gate de distrato: lead distratado não ativa o pipeline da
+      // Nicole. A mensagem já foi salva (fluxo sync acima) e o HTTP 200 já foi
+      // retornado — aqui apenas encerramos o after() SEM resposta automática.
+      // O log de warning é o sinal para o atendimento humano (monitoramento
+      // Vercel); sinalização ativa ao corretor é escopo futuro (Scope OUT 20-12).
+      // Fail-open: `distrato` é optional → undefined/false → Nicole responde
+      // (lead novo tem default false — AC 10).
+      if (lead.distrato) {
+        console.warn("[WEBHOOK] lead distratado — Nicole não ativada", { leadId: lead.id })
+        return
+      }
+
       // Update conversation timestamp
       await supabase
         .from("conversations")
@@ -900,6 +912,10 @@ export async function POST(request: NextRequest) {
 interface LeadResult {
   id: string
   created_at: string
+  // Story 20-12: cache de distrato (leads.distrato, populado pelo cron 20-11).
+  // Usado no gate do pipeline da Nicole. Optional p/ fail-open: campo ausente →
+  // undefined → falsy → Nicole responde normalmente (lead novo tem default false).
+  distrato?: boolean | null
   // metadata column does NOT exist on leads table (see migration 016 doc).
   // Kept optional for CTWA referral compat — always undefined in practice.
   metadata?: Record<string, unknown> | null
@@ -937,7 +953,7 @@ async function findOrUpsertLead(
   // (acima) lê metadata em separado para fazer merge não-destrutivo do ad_id.
   const { data: existing } = await supabase
     .from("leads")
-    .select("id, created_at")
+    .select("id, created_at, distrato")
     .eq("phone_normalized", phoneNormalized)
     .eq("org_id", orgId)
     .order("created_at", { ascending: true })
@@ -974,7 +990,7 @@ async function findOrUpsertLead(
         ignoreDuplicates: false,
       }
     )
-    .select("id, created_at")
+    .select("id, created_at, distrato")
     .maybeSingle()
 
   if (insertErr) {
@@ -995,7 +1011,7 @@ async function findOrUpsertLead(
 
     const { data: recovered } = await supabase
       .from("leads")
-      .select("id, created_at")
+      .select("id, created_at, distrato")
       .eq("phone_normalized", phoneNormalized)
       .eq("org_id", orgId)
       .order("created_at", { ascending: true })
