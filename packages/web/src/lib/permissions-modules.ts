@@ -5,6 +5,7 @@ export const ALL_MODULES: readonly string[] = [
   "alertas",
   "analytics",
   "atividades",
+  "bolsao",
   "brindes",
   "campanhas",
   "chamados",
@@ -13,6 +14,8 @@ export const ALL_MODULES: readonly string[] = [
   "conversas",
   "corretores",
   "dashboard",
+  "fluxo",
+  "imob",
   "imoveis",
   "leads",
   "mensagens",
@@ -44,6 +47,9 @@ export const MODULE_LABELS: Record<string, string> = {
   configuracoes: "Configurações",
   roleta: "Roleta de Leads",
   sistema: "Sistema",
+  imob: "IMOB",
+  bolsao: "Bolsão",
+  fluxo: "Fluxo de Pagamento",
 }
 
 export const MODULE_DESCRIPTIONS: Record<string, string> = {
@@ -67,6 +73,9 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   configuracoes: "Preferências da org",
   roleta: "Distribuição automática de leads",
   sistema: "Administração total",
+  imob: "Imobiliárias parceiras (board + cadastro)",
+  bolsao: "Bolsão de leads (pool de atendimento)",
+  fluxo: "Fluxo de pagamento (link externo)",
 }
 
 /**

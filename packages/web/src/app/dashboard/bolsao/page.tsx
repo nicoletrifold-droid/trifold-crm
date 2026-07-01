@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import { BolsaoList, type BolsaoLead } from "@web/components/bolsao/bolsao-list"
 import { canPullBolsaoDashboard } from "@web/lib/roles-hierarchy"
 
@@ -21,6 +23,10 @@ function normalize(l: RawLead): BolsaoLead {
 
 export default async function BolsaoPage() {
   const user = await getServerUser()
+  // Story 75-93: acesso ao módulo "bolsao" pela matriz de Perfil de Acesso.
+  if (!(await canAccess(user.id, user.orgId, "bolsao"))) {
+    redirect("/dashboard")
+  }
   const supabase = await createClient()
 
   const { data } = await supabase

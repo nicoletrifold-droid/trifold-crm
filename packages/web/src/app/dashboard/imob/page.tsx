@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { canAccess } from "@web/lib/permissions"
 import { ImobBoard, type BoardColumn } from "./_components/imob-board"
 import { ImobTabs } from "./_components/imob-tabs"
 
@@ -11,7 +12,7 @@ const DEFAULT_COLUMNS = ["A contatar", "Em negociação", "Visita agendada", "Fe
 
 export default async function ImobPage() {
   const user = await getServerUser()
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!(await canAccess(user.id, user.orgId, "imob"))) {
     redirect("/dashboard")
   }
 

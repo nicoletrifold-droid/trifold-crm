@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { canAccess } from "@web/lib/permissions"
 import { ImobTabs } from "../_components/imob-tabs"
 import { ImobiliariasManager } from "./_components/imobiliarias-manager"
 import type { Imobiliaria } from "@web/lib/imob/imobiliarias"
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic"
 
 export default async function ImobiliariasPage() {
   const user = await getServerUser()
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!(await canAccess(user.id, user.orgId, "imob"))) {
     redirect("/dashboard")
   }
 
