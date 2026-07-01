@@ -90,6 +90,7 @@ export default async function BrokerLayout({
     .eq("org_id", user.orgId)
     .eq("is_active", true)
     .not("bolsao_em", "is", null)
+    .is("assigned_broker_id", null) // Story 75-89: contar só o pool real (sem dono)
 
   // Badges: Agenda (compromissos), Chat (não-lidas, verde — Story 63-19),
   // Meus Leads (novos distribuídos — Story 75-8), Bolsão (pool — Story 75-83).

@@ -28,6 +28,7 @@ export default async function BolsaoPage() {
     .eq("org_id", user.orgId)
     .eq("is_active", true)
     .not("bolsao_em", "is", null)
+    .is("assigned_broker_id", null) // Story 75-89: só pool real (sem dono) — nunca "fantasma"
     .order("bolsao_em", { ascending: true })
     .limit(200)
 
