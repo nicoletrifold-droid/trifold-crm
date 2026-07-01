@@ -105,6 +105,7 @@ export default async function PipelinePage({
         .from("leads")
         .select(LEADS_SELECT, { count: "exact" })
         .eq("is_active", true)
+        .eq("segmento", "principal") // Story 75-98: pipeline principal não mostra o mundo IMOB
         .eq("stage_id", stage.id)
         .is("lost_reason", null) // safeguard: leads marcados como perdidos não aparecem no kanban
 

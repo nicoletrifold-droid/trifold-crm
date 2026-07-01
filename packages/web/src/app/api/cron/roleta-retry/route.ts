@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
     .from("leads")
     .select("id, org_id, name")
     .eq("is_active", true)
+    .eq("segmento", "principal") // Story 75-98: roleta nunca toca no mundo IMOB
     .is("assigned_broker_id", null)
     .is("bolsao_em", null)
     .gte("created_at", thirtyDaysAgo)
@@ -71,11 +72,11 @@ export async function GET(request: NextRequest) {
     // Story 75-89: também pula se o lead entrou no bolsão nesse meio-tempo.
     const { data: current } = await admin
       .from("leads")
-      .select("assigned_broker_id, bolsao_em")
+      .select("assigned_broker_id, bolsao_em, segmento")
       .eq("id", lead.id)
       .maybeSingle()
 
-    if (!current || current.assigned_broker_id !== null || current.bolsao_em !== null) {
+    if (!current || current.assigned_broker_id !== null || current.bolsao_em !== null || current.segmento !== "principal") {
       results.skipped++
       continue
     }

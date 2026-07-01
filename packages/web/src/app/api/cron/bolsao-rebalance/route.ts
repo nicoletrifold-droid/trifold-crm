@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
       .select("id, name, assigned_broker_id")
       .eq("org_id", orgId)
       .eq("is_active", true)
+      .eq("segmento", "principal") // Story 75-98: bolsão é do mundo principal, nunca IMOB
       .eq("stage_id", novoId)
       .is("primeiro_atendimento_em", null)
       .is("bolsao_em", null)
