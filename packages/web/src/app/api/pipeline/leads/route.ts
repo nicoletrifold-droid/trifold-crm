@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
 
   const searchParams = req.nextUrl.searchParams
   const stageId = searchParams.get("stage_id")
+  // Story 75-99: segmento (default 'principal'; 'imob' p/ o pipeline do mundo IMOB)
+  const segmento = searchParams.get("segmento") === "imob" ? "imob" : "principal"
   const offsetParam = searchParams.get("offset")
   const limitParam = searchParams.get("limit")
   const propertyId = searchParams.get("property_id")
@@ -84,6 +86,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("leads")
     .select(LEADS_SELECT, { count: "exact" })
+    .eq("segmento", segmento) // Story 75-98/99: principal (default) ou imob
     .eq("is_active", true)
     .eq("stage_id", stageId)
 

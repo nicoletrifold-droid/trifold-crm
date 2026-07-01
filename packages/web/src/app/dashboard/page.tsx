@@ -36,12 +36,14 @@ export default async function DashboardPage() {
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
+      .eq("segmento", "principal") // Story 75-98: dashboard = mundo principal
       .gte("created_at", commercialDayStart.toISOString()),
     // Leads ativos = MESMA regra da lista "Em atendimento" (fonte única)
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
+      .eq("segmento", "principal") // Story 75-98: dashboard = mundo principal
       .not("stage_id", "in", `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`),
     supabase
       .from("kanban_stages")

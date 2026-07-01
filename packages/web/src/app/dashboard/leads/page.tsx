@@ -62,12 +62,14 @@ export default async function LeadsPage({
     `
     )
     .eq("is_active", true)
+    .eq("segmento", "principal") // Story 75-98: tela principal não mostra o mundo IMOB
     .order("updated_at", { ascending: false })
 
   let countQuery = supabase
     .from("leads")
     .select("id", { count: "exact", head: true })
     .eq("is_active", true)
+    .eq("segmento", "principal")
 
   // Filtro por view: ativos exclui stages de perdido, perdidos só inclui
   if (view === "perdidos") {

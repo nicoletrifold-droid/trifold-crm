@@ -69,7 +69,7 @@ export async function distributeLeadToNextBroker(
   // 2. Fetch lead — must belong to this org
   const { data: lead } = await admin
     .from("leads")
-    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em")
+    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em, segmento")
     .eq("id", leadId)
     .eq("org_id", orgId)
     .maybeSingle()
@@ -83,6 +83,11 @@ export async function distributeLeadToNextBroker(
 
   // Guard: lead já foi atribuído por execução concorrente — não redistribuir
   if (lead.assigned_broker_id !== null) {
+    return { status: "sem_corretor_disponivel" }
+  }
+
+  // Story 75-98: lead do mundo IMOB nunca entra na roleta (é manual, mundo isolado).
+  if (lead.segmento === "imob") {
     return { status: "sem_corretor_disponivel" }
   }
 

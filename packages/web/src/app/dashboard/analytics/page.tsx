@@ -78,11 +78,13 @@ export default async function AnalyticsPage({
   // Landing Pages do período (extraídas do utm_campaign e subtraídas do "other")
   const lpYardenQ = supabase
     .from("leads").select("id", { count: "exact", head: true })
+    .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB
     .eq("is_active", true).is("lost_reason", null)
     .gte("created_at", sinceISO).lt("created_at", untilISO)
     .ilike("utm_campaign", "%LP Yarden%")
   const lpVindQ = supabase
     .from("leads").select("id", { count: "exact", head: true })
+    .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB
     .eq("is_active", true).is("lost_reason", null)
     .gte("created_at", sinceISO).lt("created_at", untilISO)
     .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
@@ -125,6 +127,7 @@ export default async function AnalyticsPage({
         .from("leads")
         .select("stage_id, assigned_broker_id, source, lost_reason, broker:users!assigned_broker_id(id, name)")
         .eq("org_id", appUser.orgId)
+        .eq("segmento", "principal") // Story 75-98
         .eq("is_active", true)
         .is("lost_reason", null)
         .eq("property_interest_id", propertyId)
@@ -170,7 +173,7 @@ export default async function AnalyticsPage({
     // allLeads exclui lost_reason)
     const lostData = await supabase
       .from("leads").select("lost_reason")
-      .eq("org_id", appUser.orgId).eq("is_active", true)
+      .eq("org_id", appUser.orgId).eq("segmento", "principal").eq("is_active", true)
       .not("lost_reason", "is", null)
       .eq("property_interest_id", propertyId)
       .gte("created_at", sinceISO).lt("created_at", untilISO)
@@ -184,7 +187,7 @@ export default async function AnalyticsPage({
     const counts = await Promise.all((allProperties ?? []).map(async (p) => {
       const { count } = await supabase
         .from("leads").select("id", { count: "exact", head: true })
-        .eq("org_id", appUser.orgId).eq("is_active", true).is("lost_reason", null)
+        .eq("org_id", appUser.orgId).eq("segmento", "principal").eq("is_active", true).is("lost_reason", null)
         .eq("property_interest_id", p.id)
         .gte("created_at", sinceISO).lt("created_at", untilISO)
       return { id: p.id, name: p.name, count: count ?? 0 }
@@ -221,6 +224,7 @@ export default async function AnalyticsPage({
     .from("leads")
     .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
     .eq("org_id", appUser.orgId)
+    .eq("segmento", "principal") // Story 75-98
     .not("assigned_broker_id", "is", null)
     .not("primeiro_atendimento_em", "is", null)
     .gte("primeiro_atendimento_em", sinceISO).lt("primeiro_atendimento_em", untilISO)
