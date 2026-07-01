@@ -69,4 +69,11 @@ describe("validateImobiliaria (Story 75-92)", () => {
     expect(validateImobiliaria({ nome: "X", tipos_produto: ["mcmv", "luxo"] }).ok).toBe(false)
     expect(validateImobiliaria({ nome: "X", tipos_produto: "mcmv" }).ok).toBe(false)
   })
+
+  // Story 75-97 — engajamento
+  it("engajamento: aceita key válida; vazio→null; inválido→erro", () => {
+    expect((validateImobiliaria({ nome: "X", engajamento: "alta" }) as { value: Record<string, unknown> }).value.engajamento).toBe("alta")
+    expect((validateImobiliaria({ nome: "X", engajamento: "" }) as { value: Record<string, unknown> }).value.engajamento).toBeNull()
+    expect(validateImobiliaria({ nome: "X", engajamento: "super" }).ok).toBe(false)
+  })
 })
