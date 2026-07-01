@@ -20,6 +20,10 @@ interface LeadFiltersProps {
   daysParam?: string
   brokerParam?: string
   iaParam?: string
+  /** Mostra os campos de período de captura (De/Até) — usado na tela de Leads (Story 75-94). */
+  showDateRange?: boolean
+  dateFromParam?: string
+  dateToParam?: string
 }
 
 export function LeadFilters({
@@ -33,6 +37,9 @@ export function LeadFilters({
   daysParam = "days",
   brokerParam = "broker_id",
   iaParam = "ia",
+  showDateRange = false,
+  dateFromParam = "date_from",
+  dateToParam = "date_to",
 }: LeadFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -43,6 +50,8 @@ export function LeadFilters({
   const activeDays = searchParams.get(daysParam) ?? ""
   const activeBroker = searchParams.get(brokerParam) ?? ""
   const activeIa = searchParams.get(iaParam) ?? ""
+  const activeDateFrom = searchParams.get(dateFromParam) ?? ""
+  const activeDateTo = searchParams.get(dateToParam) ?? ""
 
   const setParam = useCallback(
     (key: string, value: string) => {
@@ -58,7 +67,7 @@ export function LeadFilters({
   const selectClass =
     "h-8 rounded-lg border border-gray-300 bg-white px-2.5 py-0 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:focus:border-orange-500 dark:focus:ring-orange-500"
 
-  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeIa
+  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeIa || activeDateFrom || activeDateTo
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -103,6 +112,32 @@ export function LeadFilters({
         <option value="30">Parado 30+ dias</option>
       </select>
 
+      {/* Período de captura (De/Até) — Story 75-94, opt-in */}
+      {showDateRange && (
+        <>
+          <label className="flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
+            Captura de
+            <input
+              type="date"
+              value={activeDateFrom}
+              max={activeDateTo || undefined}
+              onChange={(e) => setParam(dateFromParam, e.target.value)}
+              className={selectClass}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400">
+            até
+            <input
+              type="date"
+              value={activeDateTo}
+              min={activeDateFrom || undefined}
+              onChange={(e) => setParam(dateToParam, e.target.value)}
+              className={selectClass}
+            />
+          </label>
+        </>
+      )}
+
       {/* Limpar */}
       {hasFilters && (
         <button
@@ -113,6 +148,8 @@ export function LeadFilters({
             params.delete(daysParam)
             params.delete(brokerParam)
             params.delete(iaParam)
+            params.delete(dateFromParam)
+            params.delete(dateToParam)
             params.delete("page")
             router.push(`${pathname}?${params.toString()}`)
           }}
