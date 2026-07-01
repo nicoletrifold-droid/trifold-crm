@@ -8,8 +8,12 @@ import {
   IMOBILIARIA_STATUS,
   TIPOS_PRODUTO,
   TIPO_PRODUTO_LABELS,
+  ENGAJAMENTO,
+  ENGAJAMENTO_LABELS,
+  ENGAJAMENTO_TONE,
   type Imobiliaria,
   type ImobiliariaStatus,
+  type Engajamento,
 } from "@web/lib/imob/imobiliarias"
 
 const STATUS_TONE: Record<ImobiliariaStatus, string> = {
@@ -24,6 +28,7 @@ type FormState = {
   gerente_nome: string; gerente_telefone: string; gerente_email: string
   socio_nome: string; socio_telefone: string; socio_email: string
   tipos_produto: string[]
+  engajamento: "" | Engajamento
   contato_nome: string; contato_telefone: string; contato_email: string
   status: ImobiliariaStatus; observacoes: string
 }
@@ -31,7 +36,7 @@ type FormState = {
 const EMPTY: FormState = {
   nome: "", razao_social: "", cnpj: "", telefone: "", email: "", cidade: "", estado: "",
   endereco: "", num_corretores: "", gerente_nome: "", gerente_telefone: "", gerente_email: "",
-  socio_nome: "", socio_telefone: "", socio_email: "", tipos_produto: [],
+  socio_nome: "", socio_telefone: "", socio_email: "", tipos_produto: [], engajamento: "",
   contato_nome: "", contato_telefone: "", contato_email: "", status: "prospeccao", observacoes: "",
 }
 
@@ -43,6 +48,7 @@ function toForm(i: Imobiliaria): FormState {
     gerente_nome: i.gerente_nome ?? "", gerente_telefone: i.gerente_telefone ?? "", gerente_email: i.gerente_email ?? "",
     socio_nome: i.socio_nome ?? "", socio_telefone: i.socio_telefone ?? "", socio_email: i.socio_email ?? "",
     tipos_produto: Array.isArray(i.tipos_produto) ? i.tipos_produto : [],
+    engajamento: i.engajamento ?? "",
     contato_nome: i.contato_nome ?? "",
     contato_telefone: i.contato_telefone ?? "", contato_email: i.contato_email ?? "",
     status: i.status, observacoes: i.observacoes ?? "",
@@ -134,6 +140,7 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-left text-xs text-stone-500 dark:bg-stone-900 dark:text-stone-400">
               <tr>
+                <th className="px-3 py-2 font-medium">Engaj.</th>
                 <th className="px-3 py-2 font-medium">Imobiliária</th>
                 <th className="px-3 py-2 font-medium">Gerente</th>
                 <th className="px-3 py-2 font-medium">Contato</th>
@@ -150,6 +157,16 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
                   onClick={() => openEdit(i)}
                   className="cursor-pointer bg-white hover:bg-stone-50 dark:bg-stone-950 dark:hover:bg-stone-900"
                 >
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {i.engajamento ? (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${ENGAJAMENTO_TONE[i.engajamento].text}`}>
+                        <span className={`h-2 w-2 rounded-full ${ENGAJAMENTO_TONE[i.engajamento].dot}`} />
+                        {ENGAJAMENTO_LABELS[i.engajamento]}
+                      </span>
+                    ) : (
+                      <span className="text-stone-400">—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-stone-900 dark:text-stone-100">{i.nome}</div>
                     {i.cnpj && <div className="text-xs text-stone-400">{i.cnpj}</div>}
@@ -316,6 +333,15 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
                 <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value as ImobiliariaStatus)}>
                   {IMOBILIARIA_STATUS.map((s) => (
                     <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Engajamento na venda</label>
+                <select className={inputCls} value={form.engajamento} onChange={(e) => set("engajamento", e.target.value as "" | Engajamento)}>
+                  <option value="">Não avaliado</option>
+                  {ENGAJAMENTO.map((eng) => (
+                    <option key={eng} value={eng}>{ENGAJAMENTO_LABELS[eng]}</option>
                   ))}
                 </select>
               </div>
