@@ -156,6 +156,7 @@ export async function GET(request: NextRequest) {
       .select("id, name, phone, assigned_broker_id, bolsao_em, sla_alerta_corretor_em, sla_alerta_gestor_em")
       .eq("org_id", orgId)
       .eq("is_active", true)
+      .eq("segmento", "principal") // Story 75-98: SLA é do mundo principal, nunca IMOB
       .eq("stage_id", novoId)
       .is("primeiro_atendimento_em", null)
       // Story 75-82: inclui leads no bolsão (sem dono) → a escalada de 60min (absoluta)

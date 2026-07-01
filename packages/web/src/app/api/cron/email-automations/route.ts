@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
       .select("id, email, name, phone")
       .eq("org_id", automation.org_id)
       .eq("is_active", true)
+      .eq("segmento", "principal") // Story 75-98: automação de e-mail é do mundo principal, nunca IMOB
       .not("email", "is", null)
       .limit(50)
 

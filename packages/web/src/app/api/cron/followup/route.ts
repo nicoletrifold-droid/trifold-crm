@@ -206,6 +206,7 @@ export async function GET(request: NextRequest) {
       .eq("org_id", rule.org_id)
       .eq("stage_id", rule.stage_id)
       .eq("is_active", true)
+      .eq("segmento", "principal") // Story 75-98: follow-up é do mundo principal, nunca IMOB
 
     if (!leads || leads.length === 0) continue
 
