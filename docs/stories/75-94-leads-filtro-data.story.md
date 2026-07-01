@@ -1,7 +1,7 @@
 # Story 75-94 — Filtro de data (período de captura) na tela de Leads
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + PR + deploy; sem migration) · **Epic:** 75 · **Branch:** feat/75-94-leads-filtro-data · **Complexidade:** S (1-2 pontos)
+- **Status:** ✅ DONE / LIVE — PR #84 merged (c918781), deploy Vercel prod success · **Epic:** 75 · **Branch:** feat/75-94-leads-filtro-data · **Complexidade:** S (1-2 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, verificação do filtro]
 - **Prioridade:** 🟢 Média — pedido do diretor (o filtro de data fazia falta na tela de Leads).
 
@@ -58,6 +58,7 @@
 **Gate → PASS.** Pronto para @devops (push + PR + deploy). Sem migration.
 
 ## Change Log
+- 2026-07-01 — @devops (Gage) — PR #84 merged (c918781) + deploy Vercel prod success. Story LIVE.
 - 2026-07-01 — @qa (Quinn) — Gate PASS (filtro created_at validado read-only; tsc/lint 0). Status → Done.
 - 2026-07-01 — @dev (Dex) — Implementado: date range opt-in no LeadFilters + query created_at + paginação na tela de Leads. Sem push.
 - 2026-07-01 — @po (Pax) — GO. Status Draft → Approved.
