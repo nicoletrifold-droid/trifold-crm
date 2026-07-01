@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { MANDATORY_FIELDS } from "@trifold/shared"
 import { getDaysSinceContact, getTimeAgo } from "@web/lib/time"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { WaitingBadge } from "@web/components/leads/waiting-badge"
 import { CreativeChip } from "@web/components/pipeline/creative-chip"
 import { CreativePreviewModal } from "@web/components/pipeline/creative-preview-modal"
 import type { CreativeData } from "@web/lib/pipeline/types"
@@ -27,6 +28,8 @@ interface LeadCardProps {
     utm_content?: string | null
     // Story 50-2 (Epic 50): criativo Meta resolvido server-side via fetchCreativesForLeads
     creative?: CreativeData | null
+    // Story 75-91: minutos aguardando atendimento (só leads em "Aguardando" não atendidos).
+    waitingMinutes?: number | null
   }
   propertyName?: string
   brokerName?: string
@@ -156,6 +159,13 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
             </span>
           )}
         </div>
+
+        {/* Story 75-91 — "⏱ aguardando há X" (só leads em "Aguardando atendimento" não atendidos). */}
+        {lead.waitingMinutes != null && (
+          <div className="mt-1">
+            <WaitingBadge minutes={lead.waitingMinutes} />
+          </div>
+        )}
 
         {/* Property Badge + Source/Creative + Progress */}
         <div className="mt-2 flex items-center gap-2">

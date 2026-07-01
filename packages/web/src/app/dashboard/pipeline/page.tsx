@@ -1,14 +1,16 @@
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
 import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
+import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
 import Link from "next/link"
 
 const PAGE_SIZE = 50
 
 // Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
-       property_interest_id, assigned_broker_id, created_at, updated_at,
+       property_interest_id, assigned_broker_id, created_at, updated_at, primeiro_atendimento_em,
        ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
@@ -165,6 +167,15 @@ export default async function PipelinePage({
     })
   )
 
+  // Story 75-91 — "⏱ aguardando há X" no kanban: minutos (horário comercial) aguardando
+  // atendimento, só p/ leads em "Aguardando atendimento" ainda não atendidos. Mesma fonte
+  // (lead_distribution_log) e helper compartilhado com a lista do corretor (Story 75-49).
+  const aguardandoIds =
+    (perStageResults.find((s) => s.stage_id === AGUARDANDO_STAGE_ID)?.leads as RawLead[] | undefined)
+      ?.filter((l) => !l.primeiro_atendimento_em)
+      .map((l) => l.id as string) ?? []
+  const waitingByLead = await computeWaitingMinutes(createAdminClient(), user.orgId, aguardandoIds)
+
   // Story 50-2 (Epic 50): batched lookup de criativos Meta (máx +1 query Supabase / AC7)
   // Post-50-3 scope adjustment: CreativeChip restrito a admin (gerente-comercial/supervisor
   // voltam ao SourceBadge genérico — comportamento pré-Epic-50).
@@ -179,6 +190,7 @@ export default async function PipelinePage({
     leads: (s.leads as RawLead[]).map((l) => ({
       ...l,
       creative: resolveCreativeForLead(l, creativesMap),
+      waitingMinutes: waitingByLead[l.id as string] ?? null,
     })),
   })) as unknown as InitialStageState[]
   // Usa totalCount (contagem real do DB por stage) em vez de leads.length

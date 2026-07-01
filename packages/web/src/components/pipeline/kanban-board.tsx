@@ -50,6 +50,8 @@ interface Lead {
   users?: { name: string } | null
   // Story 50-2 (Epic 50): criativo Meta resolvido server-side
   creative?: CreativeData | null
+  // Story 75-91: minutos aguardando atendimento (kanban do dashboard)
+  waitingMinutes?: number | null
 }
 
 export interface InitialStageState {
