@@ -1,7 +1,7 @@
 # Story 75-91 — Indicador "⏱ aguardando há X" no kanban do dashboard
 
 ## Metadata
-- **Status:** Done (QA PASS) — pronto para @devops (push + PR + deploy; sem migration) · **Epic:** 75 (SLA) · **Branch:** feat/75-91-kanban-waiting-badge · **Complexidade:** M (3 pontos)
+- **Status:** ✅ DONE / LIVE — PR #81 merged (7e8a13e), deploy Vercel prod success · **Epic:** 75 (SLA) · **Branch:** feat/75-91-kanban-waiting-badge · **Complexidade:** M (3 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [unit do helper de waiting, typecheck, lint, validação visual do badge no kanban]
 - **Prioridade:** 🟢 Média — visibilidade de gestão (pedido do diretor).
 
@@ -73,6 +73,7 @@ O indicador **"⏱ aguardando há X"** já existe (Story 75-49) na **lista** do 
 **Gate → PASS.** Pronto para @devops (push + PR + merge/deploy). Sem migration.
 
 ## Change Log
+- 2026-07-01 — @devops (Gage) — Push + PR #81 merged (squash 7e8a13e) + deploy Vercel prod success. Sem migration. Story LIVE.
 - 2026-07-01 — @qa (Quinn) — Gate PASS (6/6 unit, tsc 0, lint 0; caminho de dados validado em prod read-only). Status InReview → Done.
 - 2026-07-01 — @dev (Dex) — Implementado + dedupe do broker; helper e badge compartilhados.
 - 2026-07-01 — @po (Pax) — GO. Escopo confirmado (levar o WaitingBadge da 75-49 pro kanban do dashboard, com extração compartilhada + dedupe). Status Draft → Approved.
