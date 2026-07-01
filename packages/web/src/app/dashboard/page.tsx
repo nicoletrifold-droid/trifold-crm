@@ -21,6 +21,14 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const isGerenteComercial = appUser.role === "gerente-comercial"
 
+  // Story 75-102: dashboard "espelho". Perfis do mundo IMOB (imob/consultoria) veem o
+  // funil DELES (segmento='imob'); todos os demais seguem no mundo principal. Os links de
+  // lead/pipeline apontam p/ as telas do mundo certo.
+  const isImobWorld = appUser.role === "imob" || appUser.role === "consultoria"
+  const segmento = isImobWorld ? "imob" : "principal"
+  const leadsHref = isImobWorld ? "/dashboard/imob/leads" : "/dashboard/leads"
+  const pipelineHref = isImobWorld ? "/dashboard/imob/pipeline" : "/dashboard/pipeline"
+
   // Fetch metrics in parallel
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -36,14 +44,14 @@ export default async function DashboardPage() {
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("segmento", "principal") // Story 75-98: dashboard = mundo principal
+      .eq("segmento", segmento) // Story 75-98/75-102: mundo principal ou IMOB (espelho)
       .gte("created_at", commercialDayStart.toISOString()),
     // Leads ativos = MESMA regra da lista "Em atendimento" (fonte única)
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
-      .eq("segmento", "principal") // Story 75-98: dashboard = mundo principal
+      .eq("segmento", segmento) // Story 75-98/75-102: mundo principal ou IMOB (espelho)
       .not("stage_id", "in", `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`),
     supabase
       .from("kanban_stages")
@@ -51,7 +59,7 @@ export default async function DashboardPage() {
       .eq("is_active", true)
       .order("position"),
     supabase.from("properties").select("id, name, slug, status, total_units, available_units, city").eq("is_active", true),
-    supabase.rpc("get_dashboard_stage_counts", { p_org_id: appUser.orgId }),
+    supabase.rpc("get_dashboard_stage_counts", { p_org_id: appUser.orgId, p_segmento: segmento }),
     // Gerente-comercial: stats de toda a equipe
     isGerenteComercial
       ? supabase.rpc("get_broker_dashboard_counts", { p_org_id: appUser.orgId, p_broker_id: null })
@@ -172,7 +180,7 @@ export default async function DashboardPage() {
       {/* Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Link
-          href="/dashboard/leads?criados=hoje"
+          href={isImobWorld ? leadsHref : "/dashboard/leads?criados=hoje"}
           className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
         >
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads hoje</p>
@@ -181,14 +189,14 @@ export default async function DashboardPage() {
           </p>
         </Link>
         <Link
-          href="/dashboard/leads"
+          href={leadsHref}
           className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
         >
           <p className="text-sm text-gray-500 dark:text-stone-400">Leads ativos</p>
           <p className="mt-1 text-3xl font-bold text-orange-600 dark:text-orange-400">{activeLeads}</p>
         </Link>
         <Link
-          href="/dashboard/pipeline"
+          href={pipelineHref}
           className="block rounded-lg bg-white p-5 shadow-sm transition hover:ring-2 hover:ring-orange-500/40 dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
         >
           <p className="text-sm text-gray-500 dark:text-stone-400">Total no pipeline</p>
@@ -221,7 +229,7 @@ export default async function DashboardPage() {
             return (
               <Link
                 key={stage.id}
-                href={`/dashboard/pipeline?stage=${stage.slug}`}
+                href={isImobWorld ? pipelineHref : `/dashboard/pipeline?stage=${stage.slug}`}
                 className="flex-1 rounded-md p-3 text-center transition-[filter] hover:brightness-125 cursor-pointer"
                 style={{ backgroundColor: `${stage.color}15` }}
               >
