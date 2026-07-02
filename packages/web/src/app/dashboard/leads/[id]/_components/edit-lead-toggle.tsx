@@ -27,6 +27,11 @@ export function EditLeadToggle({ lead, properties }: Props) {
           preferred_view: lead.preferred_view as string | null,
           preferred_garage_count: lead.preferred_garage_count as number | null,
           has_down_payment: lead.has_down_payment as boolean | null,
+          observacao: lead.observacao as string | null,
+          finalidade: lead.finalidade as string | null,
+          orcamento: lead.orcamento as string | null,
+          prazo_compra: lead.prazo_compra as string | null,
+          forma_pagamento: lead.forma_pagamento as string | null,
         }}
         properties={properties}
         onClose={() => setEditing(false)}

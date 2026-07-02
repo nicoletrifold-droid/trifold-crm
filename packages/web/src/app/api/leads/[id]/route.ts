@@ -83,6 +83,12 @@ export async function PATCH(
     "ai_summary",
     "visit_scheduled_at",
     "lost_reason",
+    // Story 75-112 — enriquecimento do perfil (editável por quem já edita o lead)
+    "observacao",
+    "finalidade",
+    "orcamento",
+    "prazo_compra",
+    "forma_pagamento",
   ]
 
   const { fields, error: payloadError } = buildUpdatePayload(body, allowedFields)
