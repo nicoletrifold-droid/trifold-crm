@@ -66,6 +66,7 @@ export interface PipelineFilters {
   broker_id: string | null
   campaign_id: string | null
   score: string | null
+  sem_contato?: string | null
 }
 
 interface KanbanBoardProps {
@@ -366,6 +367,7 @@ export function KanbanBoard({
         if (activeFilters?.broker_id) params.set("broker_id", activeFilters.broker_id)
         if (activeFilters?.campaign_id) params.set("campaign_id", activeFilters.campaign_id)
         if (activeFilters?.score) params.set("score", activeFilters.score)
+        if (activeFilters?.sem_contato) params.set("sem_contato", activeFilters.sem_contato)
 
         const res = await fetch(`/api/pipeline/leads?${params.toString()}`)
         if (!res.ok) {

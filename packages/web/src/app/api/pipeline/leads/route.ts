@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
+import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
 
 // Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
-       property_interest_id, assigned_broker_id, created_at, updated_at,
+       property_interest_id, assigned_broker_id, created_at, updated_at, last_contact_at,
        ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
        users:assigned_broker_id(name)`
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
   const brokerId = searchParams.get("broker_id")
   const campaignId = searchParams.get("campaign_id")
   const score = searchParams.get("score")
+  const semContato = searchParams.get("sem_contato")
 
   if (!stageId) {
     return NextResponse.json({ error: "MISSING_STAGE_ID" }, { status: 400 })
@@ -100,6 +102,11 @@ export async function GET(req: NextRequest) {
   }
   if (campaignLeadIds && campaignLeadIds.length > 0) {
     query = query.in("id", campaignLeadIds)
+  }
+  // Story 75-115 — filtro "dias sem contato" (last_contact_at), paridade com page.tsx.
+  if (semContato) {
+    const cutoff = staleCutoffMs(Number.parseInt(semContato, 10))
+    if (cutoff > 0) query = query.lt("last_contact_at", new Date(cutoff).toISOString())
   }
 
   const { data, count, error } = await query

@@ -4,6 +4,7 @@ import { getServerUser } from "@web/lib/auth"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
 import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
 import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
+import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 import Link from "next/link"
 
 const PAGE_SIZE = 50
@@ -135,6 +136,11 @@ export default async function PipelinePage({
       }
       if (filters.date_to) {
         query = query.lte("created_at", `${filters.date_to}T23:59:59-03:00`)
+      }
+      // Story 75-115 — filtro "dias sem contato" (usa last_contact_at, o mesmo relógio do badge).
+      if (filters.sem_contato) {
+        const cutoff = staleCutoffMs(parseInt(filters.sem_contato, 10))
+        if (cutoff > 0) query = query.lt("last_contact_at", new Date(cutoff).toISOString())
       }
 
       if (campaignLeadIds !== null) {
@@ -336,6 +342,23 @@ export default async function PipelinePage({
             </select>
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Sem contato
+            </label>
+            <select
+              name="sem_contato"
+              defaultValue={filters.sem_contato ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            >
+              <option value="">Qualquer</option>
+              <option value="3">3+ dias</option>
+              <option value="7">7+ dias</option>
+              <option value="15">15+ dias</option>
+              <option value="30">30+ dias</option>
+            </select>
+          </div>
+
           <button
             type="submit"
             className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
@@ -346,7 +369,7 @@ export default async function PipelinePage({
         </form>
 
         <div className="mt-3 flex gap-2">
-          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage || filters.date_from || filters.date_to) && (
+          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage || filters.date_from || filters.date_to || filters.sem_contato) && (
             <a
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -373,6 +396,7 @@ export default async function PipelinePage({
           broker_id: filters.broker_id ?? null,
           campaign_id: filters.campaign_id ?? null,
           score: filters.score ?? null,
+          sem_contato: filters.sem_contato ?? null,
         }}
       />
     </div>
