@@ -13,7 +13,11 @@ export const dynamic = "force-dynamic"
 const DEFAULT_LISTS = ["Backlog", "A fazer", "Em andamento", "Aprovação", "Concluído"]
 
 type ColRow = { id: string; title: string; position: number }
-type CardRow = { id: string; column_id: string; title: string; description: string | null; position: number }
+type CardRow = {
+  id: string; column_id: string; title: string; description: string | null; position: number
+  due_date: string | null; assignee_id: string | null; labels: string[] | null
+  assignee: { name: string | null } | { name: string | null }[] | null
+}
 
 export default async function LancamentoBoardPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getServerUser()
@@ -55,18 +59,36 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
     ? (((
         await admin
           .from("lancamento_cards")
-          .select("id, column_id, title, description, position")
+          .select("id, column_id, title, description, position, due_date, assignee_id, labels, assignee:users!assignee_id(name)")
           .in("column_id", colIds)
           .order("position", { ascending: true })
       ).data ?? []) as CardRow[])
     : []
+
+  // Responsáveis possíveis: usuários internos (não-cliente) ativos.
+  const { data: memberRows } = await admin
+    .from("users")
+    .select("id, name")
+    .eq("org_id", user.orgId)
+    .eq("is_active", true)
+    .neq("role", "cliente")
+    .order("name", { ascending: true })
+  const members = (memberRows ?? []) as { id: string; name: string }[]
 
   const columns: BoardColumn[] = cols.map((c) => ({
     id: c.id,
     title: c.title,
     cards: cards
       .filter((k) => k.column_id === c.id)
-      .map((k) => ({ id: k.id, title: k.title, description: k.description })),
+      .map((k) => ({
+        id: k.id,
+        title: k.title,
+        description: k.description,
+        due_date: k.due_date,
+        assignee_id: k.assignee_id,
+        assignee_name: (Array.isArray(k.assignee) ? k.assignee[0]?.name : k.assignee?.name) ?? null,
+        labels: Array.isArray(k.labels) ? k.labels : [],
+      })),
   }))
 
   const cor = COR_HEX[l.cor] ?? COR_HEX.coral
@@ -93,7 +115,7 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
         </span>
       </div>
 
-      <LancamentoBoard lancamentoId={id} initialColumns={columns} />
+      <LancamentoBoard lancamentoId={id} initialColumns={columns} members={members} />
     </div>
   )
 }
