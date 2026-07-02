@@ -116,6 +116,30 @@ export async function POST(request: NextRequest) {
 // Async processing
 // ---------------------------------------------------------------------------
 
+// Story 75-114 — deriva a Finalidade (moradia/investimento/ambos) a partir da resposta do
+// form do Meta sobre o objetivo da aquisição. Detecta o campo pelo nome (objetivo/finalidade/
+// aquisição) e, na dúvida, varre as respostas por palavras-chave fortes. Retorna null se nada bater.
+function deriveFinalidade(
+  fieldData: Array<{ name: string; values: string[] }>
+): "moradia" | "investimento" | "ambos" | null {
+  const objetivoField = fieldData.find((f) => {
+    const n = f.name.toLowerCase()
+    return n.includes("objetivo") || n.includes("finalidade") || n.includes("aquisi")
+  })
+  const text = (objetivoField ? objetivoField.values : fieldData.flatMap((f) => f.values))
+    .join(" ")
+    .toLowerCase()
+  if (!text) return null
+
+  if (text.includes("ambos")) return "ambos"
+  const invest = /investi|valoriza|renda|aluguel|loca[çc]/.test(text)
+  const morar = /morad|morar|uso pr[óo]prio|uso pessoal|uso e |residi|primeira casa|pra morar/.test(text)
+  if (invest && morar) return "ambos"
+  if (invest) return "investimento"
+  if (morar) return "moradia"
+  return null
+}
+
 async function processLeadAsync(
   leadgenId: string,
   webhookValue: Record<string, unknown>,
@@ -170,10 +194,11 @@ async function processLeadAsync(
     let leadId: string | null = null
     let existingUtmCampaign: string | null = null
     let existingPropertyId: string | null = null
+    let existingFinalidade: string | null = null
     if (phone) {
       const { data: existing } = await supabase
         .from("leads")
-        .select("id, utm_campaign, property_interest_id")
+        .select("id, utm_campaign, property_interest_id, finalidade")
         .eq("phone", phone)
         .eq("org_id", orgId)
         .single()
@@ -182,6 +207,7 @@ async function processLeadAsync(
         leadId = existing.id
         existingUtmCampaign = existing.utm_campaign ?? null
         existingPropertyId = existing.property_interest_id ?? null
+        existingFinalidade = existing.finalidade ?? null
       }
     }
 
@@ -218,6 +244,9 @@ async function processLeadAsync(
       incomplete: !phone && !email,
     }
 
+    // Story 75-114: Finalidade derivada do objetivo do form do Meta.
+    const derivedFinalidade = deriveFinalidade(fieldData)
+
     if (leadId) {
       // AC8: metadata sempre atualizado; utm_* só atualizado se ainda não preenchido
       await supabase
@@ -229,6 +258,10 @@ async function processLeadAsync(
           // (não sobrescreve seleção manual/anterior).
           ...(existingPropertyId === null && detectedPropertyId
             ? { property_interest_id: detectedPropertyId }
+            : {}),
+          // Story 75-114: só preenche a finalidade se ainda não houver (não sobrescreve manual).
+          ...(existingFinalidade === null && derivedFinalidade
+            ? { finalidade: derivedFinalidade }
             : {}),
         })
         .eq("id", leadId)
@@ -245,6 +278,7 @@ async function processLeadAsync(
           source: "meta_ads",
           stage_id: defaultStageId,
           property_interest_id: detectedPropertyId, // Story 75-44
+          finalidade: derivedFinalidade, // Story 75-114: objetivo do form do Meta
           ...utmData,
           metadata: metaMetadata,
         })
