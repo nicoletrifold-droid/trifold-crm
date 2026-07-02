@@ -23,6 +23,8 @@ let leadsData: Array<Record<string, unknown>> = []
 let poolData: Array<Record<string, unknown>> = []
 let distData: Array<Record<string, unknown>> = [{ lead_id: "L1", created_at: new Date(Date.now() - 30 * 60000).toISOString() }]
 let gestorUser: Record<string, unknown> | null = { name: "Fernanda", phone: "5518999999999" }
+// Story 75-109: digest vai para usuários role='gerente-comercial' (query em lista).
+let gerentesData: Array<Record<string, unknown>> = [{ id: "g1", name: "Fernanda", phone: "5518999999999" }]
 let wppConfig: Record<string, unknown> | null = { phone_number_id: "111", access_token: "tok" }
 let claimResult: boolean | null = true
 const updateCaptured: Array<{ payload: unknown; ids: unknown }> = []
@@ -51,7 +53,7 @@ vi.mock("@web/lib/supabase/admin", () => ({
           return Promise.resolve({ data: table === "lead_distribution_log" ? distData : null, error: null })
         },
         insert: async (rows: Record<string, unknown>[]) => { if (table === "activities") activitiesInserted.push(...rows); return { data: null, error: null } },
-        then: (resolve: (v: { data: unknown; error: null }) => unknown) => resolve({ data: table === "roleta_config" ? cfgData : null, error: null }),
+        then: (resolve: (v: { data: unknown; error: null }) => unknown) => resolve({ data: table === "roleta_config" ? cfgData : table === "users" ? gerentesData : null, error: null }),
       }
       return b
     },
@@ -75,6 +77,7 @@ beforeEach(() => {
   distData = [{ lead_id: "L1", created_at: new Date(Date.now() - 30 * 60000).toISOString() }]
   poolData = []
   gestorUser = { name: "Fernanda", phone: "5518999999999" }
+  gerentesData = [{ id: "g1", name: "Fernanda", phone: "5518999999999" }]
   wppConfig = { phone_number_id: "111", access_token: "tok" }
   claimResult = true
   updateCaptured.length = 0
