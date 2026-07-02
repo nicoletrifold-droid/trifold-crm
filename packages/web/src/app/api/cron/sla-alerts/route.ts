@@ -85,6 +85,7 @@ type LeadRow = {
   bolsao_em: string | null
   sla_alerta_corretor_em: string | null
   sla_alerta_gestor_em: string | null
+  distribuido_em: string | null
 }
 
 export async function GET(request: NextRequest) {
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
     const recentIso = new Date(now.getTime() - RECENT_HOURS * 3600 * 1000).toISOString()
     const { data: leads } = await admin
       .from("leads")
-      .select("id, name, phone, assigned_broker_id, bolsao_em, sla_alerta_corretor_em, sla_alerta_gestor_em")
+      .select("id, name, phone, assigned_broker_id, bolsao_em, sla_alerta_corretor_em, sla_alerta_gestor_em, distribuido_em")
       .eq("org_id", orgId)
       .eq("is_active", true)
       .eq("segmento", "principal") // Story 75-98: SLA é do mundo principal, nunca IMOB
@@ -184,6 +185,14 @@ export async function GET(request: NextRequest) {
       const arr = distByLead.get(d.lead_id) ?? []
       arr.push(new Date(d.created_at).getTime())
       distByLead.set(d.lead_id, arr)
+    }
+    // Story 75-106: distribuido_em (carimbo atômico) é fonte adicional do relógio, cobrindo
+    // órfãos cujo insert em lead_distribution_log falhou. COALESCE das duas fontes.
+    for (const l of leadRows) {
+      if (!l.distribuido_em) continue
+      const arr = distByLead.get(l.id) ?? []
+      arr.push(new Date(l.distribuido_em).getTime())
+      distByLead.set(l.id, arr)
     }
 
     const brokerIds = [...new Set(leadRows.map((l) => l.assigned_broker_id).filter((x): x is string => !!x))]

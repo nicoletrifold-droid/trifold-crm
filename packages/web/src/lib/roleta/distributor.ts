@@ -140,9 +140,13 @@ export async function distributeLeadToNextBroker(
           phone: (u as { phone?: string | null })?.phone ?? null,
         }
 
+        // Story 75-106: carimba distribuido_em no MESMO UPDATE que atribui o corretor
+        // (mesma garantia atômica da RPC roleta_pick_and_advance) — o relógio de SLA/bolsão
+        // nunca fica dependente só do insert (não-atômico) em lead_distribution_log.
         const { data: claimed } = await admin.from("leads").update({
           assigned_broker_id: assignedUserId,
           stage_id: STAGE_IDS.novo,
+          distribuido_em: new Date().toISOString(),
         }).eq("id", leadId).is("assigned_broker_id", null).select("id").maybeSingle()
 
         if (!claimed) return { status: "sem_corretor_disponivel" }

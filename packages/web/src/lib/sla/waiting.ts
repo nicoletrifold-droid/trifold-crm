@@ -21,7 +21,7 @@ export async function computeWaitingMinutes(
   const out: Record<string, number> = {}
   if (leadIds.length === 0) return out
 
-  const [{ week, timezone }, { data: distLog }] = await Promise.all([
+  const [{ week, timezone }, { data: distLog }, { data: leadStamps }] = await Promise.all([
     getOrgSchedule(orgId, admin),
     admin
       .from("lead_distribution_log")
@@ -29,6 +29,14 @@ export async function computeWaitingMinutes(
       .eq("org_id", orgId)
       .eq("status", "distributed")
       .in("lead_id", leadIds),
+    // Story 75-106: distribuido_em é a fonte primária (carimbo atômico com a atribuição).
+    // Usamos COALESCE das duas fontes para (a) retrocompat com leads antigos (só log) e
+    // (b) cobrir órfãos cujo insert em lead_distribution_log falhou (só distribuido_em).
+    admin
+      .from("leads")
+      .select("id, distribuido_em")
+      .eq("org_id", orgId)
+      .in("id", leadIds),
   ])
 
   const now = new Date()
@@ -37,6 +45,12 @@ export async function computeWaitingMinutes(
     const arr = distByLead.get(d.lead_id) ?? []
     arr.push(new Date(d.created_at).getTime())
     distByLead.set(d.lead_id, arr)
+  }
+  for (const l of (leadStamps ?? []) as Array<{ id: string; distribuido_em: string | null }>) {
+    if (!l.distribuido_em) continue
+    const arr = distByLead.get(l.id) ?? []
+    arr.push(new Date(l.distribuido_em).getTime())
+    distByLead.set(l.id, arr)
   }
   for (const id of leadIds) {
     const dists = (distByLead.get(id) ?? []).filter((t) => t <= now.getTime())
