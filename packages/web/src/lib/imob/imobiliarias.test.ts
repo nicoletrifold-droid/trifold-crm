@@ -70,10 +70,13 @@ describe("validateImobiliaria (Story 75-92)", () => {
     expect(validateImobiliaria({ nome: "X", tipos_produto: "mcmv" }).ok).toBe(false)
   })
 
-  // Story 75-97 — engajamento
-  it("engajamento: aceita key válida; vazio→null; inválido→erro", () => {
-    expect((validateImobiliaria({ nome: "X", engajamento: "alta" }) as { value: Record<string, unknown> }).value.engajamento).toBe("alta")
+  // Story 75-97 / 75-108 — engajamento = nota 0–10
+  it("engajamento: aceita nota 0–10; vazio→null; fora do range/inválido→erro", () => {
+    expect((validateImobiliaria({ nome: "X", engajamento: 8 }) as { value: Record<string, unknown> }).value.engajamento).toBe(8)
+    expect((validateImobiliaria({ nome: "X", engajamento: 0 }) as { value: Record<string, unknown> }).value.engajamento).toBe(0)
     expect((validateImobiliaria({ nome: "X", engajamento: "" }) as { value: Record<string, unknown> }).value.engajamento).toBeNull()
-    expect(validateImobiliaria({ nome: "X", engajamento: "super" }).ok).toBe(false)
+    expect(validateImobiliaria({ nome: "X", engajamento: 11 }).ok).toBe(false)
+    expect(validateImobiliaria({ nome: "X", engajamento: 2.5 }).ok).toBe(false)
+    expect(validateImobiliaria({ nome: "X", engajamento: "alta" }).ok).toBe(false)
   })
 })

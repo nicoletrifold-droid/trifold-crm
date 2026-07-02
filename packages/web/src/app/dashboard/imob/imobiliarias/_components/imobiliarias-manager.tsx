@@ -8,9 +8,8 @@ import {
   IMOBILIARIA_STATUS,
   TIPOS_PRODUTO,
   TIPO_PRODUTO_LABELS,
-  ENGAJAMENTO,
-  ENGAJAMENTO_LABELS,
-  ENGAJAMENTO_TONE,
+  ENGAJAMENTO_NOTAS,
+  engajamentoTone,
   type Imobiliaria,
   type ImobiliariaStatus,
 } from "@web/lib/imob/imobiliarias"
@@ -85,7 +84,7 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
       await fetch(`/api/imob/imobiliarias/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ engajamento: value || null }),
+        body: JSON.stringify({ engajamento: value === "" ? null : Number(value) }),
       })
       router.refresh()
     } catch {
@@ -175,16 +174,16 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
                   {/* Story 75-100: engajamento editável INLINE (dropdown), fora do modal. */}
                   <td className="px-3 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1.5">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${i.engajamento ? ENGAJAMENTO_TONE[i.engajamento].dot : "bg-stone-300 dark:bg-stone-600"}`} />
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${engajamentoTone(i.engajamento).dot}`} />
                       <select
-                        value={i.engajamento ?? ""}
+                        value={i.engajamento == null ? "" : String(i.engajamento)}
                         disabled={savingEngaj === i.id}
                         onChange={(e) => setEngajamento(i.id, e.target.value)}
-                        className={`rounded-md border border-stone-300 bg-white px-1.5 py-0.5 text-xs font-medium disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 ${i.engajamento ? ENGAJAMENTO_TONE[i.engajamento].text : "text-stone-500 dark:text-stone-400"}`}
+                        className={`rounded-md border border-stone-300 bg-white px-1.5 py-0.5 text-xs font-medium disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 ${engajamentoTone(i.engajamento).text}`}
                       >
                         <option value="">Não avaliado</option>
-                        {ENGAJAMENTO.map((eng) => (
-                          <option key={eng} value={eng}>{ENGAJAMENTO_LABELS[eng]}</option>
+                        {ENGAJAMENTO_NOTAS.map((n) => (
+                          <option key={n} value={n}>{n}</option>
                         ))}
                       </select>
                     </div>

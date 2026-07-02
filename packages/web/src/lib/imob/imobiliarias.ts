@@ -20,21 +20,19 @@ export const TIPO_PRODUTO_LABELS: Record<TipoProduto, string> = {
   alto_padrao: "Alto Padrão",
 }
 
-// Story 75-97 — engajamento da imobiliária na venda dos produtos (definido manualmente pelo gestor).
-export const ENGAJAMENTO = ["alta", "media", "baixa"] as const
-export type Engajamento = (typeof ENGAJAMENTO)[number]
+// Story 75-97 / 75-108 — engajamento da imobiliária na venda dos produtos (definido pelo gestor).
+// Agora é uma NOTA de 0 a 10 (null = não avaliado). Substitui o categórico alta/media/baixa.
+export const ENGAJAMENTO_MIN = 0
+export const ENGAJAMENTO_MAX = 10
+export const ENGAJAMENTO_NOTAS = Array.from({ length: 11 }, (_, n) => n) // [0..10]
 
-export const ENGAJAMENTO_LABELS: Record<Engajamento, string> = {
-  alta: "Alta",
-  media: "Média",
-  baixa: "Baixa",
-}
-
-// Tom (dot + texto) por nível — alta=verde, média=amarelo, baixa=vermelho.
-export const ENGAJAMENTO_TONE: Record<Engajamento, { dot: string; text: string }> = {
-  alta: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
-  media: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
-  baixa: { dot: "bg-red-500", text: "text-red-700 dark:text-red-300" },
+// Cor (dot + texto) por faixa da nota: 0–3 vermelho, 4–6 âmbar, 7–8 lima, 9–10 verde. Null = cinza.
+export function engajamentoTone(nota: number | null | undefined): { dot: string; text: string } {
+  if (nota == null) return { dot: "bg-stone-300 dark:bg-stone-600", text: "text-stone-500 dark:text-stone-400" }
+  if (nota <= 3) return { dot: "bg-red-500", text: "text-red-700 dark:text-red-300" }
+  if (nota <= 6) return { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" }
+  if (nota <= 8) return { dot: "bg-lime-500", text: "text-lime-700 dark:text-lime-300" }
+  return { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" }
 }
 
 export interface Imobiliaria {
@@ -55,7 +53,7 @@ export interface Imobiliaria {
   socio_telefone: string | null
   socio_email: string | null
   tipos_produto: string[]
-  engajamento: Engajamento | null
+  engajamento: number | null
   contato_nome: string | null
   contato_telefone: string | null
   contato_email: string | null
@@ -139,10 +137,10 @@ export function validateImobiliaria(
     const e = b.engajamento
     if (e === null || e === "" || e === undefined) {
       out.engajamento = null
-    } else if (typeof e === "string" && (ENGAJAMENTO as readonly string[]).includes(e)) {
+    } else if (typeof e === "number" && Number.isInteger(e) && e >= ENGAJAMENTO_MIN && e <= ENGAJAMENTO_MAX) {
       out.engajamento = e
     } else {
-      return { ok: false, error: "Engajamento inválido" }
+      return { ok: false, error: "Engajamento deve ser uma nota de 0 a 10" }
     }
   }
 
