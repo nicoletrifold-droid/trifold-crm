@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Rocket, X, Trash2 } from "lucide-react"
+import { Plus, Rocket, X, Trash2, Truck } from "lucide-react"
 import {
   LANCAMENTO_STATUS,
   STATUS_LABELS,
@@ -125,12 +125,20 @@ export function LancamentosManager({
             Quadros de cada empreendimento em lançamento.
           </p>
         </div>
-        <button
-          onClick={openNew}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-[#E8856A] px-3 py-2 text-sm font-medium text-white hover:bg-[#d6724f]"
-        >
-          <Plus className="h-4 w-4" /> Novo lançamento
-        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/lancamentos/fornecedores"
+            className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            <Truck className="h-4 w-4" /> Fornecedores
+          </Link>
+          <button
+            onClick={openNew}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#E8856A] px-3 py-2 text-sm font-medium text-white hover:bg-[#d6724f]"
+          >
+            <Plus className="h-4 w-4" /> Novo lançamento
+          </button>
+        </div>
       </div>
 
       {/* Filtro */}
