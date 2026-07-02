@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { MoreVertical, X } from "lucide-react"
 import { LeadEditForm } from "./lead-edit-form"
+import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS } from "@web/lib/leads/enrich"
 
 interface LeadEditData {
   id: string
@@ -16,6 +17,11 @@ interface LeadEditData {
   preferred_view: string | null
   preferred_garage_count: number | null
   has_down_payment: boolean | null
+  observacao: string | null
+  finalidade: string | null
+  orcamento: string | null
+  prazo_compra: string | null
+  forma_pagamento: string | null
 }
 
 interface Property {
@@ -167,6 +173,36 @@ export function LeadDetailsPanel({
                   <dd className="font-medium dark:text-stone-100">
                     {lead.has_down_payment ? "Sim" : "Não"}
                   </dd>
+                </div>
+              )}
+              {lead.finalidade && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500 dark:text-stone-400">Finalidade</dt>
+                  <dd className="font-medium dark:text-stone-100">{FINALIDADE_LABELS[lead.finalidade] ?? lead.finalidade}</dd>
+                </div>
+              )}
+              {lead.orcamento && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500 dark:text-stone-400">Orçamento</dt>
+                  <dd className="font-medium dark:text-stone-100">{lead.orcamento}</dd>
+                </div>
+              )}
+              {lead.prazo_compra && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500 dark:text-stone-400">Prazo de compra</dt>
+                  <dd className="font-medium dark:text-stone-100">{PRAZO_COMPRA_LABELS[lead.prazo_compra] ?? lead.prazo_compra}</dd>
+                </div>
+              )}
+              {lead.forma_pagamento && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-500 dark:text-stone-400">Forma de pagamento</dt>
+                  <dd className="font-medium dark:text-stone-100">{FORMA_PAGAMENTO_LABELS[lead.forma_pagamento] ?? lead.forma_pagamento}</dd>
+                </div>
+              )}
+              {lead.observacao && (
+                <div className="pt-1">
+                  <dt className="mb-0.5 text-gray-500 dark:text-stone-400">Observação</dt>
+                  <dd className="whitespace-pre-line font-medium dark:text-stone-100">{lead.observacao}</dd>
                 </div>
               )}
             </dl>

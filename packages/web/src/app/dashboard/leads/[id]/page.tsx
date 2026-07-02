@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation"
 import { isUuid } from "@web/lib/uuid"
 import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
+import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS } from "@web/lib/leads/enrich"
 
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, SOURCE_LABELS as sourceLabels } from "@web/lib/constants"
 
@@ -273,6 +274,12 @@ export default async function LeadDetailPage({
               collectedData.has_down_payment === true ? "Sim" :
               collectedData.has_down_payment === false ? "Não" : null
             } />
+            {/* Story 75-112 — enriquecimento do perfil (preenchido manualmente no Editar Lead) */}
+            <InfoRow label="Finalidade" value={lead.finalidade ? (FINALIDADE_LABELS[lead.finalidade as string] ?? lead.finalidade) : null} />
+            <InfoRow label="Orçamento" value={lead.orcamento} />
+            <InfoRow label="Prazo de compra" value={lead.prazo_compra ? (PRAZO_COMPRA_LABELS[lead.prazo_compra as string] ?? lead.prazo_compra) : null} />
+            <InfoRow label="Forma de pagamento" value={lead.forma_pagamento ? (FORMA_PAGAMENTO_LABELS[lead.forma_pagamento as string] ?? lead.forma_pagamento) : null} />
+            <InfoRow label="Observação" value={lead.observacao} />
             <InfoRow label="Origem" value={lead.source ? (lead.source === "website" && lead.utm_content ? lead.utm_content : (sourceLabels[lead.source] ?? lead.source)) : null} />
             <InfoRow label="Canal" value={lead.channel} />
             <InfoRow label="Etapa qualificação" value={convState?.qualification_step} />

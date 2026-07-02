@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Save, Loader2 } from "lucide-react"
+import { FINALIDADE_OPTIONS, PRAZO_COMPRA_OPTIONS, FORMA_PAGAMENTO_OPTIONS } from "@web/lib/leads/enrich"
 
 interface LeadEditData {
   id: string
@@ -16,6 +17,11 @@ interface LeadEditData {
   preferred_view: string | null
   preferred_garage_count: number | null
   has_down_payment: boolean | null
+  observacao: string | null
+  finalidade: string | null
+  orcamento: string | null
+  prazo_compra: string | null
+  forma_pagamento: string | null
 }
 
 interface Property { id: string; name: string }
@@ -50,6 +56,11 @@ export function LeadEditForm({ lead, properties }: Props) {
   const [hasDownPayment, setHasDownPayment] = useState(
     lead.has_down_payment === null ? "" : lead.has_down_payment ? "sim" : "nao"
   )
+  const [finalidade, setFinalidade] = useState(lead.finalidade ?? "")
+  const [orcamento, setOrcamento] = useState(lead.orcamento ?? "")
+  const [prazoCompra, setPrazoCompra] = useState(lead.prazo_compra ?? "")
+  const [formaPagamento, setFormaPagamento] = useState(lead.forma_pagamento ?? "")
+  const [observacao, setObservacao] = useState(lead.observacao ?? "")
 
   async function handleSave() {
     setSaving(true)
@@ -67,6 +78,11 @@ export function LeadEditForm({ lead, properties }: Props) {
       preferred_view: preferredView.trim() || null,
       preferred_garage_count: preferredGarage ? parseInt(preferredGarage) : null,
       has_down_payment: hasDownPayment === "sim" ? true : hasDownPayment === "nao" ? false : null,
+      finalidade: finalidade || null,
+      orcamento: orcamento.trim() || null,
+      prazo_compra: prazoCompra || null,
+      forma_pagamento: formaPagamento || null,
+      observacao: observacao.trim() || null,
     }
 
     const res = await fetch(`/api/leads/${lead.id}`, {
@@ -210,6 +226,35 @@ export function LeadEditForm({ lead, properties }: Props) {
             <option value="sim">Sim</option>
             <option value="nao">Não</option>
           </select>
+        </div>
+
+        {/* Story 75-112 — enriquecimento do perfil */}
+        <div>
+          <label className={labelClass}>Finalidade</label>
+          <select value={finalidade} onChange={e => setFinalidade(e.target.value)} className={inputClass}>
+            {FINALIDADE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Orçamento / faixa de preço</label>
+          <input type="text" value={orcamento} onChange={e => setOrcamento(e.target.value)} placeholder="Ex: até R$ 450 mil" className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Prazo de compra</label>
+          <select value={prazoCompra} onChange={e => setPrazoCompra(e.target.value)} className={inputClass}>
+            {PRAZO_COMPRA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Forma de pagamento</label>
+          <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)} className={inputClass}>
+            {FORMA_PAGAMENTO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className={labelClass}>Observação</label>
+          <textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={3}
+            placeholder="Anotações livres sobre o lead (perfil, contexto, o que foi conversado…)" className={inputClass} />
         </div>
       </div>
 
