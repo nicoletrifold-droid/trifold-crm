@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { normalizePhoneBR } from "@trifold/shared"
 
+// Story 75-107: default = TUDO habilitado (espelha o dispatcher em lib/notificacoes.ts).
+// Cliente sem linha salva vê todos os canais ligados na tela e desmarca o que não quiser.
 const DEFAULT_PREFS = {
   email_enabled: true,
-  whatsapp_enabled: false,
-  push_enabled: false,
+  whatsapp_enabled: true,
+  push_enabled: true,
   notify_nova_foto: true,
   notify_novo_documento: true,
   notify_nova_mensagem: true,
