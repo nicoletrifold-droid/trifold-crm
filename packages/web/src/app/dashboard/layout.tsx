@@ -28,6 +28,7 @@ import {
   Container,
   Handshake,
   FolderClosed,
+  Rocket,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -50,6 +51,7 @@ const NAV_ITEMS_BASE = [
 ]
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
+const NAV_ITEM_LANCAMENTOS = { href: "/dashboard/lancamentos", label: "Lançamentos", icon: <Rocket className={ICON_SIZE} /> }
 const NAV_ITEM_BRINDES = { href: "/dashboard/brindes", label: "Brindes", icon: <Gift className={ICON_SIZE} /> }
 const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
 const NAV_ITEM_CHAT = { href: "/dashboard/chat", label: "Chat", icon: <MessageSquare className={ICON_SIZE} /> }
@@ -75,6 +77,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/analytics": "analytics",
   "/dashboard/campaigns": "campanhas",
   "/dashboard/obras": "obras",
+  "/dashboard/lancamentos": "lancamentos",
   "/dashboard/brindes": "brindes",
   "/dashboard/mensagens": "mensagens",
   "/dashboard/sistema/email": "sistema",
@@ -262,6 +265,8 @@ export default async function DashboardLayout({
     ...(permissions["obras"]
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),
+    // Épico Lançamentos — item logo abaixo de Obras, gated pela matriz de Perfil de Acesso.
+    ...(permissions["lancamentos"] ? [NAV_ITEM_LANCAMENTOS] : []),
     ...(permissions["brindes"] ? [NAV_ITEM_BRINDES] : []),
     ...(permissions["mensagens"]
       ? [{ ...NAV_ITEM_MENSAGENS, badge: mensagensCount ?? 0 }]
