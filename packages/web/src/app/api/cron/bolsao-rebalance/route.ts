@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
         p_window_seconds: BOLSAO_DIGEST_WINDOW_S,
       })
       if (claimed === true) {
-        digestSent = await sendBolsaoDigest(admin, orgId, cfg, digestCount)
+        digestSent = await sendBolsaoDigest(admin, orgId, digestCount)
       }
     }
 
@@ -195,42 +195,43 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ ok: true, summary })
 }
 
-// Story 75-82 — resumo do bolsão à Fernanda (gestor configurado na roleta): WhatsApp
-// template `aviso_bolsao_gestor` ({{1}}=nome, {{2}}=qtd; botão estático → /dashboard/bolsao)
-// + push. Retorna true se ao menos o push ou o WhatsApp foi disparado.
+// Story 75-82 / 75-109 — resumo do bolsão à GERENTE COMERCIAL: quando há lead(s) parado(s)
+// no pool há >= BOLSAO_DIGEST_MIN (15 min de horário comercial), avisa via WhatsApp
+// (template `aviso_bolsao_gestor`, {{1}}=nome {{2}}=qtd; botão → /dashboard/bolsao) + push.
+// Destinatário = usuários ATIVOS com role 'gerente-comercial' (não mais o gestor da roleta,
+// que trazia efeitos colaterais). Retorna true se ao menos um envio (WhatsApp/push) ocorreu.
 async function sendBolsaoDigest(
   admin: ReturnType<typeof createAdminClient>,
   orgId: string,
-  cfg: CfgRow,
   count: number
 ): Promise<boolean> {
-  const gestorUserId = cfg.notify_user_on_fora_horario ?? cfg.notify_user_on_distribution
-  if (!gestorUserId) return false
-
-  const { data: gestor } = await admin
+  const { data: gerentes } = await admin
     .from("users")
-    .select("name, phone")
-    .eq("id", gestorUserId)
+    .select("id, name, phone")
+    .eq("org_id", orgId)
+    .eq("role", "gerente-comercial")
+    .eq("is_active", true)
+  const recipients = (gerentes ?? []) as Array<{ id: string; name: string | null; phone: string | null }>
+  if (recipients.length === 0) return false
+
+  const { data: wc } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
     .maybeSingle()
-  const nome = (gestor?.name as string | undefined) ?? "gestor"
-  const phone = (gestor?.phone as string | undefined) ?? null
+  const waReady = Boolean(wc?.phone_number_id && wc?.access_token)
 
   let any = false
-
-  if (phone) {
-    const { data: wc } = await admin
-      .from("whatsapp_config")
-      .select("phone_number_id, access_token")
-      .eq("org_id", orgId)
-      .maybeSingle()
-    if (wc?.phone_number_id && wc?.access_token) {
+  for (const r of recipients) {
+    const nome = r.name ?? "gerente"
+    if (r.phone && waReady) {
       try {
-        const res = await fetch(`https://graph.facebook.com/v21.0/${wc.phone_number_id}/messages`, {
+        const res = await fetch(`https://graph.facebook.com/v21.0/${wc!.phone_number_id}/messages`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${wc.access_token}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${wc!.access_token}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             messaging_product: "whatsapp",
-            to: phone,
+            to: r.phone,
             type: "template",
             template: {
               name: "aviso_bolsao_gestor",
@@ -241,27 +242,27 @@ async function sendBolsaoDigest(
         })
         if (res.ok) {
           const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
-          void logWhatsappSend(admin, { orgId, template: "aviso_bolsao_gestor", category: "utility", recipientType: "gestor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+          void logWhatsappSend(admin, { orgId, template: "aviso_bolsao_gestor", category: "utility", recipientType: "gestor", toPhone: r.phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
           any = true
         } else {
           const err = await res.text()
-          void logWhatsappSend(admin, { orgId, template: "aviso_bolsao_gestor", category: "utility", recipientType: "gestor", toPhone: phone, status: "failed", error: `${res.status} ${err.slice(0, 300)}` })
+          void logWhatsappSend(admin, { orgId, template: "aviso_bolsao_gestor", category: "utility", recipientType: "gestor", toPhone: r.phone, status: "failed", error: `${res.status} ${err.slice(0, 300)}` })
         }
       } catch (e) {
         console.error("[bolsao] digest wpp:", e)
       }
     }
-  }
 
-  try {
-    await sendPushToUser(admin, gestorUserId, {
-      title: "Leads parados no bolsão",
-      body: `Há ${count} lead(s) aguardando atendimento no bolsão.`,
-      url: `${APP_URL}/dashboard/bolsao`,
-    })
-    any = true
-  } catch (e) {
-    console.error("[bolsao] digest push:", e)
+    try {
+      await sendPushToUser(admin, r.id, {
+        title: "Leads parados no bolsão",
+        body: `Há ${count} lead(s) aguardando atendimento no bolsão.`,
+        url: `${APP_URL}/dashboard/bolsao`,
+      })
+      any = true
+    } catch (e) {
+      console.error("[bolsao] digest push:", e)
+    }
   }
 
   return any
