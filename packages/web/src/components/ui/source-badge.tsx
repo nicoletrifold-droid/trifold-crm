@@ -2,6 +2,8 @@ import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 
 const SOURCE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
   meta_ads:              { bg: "bg-blue-50 dark:bg-blue-500/15",       text: "text-blue-700 dark:text-blue-300",       dot: "bg-blue-400" },
+  google_ads:            { bg: "bg-red-50 dark:bg-red-500/15",         text: "text-red-700 dark:text-red-300",         dot: "bg-red-400" },
+  broker_sponsored:      { bg: "bg-purple-50 dark:bg-purple-500/15",   text: "text-purple-700 dark:text-purple-300",   dot: "bg-purple-400" },
   whatsapp_click_to_ad:  { bg: "bg-green-50 dark:bg-green-500/15",     text: "text-green-700 dark:text-green-300",     dot: "bg-green-400" },
   whatsapp_organic:      { bg: "bg-emerald-50 dark:bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-400" },
   website:               { bg: "bg-indigo-50 dark:bg-indigo-500/15",   text: "text-indigo-700 dark:text-indigo-300",   dot: "bg-indigo-400" },

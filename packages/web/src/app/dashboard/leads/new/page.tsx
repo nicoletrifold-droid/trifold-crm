@@ -1,19 +1,12 @@
 "use server"
 
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { createClient } from "@web/lib/supabase/server"
 import { canAccess } from "@web/lib/permissions"
-
-const SOURCE_OPTIONS = [
-  { value: "referral",         label: "Indicação" },
-  { value: "other",            label: "Carteira Própria / Ação Externa" },
-  { value: "website",          label: "Site" },
-  { value: "whatsapp_organic", label: "WhatsApp Orgânico" },
-  { value: "meta_ads",         label: "Meta Ads (Facebook/Instagram)" },
-  { value: "google_ads",       label: "Google Ads" },
-]
+import { SOURCE_OPTIONS } from "@web/lib/constants"
 
 async function createLead(formData: FormData) {
   "use server"
@@ -45,7 +38,7 @@ async function createLead(formData: FormData) {
   const phone  = formData.get("phone")?.toString().replace(/\D/g, "") ?? ""
   const name   = formData.get("name")?.toString().trim() ?? ""
   const email  = formData.get("email")?.toString().trim() || null
-  const source = (formData.get("source")?.toString() || "other") as "referral" | "other" | "website" | "whatsapp_organic" | "meta_ads" | "google_ads"
+  const source = (formData.get("source")?.toString() || "other") as "referral" | "broker_sponsored" | "other" | "website" | "whatsapp_organic" | "meta_ads" | "google_ads"
   const utmCampaign = formData.get("utm_campaign")?.toString().trim() || null
   const propertyId  = formData.get("property_interest_id")?.toString() || null
 
@@ -231,12 +224,12 @@ export default async function NewLeadPage() {
           >
             Cadastrar lead
           </button>
-          <a
+          <Link
             href="/dashboard/leads"
             className="rounded-lg border border-stone-200 px-4 py-2.5 text-sm font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800 transition-colors"
           >
             Cancelar
-          </a>
+          </Link>
         </div>
       </form>
     </div>
