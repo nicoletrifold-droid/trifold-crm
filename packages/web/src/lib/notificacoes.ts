@@ -62,15 +62,15 @@ interface NotifPrefs {
   notify_progresso: boolean
 }
 
-// Story 75-5: cliente que nunca salvou preferências não tem linha em
-// `obra_notificacao_prefs`. Usamos estes defaults (espelham a UI e a API) para
-// que e-mail e todos os eventos cheguem por padrão; WhatsApp/push seguem opt-in.
+// Story 75-5 / 75-107: cliente que nunca salvou preferências não tem linha em
+// `obra_notificacao_prefs`. Usamos estes defaults (espelham a UI e a API) para que
+// TUDO chegue por padrão — o cliente desmarca o que não quiser. Cada canal ainda
+// depende do seu pré-requisito: e-mail requer users.email; WhatsApp requer users.phone
+// + whatsapp_config da org; push só entrega se houver assinatura (sem assinatura = no-op).
 const DEFAULT_PREFS: NotifPrefs = {
   email_enabled: true,
-  // WhatsApp ligado por padrão (Story 75-22): clientes sem linha de prefs recebem
-  // WhatsApp além de e-mail. Depende de users.phone preenchido + whatsapp_config da org.
   whatsapp_enabled: true,
-  push_enabled: false,
+  push_enabled: true,
   notify_nova_foto: true,
   notify_novo_documento: true,
   notify_nova_mensagem: true,
