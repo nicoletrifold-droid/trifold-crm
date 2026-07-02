@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { X, Trash2, Send, Plus, Paperclip, Download } from "lucide-react"
+import { X, Trash2, Send, Plus, Paperclip, Download, Truck } from "lucide-react"
 import { LABEL_COLORS, COR_HEX } from "@web/lib/lancamentos/lancamentos"
-import type { BoardCard, Member } from "./lancamento-board"
+import { CATEGORIA_COR, CATEGORIA_LABEL, STATUS_LABELS, STATUS_TONE, type FornecedorStatus } from "@web/lib/lancamentos/fornecedores"
+import type { BoardCard, Member, FornecedorOption } from "./lancamento-board"
 
 interface Comment { id: string; body: string; created_at: string; author: string }
 interface ChkItem { id: string; text: string; done: boolean; position: number }
@@ -16,9 +17,10 @@ function fmtSize(b: number | null): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function LancamentoCardModal({ card, members, onClose, onUpdated, onDeleted }: {
+export function LancamentoCardModal({ card, members, fornecedores, onClose, onUpdated, onDeleted }: {
   card: BoardCard
   members: Member[]
+  fornecedores: FornecedorOption[]
   onClose: () => void
   onUpdated: (c: BoardCard) => void
   onDeleted: (id: string) => void
@@ -33,6 +35,9 @@ export function LancamentoCardModal({ card, members, onClose, onUpdated, onDelet
   const [checklist, setChecklist] = useState<ChkItem[]>([])
   const [newChk, setNewChk] = useState("")
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [linked, setLinked] = useState<FornecedorOption[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerQ, setPickerQ] = useState("")
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -42,10 +47,12 @@ export function LancamentoCardModal({ card, members, onClose, onUpdated, onDelet
       fetch(`/api/lancamentos/cards/${card.id}/comments`).then((r) => r.json()).catch(() => ({})),
       fetch(`/api/lancamentos/cards/${card.id}/checklist`).then((r) => r.json()).catch(() => ({})),
       fetch(`/api/lancamentos/cards/${card.id}/attachments`).then((r) => r.json()).catch(() => ({})),
-    ]).then(([c, k, a]) => {
+      fetch(`/api/lancamentos/cards/${card.id}/fornecedores`).then((r) => r.json()).catch(() => ({})),
+    ]).then(([c, k, a, f]) => {
       setComments(c.comments ?? [])
       setChecklist(k.items ?? [])
       setAttachments(a.attachments ?? [])
+      setLinked(f.fornecedores ?? [])
     }).finally(() => setLoading(false))
   }, [card.id])
 
@@ -53,13 +60,30 @@ export function LancamentoCardModal({ card, members, onClose, onUpdated, onDelet
   const nameOf = (id: string) => (id ? members.find((m) => m.id === id)?.name ?? null : null)
 
   // Propaga o cartão atualizado (campos + contadores) para o board.
-  function pushCard(chk: ChkItem[] = checklist, att: Attachment[] = attachments) {
+  function pushCard(chk: ChkItem[] = checklist, att: Attachment[] = attachments, frn: FornecedorOption[] = linked) {
     onUpdated({
       id: card.id, title: title.trim() || card.title, description: description || null,
       due_date: iso(dueDate), assignee_id: assigneeId || null, assignee_name: nameOf(assigneeId || ""), labels,
       checklist_total: chk.length, checklist_done: chk.filter((i) => i.done).length, attachment_count: att.length,
+      fornecedor_count: frn.length,
     })
   }
+
+  // ── Fornecedores vinculados ──
+  function linkForn(f: FornecedorOption) {
+    if (linked.some((x) => x.id === f.id)) { setPickerOpen(false); return }
+    const next = [...linked, f]; setLinked(next); setPickerOpen(false); setPickerQ("")
+    pushCard(checklist, attachments, next)
+    void fetch(`/api/lancamentos/cards/${card.id}/fornecedores`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fornecedor_id: f.id }) }).catch(() => {})
+  }
+  function unlinkForn(f: FornecedorOption) {
+    const next = linked.filter((x) => x.id !== f.id); setLinked(next)
+    pushCard(checklist, attachments, next)
+    void fetch(`/api/lancamentos/cards/${card.id}/fornecedores/${f.id}`, { method: "DELETE" }).catch(() => {})
+  }
+  const pickerList = fornecedores
+    .filter((f) => !linked.some((l) => l.id === f.id))
+    .filter((f) => !pickerQ || f.nome.toLowerCase().includes(pickerQ.toLowerCase()))
 
   function emit(next: { title?: string; description?: string; due?: string; assignee?: string; labels?: string[] }) {
     const body: Record<string, unknown> = {}
@@ -252,6 +276,42 @@ export function LancamentoCardModal({ card, members, onClose, onUpdated, onDelet
             <div>
               <label className={lblCls}>Prazo</label>
               <input type="date" className={fieldCls} value={dueDate} onChange={(e) => { setDueDate(e.target.value); emit({ due: e.target.value }) }} />
+            </div>
+            <div>
+              <label className={`${lblCls} flex items-center gap-1.5`}><Truck className="h-3.5 w-3.5" /> Fornecedores</label>
+              <div className="mt-1.5 space-y-1.5">
+                {linked.map((f) => (
+                  <div key={f.id} className="group flex items-center gap-2 rounded-lg border border-stone-200 p-2 text-xs dark:border-stone-700">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: f.categoria ? CATEGORIA_COR[f.categoria] ?? "#78716c" : "#78716c" }} />
+                    <span className="truncate text-stone-700 dark:text-stone-200">{f.nome}</span>
+                    <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 ${STATUS_TONE[f.status as FornecedorStatus] ?? ""}`}>{STATUS_LABELS[f.status as FornecedorStatus] ?? f.status}</span>
+                    <button onClick={() => unlinkForn(f)} className="shrink-0 text-stone-300 opacity-0 hover:text-red-500 group-hover:opacity-100" aria-label="Desvincular"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+                {linked.length === 0 && <p className="text-xs text-stone-400">Nenhum fornecedor vinculado.</p>}
+              </div>
+              {pickerOpen ? (
+                <div className="mt-2 rounded-lg border border-stone-200 p-2 dark:border-stone-700">
+                  <input autoFocus value={pickerQ} onChange={(e) => setPickerQ(e.target.value)} placeholder="Buscar fornecedor…"
+                    className="w-full rounded-md border border-stone-200 px-2 py-1 text-xs dark:border-stone-700 dark:bg-stone-800 dark:text-white" />
+                  <div className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto">
+                    {pickerList.length === 0 ? (
+                      <p className="px-1 py-1.5 text-xs text-stone-400">Nenhum fornecedor disponível.</p>
+                    ) : pickerList.map((f) => (
+                      <button key={f.id} onClick={() => linkForn(f)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs hover:bg-stone-50 dark:hover:bg-stone-800">
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: f.categoria ? CATEGORIA_COR[f.categoria] ?? "#78716c" : "#78716c" }} />
+                        <span className="truncate text-stone-700 dark:text-stone-200">{f.nome}</span>
+                        {f.categoria && <span className="ml-auto shrink-0 text-[10px] text-stone-400">{CATEGORIA_LABEL[f.categoria] ?? f.categoria}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => { setPickerOpen(false); setPickerQ("") }} className="mt-1 text-xs text-stone-400 hover:text-stone-600">Fechar</button>
+                </div>
+              ) : (
+                <button onClick={() => setPickerOpen(true)} className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-[#E8856A] px-2 py-1.5 text-xs font-medium text-[#c05a3c] hover:bg-[#E8856A]/10 dark:text-[#f6b6a3]">
+                  <Plus className="h-3.5 w-3.5" /> Vincular fornecedor
+                </button>
+              )}
             </div>
           </div>
         </div>

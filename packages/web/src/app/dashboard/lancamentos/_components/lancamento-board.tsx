@@ -8,11 +8,12 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
 import { useDroppable } from "@dnd-kit/core"
 import { CSS } from "@dnd-kit/utilities"
-import { Plus, Trash2, X, GripVertical, Calendar, CheckSquare, Paperclip } from "lucide-react"
+import { Plus, Trash2, X, GripVertical, Calendar, CheckSquare, Paperclip, Truck } from "lucide-react"
 import { COR_HEX } from "@web/lib/lancamentos/lancamentos"
 import { LancamentoCardModal } from "./lancamento-card-modal"
 
 export interface Member { id: string; name: string }
+export interface FornecedorOption { id: string; nome: string; categoria: string | null; status: string }
 export interface BoardCard {
   id: string
   title: string
@@ -24,6 +25,7 @@ export interface BoardCard {
   checklist_done: number
   checklist_total: number
   attachment_count: number
+  fornecedor_count: number
 }
 export interface BoardColumn { id: string; title: string; cards: BoardCard[] }
 
@@ -62,10 +64,12 @@ export function LancamentoBoard({
   lancamentoId,
   initialColumns,
   members,
+  fornecedores,
 }: {
   lancamentoId: string
   initialColumns: BoardColumn[]
   members: Member[]
+  fornecedores: FornecedorOption[]
 }) {
   const [columns, setColumns] = useState<BoardColumn[]>(initialColumns)
   const [activeCard, setActiveCard] = useState<BoardCard | null>(null)
@@ -151,7 +155,7 @@ export function LancamentoBoard({
         id: card.id, title: card.title, description: card.description,
         due_date: card.due_date ?? null, assignee_id: card.assignee_id ?? null,
         assignee_name: null, labels: Array.isArray(card.labels) ? card.labels : [],
-        checklist_done: 0, checklist_total: 0, attachment_count: 0,
+        checklist_done: 0, checklist_total: 0, attachment_count: 0, fornecedor_count: 0,
       }
       setColumns((c) => c.map((x) => (x.id === columnId ? { ...x, cards: [...x.cards, newCard] } : x)))
     }
@@ -197,7 +201,7 @@ export function LancamentoBoard({
       </DndContext>
 
       {openCard && (
-        <LancamentoCardModal card={openCard} members={members} onClose={() => setOpenCard(null)} onUpdated={onCardUpdated} onDeleted={onCardDeleted} />
+        <LancamentoCardModal card={openCard} members={members} fornecedores={fornecedores} onClose={() => setOpenCard(null)} onUpdated={onCardUpdated} onDeleted={onCardDeleted} />
       )}
     </>
   )
@@ -260,7 +264,7 @@ function Column({ col, onRename, onDelete, onAddCard, onOpenCard }: {
 
 function SortableCard({ card, onClick }: { card: BoardCard; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id })
-  const hasMeta = !!card.due_date || !!card.assignee_id || card.checklist_total > 0 || card.attachment_count > 0
+  const hasMeta = !!card.due_date || !!card.assignee_id || card.checklist_total > 0 || card.attachment_count > 0 || card.fornecedor_count > 0
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`group rounded-lg bg-white p-2.5 text-sm shadow-sm ring-1 ring-stone-200 dark:bg-stone-900 dark:text-stone-100 dark:ring-stone-700 ${isDragging ? "opacity-40" : ""}`}>
@@ -293,6 +297,9 @@ function SortableCard({ card, onClick }: { card: BoardCard; onClick: () => void 
               )}
               {card.attachment_count > 0 && (
                 <span className="inline-flex items-center gap-1"><Paperclip className="h-3 w-3" /> {card.attachment_count}</span>
+              )}
+              {card.fornecedor_count > 0 && (
+                <span className="inline-flex items-center gap-1"><Truck className="h-3 w-3" /> {card.fornecedor_count}</span>
               )}
               {card.assignee_id && (
                 <span
