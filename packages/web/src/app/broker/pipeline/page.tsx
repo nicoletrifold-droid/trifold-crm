@@ -12,7 +12,7 @@ const PAGE_SIZE = 50
 
 // Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
 const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
-         property_interest_id, assigned_broker_id, created_at, updated_at,
+         property_interest_id, assigned_broker_id, created_at, updated_at, last_contact_at,
          ai_summary, source, utm_campaign, utm_content, metadata,
          properties:property_interest_id(name)`
 

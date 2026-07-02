@@ -12,7 +12,7 @@ export default async function BrokerAlertasPage() {
     .from("follow_up_log")
     .select(
       `id, type, status, message, created_at,
-       lead:leads!lead_id(id, name, phone, stage_id, property_interest_id, assigned_broker_id, updated_at,
+       lead:leads!lead_id(id, name, phone, stage_id, property_interest_id, assigned_broker_id, updated_at, last_contact_at,
          stage:kanban_stages!stage_id(name),
          property:properties!property_interest_id(name)
        )`
@@ -28,15 +28,15 @@ export default async function BrokerAlertasPage() {
   const { data: staleLeads } = await supabase
     .from("leads")
     .select(
-      `id, name, phone, stage_id, property_interest_id, assigned_broker_id, updated_at,
+      `id, name, phone, stage_id, property_interest_id, assigned_broker_id, updated_at, last_contact_at,
        stage:kanban_stages!stage_id(name),
        property:properties!property_interest_id(name)`
     )
     .eq("org_id", user.orgId)
     .eq("assigned_broker_id", user.id)
     .eq("is_active", true)
-    .lt("updated_at", twoDaysAgo)
-    .order("updated_at", { ascending: true })
+    .lt("last_contact_at", twoDaysAgo)
+    .order("last_contact_at", { ascending: true })
     .limit(50)
 
   type AlertItem = {
@@ -63,7 +63,7 @@ export default async function BrokerAlertasPage() {
       const property = Array.isArray(lead.property) ? lead.property[0] : lead.property
 
       const daysSince = Math.floor(
-        (nowMs - new Date(lead.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+        (nowMs - new Date((lead as { last_contact_at?: string | null }).last_contact_at ?? lead.updated_at).getTime()) / (1000 * 60 * 60 * 24)
       )
 
       alerts.push({
@@ -89,7 +89,7 @@ export default async function BrokerAlertasPage() {
       const property = Array.isArray(lead.property) ? lead.property[0] : lead.property
 
       const daysSince = Math.floor(
-        (nowMs - new Date(lead.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+        (nowMs - new Date((lead as { last_contact_at?: string | null }).last_contact_at ?? lead.updated_at).getTime()) / (1000 * 60 * 60 * 24)
       )
 
       alerts.push({

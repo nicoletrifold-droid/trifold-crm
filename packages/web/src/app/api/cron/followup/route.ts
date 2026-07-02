@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
     const { data: leads } = await supabase
       .from("leads")
       .select(
-        `id, name, phone, org_id, assigned_broker_id, property_interest_id,
+        `id, name, phone, org_id, assigned_broker_id, property_interest_id, last_contact_at,
          properties:property_interest_id(name)`
       )
       .eq("org_id", rule.org_id)
@@ -265,6 +265,13 @@ export async function GET(request: NextRequest) {
       const daysSinceLastMessage =
         (now.getTime() - lastMessageDate.getTime()) / (1000 * 60 * 60 * 24)
 
+      // Story 75-110: os limiares de follow-up usam o ÚLTIMO CONTATO real (mensagem OU registro
+      // manual no Histórico), via leads.last_contact_at — não só a última mensagem. Assim, um
+      // contato manual ("liguei, sem retorno") adia o follow-up automático. A janela de 24h do
+      // WhatsApp (brokerSentRecently / isWithinWhatsAppWindow) segue baseada na MENSAGEM real.
+      const lastContactRef = (lead as { last_contact_at?: string | null }).last_contact_at ?? lastMessage.created_at
+      const daysSinceLastContact = (now.getTime() - new Date(lastContactRef).getTime()) / (1000 * 60 * 60 * 24)
+
       // Check if broker sent a message in the last 24h — if yes, broker owns the conversation until tomorrow
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
       const brokerSentRecently = lastMessages.some(
@@ -286,7 +293,7 @@ export async function GET(request: NextRequest) {
       )
 
       // Check nicole_takeover_days first (more severe)
-      if (daysSinceLastMessage >= rule.nicole_takeover_days) {
+      if (daysSinceLastContact >= rule.nicole_takeover_days) {
         // Render template
         const message = (rule.message_template || "")
           .replace(/\{nome\}/g, lead.name || "")
@@ -374,7 +381,7 @@ export async function GET(request: NextRequest) {
         })
 
         messagesSent++
-      } else if (daysSinceLastMessage >= rule.alert_days) {
+      } else if (daysSinceLastContact >= rule.alert_days) {
         // Create alert for broker
         await supabase.from("follow_up_log").insert({
           org_id: rule.org_id,
@@ -390,7 +397,7 @@ export async function GET(request: NextRequest) {
           org_id: rule.org_id,
           lead_id: lead.id,
           type: "followup_alert_broker",
-          description: `Alerta de follow-up: lead sem contato ha ${Math.floor(daysSinceLastMessage)} dia(s) na etapa "${stage.name}"`,
+          description: `Alerta de follow-up: lead sem contato ha ${Math.floor(daysSinceLastContact)} dia(s) na etapa "${stage.name}"`,
           metadata: { rule_id: rule.id, stage_id: rule.stage_id },
         })
 
