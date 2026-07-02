@@ -65,6 +65,27 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
       ).data ?? []) as CardRow[])
     : []
 
+  // Contadores de checklist/anexos por cartão (para os badges na face).
+  const cardIds = cards.map((k) => k.id)
+  const [{ data: chkRows }, { data: attRows }] = await Promise.all([
+    cardIds.length
+      ? admin.from("lancamento_card_checklist").select("card_id, done").in("card_id", cardIds)
+      : Promise.resolve({ data: [] as { card_id: string; done: boolean }[] }),
+    cardIds.length
+      ? admin.from("lancamento_card_attachments").select("card_id").in("card_id", cardIds)
+      : Promise.resolve({ data: [] as { card_id: string }[] }),
+  ])
+  const chkTotal = new Map<string, number>()
+  const chkDone = new Map<string, number>()
+  for (const r of (chkRows ?? []) as { card_id: string; done: boolean }[]) {
+    chkTotal.set(r.card_id, (chkTotal.get(r.card_id) ?? 0) + 1)
+    if (r.done) chkDone.set(r.card_id, (chkDone.get(r.card_id) ?? 0) + 1)
+  }
+  const attCount = new Map<string, number>()
+  for (const r of (attRows ?? []) as { card_id: string }[]) {
+    attCount.set(r.card_id, (attCount.get(r.card_id) ?? 0) + 1)
+  }
+
   // Responsáveis possíveis: usuários internos (não-cliente) ativos.
   const { data: memberRows } = await admin
     .from("users")
@@ -88,6 +109,9 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
         assignee_id: k.assignee_id,
         assignee_name: (Array.isArray(k.assignee) ? k.assignee[0]?.name : k.assignee?.name) ?? null,
         labels: Array.isArray(k.labels) ? k.labels : [],
+        checklist_total: chkTotal.get(k.id) ?? 0,
+        checklist_done: chkDone.get(k.id) ?? 0,
+        attachment_count: attCount.get(k.id) ?? 0,
       })),
   }))
 
