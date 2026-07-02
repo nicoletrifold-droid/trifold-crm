@@ -40,6 +40,7 @@ type LeadRow = {
   id: string
   name: string | null
   assigned_broker_id: string
+  distribuido_em: string | null
 }
 
 export async function GET(request: NextRequest) {
@@ -90,7 +91,7 @@ export async function GET(request: NextRequest) {
     const recentIso = new Date(now.getTime() - RECENT_HOURS * 3600 * 1000).toISOString()
     const { data: leads } = await admin
       .from("leads")
-      .select("id, name, assigned_broker_id")
+      .select("id, name, assigned_broker_id, distribuido_em")
       .eq("org_id", orgId)
       .eq("is_active", true)
       .eq("segmento", "principal") // Story 75-98: bolsão é do mundo principal, nunca IMOB
@@ -114,6 +115,14 @@ export async function GET(request: NextRequest) {
       const arr = distByLead.get(d.lead_id) ?? []
       arr.push(new Date(d.created_at).getTime())
       distByLead.set(d.lead_id, arr)
+    }
+    // Story 75-106: distribuido_em (carimbo atômico) é fonte adicional do relógio, cobrindo
+    // órfãos cujo insert em lead_distribution_log falhou → antes eram pulados (dists vazio).
+    for (const l of leadRows) {
+      if (!l.distribuido_em) continue
+      const arr = distByLead.get(l.id) ?? []
+      arr.push(new Date(l.distribuido_em).getTime())
+      distByLead.set(l.id, arr)
     }
 
     const toMove: Array<{ id: string; broker: string; elapsed: number; name: string | null }> = []
