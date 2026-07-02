@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await admin
     .from("lancamento_cards")
     .insert({ org_id: appUser.org_id, column_id: columnId, title, position, created_by: appUser.id })
-    .select("id, column_id, title, description, position")
+    .select("id, column_id, title, description, position, due_date, assignee_id, labels")
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ card: data })

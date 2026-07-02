@@ -51,6 +51,20 @@ export const COR_HEX: Record<string, string> = {
   stone: "#a8a29e",
 }
 
+// Story Lançamentos-04 — paleta fixa de etiquetas do cartão (reusa as chaves de COR_HEX).
+// Cor = significado, consistente no módulo todo. Renderizadas como barras/pills via COR_HEX.
+export const LABEL_COLORS = [
+  "coral",
+  "amber",
+  "emerald",
+  "sky",
+  "violet",
+  "rose",
+  "teal",
+  "stone",
+] as const
+export type LabelColor = (typeof LABEL_COLORS)[number]
+
 export interface Lancamento {
   id: string
   org_id: string
