@@ -1,7 +1,7 @@
 # Story 75-106 — Fix: lead atribuído sem `lead_distribution_log` fica órfão do SLA e do bolsão
 
 ## Metadata
-- **Status:** InReview — @dev implementado + @qa PASS · pronto p/ @devops (push + aplicar migration 142) · **Epic:** 64 (Bolsão/SLA) · **Branch:** fix/75-106-distribuicao-sem-log-orfao · **Complexidade:** M (3 pontos)
+- **Status:** InReview — @dev + @qa PASS · PR #96 aberto · **migration 142 aplicada em prod + AC7 verificado** · aguarda merge (deploy do app code) · **Epic:** 64 (Bolsão/SLA) · **Branch:** fix/75-106-distribuicao-sem-log-orfao · **Complexidade:** M (3 pontos)
 - **executor:** @dev + @data-engineer (migration/coluna + RPC) · **quality_gate:** @qa · **quality_gate_tools:** [teste de banco no caminho REAL (lead atribuído SEM log → SLA e bolsão passam a enxergá-lo), typecheck, lint]
 - **Prioridade:** 🟠 ALTA — produção: um lead distribuído a um corretor pode ficar **permanentemente invisível** ao SLA e ao bolsão (nunca alerta, nunca vai pro pool). Caso real confirmado (lead Giuseppe Leggi Junior, 01/07). **Sem perda de lead**, mas o mecanismo de segurança inteiro (SLA + bolsão) falha em silêncio pra esse lead.
 
@@ -107,7 +107,15 @@ Recomendação: **A** — carimbo atômico numa coluna da própria linha do lead
 - **AC7 — teste de banco no caminho REAL (deferido):** rodar na janela da migration (txn rollback): clonar lead, `SELECT roleta_pick_and_advance(...)`, assert `distribuido_em` setado junto do `assigned_broker_id`; e simular órfão (dono + carimbo, sem log) e confirmar que `sla-alerts`/`bolsao-rebalance` o enxergam. Não rodado agora para **não** tomar lock `ACCESS EXCLUSIVE` na tabela quente `leads` (ADD COLUMN) em horário comercial. Ref. [[feedback-nao-quebrar-o-que-funciona]].
 - **Gate → PASS.** Handoff @devops (push + aplicar migration 142 na janela + rodar AC7).
 
+## Deploy (@devops Gage — 2026-07-02)
+- **Push:** branch `fix/75-106-distribuicao-sem-log-orfao` → origin. **PR #96** aberto (base `main`).
+- **Migration 142 aplicada em prod** (SQL direto — padrão do time, mesmo caminho da 128/130). Verificado: coluna `leads.distribuido_em` existe; `pg_get_functiondef` confirma o `distribuido_em = now()` no UPDATE final da RPC; backfill setou **1 lead** (teste antigo, inerte). `ADD COLUMN` nullable sem default = metadata-only (sem rewrite/lock longo).
+- **AC7 verificado em prod (txn rollback):** lead clonado sem dono → `roleta_pick_and_advance` → `assigned_broker_id` **e** `distribuido_em` setados JUNTOS (`tem_corretor=true, tem_carimbo=true`). Revertido.
+- **Efeito imediato:** a RPC já carimba `distribuido_em` em prod (main path da roleta). A proteção completa (crons `sla-alerts`/`bolsao-rebalance` + `waiting.ts` lendo `distribuido_em`, e o carimbo do atalho de continuidade) entra no **merge do PR #96 → deploy Vercel**. Até lá, o carimbo é gravado mas ainda não consumido (inofensivo).
+- **Pendente:** merge do PR #96 (deploy do app code).
+
 ## Change Log
+- 2026-07-02 — @devops (Gage) — Push + PR #96 + migration 142 aplicada em prod + AC7 verificado (txn rollback). RPC já carimba distribuido_em em prod. App code aguarda merge → deploy Vercel.
 - 2026-07-02 — @qa (Quinn) — Gate PASS. 14/14 testes, tsc 0, eslint 0, backfill preview inerte (1 lead antigo). Teste real da RPC (AC7) deferido à aplicação da migration. Status InReview. Handoff @devops.
 - 2026-07-02 — @dev (Dex) — Opção A implementada (migration 142 + distributor + waiting + 2 crons + testes). 14/14, tsc 0, lint 0. Status InReview.
 - 2026-07-02 — @po (Pax) — `*validate-story-draft`: GO 10/10. Opção A confirmada pelo dono do produto. Status Draft → Ready. Handoff @dev.
