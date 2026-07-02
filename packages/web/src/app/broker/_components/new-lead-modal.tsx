@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, X } from "lucide-react"
+import { SOURCE_OPTIONS } from "@web/lib/constants"
 
 interface Property { id: string; name: string }
 interface Stage { id: string; name: string; color: string }
@@ -24,6 +25,8 @@ export function NewLeadModal({
     name: "",
     phone: "",
     email: "",
+    source: "other", // default "Carteira Própria / Ação Externa" — origem mais comum no cadastro do corretor
+    utm_campaign: "",
     property_interest_id: "",
     stage_id: "",
   })
@@ -37,7 +40,7 @@ export function NewLeadModal({
   }, [open])
 
   function reset() {
-    setForm({ name: "", phone: "", email: "", property_interest_id: "", stage_id: "" })
+    setForm({ name: "", phone: "", email: "", source: "other", utm_campaign: "", property_interest_id: "", stage_id: "" })
     setError(null)
   }
 
@@ -54,6 +57,8 @@ export function NewLeadModal({
         name: form.name || null,
         phone: form.phone,
         email: form.email || null,
+        source: form.source || null,
+        utm_campaign: form.utm_campaign || null,
         property_interest_id: form.property_interest_id || null,
         stage_id: form.stage_id || null,
       }),
@@ -128,6 +133,30 @@ export function NewLeadModal({
                   value={form.email}
                   onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
                   placeholder="email@exemplo.com"
+                  className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">Origem</label>
+                <select
+                  value={form.source}
+                  onChange={(e) => setForm(f => ({ ...f, source: e.target.value }))}
+                  className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                >
+                  {SOURCE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">Campanha / Observação</label>
+                <input
+                  type="text"
+                  value={form.utm_campaign}
+                  onChange={(e) => setForm(f => ({ ...f, utm_campaign: e.target.value }))}
+                  placeholder="Ex: Ação de rua Shopping, Indicação João"
                   className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                 />
               </div>
