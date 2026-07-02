@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation"
-import { Rocket } from "lucide-react"
 import { getServerUser } from "@web/lib/auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { canAccess } from "@web/lib/permissions"
+import { LancamentosManager } from "./_components/lancamentos-manager"
+import type { Lancamento } from "@web/lib/lancamentos/lancamentos"
 
-// Épico Lançamentos — Story Lançamentos-01 (Fundação). Página inicial gated pelo
-// módulo "lancamentos". Placeholder: o índice real (grid de lançamentos + criar)
-// entra na Story Lançamentos-02. Mantém a rota navegável desde a fundação.
+// Épico Lançamentos — Story Lançamentos-02. Índice: grid de lançamentos (cada um abre seu board).
+// Tabela lancamentos tem RLS sem policy → leitura via admin client após o gate do módulo.
 export const dynamic = "force-dynamic"
+
+type Row = Lancamento & { properties?: { name: string | null } | null }
 
 export default async function LancamentosPage() {
   const user = await getServerUser()
@@ -14,23 +17,29 @@ export default async function LancamentosPage() {
     redirect("/dashboard")
   }
 
+  const admin = createAdminClient()
+  const [{ data: lancData }, { data: propData }] = await Promise.all([
+    admin
+      .from("lancamentos")
+      .select("*, properties:property_interest_id(name)")
+      .eq("org_id", user.orgId)
+      .order("created_at", { ascending: false }),
+    admin
+      .from("properties")
+      .select("id, name")
+      .eq("org_id", user.orgId)
+      .order("name", { ascending: true }),
+  ])
+
+  const lancamentos: Lancamento[] = ((lancData ?? []) as Row[]).map((r) => ({
+    ...r,
+    empreendimento_nome: r.properties?.name ?? null,
+  }))
+  const empreendimentos = (propData ?? []) as { id: string; name: string }[]
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-white">
-          Lançamentos
-        </h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Quadros de cada empreendimento em lançamento.
-        </p>
-      </div>
-
-      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-stone-300 py-20 text-center dark:border-stone-700">
-        <Rocket className="h-9 w-9 text-stone-400" />
-        <p className="text-sm text-stone-500 dark:text-stone-400">
-          O módulo está sendo montado. Em breve você poderá criar lançamentos por aqui.
-        </p>
-      </div>
+      <LancamentosManager initial={lancamentos} empreendimentos={empreendimentos} />
     </div>
   )
 }
