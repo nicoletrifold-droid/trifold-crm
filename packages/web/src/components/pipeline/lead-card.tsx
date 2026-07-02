@@ -22,6 +22,7 @@ interface LeadCardProps {
     assigned_broker_id: string | null
     created_at: string
     updated_at: string
+    last_contact_at?: string | null
     ai_summary?: string | null
     source?: string | null
     utm_campaign?: string | null
@@ -92,7 +93,10 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
     score >= 40 ? "text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-500/15" :
     "text-stone-400 bg-stone-50 dark:text-stone-400 dark:bg-stone-800"
 
-  const daysSinceContact = getDaysSinceContact(lead.updated_at)
+  // Story 75-110: "dias sem contato" = desde o ÚLTIMO CONTATO real (mensagem ou registro
+  // manual no Histórico), não desde updated_at (que não muda ao registrar contato).
+  const contactRef = lead.last_contact_at ?? lead.updated_at
+  const daysSinceContact = getDaysSinceContact(contactRef)
   const needsFollowUp = daysSinceContact > 2
   const isUrgent = daysSinceContact > 4
 
@@ -102,7 +106,7 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
     ? "border-orange-400 dark:border-orange-500/50"
     : "border-stone-200 dark:border-stone-800"
 
-  const timeAgo = getTimeAgo(lead.updated_at)
+  const timeAgo = getTimeAgo(contactRef)
   const filledCount = getMandatoryFieldsFilled(lead)
   const totalMandatory = MANDATORY_FIELDS.length
   const fillPercent = Math.round((filledCount / totalMandatory) * 100)
