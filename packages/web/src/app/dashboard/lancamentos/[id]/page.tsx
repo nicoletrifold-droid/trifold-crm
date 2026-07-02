@@ -85,6 +85,20 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
   for (const r of (attRows ?? []) as { card_id: string }[]) {
     attCount.set(r.card_id, (attCount.get(r.card_id) ?? 0) + 1)
   }
+  const { data: frnLinkRows } = cardIds.length
+    ? await admin.from("lancamento_card_fornecedores").select("card_id").in("card_id", cardIds)
+    : { data: [] as { card_id: string }[] }
+  const frnCount = new Map<string, number>()
+  for (const r of (frnLinkRows ?? []) as { card_id: string }[]) {
+    frnCount.set(r.card_id, (frnCount.get(r.card_id) ?? 0) + 1)
+  }
+  // Lista de fornecedores da org (para o picker do cartão).
+  const { data: frnRows } = await admin
+    .from("fornecedores")
+    .select("id, nome, categoria, status")
+    .eq("org_id", user.orgId)
+    .order("nome", { ascending: true })
+  const fornecedores = (frnRows ?? []) as { id: string; nome: string; categoria: string | null; status: string }[]
 
   // Responsáveis possíveis: usuários internos (não-cliente) ativos.
   const { data: memberRows } = await admin
@@ -112,6 +126,7 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
         checklist_total: chkTotal.get(k.id) ?? 0,
         checklist_done: chkDone.get(k.id) ?? 0,
         attachment_count: attCount.get(k.id) ?? 0,
+        fornecedor_count: frnCount.get(k.id) ?? 0,
       })),
   }))
 
@@ -139,7 +154,7 @@ export default async function LancamentoBoardPage({ params }: { params: Promise<
         </span>
       </div>
 
-      <LancamentoBoard lancamentoId={id} initialColumns={columns} members={members} />
+      <LancamentoBoard lancamentoId={id} initialColumns={columns} members={members} fornecedores={fornecedores} />
     </div>
   )
 }
