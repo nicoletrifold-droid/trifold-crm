@@ -7,6 +7,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { createClient } from "@web/lib/supabase/server"
 import { canAccess } from "@web/lib/permissions"
 import { SOURCE_OPTIONS } from "@web/lib/constants"
+import { FINALIDADE_OPTIONS, PRAZO_COMPRA_OPTIONS, FORMA_PAGAMENTO_OPTIONS } from "@web/lib/leads/enrich"
 
 async function createLead(formData: FormData) {
   "use server"
@@ -42,6 +43,13 @@ async function createLead(formData: FormData) {
   const utmCampaign = formData.get("utm_campaign")?.toString().trim() || null
   const propertyId  = formData.get("property_interest_id")?.toString() || null
 
+  // Story 75-113 — enriquecimento do perfil no cadastro manual (mesmos campos do Editar Lead).
+  const finalidade     = formData.get("finalidade")?.toString() || null
+  const orcamento      = formData.get("orcamento")?.toString().trim() || null
+  const prazoCompra    = formData.get("prazo_compra")?.toString() || null
+  const formaPagamento = formData.get("forma_pagamento")?.toString() || null
+  const observacao     = formData.get("observacao")?.toString().trim() || null
+
   if (!phone && !name) {
     return // validação básica
   }
@@ -62,6 +70,11 @@ async function createLead(formData: FormData) {
         qualification_status: "not_started",
         is_active:           true,
         property_interest_id: propertyId || null,
+        finalidade,
+        orcamento,
+        prazo_compra:        prazoCompra,
+        forma_pagamento:     formaPagamento,
+        observacao,
       },
       { onConflict: "org_id,phone_normalized", ignoreDuplicates: false }
     )
@@ -194,6 +207,39 @@ export default async function NewLeadPage() {
             </select>
           </div>
         )}
+
+        {/* Story 75-113 — enriquecimento do perfil */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div>
+            <label htmlFor="finalidade" className={labelCls}>Finalidade</label>
+            <select id="finalidade" name="finalidade" className={inputCls}>
+              {FINALIDADE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="orcamento" className={labelCls}>Orçamento / faixa de preço</label>
+            <input id="orcamento" name="orcamento" type="text" placeholder="Ex: até R$ 450 mil" className={inputCls} />
+          </div>
+          <div>
+            <label htmlFor="prazo_compra" className={labelCls}>Prazo de compra</label>
+            <select id="prazo_compra" name="prazo_compra" className={inputCls}>
+              {PRAZO_COMPRA_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="forma_pagamento" className={labelCls}>Forma de pagamento</label>
+            <select id="forma_pagamento" name="forma_pagamento" className={inputCls}>
+              {FORMA_PAGAMENTO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Observação */}
+        <div>
+          <label htmlFor="observacao" className={labelCls}>Observação</label>
+          <textarea id="observacao" name="observacao" rows={3}
+            placeholder="Anotações livres sobre o lead (perfil, contexto, o que foi conversado…)" className={inputCls} />
+        </div>
 
         {/* Corretor — só para admin/supervisor/gerente */}
         {isAdminLike && brokers.length > 0 && (
