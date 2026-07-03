@@ -196,6 +196,10 @@ export async function GET(request: NextRequest) {
 
     if (!stage) continue
 
+    // Story 75-118: lead em Perdido é terminal para a automação — a Nicole não
+    // manda follow-up de lead perdido. Pula qualquer regra que aponte para Perdido.
+    if (rule.stage_id === STAGE_IDS.perdido) continue
+
     // Find leads in this stage
     const { data: leads } = await supabase
       .from("leads")

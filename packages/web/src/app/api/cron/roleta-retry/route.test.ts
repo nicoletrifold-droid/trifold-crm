@@ -19,25 +19,29 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { loadLeadInboundForClassification } from "@web/lib/roleta/classify-lead"
 import { classifyContactIntent } from "@trifold/ai"
+import { STAGE_IDS } from "@trifold/shared"
 import { GET } from "./route"
 
 const eqCalls: [string, unknown][] = []
 const isCalls: [string, unknown][] = []
+const neqCalls: [string, unknown][] = []
 const gteCalls: [string, unknown][] = []
 const updateCalls: unknown[] = []
 
 function makeAdminClient(
   leads: { id: string; org_id: string; name: string }[],
-  current: Record<string, unknown> = { assigned_broker_id: null, bolsao_em: null },
+  current: Record<string, unknown> = { assigned_broker_id: null, bolsao_em: null, segmento: "principal", stage_id: STAGE_IDS.novo },
 ) {
   eqCalls.length = 0
   isCalls.length = 0
+  neqCalls.length = 0
   gteCalls.length = 0
   updateCalls.length = 0
 
   const chain = {
     eq: vi.fn((c: string, v: unknown) => { eqCalls.push([c, v]); return chain }),
     is: vi.fn((c: string, v: unknown) => { isCalls.push([c, v]); return chain }),
+    neq: vi.fn((c: string, v: unknown) => { neqCalls.push([c, v]); return chain }),
     gte: vi.fn((c: string, v: unknown) => { gteCalls.push([c, v]); return chain }),
     order: vi.fn(() => chain),
     limit: vi.fn(() => Promise.resolve({ data: leads, error: null })),
@@ -86,10 +90,34 @@ describe("roleta-retry cron (Story 71-1)", () => {
     expect(body.distributed).toBe(2)
   })
 
-  it("NÃO aplica filtro stage_id", async () => {
+  it("NÃO restringe a uma etapa específica (sem eq stage_id)", async () => {
     vi.mocked(createAdminClient).mockReturnValue(makeAdminClient([]) as never)
     await GET(makeRequest())
     expect(eqCalls.find(([c]) => c === "stage_id")).toBeUndefined()
+  })
+
+  // Story 75-118 — Perdido terminal: o cron exclui leads em Perdido dos candidatos.
+  it("exclui Perdido dos candidatos (neq stage_id = perdido)", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(makeAdminClient([]) as never)
+    await GET(makeRequest())
+    const f = neqCalls.find(([c]) => c === "stage_id")
+    expect(f).toBeDefined()
+    expect(f![1]).toBe(STAGE_IDS.perdido)
+  })
+
+  it("re-check: lead marcado Perdido no meio-tempo é pulado, NÃO distribui", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient(
+        [{ id: "l1", org_id: "o1", name: "A" }],
+        { assigned_broker_id: null, bolsao_em: null, segmento: "principal", stage_id: STAGE_IDS.perdido },
+      ) as never,
+    )
+
+    const res = await GET(makeRequest())
+    const body = await res.json()
+
+    expect(distributeLeadToNextBroker).not.toHaveBeenCalled()
+    expect(body.skipped).toBe(1)
   })
 
   it("aplica assigned_broker_id IS NULL", async () => {
@@ -113,7 +141,7 @@ describe("roleta-retry cron (Story 71-1)", () => {
     vi.mocked(createAdminClient).mockReturnValue(
       makeAdminClient(
         [{ id: "l1", org_id: "o1", name: "A" }],
-        { assigned_broker_id: null, bolsao_em: "2026-06-30T22:50:14.000Z" },
+        { assigned_broker_id: null, bolsao_em: "2026-06-30T22:50:14.000Z", segmento: "principal", stage_id: STAGE_IDS.novo },
       ) as never,
     )
 
