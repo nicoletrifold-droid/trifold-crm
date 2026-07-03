@@ -29,6 +29,7 @@ import {
   Handshake,
   FolderClosed,
   Rocket,
+  BookOpen,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -247,9 +248,27 @@ export default async function DashboardLayout({
   // Story 75-104 — módulo Pastas (upload de documentos por link). Gate via matriz.
   const showPastas = Boolean(permissions["pastas"])
   const pastasItem = { href: "/dashboard/pastas", label: "Pastas", icon: <FolderClosed className={ICON_SIZE} /> }
+  // Story 75-117 — módulo Central de Materiais (link externo p/ materiais de marketing).
+  // Gate via matriz. URL configurável em organizations.settings.materiais_url; se vazia,
+  // aponta p/ página interna de aviso (nunca link quebrado).
+  const showMateriais = Boolean(permissions["materiais"])
+  const materiaisUrl = showMateriais
+    ? await supabase
+        .from("organizations")
+        .select("settings")
+        .eq("id", user.orgId)
+        .single()
+        .then(({ data }) =>
+          ((data?.settings as Record<string, string> | null)?.materiais_url ?? "").trim()
+        )
+    : ""
+  const materiaisItem = materiaisUrl
+    ? { href: materiaisUrl, label: "Central de Materiais", icon: <BookOpen className={ICON_SIZE} />, external: true }
+    : { href: "/dashboard/materiais", label: "Central de Materiais", icon: <BookOpen className={ICON_SIZE} /> }
   const afterRoleta = [
     ...(showBolsao ? [bolsaoItem] : []),
     ...(showFluxo ? [fluxoItem] : []),
+    ...(showMateriais ? [materiaisItem] : []),
     ...(showImob ? [imobItem] : []),
     ...(showPastas ? [pastasItem] : []),
   ]

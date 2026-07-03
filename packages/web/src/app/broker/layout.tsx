@@ -1,8 +1,9 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { SidebarNav } from "@web/components/layout/sidebar-nav"
-import { LayoutDashboard, Users, Kanban, CalendarDays, Building2, Smartphone, CreditCard, MessageSquarePlus, MessageCircle, Container } from "lucide-react"
+import { SidebarNav, type NavItem } from "@web/components/layout/sidebar-nav"
+import { LayoutDashboard, Users, Kanban, CalendarDays, Building2, Smartphone, CreditCard, MessageSquarePlus, MessageCircle, Container, BookOpen } from "lucide-react"
+import { getUserPermissions } from "@web/lib/permissions"
 import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
@@ -94,7 +95,7 @@ export default async function BrokerLayout({
 
   // Badges: Agenda (compromissos), Chat (não-lidas, verde — Story 63-19),
   // Meus Leads (novos distribuídos — Story 75-8), Bolsão (pool — Story 75-83).
-  const navItems = NAV_ITEMS.map((item) => {
+  const navItems: NavItem[] = NAV_ITEMS.map((item) => {
     if (item.href === "/broker/agenda") return { ...item, badge: agendaCount ?? 0 }
     if (item.href === "/broker/chat")
       return { ...item, badge: chatUnread, badgeTone: "green" as const }
@@ -102,6 +103,32 @@ export default async function BrokerLayout({
     if (item.href === "/broker/bolsao") return { ...item, badge: bolsaoCount ?? 0 }
     return item
   })
+
+  // Story 75-117 — Central de Materiais (link externo). Gate pela matriz de Perfil
+  // de Acesso (corretor liberado por padrão). URL em organizations.settings.materiais_url;
+  // sem URL, o item não aparece no app do corretor (a config é feita no dashboard).
+  const permissions = await getUserPermissions(user.id, user.orgId)
+  if (permissions["materiais"]) {
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("settings")
+      .eq("id", user.orgId)
+      .single()
+    const materiaisUrl = ((org?.settings as Record<string, string> | null)?.materiais_url ?? "").trim()
+    if (materiaisUrl) {
+      const materiaisItem: NavItem = {
+        href: materiaisUrl,
+        label: "Central de Materiais",
+        icon: <BookOpen className={ICON_SIZE} />,
+        external: true,
+      }
+      const fluxoIdx = navItems.findIndex(
+        (item) => item.href === "https://corretor-trifold.streamlit.app"
+      )
+      if (fluxoIdx >= 0) navItems.splice(fluxoIdx + 1, 0, materiaisItem)
+      else navItems.push(materiaisItem)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">

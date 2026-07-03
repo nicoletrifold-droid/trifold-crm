@@ -63,6 +63,12 @@ const CONFIG_CARDS = [
     title: "Perfil de Acesso",
     description: "Permissões por perfil de usuário",
   },
+  {
+    href: "/dashboard/configuracoes/materiais",
+    icon: "◲",
+    title: "Central de Materiais",
+    description: "Link dos materiais de marketing para os corretores",
+  },
 ]
 
 // Cards visíveis para gerente-comercial

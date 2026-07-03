@@ -8,7 +8,7 @@ import { MoreHorizontal } from "lucide-react"
 import { LogoutButton } from "./logout-button"
 import { ThemeToggle } from "@web/components/theme-toggle"
 
-interface NavItem {
+export interface NavItem {
   href: string
   label: string
   icon: React.ReactNode

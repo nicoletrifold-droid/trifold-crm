@@ -19,6 +19,7 @@ export const ALL_MODULES: readonly string[] = [
   "imoveis",
   "lancamentos",
   "leads",
+  "materiais",
   "mensagens",
   "obras",
   "pastas",
@@ -54,6 +55,7 @@ export const MODULE_LABELS: Record<string, string> = {
   fluxo: "Fluxo de Pagamento",
   pastas: "Pastas",
   lancamentos: "Lançamentos",
+  materiais: "Central de Materiais",
 }
 
 export const MODULE_DESCRIPTIONS: Record<string, string> = {
@@ -82,6 +84,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   fluxo: "Fluxo de pagamento (link externo)",
   pastas: "Upload de documentos por link (pré-lançamento)",
   lancamentos: "Board de lançamentos por empreendimento + fornecedores",
+  materiais: "Materiais de marketing (artes, fotos, peças) para os corretores — link externo",
 }
 
 /**
