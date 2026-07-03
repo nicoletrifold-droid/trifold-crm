@@ -26,6 +26,11 @@ export function IosInstallPrompt({ variant = 'crm' }: IosInstallPromptProps) {
   useEffect(() => {
     if (!isIos() || isStandalone()) return
 
+    // Story 75-121: opt-out permanente. iOS (Safari) não tem API que diga
+    // "instalado mas aberto no navegador"; então o usuário que já instalou pode
+    // marcar "Já instalei" e nunca mais ver o aviso neste navegador.
+    if (localStorage.getItem('pwa-install-optout')) return
+
     const dismissedUntil = localStorage.getItem('ios-install-dismissed-until')
     if (dismissedUntil && Date.now() < Number(dismissedUntil)) return
 
@@ -65,6 +70,12 @@ export function IosInstallPrompt({ variant = 'crm' }: IosInstallPromptProps) {
       'ios-install-dismissed-until',
       String(Date.now() + days * 24 * 60 * 60 * 1000),
     )
+    setVisible(false)
+  }
+
+  // Story 75-121: "Já instalei" → nunca mais mostrar neste navegador.
+  function optOut() {
+    localStorage.setItem('pwa-install-optout', '1')
     setVisible(false)
   }
 
@@ -147,6 +158,16 @@ export function IosInstallPrompt({ variant = 'crm' }: IosInstallPromptProps) {
             Mais tarde
           </button>
         </div>
+
+        {/* Story 75-121: já instalou → não mostrar de novo */}
+        <button
+          onClick={optOut}
+          className={`mt-3 w-full text-center text-xs underline underline-offset-2 ${
+            isPortal ? 'text-stone-500 hover:text-stone-300' : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          Já instalei — não mostrar de novo
+        </button>
       </div>
     </div>
   )

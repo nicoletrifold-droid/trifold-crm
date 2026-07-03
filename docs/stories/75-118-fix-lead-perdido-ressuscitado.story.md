@@ -1,7 +1,7 @@
 # Story 75-118 — Fix: lead Perdido é terminal para automação (roleta/follow-up não podem ressuscitar)
 
 ## Metadata
-- **Status:** InReview · **Epic:** 64 (roleta/distribuição) · **Branch:** fix/75-118-lead-perdido-terminal · **Complexidade:** S-M (2-3 pontos)
+- **Status:** ✅ DONE / LIVE — PR #116 merged (953586b), migration 156 aplicada em prod · **Epic:** 64 (roleta/distribuição) · **Branch:** fix/75-118-lead-perdido-terminal · **Complexidade:** S-M (2-3 pontos)
 - **executor:** @dev + @data-engineer (migration 156) · **quality_gate:** @qa · **quality_gate_tools:** [teste de banco no caminho REAL (lead em Perdido NÃO é redistribuído pelo cron/distributor/RPC e NÃO recebe follow-up), typecheck, lint]
 - **Prioridade:** 🟠 ALTA — produção: lead marcado como **Perdido** reaparece sozinho em **"Aguardando atendimento"** (caso Sueli Morovis, print do Marcos 2026-07-03), e a Nicole segue mandando follow-up de lead perdido (Idalina: 181 follow-ups após o "perdido"). **Sem perda de lead.**
 
@@ -115,7 +115,13 @@ Lead marcado Perdido reaparece em "Aguardando atendimento" via activity `stage_c
 
 **Gate → PASS.** Pronto para @devops (push + aplicar migration 156 em prod + confirmar RPC viva).
 
+## Deploy (@devops Gage — 2026-07-03)
+- **Push:** branch `fix/75-118-lead-perdido-terminal` → origin. **PR #116** aberto e **merged** (squash `953586b`, branch deletada, base `main`).
+- **Migration 156:** aplicada em prod via SQL direto (execute_sql/Management API — padrão do time). Confirmado via `pg_get_functiondef`: RPC viva agora tem o guard `stage_id = perdido` (`tem_guard_perdido=true`) **e** mantém o guard de bolsão (`mantem_guard_bolsao=true`). **Efeito imediato:** a RPC `roleta_pick_and_advance` já recusa lead Perdido em prod, mesmo antes do deploy do app.
+- **Deploy Vercel:** disparado pelo merge do PR #116 (app code: guard do distributor, filtro do roleta-retry, guard do followup). Até o deploy concluir, a proteção da RPC já vale.
+
 ## Change Log
+- 2026-07-03 — @devops (Gage) — Push + PR #116 **merged** (953586b) + migration 156 aplicada em prod (RPC com guard de Perdido confirmado vivo, guard de bolsão preservado). Deploy Vercel disparado. Status InReview → **Done**. Story LIVE.
 - 2026-07-03 — @qa (Quinn) — Gate **PASS**. Predicados da 156 provados read-only contra lead Perdido real (guard aborta=true, update casa=false); 82/82 testes roleta+cron, tsc 0, lint 0 novo. Ressalva: antes/depois vivo da RPC → @devops no apply. Handoff → @devops (push + migration 156).
 - 2026-07-03 — @dev (Dex) — Implementado escopo (distributor + roleta-retry + followup + migration 156) + testes (17/17 + 14/14, tsc 0, lint 0 novo). Guard por `stage_id=perdido` (não `lost_reason`). Corrigido fixture pré-existente do roleta-retry test (segmento faltando). Status Ready → InProgress → InReview. Handoff → @qa.
 - 2026-07-03 — @po (Pax) — `*validate-story-draft`: **GO 10/10**. Anti-invenção conferida no código (STAGE_IDS, distributor:8/72/98/148/286, followup cron, migration 156 livre). Status Draft → **Ready**. Handoff → @dev.

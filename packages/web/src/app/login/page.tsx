@@ -128,6 +128,17 @@ function LoginContent() {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {/* Story 75-121: "Esqueceu a senha?" em destaque, logo abaixo do campo,
+                    cor de marca — antes era um texto cinza no rodapé, fácil de não achar. */}
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setView("recovery")}
+                    className="text-[13px] font-medium text-[#F27A5E] underline-offset-2 hover:text-[#f8927a] hover:underline"
+                  >
+                    Esqueceu a senha?
+                  </button>
+                </div>
               </div>
 
               {loginState?.error && (
@@ -150,16 +161,6 @@ function LoginContent() {
                   "Entrar"
                 )}
               </button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setView("recovery")}
-                  className="text-[13px] text-stone-500 underline-offset-2 hover:text-stone-300 hover:underline"
-                >
-                  Esqueceu a senha?
-                </button>
-              </div>
             </form>
           ) : recoverySent ? (
             /* ===== Sent confirmation ===== */
