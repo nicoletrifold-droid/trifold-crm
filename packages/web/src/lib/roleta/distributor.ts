@@ -12,6 +12,7 @@ export type DistributionStatus =
   | "roleta_inativa"
   | "sem_config"
   | "em_bolsao"
+  | "perdido"
 
 export interface DistributionResult {
   status: DistributionStatus
@@ -69,7 +70,7 @@ export async function distributeLeadToNextBroker(
   // 2. Fetch lead — must belong to this org
   const { data: lead } = await admin
     .from("leads")
-    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em, segmento")
+    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em, segmento, stage_id")
     .eq("id", leadId)
     .eq("org_id", orgId)
     .maybeSingle()
@@ -97,6 +98,16 @@ export async function distributeLeadToNextBroker(
   // via puxada manual (pegar_lead_bolsao). Guard ANTES de priorizar_lead_ativo/RPC.
   if (lead.bolsao_em) {
     return { status: "em_bolsao" }
+  }
+
+  // Story 75-118: lead em Perdido é TERMINAL para a automação. Nenhum caminho
+  // service-role (roleta/distributor/webhook) pode reatribuir corretor ou mexer
+  // na etapa de um lead perdido — só um usuário do sistema move um lead de Perdido
+  // (ao sair de Perdido manualmente, volta a fluir; por isso o guard é por ETAPA
+  // atual, não por lost_reason, que fica gravado mesmo após reabertura). Guard
+  // ANTES do atalho priorizar_lead_ativo e da RPC (mesmo padrão do bolsão).
+  if (lead.stage_id === STAGE_IDS.perdido) {
+    return { status: "perdido" }
   }
 
   // 3. Priorizar lead ativo — bypass da fila para manter continuidade de atendimento.

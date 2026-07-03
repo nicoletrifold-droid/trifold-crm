@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { loadLeadInboundForClassification } from "@web/lib/roleta/classify-lead"
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest) {
   // Leads ativos sem corretor dos últimos 30 dias.
   // Story 75-89: leads no bolsão (bolsao_em setado) NÃO são redistribuídos —
   // o bolsão é terminal p/ a roleta; só saem via puxada manual (pegar_lead_bolsao).
+  // Story 75-118: lead em Perdido também é terminal — nunca é redistribuído
+  // automaticamente (só volta a fluir se um usuário tirá-lo de Perdido).
   const { data: leads, error } = await admin
     .from("leads")
     .select("id, org_id, name")
@@ -47,6 +50,7 @@ export async function GET(request: NextRequest) {
     .eq("segmento", "principal") // Story 75-98: roleta nunca toca no mundo IMOB
     .is("assigned_broker_id", null)
     .is("bolsao_em", null)
+    .neq("stage_id", STAGE_IDS.perdido)
     .gte("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: true })
     .limit(MAX_PER_RUN)
@@ -70,13 +74,20 @@ export async function GET(request: NextRequest) {
   for (const lead of leads ?? []) {
     // Guard de idempotência: re-verifica antes de distribuir (execuções concorrentes).
     // Story 75-89: também pula se o lead entrou no bolsão nesse meio-tempo.
+    // Story 75-118: e pula se foi marcado como Perdido nesse meio-tempo.
     const { data: current } = await admin
       .from("leads")
-      .select("assigned_broker_id, bolsao_em, segmento")
+      .select("assigned_broker_id, bolsao_em, segmento, stage_id")
       .eq("id", lead.id)
       .maybeSingle()
 
-    if (!current || current.assigned_broker_id !== null || current.bolsao_em !== null || current.segmento !== "principal") {
+    if (
+      !current ||
+      current.assigned_broker_id !== null ||
+      current.bolsao_em !== null ||
+      current.segmento !== "principal" ||
+      current.stage_id === STAGE_IDS.perdido
+    ) {
       results.skipped++
       continue
     }

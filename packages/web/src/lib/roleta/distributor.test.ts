@@ -59,6 +59,7 @@ const VALID_LEAD = {
   phone: "11999999999",
   assigned_broker_id: null,
   bolsao_em: null,
+  stage_id: "00000000-0000-0000-0001-000000000001", // novo (não-perdido)
 }
 
 const RPC_RESULT = [
@@ -194,6 +195,25 @@ describe("distributor — stage assignment on distribution (Story 62-1)", () => 
     const result = await distributeLeadToNextBroker("lead-1", "org-1")
 
     expect(result.status).toBe("em_bolsao")
+    // não atribui, não muda stage, não roteia por continuidade
+    expect(updateCalls.find((u) => "assigned_broker_id" in u)).toBeUndefined()
+    expect(updateCalls.find((u) => "stage_id" in u)).toBeUndefined()
+  })
+
+  // Story 75-118 — Perdido terminal: lead em Perdido NÃO é redistribuído pela roleta.
+  it("returns perdido and does NOT distribute a lead in the Perdido stage", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient({
+        lead: { ...VALID_LEAD, stage_id: "00000000-0000-0000-0001-000000000008" },
+        // priorizar_lead_ativo ligado + telefone com dono em outro lead: mesmo assim NÃO pode roteá-lo.
+        config: { ...VALID_CONFIG, priorizar_lead_ativo: true },
+        existingLead: { assigned_broker_id: "outro-corretor" },
+      }) as never
+    )
+
+    const result = await distributeLeadToNextBroker("lead-1", "org-1")
+
+    expect(result.status).toBe("perdido")
     // não atribui, não muda stage, não roteia por continuidade
     expect(updateCalls.find((u) => "assigned_broker_id" in u)).toBeUndefined()
     expect(updateCalls.find((u) => "stage_id" in u)).toBeUndefined()
