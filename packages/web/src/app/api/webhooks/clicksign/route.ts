@@ -51,6 +51,17 @@ async function downloadSignedPdf(
 
 export async function POST(req: Request) {
   const rawBody = await req.text()
+
+  // DEBUG TEMPORÁRIO (Story 75-120) — captura headers+body reais da Clicksign p/
+  // acertar header do HMAC + parser. REMOVER após diagnóstico.
+  try {
+    const hdrs: Record<string, string> = {}
+    req.headers.forEach((v, k) => { hdrs[k] = v })
+    await createAdminClient().from("clicksign_webhook_debug").insert({ headers: hdrs, body: rawBody })
+  } catch (e) {
+    console.error("[clicksign] debug insert falhou", e)
+  }
+
   const hmacHeader = req.headers.get("content-hmac") ?? req.headers.get("Content-Hmac")
 
   if (!verifyClicksignHmac(rawBody, hmacHeader, process.env.CLICKSIGN_WEBHOOK_HMAC_SECRET)) {
