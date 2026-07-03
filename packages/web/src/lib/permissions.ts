@@ -80,6 +80,7 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         atividades: true,
         treinamento: true,
         chamados: true,
+        materiais: true, // Story 75-117 — Central de Materiais (corretor vê por padrão)
       }
 
     case "obras":
