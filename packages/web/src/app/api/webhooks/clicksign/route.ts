@@ -49,16 +49,6 @@ async function downloadSignedPdf(
   }
 }
 
-// DIAGNÓSTICO TEMPORÁRIO (Story 75-120) — remover após validar env no runtime.
-export async function GET() {
-  return NextResponse.json({
-    token: Boolean(process.env.CLICKSIGN_API_TOKEN),
-    baseUrl: Boolean(process.env.CLICKSIGN_API_BASE_URL),
-    hmac: Boolean(process.env.CLICKSIGN_WEBHOOK_HMAC_SECRET),
-    hmacLen: (process.env.CLICKSIGN_WEBHOOK_HMAC_SECRET ?? "").length,
-  })
-}
-
 export async function POST(req: Request) {
   const rawBody = await req.text()
   const hmacHeader = req.headers.get("content-hmac") ?? req.headers.get("Content-Hmac")
