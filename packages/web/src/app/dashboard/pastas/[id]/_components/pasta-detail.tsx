@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Copy, Check, Download, Loader2, Paperclip, Trash2 } from "lucide-react"
+import { ArrowLeft, Copy, Check, Download, Loader2, Paperclip, Trash2, FileSignature, X } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 
 interface Doc {
@@ -14,6 +14,30 @@ interface Doc {
   situacao: string
   filename: string | null
   uploaded_at: string | null
+}
+
+interface Signature {
+  id: string
+  status: string
+  hasSigned: boolean
+}
+
+// Story 75-120 — status da assinatura eletrônica (Clicksign) por documento.
+const ASSINATURA_LABEL: Record<string, string> = {
+  running: "Aguardando assinatura",
+  signed: "Assinado",
+  closed: "Assinado",
+  refused: "Recusado",
+  canceled: "Cancelado",
+  error: "Erro",
+}
+const ASSINATURA_CLASS: Record<string, string> = {
+  running: "text-amber-600 dark:text-amber-400",
+  signed: "text-emerald-600 dark:text-emerald-400",
+  closed: "text-emerald-600 dark:text-emerald-400",
+  refused: "text-red-600 dark:text-red-400",
+  canceled: "text-gray-500 dark:text-stone-400",
+  error: "text-red-600 dark:text-red-400",
 }
 
 const SITUACAO_LABEL: Record<string, string> = {
@@ -29,12 +53,29 @@ const SITUACAO_CLASS: Record<string, string> = {
   recusado: "text-red-600 dark:text-red-400",
 }
 
+// Procura e-mail/telefone nas informações preenchidas da pasta (chaves variam).
+function guessFromFormData(formData: Record<string, string>, kind: "email" | "phone"): string {
+  const entries = Object.entries(formData)
+  for (const [k, v] of entries) {
+    const key = k.toLowerCase()
+    if (kind === "email" && (key.includes("mail") || /@/.test(v))) return v
+    if (kind === "phone" && (key.includes("tel") || key.includes("cel") || key.includes("whats") || key.includes("fone"))) return v
+  }
+  return ""
+}
+
 export function PastaDetail({
   pasta,
   docs,
+  signatures = {},
+  clicksignEnabled = false,
+  clicksignSandbox = false,
 }: {
   pasta: { id: string; nome: string; tipo: string; empreendimento: string | null; token: string; formData: Record<string, string> }
   docs: Doc[]
+  signatures?: Record<string, Signature>
+  clicksignEnabled?: boolean
+  clicksignSandbox?: boolean
 }) {
   const router = useRouter()
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -42,6 +83,64 @@ export function PastaDetail({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const inputs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  // Modal "Enviar para assinatura"
+  const [signDoc, setSignDoc] = useState<Doc | null>(null)
+  const [signName, setSignName] = useState("")
+  const [signEmail, setSignEmail] = useState("")
+  const [signPhone, setSignPhone] = useState("")
+  const [signAuth, setSignAuth] = useState("email")
+  const [signing, setSigning] = useState(false)
+  const [signError, setSignError] = useState<string | null>(null)
+
+  function openSignModal(doc: Doc) {
+    setSignDoc(doc)
+    setSignName(pasta.nome)
+    setSignEmail(guessFromFormData(pasta.formData, "email"))
+    setSignPhone(guessFromFormData(pasta.formData, "phone"))
+    setSignAuth("email")
+    setSignError(null)
+  }
+
+  async function submitSignature() {
+    if (!signDoc) return
+    setSigning(true)
+    setSignError(null)
+    try {
+      const res = await fetch(`/api/pastas/${pasta.id}/documentos/${signDoc.id}/assinatura`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signer_name: signName,
+          signer_email: signEmail,
+          signer_phone: signPhone,
+          auth_method: signAuth,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok) {
+        setSignDoc(null)
+        router.refresh()
+      } else {
+        setSignError(data?.error ?? "Falha ao enviar para assinatura")
+      }
+    } catch {
+      setSignError("Falha de conexão")
+    } finally {
+      setSigning(false)
+    }
+  }
+
+  async function downloadSigned(sig: Signature) {
+    setBusyId(sig.id)
+    try {
+      const res = await fetch(`/api/pastas/${pasta.id}/assinatura/${sig.id}/signed-url`)
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) window.open(data.url, "_blank")
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const link = typeof window !== "undefined" ? `${window.location.origin}/pasta/${pasta.token}` : ""
 
@@ -154,6 +253,7 @@ export function PastaDetail({
           <ul className="divide-y divide-gray-100 dark:divide-stone-800">
             {docs.filter((d) => d.titular === t).map((doc) => {
               const uploaded = doc.situacao !== "pendente"
+              const sig = signatures[doc.id]
               return (
                 <li key={doc.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
@@ -194,6 +294,27 @@ export function PastaDetail({
                       Recusar
                     </button>
                   )}
+                  {/* Story 75-120 — assinatura eletrônica */}
+                  {uploaded && !sig && clicksignEnabled && (
+                    <button onClick={() => openSignModal(doc)} disabled={busyId === doc.id}
+                      className="flex items-center gap-1 rounded-md border border-indigo-200 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 dark:border-indigo-500/30 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
+                      <FileSignature className="h-3.5 w-3.5" />
+                      Enviar p/ assinatura
+                    </button>
+                  )}
+                  {sig && (
+                    <span className={`flex items-center gap-1.5 text-xs font-medium ${ASSINATURA_CLASS[sig.status] ?? "text-gray-500"}`}>
+                      <FileSignature className="h-3.5 w-3.5" />
+                      {ASSINATURA_LABEL[sig.status] ?? sig.status}
+                      {sig.hasSigned && (
+                        <button onClick={() => downloadSigned(sig)} disabled={busyId === sig.id}
+                          className="ml-1 inline-flex items-center gap-1 rounded border border-emerald-200 px-1.5 py-0.5 text-[11px] text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
+                          {busyId === sig.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                          Assinado
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </li>
               )
             })}
@@ -212,6 +333,67 @@ export function PastaDetail({
               </div>
             ))}
           </dl>
+        </div>
+      )}
+
+      {/* Story 75-120 — modal "Enviar para assinatura" */}
+      {signDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !signing && setSignDoc(null)}>
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-stone-100">Enviar para assinatura</h3>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">{signDoc.label}</p>
+              </div>
+              {clicksignSandbox && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">Teste</span>
+              )}
+              <button onClick={() => !signing && setSignDoc(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-stone-200">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600 dark:text-stone-300">Nome do signatário</span>
+                <input value={signName} onChange={(e) => setSignName(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600 dark:text-stone-300">E-mail</span>
+                <input type="email" value={signEmail} onChange={(e) => setSignEmail(e.target.value)} placeholder="email@exemplo.com"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600 dark:text-stone-300">Telefone (WhatsApp/SMS)</span>
+                <input value={signPhone} onChange={(e) => setSignPhone(e.target.value)} placeholder="(00) 00000-0000"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-gray-600 dark:text-stone-300">Autenticação</span>
+                <select value={signAuth} onChange={(e) => setSignAuth(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100">
+                  <option value="email">E-mail</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="sms">SMS</option>
+                </select>
+              </label>
+              <p className="text-[11px] text-gray-400 dark:text-stone-500">Informe e-mail ou telefone. O signatário recebe o convite direto da Clicksign.</p>
+              {signError && <p className="text-xs text-red-600 dark:text-red-400">{signError}</p>}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setSignDoc(null)} disabled={signing}
+                className="rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800">
+                Cancelar
+              </button>
+              <button onClick={submitSignature} disabled={signing}
+                className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
+                Enviar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
