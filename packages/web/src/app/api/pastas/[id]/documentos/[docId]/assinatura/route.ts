@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { isPastaManager } from "@web/lib/pastas/roles"
 import { sendDocumentForSignature } from "@web/lib/clicksign/client"
 
@@ -66,8 +67,10 @@ export async function POST(
   }
   const pasta = (doc as unknown as { pasta: { id: string; nome: string; org_id: string; empreendimento: string | null } }).pasta
 
-  // Baixa o arquivo do bucket privado e converte para data URI base64.
-  const { data: file, error: dlErr } = await supabase.storage.from("pastas").download(doc.storage_path)
+  // Baixa o arquivo do bucket privado (só acessível via service role) e converte
+  // para data URI base64. A autorização já foi checada acima via RLS (query do doc).
+  const admin = createAdminClient()
+  const { data: file, error: dlErr } = await admin.storage.from("pastas").download(doc.storage_path)
   if (dlErr || !file) {
     return NextResponse.json({ error: "Falha ao ler o arquivo do documento" }, { status: 500 })
   }
