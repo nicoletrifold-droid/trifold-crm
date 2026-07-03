@@ -179,9 +179,12 @@ export default async function ConversationDetailPage({
                 align: "justify-start",
                 bubble: "bg-gray-100 text-gray-800 dark:bg-stone-800 dark:text-stone-200",
               }
+              // Story 75-119 — mensagens de humano são gravadas com role="broker"
+              // independente do cargo (corretor, gerente de relacionamento, admin…).
+              // Exibir só o nome de quem enviou evita rotular todo mundo como "Corretor".
               const displayLabel =
                 msg.role === "broker"
-                  ? `Corretor${brokerNames[msg.metadata?.sent_by as string] ? " · " + brokerNames[msg.metadata?.sent_by as string] : ""}`
+                  ? brokerNames[msg.metadata?.sent_by as string] ?? "Equipe"
                   : config.label
 
               return (
