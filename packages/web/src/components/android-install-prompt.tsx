@@ -38,28 +38,57 @@ export function AndroidInstallPrompt({ variant = 'crm' }: AndroidInstallPromptPr
   useEffect(() => {
     if (skip || !isAndroid() || isStandalone()) return
 
+    // Story 75-121: opt-out permanente ("Já instalei") — nunca mais mostrar neste navegador.
+    if (localStorage.getItem('pwa-install-optout')) return
+
     const dismissed = localStorage.getItem(DISMISS_KEY)
     if (dismissed && Date.now() < Number(dismissed)) return
 
-    // Captura o evento nativo do Chrome (permite acionar a instalação direto)
-    const handleBeforeInstall = (e: Event) => {
-      e.preventDefault()
-      deferredPrompt.current = e as BeforeInstallPromptEvent
-      setHasNativePrompt(true)
-    }
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall)
-
+    let cancelled = false
     let scrolled = false
-    function show() { setVisible(true) }
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    function show() { if (!cancelled) setVisible(true) }
     function handleScroll() {
       if (!scrolled && window.scrollY > 200) { scrolled = true; show() }
     }
 
-    const timer = setTimeout(show, 5_000)
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    // Chrome dispara beforeinstallprompt SÓ quando o app é instalável (⇒ NÃO instalado).
+    // Mostrar o modal aqui evita reaparecer para quem já instalou (Chrome não dispara).
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault()
+      deferredPrompt.current = e as BeforeInstallPromptEvent
+      setHasNativePrompt(true)
+      show()
+    }
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+
+    // Fallback p/ navegadores Android SEM beforeinstallprompt (ex.: não-Chrome):
+    // passo a passo manual por timer/scroll. Só é armado quando NÃO detectamos o app instalado.
+    function armManualFallback() {
+      timer = setTimeout(show, 5_000)
+      window.addEventListener('scroll', handleScroll, { passive: true })
+    }
+
+    // Story 75-121: se o Chrome souber que o PWA já está instalado, não mostrar nada.
+    // getInstalledRelatedApps exige related_applications (self) no manifest; feature-detect.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nav = navigator as any
+    if (typeof nav.getInstalledRelatedApps === 'function') {
+      nav.getInstalledRelatedApps()
+        .then((apps: unknown[]) => {
+          if (cancelled) return
+          if (apps && apps.length > 0) return // já instalado → não arma fallback nem mostra
+          armManualFallback()
+        })
+        .catch(() => { if (!cancelled) armManualFallback() })
+    } else {
+      armManualFallback()
+    }
 
     return () => {
-      clearTimeout(timer)
+      cancelled = true
+      if (timer) clearTimeout(timer)
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
     }
@@ -77,6 +106,12 @@ export function AndroidInstallPrompt({ variant = 'crm' }: AndroidInstallPromptPr
 
   function dismiss(days: number) {
     localStorage.setItem(DISMISS_KEY, String(Date.now() + days * 24 * 60 * 60 * 1000))
+    setVisible(false)
+  }
+
+  // Story 75-121: "Já instalei" → nunca mais mostrar neste navegador.
+  function optOut() {
+    localStorage.setItem('pwa-install-optout', '1')
     setVisible(false)
   }
 
@@ -173,6 +208,14 @@ export function AndroidInstallPrompt({ variant = 'crm' }: AndroidInstallPromptPr
             Mais tarde
           </button>
         </div>
+
+        {/* Story 75-121: já instalou → não mostrar de novo */}
+        <button
+          onClick={optOut}
+          className={`mt-3 w-full text-center text-xs underline underline-offset-2 ${laterText}`}
+        >
+          Já instalei — não mostrar de novo
+        </button>
       </div>
     </div>
   )

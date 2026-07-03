@@ -75,5 +75,8 @@
       "description": "Ver meus leads como corretor"
     }
   ],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "related_applications": [
+    { "platform": "webapp", "url": "https://crm.trifold.eng.br/manifest.json" }
+  ]
 }
