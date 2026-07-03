@@ -369,7 +369,9 @@ export default async function LeadDetailPage({
                                   : msg.role === "assistant"
                                     ? "IA"
                                     : msg.role === "broker"
-                                      ? `Corretor${brokerNames[msg.metadata?.sent_by as string] ? " · " + brokerNames[msg.metadata?.sent_by as string] : ""}`
+                                      ? // Story 75-119 — só o nome de quem enviou (não "Corretor",
+                                        // que rotula errado gerente de relacionamento/admin).
+                                        brokerNames[msg.metadata?.sent_by as string] ?? "Equipe"
                                       : msg.role}
                               </div>
                               <p className="whitespace-pre-wrap">{msg.content}</p>
