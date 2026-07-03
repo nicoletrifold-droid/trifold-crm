@@ -1,7 +1,7 @@
 # Story 75-121 — "Esqueceu a senha?" mais visível + PWA não pedir instalação quando já instalado
 
 ## Metadata
-- **Status:** InReview · **Epic:** UX/Auth (avulsa) · **Branch:** fix/75-121-login-pwa · **Complexidade:** S-M (2-3 pontos)
+- **Status:** ✅ DONE / LIVE — PR #117 merged (19abde1), sem migration · **Epic:** UX/Auth (avulsa) · **Branch:** fix/75-121-login-pwa · **Complexidade:** S-M (2-3 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [typecheck, lint, teste manual mobile (iOS Safari + Android Chrome) do prompt, verificação do fluxo de recuperação de senha]
 - **Prioridade:** 🟠 ALTA — reportado pelo diretor Alexandre (áudio 2026-07-03): (a) não achou "esqueci a senha"; (b) o app pede pra instalar na tela inicial mesmo já estando instalado.
 
@@ -80,6 +80,15 @@
 - **AC6 (e-mail):** verificação de SMTP do Supabase Auth NÃO feita por código (sem tool de config de Auth); pendente check no painel Supabase OU disparo de reset real (com OK do usuário). Fallback admin de senha existe.
 
 **Não feito (delegado):** push/PR/deploy = @devops. Teste de aparelho + verificação de e-mail = @qa/ops.
+
+## Deploy (@devops Gage — 2026-07-03)
+- **Push + PR #117** → **merged** (squash `19abde1`, branch deletada, base `main`). Sem migration (app code + manifest). Deploy Vercel disparado pelo merge.
+- Commit também finalizou a doc da Story 75-118 (deploy/Done).
+- **Verificação de e-mail iniciada:** disparado `POST /auth/v1/recover` real p/ `marcos@trifold.eng.br` (publishable key; legacy anon está disabled) → **HTTP 200, sem erro do endpoint**. Confirmação de ENTREGA na caixa = pendente (usuário checar inbox/spam). Se não chegar → follow-up de SMTP dedicado.
+- **Pós-deploy manual:** teste no aparelho do Alexandre (iOS Safari + Android Chrome) + conferir prompt duplicado no broker.
+
+## Change Log
+- 2026-07-03 — @devops (Gage) — Push + PR #117 **merged** (19abde1) + deploy Vercel. Recover de e-mail testado (HTTP 200; entrega pendente de confirmação). Status InReview → **Done**. Story LIVE.
 
 ## QA Results (@qa Quinn — 2026-07-03)
 **Verdict: CONCERNS** (aprovado com observações — 2 ACs dependem de verificação manual/ops, não de código).
