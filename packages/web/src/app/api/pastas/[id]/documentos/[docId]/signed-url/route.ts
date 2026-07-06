@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { isPastaManager } from "@web/lib/pastas/roles"
 
 // GET — signed URL (1h) para o gestor abrir o arquivo do bucket privado `pastas`.
@@ -32,7 +33,10 @@ export async function GET(
   }
 
   const wantsDownload = new URL(req.url).searchParams.get("download") === "1"
-  const { data: signed, error } = await supabase.storage
+  // Bucket privado só acessível via service role (autorização já checada acima:
+  // isPastaManager + query pasta_documentos org-scoped via RLS). Story 75-132.
+  const admin = createAdminClient()
+  const { data: signed, error } = await admin.storage
     .from("pastas")
     .createSignedUrl(doc.storage_path, 3600, wantsDownload ? { download: doc.filename ?? true } : undefined)
 
