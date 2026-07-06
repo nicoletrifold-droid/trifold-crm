@@ -29,6 +29,16 @@ describe("buildDocSlots (Story 75-104)", () => {
     const pj = buildDocSlots("pj", false, true)
     expect(pj.some((x) => x.slug === "comprovante_pix")).toBe(true)
   })
+  it("União estável (Story 75-124): docs do parceiro + comprovante próprio", () => {
+    const d = buildDocSlots("pf", false, false, true)
+    // 4 docs do titular + 4 do parceiro (titular=conjuge) + comprovante de união estável
+    expect(d.filter((x) => x.titular === "conjuge")).toHaveLength(4)
+    expect(d.some((x) => x.slug === "comprovante_uniao_estavel")).toBe(true)
+    // casado normal NÃO traz o comprovante de união estável
+    expect(buildDocSlots("pf", true).some((x) => x.slug === "comprovante_uniao_estavel")).toBe(false)
+    // solteiro NÃO traz docs do parceiro
+    expect(buildDocSlots("pf", false, false, false).some((x) => x.titular === "conjuge")).toBe(false)
+  })
 })
 
 describe("buildInfoFields", () => {

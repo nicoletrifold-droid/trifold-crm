@@ -194,6 +194,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const [nome, setNome] = useState("")
   const [tipo, setTipo] = useState<"pf" | "pj">("pf")
   const [casado, setCasado] = useState(false)
+  const [uniaoEstavel, setUniaoEstavel] = useState(false)
   const [interessadoTelefone, setInteressadoTelefone] = useState("")
   const [interessadoEmail, setInteressadoEmail] = useState("")
 
@@ -228,6 +229,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           nome: nome.trim(),
           tipo,
           casado,
+          uniao_estavel: uniaoEstavel,
           empreendimento: empreendimento.trim(),
           tem_pix: temPix,
           corretor_nome: corretorNome.trim(),
@@ -383,10 +385,24 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 <input value={nome} onChange={(e) => setNome(e.target.value)} className={inputCls} />
               </label>
               {tipo === "pf" && (
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-stone-300">
-                  <input type="checkbox" checked={casado} onChange={(e) => setCasado(e.target.checked)} />
-                  Casado(a) — inclui documentos do cônjuge
-                </label>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-stone-300">
+                    <input
+                      type="checkbox"
+                      checked={casado}
+                      onChange={(e) => { setCasado(e.target.checked); if (e.target.checked) setUniaoEstavel(false) }}
+                    />
+                    Casado(a) — inclui documentos do cônjuge
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-stone-300">
+                    <input
+                      type="checkbox"
+                      checked={uniaoEstavel}
+                      onChange={(e) => { setUniaoEstavel(e.target.checked); if (e.target.checked) setCasado(false) }}
+                    />
+                    União estável — inclui docs do(a) companheiro(a) + comprovante de união estável
+                  </label>
+                </div>
               )}
               <label className="block">
                 <span className="text-xs text-gray-500 dark:text-stone-400">Telefone do comprador</span>

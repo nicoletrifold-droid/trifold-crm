@@ -1,7 +1,7 @@
 # Story 75-123 — Módulo "Pastas": novo "Nova Pasta" em wizard progressivo (corretor + comprador + documentos)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Pastas · **Branch:** feat/75-123-pastas-wizard · **Complexidade:** M (5 pontos)
+- **Status:** Done · **Epic:** Pastas · **Branch:** feat/75-123-pastas-wizard · **Complexidade:** M (5 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **Prioridade:** 🟠 melhora a criação de pasta e captura a origem (corretor/imobiliária).
 
 ## Contexto
@@ -68,6 +68,7 @@ Hoje o "Nova pasta" é um modal único (nome, empreendimento, tipo PF/PJ, casado
 - **Deploy:** migration 158 **ainda não aplicada em prod** (dev-DB pausado) → @devops aplica no push.
 
 ## Change Log
+- 2026-07-06 — @devops — Migration 158 aplicada em prod (verificada). PR #120 merjeado (squash, commit dff42e3) → deploy. **Done / LIVE.**
 - 2026-07-06 — @qa — **QA GATE: PASS**. 6 ACs verificados, 753/753, sem regressão. Observações de follow-up documentadas. Pronto p/ @devops.
 - 2026-07-06 — @dev — Implementado (migration 158 + checklist PIX + POST + wizard 3 telas). tsc/eslint 0, vitest 7/7, migration validada em ROLLBACK. Status → InReview.
 - 2026-07-06 — @po — **GO (10/10)**. Status Draft → Ready. Locadas as decisões do diretor: Tela 1 exige só nome do corretor; criação da pasta = @dev escolhe (tanto faz).
