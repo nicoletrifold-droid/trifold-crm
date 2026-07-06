@@ -22,7 +22,10 @@ export async function POST(request: NextRequest) {
 
   const nome = typeof body.nome === "string" ? body.nome.trim() : ""
   const tipo: PastaTipo = body.tipo === "pj" ? "pj" : "pf"
-  const casado = tipo === "pf" && body.casado === true
+  // Story 75-124 — casado e união estável são mutuamente exclusivos (só PF).
+  // Se ambos vierem true, união estável prevalece.
+  const uniaoEstavel = tipo === "pf" && body.uniao_estavel === true
+  const casado = tipo === "pf" && body.casado === true && !uniaoEstavel
   const temPix = body.tem_pix === true
   const empreendimento = optStr(body.empreendimento)
   // Story 75-123 — origem (texto livre, não amarra ao CRM) + contatos do interessado.
@@ -46,6 +49,7 @@ export async function POST(request: NextRequest) {
       nome,
       tipo,
       casado,
+      uniao_estavel: uniaoEstavel,
       empreendimento,
       tem_pix: temPix,
       corretor_nome: corretorNome,
@@ -64,7 +68,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error?.message ?? "Falha ao criar pasta" }, { status: 500 })
   }
 
-  const slots = buildDocSlots(tipo, casado, temPix)
+  const slots = buildDocSlots(tipo, casado, temPix, uniaoEstavel)
   const docsPayload = slots.map((s, i) => ({
     pasta_id: pasta.id,
     slug: s.slug,

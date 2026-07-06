@@ -58,8 +58,25 @@ const PIX_DOC: DocSlot = {
   titular: "interessado",
 }
 
-/** Documentos (uploads) exigidos conforme tipo/estado civil e marcação PIX. */
-export function buildDocSlots(tipo: PastaTipo, casado: boolean, temPix = false): DocSlot[] {
+// Story 75-124 — união estável exige comprovante próprio (escritura/contrato), que
+// tem validade e é distinto da certidão de casamento.
+const UNIAO_ESTAVEL_DOC: DocSlot = {
+  slug: "comprovante_uniao_estavel",
+  label: "Comprovante de união estável",
+  titular: "interessado",
+}
+
+/**
+ * Documentos (uploads) exigidos conforme tipo/estado civil e marcações.
+ * `casado` OU `uniaoEstavel` puxam os documentos do parceiro(a); união estável
+ * adiciona ainda o comprovante próprio. Só valem para PF (PJ ignora).
+ */
+export function buildDocSlots(
+  tipo: PastaTipo,
+  casado: boolean,
+  temPix = false,
+  uniaoEstavel = false,
+): DocSlot[] {
   let docs: DocSlot[]
   if (tipo === "pj") {
     docs = [
@@ -68,7 +85,8 @@ export function buildDocSlots(tipo: PastaTipo, casado: boolean, temPix = false):
     ]
   } else {
     docs = pessoaDocs("interessado")
-    if (casado) docs.push(...pessoaDocs("conjuge"))
+    if (casado || uniaoEstavel) docs.push(...pessoaDocs("conjuge"))
+    if (uniaoEstavel) docs.push(UNIAO_ESTAVEL_DOC)
   }
   if (temPix) docs.push(PIX_DOC)
   return docs
