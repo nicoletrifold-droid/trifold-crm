@@ -6,7 +6,7 @@ import Link from "next/link"
 import { ArrowLeft, Copy, Check, Download, Eye, Loader2, Paperclip, Trash2, FileSignature, X, FileText, Sparkles, CheckCircle2 } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import type { TermoData } from "@web/lib/pastas/termo/fill"
-import { computePastaStatus } from "@web/lib/pastas/status"
+import { computePastaStatus, TERMO_SLUG } from "@web/lib/pastas/status"
 import { validateSignerForm } from "@web/lib/clicksign/validation"
 
 interface Doc {
@@ -433,8 +433,8 @@ export function PastaDetail({
                       Recusar
                     </button>
                   )}
-                  {/* Story 75-120 — assinatura eletrônica */}
-                  {uploaded && !sig && clicksignEnabled && (
+                  {/* Story 75-120/136 — assinatura eletrônica: só no Termo de Intenção */}
+                  {uploaded && !sig && clicksignEnabled && doc.slug === TERMO_SLUG && (
                     <button onClick={() => openSignModal(doc)} disabled={busyId === doc.id}
                       className="flex items-center gap-1 rounded-md border border-indigo-200 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 dark:border-indigo-500/30 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
                       <FileSignature className="h-3.5 w-3.5" />
