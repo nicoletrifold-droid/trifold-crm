@@ -16,10 +16,22 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}))
+  // Sanitiza uma string opcional (trim + limite). Retorna null quando vazia.
+  const optStr = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null
+
   const nome = typeof body.nome === "string" ? body.nome.trim() : ""
   const tipo: PastaTipo = body.tipo === "pj" ? "pj" : "pf"
   const casado = tipo === "pf" && body.casado === true
-  const empreendimento = typeof body.empreendimento === "string" ? body.empreendimento.trim() || null : null
+  const temPix = body.tem_pix === true
+  const empreendimento = optStr(body.empreendimento)
+  // Story 75-123 — origem (texto livre, não amarra ao CRM) + contatos do interessado.
+  const corretorNome = optStr(body.corretor_nome)
+  const corretorTelefone = optStr(body.corretor_telefone)
+  const corretorEmail = optStr(body.corretor_email)
+  const imobiliaria = optStr(body.imobiliaria)
+  const interessadoTelefone = optStr(body.interessado_telefone)
+  const interessadoEmail = optStr(body.interessado_email)
 
   if (!nome) {
     return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
@@ -35,6 +47,13 @@ export async function POST(request: NextRequest) {
       tipo,
       casado,
       empreendimento,
+      tem_pix: temPix,
+      corretor_nome: corretorNome,
+      corretor_telefone: corretorTelefone,
+      corretor_email: corretorEmail,
+      imobiliaria,
+      interessado_telefone: interessadoTelefone,
+      interessado_email: interessadoEmail,
       token,
       created_by: appUser.id,
     })
@@ -45,7 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error?.message ?? "Falha ao criar pasta" }, { status: 500 })
   }
 
-  const slots = buildDocSlots(tipo, casado)
+  const slots = buildDocSlots(tipo, casado, temPix)
   const docsPayload = slots.map((s, i) => ({
     pasta_id: pasta.id,
     slug: s.slug,
@@ -55,12 +74,17 @@ export async function POST(request: NextRequest) {
     ordem: i,
   }))
 
-  const { error: docsError } = await supabase.from("pasta_documentos").insert(docsPayload)
+  // Story 75-123 — retorna os docs semeados p/ a Tela 3 do wizard anexar inline.
+  const { data: docs, error: docsError } = await supabase
+    .from("pasta_documentos")
+    .insert(docsPayload)
+    .select("id, slug, label, titular, situacao")
+    .order("ordem", { ascending: true })
   if (docsError) {
     // Rollback manual: remove a pasta se os docs falharem (mantém consistência).
     await supabase.from("pastas").delete().eq("id", pasta.id)
     return NextResponse.json({ error: docsError.message }, { status: 500 })
   }
 
-  return NextResponse.json({ data: { id: pasta.id, token: pasta.token } }, { status: 201 })
+  return NextResponse.json({ data: { id: pasta.id, token: pasta.token, docs: docs ?? [] } }, { status: 201 })
 }
