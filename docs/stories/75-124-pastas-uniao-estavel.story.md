@@ -1,7 +1,7 @@
 # Story 75-124 — Módulo "Pastas": estado civil "União estável" no wizard (+ comprovante próprio)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Pastas · **Branch:** feat/75-124-pastas-uniao-estavel · **Complexidade:** S (2 pontos)
+- **Status:** Done · **Epic:** Pastas · **Branch:** feat/75-124-pastas-uniao-estavel · **Complexidade:** S (2 pontos)
 - **executor:** @dev · **quality_gate:** @qa · **Prioridade:** 🟠 união estável exige comprovante próprio (com validade), distinto de casamento.
 
 ## Contexto
