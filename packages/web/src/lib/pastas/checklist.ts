@@ -31,14 +31,19 @@ export function titularLabel(t: Titular): string {
 }
 
 // Documentos de UMA pessoa física (titular, cônjuge ou representante).
-function pessoaDocs(titular: Titular): DocSlot[] {
+// Story 75-125 — o "Comprovante de estado civil" é opcional: solteiro não precisa
+// enviar (só casado/união estável). Default true mantém cônjuge/representante iguais.
+function pessoaDocs(titular: Titular, includeEstadoCivil = true): DocSlot[] {
   const suf = titular === "interessado" ? "" : `_${titular}`
-  return [
+  const docs: DocSlot[] = [
     { slug: `rg_cnh${suf}`, label: "RG ou CNH (frente e verso)", titular },
     { slug: `cpf${suf}`, label: "CPF ou CNH", titular },
-    { slug: `comprovante_estado_civil${suf}`, label: "Comprovante de estado civil", titular },
-    { slug: `comprovante_endereco${suf}`, label: "Comprovante de endereço", titular },
   ]
+  if (includeEstadoCivil) {
+    docs.push({ slug: `comprovante_estado_civil${suf}`, label: "Comprovante de estado civil", titular })
+  }
+  docs.push({ slug: `comprovante_endereco${suf}`, label: "Comprovante de endereço", titular })
+  return docs
 }
 
 function pessoaInfos(titular: Titular): InfoField[] {
@@ -84,7 +89,8 @@ export function buildDocSlots(
       ...pessoaDocs("representante"),
     ]
   } else {
-    docs = pessoaDocs("interessado")
+    // Story 75-125 — solteiro não envia comprovante de estado civil.
+    docs = pessoaDocs("interessado", casado || uniaoEstavel)
     if (casado || uniaoEstavel) docs.push(...pessoaDocs("conjuge"))
     if (uniaoEstavel) docs.push(UNIAO_ESTAVEL_DOC)
   }
