@@ -15,6 +15,9 @@
  *  - Prefixo `tg:` para chat_id Telegram: webhooks + cron followup
  */
 
+// Import relativo (não `@web/*`) para resolver no vitest — ver nota no topo.
+import { classifyWhatsAppSendError } from "./send-errors"
+
 /** Janela freeform do WhatsApp Business: 24h após a última mensagem do lead. */
 export const WHATSAPP_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -156,7 +159,15 @@ async function dispatchWhatsApp(
     )
 
     if (!res.ok) {
-      return { sent: false, channel, error: `HTTP_${res.status}` }
+      // Story 75-141 — lê o código de erro da Meta p/ distinguir "número sem WhatsApp".
+      let metaCode: number | undefined
+      try {
+        const detail = (await res.json()) as { error?: { code?: number } } | null
+        metaCode = detail?.error?.code
+      } catch {
+        /* resposta sem corpo/JSON — mantém HTTP_<status> */
+      }
+      return { sent: false, channel, error: classifyWhatsAppSendError(res.status, metaCode) }
     }
     return { sent: true, channel }
   } catch (err) {

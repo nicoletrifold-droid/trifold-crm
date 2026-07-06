@@ -134,6 +134,28 @@ describe("dispatchBrokerMessage", () => {
     })
   })
 
+  it("cenário 5: número sem WhatsApp (Meta 131026) retorna WHATSAPP_UNREACHABLE", async () => {
+    // Story 75-141 — resposta 400 com corpo de erro da Meta.
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { code: 131026, message: "Message undeliverable" } }),
+    } as unknown as Response)
+
+    const result = await dispatchBrokerMessage(
+      {
+        phone: "5544999990000",
+        message: "Teste",
+        conversationLastMessageAt: new Date("2026-06-09T11:00:00Z"),
+        waCredentials: WA_CREDS,
+        now: new Date("2026-06-09T12:00:00Z"),
+      },
+      fetchMock
+    )
+
+    expect(result).toEqual({ sent: false, channel: "whatsapp", error: "WHATSAPP_UNREACHABLE" })
+  })
+
   it("WhatsApp sem credenciais retorna WHATSAPP_CONFIG_MISSING", async () => {
     const fetchMock = vi.fn()
     const now = new Date("2026-06-09T12:00:00Z")
