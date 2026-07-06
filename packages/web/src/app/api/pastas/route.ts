@@ -79,11 +79,13 @@ export async function POST(request: NextRequest) {
   }))
 
   // Story 75-123 — retorna os docs semeados p/ a Tela 3 do wizard anexar inline.
+  // NB: não usar .order() aqui — o PostgREST não aplica order no retorno de INSERT
+  // (reporta "column ... does not exist"). Os docs vêm na ordem de inserção e a
+  // Tela 3 agrupa por titular de qualquer forma.
   const { data: docs, error: docsError } = await supabase
     .from("pasta_documentos")
     .insert(docsPayload)
     .select("id, slug, label, titular, situacao")
-    .order("ordem", { ascending: true })
   if (docsError) {
     // Rollback manual: remove a pasta se os docs falharem (mantém consistência).
     await supabase.from("pastas").delete().eq("id", pasta.id)
