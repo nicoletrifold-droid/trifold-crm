@@ -114,3 +114,31 @@ Opus 4.8 (1M context) — @dev (Dex)
 - 2026-07-06 — @sm — Story criada (Draft). Migration 161 planejada (tabela `pasta_links` + `pastas.origem`/`link_id`), a aplicar manualmente em prod.
 - 2026-07-06 — @dev (Dex) — `*develop`: implementado. Migration 161 criada (NÃO aplicada em prod). Wizard extraído p/ `components/pastas/pasta-wizard.tsx` (interno/público) sem regressão; página+POST públicos `/pasta/nova/[token]`; `notifyNovaPastaGestor` (e-mail+WhatsApp `nova_pasta_gestor`, fire-and-forget); API `pasta-links` (POST/PATCH, gate gestor); UI de links + selo auto-cadastro. tsc/eslint OK; vitest 829/829 (12 novos). Branch `feat/75-146-pasta-auto-cadastro`. **Status Ready → Ready for Review.**
 - 2026-07-06 — @po (Pax) — `*validate-next-story`: **GO** (score 9/10). Decisões #1–#4 do diretor incorporadas. Ajuste principal (DECISION #2): notificação passa de "só e-mail" para **e-mail + WhatsApp** com fallback gracioso (template HSM `nova_pasta_gestor` PENDING na Meta; aprovação = dependência externa). Verificados no código: migration 161 livre (última = 160), sem colisão de rota `/pasta/nova/[token]`, padrão `sendBoletoWhatsApp` (`type:"template"` + `.catch`) e `sendEmail({to,subject,html,orgId})`, `PASTA_MANAGER_ROLES`, `optStr`/`buildDocSlots` no `/api/pastas`. Editados: Escopo IN #5, Escopo OUT, AC 4, Task de notificação, bloco de Decisões. **Status Draft → Ready.**
+- 2026-07-06 — @qa (Quinn) — `*qa-gate`: **PASS**. Revisado o diff real `f7e1620`. 7 checks OK; foco em segurança do POST público (service role + token/ativo, imobiliária do link ignorando o body, created_by=null), não-regressão do interno, fallback fire-and-forget da notificação, migration 161 (RLS espelha `pastas_org_rw`), tema claro consistente. tsc/eslint limpos; vitest 829/829 (13 novos). Livre para @devops *push; aplicar migration 161 manualmente após push. Ver QA Results.
+
+## QA Results
+
+### Review Date: 2026-07-06
+
+### Reviewed By: Quinn (Test Architect)
+
+**Verdict: PASS** — sem defeitos high/medium. Revisado o diff real do commit `f7e1620` (base `3a6a20a`), não apenas o texto da story.
+
+**7 quality checks:** code review PASS · unit tests PASS (76 arquivos / 829 testes) · acceptance criteria PASS (AC 1-7) · no regressions PASS · performance PASS · security PASS · documentation PASS.
+
+**Focus areas:**
+1. Segurança do POST público — service role, valida token + `ativo!==true` → 404 limpo (sem crash/leak); `org_id`/`imobiliaria` sempre do link (body ignorado, testado); `created_by=null`, `origem='auto_cadastro'`, `link_id`; `buildDocSlots` idêntico ao interno; rollback manual preservado. Sem forja de org/spoof de imobiliária.
+2. Não-regressão do interno — `/api/pastas` inalterado; `CreateModal` → `PastaWizard(mode=internal)`; `DeleteModal` intacto; teste de não-regressão verde.
+3. Notificação — fire-and-forget (`.catch`) + try/catch; pasta persiste mesmo se `notifyNovaPastaGestor` lançar (testado, 201); e-mail não bloqueado por WhatsApp falho; gestores = `PASTA_MANAGER_ROLES` + `is_active`, telefone de `users.phone`.
+4. Migration 161 — RLS `pasta_links_org_rw` espelha `pastas_org_rw` (139) exatamente; `origem`/`link_id` nullable/default; nº 161 livre; service role não bloqueado.
+5. Gestão de links — POST/PATCH gated por `isPastaManager` (403 corretor testado); revoke `ativo=false` → página pública "Link inválido ou desativado".
+6. Tema — página pública em `bg-stone-50` (claro), consistente com `/pasta/[token]` (AC7). Deviation correta.
+7. Testes — 13 novos, não-tautológicos, cobrem body-imobiliária-ignorada, token inexistente/revogado, notificação-throws-persiste, não-regressão do interno, gate, rollback.
+
+**Observações (low, não bloqueiam):** DOC-001 — story cita 12 testes, são 13 (cosmético). SEC-002 — sem rate-limit no endpoint público, aceito como OUT (mitigado por token revogável + limite 25MB), monitorar abuso.
+
+**Verificação:** `tsc --noEmit` OK · eslint dos arquivos alterados exit 0 (sem lint introduzido) · vitest 829/829. **Livre para @devops `*push`.** Aplicar migration 161 manualmente em prod após push. Template `nova_pasta_gestor` segue PENDING na Meta (dependência externa, não bloqueia).
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/75.146-pasta-auto-cadastro-imobiliaria.yml
