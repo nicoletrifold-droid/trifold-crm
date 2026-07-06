@@ -7,6 +7,7 @@ import { ArrowLeft, Copy, Check, Download, Eye, Loader2, Paperclip, Trash2, File
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import type { TermoData } from "@web/lib/pastas/termo/fill"
 import { computePastaStatus } from "@web/lib/pastas/status"
+import { validateSignerForm } from "@web/lib/clicksign/validation"
 
 interface Doc {
   id: string
@@ -107,6 +108,9 @@ export function PastaDetail({
 
   async function submitSignature() {
     if (!signDoc) return
+    // Story 75-135 — valida antes de chamar a Clicksign (evita erro técnico cru).
+    const invalid = validateSignerForm({ name: signName, email: signEmail, phone: signPhone, auth: signAuth })
+    if (invalid) { setSignError(invalid); return }
     setSigning(true)
     setSignError(null)
     try {
@@ -114,9 +118,9 @@ export function PastaDetail({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signer_name: signName,
-          signer_email: signEmail,
-          signer_phone: signPhone,
+          signer_name: signName.trim(),
+          signer_email: signEmail.trim(),
+          signer_phone: signPhone.trim(),
           auth_method: signAuth,
         }),
       })
