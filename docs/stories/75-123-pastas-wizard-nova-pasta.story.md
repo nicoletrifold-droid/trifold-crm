@@ -68,6 +68,7 @@ Hoje o "Nova pasta" é um modal único (nome, empreendimento, tipo PF/PJ, casado
 - **Deploy:** migration 158 **ainda não aplicada em prod** (dev-DB pausado) → @devops aplica no push.
 
 ## Change Log
+- 2026-07-06 — @dev/@devops — **HOTFIX (PR #122, commit 6038454):** criação de pasta quebrava com `column pasta_documentos.ordem does not exist`. Causa: `.order("ordem")` no `.insert().select()` — o PostgREST ordena sobre as colunas do `select` do retorno de INSERT, e `ordem` não estava no select. Fix: removido o `.order` (ordem do retorno é irrelevante; Tela 3 agrupa por titular). Regressão introduzida por esta story, pega no 1º uso real em prod.
 - 2026-07-06 — @devops — Migration 158 aplicada em prod (verificada). PR #120 merjeado (squash, commit dff42e3) → deploy. **Done / LIVE.**
 - 2026-07-06 — @qa — **QA GATE: PASS**. 6 ACs verificados, 753/753, sem regressão. Observações de follow-up documentadas. Pronto p/ @devops.
 - 2026-07-06 — @dev — Implementado (migration 158 + checklist PIX + POST + wizard 3 telas). tsc/eslint 0, vitest 7/7, migration validada em ROLLBACK. Status → InReview.
