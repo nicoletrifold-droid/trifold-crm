@@ -148,7 +148,7 @@ export function LeadsBulkTable({
                         onClick={(e) => e.stopPropagation()}
                         title="Conversar no WhatsApp (número da empresa)"
                         aria-label="Conversar no WhatsApp"
-                        className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                        className="inline-flex items-center justify-center rounded p-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
                       >
                         <MessageCircle className="h-4 w-4" />
                       </Link>
