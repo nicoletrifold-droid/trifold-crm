@@ -3,9 +3,10 @@
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Copy, Check, Download, Eye, Loader2, Paperclip, Trash2, FileSignature, X, FileText, Sparkles } from "lucide-react"
+import { ArrowLeft, Copy, Check, Download, Eye, Loader2, Paperclip, Trash2, FileSignature, X, FileText, Sparkles, CheckCircle2 } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import type { TermoData } from "@web/lib/pastas/termo/fill"
+import { computePastaStatus } from "@web/lib/pastas/status"
 
 interface Doc {
   id: string
@@ -294,6 +295,15 @@ export function PastaDetail({
 
   const titulares = [...new Set(docs.map((d) => d.titular))]
 
+  // Story 75-134 — pasta concluída? (todos os docs deferidos + Termo assinado)
+  const pastaConcluida =
+    computePastaStatus(
+      docs.map((d) => {
+        const sig = signatures[d.id]
+        return { slug: d.slug, situacao: d.situacao, signed: sig?.status === "signed" || sig?.status === "closed" }
+      })
+    ).status === "concluida"
+
   return (
     <div className="space-y-6">
       <Link href="/dashboard/pastas" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200">
@@ -345,6 +355,16 @@ export function PastaDetail({
           )}
         </div>
       </div>
+
+      {pastaConcluida && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <div>
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Pasta concluída</p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">Todos os documentos foram deferidos e o Termo de Intenção está assinado.</p>
+          </div>
+        </div>
+      )}
 
       {fileError && (
         <p className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
