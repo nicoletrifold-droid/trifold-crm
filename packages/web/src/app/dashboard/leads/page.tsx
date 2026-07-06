@@ -137,7 +137,7 @@ export default async function LeadsPage({
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
 
-  const [leadsResult, countResult, perdidosCountResult, stagesResult, propertiesResult, brokersResult] = await Promise.all([
+  const [leadsResult, countResult, perdidosCountResult, ativosCountResult, stagesResult, propertiesResult, brokersResult] = await Promise.all([
     query,
     countQuery,
     supabase
@@ -145,6 +145,13 @@ export default async function LeadsPage({
       .select("id", { count: "exact", head: true })
       .eq("is_active", true)
       .in("stage_id", PERDIDO_STAGE_IDS),
+    // Story 75-129 — total da aba "Em atendimento" (sem filtros), paridade com Perdidos
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("segmento", "principal")
+      .not("stage_id", "in", `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`),
     supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
     supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
     supabase.from("users").select("id, name").eq("org_id", user.orgId).eq("is_active", true).in("role", ["broker", "gerente-comercial"]).order("name"),
@@ -152,6 +159,7 @@ export default async function LeadsPage({
   const leads = leadsResult.data
   const totalCount = countResult.count ?? 0
   const perdidosCount = perdidosCountResult.count ?? 0
+  const ativosCount = ativosCountResult.count ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const allStages = stagesResult.data ?? []
   const allProperties = propertiesResult.data ?? []
@@ -179,7 +187,7 @@ export default async function LeadsPage({
               : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
           }`}
         >
-          Em atendimento
+          Em atendimento ({ativosCount})
         </Link>
         <Link
           href="/dashboard/leads?view=perdidos"
@@ -225,6 +233,12 @@ export default async function LeadsPage({
           dateToParam="date_to"
         />
       </div>
+
+      {/* Story 75-129 — total de resultados do filtro (sempre visível) */}
+      <p className="text-sm text-stone-500 dark:text-stone-400">
+        <span className="font-semibold text-stone-900 dark:text-stone-100">{totalCount}</span>{" "}
+        {totalCount === 1 ? "lead" : "leads"}
+      </p>
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <ScrollableX>
