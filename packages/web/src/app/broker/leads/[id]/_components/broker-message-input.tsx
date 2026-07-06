@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { MediaPickerModal } from "./media-picker-modal"
 import { AudioRecorder } from "./audio-recorder"
+import { brokerSendErrorMessage } from "@web/lib/broker/send-errors"
 
 const MAX_MESSAGE_LENGTH = 4096
 
@@ -125,6 +126,11 @@ export function BrokerMessageInput({
         failed: data.sent === false,
       })
       setText("")
+      // Story 75-141 — mensagem gravada, mas não entregue (ex.: número sem WhatsApp):
+      // avisa o motivo (a bolha já fica marcada como não enviada).
+      if (data.sent === false) {
+        setError(brokerSendErrorMessage(data.sendError))
+      }
       // Re-fetch do server component para refletir a mensagem gravada (AC5).
       router.refresh()
     } catch {
