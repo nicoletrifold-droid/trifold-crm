@@ -64,6 +64,30 @@ export function BrokerMessageInput({
   const [notifyEnabled, setNotifyEnabled] = useState(notifyOnReply)
   const [notifyLoading, setNotifyLoading] = useState(false)
   const [notifyError, setNotifyError] = useState<string | null>(null)
+  // Story 75-142 — "Iniciar atendimento" via template (janela fechada / lead frio).
+  const [startLoading, setStartLoading] = useState(false)
+  const [startDone, setStartDone] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+
+  async function handleStartWhatsapp() {
+    if (startLoading || startDone) return
+    setStartLoading(true)
+    setStartError(null)
+    try {
+      const res = await fetch(`/api/leads/${leadId}/start-whatsapp`, { method: "POST" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.success) {
+        setStartError(data?.message ?? "Não foi possível iniciar o atendimento. Tente novamente.")
+        return
+      }
+      setStartDone(true)
+      router.refresh()
+    } catch {
+      setStartError("Erro de conexão. Tente novamente.")
+    } finally {
+      setStartLoading(false)
+    }
+  }
 
   async function handleNotifyOnReply() {
     if (notifyEnabled || notifyLoading) return
@@ -187,11 +211,33 @@ export function BrokerMessageInput({
               </p>
             )}
 
-            {/* Story 63-10 — Caminho 2: placeholder informativo (sem ação) */}
-            <p className="flex items-center gap-2 px-1 text-xs text-stone-500 dark:text-stone-500">
-              <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-              Modelos de mensagem aprovados estarão disponíveis em breve.
-            </p>
+            {/* Story 75-142 — Caminho 2: iniciar atendimento via template aprovado */}
+            {startDone ? (
+              <div className="flex min-h-[44px] items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400" aria-live="polite">
+                <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                Convite enviado. Aguarde a resposta do cliente para continuar.
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleStartWhatsapp()}
+                  disabled={startLoading}
+                  className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+                >
+                  {startLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
+                  Iniciar atendimento (mensagem de abertura)
+                </button>
+                <p className="px-1 text-xs text-stone-500 dark:text-stone-500">
+                  Envia uma mensagem de abertura aprovada pelo WhatsApp para reabrir a conversa com o cliente.
+                </p>
+              </>
+            )}
+            {startError && (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                {startError}
+              </p>
+            )}
           </div>
         )}
         {error && (

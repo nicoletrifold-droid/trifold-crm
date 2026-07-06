@@ -35,6 +35,20 @@ export function isWhatsAppConfirmed(input: {
   return s ? WA_SOURCE_HINTS.some((h) => s.includes(h)) : false
 }
 
+/**
+ * Normaliza um telefone para o formato aceito pela Cloud API (dígitos, com DDI 55).
+ * Retorna null se não parecer um número utilizável (ex.: Telegram). Story 75-142.
+ */
+export function toWhatsAppNumber(phone: string | null | undefined): string | null {
+  if (!phone) return null
+  if (phone.trim().toLowerCase().startsWith("tg:")) return null
+  const digits = phone.replace(/\D/g, "")
+  if (!digits) return null
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) return digits
+  if (digits.length === 10 || digits.length === 11) return `55${digits}` // DDD + número
+  return digits // melhor esforço (já pode vir com DDI de outro país)
+}
+
 /** Estado consolidado para a UI decidir o ícone/tooltip. */
 export function whatsAppState(input: {
   phone: string | null | undefined
