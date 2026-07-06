@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Copy, Check, Download, Loader2, Paperclip, Trash2, FileSignature, X, FileText, Sparkles } from "lucide-react"
+import { ArrowLeft, Copy, Check, Download, Eye, Loader2, Paperclip, Trash2, FileSignature, X, FileText, Sparkles } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import type { TermoData } from "@web/lib/pastas/termo/fill"
 
@@ -43,7 +43,7 @@ const ASSINATURA_CLASS: Record<string, string> = {
 
 const SITUACAO_LABEL: Record<string, string> = {
   pendente: "Pendente",
-  entregue: "Enviado",
+  entregue: "Recebido",
   deferido: "Deferido",
   recusado: "Recusado",
 }
@@ -80,6 +80,7 @@ export function PastaDetail({
 }) {
   const router = useRouter()
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -224,12 +225,34 @@ export function PastaDetail({
     } catch { /* ignore */ }
   }
 
-  async function download(doc: Doc) {
+  // Story 75-130 — abre o arquivo do bucket privado. download=true força o save
+  // (Content-Disposition attachment via signed URL); false abre inline (preview).
+  // Dispara via clique em <a> (não window.open, que o navegador bloqueia como
+  // popup por rodar fora do gesto do usuário, após o await).
+  async function openFile(doc: Doc, download: boolean) {
     setBusyId(doc.id)
+    setFileError(null)
     try {
-      const res = await fetch(`/api/pastas/${pasta.id}/documentos/${doc.id}/signed-url`)
+      const qs = download ? "?download=1" : ""
+      const res = await fetch(`/api/pastas/${pasta.id}/documentos/${doc.id}/signed-url${qs}`)
       const data = await res.json().catch(() => null)
-      if (res.ok && data?.url) window.open(data.url, "_blank")
+      if (!res.ok || !data?.url) {
+        setFileError(data?.error ?? "Não foi possível abrir o arquivo. Tente novamente.")
+        return
+      }
+      const a = document.createElement("a")
+      a.href = data.url
+      if (download) {
+        a.download = doc.filename ?? ""
+      } else {
+        a.target = "_blank"
+        a.rel = "noopener"
+      }
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch {
+      setFileError("Falha de conexão ao abrir o arquivo.")
     } finally {
       setBusyId(null)
     }
@@ -303,6 +326,13 @@ export function PastaDetail({
         </div>
       </div>
 
+      {fileError && (
+        <p className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+          {fileError}
+          <button onClick={() => setFileError(null)} className="text-red-400 hover:text-red-600 dark:hover:text-red-300"><X className="h-4 w-4" /></button>
+        </p>
+      )}
+
       {titulares.map((t) => (
         <div key={t} className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
           <h2 className="border-b border-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:border-stone-800 dark:text-stone-200">
@@ -334,7 +364,14 @@ export function PastaDetail({
                     {uploaded ? "Substituir" : "Anexar"}
                   </button>
                   {uploaded && (
-                    <button onClick={() => download(doc)} disabled={busyId === doc.id}
+                    <button onClick={() => openFile(doc, false)} disabled={busyId === doc.id}
+                      className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
+                      {busyId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                      Visualizar
+                    </button>
+                  )}
+                  {uploaded && (
+                    <button onClick={() => openFile(doc, true)} disabled={busyId === doc.id}
                       className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
                       {busyId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                       Baixar
