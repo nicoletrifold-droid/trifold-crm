@@ -79,12 +79,17 @@ function firstString(obj: unknown, paths: (string | number)[][]): string | null 
 }
 
 /**
- * Extrai { event, envelopeId } do payload do webhook de forma defensiva —
- * o formato exato (JSON:API) será confirmado no 1º evento real do sandbox,
- * então tentamos vários caminhos conhecidos e logamos o resto.
+ * Extrai { event, documentKey, envelopeId } do payload do webhook.
+ * Formato real (confirmado no sandbox — legado/v1): `{ event: { name }, document: { key } }`,
+ * onde `document.key` casa com `signature_envelopes.clicksign_document_id`. Mantemos os
+ * caminhos v2/JSON:API como fallback (`envelopeId`) caso a conta migre de formato.
  */
-export function parseWebhook(body: unknown): { event: string | null; envelopeId: string | null } {
-  if (!body || typeof body !== "object") return { event: null, envelopeId: null }
+export function parseWebhook(body: unknown): {
+  event: string | null
+  documentKey: string | null
+  envelopeId: string | null
+} {
+  if (!body || typeof body !== "object") return { event: null, documentKey: null, envelopeId: null }
 
   const event = firstString(body, [
     ["event", "name"],
@@ -94,6 +99,13 @@ export function parseWebhook(body: unknown): { event: string | null; envelopeId:
     ["type"],
   ])
 
+  // v1 (formato real): identificador do documento em `document.key`.
+  const documentKey = firstString(body, [
+    ["document", "key"],
+    ["data", "attributes", "document", "key"],
+  ])
+
+  // v2/JSON:API (fallback): id do envelope.
   const envelopeId =
     firstString(body, [
       ["event", "data", "envelope", "id"],
@@ -102,5 +114,5 @@ export function parseWebhook(body: unknown): { event: string | null; envelopeId:
       ["envelope", "id"],
     ]) ?? (deepGet(body, ["data", "type"]) === "envelopes" ? (firstString(body, [["data", "id"]])) : null)
 
-  return { event, envelopeId }
+  return { event, documentKey, envelopeId }
 }
