@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
-import { renderBaseLayout, renderButton } from "@web/lib/email-layout"
+import { renderPasswordActionEmail } from "@web/lib/email-layout"
 import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET() {
@@ -153,30 +153,16 @@ export async function POST(request: NextRequest) {
     })
 
     if (linkData?.properties?.action_link) {
-      const brokerName = body.name.trim()
-      const actionLink = linkData.properties.action_link
-      const html = renderBaseLayout(
-        `
-        <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">Olá, ${brokerName}!</p>
-        <p style="margin:0 0 24px;color:#6b7280;">
-          Você foi cadastrado como corretor no sistema da <strong>Trifold</strong>.
-          Para acessar o CRM, você precisa criar sua senha clicando no botão abaixo.
-        </p>
-        ${renderButton("Criar minha senha", actionLink)}
-        <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
-          Após criar sua senha, acesse o sistema em:<br>
-          <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
-        </p>
-        <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
-          Este link expira em 24 horas. Se você não esperava este e-mail, pode ignorá-lo.
-        </p>
-        `,
-        { orgName: "Trifold CRM", previewText: `${brokerName}, crie sua senha de acesso ao Trifold CRM` }
-      )
+      const { subject, html } = renderPasswordActionEmail({
+        userName: body.name.trim(),
+        actionLink: linkData.properties.action_link,
+        siteUrl,
+        mode: "create",
+      })
 
       await sendEmail({
         to: body.email.trim(),
-        subject: "Crie sua senha — Trifold CRM",
+        subject,
         html,
         tags: [{ name: "type", value: "broker_invite" }],
         orgId: appUser.org_id,
@@ -321,27 +307,16 @@ export async function POST(request: NextRequest) {
       })
 
       if (linkData?.properties?.action_link) {
-        const brokerName = (targetUser.name as string) ?? "Corretor"
-        const html = renderBaseLayout(
-          `
-          <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">Olá, ${brokerName}!</p>
-          <p style="margin:0 0 24px;color:#6b7280;">
-            Você foi cadastrado como corretor no sistema da <strong>Trifold</strong>.
-            Para acessar o CRM, crie sua senha clicando no botão abaixo.
-          </p>
-          ${renderButton("Criar minha senha", linkData.properties.action_link)}
-          <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
-            Após criar sua senha, acesse em:<br>
-            <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
-          </p>
-          <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">Este link expira em 24 horas.</p>
-          `,
-          { orgName: "Trifold CRM", previewText: `${brokerName}, crie sua senha de acesso ao Trifold CRM` }
-        )
+        const { subject, html } = renderPasswordActionEmail({
+          userName: (targetUser.name as string) ?? "Corretor",
+          actionLink: linkData.properties.action_link,
+          siteUrl,
+          mode: "create",
+        })
 
         await sendEmail({
           to: (targetUser.email as string).trim(),
-          subject: "Crie sua senha — Trifold CRM",
+          subject,
           html,
           tags: [{ name: "type", value: "broker_invite" }],
           orgId: appUser.org_id,

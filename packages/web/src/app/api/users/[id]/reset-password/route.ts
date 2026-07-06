@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
-import { renderBaseLayout, renderButton } from "@web/lib/email-layout"
+import { renderPasswordActionEmail } from "@web/lib/email-layout"
 
 export async function POST(
   _request: NextRequest,
@@ -59,30 +59,16 @@ export async function POST(
   }
 
   const brokerName = (targetUser.name as string) ?? "Corretor"
-  const actionLink = linkData.properties.action_link
-
-  const html = renderBaseLayout(
-    `
-    <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">Olá, ${brokerName}!</p>
-    <p style="margin:0 0 24px;color:#6b7280;">
-      O administrador solicitou a redefinição da sua senha no sistema da <strong>Trifold</strong>.
-      Clique no botão abaixo para criar uma nova senha de acesso.
-    </p>
-    ${renderButton("Redefinir minha senha", actionLink)}
-    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
-      Após redefinir sua senha, acesse o sistema em:<br>
-      <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
-    </p>
-    <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
-      Este link expira em 24 horas. Se você não esperava este e-mail, pode ignorá-lo.
-    </p>
-    `,
-    { orgName: "Trifold CRM", previewText: `${brokerName}, redefina sua senha de acesso ao Trifold CRM` }
-  )
+  const { subject, html } = renderPasswordActionEmail({
+    userName: brokerName,
+    actionLink: linkData.properties.action_link,
+    siteUrl,
+    mode: "reset",
+  })
 
   await sendEmail({
     to: targetUser.email as string,
-    subject: "Redefina sua senha — Trifold CRM",
+    subject,
     html,
     tags: [{ name: "type", value: "broker_password_reset" }],
     orgId: appUser.org_id,

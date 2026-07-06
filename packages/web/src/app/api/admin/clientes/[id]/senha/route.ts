@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { sendEmail } from "@web/lib/email"
+import { renderPasswordActionEmail } from "@web/lib/email-layout"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
@@ -71,15 +73,42 @@ export async function POST(
 
   // ── Opção 1: Enviar e-mail de redefinição ─────────────────────────────
   if (action === "send_reset_email") {
-    const { error: resetErr } = await adminClient.auth.resetPasswordForEmail(
-      portalUser.email,
-      {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/portal/reset-password`,
-      }
-    )
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
 
-    if (resetErr) {
-      return NextResponse.json({ error: resetErr.message }, { status: 500 })
+    // generateLink (sem envio nativo) + Resend, substituindo resetPasswordForEmail.
+    // redirectTo corrigido de /portal/reset-password (inexistente) para /reset-senha (AC2).
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: "recovery",
+      email: portalUser.email,
+      options: { redirectTo: `${siteUrl}/reset-senha` },
+    })
+
+    if (linkError || !linkData?.properties?.action_link) {
+      return NextResponse.json(
+        { error: linkError?.message ?? "Erro ao gerar link de recuperação." },
+        { status: 500 }
+      )
+    }
+
+    const { subject, html } = renderPasswordActionEmail({
+      userName: portalUser.name ?? "Cliente",
+      actionLink: linkData.properties.action_link,
+      siteUrl,
+      mode: "reset",
+    })
+
+    // Rota staff-autenticada: mantém `await` para propagar erro de envio (não há
+    // preocupação de enumeração aqui — o admin já pode consultar usuários da própria org).
+    const sendResult = await sendEmail({
+      to: portalUser.email,
+      subject,
+      html,
+      tags: [{ name: "type", value: "cliente_password_reset" }],
+      orgId: appUser.org_id,
+    })
+
+    if (sendResult.error) {
+      return NextResponse.json({ error: sendResult.error }, { status: 500 })
     }
 
     void logAudit({
