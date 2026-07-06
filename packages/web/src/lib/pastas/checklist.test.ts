@@ -2,12 +2,17 @@ import { describe, it, expect } from "vitest"
 import { buildDocSlots, buildInfoFields } from "./checklist"
 
 describe("buildDocSlots (Story 75-104)", () => {
-  it("PF solteiro: 4 docs do titular", () => {
+  it("PF solteiro (Story 75-125): sem comprovante de estado civil (3 docs)", () => {
     const d = buildDocSlots("pf", false)
     expect(d.map((x) => x.slug)).toEqual([
-      "rg_cnh", "cpf", "comprovante_estado_civil", "comprovante_endereco",
+      "rg_cnh", "cpf", "comprovante_endereco",
     ])
+    expect(d.some((x) => x.slug === "comprovante_estado_civil")).toBe(false)
     expect(d.every((x) => x.titular === "interessado")).toBe(true)
+  })
+  it("PF casado (Story 75-125): titular volta a ter comprovante de estado civil", () => {
+    const d = buildDocSlots("pf", true)
+    expect(d.some((x) => x.slug === "comprovante_estado_civil")).toBe(true)
   })
   it("PF casado: 4 do titular + 4 do cônjuge", () => {
     const d = buildDocSlots("pf", true)
