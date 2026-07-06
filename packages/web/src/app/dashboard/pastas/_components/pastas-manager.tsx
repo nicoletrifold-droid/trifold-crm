@@ -1,22 +1,31 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { FolderPlus, Copy, Check, ChevronRight, Trash2, ArrowLeft, ArrowRight, Paperclip, Loader2, CheckCircle2, Search, Clock } from "lucide-react"
+import { FolderPlus, Copy, Check, ChevronRight, Trash2, ArrowLeft, ArrowRight, Paperclip, Loader2, CheckCircle2, Search, Clock, Building2, User, Building, CalendarDays, X } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import type { PastaStatus } from "@web/lib/pastas/status"
+import { filterPastas, distinctValues, hasActiveFilters, EMPTY_FILTERS, type PastaFilters } from "@web/lib/pastas/filter"
 
 interface PastaRow {
   id: string
   nome: string
   tipo: string
   empreendimento: string | null
+  corretorNome: string | null
+  imobiliaria: string | null
+  createdAt: string
   token: string
   status: PastaStatus
   total: number
   entregues: number
   deferidos: number
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR")
 }
 
 // Story 75-134 — selo de status da pasta (Aguardando / Em análise / Concluída).
@@ -53,11 +62,44 @@ function pastaSubtitle(p: PastaRow): string {
   return `${p.entregues}/${p.total} documentos entregues`
 }
 
+const filterSelectCls =
+  "rounded-md border border-gray-200 px-2 py-1.5 text-sm text-gray-700 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+
+// Story 75-137 — linha de meta com ícones (imobiliária · corretor · empreendimento · data).
+function MetaLine({ p }: { p: PastaRow }) {
+  const items: { key: string; Icon: typeof Building2; text: string }[] = []
+  if (p.imobiliaria) items.push({ key: "imob", Icon: Building2, text: p.imobiliaria })
+  if (p.corretorNome) items.push({ key: "corr", Icon: User, text: p.corretorNome })
+  if (p.empreendimento) items.push({ key: "emp", Icon: Building, text: p.empreendimento })
+  const d = formatDate(p.createdAt)
+  if (d) items.push({ key: "date", Icon: CalendarDays, text: d })
+  if (items.length === 0) return null
+  return (
+    <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-stone-400">
+      {items.map((it) => (
+        <span key={it.key} className="inline-flex min-w-0 items-center gap-1">
+          <it.Icon className="h-3 w-3 shrink-0 text-gray-400 dark:text-stone-500" />
+          <span className="truncate">{it.text}</span>
+        </span>
+      ))}
+    </p>
+  )
+}
+
 export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
   const router = useRouter()
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PastaRow | null>(null)
+
+  // Story 75-137 — filtros (client-side).
+  const [filters, setFilters] = useState<PastaFilters>(EMPTY_FILTERS)
+  const setF = (patch: Partial<PastaFilters>) => setFilters((f) => ({ ...f, ...patch }))
+  const empreendimentos = useMemo(() => distinctValues(pastas, "empreendimento"), [pastas])
+  const corretores = useMemo(() => distinctValues(pastas, "corretorNome"), [pastas])
+  const imobiliarias = useMemo(() => distinctValues(pastas, "imobiliaria"), [pastas])
+  const filtered = useMemo(() => filterPastas(pastas, filters), [pastas, filters])
+  const active = hasActiveFilters(filters)
 
   function linkFor(token: string): string {
     const origin = typeof window !== "undefined" ? window.location.origin : ""
@@ -92,14 +134,70 @@ export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
         </button>
       </div>
 
+      {pastas.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-900">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-stone-500" />
+              <input
+                value={filters.search}
+                onChange={(e) => setF({ search: e.target.value })}
+                placeholder="Buscar por cliente, corretor ou imobiliária…"
+                className="w-full rounded-md border border-gray-200 py-1.5 pl-8 pr-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+              />
+            </div>
+            <select value={filters.status} onChange={(e) => setF({ status: e.target.value as PastaFilters["status"] })} className={filterSelectCls}>
+              <option value="">Todos os status</option>
+              <option value="aguardando">Aguardando</option>
+              <option value="em_analise">Em análise</option>
+              <option value="concluida">Concluída</option>
+            </select>
+            <select value={filters.empreendimento} onChange={(e) => setF({ empreendimento: e.target.value })} className={filterSelectCls}>
+              <option value="">Empreendimento</option>
+              {empreendimentos.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <select value={filters.corretor} onChange={(e) => setF({ corretor: e.target.value })} className={filterSelectCls}>
+              <option value="">Corretor</option>
+              {corretores.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <select value={filters.imobiliaria} onChange={(e) => setF({ imobiliaria: e.target.value })} className={filterSelectCls}>
+              <option value="">Imobiliária</option>
+              {imobiliarias.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-stone-400">
+              De
+              <input type="date" value={filters.dateFrom} onChange={(e) => setF({ dateFrom: e.target.value })} className={filterSelectCls} />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-stone-400">
+              Até
+              <input type="date" value={filters.dateTo} onChange={(e) => setF({ dateTo: e.target.value })} className={filterSelectCls} />
+            </label>
+            <span className="ml-auto text-xs text-gray-500 dark:text-stone-400">
+              {active ? `${filtered.length} de ${pastas.length} pastas` : `${pastas.length} pasta${pastas.length === 1 ? "" : "s"}`}
+            </span>
+            {active && (
+              <button onClick={() => setFilters(EMPTY_FILTERS)} className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
+                <X className="h-3.5 w-3.5" /> Limpar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         {pastas.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-gray-400 dark:text-stone-500">
             Nenhuma pasta ainda. Crie a primeira e envie o link ao interessado.
           </p>
+        ) : filtered.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-gray-400 dark:text-stone-500">
+            Nenhuma pasta encontrada com esses filtros.
+          </p>
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-stone-800">
-            {pastas.map((p) => (
+            {filtered.map((p) => (
               <li key={p.id} className="flex items-center gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 truncate font-medium text-gray-900 dark:text-stone-100">
@@ -111,8 +209,8 @@ export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
                     </span>
                     <StatusPill status={p.status} />
                   </p>
+                  <MetaLine p={p} />
                   <p className="truncate text-xs text-gray-500 dark:text-stone-400">
-                    {p.empreendimento ? `${p.empreendimento} · ` : ""}
                     {pastaSubtitle(p)}
                   </p>
                 </div>

@@ -15,7 +15,7 @@ export default async function PastasPage() {
 
   const { data: pastas } = await supabase
     .from("pastas")
-    .select("id, nome, tipo, casado, empreendimento, token, created_at, pasta_documentos(slug, situacao, signature_envelopes(status))")
+    .select("id, nome, tipo, casado, empreendimento, corretor_nome, imobiliaria, token, created_at, pasta_documentos(slug, situacao, signature_envelopes(status))")
     .eq("org_id", user.orgId)
     .order("created_at", { ascending: false })
 
@@ -36,6 +36,9 @@ export default async function PastasPage() {
       nome: p.nome,
       tipo: p.tipo as string,
       empreendimento: (p.empreendimento as string | null) ?? null,
+      corretorNome: (p.corretor_nome as string | null) ?? null,
+      imobiliaria: (p.imobiliaria as string | null) ?? null,
+      createdAt: p.created_at as string,
       token: p.token as string,
       status,
       total,
