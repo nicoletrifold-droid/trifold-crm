@@ -1,7 +1,7 @@
 # Story 75-130 — Pastas: corrigir "Baixar", adicionar Visualizar (preview) e renomear status "Enviado"
 
 ## Metadata
-- **Status:** InReview · **Epic:** Pastas · **Branch:** feat/75-130-pastas-download-preview · **Complexidade:** S (3 pontos)
+- **Status:** Done · **Epic:** Pastas · **Branch:** feat/75-130-pastas-download-preview · **PR:** #127 · **Complexidade:** S (3 pontos)
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -66,6 +66,7 @@ No detalhe da pasta (`/dashboard/pastas/[id]`) o diretor apontou 3 problemas ao 
 - **Observação (não bloqueia):** preview via clique em `<a target="_blank" rel="noopener">` (padrão robusto p/ Chrome).
 
 ## Change Log
+- 2026-07-06 — @devops — Branch + commit `25ca37f` + push + **PR #127**. Status → Done.
 - 2026-07-06 — @qa — **QA GATE: PASS**. 6 ACs, 757/757, sem regressão.
 - 2026-07-06 — @dev — Implementado (download via âncora + preview + erro visível + rótulo "Recebido"). Status → InReview.
 - 2026-07-06 — @po — **GO (10/10)**. Status Draft → Ready → InProgress.
