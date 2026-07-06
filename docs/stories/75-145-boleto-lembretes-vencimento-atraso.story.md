@@ -1,7 +1,9 @@
-# Story 75-141 — Lembretes de boleto no Portal (vence hoje + atraso +5d/+15d)
+# Story 75-145 — Lembretes de boleto no Portal (vence hoje + atraso +5d/+15d)
 
 ## Metadata
-- **Status:** Ready for Review · **Epic:** Portal / Notificações · **Branch:** feat/75-141-boleto-lembretes · **Complexidade:** M (5 pontos)
+- **Status:** Done · **Epic:** Portal / Notificações · **Complexidade:** M (5 pontos)
+- **Renumerada de 75-141 → 75-145** (colisão de número com a story "aviso número sem WhatsApp", que reteve o 75-141 por ter mergeado antes, PR #138).
+- **Entregue em produção via PR #140** (commit `5909a15`, merge 2026-07-06 18:19 UTC) — o código foi empacotado nesse PR por uma sessão paralela que rodava no mesmo working dir; título do PR ficou o da Story 75-143. QA gate: PASS (`docs/qa/gates/75.145-...yml`).
 - **executor:** @dev · **quality_gate:** @qa · **Prioridade:** 🟠 pedido do diretor — reduzir inadimplência avisando o cliente no vencimento e no atraso.
 
 ## Contexto / Problema

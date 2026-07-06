@@ -1,0 +1,72 @@
+schema: 1
+story: '75.145'
+gate: PASS
+status_reason: 'Todos os 9 ACs verificados contra o código; datas em BRT sem bug de ±1 dia, dedup por marco prefixado sem colisão (event_key é PK única), fallback gracioso do WhatsApp e não-regressão do fluxo 75-101 confirmados. tsc 0, eslint 0 nos arquivos da story, vitest 816/816.'
+reviewer: 'Quinn'
+updated: '2026-07-06T18:20:00Z'
+
+evidence:
+  type_check: 'pnpm --filter @trifold/web type-check → 0 erros'
+  changed_tests: 'vitest route.test.ts + notificacoes.test.ts → 24/24 verdes'
+  full_suite: 'vitest run (full) → 72 arquivos / 816 testes verdes'
+  story_files_lint: 'eslint nos 4 arquivos da story → 0 problemas'
+
+lint_baseline_determination:
+  verdict: 'BASELINE / PRE-EXISTING — fora do escopo'
+  turbo_lint_errors: 12
+  error_bearing_files:
+    - 'public/opus/encoderWorker.min.js (7: require-imports + no-assign-module — worker minificado)'
+    - 'src/app/cliente/[obra_id]/financeiro/informe/page.tsx (react/no-unescaped-entities)'
+    - 'src/components/weather-widget.tsx (setState-in-effect)'
+    - 'src/lib/pdf/informe-pdf.tsx (react/no-unescaped-entities)'
+  conclusion: 'Nenhum arquivo com erro pertence ao diff da story (git diff 79c6912..ee5a9c9). Confirmado: os 12 erros não foram introduzidos por esta mudança.'
+
+acceptance_criteria:
+  - id: AC1
+    desc: 'venc_hoje (diff 0) na rodada 09 BRT → 1 lembrete, chave venc_hoje:<bill>:<inst>'
+    status: PASS
+  - id: AC2
+    desc: 'atraso5 (diff 5) e atraso15 (diff 15) → 1 lembrete cada, chaves/event_type corretos'
+    status: PASS
+  - id: AC3
+    desc: 'diff=16 (ou qualquer ∉ {0,5,15}) → nenhum lembrete'
+    status: PASS
+  - id: AC4
+    desc: 'hasBoleto=false (pago) → nenhum lembrete (auto-stop). Filtro .filter(i.hasBoleto)'
+    status: PASS
+  - id: AC5
+    desc: 'dedup por marco; claim negado → não re-notifica; novo-boleto independente segue'
+    status: PASS
+  - id: AC6
+    desc: 'só 09 BRT (12 UTC) roda lembretes; novo-boleto roda nas 4 rodadas'
+    status: PASS
+  - id: AC7
+    desc: 'opt-out por canal + PORTAL_NOTIF_PAUSED respeitados'
+    status: PASS
+  - id: AC8
+    desc: 'template WhatsApp PENDING falha em silêncio, não quebra rodada, não libera claim; email/push seguem'
+    status: PASS
+  - id: AC9
+    desc: 'datas em America/Sao_Paulo sem ±1 dia; auth Bearer CRON_SECRET; tsc/lint/testes limpos'
+    status: PASS
+
+focus_area_findings:
+  - area: 'Correção da data em America/Sao_Paulo (±1 dia)'
+    result: 'hojeSaoPaulo/horaSaoPaulo via Intl.formatToParts; diffDiasVencimento via Date.UTC nos dois lados; marcoParaDiff só {0,5,15}. Brasil sem horário de verão desde 2019 → 12 UTC = 09 BRT o ano todo. Sem bug de fuso.'
+  - area: 'Dedup keys prefixadas / colisão'
+    result: 'Chaves lembrete começam com venc_hoje:/atraso5:/atraso15:; novo-boleto começa com dígito (billReceivableId numérico) → colisão impossível. Migration 126: event_key é PK única, event_type fora do ON CONFLICT.'
+  - area: 'Disparo 09 BRT / não-regressão novo-boleto'
+    result: 'Passo 2 dentro de if(rodarLembretes); passo 1 (novo-boleto) roda incondicional nas 4 rodadas e é loop separado — não lê o cap sentForClient. Testes AC6 confirmam.'
+  - area: 'Fallback gracioso WhatsApp'
+    result: 'sendBoletoLembreteWhatsApp lança em !res.ok mas é chamada com .catch no dispatcher; notifyBoletoLembrete tem try/catch próprio e nunca lança → route não libera o claim (só falha do Sienge/getReceivableBill libera). Email/push já disparados. Teste AC8 confirma.'
+  - area: 'Boleto pago (hasBoleto=false)'
+    result: 'Excluído do array abertos em ambos os passos. Teste AC4 confirma.'
+  - area: 'Qualidade dos testes'
+    result: 'Não-tautológicos: asserem marco + event_key + event_type reais, independência do novo-boleto, e via fetch mock !ok que falha de WhatsApp não impede email/push. Edge cases cobertos (diff=16, pago, claim negado, hora errada).'
+  - area: 'Não quebrar o que funciona (memoização)'
+    result: 'Refactor de passo 1 byte-a-byte preservado: getReceivableBill→getBillMemo, obra inline→resolveObra (mesmo select/filtros), vínculo inline→clienteVinculado (!vinculo ≡ !(await …)). Caches per-cliente-iteration (sem vazamento entre clientes). Só cacheia resultado OK (falha re-tenta).'
+
+top_issues: []
+waiver: { active: false }
+
+recommendation: 'Clear para @devops (push/PR). Observação operacional (não-bloqueante): WhatsApp de lembrete só entregará após aprovação dos HSM boleto_vence_hoje/boleto_em_atraso na Meta; até lá, email/push cobrem o lembrete e o WhatsApp falha em silêncio por design.'
