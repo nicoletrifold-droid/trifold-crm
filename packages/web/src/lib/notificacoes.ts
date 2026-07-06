@@ -2,6 +2,7 @@ import { sendEmail } from "@web/lib/email"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
+import { PASTA_MANAGER_ROLES } from "@web/lib/pastas/roles"
 
 // Janela de coalescing anti-flood. Dentro dela, só o 1º evento do mesmo GRUPO (ver
 // COALESCE_GROUP) dispara envio; os demais são suprimidos (o cliente vê tudo no portal).
@@ -685,6 +686,168 @@ async function sendWhatsApp(
   }
   const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
   void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+}
+
+// ── Nova pasta via auto-cadastro (Story 75-146) ─────────────────────────
+// Quando uma pasta é criada pelo link público da imobiliária, avisa os GESTORES
+// de Pastas da org (roles em PASTA_MANAGER_ROLES) por e-mail + WhatsApp. Difere das
+// notificações de cliente: destinatário interno (gestor), sem prefs de portal e SEM
+// o kill switch PORTAL_NOTIF_PAUSED (que só governa o portal do cliente; esta é uma
+// notificação de equipe, análoga a corretor/roleta).
+//
+// CRÍTICO (AC 4): todos os envios são fire-and-forget (.catch). Uma falha em qualquer
+// canal — incl. o template `nova_pasta_gestor` ainda PENDING na Meta → Graph API falha
+// — NÃO derruba a criação da pasta nem impede o outro canal. A pasta persiste.
+
+// Base do dashboard (crm.trifold.eng.br) — mesma base do botão do template WhatsApp.
+const CRM_BASE = "https://crm.trifold.eng.br"
+
+export interface NovaPastaGestorParams {
+  orgId: string
+  pastaId: string
+  compradorNome: string
+  imobiliaria: string
+}
+
+export async function notifyNovaPastaGestor(params: NovaPastaGestorParams): Promise<void> {
+  const { orgId, pastaId, compradorNome, imobiliaria } = params
+  try {
+    const admin = createAdminClient()
+
+    // Gestores de Pastas da org (admin/supervisor/gerente-comercial/imob), ativos.
+    const { data: gestores } = await admin
+      .from("users")
+      .select("id, name, email, phone")
+      .eq("org_id", orgId)
+      .eq("is_active", true)
+      .in("role", PASTA_MANAGER_ROLES as unknown as string[])
+
+    if (!gestores?.length) return
+
+    const link = `${CRM_BASE}/dashboard/pastas/${pastaId}`
+
+    for (const g of gestores as { id: string; name: string | null; email: string | null; phone: string | null }[]) {
+      const nome = g.name ?? "gestor"
+
+      if (g.email) {
+        sendEmail({
+          to: g.email,
+          orgId,
+          subject: `Nova pasta (auto-cadastro) — ${imobiliaria}`,
+          html: buildNovaPastaEmailHtml({ nome, imobiliaria, compradorNome, link }),
+        }).catch((err) => console.error("[notificacoes] nova pasta email error:", err))
+      }
+
+      if (g.phone) {
+        sendNovaPastaWhatsApp(admin, orgId, g.phone, nome, imobiliaria, compradorNome, pastaId).catch(
+          (err) => console.error("[notificacoes] nova pasta WhatsApp skip:", err)
+        )
+      }
+    }
+  } catch (err) {
+    console.error("[notificacoes] notifyNovaPastaGestor error:", err)
+  }
+}
+
+// Template HSM `nova_pasta_gestor` (pt_BR): body {{1}}=gestor nome, {{2}}=imobiliária,
+// {{3}}=comprador; botão URL dinâmica base https://crm.trifold.eng.br/dashboard/pastas/{{1}}
+// (param = pasta id). Submetido à Meta em paralelo (hoje PENDING) — se ainda não aprovado,
+// a Graph API falha e o envio cai no .catch do chamador (log via logWhatsappSend), SEM
+// derrubar a criação da pasta nem impedir o e-mail.
+async function sendNovaPastaWhatsApp(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  phone: string,
+  nome: string,
+  imobiliaria: string,
+  compradorNome: string,
+  pastaId: string
+): Promise<void> {
+  const { data: config } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .single()
+
+  if (!config?.phone_number_id || !config?.access_token) {
+    throw new Error("whatsapp_config não encontrada para org")
+  }
+
+  const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: phone,
+      type: "template",
+      template: {
+        name: "nova_pasta_gestor",
+        language: { code: "pt_BR" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: nome },
+              { type: "text", text: imobiliaria },
+              { type: "text", text: compradorNome },
+            ],
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: "0",
+            parameters: [{ type: "text", text: pastaId }],
+          },
+        ],
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template: "nova_pasta_gestor", category: "utility", recipientType: "gestor", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
+    throw new Error(`WhatsApp API error: ${res.status} ${errText}`)
+  }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template: "nova_pasta_gestor", category: "utility", recipientType: "gestor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+}
+
+function buildNovaPastaEmailHtml(params: {
+  nome: string
+  imobiliaria: string
+  compradorNome: string
+  link: string
+}): string {
+  const { nome, imobiliaria, compradorNome, link } = params
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden;">
+    <div style="background: #0F0F0F; padding: 24px; text-align: center;">
+      <span style="color: #F27A5E; font-size: 22px; font-weight: bold; letter-spacing: 2px;">TRIFOLD</span>
+    </div>
+    <div style="padding: 32px 24px;">
+      <p style="color: #333; font-size: 16px; margin: 0 0 12px;">Olá, <strong>${nome}</strong>!</p>
+      <p style="color: #555; font-size: 15px; margin: 0 0 8px;">Uma nova pasta foi criada por auto-cadastro da imobiliária <strong>${imobiliaria}</strong>.</p>
+      <p style="color: #F27A5E; font-size: 15px; font-weight: 600; margin: 0 0 32px;">Comprador: ${compradorNome}</p>
+      <div style="text-align: center; margin-bottom: 32px;">
+        <a href="${link}"
+           style="background: #F27A5E; color: #fff; padding: 12px 28px; border-radius: 6px;
+                  text-decoration: none; font-weight: 600; font-size: 15px;">
+          Abrir a pasta
+        </a>
+      </div>
+      <p style="color: #999; font-size: 12px; margin: 0;">
+        Você recebeu este e-mail porque gerencia o módulo Pastas na Trifold.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
 }
 
 function buildEmailHtml(params: {
