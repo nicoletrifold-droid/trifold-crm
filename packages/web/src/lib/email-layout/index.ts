@@ -4,6 +4,7 @@ import { renderFooter } from './components/footer'
 import type { EmailLayoutOptions } from './types'
 
 export { renderButton } from './components/button'
+export { renderPasswordActionEmail } from './components/password-action'
 export { emailTokens } from './styles'
 export type { EmailLayoutOptions } from './types'
 
