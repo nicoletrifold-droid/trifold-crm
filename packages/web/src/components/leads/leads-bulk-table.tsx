@@ -4,7 +4,9 @@ import { useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { MessageCircle } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { whatsAppState } from "@web/lib/leads/whatsapp"
 
 const LOST_REASONS = [
   "Cliente Não Atende/Responde Mais",
@@ -139,7 +141,20 @@ export function LeadsBulkTable({
                   {lead.name || "Sem nome"}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                  {lead.phone}
+                  <div className="flex items-center gap-2">
+                    {whatsAppState({ phone: lead.phone, source: lead.source }) !== "none" && (
+                      <Link
+                        href={`/dashboard/leads/${lead.id}?tab=conversa`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Conversar no WhatsApp (número da empresa)"
+                        aria-label="Conversar no WhatsApp"
+                        className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Link>
+                    )}
+                    <span>{lead.phone}</span>
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   {lead.property_interest?.name ? (
