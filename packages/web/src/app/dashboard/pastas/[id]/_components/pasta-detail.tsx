@@ -133,12 +133,32 @@ export function PastaDetail({
     }
   }
 
-  async function downloadSigned(sig: Signature) {
+  // Story 75-131 — abre o PDF ASSINADO (Clicksign). Mesmo padrão do openFile:
+  // clique em <a> (não window.open, bloqueado como popup) + erro visível.
+  async function openSigned(sig: Signature, download: boolean) {
     setBusyId(sig.id)
+    setFileError(null)
     try {
-      const res = await fetch(`/api/pastas/${pasta.id}/assinatura/${sig.id}/signed-url`)
+      const qs = download ? "?download=1" : ""
+      const res = await fetch(`/api/pastas/${pasta.id}/assinatura/${sig.id}/signed-url${qs}`)
       const data = await res.json().catch(() => null)
-      if (res.ok && data?.url) window.open(data.url, "_blank")
+      if (!res.ok || !data?.url) {
+        setFileError(data?.error ?? "Não foi possível abrir o documento assinado.")
+        return
+      }
+      const a = document.createElement("a")
+      a.href = data.url
+      if (download) {
+        a.download = ""
+      } else {
+        a.target = "_blank"
+        a.rel = "noopener"
+      }
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch {
+      setFileError("Falha de conexão ao abrir o documento assinado.")
     } finally {
       setBusyId(null)
     }
@@ -402,11 +422,18 @@ export function PastaDetail({
                       <FileSignature className="h-3.5 w-3.5" />
                       {ASSINATURA_LABEL[sig.status] ?? sig.status}
                       {sig.hasSigned && (
-                        <button onClick={() => downloadSigned(sig)} disabled={busyId === sig.id}
-                          className="ml-1 inline-flex items-center gap-1 rounded border border-emerald-200 px-1.5 py-0.5 text-[11px] text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
-                          {busyId === sig.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                          Assinado
-                        </button>
+                        <>
+                          <button onClick={() => openSigned(sig, false)} disabled={busyId === sig.id} title="Visualizar documento assinado"
+                            className="ml-1 inline-flex items-center gap-1 rounded border border-emerald-200 px-1.5 py-0.5 text-[11px] text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
+                            {busyId === sig.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                            Ver
+                          </button>
+                          <button onClick={() => openSigned(sig, true)} disabled={busyId === sig.id} title="Baixar documento assinado"
+                            className="inline-flex items-center gap-1 rounded border border-emerald-200 px-1.5 py-0.5 text-[11px] text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
+                            {busyId === sig.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                            Assinado
+                          </button>
+                        </>
                       )}
                     </span>
                   )}
