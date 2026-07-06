@@ -167,6 +167,14 @@ function DeleteModal({ pasta, onClose, onDeleted }: { pasta: PastaRow; onClose: 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
 
+// Story 75-126 — preferência de fluxo de pagamento (seção do Termo de Intenção).
+const FLUXOS_PAGAMENTO: { value: string; label: string; hint: string }[] = [
+  { value: "fluxo_30_70", label: "Fluxo 30/70", hint: "10% ato + 20% em 42 meses + 70% nas chaves" },
+  { value: "fluxo_100_obra", label: "Fluxo 100% obra", hint: "10% ato + 42 mensais com a construtora" },
+  { value: "plano_safra", label: "Plano Safra", hint: "Semestrais ou condição personalizada" },
+  { value: "plano_investidor", label: "Plano Investidor", hint: "À vista ou até 6 parcelas" },
+]
+
 interface SeededDoc {
   id: string
   slug: string
@@ -189,6 +197,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const [imobiliaria, setImobiliaria] = useState("")
   const [empreendimento, setEmpreendimento] = useState("")
   const [temPix, setTemPix] = useState(false)
+  const [fluxoPagamento, setFluxoPagamento] = useState<string | null>(null)
 
   // Tela 2 — comprador
   const [nome, setNome] = useState("")
@@ -232,6 +241,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           uniao_estavel: uniaoEstavel,
           empreendimento: empreendimento.trim(),
           tem_pix: temPix,
+          fluxo_pagamento: fluxoPagamento,
           corretor_nome: corretorNome.trim(),
           corretor_telefone: corretorTelefone.trim(),
           corretor_email: corretorEmail.trim(),
@@ -329,6 +339,25 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 <span className="text-xs text-gray-500 dark:text-stone-400">Empreendimento</span>
                 <input value={empreendimento} onChange={(e) => setEmpreendimento(e.target.value)} className={inputCls} />
               </label>
+              <div>
+                <span className="text-xs text-gray-500 dark:text-stone-400">Fluxo de pagamento <span className="text-gray-400 dark:text-stone-500">(opcional)</span></span>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  {FLUXOS_PAGAMENTO.map((f) => {
+                    const on = fluxoPagamento === f.value
+                    return (
+                      <button
+                        key={f.value}
+                        type="button"
+                        onClick={() => setFluxoPagamento(on ? null : f.value)}
+                        className={`rounded-md border px-3 py-2 text-left ${on ? "border-orange-500 bg-orange-50 dark:border-orange-500 dark:bg-orange-500/10" : "border-gray-200 dark:border-stone-700"}`}
+                      >
+                        <span className={`block text-sm font-medium ${on ? "text-orange-700 dark:text-orange-300" : "text-gray-700 dark:text-stone-300"}`}>{f.label}</span>
+                        <span className="block text-[11px] leading-tight text-gray-400 dark:text-stone-500">{f.hint}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
               <div>
                 <span className="text-xs text-gray-500 dark:text-stone-400">Pagamento</span>
                 <div className="mt-1 grid grid-cols-2 gap-2">

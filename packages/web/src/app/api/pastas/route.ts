@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
   const uniaoEstavel = tipo === "pf" && body.uniao_estavel === true
   const casado = tipo === "pf" && body.casado === true && !uniaoEstavel
   const temPix = body.tem_pix === true
+  // Story 75-126 — preferência de fluxo de pagamento (opcional; só grava se válido).
+  const FLUXOS = ["fluxo_30_70", "fluxo_100_obra", "plano_safra", "plano_investidor"]
+  const fluxoPagamento = FLUXOS.includes(body.fluxo_pagamento) ? body.fluxo_pagamento : null
   const empreendimento = optStr(body.empreendimento)
   // Story 75-123 — origem (texto livre, não amarra ao CRM) + contatos do interessado.
   const corretorNome = optStr(body.corretor_nome)
@@ -52,6 +55,7 @@ export async function POST(request: NextRequest) {
       uniao_estavel: uniaoEstavel,
       empreendimento,
       tem_pix: temPix,
+      fluxo_pagamento: fluxoPagamento,
       corretor_nome: corretorNome,
       corretor_telefone: corretorTelefone,
       corretor_email: corretorEmail,
