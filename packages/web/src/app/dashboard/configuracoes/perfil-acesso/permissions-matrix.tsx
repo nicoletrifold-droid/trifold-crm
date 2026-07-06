@@ -519,7 +519,9 @@ export function PermissionsMatrix({
 
       {/* Card principal com a matriz */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
-        <div className="max-h-[600px] overflow-auto">
+        {/* Story 75-138 — altura relativa à viewport para a barra de rolagem
+            horizontal (rodapé do container) ficar sempre visível/alcançável. */}
+        <div className="max-h-[calc(100vh-16rem)] overflow-auto">
           <table className="min-w-full">
             {/* Cabeçalho com chips de role estilizados — sticky para rolar com a tabela */}
             <thead className="sticky top-0 z-20 border-b border-gray-200 bg-gradient-to-b from-gray-50/80 to-white dark:border-stone-800 dark:from-stone-800/30 dark:to-stone-900">
