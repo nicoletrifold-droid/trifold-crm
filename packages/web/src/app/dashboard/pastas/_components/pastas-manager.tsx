@@ -3,8 +3,9 @@
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { FolderPlus, Copy, Check, ChevronRight, Trash2, ArrowLeft, ArrowRight, Paperclip, Loader2 } from "lucide-react"
+import { FolderPlus, Copy, Check, ChevronRight, Trash2, ArrowLeft, ArrowRight, Paperclip, Loader2, CheckCircle2, Search, Clock } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
+import type { PastaStatus } from "@web/lib/pastas/status"
 
 interface PastaRow {
   id: string
@@ -12,8 +13,44 @@ interface PastaRow {
   tipo: string
   empreendimento: string | null
   token: string
+  status: PastaStatus
   total: number
   entregues: number
+  deferidos: number
+}
+
+// Story 75-134 — selo de status da pasta (Aguardando / Em análise / Concluída).
+const STATUS_META: Record<PastaStatus, { label: string; Icon: typeof CheckCircle2; cls: string }> = {
+  aguardando: {
+    label: "Aguardando",
+    Icon: Clock,
+    cls: "bg-gray-100 text-gray-500 dark:bg-stone-800 dark:text-stone-400",
+  },
+  em_analise: {
+    label: "Em análise",
+    Icon: Search,
+    cls: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  },
+  concluida: {
+    label: "Concluída",
+    Icon: CheckCircle2,
+    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  },
+}
+
+function StatusPill({ status }: { status: PastaStatus }) {
+  const { label, Icon, cls } = STATUS_META[status]
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
+      <Icon className="h-3 w-3" />
+      {label}
+    </span>
+  )
+}
+
+function pastaSubtitle(p: PastaRow): string {
+  if (p.status === "em_analise") return `${p.entregues}/${p.total} entregues · ${p.deferidos}/${p.total} deferidos`
+  return `${p.entregues}/${p.total} documentos entregues`
 }
 
 export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
@@ -65,15 +102,18 @@ export function PastasManager({ pastas }: { pastas: PastaRow[] }) {
             {pastas.map((p) => (
               <li key={p.id} className="flex items-center gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-gray-900 dark:text-stone-100">
-                    {p.nome}{" "}
-                    <span className="text-xs font-normal uppercase text-gray-400 dark:text-stone-500">
-                      {p.tipo}
+                  <p className="flex items-center gap-2 truncate font-medium text-gray-900 dark:text-stone-100">
+                    <span className="truncate">
+                      {p.nome}{" "}
+                      <span className="text-xs font-normal uppercase text-gray-400 dark:text-stone-500">
+                        {p.tipo}
+                      </span>
                     </span>
+                    <StatusPill status={p.status} />
                   </p>
                   <p className="truncate text-xs text-gray-500 dark:text-stone-400">
                     {p.empreendimento ? `${p.empreendimento} · ` : ""}
-                    {p.entregues}/{p.total} documentos entregues
+                    {pastaSubtitle(p)}
                   </p>
                 </div>
                 <button
