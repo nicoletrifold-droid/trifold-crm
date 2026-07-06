@@ -1,7 +1,7 @@
 # Story 75-139 — Migração do e-mail de recuperação de senha para o Resend
 
 ## Status
-InProgress
+InReview
 
 ## Contexto
 Hoje o "e-mail de recuperação de senha" tem **dois caminhos**, ambos ainda no provedor **Supabase Auth** (SMTP
@@ -618,3 +618,61 @@ de story `75-139` está OK (livre em origin/main, que vai até 75-138).
 | 2026-07-06 | 1.0 | Story criada — migração dos 2 fluxos de e-mail de recuperação de senha (login self-service + reset cliente do portal) para o Resend, com template branded reutilizável, anti-enumeração e throttle. Reverte a decisão de infra da Story 75-122 (SMTP dedicado), mantida como fallback não utilizado pelo código. | River (@sm) |
 | 2026-07-06 | 1.1 | Validação PO (GO, 9/10). Status `Draft → Ready`. Claims técnicos verificados contra o código real. Fixes registrados: (A) mandatório antes do merge — renumerar migration 131 → 161 (colisão confirmada com `131_imobiliarias.sql` em origin/main; migrations de main já vão até 160); (B) should-fix — documentar timing side-channel da anti-enumeração e ausência de throttle por IP como resíduos conhecidos. Ver seção "PO Validation Notes". | Pax (@po) |
 | 2026-07-06 | 1.2 | Implementação (Tasks 1–6). Status `Ready → InProgress`. Migration criada como **161** (fix A). `sendEmail` na Frente 1 convertido para fire-and-forget (fix B — timing side-channel). 2 resíduos de segurança adicionados à tabela de Risks. Template `renderPasswordActionEmail` extraído e os 3 call-sites inline migrados (Task 6). typecheck + lint limpos nos arquivos tocados. Migration não aplicada (deploy do @qa/@devops). Ver "Dev Agent Record". | Dex (@dev) |
+| 2026-07-06 | 1.3 | QA Gate: **CONCERNS** (8/10). Status `InProgress → InReview`. Revisão de segurança rigorosa (auth story): anti-enumeração sólida em todos os branches, service-role server-only, throttle consistente, migration 161 idempotente c/ RLS. typecheck (0 erros novos; 4 pré-existentes não relacionados) + eslint (0) confirmados. CONCERNS por causa das verificações manuais obrigatórias pendentes (smoke e2e dos 2 fluxos + throttle + migration dry-run + AC7 no Studio), não por defeito de código. Ver "QA Results". | Quinn (@qa) |
+
+## QA Results
+
+### Review Date: 2026-07-06
+### Reviewed By: Quinn (@qa — Test Architect & Guardian)
+
+**Gate: CONCERNS → docs/qa/gates/75.139-reset-senha-self-service-via-resend.yml** (readiness 8/10)
+
+Story de autenticação — revisão de segurança rigorosa aplicada. Código sólido, **zero achados HIGH/CRITICAL**. O
+gate fica em CONCERNS (não PASS) exclusivamente porque as verificações manuais obrigatórias antes do Done (smoke
+e2e dos 2 fluxos, comportamento de throttle, migration dry-run e confirmação do SMTP no Studio) **não são
+executáveis autonomamente** e ainda estão pendentes — não por defeito de código.
+
+#### 7 Quality Checks (AIOS)
+| Check | Resultado | Nota |
+|-------|-----------|------|
+| Code review | PASS | Reuso do padrão `generateLink`+`sendEmail` já validado em prod; extração DRY do template (AC6); imports absolutos; `use server`/`server-only` corretos |
+| Unit tests | N/A | Sem testes automatizados — deps externas (Supabase Auth Admin + Resend); mesmo padrão de 20-11/20-12 |
+| Acceptance criteria | CONCERNS | AC1-AC6 atendidas no código; AC7 + e2e de AC1/AC2/AC4 exigem smoke manual pendente |
+| Regressions | PASS | Task 6 behavior-preserving (mesmo subject/CTA/link); contrato de `requestPasswordReset` preservado |
+| Performance | PASS | Fire-and-forget encurta a resposta pública; throttle usa índice `(identifier, requested_at DESC)` |
+| Security (OWASP) | PASS | Anti-enumeração sólida; service-role server-only (não vaza p/ bundle); throttle; queries parametrizadas |
+| Documentation | PASS | Dev Agent Record detalhado; decisão AC7 documentada em Dev Notes + Change Log |
+
+#### Foco de Segurança (auth story)
+- **Anti-enumeração (AC3):** SÓLIDA. `genericSuccess` retornado em 100% dos branches (throttled L118, e-mail inexistente L137, falha createUser L150, falha generateLink L163, sucesso L197). `generateLink` só é chamado após confirmar `users` existente. Nenhuma mensagem/status revela existência.
+- **Timing side-channel:** resíduo conhecido e aceito. `sendEmail` + `logAudit` são fire-and-forget (`void`); `generateLink` (await) e `recordPasswordResetAttempt` (await) permanecem só no caminho existente → assimetria residual mensurável em teoria, aceitável no threat model. `void sendEmail(...)` é seguro: `sendEmail` captura todos os erros internamente e nunca rejeita (sem unhandled rejection).
+- **Service-role (AC5):** OK. `createAdminClient()` só em arquivos server-side; nenhum Client Component o importa; `admin.ts` usa `SUPABASE_SERVICE_ROLE_KEY` (var privada, não inlined).
+- **Throttle (AC4):** janela 15min / máx 3; `isPasswordResetThrottled` e `recordPasswordResetAttempt` usam o mesmo identifier normalizado (lowercase+trim) — consistente. Desvio literal do AC4.3 (insert só após generateLink OK de usuário existente) é imaterial para a proteção de inbox.
+- **Migration 161:** número confirmado livre (main até 160; 131 ocupada). Idempotente (`IF NOT EXISTS` x2), RLS habilitada sem policies (intencional, documentado). Dry-run live pendente.
+- **Redirect (AC2):** corrigido para `/reset-senha` (página confirmada existente).
+
+#### Achados (todos LOW — não-bloqueantes)
+- `SEC-001` (low): timing side-channel residual — aceitar; opcional tornar `recordPasswordResetAttempt` fire-and-forget.
+- `REQ-001` (low): AC4.3 literal — insert só no caminho existente; imaterial p/ proteção de inbox.
+- `SEC-002` (low): sem throttle por IP — `identifier` genérico é forward-compatible; enhancement futuro.
+- `DOC-001` (low): copy Task 6 "O administrador solicitou" → "Você solicitou" (reset admin-triggered). Aceito; reversível sem afetar Tasks 1-5.
+
+#### Deltas de copy (Task 6) — veredito: ACEITAR
+Task 6 é recomendada/não-bloqueante. As mudanças de corpo ("Você solicitou..." no reset de usuário; drop de "como corretor" no broker) são cosméticas, com subject/CTA/link idênticos e zero impacto funcional. **Recomendação: não reverter.** Se a precisão de "O administrador solicitou" for desejada, tratar como enhancement de baixa prioridade (param opcional no template).
+
+#### typecheck / lint
+- `npx tsc --noEmit` (packages/web): **zero erros nos 7 arquivos tocados**. Os 4 erros restantes são pré-existentes e não relacionados (`react-email-editor` em `visual-editor.tsx` x3; `pdf-lib` em `pastas/termo/fill.ts`) — nenhum consta na File List.
+- `npx eslint` nos 7 arquivos tocados: **exit 0, zero warnings/erros**.
+
+#### Verificações manuais obrigatórias antes do Done (não executáveis autonomamente)
+1. Smoke Frente 1 — e-mail existente c/ auth_id → Resend → link → verifyOtp → `/reset-senha` → nova senha → login OK.
+2. Smoke Frente 1 — e-mail inexistente → UI idêntica de "enviado" → Resend dashboard = **0 envios**.
+3. Smoke Frente 1 — 4 solicitações <15min p/ o mesmo e-mail → só 3 geram e-mail; 4ª sem envio extra; resposta genérica.
+4. Smoke Frente 1 — usuário legado sem auth_id → conta criada via createUser → e-mail chega.
+5. Smoke Frente 2 — admin aciona reset de cliente do portal → Resend → link `/reset-senha` → funciona.
+6. Migration dry-run — aplicar 161 em dev/staging, rodar 2x (idempotência), confirmar RLS sem policies no banco.
+7. AC7 — confirmar no Supabase Studio que o SMTP custom (75-122) permanece intacto.
+
+**Decisão:** APROVADO COM OBSERVAÇÕES (CONCERNS). Segue para @devops/@qa executarem o smoke + migration dry-run antes do push/Done. Nenhum retorno ao @dev necessário — não há defeito de código a corrigir.
+
+— Quinn, guardião da qualidade 🛡️

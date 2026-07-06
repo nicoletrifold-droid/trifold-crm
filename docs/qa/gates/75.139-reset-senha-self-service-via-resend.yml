@@ -1,0 +1,99 @@
+schema: 1
+storyId: "75-139"
+story: "75.139"
+title: "Migração dos e-mails de recuperação de senha (login self-service + reset cliente portal) para o Resend"
+gate: CONCERNS
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-06
+status_reason: "Código sólido, zero achados HIGH/CRITICAL e anti-enumeração correta em todos os branches; gate fica em CONCERNS porque o smoke funcional obrigatório (Task 7 — envio real Resend + troca de senha e2e + throttle), a aplicação/dry-run da migration 161 e a confirmação do SMTP custom (AC7) no Supabase Studio são verificações manuais não executáveis autonomamente e ainda pendentes antes do Done."
+
+checks:
+  code_review: PASS         # reuso do padrão generateLink+sendEmail já validado em prod; extração DRY do template (AC6); imports absolutos; server-only/use-server corretos
+  unit_tests: N/A           # sem testes automatizados — fluxo depende de Supabase Auth Admin API + Resend (externos); mesmo padrão adotado em 20-11/20-12 para integrações externas
+  acceptance_criteria: CONCERNS # AC1-AC6 atendidas no código; AC7 e o comportamento e2e de AC1/AC2/AC4 exigem smoke manual pendente
+  regressions: PASS         # Task 6 é behavior-preserving (mesmo subject/CTA/link; só corpo unificado); contrato de requestPasswordReset preservado ({error}|{sent,email})
+  performance: PASS         # fire-and-forget encurta a resposta pública; throttle SELECT usa índice (identifier, requested_at DESC); +1 lookup indexado
+  security: PASS            # anti-enumeração em 100% dos branches; service-role só server-side (não vaza p/ bundle); throttle por e-mail; queries parametrizadas (sem injeção); resíduo de timing documentado e aceito
+  documentation: PASS       # Dev Agent Record detalhado; decisão AC7 (manter SMTP como fallback) documentada em Dev Notes + Change Log
+
+typecheck:
+  result: PASS
+  detail: "npx tsc --noEmit (packages/web) — zero erros nos 7 arquivos tocados. 4 erros restantes são pré-existentes e não relacionados: 3 em email-templates/_components/visual-editor.tsx (módulo 'react-email-editor' ausente) + 1 em lib/pastas/termo/fill.ts (módulo 'pdf-lib' ausente). Nenhum consta na File List."
+
+lint:
+  result: PASS
+  detail: "npx eslint nos 7 arquivos tocados — exit 0, zero warnings/erros."
+
+acceptance_criteria_trace:
+  AC1: "PASS (código) — generateLink(type recovery) + renderPasswordActionEmail(mode reset) + sendEmail via Resend em login/actions.ts. redirectTo `${origin}/auth/callback?next=/reset-senha` preservado. Retorno {sent:true,email:rawEmail}. Verificação e2e do link → verifyOtp → /reset-senha: SMOKE MANUAL PENDENTE (Task 7.1)."
+  AC2: "PASS — redirectTo corrigido de /portal/reset-password (inexistente) para /reset-senha (página confirmada em src/app/reset-senha/page.tsx). generateLink+sendEmail(mode reset). Erros 404/422 preservados. logAudit cliente.senha.reset_email_sent intacto. Smoke e2e do link: PENDENTE (Task 7.5)."
+  AC3: "PASS — genericSuccess ({sent:true,email:rawEmail}) retornado em TODOS os branches: throttled (L118), e-mail inexistente (L137), falha createUser (L150), falha generateLink (L163) e sucesso (L197). Nenhuma mensagem/status revela existência. Único early-return distinto é validação de input vazio (L108, 'Email é obrigatório') — não revela conta. generateLink só é chamado após confirmar users existente (L130-138)."
+  AC4: "CONCERNS (não-bloqueante) — WINDOW=15min, MAX=3; isPasswordResetThrottled e recordPasswordResetAttempt recebem o MESMO identifier normalizado (email lowercase+trim) → consistente. Protege inbox real (3 e-mails/15min). Desvio literal do AC4.3: o insert só ocorre após generateLink bem-sucedido (existing user), então tentativas p/ e-mail inexistente ou generateLink com falha NÃO são registradas. Imaterial para o objetivo (nenhum e-mail é enviado nesses casos). Verificação de contagem real: SMOKE PENDENTE (Task 7.3)."
+  AC5: "PASS — generateLink usa exclusivamente createAdminClient() (service-role). Arquivo é Server Action ('use server'); helper de throttle tem import 'server-only'. Grep confirma que nenhum Client Component importa createAdminClient. admin.ts usa SUPABASE_SERVICE_ROLE_KEY (var privada, não NEXT_PUBLIC → não é inlined no bundle do browser)."
+  AC6: "PASS — renderPasswordActionEmail({userName,actionLink,siteUrl,mode}) criado em lib/email-layout/components/password-action.ts, exportado em index.ts. Os 2 novos call-sites (login + cliente portal) e os 3 legados (users/reset-password + brokers x2) usam o template — zero HTML inline nos arquivos desta story."
+  AC7: "PASS (código) — nenhuma alteração em config SMTP; decisão de manter como fallback documentada em Dev Notes + Change Log. Confirmação de que o SMTP custom permanece intacto no Supabase Studio: VERIFICAÇÃO MANUAL PENDENTE (Task 7.7)."
+
+security_review:
+  anti_enumeration: "SÓLIDA. Resposta genérica idêntica em todos os caminhos; generateLink nunca é chamado para e-mail sem users correspondente (fecha o vetor de mensagem nativa divergente do Supabase)."
+  timing_side_channel: "RESÍDUO CONHECIDO E ACEITO. sendEmail e logAudit são fire-and-forget (void, sem await) → resposta retorna sem aguardar Resend. generateLink permanece await (precisa do link) e recordPasswordResetAttempt é await no caminho existente → assimetria de latência residual entre e-mail existente/inexistente permanece, mensurável em teoria. Aceitável no threat model do CRM (base limitada). Mitigação opcional adicional: tornar recordPasswordResetAttempt fire-and-forget também."
+  unhandled_rejection: "OK. sendEmail() captura todos os erros internamente (try/catch + checagem de resend nulo) e sempre resolve para {id,error?} — nunca rejeita. Portanto `void sendEmail(...)` NÃO gera unhandled promise rejection."
+  service_role_exposure: "OK. Chave service-role só em arquivos server-side; não vaza para bundle do browser."
+  injection: "OK. Todas as queries via supabase-js parametrizado (.eq/.ilike/.insert); sem SQL cru."
+  throttle_ip: "AUSENTE por decisão (defesa-em-profundidade). Coluna `identifier` genérica é forward-compatible p/ IP sem nova migration. Não-bloqueante, registrado como enhancement futuro."
+
+migration_review:
+  file: "supabase/migrations/161_password_reset_throttle.sql"
+  numbering: "PASS — 161 confirmado livre (origin/main vai até 160_pastas_fluxo_pagamento.sql; 131 já ocupada por 131_imobiliarias.sql). Fix (A) da validação PO aplicado corretamente."
+  idempotency: "PASS (estático) — CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS. Dry-run 2x em dev: PENDENTE (@qa/@devops)."
+  rls: "PASS — ALTER TABLE ... ENABLE ROW LEVEL SECURITY, sem policies (intencional e documentado; mesmo padrão de imob_*). service_role bypassa RLS → admin client funciona; anon/authenticated não leem. Verificação live: PENDENTE."
+
+copy_delta_review:
+  verdict: "ACEITO (Task 6 é recomendada/não-bloqueante) — manter a unificação."
+  users_reset_password: "'O administrador solicitou a redefinição...' → 'Você solicitou a redefinição...'. Levemente impreciso para reset disparado por admin (o usuário não solicitou), mas não é enganoso nem prejudicial; o template já inclui 'Se você não esperava este e-mail, pode ignorá-lo'. Subject/CTA/link idênticos. Opcional: adicionar um 3º mode/param se a equipe quiser preservar a autoria correta."
+  brokers: "'cadastrado como corretor' → 'cadastrado'. Cosmético, sem impacto funcional. Subject/CTA/link idênticos."
+  recommendation: "Não reverter. Se a precisão de 'O administrador solicitou' for desejada, tratar como enhancement de baixa prioridade (param opcional no template), sem afetar Tasks 1-5."
+
+issues:
+  - id: "SEC-001"
+    severity: low
+    category: security
+    finding: "Timing side-channel residual: generateLink (await) + recordPasswordResetAttempt (await) executam apenas no caminho de e-mail existente, criando diferença de latência mensurável vs. e-mail inexistente."
+    suggested_action: "Aceitar (documentado no threat model). Opcional: tornar recordPasswordResetAttempt fire-and-forget (void) para encurtar ainda mais a janela."
+  - id: "REQ-001"
+    severity: low
+    category: requirements
+    finding: "AC4.3 literal ('cada tentativa não bloqueada é registrada') diverge da implementação: o insert só ocorre após generateLink bem-sucedido (usuário existente). Tentativas p/ e-mail inexistente ou generateLink com falha não são registradas."
+    suggested_action: "Aceitar — imaterial para o objetivo de proteção de inbox (nenhum e-mail é enviado nesses casos). Se defesa contra varredura for desejada no futuro, registrar mais cedo e/ou adicionar identifier por IP."
+  - id: "SEC-002"
+    severity: low
+    category: security
+    finding: "Throttle apenas por e-mail, sem throttle por IP (sem defesa-em-profundidade contra origem única varrendo muitos e-mails)."
+    suggested_action: "Não-bloqueante. Coluna `identifier` genérica já é forward-compatible p/ IP. Registrar como enhancement futuro."
+  - id: "DOC-001"
+    severity: low
+    category: docs
+    finding: "Copy do reset admin-triggered mudou para 'Você solicitou' (Task 6) — semanticamente o admin dispara."
+    suggested_action: "Aceitar; opcional adicionar param/mode para preservar autoria. Reversível sem afetar Tasks 1-5."
+
+manual_verifications_pending:
+  - "Task 7.1 — Smoke Frente 1: reset p/ e-mail existente c/ auth_id → e-mail chega via Resend → link → verifyOtp → /reset-senha → nova senha → login OK."
+  - "Task 7.2 — Smoke Frente 1: reset p/ e-mail INEXISTENTE → UI mostra tela idêntica de 'enviado' → conferir Resend dashboard = 0 envios."
+  - "Task 7.3 — Smoke Frente 1: 4 solicitações <15min p/ o MESMO e-mail existente → só as 3 primeiras geram e-mail; 4ª não gera envio extra; resposta continua genérica."
+  - "Task 7.4 — Smoke Frente 1: usuário legado sem auth_id → conta criada automaticamente via createUser → e-mail chega."
+  - "Task 7.5 — Smoke Frente 2: admin aciona reset de cliente do portal → e-mail via Resend → link aponta p/ /reset-senha (não /portal/reset-password) → funciona."
+  - "Migration dry-run: aplicar 161 em dev/staging, rodar 2x (idempotência) e confirmar RLS habilitada sem policies no banco."
+  - "AC7 (Task 7.7) — confirmar no Supabase Studio que a config de SMTP custom da Story 75-122 permanece intacta (não foi tocada)."
+
+waiver: { active: false }
+
+top_issues:
+  - id: "SEC-001"
+    severity: low
+    finding: "Timing side-channel residual (generateLink/record await só no caminho existente)"
+    suggested_action: "Aceitar; documentado no threat model"
+  - id: "REQ-001"
+    severity: low
+    finding: "AC4.3 literal: insert só no caminho existente com generateLink OK"
+    suggested_action: "Aceitar; imaterial p/ proteção de inbox"
