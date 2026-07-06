@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isLikelyMobileBR, isWhatsAppConfirmed, whatsAppState } from "./whatsapp"
+import { isLikelyMobileBR, isWhatsAppConfirmed, whatsAppState, toWhatsAppNumber } from "./whatsapp"
 
 describe("isLikelyMobileBR", () => {
   it("aceita celulares válidos (com/sem DDI e com máscara)", () => {
@@ -43,5 +43,21 @@ describe("whatsAppState", () => {
     expect(whatsAppState({ phone: "4433334444", source: "meta_ads" })).toBe("none")
     expect(whatsAppState({ phone: "tg:1", hasWhatsappConversation: true })).toBe("none")
     expect(whatsAppState({ phone: null })).toBe("none")
+  })
+})
+
+describe("toWhatsAppNumber", () => {
+  it("adiciona DDI 55 quando falta e limpa a máscara", () => {
+    expect(toWhatsAppNumber("44999114326")).toBe("5544999114326")
+    expect(toWhatsAppNumber("(44) 99911-4326")).toBe("5544999114326")
+  })
+  it("mantém quando já tem 55", () => {
+    expect(toWhatsAppNumber("+5544999114326")).toBe("5544999114326")
+    expect(toWhatsAppNumber("5544999114326")).toBe("5544999114326")
+  })
+  it("null para telegram/vazio", () => {
+    expect(toWhatsAppNumber("tg:123")).toBeNull()
+    expect(toWhatsAppNumber("")).toBeNull()
+    expect(toWhatsAppNumber(null)).toBeNull()
   })
 })
