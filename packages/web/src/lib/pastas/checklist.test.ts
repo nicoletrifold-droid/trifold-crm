@@ -21,6 +21,14 @@ describe("buildDocSlots (Story 75-104)", () => {
     expect(d.filter((x) => x.titular === "representante")).toHaveLength(4)
     expect(d.some((x) => x.titular === "conjuge")).toBe(false)
   })
+  it("PIX (Story 75-123): injeta comprovante_pix ao final; sem PIX não aparece", () => {
+    expect(buildDocSlots("pf", false).some((x) => x.slug === "comprovante_pix")).toBe(false)
+    const pf = buildDocSlots("pf", false, true)
+    expect(pf.at(-1)?.slug).toBe("comprovante_pix")
+    expect(pf.at(-1)?.titular).toBe("interessado")
+    const pj = buildDocSlots("pj", false, true)
+    expect(pj.some((x) => x.slug === "comprovante_pix")).toBe(true)
+  })
 })
 
 describe("buildInfoFields", () => {

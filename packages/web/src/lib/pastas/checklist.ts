@@ -50,16 +50,27 @@ function pessoaInfos(titular: Titular): InfoField[] {
   ]
 }
 
-/** Documentos (uploads) exigidos conforme tipo/estado civil. */
-export function buildDocSlots(tipo: PastaTipo, casado: boolean): DocSlot[] {
+// Story 75-123 — quando a pasta é marcada com "PIX", o interessado precisa anexar
+// o comprovante do pagamento. É sempre do titular/interessado (PF ou PJ).
+const PIX_DOC: DocSlot = {
+  slug: "comprovante_pix",
+  label: "Comprovante de pagamento (PIX)",
+  titular: "interessado",
+}
+
+/** Documentos (uploads) exigidos conforme tipo/estado civil e marcação PIX. */
+export function buildDocSlots(tipo: PastaTipo, casado: boolean, temPix = false): DocSlot[] {
+  let docs: DocSlot[]
   if (tipo === "pj") {
-    return [
+    docs = [
       { slug: "contrato_social", label: "Contrato social", titular: "interessado" },
       ...pessoaDocs("representante"),
     ]
+  } else {
+    docs = pessoaDocs("interessado")
+    if (casado) docs.push(...pessoaDocs("conjuge"))
   }
-  const docs = pessoaDocs("interessado")
-  if (casado) docs.push(...pessoaDocs("conjuge"))
+  if (temPix) docs.push(PIX_DOC)
   return docs
 }
 
