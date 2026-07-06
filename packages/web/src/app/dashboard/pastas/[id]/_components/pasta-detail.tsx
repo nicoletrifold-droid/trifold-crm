@@ -3,8 +3,9 @@
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Copy, Check, Download, Loader2, Paperclip, Trash2, FileSignature, X } from "lucide-react"
+import { ArrowLeft, Copy, Check, Download, Loader2, Paperclip, Trash2, FileSignature, X, FileText, Sparkles } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
+import type { TermoData } from "@web/lib/pastas/termo/fill"
 
 interface Doc {
   id: string
@@ -142,6 +143,54 @@ export function PastaDetail({
     }
   }
 
+  // Story 75-127 — gerar Termo de Intenção a partir dos documentos
+  const [termoData, setTermoData] = useState<TermoData | null>(null)
+  const [termoLoading, setTermoLoading] = useState(false)
+  const [termoSaving, setTermoSaving] = useState(false)
+  const [termoError, setTermoError] = useState<string | null>(null)
+
+  async function abrirTermo() {
+    setTermoLoading(true)
+    setTermoError(null)
+    try {
+      const res = await fetch(`/api/pastas/${pasta.id}/termo/extrair`, { method: "POST" })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.data) {
+        setTermoData(data.data as TermoData)
+      } else {
+        setTermoError(data?.error ?? "Falha ao ler os documentos")
+      }
+    } catch {
+      setTermoError("Falha de conexão")
+    } finally {
+      setTermoLoading(false)
+    }
+  }
+
+  async function gerarTermo() {
+    if (!termoData) return
+    setTermoSaving(true)
+    setTermoError(null)
+    try {
+      const res = await fetch(`/api/pastas/${pasta.id}/termo/gerar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(termoData),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok) {
+        setTermoData(null)
+        router.refresh()
+      } else {
+        setTermoError(data?.error ?? "Falha ao gerar o Termo")
+      }
+    } catch {
+      setTermoError("Falha de conexão")
+    } finally {
+      setTermoSaving(false)
+    }
+  }
+
   const link = typeof window !== "undefined" ? `${window.location.origin}/pasta/${pasta.token}` : ""
 
   async function uploadDoc(doc: Doc, file: File) {
@@ -216,6 +265,15 @@ export function PastaDetail({
           {pasta.empreendimento && <p className="text-sm text-gray-500 dark:text-stone-400">{pasta.empreendimento}</p>}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={abrirTermo}
+            disabled={termoLoading}
+            title="Ler os documentos e preencher o Termo de Intenção"
+            className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-60 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
+          >
+            {termoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {termoLoading ? "Lendo documentos..." : "Gerar Termo de Intenção"}
+          </button>
           <button
             onClick={copyLink}
             className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -336,6 +394,24 @@ export function PastaDetail({
         </div>
       )}
 
+      {termoError && !termoData && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+          {termoError}
+        </p>
+      )}
+
+      {/* Story 75-127 — revisão + geração do Termo de Intenção */}
+      {termoData && (
+        <TermoReviewModal
+          data={termoData}
+          onChange={setTermoData}
+          onClose={() => { setTermoData(null); setTermoError(null) }}
+          onConfirm={gerarTermo}
+          saving={termoSaving}
+          error={termoError}
+        />
+      )}
+
       {/* Story 75-120 — modal "Enviar para assinatura" */}
       {signDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !signing && setSignDoc(null)}>
@@ -396,6 +472,128 @@ export function PastaDetail({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Story 75-127 — tela de revisão dos dados extraídos antes de gerar o Termo.
+const tInput =
+  "mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+const TERMO_FLUXOS = [
+  { v: "fluxo_30_70", l: "Fluxo 30/70" },
+  { v: "fluxo_100_obra", l: "Fluxo 100% obra" },
+  { v: "plano_safra", l: "Plano Safra" },
+  { v: "plano_investidor", l: "Plano Investidor" },
+]
+
+function TField({ label, value, onChange, cls = "" }: { label: string; value: string | null | undefined; onChange: (v: string) => void; cls?: string }) {
+  return (
+    <label className={`block ${cls}`}>
+      <span className="text-xs text-gray-500 dark:text-stone-400">{label}</span>
+      <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={tInput} />
+    </label>
+  )
+}
+
+function TermoReviewModal({
+  data, onChange, onClose, onConfirm, saving, error,
+}: {
+  data: TermoData
+  onChange: (d: TermoData) => void
+  onClose: () => void
+  onConfirm: () => void
+  saving: boolean
+  error: string | null
+}) {
+  const set = (patch: Partial<TermoData>) => onChange({ ...data, ...patch })
+  const setEnd = (patch: Partial<NonNullable<TermoData["endereco"]>>) =>
+    onChange({ ...data, endereco: { ...(data.endereco ?? {}), ...patch } })
+  const setConj = (patch: Partial<NonNullable<TermoData["conjuge"]>>) =>
+    onChange({ ...data, conjuge: { ...(data.conjuge ?? {}), ...patch } })
+  const e = data.endereco ?? {}
+  const c = data.conjuge
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && onClose()}>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-xl dark:bg-stone-900" onClick={(ev) => ev.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 pb-3 pt-4 dark:border-stone-800">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-indigo-500" />
+            <h3 className="text-base font-semibold text-gray-900 dark:text-stone-100">Revisar Termo de Intenção</h3>
+          </div>
+          <button onClick={() => !saving && onClose()} className="text-gray-400 hover:text-gray-600 dark:hover:text-stone-200"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <p className="text-[11px] text-gray-400 dark:text-stone-500">Dados lidos dos documentos + pasta. Confira e corrija antes de gerar.</p>
+
+          <TField label="Nome / Razão social" value={data.nome1} onChange={(v) => set({ nome1: v })} />
+          <div className="grid grid-cols-2 gap-2">
+            <TField label="Profissão" value={data.profissao} onChange={(v) => set({ profissao: v })} />
+            <TField label="Celular" value={data.celular} onChange={(v) => set({ celular: v })} />
+          </div>
+          <TField label="E-mail" value={data.email} onChange={(v) => set({ email: v })} />
+
+          <div className="rounded-md border border-gray-100 p-2.5 dark:border-stone-800">
+            <span className="text-[11px] font-semibold uppercase text-gray-400 dark:text-stone-500">Endereço</span>
+            <TField label="Logradouro" value={e.logradouro} onChange={(v) => setEnd({ logradouro: v })} />
+            <div className="grid grid-cols-3 gap-2">
+              <TField label="Nº" value={e.numero} onChange={(v) => setEnd({ numero: v })} />
+              <TField label="Compl." value={e.complemento} onChange={(v) => setEnd({ complemento: v })} cls="col-span-2" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <TField label="Cidade" value={e.cidade} onChange={(v) => setEnd({ cidade: v })} cls="col-span-2" />
+              <TField label="UF" value={e.uf} onChange={(v) => setEnd({ uf: v })} />
+            </div>
+            <TField label="CEP" value={e.cep} onChange={(v) => setEnd({ cep: v })} />
+          </div>
+
+          {c && (
+            <div className="rounded-md border border-gray-100 p-2.5 dark:border-stone-800">
+              <span className="text-[11px] font-semibold uppercase text-gray-400 dark:text-stone-500">Cônjuge / Companheiro(a)</span>
+              <TField label="Nome" value={c.nome} onChange={(v) => setConj({ nome: v })} />
+              <div className="grid grid-cols-2 gap-2">
+                <TField label="Profissão" value={c.profissao} onChange={(v) => setConj({ profissao: v })} />
+                <TField label="Celular" value={c.celular} onChange={(v) => setConj({ celular: v })} />
+              </div>
+              <TField label="E-mail" value={c.email} onChange={(v) => setConj({ email: v })} />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <TField label="Corretor" value={data.corretor} onChange={(v) => set({ corretor: v })} />
+            <TField label="Imobiliária" value={data.imobiliaria} onChange={(v) => set({ imobiliaria: v })} />
+          </div>
+
+          <label className="block">
+            <span className="text-xs text-gray-500 dark:text-stone-400">Fluxo de pagamento</span>
+            <select value={data.fluxoPagamento ?? ""} onChange={(ev) => set({ fluxoPagamento: (ev.target.value || null) as TermoData["fluxoPagamento"] })} className={tInput}>
+              <option value="">— não assinalar —</option>
+              {TERMO_FLUXOS.map((f) => <option key={f.v} value={f.v}>{f.l}</option>)}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-stone-300">
+            <input type="checkbox" checked={!!data.temPix} onChange={(ev) => set({ temPix: ev.target.checked })} />
+            Assinalar &quot;Farei o PIX&quot; (Grupo 1). Desmarcado = &quot;Não farei&quot; (Grupo 2).
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <TField label="Data — dia" value={data.data?.dia} onChange={(v) => set({ data: { ...(data.data ?? {}), dia: v } })} />
+            <TField label="Data — mês" value={data.data?.mes} onChange={(v) => set({ data: { ...(data.data ?? {}), mes: v } })} />
+          </div>
+
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3 dark:border-stone-800">
+          <button onClick={() => !saving && onClose()} className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 dark:text-stone-400 dark:hover:bg-stone-800">Cancelar</button>
+          <button onClick={onConfirm} disabled={saving} className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            {saving ? "Gerando..." : "Gerar e anexar"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
