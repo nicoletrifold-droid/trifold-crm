@@ -4,7 +4,7 @@
 Ready for Review
 
 ## Dependencies
-- **Story 20.10** (`docs/stories/active/20-10-distrato-ponte-leads-sienge-helper.md`) — PREREQUISITE DONE: `isContatoDistratado()` exportado de `@web/lib/distrato/is-contato-distratado.ts`; coluna `leads.distrato` existe (migration 129 aplicada). Semântica: `isContatoDistratado` retorna `true` somente quando TODOS os vínculos do contato em `clientes_obras_vinculos` têm `distrato = true` (active-contract-wins no nível do contato — ver AC 5a de 20-10).
+- **Story 20.10** (`docs/stories/active/20-10-distrato-ponte-leads-sienge-helper.md`) — PREREQUISITE DONE: `isContatoDistratado()` exportado de `@web/lib/distrato/is-contato-distratado.ts`; coluna `leads.distrato` existe (migration 161 aplicada). Semântica: `isContatoDistratado` retorna `true` somente quando TODOS os vínculos do contato em `clientes_obras_vinculos` têm `distrato = true` (active-contract-wins no nível do contato — ver AC 5a de 20-10).
 - **BRANCH:** implementar a partir de um branch novo criado de `origin/main` atualizado — NÃO do branch `feat/epic-76`, que está desatualizado e não contém as migrations 116–128 (incluindo as dependências 116+118 da 20-10). Usar `feat/epic-76` reintroduziria o bug da 20-9.
 - **Story 20.11** (`docs/stories/active/20-11-distrato-cron-sync-sienge-propagacao.md`) — SHOULD be done: `leads.distrato` populado pelo cron diário antes do deploy desta story. Os filtros `leads.distrato = false` nos crons de lote (ACs 1-4) dependem de dados populados.
 - **Nenhuma migration nova** — puramente TypeScript em 8 arquivos existentes.
@@ -597,7 +597,7 @@ Pontos-chave:
 - **Webhook Nicole (Canal 8):** o gate SILENCIA a Nicole (log de warning `[WEBHOOK] lead distratado — Nicole não ativada` + `return`), NÃO encaminha ativamente ao corretor — sinalização ativa a humano está explicitamente em **Scope OUT** desta story (linha 27). O log é o sinal para o atendimento humano via monitoramento Vercel. A mensagem do lead continua sendo salva no DB (fluxo sync antes do `after()`) e o HTTP 200 é retornado imediatamente — apenas a resposta automática é suprimida.
 - **3 selects (não 4):** confirmado contra o código real — `findOrUpsertLead` tem 3 `.select("id, created_at")` que retornam `LeadResult`; o `.select("id")` de L954 é de `kanban_stages` e ficou intocado (conforme observação do @po v1.3).
 - **Fail-open preservado:** `LeadResult.distrato` é optional (`boolean | null`) → campo ausente/undefined → falsy → Nicole responde. O helper mantém try/catch → `false` em erro. Nenhum canal virou fail-closed.
-- **AC 10 (lead novo):** `leads.distrato` é `NOT NULL DEFAULT FALSE` (migration 130) → lead recém-criado tem `distrato = false` → recebe normalmente. `.eq("distrato", false)` não descarta nulls (coluna NOT NULL).
+- **AC 10 (lead novo):** `leads.distrato` é `NOT NULL DEFAULT FALSE` (migration 161) → lead recém-criado tem `distrato = false` → recebe normalmente. `.eq("distrato", false)` não descarta nulls (coluna NOT NULL).
 - **Menor mudança possível:** cada canal recebeu só o filtro/gate; nenhuma lógica existente foi refatorada.
 
 ### File List

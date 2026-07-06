@@ -4,7 +4,7 @@
 Ready for Review
 
 ## Dependencies
-- **Story 20.10** (`docs/stories/active/20-10-distrato-ponte-leads-sienge-helper.md`) — PREREQUISITE: coluna `leads.distrato` (migration 129) e função `propagateDistratosToLeads(orgId)` em `is-contato-distratado.ts` devem existir.
+- **Story 20.10** (`docs/stories/active/20-10-distrato-ponte-leads-sienge-helper.md`) — PREREQUISITE: coluna `leads.distrato` (migration 161) e função `propagateDistratosToLeads(orgId)` em `is-contato-distratado.ts` devem existir.
 - **BRANCH:** implementar a partir de um branch novo criado de `origin/main` atualizado — NÃO do branch `feat/epic-76`, que está desatualizado e não contém as migrations 116–128 (incluindo as dependências 116+118 da Story 20-10). Usar `feat/epic-76` reintroduziria o bug da 20-9.
 - **Story 20.9** (`docs/stories/active/20-9-fix-distrato-contrato-cancelado-sienge.md`) — DONE: `reconcileDistratosForObra(obraId)` em `sync.ts` exportado; `clientes_obras_vinculos.distrato` populado via sync manual.
 - **Nenhuma migration nova** — esta story é puramente TypeScript + config Vercel.

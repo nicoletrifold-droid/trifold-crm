@@ -1,7 +1,8 @@
--- Migration 130: leads.distrato — cache denormalizado de distrato no lado `leads`
--- (Renumerada de 129 → 130 por @dev no momento da implementação: origin/main avançou
---  e o slot 129 já está ocupado por `129_imob_kanban.sql`. A própria Story 20.10 instrui
---  reconfirmar a numeração contra origin/main no apply — histórico de colisões neste projeto.)
+-- Migration 161: leads.distrato — cache denormalizado de distrato no lado `leads`
+-- (Renumerada 129 → 130 → 161 por colisões sucessivas de slot em origin/main: 129 ocupado
+--  por `129_imob_kanban.sql`, 130 ocupado por `130_roleta_pick_no_bolsao.sql` após integração
+--  com main. Decisão de stakeholder: distrato = 161 (máx. migration em origin/main = 160).
+--  A própria Story 20.10 instrui reconfirmar a numeração contra origin/main no apply.)
 -- Story 20.10 (docs/stories/active/20-10-distrato-ponte-leads-sienge-helper.md)
 --
 -- Contexto:

@@ -5,18 +5,18 @@ Ready for Review
 
 ## Dependencies
 - **Story 20.9** (`docs/stories/active/20-9-fix-distrato-contrato-cancelado-sienge.md`) — DONE: migrations 116 (colunas `sienge_contract_situations` + `distrato` em `clientes_obras_vinculos`) + 118 (índice parcial corrigido) aplicadas; `computeDistrato()` + `reconcileDistratosForObra()` em `sync.ts`; padrão de ponte via `sienge_customer_id` estabelecido em `notificacoes.ts`.
-- **Migration 129** — nova (esta story). Slot 129 livre (confirmado: última migration em `origin/main` = 128 `128_pegar_lead_bolsao.sql`; slot 121 JÁ OCUPADO por `121_nicole_copy_escassez_property_presentation.sql`; slots 122–128 também ocupados). NOTA: reconfirmar a numeração contra `origin/main` no momento do apply — este projeto tem histórico de colisões de migration.
+- **Migration 161** — nova (esta story). Renumerada 129→130→161 por colisões sucessivas de slot em `origin/main` (draft assumia 129 livre → 129 ocupado por `129_imob_kanban.sql` na implementação → 130 ocupado por `130_roleta_pick_no_bolsao.sql` após integração com main). Slot 161 confirmado livre (máx. migration em `origin/main` = 160). Histórico completo no Change Log.
 - **BRANCH:** implementar a partir de um branch novo criado de `origin/main` atualizado — NÃO do branch `feat/epic-76`, que está desatualizado e não contém as migrations 116–128 (incluindo as dependências 116+118 desta story). Usar `feat/epic-76` reintroduziria o bug da 20-9.
 
 ## Scope
 **IN:**
-- Nova coluna `leads.distrato BOOLEAN NOT NULL DEFAULT FALSE` via migration 129 — denormalização para filtragem performática nos canais de lote.
+- Nova coluna `leads.distrato BOOLEAN NOT NULL DEFAULT FALSE` via migration 161 — denormalização para filtragem performática nos canais de lote.
 - Índice parcial: `CREATE INDEX idx_leads_distrato ON leads(org_id) WHERE distrato = TRUE` — cobre o hot-path das queries de canais (filtrar distratados por org).
 - Novo arquivo server-side `packages/web/src/lib/distrato/is-contato-distratado.ts` com:
   - `isContatoDistratado(params: DistratoCheckParams): Promise<boolean>` — fonte única de verdade; verifica `clientes_obras_vinculos.distrato` em tempo real via telefone/email normalizado. Usado por canais real-time (webhook Nicole).
   - `propagateDistratosToLeads(orgId: string): Promise<{ updated: number; cleared: number }>` — batch update de `leads.distrato` para um org; chamado pelo cron da Story 20-11.
 - Adicionar `import 'server-only'` no topo do arquivo (evitar importação acidental em Client Components).
-- `@data-engineer` deve aprovar design da migration 129 antes de @dev implementar Tasks 2-3.
+- `@data-engineer` deve aprovar design da migration 161 antes de @dev implementar Tasks 2-3.
 
 **OUT:**
 - Modificar qualquer canal de comunicação — escopo da Story 20-12.
@@ -34,13 +34,13 @@ Ready for Review
 | Phone normalization divergente entre `leads.phone_normalized` e `clientes.telefone`/`whatsapp` | Médio | Alto | Usar `normalizePhoneBR()` de `@trifold/shared` sobre os phones de `clientes` ao fazer o match; `leads.phone_normalized` já está normalizado pela migration 021 |
 | `leads.distrato` desatualizado entre runs de cron (Story 20-11) | Baixo | Médio | Para canais real-time (webhook), usar `isContatoDistratado()` diretamente; `leads.distrato` é apenas cache para lote |
 | Cliente com `clientes.sienge_customer_id = NULL` não detectado como distratado | Baixo | Médio | O match por telefone/email é o fallback — `clientes` tem `telefone`, `whatsapp` e `email`; documentar como limitação conhecida em Dev Notes |
-| Migration 129 aplicada antes das migrations 116+118 estarem ativas | Baixo | Alto | Dependência explícita documentada; `clientes_obras_vinculos.distrato` (116) + índice corrigido (118) devem existir antes do deploy. Implementar a partir de branch criado de `origin/main` (que já contém 116+118) mitiga este risco. |
+| Migration 161 aplicada antes das migrations 116+118 estarem ativas | Baixo | Alto | Dependência explícita documentada; `clientes_obras_vinculos.distrato` (116) + índice corrigido (118) devem existir antes do deploy. Implementar a partir de branch criado de `origin/main` (que já contém 116+118) mitiga este risco. |
 
 ## Executor Assignment
 executor: "@dev"
 quality_gate: "@qa"
 quality_gate_tools: ["typecheck", "lint", "build", "manual-smoke"]
-nota: "@data-engineer deve revisar e aprovar o design da migration 129 antes de @dev implementar Tasks 2-3"
+nota: "@data-engineer deve revisar e aprovar o design da migration 161 antes de @dev implementar Tasks 2-3"
 
 ---
 
@@ -54,18 +54,18 @@ nota: "@data-engineer deve revisar e aprovar o design da migration 129 antes de 
 
 ## Acceptance Criteria
 
-### Frente 1 — Migration 129: `leads.distrato`
+### Frente 1 — Migration 161: `leads.distrato`
 
 **AC 1 — Coluna `distrato` adicionada à tabela `leads`**
 Dado que a tabela `leads` existe com a coluna `phone_normalized` (migration 021),
-quando a migration 129 é aplicada,
+quando a migration 161 é aplicada,
 então:
 - `leads.distrato BOOLEAN NOT NULL DEFAULT FALSE` existe na tabela.
 - Linhas existentes assumem o valor padrão `false` sem erro.
 - A migration é idempotente (`ADD COLUMN IF NOT EXISTS`).
 
 **AC 2 — Índice parcial criado corretamente**
-Dado que a migration 129 foi aplicada,
+Dado que a migration 161 foi aplicada,
 quando uma query filtra `WHERE org_id = $1 AND distrato = TRUE` na tabela `leads`,
 então o planner do PostgreSQL usa o índice `idx_leads_distrato` (verificável via `EXPLAIN`).
 O índice é parcial (`WHERE distrato = TRUE`) — cobre o conjunto menor (distratados), não o conjunto total.
@@ -137,14 +137,14 @@ então o resultado é `{ updated: N, cleared: 0 }` (ou `{ updated: 0, cleared: 0
 > Validação de qualidade via processo manual: typecheck + lint + smoke test.
 
 **Story Type Analysis:**
-- **Primary Type:** Database (migration 129) + Architecture (helper central)
+- **Primary Type:** Database (migration 161) + Architecture (helper central)
 - **Secondary Type(s):** Integration (bridge Sienge ↔ leads)
 - **Complexity:** S-M — 1 migration simples, 1 arquivo TS novo, zero mudança em fluxos existentes
 
 **Specialized Agent Assignment:**
 - Primary Agents:
   - @dev (implementação do helper + propagateDistratosToLeads)
-  - @data-engineer (design e review da migration 129)
+  - @data-engineer (design e review da migration 161)
 - Supporting Agents:
   - @qa (quality gate + smoke test de bridge telefone/email)
 
@@ -156,8 +156,8 @@ então o resultado é `{ updated: N, cleared: 0 }` (ou `{ updated: 0, cleared: 0
 
 ## Tasks / Subtasks
 
-### Task 1 — @data-engineer: Migration 129 (AC: 1, 2)
-- [x] Criar `supabase/migrations/129_leads_distrato.sql` — **renumerada para `130_leads_distrato.sql`** (slot 129 ocupado por `129_imob_kanban.sql` em origin/main; ver Completion Notes)
+### Task 1 — @data-engineer: Migration 161 (AC: 1, 2)
+- [x] Criar `supabase/migrations/161_leads_distrato.sql` — **renumerada 129→130→161** (129 ocupado por `129_imob_kanban.sql`; 130 ocupado por `130_roleta_pick_no_bolsao.sql` após integração com main; ver Completion Notes + Change Log)
 - [x] `ALTER TABLE leads ADD COLUMN IF NOT EXISTS distrato BOOLEAN NOT NULL DEFAULT FALSE`
 - [x] `CREATE INDEX IF NOT EXISTS idx_leads_distrato ON leads(org_id) WHERE distrato = TRUE`
 - [x] Adicionar `COMMENT ON COLUMN leads.distrato` explicando que é denormalização de `clientes_obras_vinculos.distrato`, populado por `propagateDistratosToLeads` (Story 20-11 cron)
@@ -252,7 +252,7 @@ email: string | null
 name: string | null
 is_active: boolean
 stage_id: string        // UUID (kanban_stages)
-distrato: boolean       // NEW — migration 129, DEFAULT false
+distrato: boolean       // NEW — migration 161, DEFAULT false
 ```
 
 `phone_normalized` já está normalizado (`normalizePhoneBR`) desde a migration 021. Portanto: ao buscar `clientes` pelo telefone do lead, normalize os phones de `clientes.telefone` e `clientes.whatsapp` com a mesma função.
@@ -408,6 +408,7 @@ Nota CRÍTICA de implementar a partir de branch novo de `origin/main` (não `fea
 | 2026-06-30 | 1.2 | @sm required-fixes: migration 121→129 consistente em toda a story (FIX 1); nota CRITICO branch origin/main em Deps+DevNotes (FIX 2); semântica active-contract-wins todos-os-vínculos com AC 5a novo + ACs 3/4 corrigidos + Tasks 2-3 atualizadas para lógica 2-queries (FIX 3) | River (@sm) |
 | 2026-06-30 | 1.3 | Re-validação PO pós-fixes: **GO (9/10)** — FIX 1 (slot 129 livre confirmado em origin/main) e FIX 3 (active-contract-wins/multi-obra com AC 5a) verificados. **Status Draft → Ready**. Primeira da cadeia 20-10→20-11→20-12 | Pax (@po) |
 | 2026-06-30 | 1.4 | Implementação @dev: migration `130_leads_distrato.sql` (renumerada 129→130, slot 129 ocupado por `129_imob_kanban.sql` em origin/main) + helper `is-contato-distratado.ts` com `isContatoDistratado()` (3-pass active-contract-wins) e `propagateDistratosToLeads()` (diff em JS, idempotente). Branch `fix/distrato-bloqueio-canais-20-10` de origin/main. typecheck+lint limpos no arquivo; build full bloqueado por pré-existente `react-email-editor` (fora de escopo). **Status Ready → Ready for Review** | Dex (@dev) |
+| 2026-07-06 | 1.6 | @dev integração com `origin/main` (worktree isolado): migration renumerada `130_leads_distrato.sql` → `161_leads_distrato.sql` (slot 130 passou a colidir com `130_roleta_pick_no_bolsao.sql` em main; decisão de stakeholder: distrato = 161). Referências operativas (Dependencies, Scope, ACs, Risks, Tasks, File List, passos de deploy) atualizadas 129/130 → 161. Entradas datadas de auditoria (Change Log 1.0–1.5, AUTO-DECISION, PO Re-Validation, QA Results) preservadas como registro histórico. Rebase sobre origin/main sem conflitos de código. | Dex (@dev) |
 | 2026-06-30 | 1.5 | @dev QA-fixes (gate CONCERNS 20.10): **SEC-001** resolvido — `orgId?` opcional em `DistratoCheckParams` escopa o lookup real-time de `clientes` por org (alinha com `propagateDistratosToLeads`), elimina falso-positivo cross-org; também mitiga PERF-001 quando `orgId` é passado. **REL-001** resolvido — match de email case-insensitive em `propagateDistratosToLeads` (compare `lower(email)` em JS, query em lote única, sem N+1). Semântica todos-os-vínculos inalterada (4 cenários do QA mantidos). typecheck+lint limpos no arquivo. Call-sites intactos (a 20-12 passará `org_id`). | Dex (@dev) |
 
 ---
@@ -439,7 +440,7 @@ Os 2 findings LOW do gate (`docs/qa/gates/20.10-distrato-ponte-leads-sienge-help
 - **Gates locais (arquivo da story):** `tsc --noEmit` → 0 erros no arquivo (só os pré-existentes de `react-email-editor` em `visual-editor.tsx`, fora de escopo); `eslint src/lib/distrato/is-contato-distratado.ts` → exit 0.
 
 ### File List
-- `supabase/migrations/130_leads_distrato.sql` (criado — Task 1; renumerado de 129 → 130, slot 129 ocupado em origin/main)
+- `supabase/migrations/161_leads_distrato.sql` (criado — Task 1; renumerado 129 → 130 → 161; 129 ocupado por `129_imob_kanban.sql`, 130 ocupado por `130_roleta_pick_no_bolsao.sql` após integração com main)
 - `packages/web/src/lib/distrato/is-contato-distratado.ts` (criado — @dev, Tasks 2-3)
 
 ---
@@ -477,7 +478,7 @@ Reconstruí a lógica de `isContatoDistratado` por código contra os 4 cenários
 | SEC-001 | low | `is-contato-distratado.ts:79-99` | Helper sem `orgId` — Passos 1/2 consultam `clientes_obras_vinculos`/`clientes` sem filtro de org → risco de falso-positivo cross-org em multi-tenant. `propagateDistratosToLeads` ESTÁ escopado por org. | Antes de 20-12 cablar nos canais: adicionar `orgId?` opcional para escopar, ou documentar premissa single-tenant. Impacto real baixo (Trifold ≈ org única). |
 | REL-001 | low | `is-contato-distratado.ts:219-246` | `propagate` lowercaseia emails-alvo mas filtra `leads` via `.in("email", ...)` (match exato no DB) → leads com email em case diferente são perdidos (falso-negativo). Helper real-time faz compare case-insensitive em JS (sem o gap). | Email é fallback (telefone é a ponte canônica). Documentar limitação ou normalizar `leads.email`. Acompanhar em 20-11/20-12. |
 | PERF-001 | low | `is-contato-distratado.ts:79-82` | Passo 1 sem bound de org a cada chamada real-time; coberto pelo índice parcial (mig 118) mas a lista IN do Passo 2 cresce com o nº de distratados. | Aceitável no volume atual; resolver junto com SEC-001 escopando por org. |
-| TEST-001 | low | — | Smoke (Task 4) não executado contra prod do QA (read-only seguro indisponível). ACs validados por código + schema; sem testes unitários (padrão 20-9). | Smoke deferido ao @devops pós-deploy (passos no gate file). Aplicar migration 130 ANTES do código da 20-12. |
+| TEST-001 | low | — | Smoke (Task 4) não executado contra prod do QA (read-only seguro indisponível). ACs validados por código + schema; sem testes unitários (padrão 20-9). | Smoke deferido ao @devops pós-deploy (passos no gate file). Aplicar migration 161 ANTES do código da 20-12. |
 
 #### AC → evidência (10/10 cobertos)
 AC1 (mig L30-31), AC2 (mig L40-42), AC3 (helper L75-136), AC4 (L116-118), AC5 (L92/L122), AC5a (L124-136 — Passo 3), AC6 (L50-66 fast path), AC7 (L46+L73), AC8 (L1 `server-only`), AC9 (L227-295), AC10 (L268-270 diff). Detalhe completo no gate file.
@@ -486,7 +487,7 @@ AC1 (mig L30-31), AC2 (mig L40-42), AC3 (helper L75-136), AC4 (L116-118), AC5 (L
 1. `isContatoDistratado({ phone: <distratado real> })` → esperar `true`.
 2. `isContatoDistratado({ phone: <lead ativo> })` → esperar `false`.
 3. `propagateDistratosToLeads(orgId)` → `leads.distrato=true` apenas para contatos totalmente distratados; re-run → `{updated:0, cleared:0}`.
-Pré-requisito: aplicar `supabase/migrations/130_leads_distrato.sql` via Management API ANTES do deploy do código da Story 20-12.
+Pré-requisito: aplicar `supabase/migrations/161_leads_distrato.sql` via Management API ANTES do deploy do código da Story 20-12.
 
 ### Gate Status
 
