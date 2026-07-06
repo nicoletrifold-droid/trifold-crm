@@ -520,7 +520,7 @@ Tasks 1–6 implementadas. Task 7 (QA Smoke) e o migration dry-run ficam para o 
 ### File List
 
 **Criados:**
-- `supabase/migrations/161_password_reset_throttle.sql` — tabela de throttle (renumerada de 131 → **161** por colisão com `131_imobiliarias.sql` na main; confirmado 161 livre, main vai até 160).
+- `supabase/migrations/162_password_reset_throttle.sql` — tabela de throttle (renumerada de 131 → **162**: 131 colide com `131_imobiliarias.sql` na main e 161 ficou reservado à branch de distrato; confirmado 162 livre, main vai até 160).
 - `packages/web/src/lib/auth/password-reset-throttle.ts` — helper `isPasswordResetThrottled` + `recordPasswordResetAttempt`.
 - `packages/web/src/lib/email-layout/components/password-action.ts` — template `renderPasswordActionEmail({ userName, actionLink, siteUrl, mode })`.
 
@@ -533,7 +533,7 @@ Tasks 1–6 implementadas. Task 7 (QA Smoke) e o migration dry-run ficam para o 
 
 ### Decisões de implementação (onde a realidade divergiu da story)
 
-1. **Migration 161 (não 131)** — aplicado o fix mandatório (A) da validação PO. Re-confirmado `ls supabase/migrations/ | sort`: última é `160_pastas_fluxo_pagamento.sql`, `131` ocupada, `161` livre.
+1. **Migration 162 (não 131)** — aplicado o fix mandatório (A) da validação PO. Re-confirmado `ls supabase/migrations/ | sort`: última é `160_pastas_fluxo_pagamento.sql`, `131` ocupada, `162` livre (161 reservado à branch de distrato).
 2. **Fire-and-forget do `sendEmail` na Frente 1** — aplicado o fix (B): o snippet original da story usava `await sendEmail(...)`. Troquei por `void sendEmail(...)` (+ `void logAudit`) e retorno `genericSuccess` sem aguardar o round-trip ao Resend, mitigando o timing side-channel. `generateLink` permanece `await` (precisa do link). Frente 2 (staff-autenticada) mantém `await sendEmail` para propagar erro — correto conforme story.
 3. **`orgId` opcional em `sendEmail` (Frente 1)** — o schema real de `users` permite `org_id` nulo no tipo inferido; passei `orgId: appUser.org_id ?? undefined` para casar com a assinatura real `sendEmail({ orgId?: string })` (a story assumia `org_id` sempre presente).
 4. **Limpeza do ternário redundante do snippet** — o snippet da Task 3 tinha `${isReset ? "Você" : "Você"}` (ambos iguais); simplifiquei para `Você` fixo. Saída visual idêntica.
@@ -548,7 +548,7 @@ Tasks 1–6 implementadas. Task 7 (QA Smoke) e o migration dry-run ficam para o 
 - Migration **não aplicada** em banco (passo de deploy do @qa/@devops).
 
 ### Pendente para o @qa
-- Migration dry-run: aplicar `161` em dev/staging, confirmar idempotência (rodar 2x) e RLS habilitada sem policies.
+- Migration dry-run: aplicar `162` em dev/staging, confirmar idempotência (rodar 2x) e RLS habilitada sem policies.
 - Smoke dos 2 fluxos (Task 7): e-mail existente / inexistente (resposta idêntica + 0 envios) / 4ª tentativa throttled / cliente do portal com link `/reset-senha`.
 - Validar os deltas de copy da Task 6 (item 5 acima).
 - Confirmar no Supabase Studio que o SMTP custom (75-122) permanece intacto (AC7).
@@ -620,6 +620,7 @@ de story `75-139` está OK (livre em origin/main, que vai até 75-138).
 | 2026-07-06 | 1.2 | Implementação (Tasks 1–6). Status `Ready → InProgress`. Migration criada como **161** (fix A). `sendEmail` na Frente 1 convertido para fire-and-forget (fix B — timing side-channel). 2 resíduos de segurança adicionados à tabela de Risks. Template `renderPasswordActionEmail` extraído e os 3 call-sites inline migrados (Task 6). typecheck + lint limpos nos arquivos tocados. Migration não aplicada (deploy do @qa/@devops). Ver "Dev Agent Record". | Dex (@dev) |
 | 2026-07-06 | 1.3 | QA Gate: **CONCERNS** (8/10). Status `InProgress → InReview`. Revisão de segurança rigorosa (auth story): anti-enumeração sólida em todos os branches, service-role server-only, throttle consistente, migration 161 idempotente c/ RLS. typecheck (0 erros novos; 4 pré-existentes não relacionados) + eslint (0) confirmados. CONCERNS por causa das verificações manuais obrigatórias pendentes (smoke e2e dos 2 fluxos + throttle + migration dry-run + AC7 no Studio), não por defeito de código. Ver "QA Results". | Quinn (@qa) |
 | 2026-07-06 | 1.4 | Push + PR aberto por @devops (Gage). Branch `feat/75-139-reset-senha-resend` → PR #137 contra `main` (https://github.com/nicoletrifold-droid/trifold-crm/pull/137). Pre-push typecheck: 0 erros novos (4 pré-existentes não relacionados: 3x react-email-editor, 1x pdf-lib). PR contém checklist de verificação manual obrigatória antes do merge. **Não mergeado** e migration 161 **não aplicada** (deploy pós-smoke). | Gage (@devops) |
+| 2026-07-06 | 1.5 | Renumeração da migration **161 → 162** (via `git mv`, histórico preservado) por colisão com a branch de distrato, que reservou o `161`. `origin/main` continua até `160`; `162` confirmado livre. Referências de estado-atual atualizadas (File List, Decisões de implementação, Pendente para @qa) + comentário em `password-reset-throttle.ts`. Entradas de Change Log anteriores mantidas como registro histórico. typecheck: 0 erros novos. | Dex (@dev) |
 
 ## QA Results
 

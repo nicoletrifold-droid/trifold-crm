@@ -8,7 +8,7 @@ const MAX_ATTEMPTS = 3
 /**
  * Throttle do fluxo público de "esqueci minha senha" (Story 75-139, AC4).
  *
- * Consulta a tabela `password_reset_throttle` (migration 161) para o `identifier`
+ * Consulta a tabela `password_reset_throttle` (migration 162) para o `identifier`
  * (e-mail normalizado lowercase+trim) dentro da janela deslizante de 15 minutos.
  *
  * @returns `true` quando o limite (3/15min) foi atingido — o chamador NÃO deve
