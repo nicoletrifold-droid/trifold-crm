@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getFinancialStatement, getReceivableBill } from "@web/lib/integrations/sienge/client"
-import { notifyNovoBoleto, portalNotificacoesPausadas } from "@web/lib/notificacoes"
+import { notifyNovoBoleto, notifyBoletoLembrete, portalNotificacoesPausadas } from "@web/lib/notificacoes"
+import type { BoletoLembreteMarco } from "@web/lib/notificacoes"
 
 // Story 75-101 — Notificação de novo boleto via VARREDURA (não só webhook).
 //
@@ -11,14 +12,71 @@ import { notifyNovoBoleto, portalNotificacoesPausadas } from "@web/lib/notificac
 // varrendo /customer-financial-statements (a mesma fonte do portal) e notificando via
 // notifyNovoBoleto. Dedup compartilhado com o webhook (sienge_webhook_dedup, chave
 // receivableBillId:installmentId) → cada boleto notifica UMA vez, venha de onde vier.
+//
+// Story 75-141 — PASSO DE LEMBRETES (aditivo). Na rodada das 09 BRT (12 UTC), sobre as
+// MESMAS parcelas com boleto em aberto, dispara lembretes de cobrança amigável: no
+// vencimento (venc_hoje) e no atraso (+5d/+15d). Dedup por MARCO+parcela, com chaves
+// prefixadas distintas (não colidem com a chave de "novo boleto"). getFinancialStatement
+// vira status=PAGO/hasBoleto=false quando o cliente paga → o ciclo para sozinho.
 
 const EVENT_TYPE = "BOLETO_SCAN"
 const PAGE_DELAY_MS = 300
+
+// Story 75-141 — event_type informativo por marco (o dedup usa event_key prefixado; o
+// event_type NÃO entra no conflito — o PK da tabela é só event_key).
+const LEMBRETE_EVENT_TYPE: Record<BoletoLembreteMarco, string> = {
+  venc_hoje: "BOLETO_LEMBRETE_VENC",
+  atraso5: "BOLETO_LEMBRETE_ATRASO5",
+  atraso15: "BOLETO_LEMBRETE_ATRASO15",
+}
 
 /** "2026-07-10" → "10/07/2026". */
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split("T")[0]?.split("-") ?? []
   return y && m && d ? `${d}/${m}/${y}` : iso
+}
+
+/** "Hoje" (y/m/d como inteiros) em America/Sao_Paulo — nunca UTC cru (Story 75-141). */
+function hojeSaoPaulo(now: Date): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now)
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value)
+  return { y: get("year"), m: get("month"), d: get("day") }
+}
+
+/** Hora (0-23) em America/Sao_Paulo. */
+function horaSaoPaulo(now: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(now)
+  return Number(parts.find((p) => p.type === "hour")?.value)
+}
+
+/**
+ * Diferença inteira de dias de calendário entre "hoje" (BRT) e o vencimento da parcela.
+ * Positivo = em atraso. Compara como datas de calendário via Date.UTC nos DOIS lados
+ * (evita o bug de ±1 dia do fuso). Retorna null se a data for inválida.
+ */
+function diffDiasVencimento(dueDateIso: string, hoje: { y: number; m: number; d: number }): number | null {
+  const [y, m, d] = (dueDateIso.split("T")[0]?.split("-") ?? []).map(Number)
+  if (!y || !m || !d) return null
+  const dueUTC = Date.UTC(y, m - 1, d)
+  const hojeUTC = Date.UTC(hoje.y, hoje.m - 1, hoje.d)
+  return Math.round((hojeUTC - dueUTC) / 86_400_000)
+}
+
+/** Mapeia a diferença de dias para o marco de lembrete (0 → venc, 5/15 → atraso), ou null. */
+function marcoParaDiff(diff: number | null): BoletoLembreteMarco | null {
+  if (diff === 0) return "venc_hoje"
+  if (diff === 5) return "atraso5"
+  if (diff === 15) return "atraso15"
+  return null
 }
 
 function sleep(ms: number): Promise<void> {
@@ -42,6 +100,12 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient()
 
+  // Story 75-141 — o passo de lembretes só roda na rodada das 09 BRT (= 12 UTC). As demais
+  // rodadas (12/15/18 BRT) mantêm APENAS a detecção de novo boleto (75-101, inalterada).
+  const now = new Date()
+  const hoje = hojeSaoPaulo(now)
+  const rodarLembretes = horaSaoPaulo(now) === 9
+
   const { data: clientes, error: clientesErr } = await admin
     .from("users")
     .select("id, name, email, phone, sienge_customer_id")
@@ -57,11 +121,52 @@ export async function GET(request: NextRequest) {
   let notified = 0
   let suppressed = 0
   let clientErrors = 0
+  let lembretesVenc = 0
+  let lembretesAtraso5 = 0
+  let lembretesAtraso15 = 0
   const scanned = clientes?.length ?? 0
 
   for (const cliente of clientes ?? []) {
     const customerId = cliente.sienge_customer_id as number | null
     if (!customerId) continue
+
+    // Memoização de getReceivableBill por billReceivableId, compartilhada entre a detecção
+    // de novo boleto e o passo de lembretes (não repete chamadas ao Sienge). Só resultados
+    // OK são cacheados — falha transitória lança e NÃO é memoizada (re-tenta no próximo run).
+    const billCache = new Map<number, Awaited<ReturnType<typeof getReceivableBill>>>()
+    const getBillMemo = async (id: number) => {
+      if (billCache.has(id)) return billCache.get(id)!
+      const bill = await getReceivableBill(id)
+      billCache.set(id, bill)
+      return bill
+    }
+    // Memoização da obra por enterpriseCode e do vínculo por obraId (cliente fixo na iteração).
+    const obraCache = new Map<number, { id: string; name: string; org_id: string } | null>()
+    const resolveObra = async (enterpriseCode: number) => {
+      if (obraCache.has(enterpriseCode)) return obraCache.get(enterpriseCode)!
+      const { data: obra } = await admin
+        .from("obras")
+        .select("id, name, org_id")
+        .eq("sienge_enterprise_id", enterpriseCode)
+        .is("deleted_at", null)
+        .maybeSingle()
+      const val = (obra as { id: string; name: string; org_id: string } | null) ?? null
+      obraCache.set(enterpriseCode, val)
+      return val
+    }
+    const vinculoCache = new Map<string, boolean>()
+    const clienteVinculado = async (obraId: string) => {
+      if (vinculoCache.has(obraId)) return vinculoCache.get(obraId)!
+      const { data: vinculo } = await admin
+        .from("cliente_obras")
+        .select("obra_id")
+        .eq("obra_id", obraId)
+        .eq("user_id", cliente.id)
+        .maybeSingle()
+      const val = !!vinculo
+      vinculoCache.set(obraId, val)
+      return val
+    }
 
     try {
       const installments = await getFinancialStatement(customerId)
@@ -70,6 +175,7 @@ export async function GET(request: NextRequest) {
         .filter((i) => i.hasBoleto)
         .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0))
 
+      // ── Passo 1: detecção de NOVO BOLETO (75-101, roda em TODAS as 4 rodadas) ──
       let sentForClient = false
 
       for (const inst of abertos) {
@@ -96,18 +202,13 @@ export async function GET(request: NextRequest) {
         // Resolve a obra do título (mesma lógica do webhook 75-76).
         let released = false
         try {
-          const bill = await getReceivableBill(inst.billReceivableId)
+          const bill = await getBillMemo(inst.billReceivableId)
           if (!bill?.customerId || bill.enterpriseCode == null) {
             console.warn("[BOLETO_SCAN] título sem customerId/enterpriseCode — mantendo claimado", { eventKey })
             continue
           }
 
-          const { data: obra } = await admin
-            .from("obras")
-            .select("id, name, org_id")
-            .eq("sienge_enterprise_id", bill.enterpriseCode)
-            .is("deleted_at", null)
-            .maybeSingle()
+          const obra = await resolveObra(bill.enterpriseCode)
 
           if (!obra) {
             console.warn("[BOLETO_SCAN] sem obra para enterpriseCode — mantendo claimado", {
@@ -117,14 +218,7 @@ export async function GET(request: NextRequest) {
             continue
           }
 
-          const { data: vinculo } = await admin
-            .from("cliente_obras")
-            .select("obra_id")
-            .eq("obra_id", obra.id)
-            .eq("user_id", cliente.id)
-            .maybeSingle()
-
-          if (!vinculo) {
+          if (!(await clienteVinculado(obra.id))) {
             console.warn("[BOLETO_SCAN] cliente não vinculado à obra no portal — mantendo claimado", {
               userId: cliente.id,
               obraId: obra.id,
@@ -155,6 +249,77 @@ export async function GET(request: NextRequest) {
           }
         }
       }
+
+      // ── Passo 2: LEMBRETES de vencimento/atraso (75-141, SÓ na rodada das 09 BRT) ──
+      // Aditivo e independente do passo 1: chaves prefixadas por marco, SEM cap "1 msg/cliente/run".
+      if (rodarLembretes) {
+        for (const inst of abertos) {
+          const marco = marcoParaDiff(diffDiasVencimento(inst.dueDate, hoje))
+          if (!marco) continue
+
+          const eventKey = `${marco}:${inst.billReceivableId}:${inst.installmentId}`
+          const { data: claimed, error: claimError } = await admin.rpc("claim_sienge_webhook", {
+            p_event_key: eventKey,
+            p_event_type: LEMBRETE_EVENT_TYPE[marco],
+          })
+          if (claimError) {
+            console.error("[BOLETO_SCAN] claim de lembrete falhou — pulando parcela:", { eventKey, err: claimError.message })
+            continue
+          }
+          if (claimed !== true) continue // marco já enviado para esta parcela
+
+          let released = false
+          try {
+            const bill = await getBillMemo(inst.billReceivableId)
+            if (!bill?.customerId || bill.enterpriseCode == null) {
+              console.warn("[BOLETO_SCAN] lembrete: título sem customerId/enterpriseCode — mantendo claimado", { eventKey })
+              continue
+            }
+
+            const obra = await resolveObra(bill.enterpriseCode)
+            if (!obra) {
+              console.warn("[BOLETO_SCAN] lembrete: sem obra para enterpriseCode — mantendo claimado", {
+                eventKey,
+                enterpriseCode: bill.enterpriseCode,
+              })
+              continue
+            }
+
+            if (!(await clienteVinculado(obra.id))) {
+              console.warn("[BOLETO_SCAN] lembrete: cliente não vinculado à obra — mantendo claimado", {
+                userId: cliente.id,
+                obraId: obra.id,
+              })
+              continue
+            }
+
+            await notifyBoletoLembrete({
+              orgId: obra.org_id,
+              userId: cliente.id,
+              nome: cliente.name,
+              email: cliente.email,
+              phone: cliente.phone,
+              obraId: obra.id,
+              obraName: obra.name,
+              vencimento: formatDate(inst.dueDate),
+              marco,
+            })
+
+            if (marco === "venc_hoje") lembretesVenc++
+            else if (marco === "atraso5") lembretesAtraso5++
+            else lembretesAtraso15++
+          } catch (err) {
+            // Falha transitória do Sienge: libera o claim DESTE marco e re-lança (pula o cliente).
+            released = true
+            await admin.from("sienge_webhook_dedup").delete().eq("event_key", eventKey)
+            throw err
+          } finally {
+            if (released) {
+              console.warn("[BOLETO_SCAN] claim de lembrete liberado por falha transitória", { eventKey })
+            }
+          }
+        }
+      }
     } catch (err) {
       clientErrors++
       console.error("[BOLETO_SCAN] erro no cliente — pulando:", {
@@ -166,7 +331,17 @@ export async function GET(request: NextRequest) {
     await sleep(PAGE_DELAY_MS)
   }
 
-  const summary = { ok: true, scanned, notified, suppressed, clientErrors }
+  const summary = {
+    ok: true,
+    scanned,
+    notified,
+    suppressed,
+    clientErrors,
+    lembretes: rodarLembretes,
+    lembretesVenc,
+    lembretesAtraso5,
+    lembretesAtraso15,
+  }
   console.log("[BOLETO_SCAN] concluído:", summary)
   return NextResponse.json(summary)
 }

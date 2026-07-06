@@ -150,8 +150,8 @@ export function LeadsListWithDrawer({ leads }: Props) {
               </button>
               <Link
                 href={`/broker/leads/${lead.id}`}
-                aria-label="Abrir conversa"
-                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl bg-orange-50 p-3 text-orange-500 ring-1 ring-orange-200 hover:bg-orange-100 dark:bg-orange-500/10 dark:ring-orange-500/30 dark:hover:bg-orange-500/20"
+                aria-label="Abrir conversa no WhatsApp"
+                className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl bg-emerald-50 p-3 text-emerald-600 ring-1 ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/30 dark:hover:bg-emerald-500/25"
               >
                 <MessageCircle className="h-5 w-5" />
               </Link>
@@ -230,8 +230,8 @@ export function LeadsListWithDrawer({ leads }: Props) {
                   <td className="px-4 py-3">
                     <Link
                       href={`/broker/leads/${lead.id}`}
-                      aria-label="Abrir conversa"
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 text-stone-400 hover:bg-orange-50 hover:text-orange-500 transition-colors dark:text-stone-600 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
+                      aria-label="Abrir conversa no WhatsApp"
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors dark:text-emerald-400 dark:hover:bg-emerald-500/10"
                     >
                       <MessageCircle className="h-4 w-4" />
                     </Link>

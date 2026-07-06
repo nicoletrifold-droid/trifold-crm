@@ -5,7 +5,7 @@
  * anti-flood (N boletos inéditos no mesmo cliente → 1 msg só) e dedup (claim negado
  * → não notifica).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
@@ -17,9 +17,11 @@ vi.mock("@web/lib/integrations/sienge/client", () => ({
 }))
 
 const notifyNovoBoletoMock = vi.fn()
+const notifyBoletoLembreteMock = vi.fn()
 let paused = false
 vi.mock("@web/lib/notificacoes", () => ({
   notifyNovoBoleto: (...a: unknown[]) => notifyNovoBoletoMock(...a),
+  notifyBoletoLembrete: (...a: unknown[]) => notifyBoletoLembreteMock(...a),
   portalNotificacoesPausadas: () => paused,
 }))
 
@@ -27,11 +29,17 @@ vi.mock("@web/lib/notificacoes", () => ({
 let clientesRows: Record<string, unknown>[] = []
 let obraRow: Record<string, unknown> | null = { id: "obra-1", name: "Yarden", org_id: "org-1" }
 let vinculoRow: Record<string, unknown> | null = { obra_id: "obra-1" }
-// claim_sienge_webhook: retorna o próximo valor da fila (ou o default se a fila esvaziar).
+// claim_sienge_webhook: retorna, por ordem de prioridade, o valor mapeado à event_key
+// (claimByKey), depois o próximo da fila, depois o default.
 let claimQueue: (boolean | null)[] = []
 let claimDefault: boolean | null = true
+let claimByKey: Record<string, boolean | null> = {}
 const rpcMock = vi.fn((name: string, args: unknown) => {
-  void name; void args
+  void name
+  const key = (args as { p_event_key?: string })?.p_event_key
+  if (key && Object.prototype.hasOwnProperty.call(claimByKey, key)) {
+    return Promise.resolve({ data: claimByKey[key], error: null })
+  }
   const v = claimQueue.length ? claimQueue.shift()! : claimDefault
   return Promise.resolve({ data: v, error: null })
 })
@@ -75,17 +83,26 @@ const CLIENTE = { id: "user-1", name: "Albert", email: "a@ex.com", phone: "55449
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Fake apenas Date (setTimeout real → o sleep() do route continua funcionando). Default:
+  // 18 UTC = 15 BRT → passo de lembretes NÃO roda; testes de novo-boleto ficam determinísticos.
+  vi.useFakeTimers({ toFake: ["Date"] })
+  vi.setSystemTime(new Date("2026-07-06T18:00:00Z"))
   paused = false
   clientesRows = [CLIENTE]
   obraRow = { id: "obra-1", name: "Yarden", org_id: "org-1" }
   vinculoRow = { obra_id: "obra-1" }
   claimQueue = []
   claimDefault = true
+  claimByKey = {}
   process.env.CRON_SECRET = "segredo"
   getReceivableBillMock.mockResolvedValue({ customerId: 1510, enterpriseCode: 8, enterpriseName: "Yarden" })
   getFinancialStatementMock.mockResolvedValue([
     { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 2305.27, generatedBillet: true },
   ])
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe("GET /api/cron/boleto-scan", () => {
@@ -152,5 +169,117 @@ describe("GET /api/cron/boleto-scan", () => {
     const json = await res.json()
     expect(json.notified).toBe(0)
     expect(notifyNovoBoletoMock).not.toHaveBeenCalled()
+  })
+})
+
+// Story 75-141 — passo de lembretes (venc_hoje / atraso5 / atraso15).
+// 12 UTC = 09 BRT (roda lembretes); 18 UTC = 15 BRT (só novo-boleto).
+describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
+  const NOVE_BRT = "2026-07-10T12:00:00Z" // 09:00 BRT
+
+  it("AC1: dueDate == hoje (diff 0) na rodada das 09 BRT → lembrete venc_hoje com chave prefixada", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretes).toBe(true)
+    expect(json.lembretesVenc).toBe(1)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(1)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ marco: "venc_hoje", obraId: "obra-1", vencimento: "10/07/2026" })
+    )
+    // Chave de dedup prefixada e event_type informativo corretos.
+    expect(rpcMock).toHaveBeenCalledWith(
+      "claim_sienge_webhook",
+      expect.objectContaining({ p_event_key: "venc_hoje:11045:11", p_event_type: "BOLETO_LEMBRETE_VENC" })
+    )
+  })
+
+  it("AC2: diff 5 → atraso5 e diff 15 → atraso15 (datas certas)", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 5, dueDate: "2026-07-05", hasBoleto: true, currentBalance: 100, generatedBillet: true }, // diff 5
+      { billReceivableId: 11045, installmentId: 15, dueDate: "2026-06-25", hasBoleto: true, currentBalance: 100, generatedBillet: true }, // diff 15
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretesAtraso5).toBe(1)
+    expect(json.lembretesAtraso15).toBe(1)
+    const marcos = notifyBoletoLembreteMock.mock.calls.map((c) => (c[0] as { marco: string }).marco)
+    expect(marcos).toEqual(expect.arrayContaining(["atraso5", "atraso15"]))
+    expect(rpcMock).toHaveBeenCalledWith(
+      "claim_sienge_webhook",
+      expect.objectContaining({ p_event_key: "atraso5:11045:5", p_event_type: "BOLETO_LEMBRETE_ATRASO5" })
+    )
+    expect(rpcMock).toHaveBeenCalledWith(
+      "claim_sienge_webhook",
+      expect.objectContaining({ p_event_key: "atraso15:11045:15", p_event_type: "BOLETO_LEMBRETE_ATRASO15" })
+    )
+  })
+
+  it("AC3: diff=16 (qualquer diff ∉ {0,5,15}) → nenhum lembrete", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 16, dueDate: "2026-06-24", hasBoleto: true, currentBalance: 100, generatedBillet: true }, // diff 16
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretesVenc + json.lembretesAtraso5 + json.lembretesAtraso15).toBe(0)
+    expect(notifyBoletoLembreteMock).not.toHaveBeenCalled()
+  })
+
+  it("AC4: hasBoleto=false (parcela paga) → nenhum lembrete mesmo caindo em marco", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: false, currentBalance: 0, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    await res.json()
+    expect(notifyBoletoLembreteMock).not.toHaveBeenCalled()
+  })
+
+  it("AC5: claim do marco negado → não re-notifica aquele marco", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    claimByKey = { "venc_hoje:11045:11": null } // marco já enviado antes
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretesVenc).toBe(0)
+    expect(notifyBoletoLembreteMock).not.toHaveBeenCalled()
+    // O novo-boleto (chave sem prefixo) é independente → segue notificando.
+    expect(notifyNovoBoletoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("AC6: rodada das 15 BRT (18 UTC) → NENHUM lembrete, mas novo-boleto roda normalmente", async () => {
+    vi.setSystemTime(new Date("2026-07-10T18:00:00Z")) // 15 BRT
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretes).toBe(false)
+    expect(notifyBoletoLembreteMock).not.toHaveBeenCalled()
+    // Não-regressão: novo-boleto continua rodando nas 4 rodadas.
+    expect(json.notified).toBe(1)
+    expect(notifyNovoBoletoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("AC6/não-regressão: rodada das 09 BRT avalia lembretes E mantém novo-boleto 1×/parcela", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    // Novo-boleto: 1 envio (não regrediu com o passo aditivo de lembretes).
+    expect(json.notified).toBe(1)
+    expect(notifyNovoBoletoMock).toHaveBeenCalledTimes(1)
+    // Lembrete: também avaliado na mesma rodada.
+    expect(json.lembretesVenc).toBe(1)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(1)
   })
 })

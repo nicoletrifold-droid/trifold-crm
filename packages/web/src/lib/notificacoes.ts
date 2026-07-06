@@ -319,6 +319,206 @@ export async function notifyNovoBoleto(params: NovoBoletoParams): Promise<void> 
   }
 }
 
+// ── Lembretes de boleto (Story 75-141) ──────────────────────────────────
+// Ciclo de cobrança amigável: no vencimento (venc_hoje) e no atraso (+5d, +15d).
+// Espelha notifyNovoBoleto (mesmo endereçamento a UM cliente, prefs por canal,
+// canais em .catch independente). A diferença é o `marco`, que escolhe copy e
+// template HSM. Idempotência é garantida no cron (dedup por marco+parcela).
+
+export type BoletoLembreteMarco = "venc_hoje" | "atraso5" | "atraso15"
+
+export interface BoletoLembreteParams extends NovoBoletoParams {
+  marco: BoletoLembreteMarco
+}
+
+// Template HSM por marco. `boleto_vence_hoje` para venc_hoje; `boleto_em_atraso`
+// para os dois marcos de atraso (Story 75-141). Ambos submetidos à Meta (hoje
+// PENDING) — se ainda não aprovados, a Graph API falha e o envio de WhatsApp
+// cai no .catch (log), SEM derrubar a rodada nem impedir e-mail/push.
+const LEMBRETE_TEMPLATE: Record<BoletoLembreteMarco, string> = {
+  venc_hoje: "boleto_vence_hoje",
+  atraso5: "boleto_em_atraso",
+  atraso15: "boleto_em_atraso",
+}
+
+// Copy por marco (e-mail + push). Atraso5 e atraso15 compartilham o texto de "em atraso".
+const LEMBRETE_COPY: Record<
+  BoletoLembreteMarco,
+  { emailSubject: string; emailIntro: string; pushTitle: string }
+> = {
+  venc_hoje: {
+    emailSubject: "Seu boleto vence hoje",
+    emailIntro: "O boleto da sua obra <strong>%OBRA%</strong> vence hoje.",
+    pushTitle: "Seu boleto vence hoje",
+  },
+  atraso5: {
+    emailSubject: "Boleto em atraso",
+    emailIntro: "O boleto da sua obra <strong>%OBRA%</strong> está em atraso.",
+    pushTitle: "Boleto em atraso",
+  },
+  atraso15: {
+    emailSubject: "Boleto em atraso",
+    emailIntro: "O boleto da sua obra <strong>%OBRA%</strong> está em atraso.",
+    pushTitle: "Boleto em atraso",
+  },
+}
+
+export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promise<void> {
+  const { orgId, userId, nome, email, phone, obraId, obraName, vencimento, marco } = params
+  try {
+    if (portalNotificacoesPausadas()) {
+      console.log("[notificacoes] portal pausado — pulando lembrete de boleto", { obraId, userId, marco })
+      return
+    }
+
+    const admin = createAdminClient()
+
+    // Prefs por canal (linha ausente → DEFAULT_PREFS). Sem pref de evento dedicada:
+    // lembrete de boleto é sempre financeiramente relevante, igual a novo boleto.
+    const { data: prefRow } = await admin
+      .from("obra_notificacao_prefs")
+      .select("email_enabled, whatsapp_enabled, push_enabled")
+      .eq("user_id", userId)
+      .maybeSingle()
+    const pref = (prefRow as Pick<NotifPrefs, "email_enabled" | "whatsapp_enabled" | "push_enabled"> | null) ?? DEFAULT_PREFS
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+    const link = `${appUrl}/cliente/boleto/${obraId}`
+    const copy = LEMBRETE_COPY[marco]
+
+    if (pref.email_enabled && email) {
+      sendEmail({
+        to: email,
+        subject: `${copy.emailSubject} — ${obraName}`,
+        html: buildBoletoLembreteEmailHtml({ nome, obraName, vencimento, link, marco }),
+      }).catch((err) => console.error("[notificacoes] lembrete boleto email error:", err))
+    }
+
+    if (pref.whatsapp_enabled && phone) {
+      sendBoletoLembreteWhatsApp(admin, orgId, phone, nome, obraName, vencimento, obraId, marco).catch(
+        (err) => console.error("[notificacoes] lembrete boleto WhatsApp skip:", err)
+      )
+    }
+
+    if (pref.push_enabled) {
+      sendPushToUser(admin, userId, {
+        title: copy.pushTitle,
+        body: `${obraName} — vencimento ${vencimento}`,
+        url: link,
+      }).catch((err) => console.error("[notificacoes] lembrete boleto push error:", err))
+    }
+  } catch (err) {
+    console.error("[notificacoes] notifyBoletoLembrete error:", err)
+  }
+}
+
+// Templates HSM `boleto_vence_hoje` / `boleto_em_atraso` (pt_BR): body {{1}}=nome,
+// {{2}}=obra, {{3}}=vencimento; botão URL dinâmica base
+// https://crm.trifold.eng.br/cliente/boleto/{{1}} (param = obra_id). Mesma estrutura de
+// `novo_boleto_cliente`. Ambos PENDING na Meta hoje — falha graciosa via .catch no chamador.
+async function sendBoletoLembreteWhatsApp(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  phone: string,
+  nome: string,
+  obraName: string,
+  vencimento: string,
+  obraId: string,
+  marco: BoletoLembreteMarco
+): Promise<void> {
+  const template = LEMBRETE_TEMPLATE[marco]
+
+  const { data: config } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .single()
+
+  if (!config?.phone_number_id || !config?.access_token) {
+    throw new Error("whatsapp_config não encontrada para org")
+  }
+
+  const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: phone,
+      type: "template",
+      template: {
+        name: template,
+        language: { code: "pt_BR" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: nome },
+              { type: "text", text: obraName },
+              { type: "text", text: vencimento },
+            ],
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: "0",
+            parameters: [{ type: "text", text: obraId }],
+          },
+        ],
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template, category: "utility", recipientType: "cliente", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
+    throw new Error(`WhatsApp API error: ${res.status} ${errText}`)
+  }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template, category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+}
+
+function buildBoletoLembreteEmailHtml(params: {
+  nome: string
+  obraName: string
+  vencimento: string
+  link: string
+  marco: BoletoLembreteMarco
+}): string {
+  const { nome, obraName, vencimento, link, marco } = params
+  const intro = LEMBRETE_COPY[marco].emailIntro.replace("%OBRA%", obraName)
+  const vencLabel = marco === "venc_hoje" ? "Vencimento (hoje)" : "Vencimento"
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden;">
+    <div style="background: #0F0F0F; padding: 24px; text-align: center;">
+      <span style="color: #F27A5E; font-size: 22px; font-weight: bold; letter-spacing: 2px;">TRIFOLD</span>
+    </div>
+    <div style="padding: 32px 24px;">
+      <p style="color: #333; font-size: 16px; margin: 0 0 12px;">Olá, <strong>${nome}</strong>!</p>
+      <p style="color: #555; font-size: 15px; margin: 0 0 8px;">${intro}</p>
+      <p style="color: #F27A5E; font-size: 15px; font-weight: 600; margin: 0 0 32px;">${vencLabel}: ${vencimento}</p>
+      <div style="text-align: center; margin-bottom: 32px;">
+        <a href="${link}"
+           style="background: #F27A5E; color: #fff; padding: 12px 28px; border-radius: 6px;
+                  text-decoration: none; font-weight: 600; font-size: 15px;">
+          Ver boleto no Portal
+        </a>
+      </div>
+      <p style="color: #999; font-size: 12px; margin: 0;">
+        Para ajustar suas notificações, acesse as configurações no portal.<br>
+        Você recebeu este email pois é cliente Trifold.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
 // Template HSM aprovado `novo_boleto_cliente` (pt_BR): body {{1}}=nome, {{2}}=obra,
 // {{3}}=vencimento; botão URL dinâmica base https://crm.trifold.eng.br/cliente/boleto/{{1}}
 // (param = obra_id). Verificado APPROVED via Graph API (Story 75-76).
