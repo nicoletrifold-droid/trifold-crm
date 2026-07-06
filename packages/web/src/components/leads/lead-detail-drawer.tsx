@@ -7,6 +7,7 @@ import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XC
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { whatsAppState } from "@web/lib/leads/whatsapp"
 import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -506,6 +507,16 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               {lead.broker && <span className="text-orange-600 dark:text-orange-300">{lead.broker.name}</span>}
               {lead.property_interest && <span>{lead.property_interest.name}</span>}
             </div>
+            {/* Story 75-140 — atender no WhatsApp pelo número da empresa (abre a Conversa). */}
+            {whatsAppState({ phone: lead.phone, source: lead.source }) !== "none" && (
+              <Link
+                href={`${leadBasePath}/${leadId}?tab=conversa`}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Conversar no WhatsApp
+              </Link>
+            )}
             {isPerdido && (
               <div className="mt-3 rounded-lg bg-red-50 p-3 dark:bg-red-500/10">
                 <div className="flex items-start gap-2">
