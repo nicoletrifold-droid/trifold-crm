@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       metadata,
       org_id,
       cancel_token,
-      lead:leads!lead_id(id, name, phone),
+      lead:leads!lead_id(id, name, phone, distrato),
       broker:users!broker_id(id, name, phone),
       property:properties!property_id(id, name)
     `)
@@ -47,6 +47,12 @@ export async function GET(request: NextRequest) {
       const lead = Array.isArray(appointment.lead) ? appointment.lead[0] : appointment.lead
       const broker = Array.isArray(appointment.broker) ? appointment.broker[0] : appointment.broker
       const property = Array.isArray(appointment.property) ? appointment.property[0] : appointment.property
+
+      // Story 20-12: lead distratado não recebe reminder de agendamento
+      if ((lead as { distrato?: boolean | null } | null)?.distrato) {
+        skipped++
+        continue
+      }
 
       const { data: waConfig } = await supabase
         .from("whatsapp_config")

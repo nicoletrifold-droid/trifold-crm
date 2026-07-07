@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       metadata,
       org_id,
       cancel_token,
-      lead:leads!lead_id(id, name, email),
+      lead:leads!lead_id(id, name, email, distrato),
       broker:users!broker_id(id, name, email),
       property:properties!property_id(id, name)
     `)
@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     .or("metadata->>'email_reminded'.is.null,metadata->>'email_reminded'.eq.false")
 
   let sent = 0
+  let skipped = 0
   let errors = 0
 
   for (const appointment of appointments ?? []) {
@@ -53,6 +54,12 @@ export async function GET(request: NextRequest) {
       const lead = Array.isArray(appointment.lead) ? appointment.lead[0] : appointment.lead
       const broker = Array.isArray(appointment.broker) ? appointment.broker[0] : appointment.broker
       const property = Array.isArray(appointment.property) ? appointment.property[0] : appointment.property
+
+      // Story 20-12: lead distratado não recebe reminder de agendamento por email
+      if ((lead as { distrato?: boolean | null } | null)?.distrato) {
+        skipped++
+        continue
+      }
 
       const scheduledDate = new Date(appointment.scheduled_at)
 
@@ -125,5 +132,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ sent, errors })
+  return NextResponse.json({ sent, skipped, errors })
 }

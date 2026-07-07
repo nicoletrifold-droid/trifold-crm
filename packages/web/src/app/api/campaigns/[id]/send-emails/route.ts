@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { sendEmail } from "@web/lib/email"
 import { injectUtmToHtml } from "@web/lib/campaign-utm"
+import { isContatoDistratado } from "@web/lib/distrato/is-contato-distratado"
 
 export async function POST(
   _request: NextRequest,
@@ -58,9 +59,17 @@ export async function POST(
 
   let sent = 0
   let failed = 0
+  let skipped = 0
 
   for (const entry of entries) {
     try {
+      // Story 20-12: pula entry de contato distratado (não marca failed — fica pending)
+      if (entry.email && (await isContatoDistratado({ email: entry.email, orgId: campaign.org_id }))) {
+        console.warn("[CAMPAIGN-EMAIL] entry distratada — pulando", { entryId: entry.id })
+        skipped++
+        continue
+      }
+
       let html = campaign.email_body_html!
         .replace(/\{\{nome\}\}/gi, entry.name ?? "")
         .replace(/\{\{name\}\}/gi, entry.name ?? "")
@@ -112,5 +121,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ sent, failed, total: entries.length })
+  return NextResponse.json({ sent, failed, skipped, total: entries.length })
 }

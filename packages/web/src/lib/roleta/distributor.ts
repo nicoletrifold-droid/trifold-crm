@@ -70,7 +70,7 @@ export async function distributeLeadToNextBroker(
   // 2. Fetch lead — must belong to this org
   const { data: lead } = await admin
     .from("leads")
-    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em, segmento, stage_id")
+    .select("property_interest_id, name, phone, assigned_broker_id, bolsao_em, segmento, stage_id, distrato")
     .eq("id", leadId)
     .eq("org_id", orgId)
     .maybeSingle()
@@ -79,6 +79,15 @@ export async function distributeLeadToNextBroker(
     await admin.from("lead_distribution_log").insert({
       org_id: orgId, lead_id: leadId, status: "sem_corretor_disponivel", skipped_brokers: [],
     })
+    return { status: "sem_corretor_disponivel" }
+  }
+
+  // Story 20-12: lead distratado não é distribuído a nenhum corretor
+  if ((lead as { distrato?: boolean | null }).distrato) {
+    await admin.from("lead_distribution_log").insert({
+      org_id: orgId, lead_id: leadId, status: "sem_corretor_disponivel", skipped_brokers: [],
+    })
+    console.warn("[ROLETA] lead distratado — não distribuído", { leadId })
     return { status: "sem_corretor_disponivel" }
   }
 
