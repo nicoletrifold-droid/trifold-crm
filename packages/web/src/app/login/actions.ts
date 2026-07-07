@@ -165,15 +165,22 @@ export async function requestPasswordReset(
     options: { redirectTo: `${baseUrl}/auth/callback?next=/reset-senha` },
   })
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     return genericSuccess // falha silenciosa — não revela detalhes internos
   }
 
   await recordPasswordResetAttempt(email) // AC4 — registra tentativa não bloqueada
 
+  // O `action_link` do generateLink aponta para /auth/v1/verify?token=... (fluxo
+  // "verify + fragment") que ignora o path e joga o usuário no login com a sessão
+  // no fragment — nunca chega em /reset-senha. Montamos o link direto para o
+  // /auth/callback do app usando `hashed_token` (token_hash), que o callback
+  // consome via verifyOtp({ token_hash, type }) e redireciona para `next`. [Story 75-139]
+  const actionLink = `${baseUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
+
   const { subject, html } = renderPasswordActionEmail({
     userName: appUser.name ?? 'usuário',
-    actionLink: linkData.properties.action_link,
+    actionLink,
     siteUrl: baseUrl,
     mode: 'reset',
   })
