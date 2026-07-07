@@ -50,7 +50,25 @@ Evita que o admin fique bloqueado sem entender por quê o botão de confirmaçã
 - Commit local criado (sem push — push é exclusivo do @devops).
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `9b054e7` (diff isolado, 1 arquivo de produto + story).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Diff mínimo e idiomático — reusa paleta `stone-*`/`indigo-*` já em uso no mesmo arquivo; wrapper `space-y-1` é o padrão do projeto para campo+hint |
+| 2. Testes | ⚠️ Sem teste automatizado novo (componente não tinha suíte prévia; mudança é puramente visual/CSS — difícil de cobrir com unit test, exigiria e2e/visual regression inexistente no repo). Validação feita via inspeção do `<input type="datetime-local">` nativo (antes/depois). Não bloqueante para este escopo XS. |
+| 3. Acceptance Criteria | ✅ AC1–AC4 confirmados linha a linha no diff: `text-stone-800`+`bg-white` no input (AC1); hint condicional `{!scheduledFor && ...}` (AC2); `disabled={...}` do botão intocado (AC3); nenhuma outra linha do Passo 3 alterada (AC4) |
+| 4. Regressões | ✅ Diff cirúrgico (linhas 100-115 apenas) — radios, resumo da campanha e aviso de >50 leads fora do hunk, sem alteração |
+| 5. Performance | ✅ N/A — apenas classes CSS, sem novo cálculo/render adicional relevante |
+| 6. Segurança | ✅ N/A — sem input de usuário novo, sem dado sensível, sem superfície de ataque alterada |
+| 7. Documentação | ✅ Story com Contexto, ACs, Dev Notes e Change Log completos |
+
+**CodeRabbit:** não executado (WSL indisponível neste ambiente macOS) — mitigado com ESLint direcionado (reexecutado de forma independente nesta revisão: 0 erros, exit 0) + revisão manual do diff completo.
+
+**Observação (não bloqueante):** registrar como débito técnico leve a ausência de cobertura e2e/visual-regression para este componente, caso o wizard de Email Blast ganhe mais lógica visual no futuro.
+
+Pronta para `@devops *push`. (Nota: por permissão de agente, @qa não altera o campo Status — cabe a @devops mover para Done após o push, conforme `story-lifecycle.md`.)
 
 ## Change Log
 - @sm (River): story criada em Draft, documentando fix de contraste já prototipado em sessão de debugging com o usuário.
