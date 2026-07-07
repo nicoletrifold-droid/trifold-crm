@@ -1,0 +1,35 @@
+schema: 1
+story: '75.147'
+gate: PASS
+status_reason: 'Agrupamento por (marco, obra) com dedup por (marco, obra, vencimento) — chave inclui o vencimento, sem colisão entre meses. Copy plural em e-mail/push quando quantidade>1; WhatsApp mantém template HSM aprovado (singular) enviado 1×. Pré-passo resolve obra antes do claim; falha transitória do Sienge cai no catch por-cliente sem claim (retry no próximo run). tsc 0, eslint 0 nos arquivos da story, vitest 834/834.'
+reviewer: 'Quinn'
+updated: '2026-07-07T10:47:00Z'
+
+evidence:
+  type_check: 'tsc --noEmit → 0 erros'
+  changed_tests: 'vitest route.test.ts + notificacoes.test.ts → 29/29 verdes'
+  full_suite: 'vitest run (full) → 76 arquivos / 834 testes verdes (era 829, +5 novos)'
+  story_files_lint: 'eslint nos 4 arquivos da story → 0 problemas'
+
+acceptance_criteria:
+  - id: AC1
+    desc: 'N parcelas mesmo cliente+obra+marco/dia → 1 notifyBoletoLembrete com quantidade=N'
+    status: PASS
+  - id: AC2
+    desc: 'Parcelas em obras diferentes (mesmo marco) → 1 mensagem por obra'
+    status: PASS
+  - id: AC3
+    desc: 'Marcos diferentes mesma obra → 1 mensagem por marco'
+    status: PASS
+  - id: AC4
+    desc: 'Dedup por (marco, obra, vencimento); chave venc não colide entre meses; 1/grupo/janela'
+    status: PASS
+  - id: AC5
+    desc: 'E-mail e push no plural quando quantidade>1; singular quando =1'
+    status: PASS
+  - id: AC6
+    desc: 'WhatsApp inalterado (template aprovado singular), 1× por grupo'
+    status: PASS
+  - id: AC7
+    desc: 'Passo novo-boleto (75-101) e rodadas 12/15/18 BRT sem regressão'
+    status: PASS

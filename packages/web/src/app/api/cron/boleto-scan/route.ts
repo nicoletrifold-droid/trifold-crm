@@ -251,73 +251,83 @@ export async function GET(request: NextRequest) {
       }
 
       // ── Passo 2: LEMBRETES de vencimento/atraso (75-141, SÓ na rodada das 09 BRT) ──
-      // Aditivo e independente do passo 1: chaves prefixadas por marco, SEM cap "1 msg/cliente/run".
+      // Story 75-147: AGRUPADO por (marco, obra) — 1 mensagem por cliente+obra+marco/dia, em
+      // vez de 1 por parcela. Dedup por (marco, obra, vencimento). Sem cap "1 msg/cliente/run".
       if (rodarLembretes) {
+        // Pré-passo: resolve a obra de cada parcela em marco e agrupa. Resolver a obra ANTES do
+        // claim é necessário p/ agrupar; falha transitória do Sienge aqui lança e cai no catch
+        // por-cliente (nada foi claimado → re-tenta no próximo run — mais limpo que release de claim).
+        const grupos = new Map<
+          string,
+          { marco: BoletoLembreteMarco; obra: { id: string; name: string; org_id: string }; dueDate: string; count: number }
+        >()
         for (const inst of abertos) {
           const marco = marcoParaDiff(diffDiasVencimento(inst.dueDate, hoje))
           if (!marco) continue
 
-          const eventKey = `${marco}:${inst.billReceivableId}:${inst.installmentId}`
-          const { data: claimed, error: claimError } = await admin.rpc("claim_sienge_webhook", {
-            p_event_key: eventKey,
-            p_event_type: LEMBRETE_EVENT_TYPE[marco],
-          })
-          if (claimError) {
-            console.error("[BOLETO_SCAN] claim de lembrete falhou — pulando parcela:", { eventKey, err: claimError.message })
+          const bill = await getBillMemo(inst.billReceivableId)
+          if (!bill?.customerId || bill.enterpriseCode == null) {
+            console.warn("[BOLETO_SCAN] lembrete: título sem customerId/enterpriseCode — pulando parcela", {
+              billReceivableId: inst.billReceivableId,
+              installmentId: inst.installmentId,
+            })
             continue
           }
-          if (claimed !== true) continue // marco já enviado para esta parcela
 
-          let released = false
-          try {
-            const bill = await getBillMemo(inst.billReceivableId)
-            if (!bill?.customerId || bill.enterpriseCode == null) {
-              console.warn("[BOLETO_SCAN] lembrete: título sem customerId/enterpriseCode — mantendo claimado", { eventKey })
-              continue
-            }
-
-            const obra = await resolveObra(bill.enterpriseCode)
-            if (!obra) {
-              console.warn("[BOLETO_SCAN] lembrete: sem obra para enterpriseCode — mantendo claimado", {
-                eventKey,
-                enterpriseCode: bill.enterpriseCode,
-              })
-              continue
-            }
-
-            if (!(await clienteVinculado(obra.id))) {
-              console.warn("[BOLETO_SCAN] lembrete: cliente não vinculado à obra — mantendo claimado", {
-                userId: cliente.id,
-                obraId: obra.id,
-              })
-              continue
-            }
-
-            await notifyBoletoLembrete({
-              orgId: obra.org_id,
-              userId: cliente.id,
-              nome: cliente.name,
-              email: cliente.email,
-              phone: cliente.phone,
-              obraId: obra.id,
-              obraName: obra.name,
-              vencimento: formatDate(inst.dueDate),
-              marco,
+          const obra = await resolveObra(bill.enterpriseCode)
+          if (!obra) {
+            console.warn("[BOLETO_SCAN] lembrete: sem obra para enterpriseCode — pulando parcela", {
+              enterpriseCode: bill.enterpriseCode,
             })
-
-            if (marco === "venc_hoje") lembretesVenc++
-            else if (marco === "atraso5") lembretesAtraso5++
-            else lembretesAtraso15++
-          } catch (err) {
-            // Falha transitória do Sienge: libera o claim DESTE marco e re-lança (pula o cliente).
-            released = true
-            await admin.from("sienge_webhook_dedup").delete().eq("event_key", eventKey)
-            throw err
-          } finally {
-            if (released) {
-              console.warn("[BOLETO_SCAN] claim de lembrete liberado por falha transitória", { eventKey })
-            }
+            continue
           }
+
+          if (!(await clienteVinculado(obra.id))) {
+            console.warn("[BOLETO_SCAN] lembrete: cliente não vinculado à obra — pulando parcela", {
+              userId: cliente.id,
+              obraId: obra.id,
+            })
+            continue
+          }
+
+          // Dentro de um (marco, obra) o vencimento é sempre o mesmo → o 1º define o dueDate do grupo.
+          const gkey = `${marco}::${obra.id}`
+          const g = grupos.get(gkey)
+          if (g) g.count++
+          else grupos.set(gkey, { marco, obra, dueDate: inst.dueDate, count: 1 })
+        }
+
+        // Envio: 1 claim + 1 notificação por grupo. A chave inclui o vencimento (todas as parcelas
+        // do grupo têm o MESMO) → não colide entre meses; 1 envio por grupo por janela.
+        for (const g of grupos.values()) {
+          const dueKey = g.dueDate.split("T")[0]
+          const eventKey = `${g.marco}:${g.obra.id}:${dueKey}`
+          const { data: claimed, error: claimError } = await admin.rpc("claim_sienge_webhook", {
+            p_event_key: eventKey,
+            p_event_type: LEMBRETE_EVENT_TYPE[g.marco],
+          })
+          if (claimError) {
+            console.error("[BOLETO_SCAN] claim de lembrete falhou — pulando grupo:", { eventKey, err: claimError.message })
+            continue
+          }
+          if (claimed !== true) continue // grupo já enviado nesta janela
+
+          await notifyBoletoLembrete({
+            orgId: g.obra.org_id,
+            userId: cliente.id,
+            nome: cliente.name,
+            email: cliente.email,
+            phone: cliente.phone,
+            obraId: g.obra.id,
+            obraName: g.obra.name,
+            vencimento: formatDate(g.dueDate),
+            marco: g.marco,
+            quantidade: g.count,
+          })
+
+          if (g.marco === "venc_hoje") lembretesVenc++
+          else if (g.marco === "atraso5") lembretesAtraso5++
+          else lembretesAtraso15++
         }
       }
     } catch (err) {
