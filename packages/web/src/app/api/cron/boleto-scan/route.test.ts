@@ -29,6 +29,8 @@ vi.mock("@web/lib/notificacoes", () => ({
 let clientesRows: Record<string, unknown>[] = []
 let obraRow: Record<string, unknown> | null = { id: "obra-1", name: "Yarden", org_id: "org-1" }
 let vinculoRow: Record<string, unknown> | null = { obra_id: "obra-1" }
+// Story 75-147 — resolução de obra por enterpriseCode (multi-obra). Se vazio, cai no obraRow.
+let obraByEnterprise: Record<number, Record<string, unknown> | null> = {}
 // claim_sienge_webhook: retorna, por ordem de prioridade, o valor mapeado à event_key
 // (claimByKey), depois o próximo da fila, depois o default.
 let claimQueue: (boolean | null)[] = []
@@ -48,15 +50,25 @@ vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: (name: string, args: unknown) => rpcMock(name, args),
     from: (table: string) => {
+      const filters: Record<string, unknown> = {}
       const builder: Record<string, unknown> = {
         select: () => builder,
-        eq: () => builder,
+        eq: (col: string, val: unknown) => {
+          filters[col] = val
+          return builder
+        },
         is: () => builder,
         not: () => builder,
         delete: () => builder,
         maybeSingle: async () =>
           table === "obras"
-            ? { data: obraRow, error: null }
+            ? {
+                data:
+                  (filters.sienge_enterprise_id as number) in obraByEnterprise
+                    ? obraByEnterprise[filters.sienge_enterprise_id as number]
+                    : obraRow,
+                error: null,
+              }
             : table === "cliente_obras"
               ? { data: vinculoRow, error: null }
               : { data: null, error: null },
@@ -91,6 +103,7 @@ beforeEach(() => {
   clientesRows = [CLIENTE]
   obraRow = { id: "obra-1", name: "Yarden", org_id: "org-1" }
   vinculoRow = { obra_id: "obra-1" }
+  obraByEnterprise = {}
   claimQueue = []
   claimDefault = true
   claimByKey = {}
@@ -188,12 +201,12 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     expect(json.lembretesVenc).toBe(1)
     expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(1)
     expect(notifyBoletoLembreteMock).toHaveBeenCalledWith(
-      expect.objectContaining({ marco: "venc_hoje", obraId: "obra-1", vencimento: "10/07/2026" })
+      expect.objectContaining({ marco: "venc_hoje", obraId: "obra-1", vencimento: "10/07/2026", quantidade: 1 })
     )
-    // Chave de dedup prefixada e event_type informativo corretos.
+    // Story 75-147: chave de dedup por (marco, obra, vencimento) + event_type informativo.
     expect(rpcMock).toHaveBeenCalledWith(
       "claim_sienge_webhook",
-      expect.objectContaining({ p_event_key: "venc_hoje:11045:11", p_event_type: "BOLETO_LEMBRETE_VENC" })
+      expect.objectContaining({ p_event_key: "venc_hoje:obra-1:2026-07-10", p_event_type: "BOLETO_LEMBRETE_VENC" })
     )
   })
 
@@ -211,11 +224,11 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     expect(marcos).toEqual(expect.arrayContaining(["atraso5", "atraso15"]))
     expect(rpcMock).toHaveBeenCalledWith(
       "claim_sienge_webhook",
-      expect.objectContaining({ p_event_key: "atraso5:11045:5", p_event_type: "BOLETO_LEMBRETE_ATRASO5" })
+      expect.objectContaining({ p_event_key: "atraso5:obra-1:2026-07-05", p_event_type: "BOLETO_LEMBRETE_ATRASO5" })
     )
     expect(rpcMock).toHaveBeenCalledWith(
       "claim_sienge_webhook",
-      expect.objectContaining({ p_event_key: "atraso15:11045:15", p_event_type: "BOLETO_LEMBRETE_ATRASO15" })
+      expect.objectContaining({ p_event_key: "atraso15:obra-1:2026-06-25", p_event_type: "BOLETO_LEMBRETE_ATRASO15" })
     )
   })
 
@@ -242,7 +255,7 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
 
   it("AC5: claim do marco negado → não re-notifica aquele marco", async () => {
     vi.setSystemTime(new Date(NOVE_BRT))
-    claimByKey = { "venc_hoje:11045:11": null } // marco já enviado antes
+    claimByKey = { "venc_hoje:obra-1:2026-07-10": null } // grupo já enviado antes
     getFinancialStatementMock.mockResolvedValue([
       { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
     ])
@@ -281,5 +294,72 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     // Lembrete: também avaliado na mesma rodada.
     expect(json.lembretesVenc).toBe(1)
     expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Story 75-147 — agrupar lembretes do mesmo cliente+obra+marco em 1 mensagem.
+describe("GET /api/cron/boleto-scan — agrupamento de lembretes (Story 75-147)", () => {
+  const NOVE_BRT = "2026-07-10T12:00:00Z" // 09:00 BRT
+
+  it("AC1: N boletos do mesmo cliente+obra no mesmo marco/dia → 1 notificação com quantidade=N", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 6, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+      { billReceivableId: 11045, installmentId: 33, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+      { billReceivableId: 11045, installmentId: 34, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    // 1 mensagem só, com a contagem correta.
+    expect(json.lembretesVenc).toBe(1)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(1)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ marco: "venc_hoje", obraId: "obra-1", vencimento: "10/07/2026", quantidade: 3 })
+    )
+    // 1 claim de lembrete por grupo (chave por marco+obra+vencimento).
+    const lembreteClaims = rpcMock.mock.calls.filter(
+      (c) => (c[1] as { p_event_key?: string })?.p_event_key === "venc_hoje:obra-1:2026-07-10"
+    )
+    expect(lembreteClaims).toHaveLength(1)
+  })
+
+  it("AC2: boletos em OBRAS diferentes (mesmo marco) → 1 mensagem por obra", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    obraByEnterprise = {
+      8: { id: "obra-1", name: "Yarden", org_id: "org-1" },
+      9: { id: "obra-2", name: "Aurora", org_id: "org-1" },
+    }
+    getReceivableBillMock.mockImplementation((id: number) =>
+      Promise.resolve({ customerId: 1510, enterpriseCode: id === 22222 ? 9 : 8, enterpriseName: "x" })
+    )
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 6, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+      { billReceivableId: 22222, installmentId: 6, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretesVenc).toBe(2)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(2)
+    const obras = notifyBoletoLembreteMock.mock.calls.map((c) => (c[0] as { obraId: string }).obraId)
+    expect(obras).toEqual(expect.arrayContaining(["obra-1", "obra-2"]))
+    // Cada obra é um grupo de quantidade 1.
+    for (const call of notifyBoletoLembreteMock.mock.calls) {
+      expect((call[0] as { quantidade: number }).quantidade).toBe(1)
+    }
+  })
+
+  it("AC3: marcos diferentes na mesma obra → 1 mensagem por marco", async () => {
+    vi.setSystemTime(new Date(NOVE_BRT))
+    getFinancialStatementMock.mockResolvedValue([
+      { billReceivableId: 11045, installmentId: 6, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true }, // venc_hoje
+      { billReceivableId: 11045, installmentId: 9, dueDate: "2026-07-05", hasBoleto: true, currentBalance: 100, generatedBillet: true }, // atraso5
+    ])
+    const res = await GET(makeReq("segredo"))
+    const json = await res.json()
+    expect(json.lembretesVenc).toBe(1)
+    expect(json.lembretesAtraso5).toBe(1)
+    expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(2)
+    const marcos = notifyBoletoLembreteMock.mock.calls.map((c) => (c[0] as { marco: string }).marco)
+    expect(marcos).toEqual(expect.arrayContaining(["venc_hoje", "atraso5"]))
   })
 })

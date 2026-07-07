@@ -200,6 +200,39 @@ describe("notifyBoletoLembrete (Story 75-141)", () => {
     expect(templateEnviado()).toBe("boleto_em_atraso")
   })
 
+  it("Story 75-147: quantidade > 1 → copy no plural em e-mail e push; WhatsApp usa o MESMO template (singular)", async () => {
+    await notifyBoletoLembrete({ ...params("venc_hoje"), quantidade: 3 })
+    await flush()
+    // E-mail: assunto e corpo no plural com a contagem.
+    const emailArg = (sendEmail as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![0] as {
+      subject: string
+      html: string
+    }
+    expect(emailArg.subject).toContain("Seus boletos vencem hoje")
+    expect(emailArg.html).toContain("3 boletos")
+    // Push: corpo com a contagem.
+    const pushArg = (sendPushToUser as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as {
+      title: string
+      body: string
+    }
+    expect(pushArg.title).toBe("Seus boletos vencem hoje")
+    expect(pushArg.body).toContain("3 boletos")
+    // WhatsApp: template aprovado inalterado (singular), enviado 1×.
+    expect(templateEnviado()).toBe("boleto_vence_hoje")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("Story 75-147: quantidade = 1 (default) → copy no singular", async () => {
+    await notifyBoletoLembrete(params("venc_hoje"))
+    await flush()
+    const emailArg = (sendEmail as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![0] as {
+      subject: string
+      html: string
+    }
+    expect(emailArg.subject).toContain("Seu boleto vence hoje")
+    expect(emailArg.html).toContain("O boleto da sua obra")
+  })
+
   it("AC8: falha do template WhatsApp (Graph API erro) não lança e não impede e-mail/push", async () => {
     fetchMock.mockResolvedValue({
       ok: false,

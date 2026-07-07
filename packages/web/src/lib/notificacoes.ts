@@ -330,6 +330,9 @@ export type BoletoLembreteMarco = "venc_hoje" | "atraso5" | "atraso15"
 
 export interface BoletoLembreteParams extends NovoBoletoParams {
   marco: BoletoLembreteMarco
+  // Story 75-147 — nº de boletos agrupados nesta mensagem (mesmo cliente+obra+marco/dia).
+  // Default 1. Só afeta copy de e-mail/push (plural); WhatsApp usa template singular aprovado.
+  quantidade?: number
 }
 
 // Template HSM por marco. `boleto_vence_hoje` para venc_hoje; `boleto_em_atraso`
@@ -342,30 +345,37 @@ const LEMBRETE_TEMPLATE: Record<BoletoLembreteMarco, string> = {
   atraso15: "boleto_em_atraso",
 }
 
-// Copy por marco (e-mail + push). Atraso5 e atraso15 compartilham o texto de "em atraso".
-const LEMBRETE_COPY: Record<
-  BoletoLembreteMarco,
-  { emailSubject: string; emailIntro: string; pushTitle: string }
-> = {
-  venc_hoje: {
-    emailSubject: "Seu boleto vence hoje",
-    emailIntro: "O boleto da sua obra <strong>%OBRA%</strong> vence hoje.",
-    pushTitle: "Seu boleto vence hoje",
-  },
-  atraso5: {
-    emailSubject: "Boleto em atraso",
-    emailIntro: "O boleto da sua obra <strong>%OBRA%</strong> está em atraso.",
-    pushTitle: "Boleto em atraso",
-  },
-  atraso15: {
-    emailSubject: "Boleto em atraso",
-    emailIntro: "O boleto da sua obra <strong>%OBRA%</strong> está em atraso.",
-    pushTitle: "Boleto em atraso",
-  },
+// Copy por marco (e-mail + push), ciente da QUANTIDADE (Story 75-147). Atraso5 e atraso15
+// compartilham o texto de "em atraso". Com quantidade > 1 a copy vai no plural ("Você tem N
+// boletos ..."); com 1, singular (texto original). O WhatsApp NÃO usa esta copy — segue no
+// template HSM aprovado (singular), enviado 1× por grupo.
+function lembreteCopy(
+  marco: BoletoLembreteMarco,
+  quantidade: number
+): { emailSubject: string; emailIntro: string; pushTitle: string } {
+  const plural = quantidade > 1
+  const nBoletos = `${quantidade} boletos`
+  if (marco === "venc_hoje") {
+    return {
+      emailSubject: plural ? "Seus boletos vencem hoje" : "Seu boleto vence hoje",
+      emailIntro: plural
+        ? `Você tem <strong>${nBoletos}</strong> da sua obra <strong>%OBRA%</strong> vencendo hoje.`
+        : "O boleto da sua obra <strong>%OBRA%</strong> vence hoje.",
+      pushTitle: plural ? "Seus boletos vencem hoje" : "Seu boleto vence hoje",
+    }
+  }
+  return {
+    emailSubject: plural ? "Boletos em atraso" : "Boleto em atraso",
+    emailIntro: plural
+      ? `Você tem <strong>${nBoletos}</strong> da sua obra <strong>%OBRA%</strong> em atraso.`
+      : "O boleto da sua obra <strong>%OBRA%</strong> está em atraso.",
+    pushTitle: plural ? "Boletos em atraso" : "Boleto em atraso",
+  }
 }
 
 export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promise<void> {
   const { orgId, userId, nome, email, phone, obraId, obraName, vencimento, marco } = params
+  const quantidade = Math.max(1, params.quantidade ?? 1)
   try {
     if (portalNotificacoesPausadas()) {
       console.log("[notificacoes] portal pausado — pulando lembrete de boleto", { obraId, userId, marco })
@@ -385,26 +395,31 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
     const link = `${appUrl}/cliente/boleto/${obraId}`
-    const copy = LEMBRETE_COPY[marco]
+    const copy = lembreteCopy(marco, quantidade)
 
     if (pref.email_enabled && email) {
       sendEmail({
         to: email,
         subject: `${copy.emailSubject} — ${obraName}`,
-        html: buildBoletoLembreteEmailHtml({ nome, obraName, vencimento, link, marco }),
+        html: buildBoletoLembreteEmailHtml({ nome, obraName, vencimento, link, marco, quantidade }),
       }).catch((err) => console.error("[notificacoes] lembrete boleto email error:", err))
     }
 
     if (pref.whatsapp_enabled && phone) {
+      // WhatsApp mantém o template HSM aprovado (singular), enviado 1× por grupo (Story 75-147).
       sendBoletoLembreteWhatsApp(admin, orgId, phone, nome, obraName, vencimento, obraId, marco).catch(
         (err) => console.error("[notificacoes] lembrete boleto WhatsApp skip:", err)
       )
     }
 
     if (pref.push_enabled) {
+      const pushBody =
+        quantidade > 1
+          ? `${obraName} — ${quantidade} boletos, vencimento ${vencimento}`
+          : `${obraName} — vencimento ${vencimento}`
       sendPushToUser(admin, userId, {
         title: copy.pushTitle,
-        body: `${obraName} — vencimento ${vencimento}`,
+        body: pushBody,
         url: link,
       }).catch((err) => console.error("[notificacoes] lembrete boleto push error:", err))
     }
@@ -488,9 +503,10 @@ function buildBoletoLembreteEmailHtml(params: {
   vencimento: string
   link: string
   marco: BoletoLembreteMarco
+  quantidade: number
 }): string {
-  const { nome, obraName, vencimento, link, marco } = params
-  const intro = LEMBRETE_COPY[marco].emailIntro.replace("%OBRA%", obraName)
+  const { nome, obraName, vencimento, link, marco, quantidade } = params
+  const intro = lembreteCopy(marco, quantidade).emailIntro.replace("%OBRA%", obraName)
   const vencLabel = marco === "venc_hoje" ? "Vencimento (hoje)" : "Vencimento"
   return `<!DOCTYPE html>
 <html>
