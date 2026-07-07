@@ -3,6 +3,7 @@
 import { useState, useRef } from "react"
 import { ArrowLeft, ArrowRight, Paperclip, Loader2, Check, Copy } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
+import { ImobiliariaSelect } from "@web/components/pastas/imobiliaria-select"
 
 // Story 75-146 — wizard compartilhado de criação de pasta (3 telas), reutilizado pelo
 // modal interno do dashboard E pela página pública de auto-cadastro da imobiliária.
@@ -72,8 +73,10 @@ export function PastaWizard({
   const [corretorNome, setCorretorNome] = useState(corretorDefaults?.nome ?? "")
   const [corretorTelefone, setCorretorTelefone] = useState(corretorDefaults?.telefone ?? "")
   const [corretorEmail, setCorretorEmail] = useState(corretorDefaults?.email ?? "")
-  // Público: imobiliária travada no valor do link. Interno: editável.
-  const [imobiliaria, setImobiliaria] = useState(lockedImobiliaria ?? "")
+  // Story 75-148 — interno: imobiliária vem da BASE (id + nome snapshot), via ImobiliariaSelect.
+  // Público: travada no link (exibida no banner; o endpoint usa a imobiliária do link).
+  const [imobiliariaId, setImobiliariaId] = useState<string | null>(null)
+  const [imobiliariaNome, setImobiliariaNome] = useState<string | null>(null)
   const imobiliariaLocked = mode === "public"
   const [empreendimento, setEmpreendimento] = useState("")
   const [temPix, setTemPix] = useState(false)
@@ -125,8 +128,10 @@ export function PastaWizard({
           corretor_nome: corretorNome.trim(),
           corretor_telefone: corretorTelefone.trim(),
           corretor_email: corretorEmail.trim(),
-          // Público: o endpoint IGNORA a imobiliária do body e usa a do link.
-          imobiliaria: imobiliaria.trim(),
+          // Interno: id da imobiliária (base) + nome (snapshot p/ exibição). Público: o
+          // endpoint IGNORA e usa a imobiliária do link.
+          imobiliaria_id: imobiliariaId,
+          imobiliaria: imobiliariaNome,
           interessado_telefone: interessadoTelefone.trim(),
           interessado_email: interessadoEmail.trim(),
         }),
@@ -203,7 +208,7 @@ export function PastaWizard({
             {imobiliariaLocked && (
               <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-500/30 dark:bg-orange-500/10">
                 <p className="text-xs text-orange-700 dark:text-orange-300">
-                  Cadastro pela imobiliária <strong>{imobiliaria}</strong>
+                  Cadastro pela imobiliária <strong>{lockedImobiliaria}</strong>
                 </p>
               </div>
             )}
@@ -219,16 +224,13 @@ export function PastaWizard({
               <span className="text-xs text-gray-500 dark:text-stone-400">E-mail do corretor</span>
               <input type="email" value={corretorEmail} onChange={(e) => setCorretorEmail(e.target.value)} className={inputCls} />
             </label>
-            <label className="block">
-              <span className="text-xs text-gray-500 dark:text-stone-400">Imobiliária</span>
-              <input
-                value={imobiliaria}
-                onChange={(e) => setImobiliaria(e.target.value)}
-                readOnly={imobiliariaLocked}
-                disabled={imobiliariaLocked}
-                className={`${inputCls} ${imobiliariaLocked ? "cursor-not-allowed bg-gray-50 text-gray-500 dark:bg-stone-800/60 dark:text-stone-400" : ""}`}
+            {/* Story 75-148 — imobiliária da BASE (interno). No público, já aparece no banner acima. */}
+            {!imobiliariaLocked && (
+              <ImobiliariaSelect
+                value={imobiliariaId}
+                onChange={(v) => { setImobiliariaId(v?.id ?? null); setImobiliariaNome(v?.nome ?? null) }}
               />
-            </label>
+            )}
             <label className="block">
               <span className="text-xs text-gray-500 dark:text-stone-400">Empreendimento</span>
               <input value={empreendimento} onChange={(e) => setEmpreendimento(e.target.value)} className={inputCls} />

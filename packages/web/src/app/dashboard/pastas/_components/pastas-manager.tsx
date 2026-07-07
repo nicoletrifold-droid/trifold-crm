@@ -7,6 +7,7 @@ import { FolderPlus, Copy, Check, ChevronRight, Trash2, Search, Clock, Building2
 import type { PastaStatus } from "@web/lib/pastas/status"
 import { filterPastas, distinctValues, hasActiveFilters, EMPTY_FILTERS, type PastaFilters } from "@web/lib/pastas/filter"
 import { PastaWizard } from "@web/components/pastas/pasta-wizard"
+import { ImobiliariaSelect } from "@web/components/pastas/imobiliaria-select"
 
 interface PastaRow {
   id: string
@@ -148,13 +149,23 @@ export function PastasManager({ pastas, links: initialLinks }: { pastas: PastaRo
             Documentos dos interessados — envie o link e acompanhe o que já foi entregue.
           </p>
         </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
-        >
-          <FolderPlus className="h-4 w-4" />
-          Nova pasta
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Story 75-148 — gerenciar a base de imobiliárias sem depender do módulo IMOB. */}
+          <Link
+            href="/dashboard/pastas/imobiliarias"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
+          >
+            <Building2 className="h-4 w-4" />
+            Imobiliárias
+          </Link>
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
+          >
+            <FolderPlus className="h-4 w-4" />
+            Nova pasta
+          </button>
+        </div>
       </div>
 
       <LinksSection initialLinks={initialLinks} />
@@ -298,7 +309,8 @@ export function PastasManager({ pastas, links: initialLinks }: { pastas: PastaRo
 function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
   const [links, setLinks] = useState<PastaLinkRow[]>(initialLinks)
   const [open, setOpen] = useState(false)
-  const [imobiliaria, setImobiliaria] = useState("")
+  const [imobiliariaId, setImobiliariaId] = useState<string | null>(null)
+  const [imobiliariaNome, setImobiliariaNome] = useState<string | null>(null)
   const [corretorNome, setCorretorNome] = useState("")
   const [corretorTelefone, setCorretorTelefone] = useState("")
   const [corretorEmail, setCorretorEmail] = useState("")
@@ -321,7 +333,7 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
   }
 
   async function createLink() {
-    if (!imobiliaria.trim()) { setError("Informe o nome da imobiliária."); return }
+    if (!imobiliariaId) { setError("Selecione a imobiliária."); return }
     setCreating(true)
     setError(null)
     try {
@@ -329,7 +341,8 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imobiliaria: imobiliaria.trim(),
+          imobiliaria_id: imobiliariaId,
+          imobiliaria: imobiliariaNome,
           corretor_nome: corretorNome.trim(),
           corretor_telefone: corretorTelefone.trim(),
           corretor_email: corretorEmail.trim(),
@@ -338,7 +351,7 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
       const data = await res.json().catch(() => null)
       if (res.ok && data?.data) {
         setLinks((prev) => [data.data as PastaLinkRow, ...prev])
-        setImobiliaria(""); setCorretorNome(""); setCorretorTelefone(""); setCorretorEmail("")
+        setImobiliariaId(null); setImobiliariaNome(null); setCorretorNome(""); setCorretorTelefone(""); setCorretorEmail("")
         setOpen(false)
       } else {
         setError(data?.error ?? "Não foi possível gerar o link.")
@@ -386,10 +399,11 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
       {open && (
         <div className="border-t border-gray-100 px-4 py-3 dark:border-stone-800">
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-xs text-gray-500 dark:text-stone-400">Imobiliária *</span>
-              <input value={imobiliaria} onChange={(e) => setImobiliaria(e.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
-            </label>
+            <ImobiliariaSelect
+              value={imobiliariaId}
+              onChange={(v) => { setImobiliariaId(v?.id ?? null); setImobiliariaNome(v?.nome ?? null) }}
+              required
+            />
             <label className="block">
               <span className="text-xs text-gray-500 dark:text-stone-400">Corretor (opcional)</span>
               <input value={corretorNome} onChange={(e) => setCorretorNome(e.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />

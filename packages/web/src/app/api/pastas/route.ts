@@ -19,6 +19,9 @@ export async function POST(request: NextRequest) {
   // Sanitiza uma string opcional (trim + limite). Retorna null quando vazia.
   const optStr = (v: unknown): string | null =>
     typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null
+  // Story 75-148 — id de imobiliária (uuid) ou null. A FK garante existência real.
+  const optId = (v: unknown): string | null =>
+    typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v.trim()) ? v.trim() : null
 
   const nome = typeof body.nome === "string" ? body.nome.trim() : ""
   const tipo: PastaTipo = body.tipo === "pj" ? "pj" : "pf"
@@ -35,6 +38,8 @@ export async function POST(request: NextRequest) {
   const corretorNome = optStr(body.corretor_nome)
   const corretorTelefone = optStr(body.corretor_telefone)
   const corretorEmail = optStr(body.corretor_email)
+  // Story 75-148 — imobiliária da BASE: id (verdade p/ relatório) + nome (snapshot p/ exibição).
+  const imobiliariaId = optId(body.imobiliaria_id)
   const imobiliaria = optStr(body.imobiliaria)
   const interessadoTelefone = optStr(body.interessado_telefone)
   const interessadoEmail = optStr(body.interessado_email)
@@ -59,6 +64,7 @@ export async function POST(request: NextRequest) {
       corretor_nome: corretorNome,
       corretor_telefone: corretorTelefone,
       corretor_email: corretorEmail,
+      imobiliaria_id: imobiliariaId,
       imobiliaria,
       interessado_telefone: interessadoTelefone,
       interessado_email: interessadoEmail,

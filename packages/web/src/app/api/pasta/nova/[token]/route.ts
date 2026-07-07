@@ -21,7 +21,7 @@ export async function POST(
   // 1. Resolve o link ativo. Token inexistente OU revogado → rejeita limpo.
   const { data: link } = await admin
     .from("pasta_links")
-    .select("id, org_id, imobiliaria, ativo")
+    .select("id, org_id, imobiliaria, imobiliaria_id, ativo")
     .eq("token", token)
     .maybeSingle()
 
@@ -69,7 +69,8 @@ export async function POST(
       corretor_nome: corretorNome,
       corretor_telefone: corretorTelefone,
       corretor_email: corretorEmail,
-      // Imobiliária SEMPRE do link (ignora o body — AC 3).
+      // Imobiliária SEMPRE do link (ignora o body — AC 3). Story 75-148: id + nome snapshot.
+      imobiliaria_id: link.imobiliaria_id,
       imobiliaria: link.imobiliaria,
       interessado_telefone: interessadoTelefone,
       interessado_email: interessadoEmail,
