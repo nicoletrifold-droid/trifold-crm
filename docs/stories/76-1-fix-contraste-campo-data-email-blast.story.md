@@ -1,7 +1,7 @@
 # Story 76-1 — Corrigir contraste do campo de data/hora no wizard de Email Blast (Passo 3)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 
@@ -74,3 +74,5 @@ Pronta para `@devops *push`. (Nota: por permissão de agente, @qa não altera o 
 - @sm (River): story criada em Draft, documentando fix de contraste já prototipado em sessão de debugging com o usuário.
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Status Draft → Ready.
 - @dev (Dex): diff revisado contra os 4 ACs (todos atendidos), ESLint OK, commit local criado. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks). Pronta para @devops *push.
+- @devops (Gage): local main estava 191 commits atrás de origin/main (outras sessões/PRs mergeados nesse intervalo) — sem conflito nos arquivos desta story (confirmado via diff no merge-base). Rebase limpo + push para origin/main (`a4495039`). Status InReview → Done.
