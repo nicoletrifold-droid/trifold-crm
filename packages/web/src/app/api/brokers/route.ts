@@ -152,10 +152,13 @@ export async function POST(request: NextRequest) {
       options: { redirectTo: `${siteUrl}/reset-senha` },
     })
 
-    if (linkData?.properties?.action_link) {
+    if (linkData?.properties?.hashed_token) {
+      // `action_link` usa /auth/v1/verify (verify + fragment) e não chega em /reset-senha.
+      // Link direto para /auth/callback com `hashed_token` (verifyOtp). [Story 75-139]
+      const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
       const { subject, html } = renderPasswordActionEmail({
         userName: body.name.trim(),
-        actionLink: linkData.properties.action_link,
+        actionLink,
         siteUrl,
         mode: "create",
       })
@@ -306,10 +309,13 @@ export async function POST(request: NextRequest) {
         options: { redirectTo: `${siteUrl}/reset-senha` },
       })
 
-      if (linkData?.properties?.action_link) {
+      if (linkData?.properties?.hashed_token) {
+        // `action_link` usa /auth/v1/verify (verify + fragment) e não chega em /reset-senha.
+        // Link direto para /auth/callback com `hashed_token` (verifyOtp). [Story 75-139]
+        const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
         const { subject, html } = renderPasswordActionEmail({
           userName: (targetUser.name as string) ?? "Corretor",
-          actionLink: linkData.properties.action_link,
+          actionLink,
           siteUrl,
           mode: "create",
         })

@@ -83,16 +83,21 @@ export async function POST(
       options: { redirectTo: `${siteUrl}/reset-senha` },
     })
 
-    if (linkError || !linkData?.properties?.action_link) {
+    if (linkError || !linkData?.properties?.hashed_token) {
       return NextResponse.json(
         { error: linkError?.message ?? "Erro ao gerar link de recuperação." },
         { status: 500 }
       )
     }
 
+    // O `action_link` do generateLink usa o fluxo /auth/v1/verify (verify + fragment)
+    // que não chega em /reset-senha. Montamos o link direto para o /auth/callback do
+    // app com `hashed_token`, consumido via verifyOtp({ token_hash, type }). [Story 75-139]
+    const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
+
     const { subject, html } = renderPasswordActionEmail({
       userName: portalUser.name ?? "Cliente",
-      actionLink: linkData.properties.action_link,
+      actionLink,
       siteUrl,
       mode: "reset",
     })

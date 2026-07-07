@@ -54,14 +54,18 @@ export async function POST(
     options: { redirectTo: `${siteUrl}/reset-senha` },
   })
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     return NextResponse.json({ error: "Erro ao gerar link de recuperação." }, { status: 500 })
   }
+
+  // `action_link` usa /auth/v1/verify (verify + fragment) e não chega em /reset-senha.
+  // Link direto para /auth/callback com `hashed_token` (verifyOtp). [Story 75-139]
+  const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
 
   const brokerName = (targetUser.name as string) ?? "Corretor"
   const { subject, html } = renderPasswordActionEmail({
     userName: brokerName,
-    actionLink: linkData.properties.action_link,
+    actionLink,
     siteUrl,
     mode: "reset",
   })
