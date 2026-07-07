@@ -62,7 +62,14 @@ export function BlastWizard() {
       return
     }
 
-    router.push("/dashboard/sistema/email-blasts")
+    const params = new URLSearchParams({
+      created: "1",
+      recipients: String(audience.recipientCount),
+      mode: scheduledFor ? "scheduled" : "now",
+    })
+    if (scheduledFor) params.set("scheduledFor", scheduledFor)
+
+    router.push(`/dashboard/sistema/email-blasts?${params.toString()}`)
     router.refresh()
   }
 

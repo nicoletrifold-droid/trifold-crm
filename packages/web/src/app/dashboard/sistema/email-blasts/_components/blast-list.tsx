@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface Blast {
   id: string
@@ -33,10 +33,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function BlastList() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [blasts, setBlasts] = useState<Blast[]>([])
   const [loading, setLoading] = useState(true)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     const res = await fetch("/api/admin/email-blasts")
@@ -48,6 +50,21 @@ export function BlastList() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    if (searchParams.get("created") !== "1") return
+
+    const recipients = searchParams.get("recipients") ?? "0"
+    const mode = searchParams.get("mode")
+    const scheduledFor = searchParams.get("scheduledFor")
+    const when = mode === "scheduled" && scheduledFor
+      ? `agendado para ${new Date(scheduledFor).toLocaleString("pt-BR")}`
+      : "imediato"
+
+    setSuccessMessage(`Blast criado com sucesso — ${recipients} lead(s) na fila. Envio ${when}.`)
+    router.replace("/dashboard/sistema/email-blasts")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const cancel = async (id: string) => {
     setCancelling(true)
@@ -67,6 +84,19 @@ export function BlastList() {
 
   return (
     <div className="space-y-6">
+      {successMessage && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <span>{successMessage}</span>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="shrink-0 text-green-500 hover:text-green-700"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-stone-900">Email Blasts</h1>

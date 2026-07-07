@@ -60,7 +60,7 @@ export function StepContent({ initial, onNext, onBack }: Props) {
           value={campaignName}
           onChange={(e) => setCampaignName(e.target.value)}
           placeholder="Ex: Lançamento Residencial XYZ — Abril 2026"
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
       </div>
 
@@ -69,7 +69,7 @@ export function StepContent({ initial, onNext, onBack }: Props) {
         <select
           value={templateId}
           onChange={(e) => handleTemplateChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         >
           <option value="">Selecione um template...</option>
           {templates.map((t) => (
@@ -88,7 +88,7 @@ export function StepContent({ initial, onNext, onBack }: Props) {
             type="text"
             value={subjectOverride}
             onChange={(e) => setSubjectOverride(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           <p className="mt-1 text-[11px] text-stone-400">Pré-preenchido com o assunto do template. Editável.</p>
         </div>
