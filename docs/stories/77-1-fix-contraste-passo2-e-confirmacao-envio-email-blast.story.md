@@ -68,7 +68,27 @@ Evita que o admin digite "no escuro" no Passo 2 (mesmo problema já resolvido no
 - `packages/web/src/app/dashboard/sistema/email-blasts/_components/blast-list.tsx`
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `465582d9` (diff isolado, 3 arquivos de produto + story).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Diff mínimo, reusa padrão já validado na 76-1 (contraste) e o padrão de banner de erro já existente no wizard (sucesso em verde) |
+| 2. Testes | ⚠️ Sem teste automatizado novo — mesma justificativa da 76-1 (mudança visual/fluxo simples, sem suíte prévia no componente). Não bloqueante. |
+| 3. Acceptance Criteria | ✅ AC1–AC5 confirmados no diff: `text-stone-800`+`bg-white` nos 3 campos (AC1); banner verde dismissível pós-redirect (AC2); texto do banner checado explicitamente — usa "criado com sucesso" / "na fila" / "Envio imediato/agendado", **nunca** "enviado" ou "entregue" (AC3); `router.replace` limpa os query params logo após ler (AC4); payload do `POST /api/admin/email-blasts` em `handleConfirm` inalterado (AC5) |
+| 4. Regressões | ✅ Diff cirúrgico nos 3 arquivos, nenhuma outra lógica tocada (Step 1/Audiência intocado) |
+| 5. Performance | ✅ N/A — um `useEffect` extra e leitura de query params, custo desprezível |
+| 6. Segurança | ✅ N/A — query params são só metadados de UX (contagem/modo/data), sem dado sensível; nenhum novo endpoint |
+| 7. Documentação | ✅ Story com Contexto, ACs, Dev Notes/Completion Notes e Change Log completos |
+
+**Verificação extra — `useSearchParams` sem `Suspense`:** confirmado que `page.tsx` (`email-blasts/page.tsx`) chama `getServerUser()` → `createClient()` do Supabase SSR, que lê cookies de auth. Uso de `cookies()` força a rota para renderização dinâmica no Next.js App Router, tirando-a da geração estática — logo o requisito de `Suspense` em torno de `useSearchParams` (que só se aplica a rotas estaticamente pré-renderizadas) não se aplica aqui. Mesmo padrão já usado sem problemas em outros componentes do app (`task-date-filter.tsx`, `lead-search.tsx`), ambos atrás de autenticação. Não é regressão de build.
+
+**Observação (não bloqueante):** a lista aberta (`<option>`) de um `<select>` nativo pode, em alguns navegadores, manter estilização de dark-mode do SO independente das classes Tailwind aplicadas ao elemento fechado — o fix resolve o problema relatado (valor selecionado ilegível no campo fechado), mas se o menu aberto também aparecer com baixo contraste em algum navegador específico, o hardening correto seria `style={{ colorScheme: "light" }}` no `<select>`. Registrar como possível débito técnico se reportado novamente.
+
+**CodeRabbit:** não executado (WSL indisponível neste ambiente macOS) — mitigado com ESLint independente (reexecutado nesta revisão: 0 erros, 1 warning pré-existente não relacionado a esta story) + revisão manual do diff completo.
+
+Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft, documentando os 2 fixes de UX reportados pelo usuário no Passo 2 e pós-confirmação do wizard de Email Blast (continuação da sessão da Story 76-1).
