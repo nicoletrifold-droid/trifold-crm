@@ -1,0 +1,66 @@
+schema: 1
+story: '75.146'
+gate: PASS
+status_reason: 'Link público de auto-cadastro por imobiliária implementado com segurança sólida (service role + token/ativo validado server-side, imobiliária do link ignorando o body), notificação fire-and-forget que não bloqueia a criação, e wizard extraído sem regressão do fluxo interno. tsc/eslint/vitest (829) limpos.'
+reviewer: 'Quinn'
+updated: '2026-07-06T00:00:00Z'
+
+review_summary: |
+  QA gate — 7 checks. Revisado o diff real (3a6a20a..f7e1620), não só a story.
+
+seven_checks:
+  code_review: PASS   # POST público espelha /api/pastas 1:1 (optStr, buildDocSlots, rollback manual); padrões consistentes com o codebase.
+  unit_tests: PASS    # 13 novos testes (story cita 12) não-tautológicos; full suite 76 arquivos / 829 testes PASS.
+  acceptance_criteria: PASS  # AC 1-7 verificados no código e por testes.
+  no_regressions: PASS # /api/pastas inalterado; CreateModal→PastaWizard(mode=internal); DeleteModal intacto; teste de não-regressão do interno verde.
+  performance: PASS    # page.tsx faz fetch de pastas+links em paralelo (Promise.all); sem N+1 novo.
+  security: PASS       # endpoint público sem auth valida token+ativo, resolve org do link, ignora imobiliária do body, created_by=null; sem forja de org/spoof. RLS 161 espelha pastas_org_rw.
+  documentation: PASS  # story File List + Change Log + Dev Notes completos; comentários inline claros.
+
+focus_area_findings:
+  - area: 'Segurança do POST público (maior risco)'
+    verdict: PASS
+    notes: 'createAdminClient (service role); resolve link por token + ativo!==true → 404 limpo (sem crash/leak); org_id e imobiliária SEMPRE do link (body ignorado — testado "Fraude Imob"); origem=auto_cadastro, link_id, created_by=null. buildDocSlots idêntico ao interno; rollback manual da pasta em falha de docs preservado e testado.'
+  - area: 'Não-regressão do fluxo interno'
+    verdict: PASS
+    notes: '/api/pastas byte-identical no comportamento (created_by=usuário, origem via default do banco, imobiliária editável). Wizard compartilhado mode=internal mantém Tela 3 inline + copiar link. Teste assert origem/link_id undefined no insert interno.'
+  - area: 'Fallback gracioso da notificação'
+    verdict: PASS
+    notes: 'notifyNovaPastaGestor é fire-and-forget (.catch no chamador) + try/catch interno + .catch por canal. Teste com mockRejectedValueOnce confirma 201 e pasta persistida. Teste unitário do lib confirma que WhatsApp falho (template PENDING) não impede o e-mail. Gestores = PASTA_MANAGER_ROLES + is_active; telefone de users.phone.'
+  - area: 'Migration 161'
+    verdict: PASS
+    notes: 'pasta_links + índices + RLS pasta_links_org_rw espelham 139/pastas_org_rw exatamente (users.auth_id=auth.uid()). pastas.origem (default interno, check interno|auto_cadastro) + link_id FK on delete set null. Tudo nullable/defaulted (sem backfill). Número 161 livre (última=160). Service role não é bloqueado; leituras internas via session client passam pela policy.'
+  - area: 'Gestão de links'
+    verdict: PASS
+    notes: 'POST /api/pasta-links + PATCH /api/pasta-links/[id] gated por isPastaManager (403 p/ corretor testado). PATCH escopado por org_id; revoga ativo=false → página pública mostra "Link inválido ou desativado".'
+  - area: 'Tema'
+    verdict: PASS
+    notes: 'Página pública /pasta/nova/[token] em tema claro (bg-stone-50), consistente com /pasta/[token]. Deviation do @dev correta (AC7). Variantes dark: do wizard são inócuas (página pública não aplica .dark).'
+  - area: 'Qualidade dos testes'
+    verdict: PASS
+    notes: 'Cobrem os caminhos de risco: body-imobiliária-ignorada, token inexistente/revogado, notificação-throws-mas-pasta-persiste, não-regressão do interno, gate de gestor, rollback. Não-tautológicos. Todos verdes.'
+
+verification_run:
+  type_check: 'PASS (tsc --noEmit)'
+  eslint: 'PASS (exit 0 nos 10 arquivos-fonte alterados)'
+  vitest: 'PASS (76 arquivos / 829 testes)'
+
+lint_baseline: 'Nenhum erro de lint introduzido. eslint nos arquivos alterados por esta story = exit 0. Não foi necessário separar baseline pré-existente (arquivos alterados limpos).'
+
+top_issues: []
+
+observations:
+  - id: 'DOC-001'
+    severity: low
+    finding: 'Story cita "12 novos testes"; a contagem real é 13 (7 no POST público + 2 interno + 3 pasta-links + 1 notificação).'
+    suggested_action: 'Cosmético — nenhuma ação exigida.'
+  - id: 'SEC-002'
+    severity: low
+    finding: 'Endpoint público sem rate-limit/CAPTCHA (escrita sem auth).'
+    suggested_action: 'Aceito como OUT of scope — mitigado por token aleatório revogável por imobiliária + limite 25MB no upload. Monitorar abuso real e reavaliar como follow-up.'
+
+handoff:
+  clear_for_devops: true
+  notes: 'Livre para @devops *push/PR. Após push, aplicar manualmente a migration 161 em prod (SQL Editor / Management API — projeto sem CI/CLI). Template WhatsApp nova_pasta_gestor segue PENDING na Meta (dependência externa, degradação graciosa já coberta) — go-live não bloqueado por isso.'
+
+waiver: { active: false }
