@@ -100,12 +100,17 @@ export function StepSchedule({ audience, content, onConfirm, onBack, submitting 
           <span className="text-sm text-stone-700">Agendar para data específica</span>
         </label>
         {!sendNow && (
-          <input
-            type="datetime-local"
-            value={scheduledFor}
-            onChange={(e) => setScheduledFor(e.target.value)}
-            className="ml-6 rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
+          <div className="ml-6 space-y-1">
+            <input
+              type="datetime-local"
+              value={scheduledFor}
+              onChange={(e) => setScheduledFor(e.target.value)}
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            {!scheduledFor && (
+              <p className="text-xs text-stone-400">Selecione o dia e o horário do disparo.</p>
+            )}
+          </div>
         )}
       </div>
 
