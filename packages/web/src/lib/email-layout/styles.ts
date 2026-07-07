@@ -1,7 +1,7 @@
 export const emailTokens = {
   colors: {
     primary: '#1a1a2e',
-    accent: '#4f46e5',
+    accent: '#F27A5E',
     background: '#f3f4f6',
     surface: '#ffffff',
     muted: '#f9fafb',

@@ -1,5 +1,6 @@
 import { renderBaseLayout } from "../index"
 import { renderButton } from "./button"
+import { emailTokens } from "../styles"
 
 /**
  * Template branded reutilizável para e-mails de ação de senha (Story 75-139, AC6).
@@ -41,7 +42,7 @@ export function renderPasswordActionEmail(params: {
     ${renderButton(cta, actionLink)}
     <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
       Após ${isReset ? "redefinir" : "criar"} sua senha, acesse o sistema em:<br>
-      <a href="${siteUrl}" style="color:#4f46e5;text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
+      <a href="${siteUrl}" style="color:${emailTokens.colors.accent};text-decoration:none;font-weight:600;">${siteUrl.replace("https://", "")}</a>
     </p>
     <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">
       Este link expira em 24 horas. Se você não esperava este e-mail, pode ignorá-lo.

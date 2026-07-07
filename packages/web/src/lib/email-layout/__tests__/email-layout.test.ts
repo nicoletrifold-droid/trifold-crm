@@ -72,6 +72,6 @@ describe('renderButton', () => {
 
   it('uses accent color for background', () => {
     const html = renderButton('CTA', 'https://example.com')
-    expect(html).toContain('#4f46e5')
+    expect(html).toContain('#F27A5E')
   })
 })
