@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
+import { after } from "next/server"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
@@ -177,26 +178,42 @@ export async function requestPasswordReset(
     mode: 'reset',
   })
 
-  // Fire-and-forget (correção PO item B): não aguardar o round-trip ao Resend nem o
-  // logAudit encurta a janela de timing side-channel da anti-enumeração — a latência
-  // entre e-mail existente e inexistente deixa de vazar pelo tempo de resposta.
-  // Mesmo tradeoff já aceito para `logAudit` neste repo.
-  void sendEmail({
-    to: appUser.email as string,
-    subject,
-    html,
-    tags: [{ name: 'type', value: 'login_password_reset' }],
-    orgId: appUser.org_id ?? undefined,
+  // `after()` (Next 16, estável desde v15.1) agenda o envio para DEPOIS que a resposta
+  // é enviada ao cliente, mas o runtime AGUARDA sua conclusão antes de congelar a
+  // invocação serverless (usa `waitUntil` por baixo na Vercel). Isso corrige o bug do
+  // fire-and-forget solto (`void sendEmail`), em que a função era encerrada antes do
+  // round-trip ao Resend completar e o e-mail nunca era enviado (Story 75-139).
+  // Como o trabalho roda após a resposta, a mitigação de timing side-channel da
+  // anti-enumeração é preservada: a latência de resposta não vaza se o e-mail existe.
+  const emailOrgId = appUser.org_id ?? undefined
+  const emailTo = appUser.email as string
+  after(async () => {
+    const res = await sendEmail({
+      to: emailTo,
+      subject,
+      html,
+      tags: [{ name: 'type', value: 'login_password_reset' }],
+      orgId: emailOrgId,
+    })
+    if (res?.error) {
+      // Observabilidade: nunca vaza para a resposta (anti-enumeração intacta).
+      console.error('[password-reset] sendEmail falhou:', res.error)
+    }
   })
 
   if (appUser.org_id) {
-    void logAudit({
-      org_id: appUser.org_id,
-      user_id: appUser.id,
-      user_name: appUser.name ?? 'unknown',
-      action: 'session.password_reset_requested',
-      entity_type: 'session',
-    })
+    const auditOrgId = appUser.org_id
+    const auditUserId = appUser.id
+    const auditUserName = appUser.name ?? 'unknown'
+    after(() =>
+      logAudit({
+        org_id: auditOrgId,
+        user_id: auditUserId,
+        user_name: auditUserName,
+        action: 'session.password_reset_requested',
+        entity_type: 'session',
+      })
+    )
   }
 
   return genericSuccess
