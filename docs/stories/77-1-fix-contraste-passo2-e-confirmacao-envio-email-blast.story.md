@@ -1,7 +1,7 @@
 # Story 77-1 — Contraste no Passo 2 do wizard de Email Blast + confirmação visual pós-criação
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 57 — Melhorias Operacionais CRM
 - **Branch:** main
 
@@ -94,3 +94,5 @@ Pronta para `@devops *push`.
 - @sm (River): story criada em Draft, documentando os 2 fixes de UX reportados pelo usuário no Passo 2 e pós-confirmação do wizard de Email Blast (continuação da sessão da Story 76-1).
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Status Draft → Ready.
 - @dev (Dex): AC1-AC5 implementados nos 3 arquivos, ESLint OK. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks). Pronta para @devops *push.
+- @devops (Gage): pre-push OK (lint limpo, sem divergência nova de origin/main). Push para origin/main (`fc8ee7e3`). Status InReview → Done.
