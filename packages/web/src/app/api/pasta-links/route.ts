@@ -18,10 +18,14 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const optStr = (v: unknown): string | null =>
     typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null
+  const optId = (v: unknown): string | null =>
+    typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v.trim()) ? v.trim() : null
 
+  // Story 75-148 — o link é POR imobiliária da base: id obrigatório + nome (snapshot).
+  const imobiliariaId = optId(body.imobiliaria_id)
   const imobiliaria = optStr(body.imobiliaria)
-  if (!imobiliaria) {
-    return NextResponse.json({ error: "Imobiliária é obrigatória" }, { status: 400 })
+  if (!imobiliariaId || !imobiliaria) {
+    return NextResponse.json({ error: "Selecione a imobiliária" }, { status: 400 })
   }
 
   const token = randomBytes(24).toString("hex")
@@ -30,6 +34,7 @@ export async function POST(request: NextRequest) {
     .from("pasta_links")
     .insert({
       org_id: appUser.org_id,
+      imobiliaria_id: imobiliariaId,
       imobiliaria,
       token,
       ativo: true,

@@ -44,26 +44,29 @@ beforeEach(() => {
   insertedLink = null
 })
 
+const IMOB_ID = "11111111-1111-1111-1111-111111111111"
+
 describe("POST /api/pasta-links", () => {
-  it("gestor cria link com token e ativo=true", async () => {
-    const res = await POST(makeReq({ imobiliaria: "Imob X" }))
+  it("gestor cria link com token, ativo=true e imobiliaria_id (base)", async () => {
+    const res = await POST(makeReq({ imobiliaria_id: IMOB_ID, imobiliaria: "Imob X" }))
     expect(res.status).toBe(201)
     const json = await res.json()
     expect(json.data.imobiliaria).toBe("Imob X")
     expect(json.data.ativo).toBe(true)
-    expect(insertedLink).toMatchObject({ imobiliaria: "Imob X", ativo: true, org_id: "org-1", created_by: "u-1" })
+    expect(insertedLink).toMatchObject({ imobiliaria_id: IMOB_ID, imobiliaria: "Imob X", ativo: true, org_id: "org-1", created_by: "u-1" })
     expect(typeof insertedLink?.token).toBe("string")
   })
 
   it("bloqueia perfil não-gestor (corretor) com 403", async () => {
     role = "corretor"
-    const res = await POST(makeReq({ imobiliaria: "Imob X" }))
+    const res = await POST(makeReq({ imobiliaria_id: IMOB_ID, imobiliaria: "Imob X" }))
     expect(res.status).toBe(403)
     expect(insertedLink).toBeNull()
   })
 
-  it("exige imobiliária (400)", async () => {
-    const res = await POST(makeReq({ imobiliaria: "" }))
+  it("exige imobiliária da base — sem imobiliaria_id → 400", async () => {
+    const res = await POST(makeReq({ imobiliaria: "Imob X" }))
     expect(res.status).toBe(400)
+    expect(insertedLink).toBeNull()
   })
 })

@@ -21,7 +21,7 @@ let docsError: { message: string } | null
 let deletedPastaId: string | null
 
 beforeEach(() => {
-  linkRow = { id: "link-1", org_id: "org-1", imobiliaria: "Imobiliária X", ativo: true }
+  linkRow = { id: "link-1", org_id: "org-1", imobiliaria: "Imobiliária X", imobiliaria_id: "imob-1", ativo: true }
   insertedPasta = null
   docsError = null
   deletedPastaId = null
@@ -85,6 +85,7 @@ describe("POST /api/pasta/nova/[token]", () => {
       created_by: null,
       org_id: "org-1",
       imobiliaria: "Imobiliária X",
+      imobiliaria_id: "imob-1",
       nome: "Fulano",
     })
   })
@@ -102,7 +103,7 @@ describe("POST /api/pasta/nova/[token]", () => {
   })
 
   it("rejeita link revogado (ativo=false) com 404", async () => {
-    linkRow = { id: "link-1", org_id: "org-1", imobiliaria: "Imobiliária X", ativo: false }
+    linkRow = { id: "link-1", org_id: "org-1", imobiliaria: "Imobiliária X", imobiliaria_id: "imob-1", ativo: false }
     const res = await POST(makeReq({ nome: "Fulano" }), ctx("tok"))
     expect(res.status).toBe(404)
     expect(insertedPasta).toBeNull()

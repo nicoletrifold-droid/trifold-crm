@@ -1,0 +1,37 @@
+schema: 1
+story: '75.148'
+gate: PASS
+status_reason: 'Pastas passam a referenciar imobiliarias via imobiliaria_id (FK) com nome snapshot para exibição; select da base + cadastro completo inline nos fluxos Nova pasta e Gerar link. Guard compartilhado imobiliariasGuard (IMOB OU isPastaManager) libera perfil só-Pastas a listar/criar/editar imobiliária (requisito central). Aba Imobiliárias dentro de Pastas reusa o mesmo componente. Público mantém imobiliária travada do link (agora via id). Migration 163 aditiva/nullable + backfill best-effort. tsc 0, eslint 0, vitest 837/837.'
+reviewer: 'Quinn'
+updated: '2026-07-07T14:35:00Z'
+
+evidence:
+  type_check: 'tsc --noEmit → 0 erros'
+  changed_tests: 'vitest imobiliarias GET + pasta-links + pasta/nova + pastas → 15/15 verdes'
+  full_suite: 'vitest run (full) → 77 arquivos / 837 testes verdes (era 834, +3)'
+  story_files_lint: 'eslint nos arquivos da story → 0 problemas'
+  build: 'validado pelo CI Vercel no PR'
+
+acceptance_criteria:
+  - id: AC1
+    desc: 'pastas e pasta_links referenciam imobiliarias via imobiliaria_id (FK); texto = snapshot'
+    status: PASS
+  - id: AC2
+    desc: 'Nova pasta e Gerar link com select da base + "+ nova" inline (fim do texto livre)'
+    status: PASS
+  - id: AC3
+    desc: 'Gerar link obrigatório; Nova pasta opcional (cliente direto sem imobiliária)'
+    status: PASS
+  - id: AC4
+    desc: 'Perfil só-Pastas lista/cria/edita imobiliária (guard compartilhado + aba em Pastas)'
+    status: PASS
+  - id: AC5
+    desc: 'Público mantém imobiliária travada do link (via imobiliaria_id)'
+    status: PASS
+  - id: AC6
+    desc: 'Backfill best-effort por nome; sem regressão nos fluxos existentes'
+    status: PASS
+
+notes:
+  - 'Aplicar migration 163 em prod ANTES do deploy (código lê/grava imobiliaria_id).'
+  - 'Snapshot de nome pode defasar em rename da imobiliária — aceitável (relatório usa id).'

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { imobGuard } from "@web/lib/imob/guard"
+import { imobiliariasGuard } from "@web/lib/imob/guard"
 import { validateImobiliaria } from "@web/lib/imob/imobiliarias"
 
 // PATCH /api/imob/imobiliarias/[id] — edita uma imobiliária (só da própria org). Story 75-92.
+// Story 75-148 — gate compartilhado (IMOB ou gestor de Pastas), base única.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const g = await imobGuard()
+  const g = await imobiliariasGuard()
   if (g.error) return g.error
   const { admin, appUser } = g
   const { id } = await params
