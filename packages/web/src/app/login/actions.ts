@@ -118,10 +118,15 @@ export async function requestPasswordReset(
   if (throttled) return genericSuccess
 
   const headersList = await headers()
-  const origin =
+  // Base URL do link de recuperação. Prioriza a env confiável (mesmo padrão da
+  // rota admin de senha do cliente e de brokers/route.ts) porque, em produção,
+  // Server Actions recebem `origin` VAZIO e o link cairia em localhost. Em dev
+  // local, defina NEXT_PUBLIC_SITE_URL=http://localhost:3000 no .env.development.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
     headersList.get('origin') ??
     process.env.NEXT_PUBLIC_APP_URL ??
-    'http://localhost:3000'
+    'https://crm.trifold.eng.br'
 
   const adminSupabase = createAdminClient() // AC5 — service-role, nunca client anônimo
 
@@ -156,7 +161,7 @@ export async function requestPasswordReset(
   const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
     type: 'recovery',
     email: appUser.email as string,
-    options: { redirectTo: `${origin}/auth/callback?next=/reset-senha` },
+    options: { redirectTo: `${baseUrl}/auth/callback?next=/reset-senha` },
   })
 
   if (linkError || !linkData?.properties?.action_link) {
@@ -168,7 +173,7 @@ export async function requestPasswordReset(
   const { subject, html } = renderPasswordActionEmail({
     userName: appUser.name ?? 'usuário',
     actionLink: linkData.properties.action_link,
-    siteUrl: origin,
+    siteUrl: baseUrl,
     mode: 'reset',
   })
 
