@@ -9,6 +9,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 const STATUS_MAP: Record<string, { http: number; message: string }> = {
   ok: { http: 200, message: "Lead atribuído a você." },
   gone: { http: 409, message: "Esse lead já foi atendido por outro corretor." },
+  ex_dono: { http: 422, message: "Você deixou este lead cair no bolsão; outro corretor precisa atendê-lo." },
   teto: { http: 422, message: "Você atingiu seu limite de leads ativos." },
   empreendimento: { http: 422, message: "Você não está habilitado no empreendimento desse lead." },
   sem_corretor: { http: 403, message: "Apenas corretores disponíveis podem pegar leads do bolsão." },
