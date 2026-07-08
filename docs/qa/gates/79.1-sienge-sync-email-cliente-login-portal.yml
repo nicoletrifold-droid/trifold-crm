@@ -1,0 +1,32 @@
+storyId: "79-1"
+title: "Sincronizar e-mail do Sienge → CRM e propagar ao login do portal"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-08
+
+checks:
+  code_review: PASS        # módulo compartilhado (syncClienteEmail) reusado por cron + sync manual; normalização/validação; erros isolados por item
+  unit_tests: CONCERNS     # sem teste automatizado novo; verificação real = execução do cron em prod pós-deploy. Não bloqueante.
+  acceptance_criteria: PASS # AC1-AC7 (ver trace)
+  regressions: PASS        # telefone segue backfill-only; criação de cliente novo inalterada; chamadas de syncClienteEmail só APÓS a lógica existente
+  performance: PASS        # cron pacing 300ms (respeita rate limit Sienge), maxDuration=300; ~71 clientes ≈ 25s
+  security: PASS           # cron gated por CRON_SECRET (Bearer); admin client service-role; portal user resolvido escopado por org_id
+  documentation: PASS      # story com Dev Agent Record + esta gate
+
+acceptance_criteria_trace:
+  AC1: "clientes.email atualizado p/ valor do Sienge quando difere e válido (syncClienteEmail)."
+  AC2: "Propaga p/ users.email + auth (updateUserById email+email_confirm), match por sienge_customer_id (fallback e-mail antigo)."
+  AC3: "Login passa a ser o novo e-mail → reset de senha vai ao endereço novo."
+  AC4: "Cron /api/cron/sienge-customer-sync (CRON_SECRET, maxDuration 300, pacing 300ms) percorre clientes vinculados."
+  AC5: "findOrCreateCliente (match CPF e e-mail) chama a mesma syncClienteEmail."
+  AC6: "Só age com e-mail válido/diferente; colisão capturada em portalError; comparação trim+lower."
+  AC7: "Telefone backfill-only mantido; criação inalterada."
+
+observations:
+  - "Raio de impacto medido em prod: 2 divergências (Sidney 1250, Diego 1442). Demais 69 já batem."
+  - "Diego (1442) muda p/ diego@trifold.eng.br (Sienge) — sinalizar ao usuário para veto caso o Sienge esteja errado."
+  - "Verificação end-to-end = rodar o cron 1x pós-deploy e conferir CRM+users+auth. tsc+ESLint limpos."
+  - "CodeRabbit N/A (WSL indisponível em macOS)."
+
+notes: "Pronta para @devops *push. Rodar o cron pós-deploy para corrigir Sidney (+Diego) e verificar."
