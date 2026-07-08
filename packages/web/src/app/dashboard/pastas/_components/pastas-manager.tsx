@@ -8,6 +8,7 @@ import type { PastaStatus } from "@web/lib/pastas/status"
 import { filterPastas, distinctValues, hasActiveFilters, EMPTY_FILTERS, type PastaFilters } from "@web/lib/pastas/filter"
 import { PastaWizard } from "@web/components/pastas/pasta-wizard"
 import { ImobiliariaSelect } from "@web/components/pastas/imobiliaria-select"
+import { maskPhoneBR, isValidPhoneBR, isValidEmail, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 interface PastaRow {
   id: string
@@ -334,6 +335,15 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
 
   async function createLink() {
     if (!imobiliariaId) { setError("Selecione a imobiliária."); return }
+    // Corretor opcional, mas se preenchido precisa ser válido.
+    if (corretorTelefone.trim() && !isValidPhoneBR(corretorTelefone)) {
+      setError("Telefone do corretor inválido — use DDD + número.")
+      return
+    }
+    if (corretorEmail.trim() && !isValidEmail(corretorEmail)) {
+      setError("E-mail do corretor inválido.")
+      return
+    }
     setCreating(true)
     setError(null)
     try {
@@ -344,8 +354,8 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
           imobiliaria_id: imobiliariaId,
           imobiliaria: imobiliariaNome,
           corretor_nome: corretorNome.trim(),
-          corretor_telefone: corretorTelefone.trim(),
-          corretor_email: corretorEmail.trim(),
+          corretor_telefone: corretorTelefone.trim() ? formatPhoneBR(corretorTelefone) : "",
+          corretor_email: normalizeEmail(corretorEmail),
         }),
       })
       const data = await res.json().catch(() => null)
@@ -410,7 +420,7 @@ function LinksSection({ initialLinks }: { initialLinks: PastaLinkRow[] }) {
             </label>
             <label className="block">
               <span className="text-xs text-gray-500 dark:text-stone-400">Telefone do corretor (opcional)</span>
-              <input value={corretorTelefone} onChange={(e) => setCorretorTelefone(e.target.value)} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
+              <input inputMode="tel" placeholder="(44) 99999-9999" value={corretorTelefone} onChange={(e) => setCorretorTelefone(maskPhoneBR(e.target.value))} className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
             </label>
             <label className="block">
               <span className="text-xs text-gray-500 dark:text-stone-400">E-mail do corretor (opcional)</span>

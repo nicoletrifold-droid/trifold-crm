@@ -4,6 +4,7 @@ import { useState, useRef } from "react"
 import { ArrowLeft, ArrowRight, Paperclip, Loader2, Check, Copy } from "lucide-react"
 import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import { ImobiliariaSelect } from "@web/components/pastas/imobiliaria-select"
+import { maskPhoneBR, phoneError, emailError, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // Story 75-146 — wizard compartilhado de criação de pasta (3 telas), reutilizado pelo
 // modal interno do dashboard E pela página pública de auto-cadastro da imobiliária.
@@ -99,18 +100,45 @@ export function PastaWizard({
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Story 80-1 — erros de formato por campo (telefone/e-mail).
+  const [errs, setErrs] = useState<{
+    corretorTelefone?: string | null
+    corretorEmail?: string | null
+    interessadoTelefone?: string | null
+    interessadoEmail?: string | null
+  }>({})
 
   const link =
     created && typeof window !== "undefined" ? `${window.location.origin}/pasta/${created.token}` : ""
 
   function next1() {
     if (!corretorNome.trim()) { setError("Informe o nome do corretor."); return }
+    // Corretor: telefone/e-mail opcionais, mas se preenchidos precisam ser válidos.
+    const e = {
+      corretorTelefone: phoneError(corretorTelefone, false),
+      corretorEmail: emailError(corretorEmail, false),
+    }
+    if (e.corretorTelefone || e.corretorEmail) {
+      setErrs((p) => ({ ...p, ...e }))
+      return
+    }
+    setErrs((p) => ({ ...p, corretorTelefone: null, corretorEmail: null }))
     setError(null)
     setStep(2)
   }
 
   async function create() {
     if (!nome.trim()) { setError("Informe o nome do comprador."); return }
+    // Comprador: telefone + e-mail obrigatórios e válidos.
+    const e = {
+      interessadoTelefone: phoneError(interessadoTelefone, true),
+      interessadoEmail: emailError(interessadoEmail, true),
+    }
+    if (e.interessadoTelefone || e.interessadoEmail) {
+      setErrs((p) => ({ ...p, ...e }))
+      return
+    }
+    setErrs((p) => ({ ...p, interessadoTelefone: null, interessadoEmail: null }))
     setLoading(true)
     setError(null)
     try {
@@ -126,14 +154,14 @@ export function PastaWizard({
           tem_pix: temPix,
           fluxo_pagamento: fluxoPagamento,
           corretor_nome: corretorNome.trim(),
-          corretor_telefone: corretorTelefone.trim(),
-          corretor_email: corretorEmail.trim(),
+          corretor_telefone: formatPhoneBR(corretorTelefone),
+          corretor_email: normalizeEmail(corretorEmail),
           // Interno: id da imobiliária (base) + nome (snapshot p/ exibição). Público: o
           // endpoint IGNORA e usa a imobiliária do link.
           imobiliaria_id: imobiliariaId,
           imobiliaria: imobiliariaNome,
-          interessado_telefone: interessadoTelefone.trim(),
-          interessado_email: interessadoEmail.trim(),
+          interessado_telefone: formatPhoneBR(interessadoTelefone),
+          interessado_email: normalizeEmail(interessadoEmail),
         }),
       })
       const data = await res.json().catch(() => null)
@@ -218,11 +246,19 @@ export function PastaWizard({
             </label>
             <label className="block">
               <span className="text-xs text-gray-500 dark:text-stone-400">Telefone do corretor</span>
-              <input value={corretorTelefone} onChange={(e) => setCorretorTelefone(e.target.value)} className={inputCls} />
+              <input
+                inputMode="tel"
+                value={corretorTelefone}
+                onChange={(e) => setCorretorTelefone(maskPhoneBR(e.target.value))}
+                placeholder="(44) 99999-9999"
+                className={inputCls}
+              />
+              {errs.corretorTelefone && <span className="mt-1 block text-xs text-red-500">{errs.corretorTelefone}</span>}
             </label>
             <label className="block">
               <span className="text-xs text-gray-500 dark:text-stone-400">E-mail do corretor</span>
               <input type="email" value={corretorEmail} onChange={(e) => setCorretorEmail(e.target.value)} className={inputCls} />
+              {errs.corretorEmail && <span className="mt-1 block text-xs text-red-500">{errs.corretorEmail}</span>}
             </label>
             {/* Story 75-148 — imobiliária da BASE (interno). No público, já aparece no banner acima. */}
             {!imobiliariaLocked && (
@@ -330,12 +366,20 @@ export function PastaWizard({
               </div>
             )}
             <label className="block">
-              <span className="text-xs text-gray-500 dark:text-stone-400">Telefone do comprador</span>
-              <input value={interessadoTelefone} onChange={(e) => setInteressadoTelefone(e.target.value)} className={inputCls} />
+              <span className="text-xs text-gray-500 dark:text-stone-400">Telefone do comprador *</span>
+              <input
+                inputMode="tel"
+                value={interessadoTelefone}
+                onChange={(e) => setInteressadoTelefone(maskPhoneBR(e.target.value))}
+                placeholder="(44) 99999-9999"
+                className={inputCls}
+              />
+              {errs.interessadoTelefone && <span className="mt-1 block text-xs text-red-500">{errs.interessadoTelefone}</span>}
             </label>
             <label className="block">
-              <span className="text-xs text-gray-500 dark:text-stone-400">E-mail do comprador</span>
+              <span className="text-xs text-gray-500 dark:text-stone-400">E-mail do comprador *</span>
               <input type="email" value={interessadoEmail} onChange={(e) => setInteressadoEmail(e.target.value)} className={inputCls} />
+              {errs.interessadoEmail && <span className="mt-1 block text-xs text-red-500">{errs.interessadoEmail}</span>}
             </label>
           </div>
         )}
