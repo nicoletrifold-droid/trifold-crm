@@ -1,0 +1,34 @@
+storyId: "78-1"
+title: "Portal Visão Mestre: 'ver como cliente' (admin, somente leitura)"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-08
+
+checks:
+  code_review: PASS        # viewer isolado sob /dashboard; reusa componentes presentacionais (FasesList/FotosGrid/MensagensList); helpers centralizados (viewer.ts/obra-financeiro.ts)
+  unit_tests: CONCERNS     # sem teste automatizado novo (mesma linha das stories 76-1/77-1 de UI); lógica de dados validada em prod via SQL. Não bloqueante.
+  acceptance_criteria: PASS # AC1-AC9 atendidos (ver trace)
+  regressions: PASS        # zero mudança em /cliente/*, middleware, RLS, api/cliente/*; única edição fora do módulo novo = item de menu em dashboard/layout.tsx
+  performance: PASS        # poucas queries por página; financeiro chama Sienge sob demanda (igual ao portal real); signed URLs de docs em paralelo
+  security: PASS           # admin client (service role) contornando RLS mitigado por requireViewerAccess (role admin/supervisor) + escopo por org_id/obra_id validado; cross-org bloqueado (getViewerObra .eq org → null → redirect)
+  documentation: PASS      # story com Dev Agent Record (inclui correção de modelo) + esta gate
+
+acceptance_criteria_trace:
+  AC1: "Item 'Portal Cliente' no menu (gate role admin/supervisor); requireViewerAccess redireciona não-admin p/ /dashboard."
+  AC2: "Seletor lista todos os vínculos agrupados por empreendimento com busca. Prod: Yarden 46 + Vind 41 = 87 unidades; futuros aparecem ao vivo."
+  AC3: "Viewer com Início/Fases/Fotos/Documentos/Mensagens/Financeiro reusando componentes presentacionais do portal."
+  AC4: "Dados via admin client escopados por org_id + obra_id (obra validada por org no getViewerVinculo)."
+  AC5: "Financeiro resolve sienge_customer_id do cliente do vínculo + filtra contract numbers; estados vazios amigáveis."
+  AC6: "Somente leitura: Mensagens via MensagensList (sem composer), sem marcar read_at; docs via signed URL; nenhuma escrita."
+  AC7: "Nenhuma linha criada/editada em cliente_obras/clientes/users/prefs/push (garantia estrutural — sem notificações)."
+  AC8: "Barra 'Visualizando como cliente — {nome} · {empreendimento} · {unidade}' + 'Voltar ao painel'."
+  AC9: "Sem regressão no portal real (grep: nenhuma alteração em /cliente/*, middleware, RLS, api/cliente/*)."
+
+observations:
+  - "Correção de modelo (dev): o viewer é chaveado por VÍNCULO (unidade/cliente), não por obra — há 1 obra por empreendimento e N clientes/unidades por obra. Rota [obra_id]→[vinculo_id]."
+  - "Smoke autenticado no navegador (admin logado) fica como confirmação final do usuário — a sessão não pôde ser mantida no ambiente de QA. Runtime: rotas retornam 307→/login sem 500."
+  - "tsc --noEmit limpo; ESLint limpo; mapeamento vínculo→portal user→mensagens validado em prod (Diego/703 = 3 msgs)."
+  - "CodeRabbit N/A (WSL indisponível em macOS) — mitigado com ESLint + revisão manual do diff."
+
+notes: "Pronta para @devops *push."
