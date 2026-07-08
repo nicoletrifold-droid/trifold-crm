@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
       stage_id: AGUARDANDO_STAGE_ID,
       property_interest_id: body?.property_interest_id || null,
       ai_summary: body?.observacao?.trim() || null,
+      // Auto-atribui ao criador (perfil 'imob' não é admin/supervisor, então sem
+      // responsável a RLS de `leads` o impediria de arrastar/editar o próprio lead).
+      // O responsável pode ser trocado depois no seletor da aba Leads do IMOB.
+      assigned_broker_id: appUser.id,
       is_active: true,
     })
     .select("id")
