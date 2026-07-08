@@ -81,6 +81,8 @@ export function PortalClienteSeletor({ groups }: { groups: EmpreendimentoGroup[]
                   <li key={u.vinculoId}>
                     <Link
                       href={`/dashboard/portal-cliente/${u.vinculoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/60"
                     >
                       <div className="min-w-0">
