@@ -1,0 +1,20 @@
+schema: 1
+story: '78.9'
+gate: PASS
+status_reason: 'Todos os 9 ACs satisfeitos em revisão estática; guard admin, agregação por moeda, isolamento Meta Ads e estados degradados corretos. tsc/eslint limpos (só os 4 erros pré-existentes). Validação funcional manual em browser deferida ao deploy (não bloqueante).'
+reviewer: 'Quinn'
+updated: '2026-07-08T00:00:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'A agregação `month_costs` soma TODOS os snapshots monetários do mês por serviço/moeda. Se algum coletor (78-3..78-7, ainda não implantados) gravar valor mensal cumulativo (month-to-date) em vez de delta diário, o somatório poderia super-contar. Fora do escopo desta story de UI; a regra `currency IS NOT NULL` + soma por moeda satisfaz AC5 como especificado.'
+    suggested_action: 'Ao implementar 78-3, confirmar que os snapshots monetários são deltas diários (não cumulativos) para que SUM(value) do mês seja o gasto real; ou ajustar a agregação para MAX/último se o contrato do coletor mudar.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Validação funcional manual (admin vê 6 cards em estado "Sem dado"; não-admin recebe 403 e vê tela de acesso restrito; erro de API tratado; Meta Ads oculto) ainda não executada em browser (T8 aberto). Sem suíte E2E no projeto para páginas admin equivalentes (padrão estabelecido).'
+    suggested_action: 'Executar T8.1–T8.4 em DEV/deploy logado como admin e como role não-admin antes de considerar a story 100% validada. Guard reusa padrão idêntico ao da 78-8 (já em produção), o que mitiga o risco.'
+  - id: 'SEC-001'
+    severity: low
+    finding: '`billing_url` é renderizado diretamente como `href` sem validação de scheme. É dado admin-controlado (seed da migration 164, sem entrada de usuário), risco de `javascript:`/XSS negligenciável.'
+    suggested_action: 'Nenhuma ação necessária no momento; se futuramente `billing_url` virar editável via UI, validar o scheme (http/https).'
+waiver: { active: false }

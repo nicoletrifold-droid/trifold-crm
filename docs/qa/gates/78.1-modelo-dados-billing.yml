@@ -1,0 +1,44 @@
+schema: 1
+story: '78.1'
+gate: PASS
+status_reason: 'Migration 164 satisfaz AC1-AC10 por construção: 3 tabelas com colunas/tipos/CHECKs/FKs exatos do contrato, RLS admin-only pós-062 (sem cast enum), UNIQUE(service_id,snapshot_date,metric), seed dos 7 serviços sem dado inventado. SQL sintaticamente válido, idempotente e puramente aditivo. Validação runtime (T4) legitimamente diferida ao deploy @devops + smoke.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-08T00:00:00Z'
+
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'T4 (aplicação/validação em Supabase DEV) DEFERIDA por instrução do spawn — comportamentos runtime (RLS non-admin bloqueando de fato, ON DELETE CASCADE, UNIQUE disparando) foram verificados apenas estaticamente, não observados em banco. Sem suíte de teste de migration no projeto (mesmo padrão da 52-1).'
+    suggested_action: 'Executar smoke pós-deploy no @devops: (1) reexecutar migration = idempotente; (2) usuario non-admin (supervisor/broker) recebe 0 rows/erro nas 3 tabelas; (3) DELETE de platform_services remove reminders/snapshots filhos; (4) 2o INSERT do mesmo (service_id,snapshot_date,metric) viola UNIQUE; (5) UPDATE em platform_services atualiza updated_at.'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'Typo no snippet ON CONFLICT do contrato de dados (Dev Notes, service_cost_snapshots): `collection_status = EXCLUDED.collected_at` deveria ser `collection_status = EXCLUDED.collection_status`. Afeta os coletores 78-3..78-7, NÃO a migration desta story. Já sinalizado pelo @po na v0.2.'
+    suggested_action: 'Corrigir o snippet no contrato antes de 78-3 implementar o upsert, para nao propagar o erro aos coletores.'
+
+waiver: { active: false }
+
+evidence:
+  ac_traceability:
+    AC1_idempotencia: 'CREATE TABLE/INDEX IF NOT EXISTS + DROP POLICY/TRIGGER IF EXISTS + INSERT ON CONFLICT (slug) DO NOTHING (L31,59,84,115-131,136-143,149-155,187) — reexecutável sem erro/duplicata'
+    AC2_platform_services: 'L31-45 — 13 colunas exatas conforme AC2, CHECK automation_tier IN (forte,media,fraca)'
+    AC3_service_billing_reminders: 'L59-72 — 12 colunas exatas, FK ON DELETE CASCADE, CHECKs currency/billing_cycle/alert_days_before/status'
+    AC4_service_cost_snapshots: 'L84-96 — colunas exatas, currency nullable com CHECK, collection_status CHECK, UNIQUE(service_id,snapshot_date,metric) L95, sem updated_at (snapshots imutaveis)'
+    AC5_rls_admin_only: 'L111-131 — ENABLE RLS nas 3 + POLICY FOR ALL USING/WITH CHECK (public.user_role() = admin) sem cast ::user_role (padrao pos-062 confirmado em 062 L22-28)'
+    AC6_integridade_referencial: 'L61,86 — FK service_id -> platform_services(id) ON DELETE CASCADE nas 2 tabelas filhas; slug UNIQUE em L33'
+    AC7_indices: 'L136-143 — 3 indices IF NOT EXISTS exatos (service_date DESC, status+due, service)'
+    AC8_seed_7_servicos: 'L163-187 — 7 slugs (anthropic,openai,vercel,whatsapp,supabase,resend,meta_ads); vercel/supabase confirmed=false; meta_ads enabled=false + tier media; ON CONFLICT (slug) DO NOTHING'
+    AC9_aditividade: 'Nenhum ALTER em tabela pre-existente; so objetos novos (verificado em todo o arquivo)'
+    AC10_contrato: 'Dev Notes preenchido; schema da migration bate 1:1 com o contrato (ressalva DOC-001, fora do escopo da migration)'
+  functions_verified:
+    - 'update_updated_at() existe em 001_base_schema.sql L279 (no-arg, seta NEW.updated_at = now())'
+    - 'public.user_role() existe em 062_users_role_enum_to_text.sql L22-28 (RETURNS TEXT, STABLE SECURITY DEFINER, comparado com = admin sem cast)'
+    - 'migration 164 e o proximo numero livre (163_pastas_imobiliaria_fk.sql e a ultima)'
+  sql_syntax: 'Revisao manual linha-a-linha: parenteses balanceados, CHECKs bem formados, sem aspas nao escapadas no seed, gen_random_uuid()/timestamptz/jsonb validos no Postgres/Supabase, sintaxe de POLICY e TRIGGER (PG11+) validas. Nenhum erro que quebraria a aplicacao.'
+
+nfr_validation:
+  security: PASS  # RLS admin-only correto pos-062; sem org_id justificado (dado de plataforma); seed nao expoe secret (so URLs publicas de billing)
+  reliability: PASS  # idempotente por construcao; UNIQUE p/ upsert idempotente dos coletores (NFR-4)
+  maintainability: PASS  # COMMENTs inline documentam decisoes; reuso de update_updated_at()
+  performance: PASS  # indices de suporte as queries comuns (service+date, status+due, service)
+
+recommendation: 'Aprovado para push. @devops deve rodar o smoke checklist (TEST-001) apos aplicar a migration como parte do deploy.'
