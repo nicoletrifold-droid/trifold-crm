@@ -61,6 +61,7 @@ export interface ViewerContext {
   vinculoId: string
   numeroUnidade: string | null
   clienteNome: string | null
+  clienteCpf: string | null
   siengeCustomerId: number | null
   contractNumbers: string[]
   /** users.id do login do portal do cliente (para filtrar mensagens); null se não tiver acesso. */
@@ -126,6 +127,7 @@ export async function getViewerVinculo(
     vinculoId: v.id as string,
     numeroUnidade: (v.numero_unidade as string | null) ?? null,
     clienteNome: c?.nome ?? null,
+    clienteCpf: c?.cpf ?? null,
     siengeCustomerId,
     contractNumbers: (v.sienge_contract_numbers as string[] | null) ?? [],
     portalUserId,
