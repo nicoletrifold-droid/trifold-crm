@@ -4,11 +4,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, Layers, Camera, FileText, MessageSquare, Wallet } from "lucide-react"
 
-// Story 78-1 — navegação do viewer (espelha as seções do portal do cliente, mas aponta
-// para /dashboard/portal-cliente/[vinculo_id]/...). Somente leitura.
+// Story 78-1/78-4 — navegação do viewer (espelha as seções do portal do cliente, aponta
+// para /portal-viewer/[vinculo_id]/... — rota full-screen fora do /dashboard). Leitura.
 export function ViewerTabNav({ vinculoId }: { vinculoId: string }) {
   const pathname = usePathname()
-  const base = `/dashboard/portal-cliente/${vinculoId}`
+  const base = `/portal-viewer/${vinculoId}`
 
   const tabs = [
     { label: "Início", href: base, icon: Home, exact: true },
