@@ -14,6 +14,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { CreativeData } from "./types"
 
+/**
+ * Quem enxerga o CreativeChip (miniatura do anúncio Meta) no pipeline.
+ * Regra: todos os perfis que acessam o pipeline do /dashboard — corretor NÃO
+ * (o `/broker` compartilha o KanbanBoard + a API, mas cai no SourceBadge por decisão
+ * da Story 50-2). Os criativos são por-org, então são idênticos para todos os perfis.
+ */
+export function canSeeCreatives(role: string): boolean {
+  return role !== "broker"
+}
+
 type LeadWithMetadata = {
   metadata?: Record<string, unknown> | null
 }

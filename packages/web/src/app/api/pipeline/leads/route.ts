@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
-import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
+import { fetchCreativesForLeads, resolveCreativeForLead, canSeeCreatives } from "@web/lib/pipeline/fetch-creatives"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 
 const DEFAULT_LIMIT = 50
@@ -126,9 +126,9 @@ export async function GET(req: NextRequest) {
   const hasMore = totalCount > offset + rawLeads.length
 
   // Story 50-2 (Epic 50): batched lookup de criativos Meta para os leads paginados (AC7)
-  // Post-50-3 scope adjustment: CreativeChip restrito a admin.
-  const isAdmin = appUser.role === "admin"
-  const creativesMap = isAdmin
+  // Story 50-4: visível para todos os perfis do pipeline do /dashboard; corretor (que
+  // compartilha esta API via KanbanBoard no /broker) segue no SourceBadge (canSeeCreatives).
+  const creativesMap = canSeeCreatives(appUser.role)
     ? await fetchCreativesForLeads(supabase, filtered, appUser.org_id)
     : new Map()
 
