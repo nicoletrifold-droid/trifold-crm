@@ -3,6 +3,7 @@ import { randomBytes } from "crypto"
 import { requireAuth } from "@web/lib/api-auth"
 import { buildDocSlots, type PastaTipo } from "@web/lib/pastas/checklist"
 import { isPastaManager } from "@web/lib/pastas/roles"
+import { isValidEmail, isValidPhoneBR, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // POST /api/pastas — cria uma pasta, gera o token do link público e semeia os
 // documentos exigidos conforme tipo (pf/pj) e estado civil (casado).
@@ -48,6 +49,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
   }
 
+  // Story 80-1 — validação de contato (server-side; o link público não pode ser burlado).
+  // Comprador: telefone + e-mail obrigatórios e válidos. Corretor: válido se preenchido.
+  if (!interessadoTelefone || !isValidPhoneBR(interessadoTelefone)) {
+    return NextResponse.json({ error: "Telefone do comprador inválido." }, { status: 400 })
+  }
+  if (!interessadoEmail || !isValidEmail(interessadoEmail)) {
+    return NextResponse.json({ error: "E-mail do comprador inválido." }, { status: 400 })
+  }
+  if (corretorTelefone && !isValidPhoneBR(corretorTelefone)) {
+    return NextResponse.json({ error: "Telefone do corretor inválido." }, { status: 400 })
+  }
+  if (corretorEmail && !isValidEmail(corretorEmail)) {
+    return NextResponse.json({ error: "E-mail do corretor inválido." }, { status: 400 })
+  }
+
   const token = randomBytes(24).toString("hex")
 
   const { data: pasta, error } = await supabase
@@ -62,12 +78,12 @@ export async function POST(request: NextRequest) {
       tem_pix: temPix,
       fluxo_pagamento: fluxoPagamento,
       corretor_nome: corretorNome,
-      corretor_telefone: corretorTelefone,
-      corretor_email: corretorEmail,
+      corretor_telefone: corretorTelefone ? formatPhoneBR(corretorTelefone) : null,
+      corretor_email: corretorEmail ? normalizeEmail(corretorEmail) : null,
       imobiliaria_id: imobiliariaId,
       imobiliaria,
-      interessado_telefone: interessadoTelefone,
-      interessado_email: interessadoEmail,
+      interessado_telefone: formatPhoneBR(interessadoTelefone),
+      interessado_email: normalizeEmail(interessadoEmail),
       token,
       created_by: appUser.id,
     })

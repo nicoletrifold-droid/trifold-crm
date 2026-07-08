@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { isValidEmail, isValidPhoneBR, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // PATCH público — salva os campos de informação (profissão/e-mail/celular…) da pasta,
 // via token. Faz merge no form_data.
@@ -27,9 +28,26 @@ export async function PATCH(
   }
 
   // Só aceita strings (campos de texto do formulário) — evita payload arbitrário.
+  // Story 80-1 — trava e-mail/telefone: chaves `email*`/`celular*` precisam ter formato
+  // válido (quando preenchidas) e são normalizadas (e-mail minúsculo, telefone com máscara).
   const clean: Record<string, string> = {}
   for (const [k, v] of Object.entries(incoming as Record<string, unknown>)) {
-    if (typeof v === "string") clean[k] = v.slice(0, 500)
+    if (typeof v !== "string") continue
+    const val = v.slice(0, 500)
+    const key = k.toLowerCase()
+    if (val.trim() && (key === "email" || key.startsWith("email_"))) {
+      if (!isValidEmail(val)) {
+        return NextResponse.json({ error: "E-mail inválido." }, { status: 400 })
+      }
+      clean[k] = normalizeEmail(val)
+    } else if (val.trim() && (key === "celular" || key.startsWith("celular_") || key === "telefone" || key.startsWith("telefone_"))) {
+      if (!isValidPhoneBR(val)) {
+        return NextResponse.json({ error: "Telefone inválido — use DDD + número." }, { status: 400 })
+      }
+      clean[k] = formatPhoneBR(val)
+    } else {
+      clean[k] = val
+    }
   }
 
   const merged = { ...(pasta.form_data as Record<string, unknown>), ...clean }

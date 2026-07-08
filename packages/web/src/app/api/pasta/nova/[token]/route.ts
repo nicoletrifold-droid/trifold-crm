@@ -3,6 +3,7 @@ import { randomBytes } from "crypto"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { buildDocSlots, type PastaTipo } from "@web/lib/pastas/checklist"
 import { notifyNovaPastaGestor } from "@web/lib/notificacoes"
+import { isValidEmail, isValidPhoneBR, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // Story 75-146 — POST PÚBLICO de criação de pasta (auto-cadastro pela imobiliária).
 // SEM auth: valida o token do link em `pasta_links` (ativo=true) e usa service role
@@ -53,6 +54,20 @@ export async function POST(
     return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 })
   }
 
+  // Story 80-1 — validação de contato (server-side; link público não pode ser burlado).
+  if (!interessadoTelefone || !isValidPhoneBR(interessadoTelefone)) {
+    return NextResponse.json({ error: "Telefone do comprador inválido." }, { status: 400 })
+  }
+  if (!interessadoEmail || !isValidEmail(interessadoEmail)) {
+    return NextResponse.json({ error: "E-mail do comprador inválido." }, { status: 400 })
+  }
+  if (corretorTelefone && !isValidPhoneBR(corretorTelefone)) {
+    return NextResponse.json({ error: "Telefone do corretor inválido." }, { status: 400 })
+  }
+  if (corretorEmail && !isValidEmail(corretorEmail)) {
+    return NextResponse.json({ error: "E-mail do corretor inválido." }, { status: 400 })
+  }
+
   const pastaToken = randomBytes(24).toString("hex")
 
   const { data: pasta, error } = await admin
@@ -67,13 +82,13 @@ export async function POST(
       tem_pix: temPix,
       fluxo_pagamento: fluxoPagamento,
       corretor_nome: corretorNome,
-      corretor_telefone: corretorTelefone,
-      corretor_email: corretorEmail,
+      corretor_telefone: corretorTelefone ? formatPhoneBR(corretorTelefone) : null,
+      corretor_email: corretorEmail ? normalizeEmail(corretorEmail) : null,
       // Imobiliária SEMPRE do link (ignora o body — AC 3). Story 75-148: id + nome snapshot.
       imobiliaria_id: link.imobiliaria_id,
       imobiliaria: link.imobiliaria,
-      interessado_telefone: interessadoTelefone,
-      interessado_email: interessadoEmail,
+      interessado_telefone: formatPhoneBR(interessadoTelefone),
+      interessado_email: normalizeEmail(interessadoEmail),
       token: pastaToken,
       created_by: null,
       origem: "auto_cadastro",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth } from "@web/lib/api-auth"
 import { isPastaManager } from "@web/lib/pastas/roles"
+import { isValidEmail, isValidPhoneBR, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // Story 75-146 — POST /api/pasta-links: gera um link de auto-cadastro por imobiliária.
 // Gate: isPastaManager (mesmo do módulo Pastas). Cria a row em pasta_links com token
@@ -28,6 +29,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Selecione a imobiliária" }, { status: 400 })
   }
 
+  // Story 80-1 — corretor opcional, mas válido se preenchido.
+  const corretorTelefone = optStr(body.corretor_telefone)
+  const corretorEmail = optStr(body.corretor_email)
+  if (corretorTelefone && !isValidPhoneBR(corretorTelefone)) {
+    return NextResponse.json({ error: "Telefone do corretor inválido." }, { status: 400 })
+  }
+  if (corretorEmail && !isValidEmail(corretorEmail)) {
+    return NextResponse.json({ error: "E-mail do corretor inválido." }, { status: 400 })
+  }
+
   const token = randomBytes(24).toString("hex")
 
   const { data: link, error } = await supabase
@@ -39,8 +50,8 @@ export async function POST(request: NextRequest) {
       token,
       ativo: true,
       corretor_nome: optStr(body.corretor_nome),
-      corretor_telefone: optStr(body.corretor_telefone),
-      corretor_email: optStr(body.corretor_email),
+      corretor_telefone: corretorTelefone ? formatPhoneBR(corretorTelefone) : null,
+      corretor_email: corretorEmail ? normalizeEmail(corretorEmail) : null,
       created_by: appUser.id,
     })
     .select("id, imobiliaria, token, ativo, corretor_nome, created_at")
