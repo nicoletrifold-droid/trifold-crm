@@ -52,6 +52,15 @@ describe("POST /api/bolsao/[id]/pegar", () => {
     expect((await call()).status).toBe(403)
   })
 
+  it("ex_dono → 422 com mensagem específica (Story 75-149)", async () => {
+    rpcResult = { data: "ex_dono", error: null }
+    const res = await call()
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { status: string; message: string }
+    expect(body.status).toBe("ex_dono")
+    expect(body.message).toContain("deixou este lead cair no bolsão")
+  })
+
   it("erro de RPC → 500", async () => {
     rpcResult = { data: null, error: { message: "boom" } }
     expect((await call()).status).toBe(500)

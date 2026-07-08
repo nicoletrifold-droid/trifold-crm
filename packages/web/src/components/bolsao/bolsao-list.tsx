@@ -79,6 +79,9 @@ export function BolsaoList({ initialLeads, orgId, canPull, dark = false }: Props
         setLeads((cur) => cur.filter((l) => l.id !== id))
         router.refresh()
       }
+      // Story 75-149: status "ex_dono" (o corretor deixou este lead cair no bolsão) cai no
+      // caminho genérico acima (banner de erro via setMsg/setMsgIsError) e o card PERMANECE
+      // na lista de propósito — o lead segue no pool para outro corretor pegar.
     } catch {
       setMsg("Erro de conexão ao pegar o lead.")
       setMsgIsError(true)
