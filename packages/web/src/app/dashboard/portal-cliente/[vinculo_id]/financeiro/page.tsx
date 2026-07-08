@@ -92,11 +92,25 @@ export default async function ViewerFinanceiroPage({
 
   return (
     <div>
-      {ctx.clienteNome && (
-        <p className="mb-4 text-xs text-stone-500">
-          Extrato de <span className="font-medium text-stone-300">{ctx.clienteNome}</span>
-        </p>
-      )}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        {ctx.clienteNome ? (
+          <p className="text-xs text-stone-500">
+            Extrato de <span className="font-medium text-stone-300">{ctx.clienteNome}</span>
+          </p>
+        ) : (
+          <span />
+        )}
+        {installments.length > 0 && (
+          <a
+            href={`/api/dashboard/portal-cliente/${vinculo_id}/extrato-pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#E8856A] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#d4705a]"
+          >
+            Gerar PDF do extrato
+          </a>
+        )}
+      </div>
 
       {installments.length > 0 && (
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -132,28 +146,42 @@ export default async function ViewerFinanceiroPage({
               key={`${inst.billReceivableId}-${inst.installmentId}`}
               className="rounded-xl border border-stone-800 bg-stone-900 p-4"
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-white">
-                  {CONDITION_LABEL[inst.conditionType] ?? inst.conditionType} {inst.installmentNumber}
-                </span>
-                <StatusBadge status={inst.status} />
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-white">
+                      {CONDITION_LABEL[inst.conditionType] ?? inst.conditionType} {inst.installmentNumber}
+                    </span>
+                    <StatusBadge status={inst.status} />
+                  </div>
+                  <p className="mt-1 text-xs text-stone-500">
+                    Vencimento: {formatDate(inst.dueDate)}
+                    {inst.receiptDate && (
+                      <span className="ml-3 text-emerald-400">Pago em: {formatDate(inst.receiptDate)}</span>
+                    )}
+                    {inst.documentId && <span className="ml-3 text-stone-400">Doc: {inst.documentId}</span>}
+                  </p>
+                  <p className="mt-2 text-base font-bold text-white">
+                    {formatCurrency(
+                      inst.status === "PAGO"
+                        ? (inst.receiptValue ?? inst.originalValue)
+                        : inst.currentBalance > 0
+                          ? inst.currentBalance
+                          : inst.originalValue
+                    )}
+                  </p>
+                </div>
+                {inst.hasBoleto && inst.status !== "PAGO" && (
+                  <a
+                    href={`/api/dashboard/portal-cliente/${vinculo_id}/boleto?billReceivableId=${inst.billReceivableId}&installmentId=${inst.installmentId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 rounded-lg bg-[#F27A5E] px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#d4705a]"
+                  >
+                    Ver boleto
+                  </a>
+                )}
               </div>
-              <p className="mt-1 text-xs text-stone-500">
-                Vencimento: {formatDate(inst.dueDate)}
-                {inst.receiptDate && (
-                  <span className="ml-3 text-emerald-400">Pago em: {formatDate(inst.receiptDate)}</span>
-                )}
-                {inst.documentId && <span className="ml-3 text-stone-400">Doc: {inst.documentId}</span>}
-              </p>
-              <p className="mt-2 text-base font-bold text-white">
-                {formatCurrency(
-                  inst.status === "PAGO"
-                    ? (inst.receiptValue ?? inst.originalValue)
-                    : inst.currentBalance > 0
-                      ? inst.currentBalance
-                      : inst.originalValue
-                )}
-              </p>
             </div>
           ))}
         </div>

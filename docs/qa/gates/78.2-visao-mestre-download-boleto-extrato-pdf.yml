@@ -1,0 +1,29 @@
+storyId: "78-2"
+title: "Visão Mestre: download de boleto (PDF) + extrato (PDF)"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-08
+
+checks:
+  code_review: PASS        # rotas espelham as do portal (getPaymentSlip / ExtratoPDF); resolução por vínculo via getViewerVinculo; reuso limpo
+  unit_tests: CONCERNS     # sem teste automatizado (mesma linha das stories de UI); verificação = smoke runtime + clique real do usuário. Não bloqueante
+  acceptance_criteria: PASS # AC1-AC5
+  regressions: PASS        # nenhuma mudança em /api/cliente/*; só adição de rotas /api/dashboard/... + 2 botões + campo clienteCpf no contexto
+  performance: PASS        # 1 chamada Sienge por ação (igual ao portal)
+  security: PASS           # gate admin/supervisor (requireAuth+requireRole); escopo por org (getViewerVinculo); IDOR mantido no boleto (parcela ∈ sienge_customer_id do vínculo); leitura apenas
+  documentation: PASS      # story + gate
+
+acceptance_criteria_trace:
+  AC1: "Ver boleto por parcela (hasBoleto && !PAGO) → redirect urlReport do Sienge."
+  AC2: "Gerar PDF do extrato → renderToBuffer(ExtratoPDF), filtro de contrato do vínculo."
+  AC3: "Rotas gated admin/supervisor; cliente resolvido pelo vínculo; IDOR no boleto."
+  AC4: "401/403 sem sessão/role (smoke: 401 confirmado); 404 sem sienge_customer_id; leitura apenas."
+  AC5: "Sem mudança em /api/cliente/*."
+
+observations:
+  - "Smoke runtime: /boleto e /extrato-pdf retornam 401 sem sessão (gate OK), sem 500."
+  - "Confirmação final: usuário logado clicar um 'Ver boleto' e 'Gerar PDF' reais (sessão admin não disponível no QA)."
+  - "tsc+ESLint limpos. CodeRabbit N/A (WSL/macOS)."
+
+notes: "Pronta para @devops *push."
