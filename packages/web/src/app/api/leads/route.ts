@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { canAccess } from "@web/lib/permissions"
 import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET(request: NextRequest) {
@@ -19,6 +20,19 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * limit
   const to = from + limit - 1
 
+  // Segmento: default 'principal' (Story 75-98 — IMOB tem tela própria e é isolado do funil).
+  // A Agenda é uma ferramenta compartilhada e precisa vincular leads de ambos os mundos, então
+  // aceita 'imob' ou 'all' — mas só para quem tem acesso ao módulo IMOB (canAccess). Sem acesso,
+  // qualquer valor cai no filtro 'principal', preservando o isolamento em todo o resto.
+  const segmentoParam = url.searchParams.get("segmento")
+  let segmentoFilter: "principal" | "imob" | null = "principal"
+  if (segmentoParam === "imob" || segmentoParam === "all") {
+    const imobAllowed = await canAccess(appUser.id, appUser.org_id, "imob")
+    if (imobAllowed) {
+      segmentoFilter = segmentoParam === "all" ? null : "imob"
+    }
+  }
+
   let query = supabase
     .from("leads")
     .select(
@@ -26,10 +40,13 @@ export async function GET(request: NextRequest) {
       { count: "exact" }
     )
     .eq("org_id", appUser.org_id)
-    .eq("segmento", "principal") // Story 75-98: lista principal (IMOB tem tela própria)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
     .range(from, to)
+
+  if (segmentoFilter) {
+    query = query.eq("segmento", segmentoFilter)
+  }
 
   if (search) {
     query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)

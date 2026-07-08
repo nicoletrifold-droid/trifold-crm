@@ -78,8 +78,10 @@ export function NewAppointmentModal({
     }
     setSearchLoading(true)
     try {
+      // segmento=all: a Agenda vincula leads do funil principal E do IMOB (a API só libera
+      // IMOB para quem tem acesso ao módulo; sem acesso, cai em 'principal').
       const res = await fetch(
-        `/api/leads?search=${encodeURIComponent(q)}&limit=10`
+        `/api/leads?search=${encodeURIComponent(q)}&segmento=all&limit=10`
       )
       if (res.ok) {
         const json = (await res.json()) as { data?: Lead[] }
