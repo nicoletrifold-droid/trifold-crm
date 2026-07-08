@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
-import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket, History, Activity, Gauge, MessageCircle, type LucideIcon } from "lucide-react"
+import { Mail, LayoutTemplate, Zap, Send, Settings, Rocket, History, Activity, Gauge, MessageCircle, Wallet, type LucideIcon } from "lucide-react"
 
 interface SystemEvent {
   id: string
@@ -159,6 +159,31 @@ export default function SistemaPage() {
             { href: "/dashboard/sistema/email-blasts", icon: Send, label: "Disparos", desc: "Email em massa" },
             { href: "/dashboard/sistema/email-envio-rapido", icon: Rocket, label: "Envio Rápido", desc: "Email avulso" },
             { href: "/dashboard/sistema/email-configuracoes", icon: Settings, label: "Configurações", desc: "Remetente e quotas" },
+          ].map(({ href, icon: Icon, label, desc }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex flex-col gap-1 bg-white px-4 py-3 transition-colors hover:bg-orange-50 dark:bg-stone-900 dark:hover:bg-stone-800"
+            >
+              <div className="flex items-center gap-2">
+                <Icon className="h-3.5 w-3.5 text-orange-600" />
+                <span className="text-sm font-medium text-stone-800 dark:text-stone-100">{label}</span>
+              </div>
+              <span className="text-xs text-stone-400 dark:text-stone-500">{desc}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Plataforma — Saúde & Billing (Story 78-9) */}
+      <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+        <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+          <Wallet className="h-4 w-4 text-orange-600" />
+          <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Plataforma</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-stone-100 lg:grid-cols-3 dark:bg-stone-800">
+          {[
+            { href: "/dashboard/sistema/billing", icon: Wallet, label: "Saúde & Billing", desc: "Custos, vencimentos e links" },
           ].map(({ href, icon: Icon, label, desc }) => (
             <Link
               key={href}

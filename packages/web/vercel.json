@@ -116,6 +116,14 @@
     {
       "path": "/api/cron/boleto-scan",
       "schedule": "0 12,15,18,21 * * *"
+    },
+    {
+      "path": "/api/cron/billing-collect-anthropic",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/billing-reminders",
+      "schedule": "10 12 * * *"
     }
   ]
 }
