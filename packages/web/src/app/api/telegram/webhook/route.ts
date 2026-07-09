@@ -3,6 +3,8 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import type { MediaBlock } from "@trifold/ai"
 import { getTelegramFileUrl, downloadFileAsBase64 } from "@trifold/bot"
 import { logEvent } from "@web/lib/logger"
+import { transcribeAudio } from "@web/lib/transcription/transcribe"
+import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 
 export const maxDuration = 60
@@ -237,55 +239,35 @@ export async function POST(request: NextRequest) {
   let mediaBlock: MediaBlock | undefined
   let mediaMetadata: { media_type?: string; media_url?: string } = {}
 
-  // Handle voice messages — transcribe with OpenAI Whisper
+  // Handle voice messages — salva o áudio (player) + transcreve (texto p/ todos + IA).
   if (message.voice) {
     const fileId = message.voice.file_id as string
-    console.log("Voice message received, file_id:", fileId)
-
     const fileUrl = await getTelegramFileUrl(TELEGRAM_BOT_TOKEN, fileId)
-    console.log("File URL:", fileUrl ? "got URL" : "FAILED to get URL")
+    const fallback = "Recebi seu audio mas nao consegui ouvir direito. Pode me escrever por texto?"
+    let mediaUrl: string | null = null
 
-    const openaiKey = process.env.OPENAI_API_KEY
-    console.log("OpenAI key:", openaiKey ? "present (" + openaiKey.slice(0, 10) + "...)" : "MISSING")
-
-    if (fileUrl && openaiKey) {
+    if (fileUrl) {
       try {
         const audioRes = await fetch(fileUrl, { signal: AbortSignal.timeout(30000) })
-        console.log("Audio download:", audioRes.ok ? "OK" : "FAILED " + audioRes.status)
-        const audioBuffer = await audioRes.arrayBuffer()
-        console.log("Audio size:", audioBuffer.byteLength, "bytes")
-
-        const formData = new FormData()
-        formData.append("file", new Blob([audioBuffer], { type: "audio/ogg" }), "voice.ogg")
-        formData.append("model", "whisper-1")
-        formData.append("language", "pt")
-
-        const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${openaiKey}` },
-          body: formData,
-          signal: AbortSignal.timeout(30000),
-        })
-
-        console.log("Whisper response:", whisperRes.status)
-
-        if (whisperRes.ok) {
-          const whisperData = await whisperRes.json() as { text: string }
-          text = whisperData.text || "[Áudio não reconhecido]"
-          console.log("Transcribed:", text)
+        if (audioRes.ok) {
+          const audioBuffer = await audioRes.arrayBuffer()
+          // (1) salva o áudio no bucket → media_url p/ o player (a URL do Telegram é
+          //     temporária e carrega o token do bot; a nossa é estável e pública).
+          mediaUrl = await uploadInboundMedia(createAdminClient(), audioBuffer, "audio/ogg", `telegram-${chatId}`)
+          // (2) transcreve
+          const transcription = await transcribeAudio(audioBuffer, "audio/ogg")
+          text = transcription || fallback
         } else {
-          const errBody = await whisperRes.text()
-          console.error("Whisper error:", errBody)
-          text = "Recebi seu audio mas nao consegui ouvir direito. Pode me escrever por texto?"
+          text = fallback
         }
       } catch (err) {
-        console.error("Voice processing error:", err)
-        text = "Recebi seu audio mas nao consegui ouvir direito. Pode me escrever por texto?"
+        console.error("Telegram voice processing error:", err)
+        text = fallback
       }
     } else {
-      text = text || "Recebi seu audio mas nao consegui ouvir direito. Pode me escrever por texto?"
+      text = text || fallback
     }
-    mediaMetadata = { media_type: "voice" }
+    mediaMetadata = { media_type: "voice", media_url: mediaUrl ?? undefined }
   }
 
   // Handle photo messages

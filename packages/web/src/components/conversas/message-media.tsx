@@ -32,8 +32,22 @@ export function MessageMedia({
   }
 
   if (isAudio) {
+    // Player nativo + link "baixar áudio". WhatsApp manda voz em OGG/Opus, que NÃO toca
+    // no Safari/iPhone — nesses casos o usuário lê a transcrição (conteúdo da mensagem) e,
+    // se quiser ouvir, baixa o arquivo. Em Chrome/Android/Firefox o player toca direto.
     return mediaUrl ? (
-      <audio controls src={mediaUrl} className="mt-1.5 w-full max-w-[260px]" />
+      <div className="mt-1.5 w-full max-w-[260px]">
+        <audio controls src={mediaUrl} className="w-full" />
+        <a
+          href={mediaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          download
+          className="mt-1 inline-flex items-center gap-1 text-xs underline opacity-80"
+        >
+          ⬇️ Baixar áudio
+        </a>
+      </div>
     ) : (
       <span className="mt-1 inline-flex items-center gap-1 text-xs opacity-70">🎤 Mensagem de voz</span>
     )

@@ -16,6 +16,8 @@ import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
 import { sendLibraryMediaIfRequested } from "@web/lib/ai/send-library-media"
 import { maybeRouteInboundToRelationship } from "@web/lib/relacionamento/route-inbound"
+import { transcribeAudio } from "@web/lib/transcription/transcribe"
+import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 
 export const maxDuration = 60
 
@@ -514,6 +516,9 @@ export async function POST(request: NextRequest) {
       // Download media for image/document messages — needs config.access_token
       let asyncMediaBlock: MediaBlock | undefined = mediaBlock
       let asyncText = text
+      // Transcrição do áudio (quando for mensagem de voz). Preenchido no branch de áudio
+      // abaixo; se OK, a Nicole responde ao conteúdo; se null, cai no fallback "digite".
+      let transcription: string | null = null
 
       if (msg.type === "image" && msg.image?.id) {
         try {
@@ -592,6 +597,55 @@ export async function POST(request: NextRequest) {
         asyncText = asyncText || msg.document?.caption || "Recebi um documento."
       }
 
+      // Voz/áudio: baixa o arquivo → (1) salva no bucket p/ o player e (2) transcreve.
+      // A transcrição vira o CONTEÚDO da mensagem (todos leem, inclusive iPhone/Safari)
+      // e alimenta a Nicole. O áudio original fica disponível pra quem quiser ouvir.
+      const audioId: string | undefined = msg.audio?.id ?? msg.voice?.id
+      if ((msg.type === "audio" || msg.type === "voice") && audioId) {
+        try {
+          const mediaRes = await fetch(
+            `https://graph.facebook.com/v21.0/${audioId}`,
+            {
+              headers: { Authorization: `Bearer ${config.access_token}` },
+              signal: AbortSignal.timeout(10000),
+            }
+          )
+          if (mediaRes.ok) {
+            const mediaData = (await mediaRes.json()) as { url: string; mime_type?: string }
+            const fileRes = await fetch(mediaData.url, {
+              headers: { Authorization: `Bearer ${config.access_token}` },
+              signal: AbortSignal.timeout(30000),
+            })
+            if (fileRes.ok) {
+              const buffer = await fileRes.arrayBuffer()
+              const mimeType =
+                mediaData.mime_type || fileRes.headers.get("content-type") || "audio/ogg"
+              // (1) salva o áudio → media_url p/ o player
+              const mediaUrl = await uploadInboundMedia(getSupabaseAdmin(), buffer, mimeType, lead.id)
+              // (2) transcreve (texto p/ todos + Nicole)
+              transcription = await transcribeAudio(buffer, mimeType)
+              // (3) atualiza a mensagem do lead: conteúdo = transcrição; metadata = voz + url
+              await getSupabaseAdmin()
+                .from("messages")
+                .update({
+                  content: transcription || "[Mensagem de voz recebida]",
+                  metadata: {
+                    whatsapp_message_id: messageId,
+                    media_type: "voice",
+                    media_url: mediaUrl,
+                    transcribed: !!transcription,
+                  },
+                })
+                .eq("metadata->>whatsapp_message_id", messageId)
+              // (4) alimenta a Nicole com a transcrição (se houve)
+              if (transcription) asyncText = transcription
+            }
+          }
+        } catch (err) {
+          console.error("WhatsApp audio download/transcribe error:", err)
+        }
+      }
+
       // Skip Nicole if there's no text and no media at all
       if (!asyncText && !asyncMediaBlock) return
 
@@ -601,8 +655,9 @@ export async function POST(request: NextRequest) {
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", conversation!.id)
 
-      // Voice/audio: short-circuit reply asking lead to type
-      if (isVoiceMessage) {
+      // Voz/áudio SEM transcrição (Whisper falhou/sem chave): fallback — pede pra digitar.
+      // Com transcrição, a Nicole segue o fluxo normal respondendo ao conteúdo do áudio.
+      if (isVoiceMessage && !transcription) {
         const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
         await fetch(whatsappUrl, {
           method: "POST",
