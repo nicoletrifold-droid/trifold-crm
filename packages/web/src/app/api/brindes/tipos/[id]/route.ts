@@ -67,7 +67,7 @@ export async function PATCH(
   if (error) {
     if (error.code === "23505") {
       return NextResponse.json(
-        { error: "Já existe um tipo com esse nome" },
+        { error: "Já existe um tipo com esse mesmo nome, tamanho e cor" },
         { status: 400 }
       )
     }
