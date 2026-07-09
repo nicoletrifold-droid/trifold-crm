@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth } from "@web/lib/api-auth"
+import { canAccess } from "@web/lib/permissions"
 import { parseEndereco } from "@web/lib/brindes/parse-endereco"
 
 const BATCH_LIMIT = 500
@@ -17,8 +18,9 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "obras", "gerente-relacionamento"])
-  if (roleError) return roleError
+  if (!(await canAccess(appUser.id, appUser.org_id, "brindes"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   let body: { records?: unknown }
   try {
