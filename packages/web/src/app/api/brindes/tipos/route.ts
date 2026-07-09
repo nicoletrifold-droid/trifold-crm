@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   if (error) {
     if (error.code === "23505") {
       return NextResponse.json(
-        { error: `Já existe um tipo com o nome "${nome}"` },
+        { error: `Já existe "${nome}" com esse mesmo tamanho e cor` },
         { status: 400 }
       )
     }
