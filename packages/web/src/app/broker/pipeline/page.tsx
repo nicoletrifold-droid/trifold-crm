@@ -5,9 +5,9 @@ import {
   type InitialStageState,
 } from "@web/components/pipeline/kanban-board"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
-// Story 50-2 + admin-only gate (pós-50-3): corretor não vê CreativeChip.
-// fetchCreativesForLeads/resolveCreativeForLead removidos deste arquivo a propósito —
-// LeadCard cai no fallback SourceBadge quando `creative` é ausente/null.
+// Story 50-5 (2026-07-09): CreativeChip habilitado também no pipeline do corretor —
+// mesma miniatura do anúncio Meta que admin/supervisor já viam (meta_ads é por-org).
+import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
 
 const PAGE_SIZE = 50
 
@@ -79,8 +79,17 @@ export default async function BrokerPipelinePage({
     })
   )
 
-  // Admin-only gate (pós-50-3): corretor sempre cai no fallback SourceBadge (creative ausente).
-  const initialLeadsPerStage = perStageResults as unknown as InitialStageState[]
+  // Story 50-5: anexa o creative Meta a cada lead (mesmo padrão do /dashboard/pipeline).
+  // Batched lookup (máx +1 query / AC7); degrada gracioso p/ SourceBadge se não achar.
+  const allLeads = perStageResults.flatMap((s) => s.leads as RawLead[])
+  const creativesMap = await fetchCreativesForLeads(supabase, allLeads, user.orgId)
+  const initialLeadsPerStage = perStageResults.map((s) => ({
+    ...s,
+    leads: (s.leads as RawLead[]).map((l) => ({
+      ...l,
+      creative: resolveCreativeForLead(l, creativesMap),
+    })),
+  })) as unknown as InitialStageState[]
   const totalVisible = initialLeadsPerStage.reduce((acc, s) => acc + s.leads.length, 0)
 
   return (

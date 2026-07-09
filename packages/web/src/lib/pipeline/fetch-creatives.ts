@@ -16,12 +16,13 @@ import type { CreativeData } from "./types"
 
 /**
  * Quem enxerga o CreativeChip (miniatura do anúncio Meta) no pipeline.
- * Regra: todos os perfis que acessam o pipeline do /dashboard — corretor NÃO
- * (o `/broker` compartilha o KanbanBoard + a API, mas cai no SourceBadge por decisão
- * da Story 50-2). Os criativos são por-org, então são idênticos para todos os perfis.
+ * TODOS os perfis internos que acessam o pipeline — incluindo o corretor (Story 50-5,
+ * 2026-07-09). Os criativos são por-org (idênticos p/ todos) e `meta_ads` é legível por
+ * qualquer usuário da org (RLS org_isolation). Antes o corretor caía no SourceBadge
+ * (rollout progressivo das Stories 50-2 → 50-4); agora ele também vê a miniatura.
  */
-export function canSeeCreatives(role: string): boolean {
-  return role !== "broker"
+export function canSeeCreatives(): boolean {
+  return true
 }
 
 type LeadWithMetadata = {
