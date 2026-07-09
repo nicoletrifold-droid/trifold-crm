@@ -120,6 +120,14 @@
     {
       "path": "/api/cron/sienge-customer-sync",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/billing-collect-anthropic",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/billing-reminders",
+      "schedule": "10 12 * * *"
     }
   ]
 }

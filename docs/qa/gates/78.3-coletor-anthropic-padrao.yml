@@ -1,0 +1,22 @@
+schema: 1
+story: '78.3'
+gate: CONCERNS
+status_reason: 'Contrato de coletor e implementação Anthropic corretos, lint/typecheck limpos e todos os 10 AC satisfeitos por construção; concerns são apenas não-bloqueantes: validação e2e com dado real bloqueada pela Story 78-2 (secret não provisionado) e uma observação de baixa severidade sobre linha de erro remanescente.'
+reviewer: 'Quinn'
+updated: '2026-07-08T00:00:00Z'
+
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'Validação end-to-end (AC7, T6.3-T6.5: coleta real, idempotência com valor real, falha isolada com chave inválida) não executada — ANTHROPIC_ADMIN_KEY ainda não provisionada (Story 78-2 Draft, pré-requisito humano PENDENTE). Idempotência garantida por construção (upsert onConflict service_id,snapshot_date,metric = UNIQUE da migration 164); cenários deterministas 401/503 validados por inspeção de código.'
+    suggested_action: 'Forward-gate: re-executar T6.3-T6.5 em DEV assim que a 78-2 gravar o secret. Não bloqueia o merge do contrato-âncora (AC8 cobre a ausência do secret com 503 sem dado inventado).'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'A linha degradada metric=collection_error (snapshot_date=window.to) não é limpa quando uma execução posterior da mesma janela tem sucesso — o metric difere de cost_usd, então o upsert idempotente não a sobrescreve. Pode ficar como indicador de erro obsoleto.'
+    suggested_action: 'Impacto contido: a UI da 78-9 agrega custo com WHERE currency IS NOT NULL (collection_error tem currency=null), logo não corrompe totais. Considerar, na 78-9, exibir só o último status por dia, ou limpar a linha de erro no sucesso subsequente. Não bloqueante.'
+  - id: 'DOC-001'
+    severity: low
+    finding: 'Semântica de timezone: "ontem BRT" (janela civil default) é enviado à Admin API como fronteira de dia UTC (${from}T00:00:00Z); buckets da Anthropic são alinhados ao dia UTC, logo snapshot_date reflete o dia UTC, não BRT.'
+    suggested_action: 'Nenhuma ação — decisão de design documentada e aceitável para granularidade diária (CON-6), registrada nas Completion Notes. Note-only.'
+
+waiver: { active: false }

@@ -1,0 +1,33 @@
+schema: 1
+story: '78.8'
+gate: CONCERNS
+status_reason: 'Todos os 9 AC atendidos e verificados por revisão estática; lint/typecheck limpos (só os 4 erros pré-existentes). CONCERNS apenas por gaps de verificação: validação manual dos 12 cenários em DEV pendente e ausência de teste unitário para as funções puras de risco (avancarCiclo/janela/timezone) num motor P1 de dinheiro — itens de baixa severidade, rastreáveis, não bloqueantes.'
+reviewer: 'Quinn'
+updated: '2026-07-08T00:00:00Z'
+
+traceability:
+  AC1: 'PASS — requireAuth()+requireRole(appUser,["admin"]) nos 4 handlers (GET/POST route.ts; PATCH/DELETE [id]/route.ts). 401 via requireAuth (sem sessão), 403 via requireRole. RLS admin_only da migration 164 reforça na camada de dados (client user-scoped).'
+  AC2: 'PASS — lib/billing/reminder-validation.ts (validateCreate/validateUpdate) espelha os CHECK de 164: currency IN (USD,BRL), billing_cycle IN (monthly,annual,usage), status IN (pending,alerted,paid,postponed,skipped), alert_days_before>=0. service_id+due_date obrigatórios no POST; alert_days_before default 7. Enum inválido → 400.'
+  AC3: 'PASS — janela filtrada por diffDias: diff<=0 && diff>=-alert_days_before. Dedup ATÔMICO: UPDATE .in("id",ids).eq("status","pending").select() RETURNING; só as linhas retornadas são notificadas. 2a execução concorrente não acha pending → não reenvia.'
+  AC4: 'PASS — sendEmail (lib/email.ts) + sendPushToUser (lib/server/push-service.ts) REUSADOS; nenhum canal novo, sem WhatsApp. Destinatários: users role=admin AND is_active=true, SEM filtro org_id. Envios coletados e await Promise.allSettled; cada envio com .catch próprio. Ver OBS-1.'
+  AC5: 'PASS — avancarCiclo() monthly=+1mês / annual=+12meses com clamp de dia-do-mês (último dia via Date.UTC(ny,nm0+1,0)); 31/01 mensal → 28/02 (29/02 bissexto) verificado por inspeção. usage → precisaRevisaoManual (sem inventar regra). Reset status=pending / paid_at=null. Ver OBS-2.'
+  AC6: 'PASS — PATCH {status:"paid"} deriva paid_at=now() no servidor (não aceito cru do cliente); sair de paid limpa paid_at=null. Idempotente por natureza de UPDATE.'
+  AC7: 'PASS — best-effort: .catch por envio + try/erro por linha na recorrência; 200 sempre com summary (pendentes/naJanela/alertsSent/alertErrors/recorridas/recorrErrors/precisaRevisaoManual).'
+  AC8: 'PASS — CRON_SECRET: 503 se não configurado, 401 se Bearer ausente/incorreto (padrão sla-alerts/boleto-scan). vercel.json crons[] com "10 12 * * *" — sem colisão (minuto 10 livre na hora 12; appointment-email-reminders=0 12, boleto-scan=0 12,15,18,21).'
+  AC9: 'PASS — hojeSaoPaulo() via Intl.DateTimeFormat("en-CA","America/Sao_Paulo"); diffDias() compara via Date.UTC nos dois lados (sem bug de ±1 dia de fuso).'
+
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Validação manual dos 12 cenários em DEV pendente (DoD desmarcado) e sem teste unitário para as funções puras de risco (avancarCiclo overflow, janela de alerta, timezone), apesar de boleto-scan/route.test.ts existir como precedente. Motor é P1 (dinheiro/corte de produção).'
+    suggested_action: 'Antes de habilitar o cron em prod: rodar smoke com ?dry=1 em DEV populando linhas (janela/fora/vencido mensal/usage) e adicionar teste unitário mínimo de avancarCiclo + janela (não bloqueante).'
+  - id: 'REL-001'
+    severity: low
+    finding: 'Recorrência avança due_date uma vez por execução mesmo para linha alerted/vencida-não-paga, resetando silenciosamente para pending e perdendo o sinal de "vencido e não pago" (sem escalonamento de atraso). Linha muitos ciclos atrasada converge ao longo de N dias (1 ciclo/run).'
+    suggested_action: 'Consistente com o design documentado (linha = próximo vencimento vigente). Expor "último lembrete/atraso" na observabilidade da 78-9; considerar status de atraso em iteração futura.'
+  - id: 'REL-002'
+    severity: low
+    finding: 'sendEmail resolve com {error} (não rejeita) quando RESEND_API_KEY ausente; o .catch não dispara e alertErrors não contabiliza falha de config de e-mail. Efeito funcional (não bloqueia push, não derruba loop) preservado; apenas subcontagem de observabilidade.'
+    suggested_action: 'Checar result.error do sendEmail para incrementar alertErrors (observabilidade), sem alterar o comportamento best-effort.'
+
+waiver: { active: false }
