@@ -4,6 +4,7 @@ import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, Upload, Paperclip, Loader2 } from "lucide-react"
 import { titularLabel, type InfoField, type Titular } from "@web/lib/pastas/checklist"
+import { maskPhoneBR, emailError, phoneError, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 interface Doc {
   id: string
@@ -201,19 +202,42 @@ function InfoForm({
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [errs, setErrs] = useState<Record<string, string | null>>({})
 
   const titulares = [...new Set(fields.map((f) => f.titular))]
 
   async function save() {
+    // Story 80-1 — trava e-mail/telefone: obrigatórios e no formato correto.
+    const nextErrs: Record<string, string | null> = {}
+    for (const f of fields) {
+      if (f.type === "email") nextErrs[f.key] = emailError(values[f.key], true)
+      else if (f.type === "tel") nextErrs[f.key] = phoneError(values[f.key], true)
+    }
+    if (Object.values(nextErrs).some(Boolean)) {
+      setErrs(nextErrs)
+      return
+    }
+    setErrs({})
+
+    // Normaliza contatos antes de salvar (telefone com máscara, e-mail minúsculo).
+    const payload: Record<string, string> = { ...values }
+    for (const f of fields) {
+      if (f.type === "email") payload[f.key] = normalizeEmail(payload[f.key])
+      else if (f.type === "tel") payload[f.key] = formatPhoneBR(payload[f.key])
+    }
+
     setSaving(true)
     setSaved(false)
     try {
       const res = await fetch(`/api/pasta/${token}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ form_data: values }),
+        body: JSON.stringify({ form_data: payload }),
       })
-      if (res.ok) setSaved(true)
+      if (res.ok) {
+        setValues(payload)
+        setSaved(true)
+      }
     } finally {
       setSaving(false)
     }
@@ -233,10 +257,19 @@ function InfoForm({
                   <span className="text-xs text-stone-500">{f.label}</span>
                   <input
                     type={f.type}
+                    inputMode={f.type === "tel" ? "tel" : undefined}
+                    placeholder={f.type === "tel" ? "(44) 99999-9999" : undefined}
                     value={values[f.key] ?? ""}
-                    onChange={(e) => { setValues((v) => ({ ...v, [f.key]: e.target.value })); setSaved(false) }}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      const val = f.type === "tel" ? maskPhoneBR(raw) : raw
+                      setValues((v) => ({ ...v, [f.key]: val }))
+                      setSaved(false)
+                      if (errs[f.key]) setErrs((p) => ({ ...p, [f.key]: null }))
+                    }}
                     className="mt-1 w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm focus:border-orange-400 focus:outline-none"
                   />
+                  {errs[f.key] && <span className="mt-1 block text-xs text-red-500">{errs[f.key]}</span>}
                 </label>
               ))}
           </div>

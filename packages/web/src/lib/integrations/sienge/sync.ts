@@ -5,6 +5,7 @@ import {
   getAllSalesContracts,
   getCustomerById,
 } from "./client"
+import { syncClienteEmail } from "./customer-profile-sync"
 import type { SiengeContract, SiengeCustomer } from "./types"
 
 /**
@@ -287,6 +288,12 @@ async function findOrCreateCliente(
       if (Object.keys(updates).length > 0) {
         await supabaseAdmin.from("clientes").update(updates).eq("id", existing.id)
       }
+      // Story 79-1: e-mail segue o Sienge (fonte da verdade) + propaga ao login do portal.
+      await syncClienteEmail(
+        supabaseAdmin,
+        { id: existing.id, email: existing.email, sienge_customer_id: existing.sienge_customer_id ?? customer.id, org_id: orgId },
+        customer.email
+      )
       return { clienteId: existing.id, created: false }
     }
   }
@@ -314,6 +321,12 @@ async function findOrCreateCliente(
       if (Object.keys(updates).length > 0) {
         await supabaseAdmin.from("clientes").update(updates).eq("id", existing.id)
       }
+      // Story 79-1: e-mail segue o Sienge (fonte da verdade) + propaga ao login do portal.
+      await syncClienteEmail(
+        supabaseAdmin,
+        { id: existing.id, email: existing.email, sienge_customer_id: existing.sienge_customer_id ?? customer.id, org_id: orgId },
+        customer.email
+      )
       return { clienteId: existing.id, created: false }
     }
   }

@@ -118,6 +118,10 @@
       "schedule": "0 12,15,18,21 * * *"
     },
     {
+      "path": "/api/cron/sienge-customer-sync",
+      "schedule": "15 6 * * *"
+    },
+    {
       "path": "/api/cron/billing-collect-anthropic",
       "schedule": "0 10 * * *"
     },

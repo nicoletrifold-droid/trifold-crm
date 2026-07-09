@@ -2,7 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
-import { fetchCreativesForLeads, resolveCreativeForLead } from "@web/lib/pipeline/fetch-creatives"
+import { fetchCreativesForLeads, resolveCreativeForLead, canSeeCreatives } from "@web/lib/pipeline/fetch-creatives"
 import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 import Link from "next/link"
@@ -184,11 +184,10 @@ export default async function PipelinePage({
   const waitingByLead = await computeWaitingMinutes(createAdminClient(), user.orgId, aguardandoIds)
 
   // Story 50-2 (Epic 50): batched lookup de criativos Meta (máx +1 query Supabase / AC7)
-  // Post-50-3 scope adjustment: CreativeChip restrito a admin (gerente-comercial/supervisor
-  // voltam ao SourceBadge genérico — comportamento pré-Epic-50).
-  const isAdmin = user.role === "admin"
+  // Story 50-4: CreativeChip visível para todos os perfis do pipeline do /dashboard
+  // (admin/supervisor/gerente-comercial). Corretor segue no SourceBadge (canSeeCreatives).
   const allLeads = perStageResults.flatMap((s) => s.leads as RawLead[])
-  const creativesMap = isAdmin
+  const creativesMap = canSeeCreatives(user.role)
     ? await fetchCreativesForLeads(supabase, allLeads, user.orgId)
     : new Map()
 

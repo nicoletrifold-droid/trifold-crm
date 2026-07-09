@@ -30,6 +30,7 @@ import {
   FolderClosed,
   Rocket,
   BookOpen,
+  Eye,
 } from "lucide-react"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
@@ -279,11 +280,21 @@ export default async function DashboardLayout({
     ? [...baseFiltered.slice(0, roletaIdx + 1), ...afterRoleta, ...baseFiltered.slice(roletaIdx + 1)]
     : [...baseFiltered, ...afterRoleta]
 
+  // Story 78-1 — Portal Cliente (Visão Mestre): "ver como cliente", somente leitura.
+  // Gate hardcoded por role (admin/supervisor); migrar p/ matriz de Perfil de Acesso depois.
+  const showPortalViewer = user.role === "admin" || user.role === "supervisor"
+  const portalViewerItem = {
+    href: "/dashboard/portal-cliente",
+    label: "Portal Cliente",
+    icon: <Eye className={ICON_SIZE} />,
+  }
+
   const navItems = [
     ...baseWithExtras,
     ...(permissions["obras"]
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),
+    ...(showPortalViewer ? [portalViewerItem] : []),
     // Épico Lançamentos — item logo abaixo de Obras, gated pela matriz de Perfil de Acesso.
     ...(permissions["lancamentos"] ? [NAV_ITEM_LANCAMENTOS] : []),
     ...(permissions["brindes"] ? [NAV_ITEM_BRINDES] : []),

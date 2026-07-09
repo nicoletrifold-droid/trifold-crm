@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { canAccess } from "@web/lib/permissions"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET(request: NextRequest) {
@@ -19,35 +21,77 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * limit
   const to = from + limit - 1
 
-  let query = supabase
-    .from("leads")
-    .select(
-      "id, name, phone, email, stage_id, qualification_score, interest_level, property_interest_id, assigned_broker_id, source, created_at, updated_at",
-      { count: "exact" }
-    )
-    .eq("org_id", appUser.org_id)
-    .eq("segmento", "principal") // Story 75-98: lista principal (IMOB tem tela própria)
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
-    .range(from, to)
-
-  if (search) {
-    query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+  // Segmento: default 'principal' (Story 75-98 — IMOB tem tela própria e é isolado do funil).
+  // A Agenda é uma ferramenta compartilhada e precisa vincular leads de ambos os mundos, então
+  // aceita 'imob' ou 'all' — mas só para quem tem acesso ao módulo IMOB (canAccess). Sem acesso,
+  // qualquer valor cai só no 'principal', preservando o isolamento em todo o resto.
+  const segmentoParam = url.searchParams.get("segmento")
+  let wantPrincipal = true
+  let wantImob = false
+  if (segmentoParam === "imob") {
+    wantPrincipal = false
+    wantImob = true
+  } else if (segmentoParam === "all") {
+    wantImob = true
+  }
+  if (wantImob && !(await canAccess(appUser.id, appUser.org_id, "imob"))) {
+    // Sem acesso ao módulo IMOB → só o funil principal.
+    wantImob = false
+    wantPrincipal = true
   }
 
-  if (stageId) {
-    query = query.eq("stage_id", stageId)
+  // Monta a query de leads de um segmento, aplicando os mesmos filtros de busca.
+  // `client` decide o escopo de visibilidade (ver abaixo por que IMOB usa admin).
+  const buildQuery = (
+    client: typeof supabase,
+    segmento: "principal" | "imob"
+  ) => {
+    let q = client
+      .from("leads")
+      .select(
+        "id, name, phone, email, stage_id, qualification_score, interest_level, property_interest_id, assigned_broker_id, source, created_at, updated_at",
+        { count: "exact" }
+      )
+      .eq("org_id", appUser.org_id)
+      .eq("segmento", segmento)
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .range(from, to)
+
+    if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+    if (stageId) q = q.eq("stage_id", stageId)
+    if (propertyId) q = q.eq("property_interest_id", propertyId)
+    return q
   }
 
-  if (propertyId) {
-    query = query.eq("property_interest_id", propertyId)
+  const queries = []
+  // Principal: cliente RLS — corretor vê só os próprios leads; admin/supervisor veem todos.
+  if (wantPrincipal) queries.push(buildQuery(supabase, "principal"))
+  // IMOB: os leads são geridos COLETIVAMENTE por quem tem acesso ao módulo (não por
+  // assigned_broker_id). A RLS de `leads` só libera não-admin/supervisor a ver os próprios
+  // leads atribuídos, então esconderia os leads IMOB (normalmente sem corretor) de um usuário
+  // com perfil 'imob'. Usamos o admin client — autorizado pelo gate canAccess("imob") acima —
+  // como já faz a tela de Leads do IMOB (dashboard/imob/leads/page.tsx).
+  if (wantImob)
+    queries.push(buildQuery(createAdminClient() as typeof supabase, "imob"))
+
+  const results = await Promise.all(queries)
+  const failed = results.find((r) => r.error)
+  if (failed?.error) {
+    return NextResponse.json({ error: failed.error.message }, { status: 500 })
   }
 
-  const { data: leads, error, count } = await query
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  // Uma única fonte → passa direto. Duas (segmento=all) → intercala por updated_at desc.
+  const leads =
+    results.length === 1
+      ? results[0]?.data ?? []
+      : results
+          .flatMap((r) => r.data ?? [])
+          .sort((a, b) =>
+            a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0
+          )
+          .slice(0, limit)
+  const count = results.reduce((sum, r) => sum + (r.count ?? 0), 0)
 
   return NextResponse.json({ data: leads, count, page, limit })
 }

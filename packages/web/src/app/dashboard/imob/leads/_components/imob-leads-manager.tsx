@@ -14,9 +14,12 @@ export type ImobLead = {
   stage_name: string | null
   stage_color: string | null
   property_name: string | null
+  assigned_broker_id: string | null
+  responsavel_name: string | null
 }
 
 type Property = { id: string; name: string }
+type OrgUser = { id: string; name: string }
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
@@ -24,14 +27,30 @@ const labelCls = "block text-xs font-medium text-gray-500 dark:text-stone-400"
 
 const EMPTY = { name: "", phone: "", email: "", property_interest_id: "", observacao: "" }
 
-export function ImobLeadsManager({ initial, properties }: { initial: ImobLead[]; properties: Property[] }) {
+export function ImobLeadsManager({ initial, properties, users }: { initial: ImobLead[]; properties: Property[]; users: OrgUser[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ ...EMPTY })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [assigningId, setAssigningId] = useState<string | null>(null)
 
   function set<K extends keyof typeof EMPTY>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })) }
+
+  // Define/troca o responsável do lead (via endpoint admin-backed do IMOB) e recarrega.
+  async function assignResponsavel(leadId: string, userId: string) {
+    setAssigningId(leadId)
+    try {
+      const res = await fetch(`/api/imob/leads/${leadId}/assign`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ broker_id: userId || null }),
+      })
+      if (res.ok) router.refresh()
+    } finally {
+      setAssigningId(null)
+    }
+  }
 
   async function save() {
     if (!form.phone.trim()) { setError("Telefone é obrigatório"); return }
@@ -77,6 +96,7 @@ export function ImobLeadsManager({ initial, properties }: { initial: ImobLead[];
                 <th className="px-3 py-2 font-medium">Telefone</th>
                 <th className="px-3 py-2 font-medium">Empreendimento</th>
                 <th className="px-3 py-2 font-medium">Etapa</th>
+                <th className="px-3 py-2 font-medium">Responsável</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
@@ -97,6 +117,19 @@ export function ImobLeadsManager({ initial, properties }: { initial: ImobLead[];
                         {l.stage_name}
                       </span>
                     ) : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={l.assigned_broker_id ?? ""}
+                      disabled={assigningId === l.id}
+                      onChange={(e) => assignResponsavel(l.id, e.target.value)}
+                      className="w-full max-w-[180px] rounded-md border border-stone-300 bg-white px-2 py-1 text-xs text-stone-800 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                    >
+                      <option value="">Sem responsável</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
                   </td>
                 </tr>
               ))}

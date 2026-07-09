@@ -8,6 +8,7 @@ import { titularLabel, type Titular } from "@web/lib/pastas/checklist"
 import type { TermoData } from "@web/lib/pastas/termo/fill"
 import { computePastaStatus, TERMO_SLUG } from "@web/lib/pastas/status"
 import { validateSignerForm } from "@web/lib/clicksign/validation"
+import { isValidPhoneBR, maskPhoneBR } from "@web/lib/validation/contato"
 
 interface Doc {
   id: string
@@ -111,6 +112,11 @@ export function PastaDetail({
     // Story 75-135 — valida antes de chamar a Clicksign (evita erro técnico cru).
     const invalid = validateSignerForm({ name: signName, email: signEmail, phone: signPhone, auth: signAuth })
     if (invalid) { setSignError(invalid); return }
+    // Story 80-1 — telefone no padrão BR (10/11 dígitos), além da checagem básica da Clicksign.
+    if (signPhone.trim() && !isValidPhoneBR(signPhone)) {
+      setSignError("Telefone inválido — use DDD + número (10 ou 11 dígitos).")
+      return
+    }
     setSigning(true)
     setSignError(null)
     try {
@@ -530,7 +536,7 @@ export function PastaDetail({
               </label>
               <label className="block">
                 <span className="text-xs font-medium text-gray-600 dark:text-stone-300">Telefone (WhatsApp/SMS)</span>
-                <input value={signPhone} onChange={(e) => setSignPhone(e.target.value)} placeholder="(00) 00000-0000"
+                <input value={signPhone} onChange={(e) => setSignPhone(maskPhoneBR(e.target.value))} placeholder="(00) 00000-0000"
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" />
               </label>
               <label className="block">
