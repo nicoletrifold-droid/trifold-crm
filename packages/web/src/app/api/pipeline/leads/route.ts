@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
   // Story 50-2 (Epic 50): batched lookup de criativos Meta para os leads paginados (AC7)
   // Story 50-4: visível para todos os perfis do pipeline do /dashboard; corretor (que
   // compartilha esta API via KanbanBoard no /broker) segue no SourceBadge (canSeeCreatives).
-  const creativesMap = canSeeCreatives(appUser.role)
+  const creativesMap = canSeeCreatives()
     ? await fetchCreativesForLeads(supabase, filtered, appUser.org_id)
     : new Map()
 

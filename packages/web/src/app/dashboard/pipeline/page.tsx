@@ -187,7 +187,7 @@ export default async function PipelinePage({
   // Story 50-4: CreativeChip visível para todos os perfis do pipeline do /dashboard
   // (admin/supervisor/gerente-comercial). Corretor segue no SourceBadge (canSeeCreatives).
   const allLeads = perStageResults.flatMap((s) => s.leads as RawLead[])
-  const creativesMap = canSeeCreatives(user.role)
+  const creativesMap = canSeeCreatives()
     ? await fetchCreativesForLeads(supabase, allLeads, user.orgId)
     : new Map()
 
