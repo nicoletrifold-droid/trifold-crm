@@ -73,9 +73,12 @@ function makeReq(body: unknown): NextRequest {
 
 const ctx = (token: string) => ({ params: Promise.resolve({ token }) })
 
+// Story 80-1 — contato do comprador é obrigatório e validado (telefone BR + e-mail).
+const CONTATO = { interessado_telefone: "44999998888", interessado_email: "comprador@example.com" }
+
 describe("POST /api/pasta/nova/[token]", () => {
   it("cria pasta com origem=auto_cadastro, link_id, created_by=null e imobiliária DO LINK", async () => {
-    const res = await POST(makeReq({ nome: "Fulano", tipo: "pf", imobiliaria: "OUTRA IMOB (deve ser ignorada)" }), ctx("tok"))
+    const res = await POST(makeReq({ nome: "Fulano", tipo: "pf", imobiliaria: "OUTRA IMOB (deve ser ignorada)", ...CONTATO }), ctx("tok"))
     expect(res.status).toBe(201)
     const json = await res.json()
     expect(json.data.token).toBe("pastatoken")
@@ -91,7 +94,7 @@ describe("POST /api/pasta/nova/[token]", () => {
   })
 
   it("ignora a imobiliária do body (usa sempre a do link)", async () => {
-    await POST(makeReq({ nome: "Beltrano", imobiliaria: "Fraude Imob" }), ctx("tok"))
+    await POST(makeReq({ nome: "Beltrano", imobiliaria: "Fraude Imob", ...CONTATO }), ctx("tok"))
     expect(insertedPasta?.imobiliaria).toBe("Imobiliária X")
   })
 
@@ -114,16 +117,29 @@ describe("POST /api/pasta/nova/[token]", () => {
     expect(res.status).toBe(400)
   })
 
+  it("Story 80-1: rejeita contato do comprador inválido/ausente (400) sem criar pasta", async () => {
+    // Sem telefone/e-mail
+    let res = await POST(makeReq({ nome: "Fulano" }), ctx("tok"))
+    expect(res.status).toBe(400)
+    // Telefone com dígitos de menos
+    res = await POST(makeReq({ nome: "Fulano", interessado_telefone: "123", interessado_email: "ok@example.com" }), ctx("tok"))
+    expect(res.status).toBe(400)
+    // E-mail malformado
+    res = await POST(makeReq({ nome: "Fulano", interessado_telefone: "44999998888", interessado_email: "sem-arroba" }), ctx("tok"))
+    expect(res.status).toBe(400)
+    expect(insertedPasta).toBeNull()
+  })
+
   it("faz rollback da pasta se o seed de documentos falhar", async () => {
     docsError = { message: "boom" }
-    const res = await POST(makeReq({ nome: "Fulano" }), ctx("tok"))
+    const res = await POST(makeReq({ nome: "Fulano", ...CONTATO }), ctx("tok"))
     expect(res.status).toBe(500)
     expect(deletedPastaId).toBe("pasta-1")
   })
 
   it("GRACEFUL FALLBACK: a pasta é criada mesmo se a notificação (WhatsApp/template PENDING) falhar", async () => {
     notifyMock.mockRejectedValueOnce(new Error("Graph API 132000 template PENDING"))
-    const res = await POST(makeReq({ nome: "Fulano" }), ctx("tok"))
+    const res = await POST(makeReq({ nome: "Fulano", ...CONTATO }), ctx("tok"))
     // A criação persiste e retorna 201 — a notificação é fire-and-forget (.catch).
     expect(res.status).toBe(201)
     expect(insertedPasta?.origem).toBe("auto_cadastro")

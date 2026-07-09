@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe("POST /api/pastas (fluxo interno)", () => {
   it("mantém created_by = usuário e NÃO marca auto_cadastro", async () => {
-    const res = await POST(makeReq({ nome: "Fulano", tipo: "pf", imobiliaria: "Imob X" }))
+    const res = await POST(makeReq({ nome: "Fulano", tipo: "pf", imobiliaria: "Imob X", interessado_telefone: "44999998888", interessado_email: "comprador@example.com" }))
     expect(res.status).toBe(201)
     expect(insertedPasta).toMatchObject({ created_by: "user-1", org_id: "org-1", imobiliaria: "Imob X" })
     expect(insertedPasta?.origem).toBeUndefined()
@@ -63,6 +63,14 @@ describe("POST /api/pastas (fluxo interno)", () => {
     role = "corretor"
     const res = await POST(makeReq({ nome: "Fulano" }))
     expect(res.status).toBe(403)
+    expect(insertedPasta).toBeNull()
+  })
+
+  it("Story 80-1: rejeita contato do comprador inválido/ausente (400) sem criar pasta", async () => {
+    let res = await POST(makeReq({ nome: "Fulano", tipo: "pf" }))
+    expect(res.status).toBe(400)
+    res = await POST(makeReq({ nome: "Fulano", interessado_telefone: "44999998888", interessado_email: "sem-arroba" }))
+    expect(res.status).toBe(400)
     expect(insertedPasta).toBeNull()
   })
 })
