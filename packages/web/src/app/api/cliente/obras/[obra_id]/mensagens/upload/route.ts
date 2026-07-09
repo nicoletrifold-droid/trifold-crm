@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { ensureConversaAtribuida } from "@web/lib/portal/conversa"
+import { transcribeAudio } from "@web/lib/transcription/transcribe"
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024 // 20 MB
@@ -84,6 +85,13 @@ export async function POST(
     return NextResponse.json({ error: uploadError.message }, { status: 500 })
   }
 
+  // Conteúdo textual: documento = nome do arquivo; áudio = transcrição (texto legível
+  // por todos, inclusive quem não consegue tocar o áudio no navegador). Imagem = null.
+  let content: string | null = messageType === "document" ? file.name : null
+  if (messageType === "audio") {
+    content = await transcribeAudio(bytes, file.type || "audio/ogg")
+  }
+
   const { data: mensagem, error: dbError } = await supabase
     .from("obra_mensagens")
     .insert({
@@ -92,7 +100,7 @@ export async function POST(
       sender_id: appUser.id,
       sender_type: "cliente",
       cliente_id: appUser.id,
-      content: messageType === "document" ? file.name : null,
+      content,
       message_type: messageType,
       storage_path: storagePath,
     })
