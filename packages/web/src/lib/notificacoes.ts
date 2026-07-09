@@ -336,9 +336,10 @@ export interface BoletoLembreteParams extends NovoBoletoParams {
 }
 
 // Template HSM por marco. `boleto_vence_hoje` para venc_hoje; `boleto_em_atraso`
-// para os dois marcos de atraso (Story 75-141). Ambos submetidos à Meta (hoje
-// PENDING) — se ainda não aprovados, a Graph API falha e o envio de WhatsApp
-// cai no .catch (log), SEM derrubar a rodada nem impedir e-mail/push.
+// para os dois marcos de atraso (Story 75-141). Ambos APROVADOS na Meta
+// (confirmado 2026-07-09). Mesmo assim o envio segue defensivo: se um template
+// for pausado/reprovado, a Graph API falha e o envio de WhatsApp cai no .catch
+// (log), SEM derrubar a rodada nem impedir e-mail/push.
 const LEMBRETE_TEMPLATE: Record<BoletoLembreteMarco, string> = {
   venc_hoje: "boleto_vence_hoje",
   atraso5: "boleto_em_atraso",
@@ -431,7 +432,8 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
 // Templates HSM `boleto_vence_hoje` / `boleto_em_atraso` (pt_BR): body {{1}}=nome,
 // {{2}}=obra, {{3}}=vencimento; botão URL dinâmica base
 // https://crm.trifold.eng.br/cliente/boleto/{{1}} (param = obra_id). Mesma estrutura de
-// `novo_boleto_cliente`. Ambos PENDING na Meta hoje — falha graciosa via .catch no chamador.
+// `novo_boleto_cliente`. Ambos APROVADOS na Meta (2026-07-09) — envio ainda defensivo
+// (falha graciosa via .catch no chamador caso um template seja pausado no futuro).
 async function sendBoletoLembreteWhatsApp(
   admin: ReturnType<typeof createAdminClient>,
   orgId: string,
