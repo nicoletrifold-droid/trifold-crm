@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth } from "@web/lib/api-auth"
+import { canAccess } from "@web/lib/permissions"
 
 export async function PATCH(
   request: NextRequest,
@@ -9,8 +10,9 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "obras", "gerente-relacionamento"])
-  if (roleError) return roleError
+  if (!(await canAccess(appUser.id, appUser.org_id, "brindes"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   const { id } = await params
 
