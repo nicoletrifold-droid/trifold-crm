@@ -21,6 +21,7 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState(EMPTY_FORM)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   async function handleCreate(e: React.FormEvent) {
@@ -57,12 +58,14 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
 
   function startEdit(t: BrindeTipo) {
     setEditingId(t.id)
+    setEditError(null)
     setEditForm({ nome: t.nome, descricao: t.descricao ?? "", tamanho: t.tamanho ?? "", cor: t.cor ?? "" })
   }
 
   async function handleSaveEdit(id: string) {
     if (savingId || !editForm.nome.trim()) return
     setSavingId(id)
+    setEditError(null)
     try {
       const res = await fetch(`/api/brindes/tipos/${id}`, {
         method: "PATCH",
@@ -81,7 +84,13 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
         )
         setEditingId(null)
         router.refresh()
+      } else {
+        // Antes o erro era engolido (botão "não fazia nada"). Agora mostramos o motivo.
+        const d = (await res.json().catch(() => ({}))) as { error?: string }
+        setEditError(d.error ?? `Erro ao salvar (HTTP ${res.status}).`)
       }
+    } catch {
+      setEditError("Erro de rede ao salvar.")
     } finally {
       setSavingId(null)
     }
@@ -152,8 +161,11 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
                     value={editForm.descricao}
                     onChange={(e) => setEditForm((f) => ({ ...f, descricao: e.target.value }))}
                   />
+                  {editError && (
+                    <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-500/15 dark:text-red-300">{editError}</p>
+                  )}
                   <div className="flex gap-2 justify-end">
-                    <button type="button" onClick={() => setEditingId(null)} className="text-xs text-gray-500 hover:text-gray-700 dark:text-stone-400">Cancelar</button>
+                    <button type="button" onClick={() => { setEditingId(null); setEditError(null) }} className="text-xs text-gray-500 hover:text-gray-700 dark:text-stone-400">Cancelar</button>
                     <button
                       type="button"
                       onClick={() => handleSaveEdit(t.id)}
