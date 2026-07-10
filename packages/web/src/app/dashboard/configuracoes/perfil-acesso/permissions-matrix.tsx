@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import {
   LayoutDashboard,
   Kanban,
@@ -24,9 +24,10 @@ import {
   Check,
   Loader2,
   CircleDot,
+  CornerDownRight,
 } from "lucide-react"
 import type { OrgRole, PermissionsMatrix } from "@web/lib/permissions"
-import { MODULE_LABELS, MODULE_DESCRIPTIONS } from "@web/lib/permissions-modules"
+import { MODULE_LABELS, MODULE_DESCRIPTIONS, SUBMODULE_MAP } from "@web/lib/permissions-modules"
 import { deleteRole, updatePermission } from "./actions"
 
 /**
@@ -356,10 +357,12 @@ export function PermissionsMatrix({
     const desc = MODULE_DESCRIPTIONS[m] ?? ""
     const q = search.trim().toLowerCase()
     if (!q) return true
+    const subLabels = Object.values(SUBMODULE_MAP[m] ?? {}).join(" ").toLowerCase()
     return (
       label.toLowerCase().includes(q) ||
       desc.toLowerCase().includes(q) ||
-      m.toLowerCase().includes(q)
+      m.toLowerCase().includes(q) ||
+      subLabels.includes(q)
     )
   })
 
@@ -599,8 +602,8 @@ export function PermissionsMatrix({
                 const moduleDesc = MODULE_DESCRIPTIONS[module] ?? ""
                 const IconComponent = MODULE_ICONS[module] ?? Shield
                 return (
+                  <Fragment key={module}>
                   <tr
-                    key={module}
                     className="group transition-colors hover:bg-gray-50/70 dark:hover:bg-stone-800/30"
                   >
                     {/* Coluna do módulo: ícone + label + descrição */}
@@ -649,6 +652,51 @@ export function PermissionsMatrix({
                       )
                     })}
                   </tr>
+
+                  {/* Sub-módulos (ex.: sistema.notificacoes-financeiras) — herdam do pai
+                      quando sem valor explícito; toggle grava a chave dotted no role. */}
+                  {Object.entries(SUBMODULE_MAP[module] ?? {}).map(([subKey, subLabel]) => (
+                    <tr
+                      key={subKey}
+                      className="group bg-gray-50/40 transition-colors hover:bg-gray-50 dark:bg-stone-900/40 dark:hover:bg-stone-800/30"
+                    >
+                      <td className="sticky left-0 z-10 bg-gray-50/40 px-6 py-2.5 transition-colors group-hover:bg-gray-50 dark:bg-stone-900/40 dark:group-hover:bg-stone-800/40">
+                        <div className="flex items-center gap-2 pl-9">
+                          <CornerDownRight
+                            className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 dark:text-stone-600"
+                            aria-hidden="true"
+                          />
+                          <span className="text-xs font-medium text-gray-600 dark:text-stone-300">
+                            {subLabel}
+                          </span>
+                        </div>
+                      </td>
+                      {roles.map((role) => {
+                        const palette = getRolePalette(role)
+                        const key = cellKey(role.id, subKey)
+                        const explicit = optimisticMatrix[role.id]?.[subKey]
+                        // Sem valor explícito → herda a permissão do módulo pai.
+                        const checked = explicit ?? (optimisticMatrix[role.id]?.[module] ?? false)
+                        const loading = loadingCells.has(key)
+                        return (
+                          <td key={role.id} className="px-4 py-2.5 align-middle">
+                            <PermissionToggle
+                              roleId={role.id}
+                              module={subKey}
+                              roleLabel={role.label}
+                              moduleLabel={subLabel}
+                              checked={checked}
+                              loading={loading}
+                              onColorHex={palette.toggleOnHex}
+                              focusColorHex={palette.toggleFocusHex}
+                              onToggle={handleToggle}
+                            />
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                  </Fragment>
                 )
               })}
 
