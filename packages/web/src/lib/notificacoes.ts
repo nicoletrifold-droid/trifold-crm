@@ -2,6 +2,7 @@ import { sendEmail } from "@web/lib/email"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
+import { logFinancialNotification, marcoToTipo } from "@web/lib/financeiro/log-financial-notification"
 import { PASTA_MANAGER_ROLES } from "@web/lib/pastas/roles"
 
 // Janela de coalescing anti-flood. Dentro dela, só o 1º evento do mesmo GRUPO (ver
@@ -294,18 +295,24 @@ export async function notifyNovoBoleto(params: NovoBoletoParams): Promise<void> 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
     const link = `${appUrl}/cliente/boleto/${obraId}`
 
+    // Log financeiro (Notificações Financeiras) — 1 linha por canal disparado.
+    const logFin = (canal: "whatsapp" | "email" | "push", status: "sent" | "failed", detail?: string) =>
+      void logFinancialNotification(admin, { orgId, userId, obraId, tipo: "novo_boleto", canal, status, vencimento, detail })
+
     if (pref.email_enabled && email) {
       sendEmail({
         to: email,
         subject: `Novo boleto da sua obra — ${obraName}`,
         html: buildBoletoEmailHtml({ nome, obraName, vencimento, link }),
-      }).catch((err) => console.error("[notificacoes] boleto email error:", err))
+      })
+        .then(() => logFin("email", "sent"))
+        .catch((err) => { console.error("[notificacoes] boleto email error:", err); logFin("email", "failed", String(err).slice(0, 300)) })
     }
 
     if (pref.whatsapp_enabled && phone) {
-      sendBoletoWhatsApp(admin, orgId, phone, nome, obraName, vencimento, obraId).catch(
-        (err) => console.error("[notificacoes] boleto WhatsApp skip:", err)
-      )
+      sendBoletoWhatsApp(admin, orgId, phone, nome, obraName, vencimento, obraId)
+        .then(() => logFin("whatsapp", "sent"))
+        .catch((err) => { console.error("[notificacoes] boleto WhatsApp skip:", err); logFin("whatsapp", "failed", String(err).slice(0, 300)) })
     }
 
     if (pref.push_enabled) {
@@ -313,7 +320,9 @@ export async function notifyNovoBoleto(params: NovoBoletoParams): Promise<void> 
         title: "Novo boleto disponível",
         body: `${obraName} — vencimento ${vencimento}`,
         url: link,
-      }).catch((err) => console.error("[notificacoes] boleto push error:", err))
+      })
+        .then(() => logFin("push", "sent"))
+        .catch((err) => { console.error("[notificacoes] boleto push error:", err); logFin("push", "failed", String(err).slice(0, 300)) })
     }
   } catch (err) {
     console.error("[notificacoes] notifyNovoBoleto error:", err)
@@ -398,19 +407,26 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
     const link = `${appUrl}/cliente/boleto/${obraId}`
     const copy = lembreteCopy(marco, quantidade)
 
+    // Log financeiro (Notificações Financeiras) — 1 linha por canal disparado.
+    const tipoLog = marcoToTipo(marco)
+    const logFin = (canal: "whatsapp" | "email" | "push", status: "sent" | "failed", detail?: string) =>
+      void logFinancialNotification(admin, { orgId, userId, obraId, tipo: tipoLog, canal, status, vencimento, detail })
+
     if (pref.email_enabled && email) {
       sendEmail({
         to: email,
         subject: `${copy.emailSubject} — ${obraName}`,
         html: buildBoletoLembreteEmailHtml({ nome, obraName, vencimento, link, marco, quantidade }),
-      }).catch((err) => console.error("[notificacoes] lembrete boleto email error:", err))
+      })
+        .then(() => logFin("email", "sent"))
+        .catch((err) => { console.error("[notificacoes] lembrete boleto email error:", err); logFin("email", "failed", String(err).slice(0, 300)) })
     }
 
     if (pref.whatsapp_enabled && phone) {
       // WhatsApp mantém o template HSM aprovado (singular), enviado 1× por grupo (Story 75-147).
-      sendBoletoLembreteWhatsApp(admin, orgId, phone, nome, obraName, vencimento, obraId, marco).catch(
-        (err) => console.error("[notificacoes] lembrete boleto WhatsApp skip:", err)
-      )
+      sendBoletoLembreteWhatsApp(admin, orgId, phone, nome, obraName, vencimento, obraId, marco)
+        .then(() => logFin("whatsapp", "sent"))
+        .catch((err) => { console.error("[notificacoes] lembrete boleto WhatsApp skip:", err); logFin("whatsapp", "failed", String(err).slice(0, 300)) })
     }
 
     if (pref.push_enabled) {
@@ -422,7 +438,9 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
         title: copy.pushTitle,
         body: pushBody,
         url: link,
-      }).catch((err) => console.error("[notificacoes] lembrete boleto push error:", err))
+      })
+        .then(() => logFin("push", "sent"))
+        .catch((err) => { console.error("[notificacoes] lembrete boleto push error:", err); logFin("push", "failed", String(err).slice(0, 300)) })
     }
   } catch (err) {
     console.error("[notificacoes] notifyBoletoLembrete error:", err)

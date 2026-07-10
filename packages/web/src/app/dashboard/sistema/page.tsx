@@ -206,7 +206,7 @@ export default function SistemaPage() {
           <History className="h-4 w-4 text-orange-600" />
           <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Auditoria</h2>
         </div>
-        <div className="p-4">
+        <div className="space-y-2 p-4">
           <Link
             href="/dashboard/sistema/logs"
             className="flex items-center gap-2 rounded-lg border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-orange-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -214,6 +214,14 @@ export default function SistemaPage() {
             <History className="h-4 w-4 text-orange-600" />
             Log de Atividades
             <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">Auditoria completa →</span>
+          </Link>
+          <Link
+            href="/dashboard/sistema/notificacoes-financeiras"
+            className="flex items-center gap-2 rounded-lg border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-orange-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+          >
+            <Wallet className="h-4 w-4 text-orange-600" />
+            Notificações Financeiras
+            <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">Boletos por cliente e empreendimento →</span>
           </Link>
         </div>
       </div>
