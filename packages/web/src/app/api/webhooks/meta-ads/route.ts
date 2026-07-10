@@ -303,6 +303,12 @@ async function processLeadAsync(
       return
     }
 
+    // Sync on-demand: garante que o anúncio exista em meta_ads imediatamente,
+    // sem esperar o cron de sincronização. Falha silenciosa para não bloquear o fluxo.
+    if (metaMetadata.ad_id) {
+      await syncAdOnDemand(supabase, metaMetadata.ad_id, orgId)
+    }
+
     await supabase.from("activities").insert({
       org_id: orgId,
       lead_id: leadId,
@@ -436,6 +442,161 @@ async function fetchWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<
     }
   }
   return null
+}
+
+// ---------------------------------------------------------------------------
+// On-demand ad sync
+// ---------------------------------------------------------------------------
+
+/**
+ * Garante que um anúncio (e sua cadeia adset→campanha) exista em meta_ads.
+ * Chamado logo após salvar o lead no webhook — elimina o gap entre o lead chegar
+ * e o criativo aparecer no pipeline, sem depender do cron de sync.
+ * Falhas são logadas e descartadas (não bloqueiam o fluxo do webhook).
+ */
+async function syncAdOnDemand(
+  supabase: SupabaseClient,
+  adId: string,
+  orgId: string,
+): Promise<void> {
+  try {
+    // Verifica se o anúncio já existe (evita chamadas desnecessárias à Graph API)
+    const { data: existing } = await supabase
+      .from("meta_ads")
+      .select("meta_ad_id")
+      .eq("meta_ad_id", adId)
+      .eq("org_id", orgId)
+      .maybeSingle()
+
+    if (existing) return
+
+    const { data: account } = await supabase
+      .from("meta_ad_accounts")
+      .select("id, access_token")
+      .eq("org_id", orgId)
+      .eq("status", "active")
+      .maybeSingle()
+
+    if (!account?.access_token) return
+
+    const token = account.access_token
+
+    const adData = await fetchWithRetry(() =>
+      fetch(
+        `${META_API_BASE}/${adId}?access_token=${token}&fields=id,name,adset_id,status,creative{id,name,thumbnail_url,image_url,effective_object_story_id,object_story_spec}`,
+        { signal: AbortSignal.timeout(10_000) },
+      ).then((res) => {
+        if (!res.ok) throw new Error(`Graph API ad ${res.status}`)
+        return res.json() as Promise<{ id: string; name: string; adset_id: string; status: string; creative?: Record<string, unknown> }>
+      }),
+    )
+
+    if (!adData) return
+
+    // Garante que o adset existe na tabela (cria se necessário)
+    let { data: dbAdset } = await supabase
+      .from("meta_adsets")
+      .select("id")
+      .eq("meta_adset_id", adData.adset_id)
+      .eq("org_id", orgId)
+      .maybeSingle()
+
+    if (!dbAdset) {
+      const adsetData = await fetchWithRetry(() =>
+        fetch(
+          `${META_API_BASE}/${adData.adset_id}?access_token=${token}&fields=id,name,campaign_id,status,optimization_goal,daily_budget`,
+          { signal: AbortSignal.timeout(10_000) },
+        ).then((res) => {
+          if (!res.ok) throw new Error(`Graph API adset ${res.status}`)
+          return res.json() as Promise<{ id: string; name: string; campaign_id: string; status: string; optimization_goal?: string; daily_budget?: string }>
+        }),
+      )
+
+      if (!adsetData) return
+
+      // Garante que a campanha existe na tabela (cria se necessário)
+      let { data: dbCampaign } = await supabase
+        .from("meta_campaigns")
+        .select("id")
+        .eq("meta_campaign_id", adsetData.campaign_id)
+        .eq("org_id", orgId)
+        .maybeSingle()
+
+      if (!dbCampaign) {
+        const campaignData = await fetchWithRetry(() =>
+          fetch(
+            `${META_API_BASE}/${adsetData.campaign_id}?access_token=${token}&fields=id,name,objective,status`,
+            { signal: AbortSignal.timeout(10_000) },
+          ).then((res) => {
+            if (!res.ok) throw new Error(`Graph API campaign ${res.status}`)
+            return res.json() as Promise<{ id: string; name: string; objective?: string; status: string }>
+          }),
+        )
+
+        if (!campaignData) return
+
+        const { data: insertedCampaign } = await supabase
+          .from("meta_campaigns")
+          .upsert(
+            {
+              org_id: orgId,
+              account_id: account.id,
+              meta_campaign_id: campaignData.id,
+              name: campaignData.name,
+              objective: campaignData.objective ?? null,
+              status: campaignData.status,
+              synced_at: new Date().toISOString(),
+            },
+            { onConflict: "org_id,meta_campaign_id" },
+          )
+          .select("id")
+          .single()
+
+        dbCampaign = insertedCampaign
+      }
+
+      if (!dbCampaign) return
+
+      const { data: insertedAdset } = await supabase
+        .from("meta_adsets")
+        .upsert(
+          {
+            org_id: orgId,
+            campaign_id: dbCampaign.id,
+            meta_adset_id: adsetData.id,
+            name: adsetData.name,
+            status: adsetData.status,
+            optimization_goal: adsetData.optimization_goal ?? null,
+            daily_budget: adsetData.daily_budget ? parseInt(adsetData.daily_budget, 10) : null,
+            synced_at: new Date().toISOString(),
+          },
+          { onConflict: "org_id,meta_adset_id" },
+        )
+        .select("id")
+        .single()
+
+      dbAdset = insertedAdset
+    }
+
+    if (!dbAdset) return
+
+    await supabase
+      .from("meta_ads")
+      .upsert(
+        {
+          org_id: orgId,
+          adset_id: dbAdset.id,
+          meta_ad_id: adData.id,
+          name: adData.name,
+          status: adData.status,
+          creative: adData.creative ?? null,
+          synced_at: new Date().toISOString(),
+        },
+        { onConflict: "org_id,meta_ad_id" },
+      )
+  } catch (error) {
+    console.warn("[META-WEBHOOK] syncAdOnDemand failed (degrading gracefully):", error instanceof Error ? error.message : error)
+  }
 }
 
 // ---------------------------------------------------------------------------

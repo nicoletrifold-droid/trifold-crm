@@ -1,7 +1,7 @@
 # Story 78-1 — Cron de fila de email deve respeitar a quota diária configurada por organização
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 18 — Central de Email: Templates, Envio e Monitoramento
 - **Branch:** main
 
@@ -93,3 +93,5 @@ Pronta para `@devops *push`.
 - @sm (River): story criada em Draft, documentando o bug de inconsistência entre a config de quota diária (UI) e o cron real de envio (hardcoded), encontrado ao ajudar o usuário a configurar 30 emails/dia para a campanha Vind Residence.
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Status Draft → Ready.
 - @dev (Dex): AC1-AC5 implementados, ESLint OK. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks). Pronta para @devops *push.
+- @devops (Gage): local main estava 32 commits atrás de origin/main. Rebase limpo (nenhum commit remoto tocou os arquivos desta story) + push (`7d7c1f9f`). Status InReview → Done. Nota: rebase expôs um conflito de merge em `fetch-creatives.ts` — mas esse arquivo é uma mudança pré-existente e não relacionada a esta story (já estava modificada, sem commit, antes desta sessão), não fazia parte do escopo da 78-1.

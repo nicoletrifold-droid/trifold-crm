@@ -25,6 +25,16 @@ export function canSeeCreatives(): boolean {
   return true
 }
 
+// Meta CDN URLs contêm o parâmetro `oe` (hex) com o timestamp Unix de expiração.
+// Exemplo: ...&oe=6A3E9C8E → expira quando Unix.now() > 0x6A3E9C8E
+function isMetaUrlValid(url: string | null | undefined): boolean {
+  if (!url) return false
+  const match = url.match(/[?&]oe=([0-9a-fA-F]+)/)
+  if (!match) return true // sem parâmetro oe → assume válido
+  const expiresAt = parseInt(match[1], 16) * 1000
+  return Date.now() < expiresAt
+}
+
 type LeadWithMetadata = {
   metadata?: Record<string, unknown> | null
 }
@@ -108,12 +118,14 @@ export async function fetchCreativesForLeads(
     const creative = row.creative as Record<string, unknown> | null
     const { campaignName, metaCampaignId } = unwrapAdsets(row.adsets)
 
+    const rawThumb = creative?.thumbnail_url as string | null | undefined
+    const rawImage = creative?.image_url as string | null | undefined
     map.set(row.meta_ad_id, {
       adId: row.meta_ad_id,
       adName: row.name ?? "(sem nome)",
       campaignName,
-      thumbnailUrl: (creative?.thumbnail_url as string) ?? null,
-      imageUrl: (creative?.image_url as string) ?? null,
+      thumbnailUrl: isMetaUrlValid(rawThumb) ? (rawThumb ?? null) : null,
+      imageUrl: isMetaUrlValid(rawImage) ? (rawImage ?? null) : null,
       metaCampaignId,
     })
   }
