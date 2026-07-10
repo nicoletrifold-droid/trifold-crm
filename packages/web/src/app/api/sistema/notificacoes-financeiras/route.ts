@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { canAccess } from "@web/lib/permissions"
 
 /**
  * Extrato de Notificações Financeiras (boleto: emissão/vencimento/atraso) por
- * cliente e empreendimento. Lê `financial_notification_log`. Admin/supervisor.
+ * cliente e empreendimento. Lê `financial_notification_log`. Gate por sub-módulo
+ * `sistema.notificacoes-financeiras` (admin herda de `sistema`; supervisor via role).
  */
 export async function GET(request: NextRequest) {
   const user = await getServerUser()
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!(await canAccess(user.id, user.orgId, "sistema.notificacoes-financeiras"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -90,6 +90,7 @@ export default function SistemaPage() {
   const [filterLevel, setFilterLevel] = useState<string>("")
   const [filterCategory, setFilterCategory] = useState<string>("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [access, setAccess] = useState<{ full: boolean; notificacoesFinanceiras: boolean } | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -114,13 +115,34 @@ export default function SistemaPage() {
     }
   }, [filterLevel, filterCategory])
 
+  // 1º: descobre o que o usuário pode ver. Só busca telemetria (system-events)
+  // se tiver acesso TOTAL — supervisor com só o sub-módulo vê apenas o card dele.
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
+    let interval: ReturnType<typeof setInterval> | undefined
+    fetch("/api/sistema/access")
+      .then((r) => (r.ok ? r.json() : { full: false, notificacoesFinanceiras: false }))
+      .then((acc) => {
+        setAccess(acc)
+        if (acc.full) {
+          fetchData()
+          interval = setInterval(fetchData, 30000)
+        } else {
+          setLoading(false)
+        }
+      })
+      .catch(() => { setAccess({ full: false, notificacoesFinanceiras: false }); setLoading(false) })
+    return () => { if (interval) clearInterval(interval) }
   }, [fetchData])
 
-  if (error) {
+  if (access && !access.full && !access.notificacoesFinanceiras) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <p className="text-stone-500">Acesso restrito.</p>
+      </div>
+    )
+  }
+
+  if (access?.full && error) {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="text-stone-500">{error}</p>
@@ -128,10 +150,37 @@ export default function SistemaPage() {
     )
   }
 
-  if (loading || !data) {
+  if (!access || (access.full && (loading || !data))) {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="text-stone-400">Carregando...</p>
+      </div>
+    )
+  }
+
+  // Modo restrito (só sub-módulo): mostra apenas os cards permitidos.
+  if (!access.full) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">Sistema</h1>
+        <div className="rounded-lg border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+          <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+            <History className="h-4 w-4 text-orange-600" />
+            <h2 className="text-sm font-medium text-stone-700 dark:text-stone-300">Auditoria</h2>
+          </div>
+          <div className="space-y-2 p-4">
+            {access.notificacoesFinanceiras && (
+              <Link
+                href="/dashboard/sistema/notificacoes-financeiras"
+                className="flex items-center gap-2 rounded-lg border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-orange-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                <Wallet className="h-4 w-4 text-orange-600" />
+                Notificações Financeiras
+                <span className="ml-auto text-xs text-stone-400 dark:text-stone-500">Boletos por cliente e empreendimento →</span>
+              </Link>
+            )}
+          </div>
+        </div>
       </div>
     )
   }
@@ -140,6 +189,8 @@ export default function SistemaPage() {
     const d = new Date(iso)
     return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
   }
+
+  if (!data) return null // acesso total garantido aqui; narrowing p/ o TS
 
   return (
     <div className="space-y-6">

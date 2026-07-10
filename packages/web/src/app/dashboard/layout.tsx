@@ -308,7 +308,12 @@ export default async function DashboardLayout({
       const bottomGroup = [
         ...(permissions["chamados"] ? [{ ...NAV_ITEM_CHAMADOS, badge: chamadosPendentesCount ?? 0 }] : []),
         ...(permissions["configuracoes"] ? [NAV_ITEM_CONFIG] : []),
-        ...(permissions["sistema"] ? [NAV_ITEM_EMAIL, NAV_ITEM_SISTEMA] : []),
+        // Email Marketing: só acesso total ao Sistema. Sistema: acesso total OU
+        // sub-módulo (ex.: supervisor com `sistema.notificacoes-financeiras`).
+        ...(permissions["sistema"] ? [NAV_ITEM_EMAIL] : []),
+        ...(permissions["sistema"] || permissions["sistema.notificacoes-financeiras"]
+          ? [NAV_ITEM_SISTEMA]
+          : []),
       ]
       return bottomGroup.map((item, idx) =>
         idx === 0 ? { ...item, separator: true } : item
