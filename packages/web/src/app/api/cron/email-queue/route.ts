@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { sendEmail, getEmailsSentToday } from "@web/lib/email"
+import { sendEmail, getEmailsSentToday, getEmailSettings } from "@web/lib/email"
 
 const CRON_SECRET = process.env.CRON_SECRET
-const DAILY_QUOTA = 100
 const BATCH_SIZE = 50
 
 type ServiceClient = SupabaseClient
@@ -53,7 +52,8 @@ export async function GET(request: NextRequest) {
 
   for (const orgId of orgIds) {
     const sentToday = await getEmailsSentToday(orgId, supabase)
-    const remaining = DAILY_QUOTA - sentToday
+    const { daily_quota } = await getEmailSettings(orgId)
+    const remaining = daily_quota - sentToday
     if (remaining <= 0) continue
 
     const limit = Math.min(BATCH_SIZE, remaining)
