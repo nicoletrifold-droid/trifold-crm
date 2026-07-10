@@ -30,7 +30,7 @@ export function canSeeCreatives(): boolean {
 function isMetaUrlValid(url: string | null | undefined): boolean {
   if (!url) return false
   const match = url.match(/[?&]oe=([0-9a-fA-F]+)/)
-  if (!match) return true // sem parâmetro oe → assume válido
+  if (!match?.[1]) return true // sem parâmetro oe → assume válido
   const expiresAt = parseInt(match[1], 16) * 1000
   return Date.now() < expiresAt
 }
