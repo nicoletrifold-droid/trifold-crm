@@ -3,6 +3,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { getFinancialStatement, getReceivableBill } from "@web/lib/integrations/sienge/client"
 import { notifyNovoBoleto, notifyBoletoLembrete, portalNotificacoesPausadas } from "@web/lib/notificacoes"
 import type { BoletoLembreteMarco } from "@web/lib/notificacoes"
+import { lembreteEventKey } from "@web/lib/boleto-lembrete-key"
 
 // Story 75-101 — Notificação de novo boleto via VARREDURA (não só webhook).
 //
@@ -297,11 +298,12 @@ export async function GET(request: NextRequest) {
           else grupos.set(gkey, { marco, obra, dueDate: inst.dueDate, count: 1 })
         }
 
-        // Envio: 1 claim + 1 notificação por grupo. A chave inclui o vencimento (todas as parcelas
-        // do grupo têm o MESMO) → não colide entre meses; 1 envio por grupo por janela.
+        // Envio: 1 claim + 1 notificação por grupo. A chave inclui o CLIENTE e o vencimento —
+        // sem o cliente, o claim colidia entre clientes da mesma obra+vencimento e só o 1º
+        // recebia (Story 75-145-b). Com o cliente: 1 envio por cliente+obra+marco/dia.
         for (const g of grupos.values()) {
-          const dueKey = g.dueDate.split("T")[0]
-          const eventKey = `${g.marco}:${g.obra.id}:${dueKey}`
+          const dueKey = g.dueDate.split("T")[0] ?? g.dueDate
+          const eventKey = lembreteEventKey(g.marco, g.obra.id, cliente.id, dueKey)
           const { data: claimed, error: claimError } = await admin.rpc("claim_sienge_webhook", {
             p_event_key: eventKey,
             p_event_type: LEMBRETE_EVENT_TYPE[g.marco],
