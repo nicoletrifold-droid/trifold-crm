@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import {
   detectMediaRequest,
   detectMaterialRequest,
   selectAssets,
+  sendLibraryMediaIfRequested,
   MAX_MEDIA_PER_TURN,
   type MediaAsset,
 } from "./send-library-media"
@@ -111,6 +112,103 @@ describe("selectAssets", () => {
     const a = selectAssets(VIND, ["generic"]).map((x) => x.id)
     const b = selectAssets([...VIND].reverse(), ["generic"]).map((x) => x.id)
     expect(a).toEqual(b)
+  })
+})
+
+// Fake mínimo do admin Supabase: builder encadeável + thenable, por tabela.
+function fakeAdmin(config: {
+  leadPropertyId?: string | null
+  assets?: MediaAsset[]
+  sentAssetIds?: string[]
+}) {
+  const inserts: Array<Record<string, unknown>> = []
+  const tables: Record<string, { list?: unknown[]; single?: unknown }> = {
+    leads: { single: { property_interest_id: config.leadPropertyId ?? null } },
+    agent_media_assets: { list: config.assets ?? [] },
+    messages: {
+      list: (config.sentAssetIds ?? []).map((id) => ({ metadata: { media_asset_id: id } })),
+    },
+  }
+  function builder(table: string) {
+    const b: Record<string, unknown> = {}
+    const chain = () => b
+    b.select = chain
+    b.eq = chain
+    b.not = chain
+    b.limit = chain
+    b.maybeSingle = () => Promise.resolve({ data: tables[table]?.single ?? null })
+    b.insert = (row: Record<string, unknown>) => {
+      inserts.push({ __table: table, ...row })
+      return Promise.resolve({ error: null })
+    }
+    // torna o builder "awaitable" (para os SELECTs sem maybeSingle)
+    b.then = (resolve: (v: unknown) => void) =>
+      resolve({ data: tables[table]?.list ?? [] })
+    return b
+  }
+  const admin = { from: (t: string) => builder(t) }
+  return { admin, inserts }
+}
+
+const P_ASSETS: MediaAsset[] = [
+  { id: "planta", title: "Planta", category: "planta", file_url: "u1", file_name: "p.png", file_type: "image" },
+  { id: "fachada", title: "Fachada", category: "fachada", file_url: "u2", file_name: "f.jpg", file_type: "image" },
+  { id: "academia", title: "Academia", category: "outro", file_url: "u3", file_name: "a.png", file_type: "image" },
+]
+
+const baseArgs = {
+  orgId: "org1",
+  leadId: "lead1",
+  leadPhone: "5544999999999",
+  conversationId: "conv1",
+  phoneNumberId: "pn1",
+  accessToken: "tok",
+}
+
+describe("sendLibraryMediaIfRequested (I/O)", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("Bug C — dedup real: não reenvia asset já enviado; grava log sem org_id", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }))
+    const { admin, inserts } = fakeAdmin({
+      leadPropertyId: "P",
+      assets: P_ASSETS,
+      sentAssetIds: ["fachada"], // Fachada já foi enviada antes
+    })
+    // "tem mais imagem?" → generic → combo fachada+lazer+planta; fachada dedupada.
+    const n = await sendLibraryMediaIfRequested(
+      admin as never,
+      { ...baseArgs, text: "tem mais alguma imagem que possa me mandar?" }
+    )
+    expect(n).toBe(2) // academia + planta (fachada excluída)
+    const sentIds = inserts.map((r) => (r.metadata as { media_asset_id: string }).media_asset_id)
+    expect(sentIds).not.toContain("fachada")
+    expect(sentIds.sort()).toEqual(["academia", "planta"])
+    // A regressão do org_id: o insert em messages NUNCA pode conter org_id.
+    for (const row of inserts) {
+      expect(row).not.toHaveProperty("org_id")
+      expect(row.role).toBe("assistant")
+    }
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it("não envia quando não há empreendimento identificado", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }))
+    const { admin, inserts } = fakeAdmin({ leadPropertyId: null, assets: [] })
+    const n = await sendLibraryMediaIfRequested(
+      admin as never,
+      { ...baseArgs, text: "me manda a planta" }
+    )
+    expect(n).toBe(0)
+    expect(inserts).toHaveLength(0)
+  })
+
+  it("não faz nada quando não é pedido de mídia", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }))
+    const { admin } = fakeAdmin({ leadPropertyId: "P", assets: P_ASSETS })
+    const n = await sendLibraryMediaIfRequested(admin as never, { ...baseArgs, text: "bom dia" })
+    expect(n).toBe(0)
+    expect(fetch).not.toHaveBeenCalled()
   })
 })
 
