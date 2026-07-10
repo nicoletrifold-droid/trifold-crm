@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { X, Plus } from "lucide-react"
+import { X, Plus, Trash2 } from "lucide-react"
 import type { DataComemorativa } from "./types"
 
 interface DatasModalProps {
@@ -18,6 +18,8 @@ export function DatasModal({ datas: initialDatas, onClose }: DatasModalProps) {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -65,6 +67,28 @@ export function DatasModal({ datas: initialDatas, onClose }: DatasModalProps) {
     }
   }
 
+  async function handleDelete(d: DataComemorativa) {
+    if (deletingId) return
+    if (!window.confirm(`Excluir a data "${d.nome}"? Esta ação não pode ser desfeita.`)) return
+    setDeletingId(d.id)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/brindes/datas/${d.id}`, { method: "DELETE" })
+      if (res.ok) {
+        setDatas((prev) => prev.filter((x) => x.id !== d.id))
+        router.refresh()
+      } else {
+        const j = (await res.json().catch(() => ({}))) as { error?: string }
+        // 409 = data em uso (a API sugere desativar em vez de excluir).
+        setActionError(j.error ?? `Erro ao excluir (HTTP ${res.status}).`)
+      }
+    } catch {
+      setActionError("Erro de rede ao excluir.")
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 dark:bg-black/70">
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
@@ -77,6 +101,9 @@ export function DatasModal({ datas: initialDatas, onClose }: DatasModalProps) {
         </div>
 
         <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 px-5 py-3 dark:divide-stone-800">
+          {actionError && (
+            <p className="mb-2 rounded bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/15 dark:text-red-300">{actionError}</p>
+          )}
           {datas.map((d) => (
             <div key={d.id} className="flex items-center justify-between py-2">
               <div>
@@ -96,6 +123,16 @@ export function DatasModal({ datas: initialDatas, onClose }: DatasModalProps) {
                   className="text-xs text-orange-600 hover:text-orange-800 disabled:opacity-50 dark:text-orange-300 dark:hover:text-orange-200"
                 >
                   {d.ativa ? "Desativar" : "Ativar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(d)}
+                  disabled={deletingId === d.id}
+                  title="Excluir"
+                  aria-label="Excluir"
+                  className="p-1 text-gray-400 hover:text-red-600 dark:text-stone-500 dark:hover:text-red-400 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>

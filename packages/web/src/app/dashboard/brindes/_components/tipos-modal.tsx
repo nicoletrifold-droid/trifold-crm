@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { X, Plus, Pencil, Check, Package } from "lucide-react"
+import { X, Plus, Pencil, Check, Package, Trash2 } from "lucide-react"
 import type { BrindeTipo } from "./types"
 
 interface TiposModalProps {
@@ -23,6 +23,8 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -96,6 +98,28 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
     }
   }
 
+  async function handleDelete(t: BrindeTipo) {
+    if (deletingId) return
+    if (!window.confirm(`Excluir o tipo "${t.nome}"? Esta ação não pode ser desfeita.`)) return
+    setDeletingId(t.id)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/brindes/tipos/${t.id}`, { method: "DELETE" })
+      if (res.ok) {
+        setTipos((prev) => prev.filter((x) => x.id !== t.id))
+        router.refresh()
+      } else {
+        const d = (await res.json().catch(() => ({}))) as { error?: string }
+        // 409 = tipo em uso (a API sugere desativar em vez de excluir).
+        setActionError(d.error ?? `Erro ao excluir (HTTP ${res.status}).`)
+      }
+    } catch {
+      setActionError("Erro de rede ao excluir.")
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   async function toggleAtivo(t: BrindeTipo) {
     if (togglingId) return
     setTogglingId(t.id)
@@ -128,6 +152,9 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
         </div>
 
         <div className="max-h-[60vh] overflow-y-auto px-6 py-4 space-y-2">
+          {actionError && (
+            <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/15 dark:text-red-300">{actionError}</p>
+          )}
           {tipos.length === 0 && (
             <p className="text-center text-sm text-gray-400 dark:text-stone-500 py-4">Nenhum tipo cadastrado.</p>
           )}
@@ -200,6 +227,16 @@ export function TiposModal({ tipos: initialTipos, onClose }: TiposModalProps) {
                       className="text-xs text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200 disabled:opacity-50 px-1"
                     >
                       {togglingId === t.id ? "..." : t.ativo ? "Desativar" : "Ativar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(t)}
+                      disabled={deletingId === t.id}
+                      title="Excluir"
+                      aria-label="Excluir"
+                      className="p-1 text-gray-400 hover:text-red-600 dark:text-stone-500 dark:hover:text-red-400 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
