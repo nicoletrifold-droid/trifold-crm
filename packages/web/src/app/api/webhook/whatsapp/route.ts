@@ -884,7 +884,9 @@ export async function POST(request: NextRequest) {
             orgId,
             leadId: lead!.id,
             leadPhone: fromRaw,
-            text,
+            // asyncText = texto resolvido (transcrição de áudio / caption de imagem);
+            // `text` traz placeholder "[Mensagem de voz recebida]" para áudio (Story 56-2 AC6).
+            text: asyncText,
             conversationId: conversation!.id,
             phoneNumberId: config.phone_number_id,
             accessToken: config.access_token,
