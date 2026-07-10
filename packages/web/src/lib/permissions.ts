@@ -332,7 +332,15 @@ export async function canAccess(
       return (excRow as { can_access: boolean }).can_access
     }
 
-    // Sem exceção explícita: herdar do módulo pai.
+    // Sem exceção por usuário: sub-módulo concedido por ROLE (linha com ponto em
+    // role_permissions, ex.: `sistema.notificacoes-financeiras`). Retrocompatível:
+    // se não houver linha dotted, cai na herança do módulo pai (comportamento antigo).
+    const perms = await getUserPermissions(userId, orgId)
+    if (perms[module] !== undefined) {
+      return perms[module] ?? false
+    }
+
+    // Sem exceção nem grant por role: herdar do módulo pai.
     const parentModule = module.slice(0, dotIndex)
     return canAccess(userId, orgId, parentModule)
   }
