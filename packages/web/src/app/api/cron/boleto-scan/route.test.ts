@@ -206,7 +206,7 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     // Story 75-147: chave de dedup por (marco, obra, vencimento) + event_type informativo.
     expect(rpcMock).toHaveBeenCalledWith(
       "claim_sienge_webhook",
-      expect.objectContaining({ p_event_key: "venc_hoje:obra-1:2026-07-10", p_event_type: "BOLETO_LEMBRETE_VENC" })
+      expect.objectContaining({ p_event_key: "venc_hoje:obra-1:user-1:2026-07-10", p_event_type: "BOLETO_LEMBRETE_VENC" })
     )
   })
 
@@ -224,11 +224,11 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     expect(marcos).toEqual(expect.arrayContaining(["atraso5", "atraso15"]))
     expect(rpcMock).toHaveBeenCalledWith(
       "claim_sienge_webhook",
-      expect.objectContaining({ p_event_key: "atraso5:obra-1:2026-07-05", p_event_type: "BOLETO_LEMBRETE_ATRASO5" })
+      expect.objectContaining({ p_event_key: "atraso5:obra-1:user-1:2026-07-05", p_event_type: "BOLETO_LEMBRETE_ATRASO5" })
     )
     expect(rpcMock).toHaveBeenCalledWith(
       "claim_sienge_webhook",
-      expect.objectContaining({ p_event_key: "atraso15:obra-1:2026-06-25", p_event_type: "BOLETO_LEMBRETE_ATRASO15" })
+      expect.objectContaining({ p_event_key: "atraso15:obra-1:user-1:2026-06-25", p_event_type: "BOLETO_LEMBRETE_ATRASO15" })
     )
   })
 
@@ -255,7 +255,7 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
 
   it("AC5: claim do marco negado → não re-notifica aquele marco", async () => {
     vi.setSystemTime(new Date(NOVE_BRT))
-    claimByKey = { "venc_hoje:obra-1:2026-07-10": null } // grupo já enviado antes
+    claimByKey = { "venc_hoje:obra-1:user-1:2026-07-10": null } // grupo já enviado antes
     getFinancialStatementMock.mockResolvedValue([
       { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
     ])
@@ -318,7 +318,7 @@ describe("GET /api/cron/boleto-scan — agrupamento de lembretes (Story 75-147)"
     )
     // 1 claim de lembrete por grupo (chave por marco+obra+vencimento).
     const lembreteClaims = rpcMock.mock.calls.filter(
-      (c) => (c[1] as { p_event_key?: string })?.p_event_key === "venc_hoje:obra-1:2026-07-10"
+      (c) => (c[1] as { p_event_key?: string })?.p_event_key === "venc_hoje:obra-1:user-1:2026-07-10"
     )
     expect(lembreteClaims).toHaveLength(1)
   })
