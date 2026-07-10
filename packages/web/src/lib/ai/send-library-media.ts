@@ -167,10 +167,13 @@ interface SendArgs {
   accessToken: string
 }
 
-/** IDs de assets já enviados nesta conversa (pela Nicole ou pelo corretor). */
+/**
+ * IDs de assets já enviados nesta conversa (pela Nicole ou pelo corretor).
+ * IMPORTANTE: a tabela `messages` NÃO tem coluna `org_id` — filtrar por ela aqui
+ * fazia a query falhar e o dedup nunca funcionar (Story 56-3).
+ */
 async function loadAlreadySentIds(
   admin: Admin,
-  orgId: string,
   conversationId: string | null
 ): Promise<Set<string>> {
   const sent = new Set<string>()
@@ -179,7 +182,6 @@ async function loadAlreadySentIds(
     .from("messages")
     .select("metadata")
     .eq("conversation_id", conversationId)
-    .eq("org_id", orgId)
     .limit(300)
   for (const m of data ?? []) {
     const meta = (m.metadata ?? {}) as Record<string, unknown>
@@ -238,7 +240,7 @@ export async function sendLibraryMediaIfRequested(
       .eq("is_active", true)
     if (!assets || assets.length === 0) return 0
 
-    const alreadySent = await loadAlreadySentIds(admin, args.orgId, args.conversationId)
+    const alreadySent = await loadAlreadySentIds(admin, args.conversationId)
     const chosen = selectAssets(assets as MediaAsset[], kinds, alreadySent)
     if (chosen.length === 0) return 0
 
@@ -274,9 +276,12 @@ export async function sendLibraryMediaIfRequested(
         if (res.ok) {
           enviados++
           if (args.conversationId) {
+            // NÃO incluir org_id: a tabela `messages` não tem essa coluna — incluí-la
+            // fazia o INSERT falhar silenciosamente, logo nada era logado e o dedup
+            // nunca via o histórico (Story 56-3). Shape espelha o `saveMessages` do
+            // pipeline (trigger preenche topic/extension).
             await admin.from("messages").insert({
               conversation_id: args.conversationId,
-              org_id: args.orgId,
               role: "assistant",
               content: `[Mídia enviada] ${asset.title}`,
               metadata: {
