@@ -57,6 +57,33 @@ export function formatBrokers(
     .join(" · ")
 }
 
+/**
+ * Agrega distribuições por corretor contando LEADS ÚNICOS (não eventos):
+ * se o mesmo lead foi (re)distribuído ao mesmo corretor mais de uma vez, conta 1.
+ * `atenderam` = dos leads distintos do corretor, quantos já saíram de "novo"
+ * (stage atual != novoId). Story 75-45-c — antes contava por evento, inflando
+ * quem recebeu redistribuição. Puro/exportado para teste.
+ */
+export function aggregateBrokerRows(
+  distRows: Array<{ lead_id: string; broker_id: string }>,
+  leadStage: Record<string, string | null>,
+  novoId: string | null,
+  brokerName: Record<string, string>
+): Array<{ name: string; distribuidos: number; atenderam: number }> {
+  const seenByBroker: Record<string, Set<string>> = {}
+  const byBroker: Record<string, { distribuidos: number; atenderam: number }> = {}
+  for (const d of distRows) {
+    const seen = (seenByBroker[d.broker_id] ??= new Set())
+    if (seen.has(d.lead_id)) continue // mesmo lead já contado para este corretor
+    seen.add(d.lead_id)
+    const agg = (byBroker[d.broker_id] ??= { distribuidos: 0, atenderam: 0 })
+    agg.distribuidos++
+    const stage = leadStage[d.lead_id]
+    if (stage && stage !== novoId) agg.atenderam++
+  }
+  return Object.entries(byBroker).map(([id, v]) => ({ name: brokerName[id] ?? "?", ...v }))
+}
+
 export function formatDuration(minutes: number): string {
   const m = Math.max(0, Math.round(minutes))
   if (m < 60) return `${m} min`
@@ -237,14 +264,7 @@ export async function buildDailyLeadsReport(
       leadStage[l.id] = l.stage_id
     }
 
-    const byBroker: Record<string, { distribuidos: number; atenderam: number }> = {}
-    for (const d of distRows) {
-      const agg = (byBroker[d.broker_id] ??= { distribuidos: 0, atenderam: 0 })
-      agg.distribuidos++
-      const stage = leadStage[d.lead_id]
-      if (stage && stage !== novoId) agg.atenderam++
-    }
-    brokerRows = Object.entries(byBroker).map(([id, v]) => ({ name: brokerName[id] ?? "?", ...v }))
+    brokerRows = aggregateBrokerRows(distRows, leadStage, novoId, brokerName)
   }
 
   return {
