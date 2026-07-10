@@ -15,7 +15,7 @@ export interface DailyReportVars {
   total: string // {{2}} ex.: "20"
   canais: string // {{3}} ex.: "WhatsApp 12 · Meta Ads 7 · Site 1"
   corretores: string // {{4}} ex.: "Robson 8→8 · Odair 3→2"
-  distribuidos: string // {{5}} ex.: "15 de 20"
+  distribuidos: string // {{5}} ex.: "8 de 9 recebidos · 13 envios no total (3 redistribuições)"
   tempo: string // {{6}} ex.: "14 min (mín 3 · máx 1h12)"
 }
 
@@ -73,6 +73,39 @@ export function formatTempo(durationsMin: number[]): string {
   return `${formatDuration(avg)} (mín ${formatDuration(min)} · máx ${formatDuration(max)})`
 }
 
+/**
+ * Formata a linha "Distribuídos" ({{5}}) medindo a INTENÇÃO original (cobertura:
+ * quantos DOS leads recebidos foram distribuídos) e, quando há eventos além
+ * disso, mostra o total de envios e as redistribuições. Corrige o "13 de 9":
+ * antes contava eventos de distribuição contra os recebidos (denominadores
+ * diferentes → estourava). Story 75-45-b.
+ *
+ * - `recebidos`     = leads criados na janela
+ * - `coberturaUnica`= dos recebidos, quantos tiveram ao menos 1 distribuição
+ * - `totalEventos`  = eventos de distribuição na janela (inclui redistribuições)
+ * - `leadsUnicos`   = leads distintos distribuídos na janela (inclui carryover de dias anteriores)
+ *
+ * Uma linha só, sem quebra/tab (regra de parâmetro de template da Meta).
+ */
+export function formatDistribuidos(params: {
+  recebidos: number
+  coberturaUnica: number
+  totalEventos: number
+  leadsUnicos: number
+}): string {
+  const { recebidos, coberturaUnica, totalEventos, leadsUnicos } = params
+  const redistrib = Math.max(0, totalEventos - leadsUnicos)
+  const base = `${coberturaUnica} de ${recebidos} recebido${recebidos === 1 ? "" : "s"}`
+  // Sem eventos extras (tudo 1:1 com os recebidos) → só a cobertura.
+  if (totalEventos <= coberturaUnica) return base
+  const envios = `${totalEventos} envio${totalEventos === 1 ? "" : "s"} no total`
+  const red =
+    redistrib > 0
+      ? ` (${redistrib} ${redistrib === 1 ? "redistribuição" : "redistribuições"})`
+      : ""
+  return `${base} · ${envios}${red}`
+}
+
 export function formatDateBR(d: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -112,14 +145,15 @@ export async function buildDailyLeadsReport(
   // (1)(2)(3) Leads criados na janela + por canal
   const { data: leads } = await admin
     .from("leads")
-    .select("channel, source")
+    .select("id, channel, source")
     .eq("org_id", orgId)
     .eq("segmento", "principal") // Story 75-98: relatório do mundo principal, sem IMOB
     .eq("is_active", true)
     .gte("created_at", sinceIso)
     .lt("created_at", untilIso)
-  const leadRows = (leads ?? []) as Array<{ channel: string | null; source: string | null }>
+  const leadRows = (leads ?? []) as Array<{ id: string; channel: string | null; source: string | null }>
   const total = leadRows.length
+  const recebidosIds = new Set(leadRows.map((l) => l.id))
   const canalCounts: Record<string, number> = {}
   for (const l of leadRows) {
     const canal = l.channel ?? l.source ?? "desconhecido"
@@ -176,6 +210,11 @@ export async function buildDailyLeadsReport(
     .lt("created_at", untilIso)
   const distRows = (dist ?? []) as Array<{ lead_id: string; broker_id: string }>
   const totalDistribuidos = distRows.length
+  // Cobertura (intenção original do "X de Y"): dos recebidos, quantos foram
+  // distribuídos ao menos uma vez. + leads únicos distribuídos (inclui carryover).
+  const distinctDistributedIds = new Set(distRows.map((d) => d.lead_id))
+  const coberturaUnica = [...recebidosIds].filter((id) => distinctDistributedIds.has(id)).length
+  const leadsUnicosDistribuidos = distinctDistributedIds.size
 
   let brokerRows: Array<{ name: string; distribuidos: number; atenderam: number }> = []
   if (distRows.length > 0) {
@@ -213,7 +252,12 @@ export async function buildDailyLeadsReport(
     total: String(total),
     canais: formatChannels(canalCounts),
     corretores: formatBrokers(brokerRows),
-    distribuidos: `${totalDistribuidos} de ${total}`,
+    distribuidos: formatDistribuidos({
+      recebidos: total,
+      coberturaUnica,
+      totalEventos: totalDistribuidos,
+      leadsUnicos: leadsUnicosDistribuidos,
+    }),
     tempo: formatTempo(durations),
   }
 }
