@@ -1,7 +1,7 @@
 # Story 56-2 — Nicole envia mídia da biblioteca de forma contextual e inteligente
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 56 — Biblioteca de Mídia da Nicole
 - **Branch:** story-56-2-nicole-envio-midia
 
