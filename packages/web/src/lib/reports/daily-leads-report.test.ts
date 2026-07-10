@@ -6,6 +6,7 @@ import {
   formatBrokers,
   formatDuration,
   formatTempo,
+  formatDistribuidos,
   formatDateBR,
 } from "./daily-leads-report"
 
@@ -75,6 +76,46 @@ describe("formatTempo", () => {
     expect(formatTempo([3, 14, 72])).toBe(
       `${formatDuration((3 + 14 + 72) / 3)} (mín 3 min · máx 1h12)`
     )
+  })
+})
+
+describe("formatDistribuidos", () => {
+  it("caso do relatório: cobertura + envios + redistribuições", () => {
+    // 9 recebidos, 8 deles distribuídos, 13 eventos, 10 leads únicos → 3 redistrib.
+    expect(
+      formatDistribuidos({ recebidos: 9, coberturaUnica: 8, totalEventos: 13, leadsUnicos: 10 })
+    ).toBe("8 de 9 recebidos · 13 envios no total (3 redistribuições)")
+  })
+
+  it("nunca mais 'X de Y' com X > Y (o bug do 13 de 9)", () => {
+    const s = formatDistribuidos({ recebidos: 9, coberturaUnica: 8, totalEventos: 13, leadsUnicos: 10 })
+    expect(s.startsWith("8 de 9")).toBe(true)
+    expect(s).not.toContain("13 de 9")
+  })
+
+  it("1:1 (sem redistribuição nem carryover) → só a cobertura", () => {
+    expect(
+      formatDistribuidos({ recebidos: 5, coberturaUnica: 5, totalEventos: 5, leadsUnicos: 5 })
+    ).toBe("5 de 5 recebidos")
+  })
+
+  it("carryover sem redistribuição (leads de dias anteriores, sem repetição)", () => {
+    // 3 recebidos, todos distribuídos; +2 leads antigos distribuídos hoje = 5 eventos, 5 únicos
+    expect(
+      formatDistribuidos({ recebidos: 3, coberturaUnica: 3, totalEventos: 5, leadsUnicos: 5 })
+    ).toBe("3 de 3 recebidos · 5 envios no total")
+  })
+
+  it("singular: 1 redistribuição / 1 recebido / 1 envio", () => {
+    expect(
+      formatDistribuidos({ recebidos: 1, coberturaUnica: 1, totalEventos: 2, leadsUnicos: 1 })
+    ).toBe("1 de 1 recebido · 2 envios no total (1 redistribuição)")
+  })
+
+  it("zero recebidos", () => {
+    expect(
+      formatDistribuidos({ recebidos: 0, coberturaUnica: 0, totalEventos: 0, leadsUnicos: 0 })
+    ).toBe("0 de 0 recebidos")
   })
 })
 
