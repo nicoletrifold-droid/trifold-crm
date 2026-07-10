@@ -4,6 +4,7 @@ import {
   formatChannels,
   firstName,
   formatBrokers,
+  aggregateBrokerRows,
   formatDuration,
   formatTempo,
   formatDistribuidos,
@@ -53,6 +54,52 @@ describe("formatBrokers", () => {
   })
   it("nenhum distribuído", () => {
     expect(formatBrokers([])).toBe("Nenhum lead distribuído")
+  })
+})
+
+describe("aggregateBrokerRows", () => {
+  const names = { b1: "Valeria Souza", b2: "Roberto Lima" }
+
+  it("conta LEADS ÚNICOS, não eventos (redistribuição ao mesmo corretor = 1)", () => {
+    // lead L1 distribuído 2x para b1 (redistribuição) → conta 1
+    const rows = [
+      { lead_id: "L1", broker_id: "b1" },
+      { lead_id: "L1", broker_id: "b1" },
+      { lead_id: "L2", broker_id: "b1" },
+    ]
+    const stages = { L1: "atendido", L2: "novo-id" }
+    const out = aggregateBrokerRows(rows, stages, "novo-id", names)
+    expect(out).toEqual([{ name: "Valeria Souza", distribuidos: 2, atenderam: 1 }])
+  })
+
+  it("lead redistribuído entre 2 corretores conta 1 para cada", () => {
+    const rows = [
+      { lead_id: "L1", broker_id: "b1" },
+      { lead_id: "L1", broker_id: "b2" },
+    ]
+    const stages = { L1: "atendido" }
+    const out = aggregateBrokerRows(rows, stages, "novo-id", names).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )
+    expect(out).toEqual([
+      { name: "Roberto Lima", distribuidos: 1, atenderam: 1 },
+      { name: "Valeria Souza", distribuidos: 1, atenderam: 1 },
+    ])
+  })
+
+  it("atenderam só conta leads distintos fora de 'novo'", () => {
+    const rows = [
+      { lead_id: "L1", broker_id: "b1" },
+      { lead_id: "L2", broker_id: "b1" },
+      { lead_id: "L3", broker_id: "b1" },
+    ]
+    const stages = { L1: "novo-id", L2: "visita", L3: null }
+    const out = aggregateBrokerRows(rows, stages, "novo-id", names)
+    expect(out).toEqual([{ name: "Valeria Souza", distribuidos: 3, atenderam: 1 }])
+  })
+
+  it("vazio → []", () => {
+    expect(aggregateBrokerRows([], {}, "novo-id", names)).toEqual([])
   })
 })
 
