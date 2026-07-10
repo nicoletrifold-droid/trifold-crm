@@ -71,7 +71,23 @@ Corrige uma configuração que hoje é "decorativa" — a quota diária configur
 - `packages/web/src/app/api/cron/email-queue/route.ts`
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `4083b9d4` (diff isolado, 1 arquivo de produto + story).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Diff mínimo e cirúrgico — 2 linhas removidas (constante), 2 linhas trocadas (leitura via `getEmailSettings`), reusa função já existente e testada em produção pelo fluxo de enfileiramento |
+| 2. Testes | ⚠️ Sem teste automatizado novo (rota de cron sem suíte prévia no repo). Mitigado por revisão manual linha a linha + baixa complexidade da mudança. Não bloqueante. |
+| 3. Acceptance Criteria | ✅ AC1 (leitura via `getEmailSettings(orgId)` dentro do loop, confirmado no diff); AC2 (fallback herdado de `DEFAULT_SETTINGS.daily_quota = 100`, mesmo valor que estava hardcoded — comportamento idêntico ao anterior para orgs sem config); AC3 (`BATCH_SIZE` intocado); AC5 (`remaining` agora reflete o `daily_quota` real por org) |
+| 4. Regressões | ✅ **AC4 verificado com atenção**: `getEmailSettings` (linha 34-42 de `lib/email.ts`) retorna `DEFAULT_SETTINGS` (`daily_quota: 100`) via `?? DEFAULT_SETTINGS` quando não há linha em `email_settings` para o `orgId` — exatamente o valor que estava hardcoded antes. Nenhuma organização sem config prévia muda de comportamento. |
+| 5. Performance | ✅ Verificado `createServiceClient()` (linha 210-216 de `lib/email.ts`): só instancia um client HTTP leve (`autoRefreshToken: false, persistSession: false`), sem pool de conexão nem overhead de rede além da própria query já feita por `getEmailsSentToday`. Custo extra por org no loop é desprezível (mais uma query pontual `select("*")` em `email_settings`, tabela pequena, `maybeSingle()`). |
+| 6. Segurança | ✅ N/A — mesma tabela/RLS já usada em outro fluxo, nenhum novo input externo, service role já era usado no cron |
+| 7. Documentação | ✅ Story com Contexto (as 2 camadas divergentes), ACs, Dev Notes/Completion Notes e Change Log completos |
+
+**CodeRabbit:** não executado (WSL indisponível neste ambiente macOS) — mitigado com ESLint independente (reexecutado nesta revisão: 0 erros) + revisão manual completa do diff e das funções reusadas (`getEmailSettings`, `createServiceClient`).
+
+Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft, documentando o bug de inconsistência entre a config de quota diária (UI) e o cron real de envio (hardcoded), encontrado ao ajudar o usuário a configurar 30 emails/dia para a campanha Vind Residence.
