@@ -109,4 +109,7 @@ export const SUBMODULE_MAP: Record<string, Record<string, string>> = {
     "configuracoes.pipeline": "Etapas do Pipeline",
     "configuracoes.perfil-acesso": "Perfil de Acesso",
   },
+  sistema: {
+    "sistema.notificacoes-financeiras": "Notificações Financeiras",
+  },
 }
