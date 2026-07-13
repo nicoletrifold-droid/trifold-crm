@@ -121,7 +121,16 @@ export type ReminderUpdate = Partial<{
   notes: string | null
 }>
 
-/** Valida o corpo de um PATCH (edição parcial). Só valida campos presentes; exige >= 1 campo. */
+/**
+ * Valida o corpo de um PATCH (edição parcial). Só valida campos presentes; exige >= 1 campo.
+ *
+ * [Story 78-11, AC11] Campos derivados pelo servidor NUNCA são aceitos crus do cliente:
+ *   - `paid_at`        → derivado da transição de status na rota [id]/route.ts;
+ *   - `last_alerted_on` → gravado só pelo cron (dedup por dia) e pelo reset da recorrência-ao-pagar.
+ * Este whitelist copia APENAS os campos conhecidos abaixo para `out`; qualquer outro campo do
+ * corpo (incl. `paid_at`/`last_alerted_on`) é silenciosamente DESCARTADO — nunca chega ao UPDATE.
+ * A escolha (ignorar em vez de rejeitar) espelha a disciplina já usada para `paid_at` na 78-8.
+ */
 export function validateUpdate(body: unknown): ValidationResult<ReminderUpdate> {
   if (!body || typeof body !== "object") {
     return { ok: false, error: "Corpo da requisição inválido" }

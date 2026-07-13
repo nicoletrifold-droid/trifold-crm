@@ -1,0 +1,26 @@
+schema: 1
+story: '78.11'
+gate: PASS
+status_reason: 'Os 11 ACs satisfeitos em revisão estática; escalonamento D-N/D-0/diário-até-pagar correto, dedup por dia via last_alerted_on (inclui NULLs corretamente), recorrência movida do cron para o PATCH (só ao pagar), Passo 2 removido. Sinal do diffDias tratado com diffDiasAteVencer (sem inversão). 26/26 testes vitest passam; tsc/eslint limpos (só os 4 erros pré-existentes). Validação e2e em DB deferida ao deploy (migration 169 pré-merge).'
+reviewer: 'Quinn (análise) + orquestrador (registro após interrupção de API; testes reconfirmados independentemente)'
+updated: '2026-07-13T00:00:00Z'
+requirement_coverage:
+  - 'D-3 (aviso antes): AC1 — gatilho distanciaAteVencer === alert_days_before'
+  - 'D-0 (dia do vencimento): AC3 — dispara mesmo após D-N (dedup por dia, não por status)'
+  - 'E-mail diário até pagar: AC4 — vencida & status!=paid dispara todo dia, 1x/dia'
+  - 'Para ao pagar: AC5 — status=paid interrompe; AC7 recorrência só no PATCH'
+  - 'Nunca avança due_date silenciosamente: AC8 — Passo 2 removido do cron'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Validação e2e dos cenários de cron/PATCH contra Supabase real fica para o deploy (a coluna last_alerted_on da migration 169 precisa estar aplicada; o cron e o PATCH a referenciam e falhariam em runtime sem ela). As funções puras (gatilho, sinal, avancarCiclo, clamp) estão cobertas por 26 testes vitest passando.'
+    suggested_action: 'Aplicar a migration 169 ANTES do merge/redeploy (ordem: migration → deploy). Após deploy, disparar o cron billing-reminders manualmente (CRON_SECRET) e validar 1 alerta/dia + parada ao pagar.'
+  - id: 'SIGN-OK'
+    severity: low
+    finding: 'A armadilha de sinal sinalizada pelo @po foi tratada: diffDias mantém a semântica herdada (hoje - due, positivo = vencida) e foi criada diffDiasAteVencer = -diffDias (positivo = falta vencer) usada pelos gatilhos; -0 normalizado para 0. Teste cobre ambos os sinais. Sem inversão.'
+    suggested_action: 'Nenhuma ação — registrado como verificação positiva.'
+  - id: 'DEDUP-OK'
+    severity: low
+    finding: 'O dedup usa .or(last_alerted_on.is.null, last_alerted_on.neq.<hoje>) — inclui corretamente linhas NULL (nunca-alertadas), que um .neq sozinho excluiria no PostgREST. UPDATE ... RETURNING garante que só linhas efetivamente marcadas são notificadas (sem duplo-envio concorrente).'
+    suggested_action: 'Nenhuma ação — registrado como verificação positiva.'
+waiver: { active: false }
