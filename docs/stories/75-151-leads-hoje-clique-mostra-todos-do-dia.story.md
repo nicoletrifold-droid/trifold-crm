@@ -117,3 +117,10 @@ claude-opus-4-8[1m]
 - Sem teste unitário novo: não há testes de página (server component) no repo; verificação foi
   ponta-a-ponta via SQL espelhando as queries. Suíte existente: 883/883 sem regressão.
 - Warning eslint `isAdmin` é pré-existente (fora do escopo desta story).
+
+## QA Results
+**Gate: PASS** (Quinn, 2026-07-13) — `docs/qa/gates/75.151-leads-hoje-clique-todos-do-dia.yml`.
+Os 6 ACs verificados; AC1/AC2/AC4 confirmados por SQL em prod (total do dia = 11 = card =
+6 em atendimento + 5 perdidos + 0 acervo). tsc 0 / eslint 0 / **vitest 883/883** sem regressão.
+1 CONCERN low: sem teste unitário novo (server-component page; repo não testa páginas) — verificação
+foi E2E via SQL. Aceito.
