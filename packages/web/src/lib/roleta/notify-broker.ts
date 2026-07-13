@@ -43,7 +43,7 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const admin = createAdminClient()
   const result: NotifyResult = { push: false, email: false, whatsapp: false }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
   const leadUrl = `${appUrl}/broker/leads/${lead.id}`
   const leadName = lead.name ?? "Novo Lead"
 
@@ -237,7 +237,7 @@ export async function notifyImobiliaria(params: NotifyImobiliariaParams): Promis
 
   if (!user?.email) return
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
   const leadUrl = `${appUrl}/dashboard/leads/${lead.id}`
 
   await Promise.allSettled([
