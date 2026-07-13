@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 78 — Painel de Saúde & Billing da Plataforma
 - **Story:** 78-7
-- **Status:** Ready
+- **Status:** InReview
 - **Priority:** P2 — visibilidade complementar (não bloqueia o "coração" do épico, que é a Story 78-8); mas fecha a camada FRACA do catálogo (Supabase, Resend), os únicos 2 dos 7 serviços sem qualquer API de custo/fatura
 - **Complexity:** M (2 coletores de USO — não de custo — adaptando o contrato da 78-3; 2 rotas de cron novas; sem migration; ~6-8h)
 - **Created:** 2026-07-08
@@ -61,59 +61,59 @@ Esta story **não coleta custo**. Ela coleta **uso técnico** (requests, egress,
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Ambos os coletores adaptam o contrato `BillingCollector` da 78-3, sem modificá-lo:** `packages/web/src/lib/billing-collectors/supabase-usage.ts` e `.../resend-usage.ts` importam `BillingCollector`, `CostSnapshotRow`, `CollectorResult` de `types.ts` e são executados através de `runCollector()` (mesmo import, sem editar `types.ts`/`run-collector.ts`). Nenhum novo runner, nenhuma nova função de upsert é criada.
+- [x] **AC1 — Ambos os coletores adaptam o contrato `BillingCollector` da 78-3, sem modificá-lo:** `packages/web/src/lib/billing-collectors/supabase-usage.ts` e `.../resend-usage.ts` importam `BillingCollector`, `CostSnapshotRow`, `CollectorResult` de `types.ts` e são executados através de `runCollector()` (mesmo import, sem editar `types.ts`/`run-collector.ts`). Nenhum novo runner, nenhuma nova função de upsert é criada.
 
-- [ ] **AC2 — Coletor Supabase grava uso técnico, nunca custo:** `collectSupabaseUsage(window)` chama a Supabase Management API com `Authorization: Bearer ${SUPABASE_MANAGEMENT_PAT}` e grava ao menos: (a) uma linha `metric = 'supabase_plan_info'` com `value = 1` e `raw_response` contendo o nome/tier do plano retornado pela API (o valor numérico da coluna `value` não pode carregar uma string — o nome do plano vive em `raw_response`, nunca inventado como número); (b) linhas de uso técnico quando disponíveis pela API de analytics (ex.: `metric = 'supabase_requests_total'`, `metric = 'supabase_egress_bytes'`), sempre com `currency = null` e `collection_status = 'ok'`.
+- [x] **AC2 — Coletor Supabase grava uso técnico, nunca custo:** `collectSupabaseUsage(window)` chama a Supabase Management API com `Authorization: Bearer ${SUPABASE_MANAGEMENT_PAT}` e grava ao menos: (a) uma linha `metric = 'supabase_plan_info'` com `value = 1` e `raw_response` contendo o nome/tier do plano retornado pela API (o valor numérico da coluna `value` não pode carregar uma string — o nome do plano vive em `raw_response`, nunca inventado como número); (b) linhas de uso técnico quando disponíveis pela API de analytics (ex.: `metric = 'supabase_requests_total'`, `metric = 'supabase_egress_bytes'`), sempre com `currency = null` e `collection_status = 'ok'`.
 
-- [ ] **AC3 — Coletor Resend grava quota + contagem de envios, nunca custo:** `collectResendUsage(window)` (a) faz uma chamada autenticada de baixo custo à API do Resend (`Authorization: Bearer ${RESEND_API_KEY}` — env var **já existente** no projeto, usada por `packages/web/src/lib/email.ts`; não é um secret novo) e lê o header de resposta `x-resend-monthly-quota`, gravando `metric = 'resend_monthly_quota_limit'`, `value = Number(header)`, `currency = null`, `collection_status = 'ok'`; (b) conta em paralelo, via query direta em `email_logs` (`status != 'failed' AND sent_at BETWEEN window.from AND window.to`), o total de envios do período, gravando `metric = 'resend_emails_sent_count_email_logs'`, `value = count`, `currency = null`, `collection_status = 'ok'`.
+- [x] **AC3 — Coletor Resend grava quota + contagem de envios, nunca custo:** `collectResendUsage(window)` (a) faz uma chamada autenticada de baixo custo à API do Resend (`Authorization: Bearer ${RESEND_API_KEY}` — env var **já existente** no projeto, usada por `packages/web/src/lib/email.ts`; não é um secret novo) e lê o header de resposta `x-resend-monthly-quota`, gravando `metric = 'resend_monthly_quota_limit'`, `value = Number(header)`, `currency = null`, `collection_status = 'ok'`; (b) conta em paralelo, via query direta em `email_logs` (`status != 'failed' AND sent_at BETWEEN window.from AND window.to`), o total de envios do período, gravando `metric = 'resend_emails_sent_count_email_logs'`, `value = count`, `currency = null`, `collection_status = 'ok'`.
 
-- [ ] **AC4 — Invariante: nenhuma linha desta story tem `currency` preenchida:** Toda `CostSnapshotRow` produzida por `supabase-usage.ts` e `resend-usage.ts` tem `currency: null` explicitamente (nunca `"USD"`/`"BRL"`). Isso garante que a query de agregação de "gasto do mês" da Story 78-9 (`WHERE currency IS NOT NULL`) **nunca** inclui essas linhas — validado manualmente consultando `service_cost_snapshots` após rodar os 2 coletores (ver Testing).
+- [x] **AC4 — Invariante: nenhuma linha desta story tem `currency` preenchida:** Toda `CostSnapshotRow` produzida por `supabase-usage.ts` e `resend-usage.ts` tem `currency: null` explicitamente (nunca `"USD"`/`"BRL"`). Isso garante que a query de agregação de "gasto do mês" da Story 78-9 (`WHERE currency IS NOT NULL`) **nunca** inclui essas linhas — validado manualmente consultando `service_cost_snapshots` após rodar os 2 coletores (ver Testing).
 
-- [ ] **AC5 — Ausência de secret degrada graciosamente (mesmo padrão da AC8 da 78-3):** Se `SUPABASE_MANAGEMENT_PAT` não estiver definida, `GET /api/cron/billing-collect-supabase` retorna `503 { error: "SUPABASE_MANAGEMENT_PAT not set" }` sem chamar a API e sem gravar snapshot algum. Se `RESEND_API_KEY` não estiver definida, `GET /api/cron/billing-collect-resend` retorna `503 { error: "RESEND_API_KEY not set" }` sem chamar a API — mas **ainda assim tenta** a contagem via `email_logs` (essa parte não depende do Resend estar configurado; documentar essa distinção no Completion Notes se implementada dessa forma, ou justificar por que optou por bloquear as duas partes juntas).
+- [x] **AC5 — Ausência de secret degrada graciosamente (mesmo padrão da AC8 da 78-3):** Se `SUPABASE_MANAGEMENT_PAT` não estiver definida, `GET /api/cron/billing-collect-supabase` retorna `503 { error: "SUPABASE_MANAGEMENT_PAT not set" }` sem chamar a API e sem gravar snapshot algum. Se `RESEND_API_KEY` não estiver definida, `GET /api/cron/billing-collect-resend` retorna `503 { error: "RESEND_API_KEY not set" }` sem chamar a API — mas **ainda assim tenta** a contagem via `email_logs` (essa parte não depende do Resend estar configurado; documentar essa distinção no Completion Notes se implementada dessa forma, ou justificar por que optou por bloquear as duas partes juntas).
 
-- [ ] **AC6 — Falha isolada de uma sub-chamada não derruba o coletor inteiro:** Se a chamada de plano (Supabase) ou de quota (Resend) falhar mas a chamada de uso/contagem tiver sucesso (ou vice-versa), o coletor retorna as linhas que conseguiu obter — não propaga exceção só porque uma das 2 sub-chamadas falhou (mesmo princípio do AC9 da 78-3 para `usage_report/messages` opcional). Se **ambas** falharem, o `collect()` lança exceção e o `runCollector()` (78-3) grava a linha `collection_status='error'` padrão, sem intervenção adicional desta story.
+- [x] **AC6 — Falha isolada de uma sub-chamada não derruba o coletor inteiro:** Se a chamada de plano (Supabase) ou de quota (Resend) falhar mas a chamada de uso/contagem tiver sucesso (ou vice-versa), o coletor retorna as linhas que conseguiu obter — não propaga exceção só porque uma das 2 sub-chamadas falhou (mesmo princípio do AC9 da 78-3 para `usage_report/messages` opcional). Se **ambas** falharem, o `collect()` lança exceção e o `runCollector()` (78-3) grava a linha `collection_status='error'` padrão, sem intervenção adicional desta story.
 
-- [ ] **AC7 — Idempotência (NFR-4, reuso do runner):** Rodar cada coletor 2× para a mesma janela resulta em exatamente uma linha por `(service_id, snapshot_date, metric)` — comportamento herdado do `runCollector()` da 78-3, sem lógica adicional necessária nesta story; validado manualmente (ver Testing).
+- [x] **AC7 — Idempotência (NFR-4, reuso do runner):** Rodar cada coletor 2× para a mesma janela resulta em exatamente uma linha por `(service_id, snapshot_date, metric)` — comportamento herdado do `runCollector()` da 78-3, sem lógica adicional necessária nesta story; validado manualmente (ver Testing).
 
-- [ ] **AC8 — Cron autenticado por `CRON_SECRET` (idêntico ao padrão da 78-3):** `GET /api/cron/billing-collect-supabase` e `GET /api/cron/billing-collect-resend` retornam `503` sem `CRON_SECRET` configurado, `401` com header `Authorization` incorreto, e prosseguem com auth correta — nenhuma variação do padrão já usado em `billing-collect-anthropic`.
+- [x] **AC8 — Cron autenticado por `CRON_SECRET` (idêntico ao padrão da 78-3):** `GET /api/cron/billing-collect-supabase` e `GET /api/cron/billing-collect-resend` retornam `503` sem `CRON_SECRET` configurado, `401` com header `Authorization` incorreto, e prosseguem com auth correta — nenhuma variação do padrão já usado em `billing-collect-anthropic`.
 
-- [ ] **AC9 — `vercel.json` atualizado sem colisão de horário:** 2 novos entries — `{ "path": "/api/cron/billing-collect-supabase", "schedule": "0 13 * * *" }` e `{ "path": "/api/cron/billing-collect-resend", "schedule": "0 14 * * *" }` (13:00 e 14:00 UTC, horários livres confirmados contra a lista completa de crons já existentes em `packages/web/vercel.json`, incluindo o `"0 10 * * *"` já adicionado pela Story 78-3).
+- [x] **AC9 — `vercel.json` atualizado sem colisão de horário:** 2 novos entries — `{ "path": "/api/cron/billing-collect-supabase", "schedule": "0 13 * * *" }` e `{ "path": "/api/cron/billing-collect-resend", "schedule": "0 14 * * *" }` (13:00 e 14:00 UTC, horários livres confirmados contra a lista completa de crons já existentes em `packages/web/vercel.json`, incluindo o `"0 10 * * *"` já adicionado pela Story 78-3).
 
-- [ ] **AC10 — Nenhuma mudança em `platform_services`/`service_billing_reminders`:** Esta story não executa nenhum `UPDATE`/`INSERT`/`DELETE` em `platform_services` (os slugs `supabase`/`resend` e seus flags `automation_tier`/`has_auto_cost_collection` permanecem exatamente como seedados na 78-1) nem em `service_billing_reminders` (cadastro manual continua 100% responsabilidade da Story 78-8, sem duplicação de lógica).
+- [x] **AC10 — Nenhuma mudança em `platform_services`/`service_billing_reminders`:** Esta story não executa nenhum `UPDATE`/`INSERT`/`DELETE` em `platform_services` (os slugs `supabase`/`resend` e seus flags `automation_tier`/`has_auto_cost_collection` permanecem exatamente como seedados na 78-1) nem em `service_billing_reminders` (cadastro manual continua 100% responsabilidade da Story 78-8, sem duplicação de lógica).
 
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Preparação e confirmação de contrato/API** (AC1, AC2, AC3)
-  - [ ] T1.1 — Reler Story 78-1 (contrato de `service_cost_snapshots`: `metric` livre sem CHECK, `currency` nullable, `collection_status` enum) e Story 78-2 (nomes exatos `SUPABASE_MANAGEMENT_PAT`, `SUPABASE_ORG_SLUG` — não inventar variação)
-  - [ ] T1.2 — Reler Story 78-3 (contrato `BillingCollector`/`CostSnapshotRow`/`CollectorResult`, `runCollector()`, padrão de cron `CRON_SECRET`) — este é o código a **adaptar**, não recriar
-  - [ ] T1.3 — Confirmar via documentação oficial da Supabase Management API os endpoints e nomes de campo exatos de `GET /v1/organizations/{slug}` (campo de plano) e `GET /v1/projects/{ref}/analytics/endpoints/usage.*` (nomes reais dos endpoints de uso — o épico usa `usage.*` como wildcard, não como nome literal) — via `context7`/busca web; não inventar nomes de campo (Artigo IV). Documentar o formato real encontrado em Completion Notes
-  - [ ] T1.4 — Confirmar como derivar o **project ref** do Supabase sem criar env var nova: extrair do subdomínio de `NEXT_PUBLIC_SUPABASE_URL` (já existente, ex. `https://dsopqkqjkmhytudaaolv.supabase.co` → ref `dsopqkqjkmhytudaaolv`) — nenhuma nova credencial necessária além das já fixadas na 78-2
-  - [ ] T1.5 — Confirmar via documentação oficial do Resend qual endpoint autenticado de baixo custo retorna o header `x-resend-monthly-quota` na resposta (ex.: `GET /domains` ou `GET /api-keys` — confirmar em T1, não assumir) — via `context7`/busca web
-  - [ ] T1.6 — Ler `packages/web/src/lib/email.ts` (`sendTemplateEmail`, `RESEND_API_KEY`) e `packages/web/src/app/api/webhook/resend/route.ts` (já grava `email_logs.sent_at`/`status` para envios via template) para confirmar exatamente quais envios ficam registrados em `email_logs`
-  - [ ] T1.7 — Confirmar com @po/@sm se o status atual das Stories 78-2 (secrets) e 78-3 (contrato) já avançou o suficiente para permitir validação end-to-end; se não, prosseguir mesmo assim (AC5 cobre a ausência de secret)
+- [x] **T1 — Preparação e confirmação de contrato/API** (AC1, AC2, AC3)
+  - [x] T1.1 — Reler Story 78-1 (contrato de `service_cost_snapshots`: `metric` livre sem CHECK, `currency` nullable, `collection_status` enum) e Story 78-2 (nomes exatos `SUPABASE_MANAGEMENT_PAT`, `SUPABASE_ORG_SLUG` — não inventar variação)
+  - [x] T1.2 — Reler Story 78-3 (contrato `BillingCollector`/`CostSnapshotRow`/`CollectorResult`, `runCollector()`, padrão de cron `CRON_SECRET`) — este é o código a **adaptar**, não recriar
+  - [x] T1.3 — Confirmar via documentação oficial da Supabase Management API os endpoints e nomes de campo exatos de `GET /v1/organizations/{slug}` (campo de plano) e `GET /v1/projects/{ref}/analytics/endpoints/usage.*` (nomes reais dos endpoints de uso — o épico usa `usage.*` como wildcard, não como nome literal) — via `context7`/busca web; não inventar nomes de campo (Artigo IV). Documentar o formato real encontrado em Completion Notes
+  - [x] T1.4 — Confirmar como derivar o **project ref** do Supabase sem criar env var nova: extrair do subdomínio de `NEXT_PUBLIC_SUPABASE_URL` (já existente, ex. `https://dsopqkqjkmhytudaaolv.supabase.co` → ref `dsopqkqjkmhytudaaolv`) — nenhuma nova credencial necessária além das já fixadas na 78-2
+  - [x] T1.5 — Confirmar via documentação oficial do Resend qual endpoint autenticado de baixo custo retorna o header `x-resend-monthly-quota` na resposta (ex.: `GET /domains` ou `GET /api-keys` — confirmar em T1, não assumir) — via `context7`/busca web
+  - [x] T1.6 — Ler `packages/web/src/lib/email.ts` (`sendTemplateEmail`, `RESEND_API_KEY`) e `packages/web/src/app/api/webhook/resend/route.ts` (já grava `email_logs.sent_at`/`status` para envios via template) para confirmar exatamente quais envios ficam registrados em `email_logs`
+  - [x] T1.7 — Confirmar com @po/@sm se o status atual das Stories 78-2 (secrets) e 78-3 (contrato) já avançou o suficiente para permitir validação end-to-end; se não, prosseguir mesmo assim (AC5 cobre a ausência de secret)
 
-- [ ] **T2 — Coletor de uso Supabase** (AC2, AC4, AC6)
-  - [ ] T2.1 — Criar `packages/web/src/lib/billing-collectors/supabase-usage.ts` implementando `BillingCollector` (`serviceSlug: 'supabase'`)
-  - [ ] T2.2 — Chamada de plano (`GET /v1/organizations/{slug}` com `SUPABASE_ORG_SLUG`) → linha `metric='supabase_plan_info'`, `value=1`, `raw_response` com o payload relevante, `currency=null`
-  - [ ] T2.3 — Chamada(s) de uso técnico (`GET /v1/projects/{ref}/analytics/endpoints/usage.*`, ref derivado de T1.4) → linha(s) `metric='supabase_requests_total'`/`'supabase_egress_bytes'` (nomes exatos conforme confirmado em T1.3), `currency=null`
-  - [ ] T2.4 — Isolar cada sub-chamada em seu próprio try/catch (AC6) — se uma falhar, retornar só as linhas que tiveram sucesso; se ambas falharem, propagar exceção (o runner trata)
-  - [ ] T2.5 — Se `SUPABASE_MANAGEMENT_PAT` ausente, lançar erro tipado tratado pela rota como 503 (AC5), distinto do erro genérico do runner
+- [x] **T2 — Coletor de uso Supabase** (AC2, AC4, AC6)
+  - [x] T2.1 — Criar `packages/web/src/lib/billing-collectors/supabase-usage.ts` implementando `BillingCollector` (`serviceSlug: 'supabase'`)
+  - [x] T2.2 — Chamada de plano (`GET /v1/organizations/{slug}` com `SUPABASE_ORG_SLUG`) → linha `metric='supabase_plan_info'`, `value=1`, `raw_response` com o payload relevante, `currency=null`
+  - [x] T2.3 — Chamada(s) de uso técnico (`GET /v1/projects/{ref}/analytics/endpoints/usage.*`, ref derivado de T1.4) → linha(s) `metric='supabase_requests_total'`/`'supabase_egress_bytes'` (nomes exatos conforme confirmado em T1.3), `currency=null`
+  - [x] T2.4 — Isolar cada sub-chamada em seu próprio try/catch (AC6) — se uma falhar, retornar só as linhas que tiveram sucesso; se ambas falharem, propagar exceção (o runner trata)
+  - [x] T2.5 — Se `SUPABASE_MANAGEMENT_PAT` ausente, lançar erro tipado tratado pela rota como 503 (AC5), distinto do erro genérico do runner
 
-- [ ] **T3 — Coletor de uso Resend** (AC3, AC4, AC6)
-  - [ ] T3.1 — Criar `packages/web/src/lib/billing-collectors/resend-usage.ts` implementando `BillingCollector` (`serviceSlug: 'resend'`)
-  - [ ] T3.2 — Chamada autenticada ao endpoint confirmado em T1.5 → ler header `x-resend-monthly-quota` → linha `metric='resend_monthly_quota_limit'`, `currency=null`
-  - [ ] T3.3 — Query em `email_logs` (usando `createAdminClient()`) contando `status != 'failed' AND sent_at BETWEEN window.from AND window.to` → linha `metric='resend_emails_sent_count_email_logs'`, `currency=null`
-  - [ ] T3.4 — Isolar as 2 sub-chamadas (AC6); documentar explicitamente no JSDoc do arquivo que esta contagem **não** inclui envios feitos via `sendEmail()` direto fora do fluxo de template (ex.: caminho legado de campanhas) — é uma métrica de uso **parcial**, não a contagem total real de envios Resend (AC10 exige essa transparência)
-  - [ ] T3.5 — Se `RESEND_API_KEY` ausente, decidir e documentar (Completion Notes) se a rota bloqueia as 2 sub-chamadas juntas (503 simples) ou só a parte de quota, deixando a contagem via `email_logs` prosseguir — AC5 exige ao menos justificar a escolha
+- [x] **T3 — Coletor de uso Resend** (AC3, AC4, AC6)
+  - [x] T3.1 — Criar `packages/web/src/lib/billing-collectors/resend-usage.ts` implementando `BillingCollector` (`serviceSlug: 'resend'`)
+  - [x] T3.2 — Chamada autenticada ao endpoint confirmado em T1.5 → ler header `x-resend-monthly-quota` → linha `metric='resend_monthly_quota_limit'`, `currency=null`
+  - [x] T3.3 — Query em `email_logs` (usando `createAdminClient()`) contando `status != 'failed' AND sent_at BETWEEN window.from AND window.to` → linha `metric='resend_emails_sent_count_email_logs'`, `currency=null`
+  - [x] T3.4 — Isolar as 2 sub-chamadas (AC6); documentar explicitamente no JSDoc do arquivo que esta contagem **não** inclui envios feitos via `sendEmail()` direto fora do fluxo de template (ex.: caminho legado de campanhas) — é uma métrica de uso **parcial**, não a contagem total real de envios Resend (AC10 exige essa transparência)
+  - [x] T3.5 — Se `RESEND_API_KEY` ausente, decidir e documentar (Completion Notes) se a rota bloqueia as 2 sub-chamadas juntas (503 simples) ou só a parte de quota, deixando a contagem via `email_logs` prosseguir — AC5 exige ao menos justificar a escolha
 
-- [ ] **T4 — Rotas de cron** (AC5, AC8, AC9)
-  - [ ] T4.1 — Criar `packages/web/src/app/api/cron/billing-collect-supabase/route.ts` com auth `CRON_SECRET` idêntico ao padrão de `billing-collect-anthropic` (78-3)
-  - [ ] T4.2 — Criar `packages/web/src/app/api/cron/billing-collect-resend/route.ts`, mesmo padrão
-  - [ ] T4.3 — Cada rota: checar o respectivo secret antes de chamar o coletor (AC5), default de janela = ontem em `America/Sao_Paulo` (NFR-8, mesma abordagem da 78-3), aceitar `?from=&to=` opcionais (FR-10)
-  - [ ] T4.4 — Chamar `runCollector(admin, collector, window)` e retornar `CollectorResult` como JSON
-  - [ ] T4.5 — Adicionar as 2 entries em `packages/web/vercel.json` (AC9)
+- [x] **T4 — Rotas de cron** (AC5, AC8, AC9)
+  - [x] T4.1 — Criar `packages/web/src/app/api/cron/billing-collect-supabase/route.ts` com auth `CRON_SECRET` idêntico ao padrão de `billing-collect-anthropic` (78-3)
+  - [x] T4.2 — Criar `packages/web/src/app/api/cron/billing-collect-resend/route.ts`, mesmo padrão
+  - [x] T4.3 — Cada rota: checar o respectivo secret antes de chamar o coletor (AC5), default de janela = ontem em `America/Sao_Paulo` (NFR-8, mesma abordagem da 78-3), aceitar `?from=&to=` opcionais (FR-10)
+  - [x] T4.4 — Chamar `runCollector(admin, collector, window)` e retornar `CollectorResult` como JSON
+  - [x] T4.5 — Adicionar as 2 entries em `packages/web/vercel.json` (AC9)
 
 - [ ] **T5 — Validação manual em DEV** (AC4, AC5, AC7, AC8)
   - [ ] T5.1 — Chamar as 2 rotas sem auth → 401; sem `CRON_SECRET` → 503
@@ -122,9 +122,9 @@ Esta story **não coleta custo**. Ela coleta **uso técnico** (requests, egress,
   - [ ] T5.4 — Rodar cada rota 2× para a mesma janela → confirmar 1 linha por métrica/dia (AC7)
   - [ ] T5.5 — Confirmar que `platform_services` e `service_billing_reminders` não sofreram nenhuma alteração após rodar os coletores (AC10)
 
-- [ ] **T6 — Documentar no Change Log / Completion Notes**
-  - [ ] T6.1 — Registrar o formato real das APIs Supabase/Resend encontrado em T1.3/T1.5
-  - [ ] T6.2 — Registrar a decisão tomada em T3.5 (bloqueio total vs. parcial na ausência de `RESEND_API_KEY`)
+- [x] **T6 — Documentar no Change Log / Completion Notes**
+  - [x] T6.1 — Registrar o formato real das APIs Supabase/Resend encontrado em T1.3/T1.5
+  - [x] T6.2 — Registrar a decisão tomada em T3.5 (bloqueio total vs. parcial na ausência de `RESEND_API_KEY`)
 
 ---
 
@@ -273,27 +273,124 @@ A Story 78-2 documentou que `SUPABASE_ORG_SLUG` "também destrava a atualizaçã
 |------|--------|-----------|-------|
 | 2026-07-08 | 0.1 | Story criada a partir do Epic 78 (§7, story 78-7). Dois coletores de **uso técnico** (não custo) adaptando o contrato `BillingCollector`/`runCollector()` fixado na Story 78-3: Supabase (plano + requests/egress via Management API, `SUPABASE_MANAGEMENT_PAT`/`SUPABASE_ORG_SLUG` da 78-2) e Resend (quota via header `x-resend-monthly-quota` + contagem de envios via `email_logs`, `RESEND_API_KEY` já existente). [AUTO-DECISION] Invariante `currency = null` elevada a Acceptance Criteria própria (AC4) → reason: a regra de agregação de "gasto do mês" da Story 78-9 (`WHERE currency IS NOT NULL`) depende inteiramente de os coletores desta story nunca preencherem `currency`; um erro de cópia do padrão Anthropic (que sempre seta `currency='USD'`) poluiria silenciosamente o total consolidado do painel com uso técnico disfarçado de custo. [AUTO-DECISION] Nome de métrica `resend_emails_sent_count_email_logs` (não `resend_emails_sent_total`) → reason: Article IV — `email_logs` não captura envios do caminho legado de campanhas (`sendEmail()` direto, sem `sendTemplateEmail()`); o nome da métrica já comunica o escopo parcial em vez de reivindicar uma contagem completa que o dado atual não sustenta. [AUTO-DECISION] `supabase_plan_info` grava `value=1` com o nome do plano em `raw_response` (não em `value`) → reason: `service_cost_snapshots.value` é `numeric NOT NULL` (contrato da 78-1); inventar uma escala numérica para nome de plano seria dado fabricado, proibido pelo Artigo IV. [AUTO-DECISION] Project ref do Supabase derivado de `NEXT_PUBLIC_SUPABASE_URL` (já existente) em vez de nova env var → reason: evitar credencial/config redundante quando o dado já está disponível no ambiente. [AUTO-DECISION] Horários de cron `"0 13 * * *"`/`"0 14 * * *"` escolhidos por não colidirem com nenhum horário fixo já ocupado em `vercel.json`, incluindo o `"0 10 * * *"` já adicionado pela Story 78-3. [AUTO-DECISION] Nenhuma atualização de `platform_services.billing_url_confirmed` do slug `supabase` nesta story, apesar de `SUPABASE_ORG_SLUG` (78-2) habilitar isso → reason: já documentado como fora de escopo pela própria Story 78-2; não assumir tarefa não atribuída explicitamente (evitar scope creep silencioso). | @sm (River) |
 | 2026-07-08 | 0.2 | **Validação cruzada do backlog do Epic 78 (@po Pax) — GO, Status Draft → Ready.** Invariante central `currency = null` (AC4) validada como o mecanismo que mantém o "gasto do mês" da 78-9 (`WHERE currency IS NOT NULL`) livre de uso técnico disfarçado de custo — coerência de contrato de dados confirmada ponta-a-ponta. Nenhuma env var fora do contrato da 78-2 (`SUPABASE_MANAGEMENT_PAT`/`SUPABASE_ORG_SLUG` no contrato; `RESEND_API_KEY` pré-existente; project ref derivado de `NEXT_PUBLIC_SUPABASE_URL`). Horários de cron `"0 13"`/`"0 14"` confirmados livres. Ponto em aberto menor (bloqueio total vs. parcial na ausência de `RESEND_API_KEY`, T3.5) corretamente deixado como decisão documentável do @dev — não bloqueia. | @po (Pax) |
+| 2026-07-13 | 0.3 | **Implementação (@dev Dex) — Status Ready → InReview.** 4 arquivos criados (2 coletores + 2 rotas de cron) + `vercel.json` atualizado. Contrato Supabase Management API **confirmado via OpenAPI oficial** (`plan` enum em `/v1/organizations/{slug}`; `usage.api-requests-count` para requests). **DESVIO documentado (Article IV):** `supabase_egress_bytes` NÃO gravado — a Management API não expõe endpoint de egress; não inventado. **INCERTEZA documentada (T1.5):** header `x-resend-monthly-quota` não confirmável sem key válida — parsing defensivo pula a linha (com warn) se o header estiver ausente, nunca inventa. **DECISÃO (T3.5):** rota Resend prossegue sem `RESEND_API_KEY` (parcial, `resend_api_key_missing:true` no corpo) porque a contagem via `email_logs` independe do Resend; rota Supabase mantém 503 sem PAT (ambas sub-chamadas dependem dele). Invariante AC4 (`currency:null` em 100% das 4 linhas) verificada por grep. IDS: `types.ts`/`run-collector.ts` REUSE (não modificados); coletores/rotas ADAPT de anthropic/vercel; `createResendUsageCollector(admin)` como factory (precisa do admin p/ COUNT em `email_logs`). Typecheck: 0 erros novos (4 pré-existentes fora de escopo). Lint: exit 0. T5 (validação manual em DEV) deixada para o quality gate. | @dev (Dex) |
 
 ---
 
 ## Dev Agent Record
 
-_A ser preenchido pelo @dev durante a implementação._
-
 ### Agent Model Used
-—
+Claude Opus 4.8 (1M context) — @dev (Dex), modo autônomo (YOLO).
 
 ### Debug Log References
-—
+- `npx tsc --noEmit` em `packages/web`: 4 erros TS totais, **todos pré-existentes** (`visual-editor.tsx`, `lib/pastas/termo/fill.ts`) — **zero** nos arquivos desta story.
+- `npx eslint` nos 4 arquivos novos: exit 0 (limpo).
+- Contrato de API Supabase confirmado empiricamente contra a OpenAPI oficial (`GET https://api.supabase.com/api/v1-json`) — ver Completion Notes.
 
 ### Completion Notes List
-—
+
+**T1.3 — Supabase Management API (contrato confirmado via OpenAPI oficial, não inventado):**
+- `GET /v1/organizations/{slug}` → `{ id, name, plan }`, onde `plan` é enum `"free"|"pro"|"team"|"enterprise"|"platform"`. Usado para `metric='supabase_plan_info'` (`value=1`, plano em `raw_response`).
+- `GET /v1/projects/{ref}/analytics/endpoints/usage.api-requests-count` → `{ result: [{ count }], error }`. Somado em `metric='supabase_requests_total'`.
+- **DESVIO/INCERTEZA (Article IV):** a Management API **NÃO expõe** endpoint de "egress bytes" (a OpenAPI só tem `usage.api-counts`, `usage.api-requests-count`, `functions.combined-stats`). Por isso **NÃO gravamos `supabase_egress_bytes`** — não inventamos uma métrica sem fonte. AC2 (b) diz "quando disponíveis pela API" — egress não está disponível, então só `supabase_requests_total` é gravado. Se futuramente for necessário egress, a fonte seria a página de billing/usage (sem endpoint Management API atual).
+- **LIMITAÇÃO documentada:** `usage.api-requests-count` retorna uma **janela rolante fixa do provedor** (não aceita `from`/`to` arbitrários). A leitura é alocada em `snapshot_date = window.to` como snapshot pontual de uso técnico. Idempotência preservada (1 linha por `service_id,snapshot_date,metric`).
+
+**T1.5 — Resend quota header (INCERTEZA documentada):**
+- O header `x-resend-monthly-quota` **não pôde ser confirmado empiricamente** sem uma `RESEND_API_KEY` válida: uma chamada não-autenticada a `GET https://api.resend.com/domains` retorna `400` **sem** expor qualquer header de quota (o header, conforme classificação do épico §2.1, só apareceria em resposta autenticada com sucesso).
+- **Decisão defensiva (Article IV):** o coletor lê `x-resend-monthly-quota` da resposta autenticada; se o header estiver **ausente ou não-numérico**, a linha `resend_monthly_quota_limit` é **PULADA com warn** (`resend_usage_quota_header_missing`) — nunca inventada. A contagem via `email_logs` segue independente. @architect deve validar o header em produção com a key real.
+- Endpoint escolhido para a leitura de quota: `GET /domains` (leve, autenticado, read-only). Se em produção o header vier em outro endpoint, trocar apenas a constante `RESEND_QUOTA_ENDPOINT`.
+
+**T3.5 — Decisão sobre ausência de `RESEND_API_KEY` (bloqueio total vs. parcial):**
+- **Escolha: parcial (não bloqueia com 503).** A rota `/api/cron/billing-collect-resend` **prossegue** mesmo sem `RESEND_API_KEY`, porque a contagem via `email_logs` é **independente** do Resend estar configurado. O coletor pula graciosamente a sub-chamada de quota (warn) e ainda grava `resend_emails_sent_count_email_logs`. A condição é sinalizada no corpo da resposta (`resend_api_key_missing: true`), em vez de um HTTP 503 "seco" que descartaria esse dado útil. Justificativa: um 503 implica "nada aconteceu", o que seria falso — a contagem foi coletada. (Distinto do coletor Supabase, cuja rota **sim** retorna 503 sem `SUPABASE_MANAGEMENT_PAT`, pois ali ambas as sub-chamadas dependem do PAT.)
+
+**Contagem de envios Resend — parcialidade (AC10):** documentada no JSDoc de `resend-usage.ts` e no nome da métrica (`..._email_logs`, não `..._total`). Não cobre o caminho legado de campanhas (`sendEmail()` direto, sem `sendTemplateEmail()`), rastreado via `campaign_entries`/`campaign_events`. Janela interpretada em BRT (UTC-3), coerente com o "ontem" das rotas; contagem platform-wide (sem filtro de org).
+
+**IDS (REUSE > ADAPT > CREATE):**
+- `types.ts` / `run-collector.ts` → **REUSE** (import direto, não modificados — AC1).
+- Coletores → **ADAPT** do padrão `anthropic.ts`/`vercel.ts` (mesma estrutura de erro tipado, `fetch` defensivo, `logEvent`).
+- Rotas de cron → **ADAPT** literal de `billing-collect-anthropic/route.ts` (auth `CRON_SECRET`, janela `saoPauloYesterday`, `?from=&to=`).
+- **Nota de CREATE justificado:** `createResendUsageCollector(admin)` é uma **factory** (não uma const como `anthropicCollector`), porque o coletor Resend precisa do `admin` client para o `COUNT` em `email_logs` — coletores anthropic/vercel só usam `fetch`. O `runCollector(admin, collector, window)` continua chamando `collector.collect(window)` sem alteração.
+
+**T5 (validação manual em DEV):** não executada neste ambiente autônomo (sem servidor Next rodando / sem secrets DEV carregados). Deixada para o @qa/@architect no quality gate. AC5/AC8 (degradação graciosa) e AC4 (invariante `currency=null`) validados por inspeção de código + typecheck/lint.
 
 ### File List
-—
+**Criados:**
+- `packages/web/src/lib/billing-collectors/supabase-usage.ts`
+- `packages/web/src/lib/billing-collectors/resend-usage.ts`
+- `packages/web/src/app/api/cron/billing-collect-supabase/route.ts`
+- `packages/web/src/app/api/cron/billing-collect-resend/route.ts`
+
+**Modificados:**
+- `packages/web/vercel.json` (2 novos entries de cron: `"0 13 * * *"` Supabase, `"0 14 * * *"` Resend)
+- `docs/stories/78-7-fallback-manual-uso-tecnico-supabase-resend.story.md` (checkboxes, Dev Agent Record, Change Log, Status)
 
 ---
 
 ## QA Results
 
-_A ser preenchido pelo @architect durante o quality gate._
+### Review Date: 2026-07-13
+
+### Reviewed By: Quinn (Test Architect / Guardian) — quality gate delegado do @architect
+
+### Escopo revisado
+Revisão estática cuidadosa dos 4 arquivos criados + `vercel.json`, contra os 7 quality checks e a invariante
+crítica `currency=null`. `npx tsc --noEmit` e `npx eslint` executados; nenhuma aplicação em banco, nenhum
+commit/push (correções, se houver, são do @dev).
+
+### INVARIANTE CRÍTICA — `currency = null` (AC4): ✅ CONFIRMADA
+Leitura direta + grep confirmam **4 (quatro)** literais `CostSnapshotRow` produzidos por esta story, **todos com
+`currency: null`**, nenhum grava `'USD'`/`'BRL'`:
+- `supabase-usage.ts` → `supabase_plan_info` (L124), `supabase_requests_total` (L165)
+- `resend-usage.ts` → `resend_monthly_quota_limit` (L119), `resend_emails_sent_count_email_logs` (L157)
+
+A coluna `service_cost_snapshots.currency` é nullable (migration `164`, L90: `CHECK (currency IN ('USD','BRL'))`,
+sem `NOT NULL`) — `null` passa no schema. A agregação de "gasto do mês" da 78-9 (`WHERE currency IS NOT NULL`)
+**nunca** incluirá estas linhas. R3 do épico neutralizado por construção do dado.
+
+### Traceability AC → evidência
+| AC | Veredito | Evidência |
+|----|----------|-----------|
+| AC1 — adapta contrato 78-3 sem modificar | PASS | Ambos importam `BillingCollector`/`CostSnapshotRow`/`CollectWindow` de `types.ts` e rodam via `runCollector()`; `types.ts`/`run-collector.ts` intocados (REUSE). |
+| AC2 — Supabase uso técnico, nunca custo | PASS | `supabase_plan_info` (`value=1`, plano em `raw_response`) + `supabase_requests_total`. Egress **omitido** com justificativa Article IV (Management API não expõe endpoint) — AC2(b) diz "quando disponíveis pela API". |
+| AC3 — Resend quota + contagem | PASS | Header `x-resend-monthly-quota` → `resend_monthly_quota_limit`; `COUNT` em `email_logs` (`status != 'failed'` + `sent_at` na janela) → `resend_emails_sent_count_email_logs`. |
+| AC4 — invariante currency=null | PASS | Ver bloco acima (crítico). |
+| AC5 — degradação graciosa por secret | PASS | Supabase → 503 sem PAT **antes** de coletar (route L39). Resend → prossegue sem key, sinaliza `resend_api_key_missing` no corpo, mantém contagem `email_logs` (T3.5). Divergência coerente e documentada. |
+| AC6 — falha isolada de sub-chamada | PASS | `Promise.allSettled` nos 2 coletores: parcial se uma falha; `throw` só se **ambas** falham → runner grava `collection_status='error'`. |
+| AC7 — idempotência | PASS | Herdada de `runCollector` (`onConflict service_id,snapshot_date,metric`); todas as linhas usam `snapshot_date=window.to`. |
+| AC8 — cron autenticado CRON_SECRET | PASS | 503 sem secret / 401 header errado — idêntico a `billing-collect-anthropic`. |
+| AC9 — vercel.json sem colisão | PASS | `"0 13"` (supabase) e `"0 14"` (resend); nenhum horário fixo existente usa esses slots (o `0 * * * *` do email-queue é execução horária independente, não colisão bloqueante). |
+| AC10 — sem mudança em platform_services/service_billing_reminders | PASS | Coletores só **leem** `platform_services` (via runner) e `email_logs`; escrevem apenas `service_cost_snapshots`. |
+
+### Coletor Supabase (check 3): PASS
+Management API `/v1/organizations/{slug}` (plano) + `/v1/projects/{ref}/analytics/endpoints/usage.api-requests-count`
+(requests), `Authorization: Bearer ${SUPABASE_MANAGEMENT_PAT}`. Project ref derivado de `NEXT_PUBLIC_SUPABASE_URL`
+(sem env nova). Sub-chamadas isoladas. Omissão de egress justificada (Article IV — sem endpoint), documentada.
+
+### Coletor Resend (check 4): PASS
+Parsing **defensivo** do header: ausente/não-numérico → linha pulada com warn `resend_usage_quota_header_missing`,
+nunca inventada. Contagem `email_logs` platform-wide via `head:true` (só o count, sem transferir linhas de tenant).
+Parcialidade documentada no nome da métrica (`..._email_logs`) e no JSDoc.
+
+### Segurança (check 6): PASS
+PAT/API key nunca logados: mensagens de erro carregam status HTTP + `body.slice(0,300)` da API (não o header de
+auth); `raw_response` grava só `{id,name,plan}` (Supabase) e `{header,value=quota}` (Resend) — sem secrets.
+Contagem `email_logs` é agregada (nenhum dado de tenant vaza).
+
+### Convenções (check 7): PASS
+- `npx tsc --noEmit`: apenas os **4 erros pré-existentes** (`visual-editor.tsx` ×3, `lib/pastas/termo/fill.ts` ×1) — **zero** nos arquivos desta story.
+- `npx eslint` nos 4 arquivos novos: exit **0**.
+- Runner 78-3 reusado sem recriação; `createResendUsageCollector(admin)` como factory (CREATE justificado — precisa do admin p/ `COUNT`), sem alterar assinatura de `runCollector`.
+
+### Observações (baixa severidade — não bloqueantes, verificar no redeploy)
+- **REL-001:** T5 (validação manual em DEV) não executada neste ambiente autônomo. A invariante landando no banco
+  e a idempotência real são inferidas por análise estática + comportamento herdado do runner 78-3. Confirmar no
+  redeploy: `SELECT DISTINCT currency` das linhas supabase/resend = só `NULL`; 2ª chamada mantém 1 linha/métrica.
+- **REL-002:** header `x-resend-monthly-quota` não confirmado empiricamente sem key válida (T1.5); se divergir em
+  prod, a métrica de quota é silenciosamente pulada (só warn). Verificar no redeploy com a key real.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/78.7-fallback-manual-uso-tecnico-supabase-resend.yml
+
+**Próximo passo:** Story apta a seguir para @devops (`*push`). As observações REL-001/REL-002 são follow-ups de
+verificação no redeploy (secrets já provisionados em prod), não bloqueiam o merge.
