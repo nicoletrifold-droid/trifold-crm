@@ -12,7 +12,7 @@ import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as 
 const TABS = [
   { key: "info", label: "Info" },
   { key: "conversa", label: "Conversa" },
-  { key: "timeline", label: "Timeline" },
+  { key: "timeline", label: "Histórico" },
   { key: "resumo", label: "Resumo IA" },
 ] as const
 
@@ -410,7 +410,7 @@ export default async function LeadDetailPage({
               href={`/dashboard/leads/${id}/timeline`}
               className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
             >
-              Ver timeline completa
+              Ver histórico completo
             </Link>
           </div>
 
