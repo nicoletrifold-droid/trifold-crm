@@ -9,6 +9,21 @@ import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
 import { PERDIDO_STAGE_IDS, ACERVO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
+import { SOURCE_LABELS } from "@web/lib/constants"
+
+// Opções do filtro de Origem — ordem de exibição. Rótulos vêm de SOURCE_LABELS.
+const SOURCE_FILTER_KEYS = [
+  "meta_ads",
+  "google_ads",
+  "whatsapp_organic",
+  "whatsapp_click_to_ad",
+  "website",
+  "referral",
+  "broker_sponsored",
+  "walk_in",
+  "telegram",
+  "other",
+] as const
 
 const PAGE_SIZE = 50
 
@@ -21,7 +36,9 @@ function buildPageHref(
   days?: string,
   dateFrom?: string,
   dateTo?: string,
-  criados?: string
+  criados?: string,
+  brokerId?: string,
+  source?: string
 ): string {
   const p = new URLSearchParams()
   p.set("page", String(targetPage))
@@ -33,13 +50,15 @@ function buildPageHref(
   if (dateFrom) p.set("date_from", dateFrom)
   if (dateTo) p.set("date_to", dateTo)
   if (criados) p.set("criados", criados)
+  if (brokerId) p.set("broker_id", brokerId)
+  if (source) p.set("source", source)
   return `?${p.toString()}`
 }
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; criados?: string; date_from?: string; date_to?: string }>
+  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; source?: string; criados?: string; date_from?: string; date_to?: string }>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -106,6 +125,11 @@ export default async function LeadsPage({
   if (params.broker_id) {
     query = query.eq("assigned_broker_id", params.broker_id)
     countQuery = countQuery.eq("assigned_broker_id", params.broker_id)
+  }
+
+  if (params.source) {
+    query = query.eq("source", params.source)
+    countQuery = countQuery.eq("source", params.source)
   }
 
   if (params.days) {
@@ -244,10 +268,12 @@ export default async function LeadsPage({
           brokers={["admin", "supervisor", "gerente-comercial"].includes(user.role)
             ? allBrokers.map(b => ({ id: b.id, name: b.name }))
             : undefined}
+          sources={SOURCE_FILTER_KEYS.map(k => ({ value: k, label: SOURCE_LABELS[k] ?? k }))}
           stageParam="stage_id"
           propertyParam="property_id"
           daysParam="days"
           brokerParam="broker_id"
+          sourceParam="source"
           showDateRange
           dateFromParam="date_from"
           dateToParam="date_to"
@@ -297,7 +323,7 @@ export default async function LeadsPage({
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (
               <Link
-                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined)}
+                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined, params.broker_id, params.source)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -316,7 +342,7 @@ export default async function LeadsPage({
             </span>
             {page < totalPages ? (
               <Link
-                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined)}
+                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined, params.broker_id, params.source)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Próxima <ChevronRight className="h-4 w-4" />

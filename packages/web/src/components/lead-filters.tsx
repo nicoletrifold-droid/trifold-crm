@@ -6,11 +6,14 @@ import { useCallback } from "react"
 interface Stage { id: string; name: string; color: string | null }
 interface Property { id: string; name: string }
 interface Broker { id: string; name: string }
+interface Source { value: string; label: string }
 
 interface LeadFiltersProps {
   stages: Stage[]
   properties: Property[]
   brokers?: Broker[]
+  /** Opções do filtro de Origem — só renderiza o dropdown quando passado. */
+  sources?: Source[]
   /** Adiciona a opção "Sem corretor" no filtro de Corretor (Conversas). */
   includeUnassigned?: boolean
   /** Mostra o filtro "Atendimento" (Nicole IA / Humano) — usado nas Conversas. */
@@ -19,6 +22,7 @@ interface LeadFiltersProps {
   propertyParam?: string
   daysParam?: string
   brokerParam?: string
+  sourceParam?: string
   iaParam?: string
   /** Mostra os campos de período de captura (De/Até) — usado na tela de Leads (Story 75-94). */
   showDateRange?: boolean
@@ -30,12 +34,14 @@ export function LeadFilters({
   stages,
   properties,
   brokers,
+  sources,
   includeUnassigned = false,
   showAtendimento = false,
   stageParam = "stage",
   propertyParam = "property",
   daysParam = "days",
   brokerParam = "broker_id",
+  sourceParam = "source",
   iaParam = "ia",
   showDateRange = false,
   dateFromParam = "date_from",
@@ -49,6 +55,7 @@ export function LeadFilters({
   const activeProperty = searchParams.get(propertyParam) ?? ""
   const activeDays = searchParams.get(daysParam) ?? ""
   const activeBroker = searchParams.get(brokerParam) ?? ""
+  const activeSource = searchParams.get(sourceParam) ?? ""
   const activeIa = searchParams.get(iaParam) ?? ""
   const activeDateFrom = searchParams.get(dateFromParam) ?? ""
   const activeDateTo = searchParams.get(dateToParam) ?? ""
@@ -67,7 +74,7 @@ export function LeadFilters({
   const selectClass =
     "h-8 rounded-lg border border-gray-300 bg-white px-2.5 py-0 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:focus:border-orange-500 dark:focus:ring-orange-500"
 
-  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeIa || activeDateFrom || activeDateTo
+  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeSource || activeIa || activeDateFrom || activeDateTo
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -91,6 +98,14 @@ export function LeadFilters({
           <option value="">Corretor: Todos</option>
           {includeUnassigned && <option value="none">Sem corretor</option>}
           {brokers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      )}
+
+      {/* Origem — só aparece quando passado via prop (tela de Leads) */}
+      {sources && sources.length > 0 && (
+        <select value={activeSource} onChange={(e) => setParam(sourceParam, e.target.value)} className={selectClass}>
+          <option value="">Origem: Todas</option>
+          {sources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       )}
 
@@ -147,6 +162,7 @@ export function LeadFilters({
             params.delete(propertyParam)
             params.delete(daysParam)
             params.delete(brokerParam)
+            params.delete(sourceParam)
             params.delete(iaParam)
             params.delete(dateFromParam)
             params.delete(dateToParam)
