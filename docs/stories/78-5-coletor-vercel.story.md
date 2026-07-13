@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 78 — Painel de Saúde & Billing da Plataforma
 - **Story:** 78-5
-- **Status:** Ready
+- **Status:** InReview
 - **Priority:** P1 — completa a camada FORTE de coleta automática (junto com 78-3 Anthropic e 78-4 OpenAI); Vercel é a hospedagem de produção (`crm.trifold.eng.br`), risco direto de corte de serviço se a fatura passar despercebida
 - **Complexity:** M (adapta o contrato já fixado pela 78-3; complexidade concentrada no parsing JSONL e na regra de janela ≤ 1 ano; ~6-8h)
 - **Created:** 2026-07-08
@@ -65,63 +65,63 @@ Esta story **adapta** esse contrato para a Vercel (IDS: REUSE > ADAPT > CREATE �
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Adapta o contrato `BillingCollector` sem modificá-lo:** `packages/web/src/lib/billing-collectors/vercel.ts` exporta um objeto/factory que implementa a interface `BillingCollector` da Story 78-3 (`serviceSlug: 'vercel'`, `collect(window): Promise<CostSnapshotRow[]>`), importado de `./types.ts` **sem** redefinir os tipos localmente. A rota de cron chama `runCollector(admin, vercelCollector, window)` — o mesmo runner da 78-3, sem cópia/fork de sua lógica de upsert ou isolamento de falha.
+- [x] **AC1 — Adapta o contrato `BillingCollector` sem modificá-lo:** `packages/web/src/lib/billing-collectors/vercel.ts` exporta um objeto/factory que implementa a interface `BillingCollector` da Story 78-3 (`serviceSlug: 'vercel'`, `collect(window): Promise<CostSnapshotRow[]>`), importado de `./types.ts` **sem** redefinir os tipos localmente. A rota de cron chama `runCollector(admin, vercelCollector, window)` — o mesmo runner da 78-3, sem cópia/fork de sua lógica de upsert ou isolamento de falha.
 
-- [ ] **AC2 — Parsing correto de JSONL (CON-5, ponto técnico central desta story):** O coletor busca `GET https://api.vercel.com/v1/billing/charges` e processa a resposta como **JSON Lines**, não como um array JSON único: lê o corpo via `response.text()`, separa por `\n`, filtra linhas vazias (`.filter(Boolean)`), e aplica `JSON.parse` em cada linha individualmente dentro de um `try/catch` por linha (uma linha malformada é logada e ignorada, sem derrubar o parsing das demais — nunca usar `response.json()` diretamente no corpo inteiro, o que falharia ou processaria incorretamente um payload JSONL).
+- [x] **AC2 — Parsing correto de JSONL (CON-5, ponto técnico central desta story):** O coletor busca `GET https://api.vercel.com/v1/billing/charges` e processa a resposta como **JSON Lines**, não como um array JSON único: lê o corpo via `response.text()`, separa por `\n`, filtra linhas vazias (`.filter(Boolean)`), e aplica `JSON.parse` em cada linha individualmente dentro de um `try/catch` por linha (uma linha malformada é logada e ignorada, sem derrubar o parsing das demais — nunca usar `response.json()` diretamente no corpo inteiro, o que falharia ou processaria incorretamente um payload JSONL).
 
-- [ ] **AC3 — Requisição com params e auth exatos:** A chamada usa `Authorization: Bearer ${VERCEL_BILLING_TOKEN}` e os query params `teamId=${VERCEL_TEAM_ID}` (via `URLSearchParams`), além de `from`/`to` no formato de data aceito pela API (formato ISO 8601 — **confirmar o nome exato do(s) parâmetro(s) de janela e o formato de data na documentação oficial da Vercel Billing API antes de implementar**, seguindo o mesmo princípio da Story 78-3/T1.4 de não inventar nomes de campo — Artigo IV). O nome real do(s) parâmetro(s) encontrado deve ser documentado em Completion Notes.
+- [x] **AC3 — Requisição com params e auth exatos:** A chamada usa `Authorization: Bearer ${VERCEL_BILLING_TOKEN}` e os query params `teamId=${VERCEL_TEAM_ID}` (via `URLSearchParams`), além de `from`/`to` no formato de data aceito pela API (formato ISO 8601 — **confirmar o nome exato do(s) parâmetro(s) de janela e o formato de data na documentação oficial da Vercel Billing API antes de implementar**, seguindo o mesmo princípio da Story 78-3/T1.4 de não inventar nomes de campo — Artigo IV). O nome real do(s) parâmetro(s) encontrado deve ser documentado em Completion Notes.
 
-- [ ] **AC4 — Mapeamento FOCUS → `CostSnapshotRow[]` com convenção de métrica compartilhada:** Cada linha JSONL (registro FOCUS — ex.: campos como período de cobrança, custo faturado/efetivo, nome do serviço/recurso) é agregada por `snapshot_date` (dia) em uma ou mais `CostSnapshotRow`. A métrica monetária principal usa `metric = 'cost_usd'` (mesma convenção adotada pelo coletor Anthropic da 78-3, para que a Story 78-9 possa somar `SUM(value) WHERE metric = 'cost_usd'` de forma uniforme entre coletores da camada FORTE); quando a resposta permitir quebra por serviço/recurso Vercel, métricas adicionais de uso podem ser gravadas com `metric` descritivo (ex.: prefixado por tipo de recurso) e `currency: null`. Múltiplas linhas JSONL do mesmo dia são **somadas** em um único valor de `cost_usd` por dia (não uma linha por registro bruto) — a granularidade de gravação em `service_cost_snapshots` é diária (CON-6 do épico), não por linha de charge.
+- [x] **AC4 — Mapeamento FOCUS → `CostSnapshotRow[]` com convenção de métrica compartilhada:** Cada linha JSONL (registro FOCUS — ex.: campos como período de cobrança, custo faturado/efetivo, nome do serviço/recurso) é agregada por `snapshot_date` (dia) em uma ou mais `CostSnapshotRow`. A métrica monetária principal usa `metric = 'cost_usd'` (mesma convenção adotada pelo coletor Anthropic da 78-3, para que a Story 78-9 possa somar `SUM(value) WHERE metric = 'cost_usd'` de forma uniforme entre coletores da camada FORTE); quando a resposta permitir quebra por serviço/recurso Vercel, métricas adicionais de uso podem ser gravadas com `metric` descritivo (ex.: prefixado por tipo de recurso) e `currency: null`. Múltiplas linhas JSONL do mesmo dia são **somadas** em um único valor de `cost_usd` por dia (não uma linha por registro bruto) — a granularidade de gravação em `service_cost_snapshots` é diária (CON-6 do épico), não por linha de charge.
 
-- [ ] **AC5 — Janela ≤ 1 ano validada antes da chamada (CON-5):** Se a rota receber `?from=YYYY-MM-DD&to=YYYY-MM-DD` com diferença superior a 366 dias, o coletor retorna erro claro (`collector.collect()` lança uma exceção tipada específica, ex. `VercelWindowTooLargeError`) **antes** de chamar a API Vercel; a rota trata esse erro retornando HTTP 400 `{ error: "Window exceeds 1 year limit" }` (distinto do fluxo de erro genérico do runner, que resultaria em `collection_status='error'` — aqui é erro de validação de input, não falha de coleta).
+- [x] **AC5 — Janela ≤ 1 ano validada antes da chamada (CON-5):** Se a rota receber `?from=YYYY-MM-DD&to=YYYY-MM-DD` com diferença superior a 366 dias, o coletor retorna erro claro (`collector.collect()` lança uma exceção tipada específica, ex. `VercelWindowTooLargeError`) **antes** de chamar a API Vercel; a rota trata esse erro retornando HTTP 400 `{ error: "Window exceeds 1 year limit" }` (distinto do fluxo de erro genérico do runner, que resultaria em `collection_status='error'` — aqui é erro de validação de input, não falha de coleta).
 
-- [ ] **AC6 — Custo diário gravado idempotente por serviço (NFR-4):** Rodar o coletor duas vezes para a mesma janela resulta em **exatamente uma linha** por `(service_id, snapshot_date, 'cost_usd')` em `service_cost_snapshots` — o `value` da segunda execução sobrescreve (upsert via `onConflict: 'service_id,snapshot_date,metric'`), nunca duplica linha. Mesmo padrão de validação da 78-3/AC7.
+- [x] **AC6 — Custo diário gravado idempotente por serviço (NFR-4):** Rodar o coletor duas vezes para a mesma janela resulta em **exatamente uma linha** por `(service_id, snapshot_date, 'cost_usd')` em `service_cost_snapshots` — o `value` da segunda execução sobrescreve (upsert via `onConflict: 'service_id,snapshot_date,metric'`), nunca duplica linha. Mesmo padrão de validação da 78-3/AC7.
 
-- [ ] **AC7 — Cron autenticado e degradação graciosa quando secrets ausentes:** `GET /api/cron/billing-collect-vercel` segue exatamente o padrão `CRON_SECRET` de `daily-report`/78-3 (sem `CRON_SECRET` → 503; header incorreto → 401). Se `VERCEL_BILLING_TOKEN` ou `VERCEL_TEAM_ID` não estiverem definidos, a rota retorna 503 `{ error: "VERCEL_BILLING_TOKEN not set" }` (ou `VERCEL_TEAM_ID`, conforme o ausente) **sem** tentar chamar a API Vercel e **sem** gravar snapshot algum — cobre o caso real de a Story 78-2 ainda não ter concluído o provisionamento.
+- [x] **AC7 — Cron autenticado e degradação graciosa quando secrets ausentes:** `GET /api/cron/billing-collect-vercel` segue exatamente o padrão `CRON_SECRET` de `daily-report`/78-3 (sem `CRON_SECRET` → 503; header incorreto → 401). Se `VERCEL_BILLING_TOKEN` ou `VERCEL_TEAM_ID` não estiverem definidos, a rota retorna 503 `{ error: "VERCEL_BILLING_TOKEN not set" }` (ou `VERCEL_TEAM_ID`, conforme o ausente) **sem** tentar chamar a API Vercel e **sem** gravar snapshot algum — cobre o caso real de a Story 78-2 ainda não ter concluído o provisionamento.
 
-- [ ] **AC8 — Falha da API isolada não derruba o cron (NFR-3, herdado do runner da 78-3):** Se a chamada à API Vercel falhar (timeout, erro HTTP, resposta que não é JSONL válido em nenhuma linha), o `runCollector()` da 78-3 captura o erro (propagado normalmente por `collect()`, sem tratamento especial no coletor Vercel além do parsing linha-a-linha do AC2), grava linha `collection_status='error'`, e a rota retorna HTTP 200 com `{ ok: false, error: ... }` — nunca 500 por falha isolada.
+- [x] **AC8 — Falha da API isolada não derruba o cron (NFR-3, herdado do runner da 78-3):** Se a chamada à API Vercel falhar (timeout, erro HTTP, resposta que não é JSONL válido em nenhuma linha), o `runCollector()` da 78-3 captura o erro (propagado normalmente por `collect()`, sem tratamento especial no coletor Vercel além do parsing linha-a-linha do AC2), grava linha `collection_status='error'`, e a rota retorna HTTP 200 com `{ ok: false, error: ... }` — nunca 500 por falha isolada.
 
-- [ ] **AC9 — Backfill manual dentro do limite (FR-10):** A rota aceita `?from=YYYY-MM-DD&to=YYYY-MM-DD` opcionais para reprocessar um período passado (respeitando o limite de 1 ano do AC5); se ausentes, o default é o dia anterior (`ontem`, calculado em `America/Sao_Paulo` — NFR-8), igual ao padrão da 78-3.
+- [x] **AC9 — Backfill manual dentro do limite (FR-10):** A rota aceita `?from=YYYY-MM-DD&to=YYYY-MM-DD` opcionais para reprocessar um período passado (respeitando o limite de 1 ano do AC5); se ausentes, o default é o dia anterior (`ontem`, calculado em `America/Sao_Paulo` — NFR-8), igual ao padrão da 78-3.
 
-- [ ] **AC10 — `vercel.json` atualizado sem colisão:** Novo entry em `packages/web/vercel.json` em horário livre que não colide com nenhum cron existente nem com o da 78-3 (`billing-collect-anthropic` às `10:00 UTC`) — ver Dev Notes para o horário exato escolhido e a lista completa de horários já ocupados.
+- [x] **AC10 — `vercel.json` atualizado sem colisão:** Novo entry em `packages/web/vercel.json` em horário livre que não colide com nenhum cron existente nem com o da 78-3 (`billing-collect-anthropic` às `10:00 UTC`) — ver Dev Notes para o horário exato escolhido e a lista completa de horários já ocupados.
 
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Preparação e confirmação de contrato/API** (AC1, AC3)
-  - [ ] T1.1 — Confirmar se `packages/web/src/lib/billing-collectors/{types.ts,run-collector.ts}` já existem (Story 78-3 implementada); se não existirem, sinalizar bloqueio e priorizar a implementação da 78-3 antes de prosseguir
-  - [ ] T1.2 — Ler a Story 78-3 (Dev Notes: contrato `BillingCollector`, `CostSnapshotRow`, `CollectorResult`, esqueleto de `runCollector()`) e o coletor Anthropic como referência de estrutura de arquivo
-  - [ ] T1.3 — Ler `packages/web/src/app/api/cron/daily-report/route.ts` (padrão de auth `CRON_SECRET`, confirmado: `authHeader !== \`Bearer ${cronSecret}\`` → 401; ausência de `cronSecret` → 503)
-  - [ ] T1.4 — Consultar a documentação oficial da Vercel Billing API (`GET /v1/billing/charges`) via `context7` ou busca web para confirmar: nomes exatos dos query params de janela de data, formato de data aceito, estrutura exata dos campos FOCUS retornados por linha (nome do serviço/recurso, campo de custo faturado vs. efetivo, campo de período). **Não inventar nomes de campo** (Artigo IV) — documentar o formato real encontrado em Completion Notes, seguindo o mesmo processo da 78-3/T1.4 para a Anthropic Admin API
+- [x] **T1 — Preparação e confirmação de contrato/API** (AC1, AC3)
+  - [x] T1.1 — Confirmar se `packages/web/src/lib/billing-collectors/{types.ts,run-collector.ts}` já existem (Story 78-3 implementada); se não existirem, sinalizar bloqueio e priorizar a implementação da 78-3 antes de prosseguir
+  - [x] T1.2 — Ler a Story 78-3 (Dev Notes: contrato `BillingCollector`, `CostSnapshotRow`, `CollectorResult`, esqueleto de `runCollector()`) e o coletor Anthropic como referência de estrutura de arquivo
+  - [x] T1.3 — Ler `packages/web/src/app/api/cron/daily-report/route.ts` (padrão de auth `CRON_SECRET`, confirmado: `authHeader !== \`Bearer ${cronSecret}\`` → 401; ausência de `cronSecret` → 503)
+  - [x] T1.4 — Consultar a documentação oficial da Vercel Billing API (`GET /v1/billing/charges`) via `context7` ou busca web para confirmar: nomes exatos dos query params de janela de data, formato de data aceito, estrutura exata dos campos FOCUS retornados por linha (nome do serviço/recurso, campo de custo faturado vs. efetivo, campo de período). **Não inventar nomes de campo** (Artigo IV) — documentar o formato real encontrado em Completion Notes, seguindo o mesmo processo da 78-3/T1.4 para a Anthropic Admin API
 
-- [ ] **T2 — Parser JSONL** (AC2)
-  - [ ] T2.1 — Implementar leitura via `response.text()` + split por `\n` + filter de linhas vazias
-  - [ ] T2.2 — `JSON.parse` por linha dentro de `try/catch` individual; linha malformada é logada (`console.warn` ou `logEvent`) e ignorada, sem interromper o parsing das demais linhas
+- [x] **T2 — Parser JSONL** (AC2)
+  - [x] T2.1 — Implementar leitura via `response.text()` + split por `\n` + filter de linhas vazias
+  - [x] T2.2 — `JSON.parse` por linha dentro de `try/catch` individual; linha malformada é logada (`console.warn` ou `logEvent`) e ignorada, sem interromper o parsing das demais linhas
   - [ ] T2.3 — Unit test (se o projeto tiver Vitest configurado para `packages/web/src/lib/`) cobrindo: JSONL válido multi-linha, linha vazia no meio, uma linha malformada entre linhas válidas
 
-- [ ] **T3 — Mapeamento FOCUS → `CostSnapshotRow[]`** (AC4)
-  - [ ] T3.1 — Agrupar registros parseados por `snapshot_date` (dia)
-  - [ ] T3.2 — Somar o valor de custo faturado/efetivo (campo confirmado em T1.4) por dia → uma `CostSnapshotRow` com `metric: 'cost_usd'`, `currency: 'USD'`, `collection_status: 'ok'`
+- [x] **T3 — Mapeamento FOCUS → `CostSnapshotRow[]`** (AC4)
+  - [x] T3.1 — Agrupar registros parseados por `snapshot_date` (dia)
+  - [x] T3.2 — Somar o valor de custo faturado/efetivo (campo confirmado em T1.4) por dia → uma `CostSnapshotRow` com `metric: 'cost_usd'`, `currency: 'USD'`, `collection_status: 'ok'`
   - [ ] T3.3 — (Opcional, se os dados permitirem sem invenção) gravar métricas de uso adicionais por tipo de recurso, `currency: null`
 
-- [ ] **T4 — Validação de janela ≤ 1 ano** (AC5)
-  - [ ] T4.1 — Calcular diferença em dias entre `from` e `to` antes de montar a requisição
-  - [ ] T4.2 — Se > 366 dias, lançar `VercelWindowTooLargeError` (tipo específico) sem chamar a API
+- [x] **T4 — Validação de janela ≤ 1 ano** (AC5)
+  - [x] T4.1 — Calcular diferença em dias entre `from` e `to` antes de montar a requisição
+  - [x] T4.2 — Se > 366 dias, lançar `VercelWindowTooLargeError` (tipo específico) sem chamar a API
 
-- [ ] **T5 — Coletor Vercel** (AC1, AC3)
-  - [ ] T5.1 — Criar `packages/web/src/lib/billing-collectors/vercel.ts` implementando `BillingCollector` (`serviceSlug: 'vercel'`)
-  - [ ] T5.2 — Montar requisição com `Authorization: Bearer ${VERCEL_BILLING_TOKEN}` + `URLSearchParams({ teamId: VERCEL_TEAM_ID, ...params de janela confirmados em T1.4 })`
-  - [ ] T5.3 — Se `VERCEL_BILLING_TOKEN` ou `VERCEL_TEAM_ID` ausente, lançar erro tipado específico que a rota trata como 503 (AC7), distinto do erro genérico tratado pelo runner (AC8)
+- [x] **T5 — Coletor Vercel** (AC1, AC3)
+  - [x] T5.1 — Criar `packages/web/src/lib/billing-collectors/vercel.ts` implementando `BillingCollector` (`serviceSlug: 'vercel'`)
+  - [x] T5.2 — Montar requisição com `Authorization: Bearer ${VERCEL_BILLING_TOKEN}` + `URLSearchParams({ teamId: VERCEL_TEAM_ID, ...params de janela confirmados em T1.4 })`
+  - [x] T5.3 — Se `VERCEL_BILLING_TOKEN` ou `VERCEL_TEAM_ID` ausente, lançar erro tipado específico que a rota trata como 503 (AC7), distinto do erro genérico tratado pelo runner (AC8)
 
-- [ ] **T6 — Rota de cron** (AC5, AC7, AC9, AC10)
-  - [ ] T6.1 — Criar `packages/web/src/app/api/cron/billing-collect-vercel/route.ts` com auth `CRON_SECRET` idêntica ao padrão existente
-  - [ ] T6.2 — Ler query params opcionais `from`/`to`; default = ontem em `America/Sao_Paulo`
-  - [ ] T6.3 — Checar `VERCEL_BILLING_TOKEN`/`VERCEL_TEAM_ID` antes de chamar o coletor (AC7)
-  - [ ] T6.4 — Capturar `VercelWindowTooLargeError` explicitamente → 400 (AC5), antes de delegar ao `runCollector()` (que trataria como erro genérico 200/error)
-  - [ ] T6.5 — Chamar `runCollector(admin, vercelCollector, window)` e retornar `CollectorResult` como JSON
-  - [ ] T6.6 — `export const maxDuration = 60`
-  - [ ] T6.7 — Adicionar entry em `packages/web/vercel.json` (AC10)
+- [x] **T6 — Rota de cron** (AC5, AC7, AC9, AC10)
+  - [x] T6.1 — Criar `packages/web/src/app/api/cron/billing-collect-vercel/route.ts` com auth `CRON_SECRET` idêntica ao padrão existente
+  - [x] T6.2 — Ler query params opcionais `from`/`to`; default = ontem em `America/Sao_Paulo`
+  - [x] T6.3 — Checar `VERCEL_BILLING_TOKEN`/`VERCEL_TEAM_ID` antes de chamar o coletor (AC7)
+  - [x] T6.4 — Capturar `VercelWindowTooLargeError` explicitamente → 400 (AC5), antes de delegar ao `runCollector()` (que trataria como erro genérico 200/error)
+  - [x] T6.5 — Chamar `runCollector(admin, vercelCollector, window)` e retornar `CollectorResult` como JSON
+  - [x] T6.6 — `export const maxDuration = 60`
+  - [x] T6.7 — Adicionar entry em `packages/web/vercel.json` (AC10)
 
 - [ ] **T7 — Validação manual em DEV** (AC2, AC6, AC7, AC8, AC9)
   - [ ] T7.1 — Chamar a rota sem header de auth → 401; sem `CRON_SECRET` configurado → 503
@@ -131,9 +131,9 @@ Esta story **adapta** esse contrato para a Vercel (IDS: REUSE > ADAPT > CREATE �
   - [ ] T7.5 — Chamar com janela > 366 dias → confirmar 400, sem chamada à API Vercel (checar logs/mocks) — AC5
   - [ ] T7.6 — Forçar falha de rede/resposta inválida → confirmar linha `collection_status='error'` + resposta 200 (não 500) — AC8
 
-- [ ] **T8 — Documentar formato real encontrado**
-  - [ ] T8.1 — Registrar em Completion Notes o formato exato de query params e campos FOCUS confirmados na doc oficial (T1.4)
-  - [ ] T8.2 — Registrar decisões no Change Log
+- [x] **T8 — Documentar formato real encontrado**
+  - [x] T8.1 — Registrar em Completion Notes o formato exato de query params e campos FOCUS confirmados na doc oficial (T1.4)
+  - [x] T8.2 — Registrar decisões no Change Log
 
 ---
 
@@ -269,14 +269,14 @@ Horários já ocupados (conferir `packages/web/vercel.json` antes de editar): `*
 
 ## Definition of Done
 
-- [ ] `packages/web/src/lib/billing-collectors/vercel.ts` criado, implementando `BillingCollector` sem redefinir o contrato da 78-3
-- [ ] Parser JSONL implementado corretamente (`response.text()` + split por linha + `JSON.parse` por linha, com isolamento de linha malformada)
-- [ ] Validação de janela ≤ 1 ano implementada, com erro 400 explícito antes de qualquer chamada à API Vercel
-- [ ] Mapeamento FOCUS → `CostSnapshotRow` grava `metric='cost_usd'`/`currency='USD'` agregado por dia (mesma convenção do coletor Anthropic)
-- [ ] `packages/web/src/app/api/cron/billing-collect-vercel/route.ts` criado com auth `CRON_SECRET` idêntica ao padrão existente
-- [ ] `packages/web/vercel.json` atualizado com o novo cron (`"20 10 * * *"`), sem colisão
+- [x] `packages/web/src/lib/billing-collectors/vercel.ts` criado, implementando `BillingCollector` sem redefinir o contrato da 78-3
+- [x] Parser JSONL implementado corretamente (`response.text()` + split por linha + `JSON.parse` por linha, com isolamento de linha malformada)
+- [x] Validação de janela ≤ 1 ano implementada, com erro 400 explícito antes de qualquer chamada à API Vercel
+- [x] Mapeamento FOCUS → `CostSnapshotRow` grava `metric='cost_usd'`/`currency='USD'` agregado por dia (mesma convenção do coletor Anthropic)
+- [x] `packages/web/src/app/api/cron/billing-collect-vercel/route.ts` criado com auth `CRON_SECRET` idêntica ao padrão existente
+- [x] `packages/web/vercel.json` atualizado com o novo cron (`"20 10 * * *"`), sem colisão
 - [ ] Validação manual em DEV: auth ausente (401), secret de cron ausente (503), secrets Vercel ausentes (503 sem gravar), janela > 1 ano (400 sem chamar API), coleta com sucesso (linha `cost_usd`), idempotência (sem duplicata), falha isolada (200 + `collection_status='error'`)
-- [ ] Nenhuma modificação em `run-collector.ts`/`types.ts` da 78-3 sem revisão explícita do @architect
+- [x] Nenhuma modificação em `run-collector.ts`/`types.ts` da 78-3 sem revisão explícita do @architect
 - [ ] @architect executou quality gate com verdict PASS ou CONCERNS documentados e aceitos (foco: correção do parsing JSONL e aderência ao contrato da 78-3)
 - [ ] @devops fez push do commit final
 
@@ -297,27 +297,96 @@ Horários já ocupados (conferir `packages/web/vercel.json` antes de editar): `*
 |------|--------|-----------|-------|
 | 2026-07-08 | 0.1 | Story criada a partir do Epic 78 (§7, story 78-5). Adapta o contrato `BillingCollector`/`runCollector()` fixado pela Story 78-3 para a Vercel, com foco no ponto técnico central desta story: parsing de resposta **JSONL** (não JSON array) no formato FOCUS/FinOps v1.3, agregação diária de custo em `metric='cost_usd'` e validação explícita de janela ≤ 1 ano (CON-5) antes de chamar a API. [AUTO-DECISION] Executor = @dev / Quality Gate = @architect → reason: tabela de decomposição do Épico 78 (§7) já define este mapeamento explicitamente para 78-5, idêntico ao padrão da 78-3/78-4/78-6. [AUTO-DECISION] Nomes exatos de query params e campos FOCUS da Vercel Billing API não fixados nesta story, apenas os já confirmados pelo discovery do épico (endpoint, JSONL, janela ≤ 1 ano) → reason: Artigo IV (No Invention) — @dev deve confirmar via documentação oficial (T1.4) antes de implementar o parser/mapeamento, mesmo padrão exigido pela 78-3 para a Anthropic Admin API. [AUTO-DECISION] Convenção `metric='cost_usd'`/`currency='USD'` fixada como padrão compartilhado entre coletores da camada FORTE (Anthropic, OpenAI, Vercel) → reason: permitir que a Story 78-9 (UI) some o "gasto do mês" de forma uniforme, sem lógica especial por serviço. [AUTO-DECISION] Horário de cron `"20 10 * * *"` escolhido por não colidir com nenhum horário já ocupado em `vercel.json`, incluindo o novo cron da 78-3 (`10:00 UTC`) → reason: sequenciar os coletores da camada FORTE em horários próximos mas não simultâneos, evitando picos de execução. [AUTO-DECISION] Dependência de sequenciamento de implementação com a Story 78-3 explicitada (código, não só contrato textual) → reason: `runCollector()`/`types.ts` precisam existir fisicamente no repositório antes desta story poder importar e adaptar o contrato; evita que o @dev desta story recrie o runner por engano caso assuma 78-5 antes de 78-3 estar implementada. | @sm (River) |
 | 2026-07-08 | 0.2 | **Validação cruzada do backlog do Epic 78 (@po Pax) — GO, Status Draft → Ready.** Ponto técnico central (parsing JSONL/FOCUS via `response.text()` + parse por linha, nunca `response.json()` no corpo inteiro) bem especificado; validação de janela ≤ 1 ano (400 antes da chamada, distinto do fluxo de erro do runner) coerente com CON-5. Convenção `metric='cost_usd'`/`currency='USD'` alinhada com 78-3 e com a agregação da 78-9. Horário de cron `"20 10"` confirmado livre, sem colisão com `"0 10"` (78-3) nem `"15 10"` (78-4). | @po (Pax) |
+| 2026-07-13 | 0.3 | **Implementação (@dev Dex) — Status Ready → InReview.** Contrato da Vercel Billing API confirmado na OpenAPI oficial (T1.4): `Content-Type: application/jsonl`, params `from` (inclusivo)/`to` (**exclusivo**)/`teamId`, campos FOCUS v1.3 `BilledCost`/`BillingCurrency`/`ChargePeriodStart`. Criados `vercel.ts` (coletor + parser JSONL defensivo + `assertVercelWindow` + agregação diária de `BilledCost` em `cost_usd`/USD) e `route.ts` (auth CRON_SECRET, 503 gracioso p/ credenciais ausentes, 400 p/ janela > 1 ano antes do runCollector). `runCollector`/`types.ts` da 78-3 REUSADOS sem modificação (IDS ADAPT). Cron `"20 10 * * *"` adicionado em `vercel.json`. Lint e typecheck limpos nos arquivos novos (restam apenas os 4 erros pré-existentes não relacionados: react-email-editor ×3, pdf-lib). [AUTO-DECISION] Métrica de uso por serviço (T3.3, opcional) não implementada → reason: `ConsumedUnit` varia por linha, somar unidades distintas seria invenção (Artigo IV); só `cost_usd` gravado. [AUTO-DECISION] Unit test (T2.3) não adicionado → reason: `packages/web` sem runner de teste unitário (só Playwright e2e), idêntico à 78-3; item não-bloqueante. T7.3–T7.6 (validação E2E com secrets reais) pendentes até 78-2 provisionar credenciais no ambiente. | @dev (Dex) |
 
 ---
 
 ## Dev Agent Record
 
-_A ser preenchido pelo @dev durante a implementação._
-
 ### Agent Model Used
-—
+Opus 4.8 (1M) — @dev (Dex), modo autônomo YOLO.
 
 ### Debug Log References
-—
+- Confirmação do contrato da API via OpenAPI oficial da Vercel (`https://openapi.vercel.sh`, spec pública sem auth): endpoint `GET /v1/billing/charges`, `Content-Type: application/jsonl`, schema FOCUS v1.3.
+- Probe do endpoint sem token → `403 forbidden / missingToken` (confirma que o endpoint existe e exige `Authorization: Bearer`).
 
 ### Completion Notes List
-—
+
+**Contrato da Vercel Billing API confirmado na OpenAPI oficial (T1.4 — Artigo IV, sem invenção):**
+- **Endpoint:** `GET https://api.vercel.com/v1/billing/charges`
+- **Content-Type da resposta:** `application/jsonl` — confirma formalmente JSONL (não array JSON). Parsing via `response.text()` + `split('\n')` + `JSON.parse` por linha (AC2).
+- **Query params (nomes exatos confirmados na spec):**
+  - `from` — **required**, ISO 8601 date-time UTC, "Inclusive start of the date range".
+  - `to` — **required**, ISO 8601 date-time UTC, **"Exclusive end of the date range"**. Como `to` é EXCLUSIVO, para a janela civil `[from, to]` inclusiva o coletor envia `to = (window.to + 1 dia) às 00:00Z` (mesmo padrão do `ending_at` exclusivo da Anthropic na 78-3).
+  - `teamId` — opcional (usado com `VERCEL_TEAM_ID`); alternativa `slug` também aceita.
+- **Campos FOCUS v1.3 confirmados no schema da resposta 200 (usados pelo coletor):**
+  - `BilledCost` (number) — "Charge amount serving as the basis for invoicing" → **métrica de custo principal** somada em `cost_usd`.
+  - `BillingCurrency` (string, enum `["USD"]`) → mapeado para `currency='USD'`; linha com moeda ≠ USD é descartada defensivamente (nunca ocorre pelo enum, mas evita mistura de moeda numa soma USD — NFR-7).
+  - `ChargePeriodStart` (string, ISO 8601 UTC, inclusivo) → usado para alocar o custo no dia (`snapshot_date = ChargePeriodStart.slice(0,10)`).
+  - Outros campos disponíveis não usados nesta story: `EffectiveCost`, `ChargePeriodEnd`, `ChargeCategory` (Adjustment/Credit/Purchase/Tax/Usage), `ServiceName`, `ServiceCategory`, `Tags` (ProjectId/ProjectName), `ConsumedQuantity`/`ConsumedUnit`, `PricingCategory`, etc.
+
+**Decisões de implementação (IDS: ADAPT do coletor Anthropic 78-3):**
+- REUSE sem modificação: `types.ts` (`BillingCollector`, `CostSnapshotRow`, `CollectWindow`), `run-collector.ts` (`runCollector` — upsert idempotente `onConflict:'service_id,snapshot_date,metric'` + isolamento de falha), `logger.logEvent`, `createAdminClient`.
+- CREATE (código genuinamente novo, ~30% do artefato): parser JSONL, `assertVercelWindow` (janela ≤ 366 dias), `aggregateDailyCost` (FOCUS → `CostSnapshotRow`).
+- **Agregação diária:** `BilledCost` de todas as linhas do mesmo `ChargePeriodStart`-dia é **somado** numa única `CostSnapshotRow` `metric='cost_usd'`/`currency='USD'` (CON-6 — granularidade diária, não uma linha por charge bruto). Somar `BilledCost` (não `EffectiveCost`) porque é a "base para faturamento" — reflete o valor que a fatura cobra, já com sinal de créditos/ajustes.
+- **`raw_response`:** grava um resumo `{ charge_count, billed_cost_total }` por dia (não o payload bruto inteiro, que pode ser volumoso) — suficiente para auditoria/depuração.
+- **Validação de janela (AC5):** exportei `assertVercelWindow` + `VercelWindowTooLargeError`; a **rota** valida ANTES de chamar `runCollector` → HTTP 400 explícito (`{ error: "Window exceeds 1 year limit" }`), distinto do fluxo de erro do runner (que geraria `collection_status='error'` + 200). O coletor também revalida internamente como rede de segurança.
+- **503 gracioso (AC7):** a rota checa `VERCEL_BILLING_TOKEN` e `VERCEL_TEAM_ID` antes de qualquer chamada; ausência → 503 com a env var específica no corpo, sem gravar snapshot. O coletor tem `MissingVercelCredentialsError` como rede de segurança.
+
+**Incertezas / desvios registrados:**
+- **T3.3 (métricas de uso por serviço/recurso — OPCIONAL) NÃO implementada.** Motivo: `ConsumedUnit` varia por linha FOCUS (GB, requests, invocations, etc.); somar `ConsumedQuantity` por dia entre unidades diferentes seria semanticamente inválido e exigiria inventar uma agregação (Artigo IV). Fica como métrica de uso não coletada — só o custo monetário `cost_usd` é gravado (que é o exigido pelo DoD e pela convenção compartilhada da camada FORTE). Escalável ao @architect se a 78-9 precisar de breakdown por serviço.
+- **T2.3 (unit test do parser) NÃO adicionada.** Motivo: `packages/web` não tem runner de teste unitário configurado (só Playwright e2e) — mesmo estado observado na 78-3, que também não adicionou testes unitários. T2.3 é explicitamente "não bloqueante" na story.
+- **T7.3–T7.6 (validação E2E com secrets reais) PENDENTES** até a Story 78-2 provisionar `VERCEL_BILLING_TOKEN`/`VERCEL_TEAM_ID` (a mission indica que já foram provisionados na Vercel produção, mas não estão no ambiente DEV local desta implementação). Caminhos de degradação graciosa (401/503/400) são determinísticos e validáveis por leitura de código.
 
 ### File List
-—
+- **Criado:** `packages/web/src/lib/billing-collectors/vercel.ts` — coletor Vercel (implementa `BillingCollector`, parser JSONL, `assertVercelWindow`, `aggregateDailyCost`).
+- **Criado:** `packages/web/src/app/api/cron/billing-collect-vercel/route.ts` — rota de cron autenticada (`CRON_SECRET`), 503 gracioso, 400 janela > 1 ano, delega a `runCollector`.
+- **Modificado:** `packages/web/vercel.json` — novo cron `"20 10 * * *"` para `/api/cron/billing-collect-vercel`.
 
 ---
 
 ## QA Results
 
-_A ser preenchido pelo @architect durante o quality gate._
+### Review Date: 2026-07-13
+
+### Reviewed By: Quinn (Test Architect) — @qa
+
+### Escopo
+Quality gate estático da Story 78-5 (Coletor Vercel), 7 quality checks do fluxo QA + os focos específicos da mission (parsing JSONL/FOCUS, janela ≤1 ano, aderência ao contrato 78-3, degradação graciosa, segurança, convenções). Sem aplicação em banco, sem commit/push. Correções de código, se necessárias, são do @dev.
+
+### Evidências
+- **Typecheck** (`npx tsc --noEmit` em `packages/web`): apenas os **4 erros pré-existentes** não relacionados (`react-email-editor` ×3, `pdf-lib` ×1). **Zero** erros em `vercel.ts`/`route.ts`.
+- **Lint** (`npx eslint` nos 2 arquivos novos): **sem erros**.
+- **Contrato 78-3 inalterado**: `git status` confirma `types.ts`/`run-collector.ts` **não modificados** — só `vercel.ts` (novo) + `vercel.json` (cron adicionado). IDS ADAPT respeitado (REUSE do runner sem fork).
+- **Cron sem colisão**: `grep` confirma `"20 10 * * *"` como único nesse horário (anthropic `0 10`, openai `15 10`, daily-report `59 10`).
+
+### 7 Quality Checks
+| Check | Resultado | Nota |
+|-------|-----------|------|
+| 1. Code review (padrões/legibilidade) | ✅ PASS | Coletor defensivo, tipagem FOCUS explícita, erros tipados (`VercelWindowTooLargeError`, `MissingVercelCredentialsError`). |
+| 2. Parsing JSONL/FOCUS | ✅ PASS | `response.text()`+`split('\n')`+`JSON.parse` por linha em try/catch individual; linha malformada logada e isolada; **nunca** `response.json()`. `BilledCost`/`BillingCurrency`/`ChargePeriodStart` mapeados; agregação diária somada em `cost_usd`/USD. |
+| 3. Acceptance Criteria (AC1–AC10) | ✅ PASS | Todos rastreados (ver gate file). AC6/e2e diferido. |
+| 4. Sem regressões (contrato 78-3) | ✅ PASS | Runner/types reusados sem alteração. |
+| 5. Performance | ✅ PASS | `maxDuration=60`, `AbortSignal.timeout(30s)`, `raw_response` resumido (não payload bruto). |
+| 6. Segurança | ✅ PASS | Token só em header `Bearer`; nunca logado (logs carregam linha/erro da API, não a credencial); `trim()` nas envs. |
+| 7. Documentação/convenções | ✅ PASS | Completion Notes documentam formato real da API (T1.4, Artigo IV); lint/typecheck limpos. |
+
+### Focos específicos da mission
+- **Parsing (Check 2):** correto e defensivo. Descarte por linha sem derrubar as demais confirmado em `parseJsonl`; linhas sem `ChargePeriodStart` ou `BilledCost` não-finito também isoladas em `aggregateDailyCost`.
+- **Janela ≤1 ano (Check 3):** `assertVercelWindow` (>366d → `VercelWindowTooLargeError`) validada **na rota antes** do `runCollector` → 400 explícito, distinto do fluxo `collection_status='error'` do runner. `to` exclusivo tratado (`to = window.to + 1 dia` @ 00:00Z).
+- **Contrato 78-3 (Check 4):** ADAPTA (importa types/runner), não recria. Upsert idempotente via runner (`onConflict:service_id,snapshot_date,metric`).
+- **Degradação & auth (Check 5):** `CRON_SECRET` ausente→503, header errado→401; `VERCEL_BILLING_TOKEN`/`VERCEL_TEAM_ID` ausente→503 **antes** de qualquer chamada/gravação; falha de API isolada pelo runner → HTTP 200.
+- **Segurança (Check 6):** token nunca exposto; `Bearer` correto.
+- **Convenções (Check 7):** lint/typecheck limpos; cron `20 10` sem colisão.
+
+### Observações (não bloqueantes)
+- **REL-001 (low):** para janela civil de exatamente 366 dias, o `to` exclusivo (+1 dia) cobre 367 dias-calendário; se a Vercel aplicar limite estrito de 1 ano no range, um backfill no limite máximo pode receber erro genérico — degrada com segurança (runner isola → `error` + 200, sem corrupção). Padrão herdado do +1 exclusivo da 78-3. Monitorar no 1º backfill largo.
+- **TEST-001 (low):** validação E2E com dado real (T7.3–T7.6) **pendente do redeploy pós-78-2** (secrets já provisionados em produção conforme mission). Caminhos de degradação (401/503/400) determinísticos e validados por leitura estática.
+- **TEST-002 (low):** unit test do parser (T2.3) não adicionado — `packages/web` sem runner unitário (só Playwright e2e), idêntico à 78-3; explicitamente não-bloqueante.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/78.5-coletor-vercel.yml
+
+### Próximo passo
+APROVADO para push (@devops). Após redeploy, executar T7.3–T7.6 (validação E2E com dado real) e fechar os checkboxes de validação manual + DoD restantes.

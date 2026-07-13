@@ -3,7 +3,7 @@
 ## Metadata
 - **Epic:** 78 — Painel de Saúde & Billing da Plataforma
 - **Story:** 78-2
-- **Status:** Ready
+- **Status:** InProgress (parcial — Vercel/Supabase/Resend provisionados e validados; Anthropic/OpenAI/Meta PENDENTES de pré-requisito humano de owner)
 - **Priority:** P1 — **PRÉ-REQUISITO BLOQUEANTE** para as Stories 78-3, 78-4, 78-5, 78-6 e 78-10 (nenhum coletor funciona sem as credenciais desta story)
 - **Complexity:** M (sem código de aplicação; provisionamento de 8 env vars + validação read-only de cada credencial; depende de ações humanas fora do repositório para gerar 3 das credenciais)
 - **Created:** 2026-07-08
@@ -80,39 +80,39 @@ Esta story é o **CON-2** do épico tornado acionável: "Anthropic e OpenAI exig
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Confirmar nomenclatura e ausência de colisão (AC1, AC9)**
-  - [ ] T1.1 — Ler `reference_vercel_env.md` / rodar `vercel env ls` no projeto de produção para confirmar que nenhum dos 8 nomes propostos já existe
-  - [ ] T1.2 — Fixar a tabela de contrato de nomes nos Dev Notes desta story (fonte de verdade para 78-3..78-6/78-10)
+- [x] **T1 — Confirmar nomenclatura e ausência de colisão (AC1, AC9)** ✅ 2026-07-13
+  - [x] T1.1 — Verificado via `GET /v10/projects/{id}/env` (74 env vars no projeto): dos 8 nomes do contrato, nenhum dos 7 novos já existia (`VERCEL_BILLING_TOKEN`, `VERCEL_TEAM_ID`, `SUPABASE_MANAGEMENT_PAT`, `SUPABASE_ORG_SLUG`, `ANTHROPIC_ADMIN_KEY`, `OPENAI_ADMIN_KEY`, `META_SYSTEM_USER_TOKEN`, `WHATSAPP_BUSINESS_ACCOUNT_ID` = ABSENT). `RESEND_API_KEY` já existe (prod+preview, não faz parte do contrato desta story). Sem colisão — AC9 preservada
+  - [x] T1.2 — Tabela de contrato de nomes já fixada nos Dev Notes (feita pelo @sm/@po na criação)
 
 - [ ] **T2 — Pré-requisitos humanos: solicitar geração das 3 credenciais de owner (AC8)**
-  - [ ] T2.1 — Notificar o usuário/owner (fora do escopo de agente) para gerar a Anthropic Admin key em `https://console.anthropic.com/settings/admin-keys` (requer papel de Organization Owner)
+  - [x] T2.1 — Anthropic Admin key gerada pelo owner e fornecida ao @devops ✅ 2026-07-13 (`https://console.anthropic.com/settings/admin-keys`, papel Organization Owner) — CONCLUÍDO
   - [ ] T2.2 — Notificar o usuário/owner para gerar a OpenAI Admin/Org key em `https://platform.openai.com/settings/organization/admin-keys` (requer papel de Org Owner/Admin)
   - [ ] T2.3 — Notificar o usuário/owner para gerar um Meta System User token com os escopos `whatsapp_business_management` (78-6) e `ads_read` (78-10, opcional) via Business Manager → System Users
   - [ ] T2.4 — Registrar status (`PENDENTE`/`CONCLUÍDO`) de cada item na tabela de Pré-requisitos Humanos
 
-- [ ] **T3 — Provisionar Vercel access token + Team ID (AC2, AC3)**
-  - [ ] T3.1 — Gerar um Vercel Access Token dedicado (escopo mínimo: leitura de billing/usage) em `https://vercel.com/account/tokens` — **não** reusar o token pessoal do CLI (`auth.json`) como secret de produção
-  - [ ] T3.2 — Confirmar `teamId`/slug do time correto (mesmo usado em `.vercel/project.json`)
-  - [ ] T3.3 — Gravar `VERCEL_BILLING_TOKEN` e `VERCEL_TEAM_ID` via `scripts/vercel-env-set.sh` (nunca stdin)
+- [x] **T3 — Provisionar Vercel access token + Team ID (AC2, AC3)** ✅ 2026-07-13
+  - [x] T3.1 — Vercel Access Token dedicado fornecido pelo usuário (conta `nicoletrifold-droid`, escopo com acesso a `/v1/billing/charges` confirmado) — **não** foi reusado o token pessoal do CLI (`auth.json`, logado como `freelans-dev` sem acesso à trifold)
+  - [x] T3.2 — `teamId` confirmado: `team_XCf2jBxUmCXao0prWVy0VmOZ` (slug `trifold-s-projects`), derivado via `GET /v2/teams`; projeto `prj_s3ARh1fpDnzbx9ua4MYJf9iqdRhj` acessível (HTTP 200)
+  - [x] T3.3 — `VERCEL_BILLING_TOKEN` e `VERCEL_TEAM_ID` gravados via REST API direta `POST /v10/projects/{id}/env` (`type:encrypted`, target `production/preview/development`) — **nunca stdin**. Helper `vercel-env-set.sh` não usado porque autentica via `auth.json` (conta sem acesso à trifold); usada a REST API com o token fornecido
 
-- [ ] **T4 — Provisionar Supabase Management PAT + Org slug (AC2, AC3)**
-  - [ ] T4.1 — Gerar um PAT do Supabase em `https://supabase.com/dashboard/account/tokens` (papel de owner da organização)
-  - [ ] T4.2 — Confirmar o org slug (`https://supabase.com/dashboard/org/{slug}`)
-  - [ ] T4.3 — Gravar `SUPABASE_MANAGEMENT_PAT` e `SUPABASE_ORG_SLUG` via `scripts/vercel-env-set.sh`
+- [x] **T4 — Provisionar Supabase Management PAT + Org slug (AC2, AC3)** ✅ 2026-07-13
+  - [x] T4.1 — PAT do Supabase fornecido pelo usuário; validado via `GET /v1/organizations` (HTTP 200)
+  - [x] T4.2 — Org slug confirmado: `hgvhxeyntttvnjxxdnkz` (org name "trifold"); projeto de prod `dsopqkqjkmhytudaaolv` confirmado sob essa org via `GET /v1/projects`
+  - [x] T4.3 — `SUPABASE_MANAGEMENT_PAT` e `SUPABASE_ORG_SLUG` gravados via REST API direta `POST /v10/projects/{id}/env` (`type:encrypted`) — nunca stdin
 
-- [ ] **T5 — Gravar as 3 credenciais geradas pelo owner assim que disponíveis (AC2, AC3, AC8)**
-  - [ ] T5.1 — Gravar `ANTHROPIC_ADMIN_KEY` assim que T2.1 concluído
+- [ ] **T5 — Gravar as 3 credenciais geradas pelo owner assim que disponíveis (AC2, AC3, AC8)** — PARCIAL (Anthropic ✅; OpenAI/Meta pendentes)
+  - [x] T5.1 — `ANTHROPIC_ADMIN_KEY` gravada via REST API direta `POST /v10/projects/{id}/env` (`type:encrypted`, targets `production/preview/development`, env id `3qxeovn8AHYzklrp`) — nunca stdin. Re-GET decrypted confirmou valor não-vazio (len 110, prefixo `sk-ant-admin01-` OK) ✅ 2026-07-13
   - [ ] T5.2 — Gravar `OPENAI_ADMIN_KEY` assim que T2.2 concluído
   - [ ] T5.3 — Gravar `META_SYSTEM_USER_TOKEN` assim que T2.3 concluído
   - [ ] T5.4 — Gravar `WHATSAPP_BUSINESS_ACCOUNT_ID` (identificador do WABA — **não** exige pré-requisito humano de owner; valor observável em payload real do webhook de mensagens `entry[0].id` ou via Business Manager → WhatsApp Manager) via `scripts/vercel-env-set.sh`, nunca stdin
 
-- [ ] **T6 — Validar cada credencial com chamada de teste read-only (AC5)**
-  - [ ] T6.1 — Anthropic: `GET /v1/organizations/cost_report?starting_at=<hoje-1d>` com header `x-api-key: $ANTHROPIC_ADMIN_KEY` + `anthropic-version: 2023-06-01` — esperar 200
-  - [ ] T6.2 — OpenAI: `GET /v1/organization/costs?start_time=<epoch hoje-1d>` com `Authorization: Bearer $OPENAI_ADMIN_KEY` — esperar 200
-  - [ ] T6.3 — Vercel: `GET /v2/user` ou `GET /v9/projects?teamId=$VERCEL_TEAM_ID` com `Authorization: Bearer $VERCEL_BILLING_TOKEN` — esperar 200
-  - [ ] T6.4 — Meta: `GET /<WABA_ID>?fields=id&access_token=$META_SYSTEM_USER_TOKEN` — esperar 200 (teste mínimo; `pricing_analytics` real fica para 78-6)
-  - [ ] T6.5 — Supabase: `GET /v1/organizations/{slug}` com `Authorization: Bearer $SUPABASE_MANAGEMENT_PAT` — esperar 200
-  - [ ] T6.6 — Documentar cada resultado no Change Log (comando, status HTTP, trecho não-sensível)
+- [ ] **T6 — Validar cada credencial com chamada de teste read-only (AC5)** — PARCIAL (Vercel/Supabase/Anthropic ✅; OpenAI/Meta pendentes)
+  - [x] T6.1 — Anthropic: `GET /v1/organizations/cost_report?starting_at=2026-07-06&ending_at=2026-07-13` com header `x-api-key: $ANTHROPIC_ADMIN_KEY` + `anthropic-version: 2023-06-01` — **HTTP 200**, retornou 7 buckets diários com 7 result entries (dados de custo presentes). Escopo de billing de organização confirmado ✅ 2026-07-13
+  - [ ] T6.2 — OpenAI: `GET /v1/organization/costs?start_time=<epoch hoje-1d>` com `Authorization: Bearer $OPENAI_ADMIN_KEY` — **PENDENTE** (admin key não gerada)
+  - [x] T6.3 — Vercel: validado com `GET /v2/user` (HTTP 200, user `nicoletrifold-droid`), `GET /v9/projects/{id}?teamId=` (HTTP 200) e adicionalmente `GET /v1/billing/charges?from=..&to=..&teamId=` (HTTP 200, retornou JSONL de charges FOCUS com campos `BilledCost`/`ServiceName`) — escopo de billing confirmado ✅ 2026-07-13
+  - [ ] T6.4 — Meta: `GET /<WABA_ID>?fields=id&access_token=$META_SYSTEM_USER_TOKEN` — **PENDENTE** (System User token não gerado)
+  - [x] T6.5 — Supabase: `GET /v1/organizations` (HTTP 200, org `hgvhxeyntttvnjxxdnkz`) + `GET /v1/projects` (HTTP 200, prod `dsopqkqjkmhytudaaolv` presente). Nota: usado `curl` (não urllib) — `api.supabase.com` bloqueia UA do urllib Python via Cloudflare ✅ 2026-07-13
+  - [x] T6.6 — Resultados documentados no Change Log (comando, status HTTP, trecho não-sensível) — apenas para as credenciais já provisionadas
 
 - [ ] **T7 — Redeploy e confirmação final (AC7, AC10)**
   - [ ] T7.1 — `vercel redeploy <último deployment de produção>`
@@ -181,7 +181,7 @@ Todas as 7 variáveis são consumidas exclusivamente por: (a) rotas de cron serv
 
 | # | Credencial | Onde gerar | Papel necessário | Status |
 |---|-----------|------------|-------------------|--------|
-| 1 | Anthropic Admin key | `https://console.anthropic.com/settings/admin-keys` | Organization Owner da conta Anthropic da Trifold | **PENDENTE** |
+| 1 | Anthropic Admin key | `https://console.anthropic.com/settings/admin-keys` | Organization Owner da conta Anthropic da Trifold | **CONCLUÍDO** 2026-07-13 (gerada pelo owner, provisionada e validada — HTTP 200 no `cost_report`) |
 | 2 | OpenAI Admin/Org key | `https://platform.openai.com/settings/organization/admin-keys` | Org Owner/Admin da conta OpenAI da Trifold | **PENDENTE** |
 | 3 | Meta System User token (`whatsapp_business_management` + `ads_read`) | Business Manager → Configurações do Negócio → Usuários do Sistema → gerar token com os 2 escopos | Admin do Business Manager da Trifold (mesma conta do App "Ações Trifold", ID `1249990980457973`) | **PENDENTE** |
 
@@ -274,6 +274,8 @@ O @devops (executor desta story) deve, ao assumir a story em `*develop`, comunic
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-07-08 | 0.1 | Story criada a partir do Epic 78 (§7, story 78-2; CON-2; risco "Admin keys Anthropic/OpenAI como pré-requisito"). Contrato de 7 env vars fixado: `ANTHROPIC_ADMIN_KEY`, `OPENAI_ADMIN_KEY`, `VERCEL_BILLING_TOKEN`, `VERCEL_TEAM_ID`, `META_SYSTEM_USER_TOKEN`, `SUPABASE_MANAGEMENT_PAT`, `SUPABASE_ORG_SLUG`. [AUTO-DECISION] Sufixo `_ADMIN_KEY` (não `_API_KEY`) para Anthropic/OpenAI → reason: eliminar ambiguidade com `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` já existentes no Vercel (confirmado via memória `reference_vercel_env.md` — nenhuma colisão de nome). [AUTO-DECISION] `META_SYSTEM_USER_TOKEN` único (não dois tokens separados para WhatsApp/Ads) → reason: System User do Meta Business Manager pode carregar múltiplos escopos (`whatsapp_business_management` + `ads_read`) no mesmo token; evita retrabalho de provisionamento quando a Story 78-10 opcional for ativada (depende de OQ-2). [AUTO-DECISION] Vercel access token dedicado (não reusar token pessoal do CLI de `auth.json`) → reason: separar credencial de automação/produção do login pessoal do desenvolvedor, seguindo princípio de menor privilégio. [AUTO-DECISION] 3 credenciais marcadas como Pré-requisito Humano bloqueante (AC8) → reason: não existe endpoint de API para gerar admin/org keys ou System User tokens de forma automatizada; exige login humano com papel de owner nos consoles Anthropic/OpenAI/Meta — Article II (Agent Authority) não permite a um agente assumir esse papel. Executor @devops, quality gate @architect (mapping confirmado no Epic 78 §7). CodeRabbit Disabled (mesma constatação da Story 78-1 — chave ausente em core-config.yaml). | @sm (River) |
+| 2026-07-13 | 0.3 | **Execução PARCIAL (@devops Gage) — Status Ready → InProgress.** Provisionadas e validadas as credenciais cujos tokens o usuário já forneceu: **Vercel** (`VERCEL_BILLING_TOKEN` + `VERCEL_TEAM_ID`) e **Supabase** (`SUPABASE_MANAGEMENT_PAT` + `SUPABASE_ORG_SLUG`), todas via REST API direta `POST /v10/projects/{id}/env` (`type:encrypted`, target production/preview/development) — nunca stdin (AC2), nenhuma vazia (AC3, confirmado por re-GET decrypted, valor nunca ecoado). Health-check read-only OK: Vercel `GET /v2/user`+`/v9/projects/{id}` HTTP 200 e `GET /v1/billing/charges` HTTP 200 (JSONL FOCUS com `BilledCost`/`ServiceName` — escopo de billing confirmado); Supabase `GET /v1/organizations`+`/v1/projects` HTTP 200 (org slug `hgvhxeyntttvnjxxdnkz`, prod `dsopqkqjkmhytudaaolv` confirmado). `RESEND_API_KEY` já existia (prod+preview, `re_`, 36 chars) — conferida e NÃO recadastrada (AC9). Sem colisão de nomes (T1.1: 74 env vars, 7 novos ABSENT). Nenhum `NEXT_PUBLIC_*` (AC4). **NÃO executado:** redeploy (AC7 — adiado até o código dos coletores 78-5/78-7 existir, por instrução) e as 3 credenciais de pré-requisito humano de owner permanecem **PENDENTES** (Anthropic Admin key, OpenAI Admin key, Meta System User token) + `WHATSAPP_BUSINESS_ACCOUNT_ID` ainda a gravar. Story **não pode ser Done** (AC8/DoD). [AUTO-DECISION] REST API direta em vez de `vercel-env-set.sh` → reason: helper autentica via `auth.json` (conta `freelans-dev` sem acesso à trifold, daria 403); usado token fornecido pelo usuário. Arquivo temporário de tokens apagado ao fim da sessão (`rm -f`); nenhum valor de secret escrito no working tree. | @devops (Gage) |
+| 2026-07-13 | 0.4 | **Provisionamento Anthropic (@devops Gage) — pré-requisito humano #1 resolvido.** Owner gerou a Anthropic Admin key e forneceu ao @devops. Validada ANTES de gravar: `GET /v1/organizations/cost_report?starting_at=2026-07-06&ending_at=2026-07-13` (headers `x-api-key` + `anthropic-version: 2023-06-01`) → **HTTP 200**, 7 buckets diários / 7 result entries com dados de custo presentes (escopo billing de organização confirmado; valor da key nunca ecoado). Gravada `ANTHROPIC_ADMIN_KEY` via REST API direta `POST /v10/projects/prj_s3ARh1fpDnzbx9ua4MYJf9iqdRhj/env?teamId=team_XCf2jBxUmCXao0prWVy0VmOZ` (`type:encrypted`, targets production/preview/development, HTTP 201, env id `3qxeovn8AHYzklrp`) — nunca stdin (AC2). Re-GET decrypted confirmou não-vazia (len 110, prefixo `sk-ant-admin01-` OK — AC3). Autenticação via `VERCEL_BILLING_TOKEN` de escopo trifold (conta `nicoletrifold-droid`), não o CLI `auth.json`. **NÃO executado:** redeploy (AC7 — batch com coletores 78-5/78-7). Ambos os arquivos temporários de token apagados (`rm -f`); nenhum valor de secret no working tree. **Ainda PENDENTES** (AC8/DoD, story não pode ser Done): `OPENAI_ADMIN_KEY` (pré-req humano #2), `META_SYSTEM_USER_TOKEN` (pré-req humano #3) e o identificador `WHATSAPP_BUSINESS_ACCOUNT_ID` (T5.4). | @devops (Gage) |
 | 2026-07-08 | 0.2 | **Validação cruzada do backlog do Epic 78 (@po Pax) — GO, Status Draft → Ready.** Correção obrigatória aplicada: contrato de env vars ampliado de 7 → **8** variáveis com a inclusão de `WHATSAPP_BUSINESS_ACCOUNT_ID` (identificador do WABA, análogo a `VERCEL_TEAM_ID`/`SUPABASE_ORG_SLUG`), fechando o gap identificado pela Story 78-6 (que precisa desse ID para montar a URL de `pricing_analytics` e não o encontrava no contrato). Atualizados: tabela de contrato (Dev Notes), AC1, AC2/AC3/AC4/AC10 (contagem 7→8), AC5 (WABA ID listado como identificador sem health-check próprio), T1.1 (7→8), nova subtask T5.4 (gravar o identificador, sem pré-requisito humano). Verificado que 78-7 (Supabase/Resend) e 78-10 (Meta Ads) não introduzem env var fora deste contrato (`RESEND_API_KEY`/`NEXT_PUBLIC_SUPABASE_URL` pré-existentes; `meta_account_id` lido de `meta_ad_accounts`, não env). | @po (Pax) |
 
 ---
@@ -283,16 +285,46 @@ O @devops (executor desta story) deve, ao assumir a story em `*develop`, comunic
 _A ser preenchido pelo @devops durante a implementação._
 
 ### Agent Model Used
-—
+Opus 4.8 (1M) — @devops (Gage), execução parcial 2026-07-13
 
 ### Debug Log References
 —
 
 ### Completion Notes List
-—
+
+**Execução PARCIAL 2026-07-13 (@devops).** Provisionadas e validadas apenas as credenciais cujos tokens o usuário já forneceu (Vercel, Supabase) + conferência da pré-existente (Resend). As 3 credenciais de pré-requisito humano (Anthropic Admin key, OpenAI Admin key, Meta System User token) permanecem **PENDENTES** — não há endpoint de API para gerá-las e exigem login humano de owner nos consoles. A story **NÃO** pode transicionar para Done enquanto esses 3 itens estiverem pendentes (DoD + AC8).
+
+**Env vars provisionadas nesta sessão (nomes, nunca valores):**
+
+| Env Var | Ação | Método | Target | Valor não-vazio |
+|---------|------|--------|--------|-----------------|
+| `VERCEL_BILLING_TOKEN` | CRIADA (id `H1z7fZcAx2JBANK8`) | `POST /v10/.../env` `type:encrypted` | production/preview/development | S (len 60) |
+| `VERCEL_TEAM_ID` | CRIADA (id `WE98TAFRFEkh8FAC`) | `POST /v10/.../env` `type:encrypted` | production/preview/development | S (len 29, prefixo `team_`) |
+| `SUPABASE_MANAGEMENT_PAT` | CRIADA (id `JzGSHdWcZwAkrzze`) | `POST /v10/.../env` `type:encrypted` | production/preview/development | S (len 44, prefixo `sbp_`) |
+| `SUPABASE_ORG_SLUG` | CRIADA (id `zXqqMy6xb9lcjgnd`) | `POST /v10/.../env` `type:encrypted` | production/preview/development | S (len 20) |
+| `RESEND_API_KEY` | NÃO tocada (já existia, prod id `WQ1P2KYEm92h1ed5`) | — | production/preview | S (len 36, prefixo `re_`) — conferida, não recadastrada |
+
+**Identificadores derivados (não-secretos):**
+- `VERCEL_TEAM_ID` = `team_XCf2jBxUmCXao0prWVy0VmOZ` (slug `trifold-s-projects`)
+- `SUPABASE_ORG_SLUG` = `hgvhxeyntttvnjxxdnkz` (org name "trifold"; projeto prod `dsopqkqjkmhytudaaolv` confirmado)
+
+**Gotcha do valor vazio (R2/AC3):** NÃO ocorreu. Gravação via REST API direta (não `vercel env add` por stdin); confirmação de não-vazio feita via re-GET decrypted de cada id (apenas comprimento/prefixo inspecionados, valor nunca ecoado).
+
+**[AUTO-DECISION]** Não usar `scripts/vercel-env-set.sh` → reason: o helper autentica via `~/Library/Application Support/com.vercel.cli/auth.json`, que está logado na conta `freelans-dev` (sem acesso à trifold, daria 403). Usada a REST API direta com o token fornecido pelo usuário (`Authorization: Bearer`) — mesmo endpoint interno do helper, satisfazendo AC2.
+
+**[AUTO-DECISION]** target = production + preview + development para as 4 novas vars → reason: coletores futuros (78-5/78-7) podem ser testados localmente via `vercel env pull` e em preview deploys; ter as credenciais/identificadores nos 3 ambientes evita re-provisionamento.
+
+**Redeploy (AC7): NÃO executado nesta sessão** — por instrução explícita, o `vercel redeploy` fica para quando o código dos coletores (78-5/78-7) for implementado, para não gerar deploy sem consumidor das novas vars.
+
+**PENDENTE para fechar a story (pré-requisito humano de owner):**
+- `ANTHROPIC_ADMIN_KEY` (T2.1/T5.1/T6.1) — gerar em console.anthropic.com/settings/admin-keys
+- `OPENAI_ADMIN_KEY` (T2.2/T5.2/T6.2) — gerar em platform.openai.com/settings/organization/admin-keys
+- `META_SYSTEM_USER_TOKEN` (T2.3/T5.3/T6.4) — Business Manager → System Users (escopos `whatsapp_business_management` + `ads_read`)
+- `WHATSAPP_BUSINESS_ACCOUNT_ID` (T5.4) — identificador do WABA; não exige owner, mas não fazia parte dos tokens fornecidos nesta sessão → ainda a gravar
+- Redeploy (AC7) + tabela-resumo final completa (AC10) após as 4 acima.
 
 ### File List
-—
+Nenhum arquivo de código (story de infraestrutura pura). Alterações apenas neste arquivo de story. Secrets provisionados no Vercel (fora do repositório).
 
 ---
 

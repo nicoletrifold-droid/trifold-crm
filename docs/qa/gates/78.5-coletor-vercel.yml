@@ -1,0 +1,71 @@
+schema: 1
+story: '78.5'
+slug: coletor-vercel
+gate: PASS
+status_reason: 'Coletor Vercel adapta corretamente o contrato da 78-3 (REUSE do runner/types sem fork), parser JSONL/FOCUS via response.text()+parse por linha com isolamento de linha malformada, janela <=1 ano validada na rota (400) antes da chamada, auth CRON_SECRET + 503 gracioso p/ credenciais ausentes. Lint/typecheck limpos (só os 4 erros pré-existentes). Validação E2E com dado real pendente do redeploy pós-78-2 (não bloqueante).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-13T00:00:00Z'
+
+traceability:
+  - ac: 'AC1 — Adapta contrato BillingCollector sem modificá-lo'
+    evidence: 'vercel.ts importa BillingCollector/CollectWindow/CostSnapshotRow de ./types (sem redefinir); route.ts chama runCollector(admin, vercelCollector, window). types.ts/run-collector.ts NÃO aparecem em git status (inalterados desde 78-3).'
+    status: PASS
+  - ac: 'AC2 — Parsing JSONL correto'
+    evidence: 'parseJsonl(): response.text() + split(\n) + filter(trim>0) + JSON.parse por linha em try/catch individual; linha malformada logada (vercel_jsonl_parse_error) e descartada. Nunca response.json() no corpo.'
+    status: PASS
+  - ac: 'AC3 — Requisição com params e auth exatos'
+    evidence: 'Authorization: Bearer ${token}; URLSearchParams({teamId, from, to}) em ISO 8601 UTC. Nomes from/to/teamId confirmados na OpenAPI oficial (Completion Notes T1.4).'
+    status: PASS
+  - ac: 'AC4 — Mapeamento FOCUS -> CostSnapshotRow agregado por dia'
+    evidence: 'aggregateDailyCost(): soma BilledCost de todas as linhas do mesmo ChargePeriodStart-dia em UMA CostSnapshotRow metric=cost_usd/currency=USD; moeda !=USD e BilledCost não-finito descartados defensivamente.'
+    status: PASS
+  - ac: 'AC5 — Janela <=1 ano validada antes da chamada'
+    evidence: 'assertVercelWindow() lança VercelWindowTooLargeError se >366 dias; route.ts captura ANTES de runCollector -> 400 {error:"Window exceeds 1 year limit"}. Coletor revalida internamente como rede de segurança.'
+    status: PASS
+  - ac: 'AC6 — Custo diário idempotente por serviço'
+    evidence: 'Upsert via runCollector com onConflict:service_id,snapshot_date,metric (78-3 inalterado). Verificação em runtime pendente (T7.4) até secrets em ambiente.'
+    status: PASS (e2e deferred)
+  - ac: 'AC7 — Cron autenticado + degradação graciosa'
+    evidence: 'CRON_SECRET ausente -> 503; header incorreto -> 401; VERCEL_BILLING_TOKEN/VERCEL_TEAM_ID ausente -> 503 com env específica, ANTES de createAdminClient/runCollector (sem gravar snapshot).'
+    status: PASS
+  - ac: 'AC8 — Falha da API isolada não derruba o cron'
+    evidence: 'collect() propaga erro; runCollector isola (try/catch), grava collection_status=error e route retorna 200 {ok:false,...}. Nunca 500 por falha isolada.'
+    status: PASS
+  - ac: 'AC9 — Backfill manual dentro do limite'
+    evidence: 'route.ts lê ?from/?to opcionais (regex YYYY-MM-DD + from<=to); default = ontem em America/Sao_Paulo (saoPauloYesterday via Intl en-CA).'
+    status: PASS
+  - ac: 'AC10 — vercel.json sem colisão'
+    evidence: 'Entry "20 10 * * *" p/ /api/cron/billing-collect-vercel; grep confirma único cron nesse horário (anthropic 0 10, openai 15 10, daily-report 59 10).'
+    status: PASS
+
+quality_checks:
+  code_review: PASS
+  parsing_jsonl_focus: PASS
+  window_limit: PASS
+  contract_78_3: PASS
+  graceful_degradation_auth: PASS
+  security: PASS
+  conventions_lint_typecheck: PASS
+
+evidence:
+  typecheck: 'npx tsc --noEmit → apenas 4 erros pré-existentes (react-email-editor ×3, pdf-lib ×1); nenhum em vercel.ts/route.ts.'
+  lint: 'npx eslint nos 2 arquivos novos → sem erros.'
+  contract_untouched: 'git status: types.ts/run-collector.ts inalterados (só vercel.ts novo + vercel.json modificado).'
+
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'Para janela civil de exatamente 366 dias, o request envia `to = window.to + 1 dia` (exclusivo), cobrindo 367 dias-calendário. Se a Vercel aplicar limite estrito de 1 ano no range [from,to), um backfill no limite máximo poderia receber erro genérico da API.'
+    suggested_action: 'Comportamento degrada com segurança (runner isola -> collection_status=error + HTTP 200, sem corrupção). Padrão herdado do +1 exclusivo do coletor Anthropic (78-3). Monitorar no primeiro backfill de janela larga; ajustar MAX_WINDOW_DAYS para 365 se a API rejeitar.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Validação E2E com dado real (T7.3–T7.6: coleta ok, idempotência, falha isolada em runtime) pendente até redeploy com VERCEL_BILLING_TOKEN/VERCEL_TEAM_ID no ambiente. Caminhos de degradação (401/503/400) são determinísticos e validados por leitura estática.'
+    suggested_action: 'Executar T7.3–T7.6 após @devops redeploy (secrets já provisionados em produção conforme mission). Não bloqueante para o gate.'
+  - id: 'TEST-002'
+    severity: low
+    finding: 'Unit test do parser JSONL (T2.3) não adicionado — packages/web sem runner de teste unitário (só Playwright e2e), idêntico à 78-3.'
+    suggested_action: 'Item explicitamente não-bloqueante na story. Considerar Vitest para packages/web/src/lib/ como melhoria futura transversal ao Epic 78.'
+
+waiver: { active: false }
+
+recommendation: 'APROVADO para push. Após redeploy (@devops), executar T7.3–T7.6 (validação E2E com dado real) e fechar os checkboxes de validação manual + DoD restantes na story.'

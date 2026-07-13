@@ -1,0 +1,65 @@
+schema: 1
+story: '78.7'
+slug: fallback-manual-uso-tecnico-supabase-resend
+title: 'Fallback Manual + Uso Técnico (Supabase & Resend)'
+gate: PASS
+status_reason: >-
+  Invariante central AC4 (currency=null em 100% das linhas) verificada por leitura direta e grep — 4 literais
+  CostSnapshotRow, todos currency:null. Contrato 78-3 reusado sem modificação, degradação graciosa coerente,
+  typecheck/lint limpos (só os 4 erros pré-existentes fora de escopo). Observações de baixa severidade ficam
+  para verificação no redeploy (secrets já provisionados em prod).
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-13T00:00:00Z'
+
+invariant_check:
+  currency_null: PASS
+  detail: >-
+    supabase-usage.ts (supabase_plan_info, supabase_requests_total) e resend-usage.ts
+    (resend_monthly_quota_limit, resend_emails_sent_count_email_logs) — as 4 únicas linhas produzidas
+    têm `currency: null` literal. Nenhuma escreve 'USD'/'BRL'. A agregação `WHERE currency IS NOT NULL`
+    da 78-9 nunca incluirá estas linhas. Coluna service_cost_snapshots.currency é nullable
+    (migration 164 L90: CHECK IN ('USD','BRL'), sem NOT NULL) — null é aceito pelo schema.
+
+traceability:
+  AC1: PASS  # Ambos coletores importam BillingCollector/CostSnapshotRow/CollectWindow de types.ts e rodam via runCollector; types.ts/run-collector.ts intocados.
+  AC2: PASS  # supabase_plan_info (value=1, plano em raw_response) + supabase_requests_total; egress omitido com justificativa Article IV (sem endpoint).
+  AC3: PASS  # resend_monthly_quota_limit via header x-resend-monthly-quota + resend_emails_sent_count_email_logs via COUNT em email_logs.
+  AC4: PASS  # Invariante currency=null — verificada estaticamente (crítica).
+  AC5: PASS  # Supabase 503 sem PAT (antes de coletar); Resend prossegue sem key (parcial, resend_api_key_missing no corpo) — divergência documentada e coerente.
+  AC6: PASS  # Promise.allSettled isola sub-chamadas; parcial se uma falha, throw só se ambas falham (runner grava error).
+  AC7: PASS  # Idempotência herdada do runCollector (onConflict service_id,snapshot_date,metric); todas as linhas usam snapshot_date=window.to.
+  AC8: PASS  # CRON_SECRET: 503 sem secret, 401 header errado — idêntico a billing-collect-anthropic.
+  AC9: PASS  # vercel.json: "0 13" (supabase) / "0 14" (resend) — sem colisão com horário fixo existente.
+  AC10: PASS # Nenhum write em platform_services/service_billing_reminders; coletores só leem platform_services e email_logs, escrevem apenas service_cost_snapshots.
+
+quality_checks:
+  code_review: PASS
+  unit_tests: N/A  # projeto sem suíte para coletores (mesmo padrão 78-1/78-3); validação manual em DEV é o standard.
+  acceptance_criteria: PASS
+  no_regressions: PASS  # types.ts/run-collector.ts REUSE sem alteração; nenhum consumidor existente afetado.
+  performance: PASS  # timeouts (20s Supabase / 15s Resend), maxDuration=60, COUNT com head:true (sem transferir linhas).
+  security: PASS
+  documentation: PASS  # JSDoc extenso + Completion Notes cobrem desvios (egress, header incerto, parcialidade).
+
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: >-
+      T5 (validação manual em DEV) e a linha de DoD de validação manual não foram executadas neste ambiente
+      autônomo (sem servidor Next / sem secrets DEV). A invariante currency=null landando de fato no banco e
+      a idempotência real são inferidas por raciocínio estático + comportamento herdado do runner 78-3, não por
+      DB ao vivo.
+    suggested_action: >-
+      Confirmar no redeploy: (a) SELECT DISTINCT currency das linhas supabase/resend = só NULL; (b) 2ª chamada
+      da mesma janela mantém 1 linha por (service_id,snapshot_date,metric). Não bloqueante — secrets já em prod.
+  - id: 'REL-002'
+    severity: low
+    finding: >-
+      Header x-resend-monthly-quota não pôde ser confirmado empiricamente sem RESEND_API_KEY válida (T1.5).
+      Se o nome do header divergir em prod, a métrica resend_monthly_quota_limit é silenciosamente pulada
+      (só um warn), degradando sem erro visível.
+    suggested_action: >-
+      No redeploy com a key real, verificar em log/response se a linha resend_monthly_quota_limit foi gravada;
+      se ausente, ajustar RESEND_QUOTA_ENDPOINT/RESEND_QUOTA_HEADER. Parsing defensivo já evita dado inventado.
+
+waiver: { active: false }

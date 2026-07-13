@@ -126,8 +126,20 @@
       "schedule": "0 10 * * *"
     },
     {
+      "path": "/api/cron/billing-collect-vercel",
+      "schedule": "20 10 * * *"
+    },
+    {
       "path": "/api/cron/billing-reminders",
       "schedule": "10 12 * * *"
+    },
+    {
+      "path": "/api/cron/billing-collect-supabase",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/billing-collect-resend",
+      "schedule": "0 14 * * *"
     }
   ]
 }
