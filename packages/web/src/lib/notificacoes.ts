@@ -207,7 +207,7 @@ export async function notifyClientes(
     const prefKey = EVENTO_PREF_KEY[evento] as keyof NotifPrefs
     const descricao = EVENTO_LABEL[evento]
     const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
     const link = `${appUrl}/cliente/${obraId}`
 
     for (const user of usersRes.data ?? []) {
@@ -292,7 +292,7 @@ export async function notifyNovoBoleto(params: NovoBoletoParams): Promise<void> 
       .maybeSingle()
     const pref = (prefRow as Pick<NotifPrefs, "email_enabled" | "whatsapp_enabled" | "push_enabled"> | null) ?? DEFAULT_PREFS
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
     const link = `${appUrl}/cliente/boleto/${obraId}`
 
     // Log financeiro (Notificações Financeiras) — 1 linha por canal disparado.
@@ -403,7 +403,7 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
       .maybeSingle()
     const pref = (prefRow as Pick<NotifPrefs, "email_enabled" | "whatsapp_enabled" | "push_enabled"> | null) ?? DEFAULT_PREFS
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
     const link = `${appUrl}/cliente/boleto/${obraId}`
     const copy = lembreteCopy(marco, quantidade)
 

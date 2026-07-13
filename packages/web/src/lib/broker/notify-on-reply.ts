@@ -97,7 +97,7 @@ export async function notifyBrokerOnReply(
 
     // 3. Enviar push (Q2 — sem debounce: 1 push por inbound; sem mutar metadata).
     const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.com.br"
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
     const payload = buildReplyPushPayload({
       leadName: (lead.name as string | null) ?? null,
       messageExcerpt,
