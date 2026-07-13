@@ -2,22 +2,36 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import {
+  hojeSaoPaulo,
+  toIsoDate,
+  diffDiasAteVencer,
+  deveAlertar,
+  type SaoPauloDate,
+} from "@web/lib/billing/reminder-schedule"
 
-// Story 78-8 — Motor de lembretes de vencimento de fatura (cron diário).
-//
-// Passo 1 — Alertar: para cada service_billing_reminders com status='pending' cuja janela
-//   [due_date - alert_days_before, due_date] contém "hoje" (America/Sao_Paulo), marca
-//   status='alerted' de forma ATÔMICA (UPDATE ... WHERE status='pending' RETURNING) e
-//   dispara e-mail + push (canais REUSADOS — sendEmail/sendPushToUser) para todos os
-//   admins ativos (role='admin', is_active=true, SEM filtro org_id — dado da plataforma).
-// Passo 2 — Recorrência: para cada linha com due_date < hoje e billing_cycle monthly/annual,
-//   avança due_date para o próximo ciclo (com clamp de dia-do-mês) e reseta status='pending'
-//   / paid_at=NULL. Ciclo 'usage' não recorre automaticamente — sinalizado em precisaRevisaoManual.
-//
-// Guard CRON_SECRET (padrão de sla-alerts/boleto-scan). Dry-run: GET ?dry=1 (calcula/reporta
-// sem enviar nem gravar). Best-effort: erro numa linha/admin não derruba o restante (NFR-3).
+// Story 78-11 — Motor de lembretes com ESCALONAMENTO (reescreve o Passo 1 da 78-8; remove o
+// Passo 2 da 78-8). Gatilhos discretos de alerta (America/Sao_Paulo):
+//   - D-N exato: distanciaAteVencer === alert_days_before (usuário configura 3 = "3 dias antes");
+//   - D-0 exato: distanciaAteVencer === 0 (dia do vencimento);
+//   - vencida:   distanciaAteVencer < 0 → TODO dia (D+1, D+2, ...), enquanto não paga.
+// Candidatos: status NOT IN ('paid','postponed','skipped') — inclui 'pending' E 'alerted'
+//   ('alerted' deixou de ser estado terminal de dedup). Dedup passou a ser POR DIA via
+//   last_alerted_on (coluna nova, migration 169), não mais por status permanente.
+// Dedup ATÔMICO por dia: UPDATE ... WHERE last_alerted_on IS DISTINCT FROM hoje RETURNING —
+//   2 execuções concorrentes no mesmo dia não notificam 2x; no dia seguinte, volta a alertar.
+// RECORRÊNCIA REMOVIDA do cron (antigo "Passo 2"): o cron NUNCA mais avança due_date de uma
+//   linha vencida-não-paga (AC8). A recorrência agora só ocorre no PATCH .../[id] quando o
+//   status vira 'paid' (evento de pagamento), síncrona na mesma requisição.
+// Canais reusados (e-mail + push) para todos os admins ativos (role='admin', is_active=true,
+//   SEM filtro org_id — dado da plataforma). Guard CRON_SECRET. Dry-run: GET ?dry=1.
+// Best-effort: erro numa linha/admin não derruba o restante (NFR-3).
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+
+// Status que NUNCA disparam alerta (suprimem o motor). 'paid' = pago; 'postponed'/'skipped' =
+// decisão manual do admin. Candidatos do cron = tudo que NÃO está nesta lista.
+const STATUS_SUPRIMIDOS = ["paid", "postponed", "skipped"] as const
 
 type ReminderRow = {
   id: string
@@ -28,61 +42,11 @@ type ReminderRow = {
   billing_cycle: string
   alert_days_before: number
   status: string
+  last_alerted_on: string | null
   platform_services: { slug: string; name: string } | null
 }
 
 type AdminRow = { id: string; name: string | null; email: string | null }
-
-/** "Hoje" (y/m/d inteiros) em America/Sao_Paulo — nunca UTC cru (mesmo padrão de boleto-scan). */
-function hojeSaoPaulo(now: Date): { y: number; m: number; d: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now)
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value)
-  return { y: get("year"), m: get("month"), d: get("day") }
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0")
-}
-
-/** "YYYY-MM-DD" de um {y,m,d}. */
-function toIsoDate(dt: { y: number; m: number; d: number }): string {
-  return `${dt.y}-${pad2(dt.m)}-${pad2(dt.d)}`
-}
-
-/**
- * Diferença inteira de dias de calendário (hoje - due_date). Positivo = vencido.
- * Compara via Date.UTC nos dois lados (evita o bug de ±1 dia do fuso). null se inválida.
- */
-function diffDias(dueDateIso: string, hoje: { y: number; m: number; d: number }): number | null {
-  const [y, m, d] = (dueDateIso.split("T")[0]?.split("-") ?? []).map(Number)
-  if (!y || !m || !d) return null
-  const dueUTC = Date.UTC(y, m - 1, d)
-  const hojeUTC = Date.UTC(hoje.y, hoje.m - 1, hoje.d)
-  return Math.round((hojeUTC - dueUTC) / 86_400_000)
-}
-
-/**
- * Avança due_date um ciclo (monthly = +1 mês, annual = +12 meses), tratando overflow de
- * dia-do-mês por clamp para o último dia do mês de destino (ex.: 31/01 mensal → 28/02 ou
- * 29/02 em ano bissexto). Projeto não usa date-fns — cálculo manual documentado (T4.2).
- */
-function avancarCiclo(dueDateIso: string, cycle: "monthly" | "annual"): string | null {
-  const [y, m, d] = (dueDateIso.split("T")[0]?.split("-") ?? []).map(Number)
-  if (!y || !m || !d) return null
-  const monthsToAdd = cycle === "annual" ? 12 : 1
-  const total0 = m - 1 + monthsToAdd // mês 0-based acumulado
-  const ny = y + Math.floor(total0 / 12)
-  const nm0 = ((total0 % 12) + 12) % 12 // 0-based
-  // Último dia do mês de destino (dia 0 do mês seguinte).
-  const lastDay = new Date(Date.UTC(ny, nm0 + 1, 0)).getUTCDate()
-  const nd = Math.min(d, lastDay)
-  return `${ny}-${pad2(nm0 + 1)}-${pad2(nd)}`
-}
 
 function formatDateBr(iso: string): string {
   const [y, m, d] = iso.split("T")[0]?.split("-") ?? []
@@ -92,6 +56,51 @@ function formatDateBr(iso: string): string {
 function formatAmount(amount: number | null, currency: string): string {
   if (amount === null || amount === undefined) return "valor não informado"
   return `${currency} ${amount.toFixed(2)}`
+}
+
+/**
+ * Constrói assunto/corpo do e-mail variando pelo tipo de gatilho (D-N / D-0 / vencida),
+ * usando a distância até vencer já calculada. Diferenciação recomendada pela story (T3.4),
+ * não bloqueante — melhora a clareza para o admin.
+ */
+function buildMensagem(
+  serviceName: string,
+  valor: string,
+  vencBr: string,
+  distancia: number
+): { subject: string; pushTitle: string; pushBody: string; html: string } {
+  let situacao: string
+  let acao: string
+  if (distancia < 0) {
+    const diasVencida = -distancia
+    situacao = `está <strong>vencida há ${diasVencida} dia${diasVencida > 1 ? "s" : ""}</strong> e ainda não foi paga`
+    acao = "Pague o quanto antes para não interromper a produção (crm.trifold.eng.br)."
+  } else if (distancia === 0) {
+    situacao = `<strong>vence hoje</strong> (${vencBr})`
+    acao = "Garanta o pagamento hoje para não interromper a produção."
+  } else {
+    situacao = `vence em <strong>${distancia} dia${distancia > 1 ? "s" : ""}</strong> (${vencBr})`
+    acao = "Programe o pagamento para não interromper a produção."
+  }
+
+  const subject =
+    distancia < 0
+      ? `[Trifold] Fatura VENCIDA: ${serviceName} (${vencBr})`
+      : distancia === 0
+        ? `[Trifold] Vence hoje: ${serviceName} (${vencBr})`
+        : `[Trifold] Vencimento em ${distancia} dia${distancia > 1 ? "s" : ""}: ${serviceName} (${vencBr})`
+
+  const pushTitle = distancia < 0 ? "Fatura vencida" : distancia === 0 ? "Fatura vence hoje" : "Fatura vencendo"
+  const pushBody = `${serviceName}: fatura ${distancia < 0 ? "vencida" : distancia === 0 ? "vence hoje" : `vence em ${distancia}d`} (${valor}).`
+
+  const html =
+    `<p>Olá,</p>` +
+    `<p>A fatura do serviço <strong>${serviceName}</strong> ${situacao}.</p>` +
+    `<p>Valor esperado: <strong>${valor}</strong> · Vencimento: ${vencBr}</p>` +
+    `<p>${acao}</p>` +
+    `<p><a href="${APP_URL}/dashboard">Abrir o painel</a></p>`
+
+  return { subject, pushTitle, pushBody, html }
 }
 
 export async function GET(request: NextRequest) {
@@ -106,57 +115,58 @@ export async function GET(request: NextRequest) {
   const dryRun = new URL(request.url).searchParams.get("dry") === "1"
   const admin = createAdminClient()
   const now = new Date()
-  const hoje = hojeSaoPaulo(now)
+  const hoje: SaoPauloDate = hojeSaoPaulo(now)
   const hojeIso = toIsoDate(hoje)
 
   const selectCols =
-    "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, platform_services!inner(slug, name, enabled)"
+    "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, last_alerted_on, platform_services!inner(slug, name, enabled)"
 
-  // ── Passo 1: ALERTAR (janela [due_date - alert_days_before, due_date], status='pending') ──
+  // ── Buscar candidatos: tudo que NÃO está suprimido (inclui 'pending' E 'alerted') ──
   let alertsSent = 0
   let alertErrors = 0
   const wouldAlert: Array<Record<string, unknown>> = []
 
-  const { data: pendentesRaw, error: pendErr } = await admin
+  const { data: candidatosRaw, error: candErr } = await admin
     .from("service_billing_reminders")
     .select(selectCols)
-    .eq("status", "pending")
+    .not("status", "in", `(${STATUS_SUPRIMIDOS.join(",")})`)
     .eq("platform_services.enabled", true)
 
-  if (pendErr) {
-    console.error("[billing-reminders] erro ao buscar pendentes:", pendErr.message)
-    return NextResponse.json({ ok: false, error: pendErr.message }, { status: 500 })
+  if (candErr) {
+    console.error("[billing-reminders] erro ao buscar candidatos:", candErr.message)
+    return NextResponse.json({ ok: false, error: candErr.message }, { status: 500 })
   }
 
-  const pendentes = (pendentesRaw ?? []) as unknown as ReminderRow[]
-  const naJanela = pendentes.filter((r) => {
-    const diff = diffDias(r.due_date, hoje) // hoje - due
-    if (diff === null) return false
-    // Janela: due - alert_days_before <= hoje <= due  ⇔  -alert_days_before <= diff <= 0
-    return diff <= 0 && diff >= -r.alert_days_before
-  })
+  const candidatos = (candidatosRaw ?? []) as unknown as ReminderRow[]
 
-  if (naJanela.length > 0) {
+  // Gatilho D-N/D-0/vencida + dedup por dia (last_alerted_on != hoje) — em memória.
+  const paraAlertar = candidatos.filter((r) => deveAlertar(r, hoje))
+
+  if (paraAlertar.length > 0) {
     if (dryRun) {
-      for (const r of naJanela) {
+      for (const r of paraAlertar) {
         wouldAlert.push({
           id: r.id,
           service: r.platform_services?.name ?? r.service_id,
           due_date: r.due_date,
           alert_days_before: r.alert_days_before,
+          distancia: diffDiasAteVencer(r.due_date, hoje),
+          last_alerted_on: r.last_alerted_on,
         })
       }
     } else {
-      // Dedup ATÔMICO: só notifica as linhas efetivamente marcadas (RETURNING). Uma 2ª execução
-      // concorrente não encontra mais status='pending' e não reenvia (AC3).
-      const ids = naJanela.map((r) => r.id)
+      // Dedup ATÔMICO POR DIA: só notifica as linhas efetivamente marcadas (RETURNING). O filtro
+      // `last_alerted_on IS DISTINCT FROM hoje` (via OR: is.null OU neq.hoje — .neq exclui NULLs
+      // no PostgREST, por isso o is.null explícito) garante que 2 execuções concorrentes no MESMO
+      // dia não notificam 2x. No dia seguinte, o filtro volta a passar e a linha alerta de novo.
+      const ids = paraAlertar.map((r) => r.id)
       const { data: alertadasRaw, error: updErr } = await admin
         .from("service_billing_reminders")
-        .update({ status: "alerted" })
+        .update({ status: "alerted", last_alerted_on: hojeIso })
         .in("id", ids)
-        .eq("status", "pending")
+        .or(`last_alerted_on.is.null,last_alerted_on.neq.${hojeIso}`)
         .select(
-          "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, platform_services(slug, name)"
+          "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, last_alerted_on, platform_services(slug, name)"
         )
 
       if (updErr) {
@@ -164,7 +174,7 @@ export async function GET(request: NextRequest) {
       } else {
         const alertadas = (alertadasRaw ?? []) as unknown as ReminderRow[]
 
-        // Destinatários: TODOS os admins ativos, SEM filtro org_id (dado da plataforma — AC4).
+        // Destinatários: TODOS os admins ativos, SEM filtro org_id (dado da plataforma).
         const { data: adminsRaw } = await admin
           .from("users")
           .select("id, name, email")
@@ -172,21 +182,23 @@ export async function GET(request: NextRequest) {
           .eq("is_active", true)
         const admins = (adminsRaw ?? []) as AdminRow[]
 
-        // Coleta todos os envios e AWAIT com Promise.allSettled (padrão de obras-approval-reminder):
-        // em serverless, retornar a resposta antes dos envios os congela. Cada envio tem .catch
-        // próprio (AC4/AC7) — falha de um canal/admin não bloqueia os demais nem interrompe o loop.
+        // Coleta todos os envios e AWAIT com Promise.allSettled: em serverless, retornar a resposta
+        // antes dos envios os congela. Cada envio tem .catch próprio — falha de um canal/admin não
+        // bloqueia os demais nem interrompe o loop (best-effort, herdado de 78-8).
         const pending: Promise<unknown>[] = []
         for (const r of alertadas) {
           const serviceName = r.platform_services?.name ?? "Serviço"
           const valor = formatAmount(r.expected_amount, r.currency)
           const vencBr = formatDateBr(r.due_date)
-          const subject = `[Trifold] Vencimento próximo: ${serviceName} (${vencBr})`
-          const html =
-            `<p>Olá,</p>` +
-            `<p>O serviço <strong>${serviceName}</strong> tem uma fatura vencendo em <strong>${vencBr}</strong>.</p>` +
-            `<p>Valor esperado: <strong>${valor}</strong> · Ciclo: ${r.billing_cycle}</p>` +
-            `<p>Garanta o pagamento para não interromper a produção.</p>` +
-            `<p><a href="${APP_URL}/dashboard">Abrir o painel</a></p>`
+          // distancia recomputada a partir do due_date (recorrência nunca acontece aqui, então
+          // due_date é estável); usada só para diferenciar a mensagem por tipo de gatilho.
+          const distancia = diffDiasAteVencer(r.due_date, hoje) ?? 0
+          const { subject, pushTitle, pushBody, html } = buildMensagem(
+            serviceName,
+            valor,
+            vencBr,
+            distancia
+          )
 
           for (const a of admins) {
             if (a.email) {
@@ -199,8 +211,8 @@ export async function GET(request: NextRequest) {
             }
             pending.push(
               sendPushToUser(admin, a.id, {
-                title: "Fatura vencendo",
-                body: `${serviceName} vence em ${vencBr} (${valor}).`,
+                title: pushTitle,
+                body: pushBody,
                 url: `${APP_URL}/dashboard`,
               }).catch((e: unknown) => {
                 alertErrors++
@@ -215,67 +227,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── Passo 2: RECORRÊNCIA (due_date < hoje). Não colide com o Passo 1 (due >= hoje lá). ──
-  let recorridas = 0
-  let recorrErrors = 0
-  const precisaRevisaoManual: string[] = []
-  const wouldRecur: Array<Record<string, unknown>> = []
-
-  const { data: vencidasRaw, error: vencErr } = await admin
-    .from("service_billing_reminders")
-    .select(selectCols)
-    .lt("due_date", hojeIso)
-    .eq("platform_services.enabled", true)
-
-  if (vencErr) {
-    console.error("[billing-reminders] erro ao buscar vencidas:", vencErr.message)
-  } else {
-    const vencidas = (vencidasRaw ?? []) as unknown as ReminderRow[]
-    for (const r of vencidas) {
-      if (r.billing_cycle === "monthly" || r.billing_cycle === "annual") {
-        const proximo = avancarCiclo(r.due_date, r.billing_cycle)
-        if (!proximo) {
-          recorrErrors++
-          console.error("[billing-reminders] due_date inválida na recorrência:", r.id, r.due_date)
-          continue
-        }
-        if (dryRun) {
-          wouldRecur.push({ id: r.id, de: r.due_date, para: proximo, cycle: r.billing_cycle })
-        } else {
-          const { error: recErr } = await admin
-            .from("service_billing_reminders")
-            .update({ due_date: proximo, status: "pending", paid_at: null })
-            .eq("id", r.id)
-          if (recErr) {
-            recorrErrors++
-            console.error("[billing-reminders] erro ao recorrer:", r.id, recErr.message)
-          } else {
-            recorridas++
-          }
-        }
-      } else {
-        // billing_cycle === 'usage' — sem regra de recorrência (Article IV): revisão manual.
-        precisaRevisaoManual.push(r.id)
-      }
-    }
-  }
-
   const summary = {
     ok: true,
     dryRun,
     hoje: hojeIso,
-    passo1: {
-      pendentes: pendentes.length,
-      naJanela: naJanela.length,
+    // Shape observável mudou vs 78-8 (T4.2): removida a chave `passo2` (recorrência por decurso
+    // de tempo, agora inexistente no cron); `passo1` renomeado para `alertas`. Nenhum consumidor
+    // atual (a UI/78-9 não chama este endpoint) — registrado para rastreabilidade.
+    alertas: {
+      candidatos: candidatos.length,
+      paraAlertar: paraAlertar.length,
       alertsSent,
       alertErrors,
       ...(dryRun ? { wouldAlert } : {}),
-    },
-    passo2: {
-      recorridas,
-      recorrErrors,
-      precisaRevisaoManual,
-      ...(dryRun ? { wouldRecur } : {}),
     },
   }
   console.log("[billing-reminders] concluído:", summary)
