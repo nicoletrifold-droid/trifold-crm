@@ -312,7 +312,7 @@ async function fetchTimelineData(
   // 2. Activities
   const { data: activities } = await supabase
     .from("activities")
-    .select("id, type, description, created_at, metadata")
+    .select("id, type, description, created_at, metadata, user_id, users:user_id(name)")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: true })
 
@@ -328,17 +328,33 @@ async function fetchTimelineData(
         followup_alert_broker: "Alerta de follow-up",
         followup_nicole_sent: "Follow-up automático",
         note_added: "Nota adicionada",
+        broker_note: "Nota do corretor",
       }
+
+      // Nome do corretor autor: do join users, com fallback ao metadata (notas antigas).
+      const userRaw = (activity as { users?: { name: string } | { name: string }[] | null }).users
+      const userName = Array.isArray(userRaw) ? userRaw[0]?.name : userRaw?.name
+      const metaCorretor = (activity.metadata as { corretor?: { nome?: string } } | null)?.corretor?.nome
+      const brokerName = userName || metaCorretor || null
+
+      // Notas do corretor: mostram o NOME de quem escreveu (facilita quando
+      // mais de um corretor mexe no lead) em vez de "SISTEMA broker_note".
+      const isBrokerNote = activity.type === "broker_note"
+      const actor: TimelineEvent["actor"] = isBrokerNote && brokerName ? "broker" : "system"
+      const title = isBrokerNote
+        ? brokerName || "Nota do corretor"
+        : typeLabels[activity.type] ?? activity.type
 
       events.push({
         type: "activity",
-        actor: "system",
-        title: typeLabels[activity.type] ?? activity.type,
+        actor,
+        title,
         description: activity.description || activity.type,
         timestamp: activity.created_at,
         metadata: {
           activity_id: activity.id,
           activity_type: activity.type,
+          broker_name: brokerName,
           ...(activity.metadata as Record<string, unknown> ?? {}),
         },
       })
