@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Users, X } from "lucide-react"
+import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 
 export type ImobLead = {
   id: string
@@ -34,6 +35,8 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [assigningId, setAssigningId] = useState<string | null>(null)
+  // Lead aberto no drawer completo (mesmo componente do pipeline: Tarefas, Histórico, Transferir…).
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   function set<K extends keyof typeof EMPTY>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })) }
 
@@ -101,7 +104,11 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
               {initial.map((l) => (
-                <tr key={l.id} className="bg-white dark:bg-stone-950">
+                <tr
+                  key={l.id}
+                  onClick={() => setSelectedLeadId(l.id)}
+                  className="cursor-pointer bg-white hover:bg-stone-50 dark:bg-stone-950 dark:hover:bg-stone-900"
+                >
                   <td className="px-3 py-2">
                     <div className="font-medium text-stone-900 dark:text-stone-100">{l.name || "Sem nome"}</div>
                     {l.email && <div className="text-xs text-stone-400">{l.email}</div>}
@@ -118,7 +125,8 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
                       </span>
                     ) : "—"}
                   </td>
-                  <td className="px-3 py-2">
+                  {/* O select de Responsável não deve abrir o drawer. */}
+                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     <select
                       value={l.assigned_broker_id ?? ""}
                       disabled={assigningId === l.id}
@@ -182,6 +190,13 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
           </div>
         </div>
       )}
+
+      {/* Drawer completo do lead — mesmo componente do pipeline (Tarefas, Histórico
+          de Contatos, Transferir Corretor, etc.). Atualiza a lista ao fechar. */}
+      <LeadDetailDrawer
+        leadId={selectedLeadId}
+        onClose={() => { setSelectedLeadId(null); router.refresh() }}
+      />
     </div>
   )
 }
