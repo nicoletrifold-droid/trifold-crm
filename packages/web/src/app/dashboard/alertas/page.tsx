@@ -51,12 +51,17 @@ export default async function AlertasPage() {
     .limit(50)
 
   const alerts: AlertItem[] = []
+  // Um alerta por LEAD: o mesmo lead pode ter vários follow_up_log pendentes
+  // (cada tentativa/tipo gera um registro) — sem isso, o lead repetia N vezes.
+  const seenLeadIds = new Set<string>()
 
   // From follow_up_log
   if (pendingLogs) {
     for (const log of pendingLogs) {
       const lead = Array.isArray(log.lead) ? log.lead[0] : log.lead
       if (!lead) continue
+      if (seenLeadIds.has(lead.id)) continue
+      seenLeadIds.add(lead.id)
 
       const stage = Array.isArray(lead.stage) ? lead.stage[0] : lead.stage
       const property = Array.isArray(lead.property) ? lead.property[0] : lead.property
@@ -81,11 +86,11 @@ export default async function AlertasPage() {
     }
   }
 
-  // From stale leads (avoid duplicates)
-  const logLeadIds = new Set(alerts.map((a) => a.leadId))
+  // From stale leads (avoid duplicates) — reaproveita o mesmo set de leads já vistos
   if (staleLeads) {
     for (const lead of staleLeads) {
-      if (logLeadIds.has(lead.id)) continue
+      if (seenLeadIds.has(lead.id)) continue
+      seenLeadIds.add(lead.id)
 
       const stage = Array.isArray(lead.stage) ? lead.stage[0] : lead.stage
       const property = Array.isArray(lead.property) ? lead.property[0] : lead.property
