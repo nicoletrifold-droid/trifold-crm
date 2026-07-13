@@ -1,0 +1,34 @@
+storyId: 75-151
+title: "'Leads hoje' clique mostra todos do dia + quebra por situação"
+verdict: PASS
+reviewer: Quinn (@qa)
+date: 2026-07-13
+
+checks:
+  code_review: PASS        # diff focado em 1 arquivo; segue padrões da página; removeu dead-code (void inList)
+  unit_tests: CONCERNS     # sem teste novo (repo não testa server-component pages); suíte 883/883; verificação E2E via SQL
+  acceptance_criteria: PASS
+  no_regressions: PASS     # tsc 0, vitest 883/883
+  performance: PASS        # +2 count-queries (head:true) SÓ no modo criados=hoje
+  security: PASS           # sem novos inputs; RLS/segmento inalterados; queries via builder (sem injeção)
+  documentation: PASS      # story + comentários inline referenciando 75-151
+
+acceptance_criteria_review:
+  AC1: PASS   # criados=hoje sem exclusão de etapas; total lista == card. Verificado SQL prod: total_dia=11==card.
+  AC2: PASS   # linha-resumo com baldes >0. 6 em atendimento · 5 perdidos (acervo=0 escondido).
+  AC3: PASS   # coluna Etapa já existente rotula cada lead.
+  AC4: PASS   # dashboard/page.tsx (card leadsToday) intocado.
+  AC5: PASS   # bypass condicionado estritamente a params.criados==='hoje'; abas/filtros normais inalterados.
+  AC6: PASS   # isImobWorld continua usando leadsHref (não tocado).
+
+verification:
+  method: "SQL espelhando as queries reais da página (prod dsopqkqjkmhytudaaolv, dia comercial 12/07 20:00→)"
+  result: "total_dia=11 (== card 'Leads hoje'); perdidos=5, acervo=0, em_atendimento=6; 6+5+0=11 ✅"
+
+issues:
+  - severity: low
+    category: tests
+    description: "Nenhum teste unitário novo — página é server component e bate no Supabase; repo não tem testes de página."
+    recommendation: "Opcional: extrair a matemática do resumo (emAtendimento = total − perdidos − acervo) num helper puro testável."
+
+notes: "tsc 0 erros; eslint 0 erros (warning isAdmin é pré-existente, fora de escopo). PASS."
