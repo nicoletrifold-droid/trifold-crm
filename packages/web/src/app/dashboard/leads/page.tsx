@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { LeadFilters } from "@web/components/lead-filters"
 import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
-import { PERDIDO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
+import { PERDIDO_STAGE_IDS, ACERVO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 
 const PAGE_SIZE = 50
@@ -20,7 +20,8 @@ function buildPageHref(
   propertyId?: string,
   days?: string,
   dateFrom?: string,
-  dateTo?: string
+  dateTo?: string,
+  criados?: string
 ): string {
   const p = new URLSearchParams()
   p.set("page", String(targetPage))
@@ -31,6 +32,7 @@ function buildPageHref(
   if (days) p.set("days", days)
   if (dateFrom) p.set("date_from", dateFrom)
   if (dateTo) p.set("date_to", dateTo)
+  if (criados) p.set("criados", criados)
   return `?${p.toString()}`
 }
 
@@ -48,6 +50,9 @@ export default async function LeadsPage({
   const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   const view = params.view === "perdidos" ? "perdidos" : "ativos"
+  // Story 75-151 — modo "Leads hoje" (clique no card do dashboard): lista TODOS os leads do dia
+  // comercial, sem excluir perdidos/não qualificados/acervo, p/ o total bater com o card.
+  const isCriadosHoje = params.criados === "hoje"
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
   const offset = (page - 1) * PAGE_SIZE
 
@@ -71,13 +76,12 @@ export default async function LeadsPage({
     .eq("is_active", true)
     .eq("segmento", "principal")
 
-  // Filtro por view: ativos exclui stages de perdido, perdidos só inclui
+  // Filtro por view: ativos exclui stages de perdido, perdidos só inclui.
+  // Story 75-151: no modo "criados=hoje" NÃO excluímos etapas (mostra tudo do dia → bate com o card).
   if (view === "perdidos") {
-    const inList = `(${PERDIDO_STAGE_IDS.join(",")})`
     query = query.in("stage_id", PERDIDO_STAGE_IDS)
     countQuery = countQuery.in("stage_id", PERDIDO_STAGE_IDS)
-    void inList
-  } else {
+  } else if (!isCriadosHoje) {
     const excluded = `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`
     query = query.not("stage_id", "in", excluded)
     countQuery = countQuery.not("stage_id", "in", excluded)
@@ -115,11 +119,12 @@ export default async function LeadsPage({
 
   // "criados=hoje" — usa o DIA COMERCIAL (vira no fechamento, não meia-noite),
   // mesma fonte do card "Leads hoje" do dashboard (Story 75-57).
-  if (params.criados === "hoje") {
+  let commercialDayFromIso: string | null = null
+  if (isCriadosHoje) {
     const { from } = await commercialDayRangeForOrg(user.orgId, supabase)
-    const iso = from.toISOString()
-    query = query.gte("created_at", iso)
-    countQuery = countQuery.gte("created_at", iso)
+    commercialDayFromIso = from.toISOString()
+    query = query.gte("created_at", commercialDayFromIso)
+    countQuery = countQuery.gte("created_at", commercialDayFromIso)
   }
 
   // Story 75-94 — filtro de período de captura (created_at), fuso America/Sao_Paulo (UTC-3),
@@ -137,7 +142,7 @@ export default async function LeadsPage({
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
 
-  const [leadsResult, countResult, perdidosCountResult, ativosCountResult, stagesResult, propertiesResult, brokersResult] = await Promise.all([
+  const [leadsResult, countResult, perdidosCountResult, ativosCountResult, stagesResult, propertiesResult, brokersResult, perdidosHojeResult, acervoHojeResult] = await Promise.all([
     query,
     countQuery,
     supabase
@@ -155,11 +160,26 @@ export default async function LeadsPage({
     supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
     supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
     supabase.from("users").select("id, name").eq("org_id", user.orgId).eq("is_active", true).in("role", ["broker", "gerente-comercial"]).order("name"),
+    // Story 75-151 — quebra por situação DO DIA (só no modo "criados=hoje"): perdidos/não qualif. e acervo.
+    isCriadosHoje && commercialDayFromIso
+      ? supabase.from("leads").select("id", { count: "exact", head: true })
+          .eq("is_active", true).eq("segmento", "principal")
+          .gte("created_at", commercialDayFromIso).in("stage_id", PERDIDO_STAGE_IDS)
+      : Promise.resolve({ count: 0 }),
+    isCriadosHoje && commercialDayFromIso
+      ? supabase.from("leads").select("id", { count: "exact", head: true })
+          .eq("is_active", true).eq("segmento", "principal")
+          .gte("created_at", commercialDayFromIso).in("stage_id", ACERVO_STAGE_IDS)
+      : Promise.resolve({ count: 0 }),
   ])
   const leads = leadsResult.data
   const totalCount = countResult.count ?? 0
   const perdidosCount = perdidosCountResult.count ?? 0
   const ativosCount = ativosCountResult.count ?? 0
+  // Story 75-151 — baldes do dia p/ a linha-resumo. em-atendimento = total do dia − perdidos − acervo.
+  const perdidosHojeCount = perdidosHojeResult.count ?? 0
+  const acervoHojeCount = acervoHojeResult.count ?? 0
+  const emAtendimentoHojeCount = Math.max(0, totalCount - perdidosHojeCount - acervoHojeCount)
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const allStages = stagesResult.data ?? []
   const allProperties = propertiesResult.data ?? []
@@ -235,9 +255,17 @@ export default async function LeadsPage({
       </div>
 
       {/* Story 75-129 — total de resultados do filtro (sempre visível) */}
+      {/* Story 75-151 — no modo "Leads hoje", quebra por situação p/ explicar o total do card */}
       <p className="text-sm text-stone-500 dark:text-stone-400">
         <span className="font-semibold text-stone-900 dark:text-stone-100">{totalCount}</span>{" "}
-        {totalCount === 1 ? "lead" : "leads"}
+        {isCriadosHoje ? (totalCount === 1 ? "lead hoje" : "leads hoje") : (totalCount === 1 ? "lead" : "leads")}
+        {isCriadosHoje && perdidosHojeCount + acervoHojeCount > 0 && (
+          <>
+            {" · "}{emAtendimentoHojeCount} em atendimento
+            {perdidosHojeCount > 0 && <>{" · "}{perdidosHojeCount} perdidos/não qualificados</>}
+            {acervoHojeCount > 0 && <>{" · "}{acervoHojeCount} em acervo</>}
+          </>
+        )}
       </p>
 
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
@@ -269,7 +297,7 @@ export default async function LeadsPage({
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (
               <Link
-                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to)}
+                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -288,7 +316,7 @@ export default async function LeadsPage({
             </span>
             {page < totalPages ? (
               <Link
-                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to)}
+                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Próxima <ChevronRight className="h-4 w-4" />
