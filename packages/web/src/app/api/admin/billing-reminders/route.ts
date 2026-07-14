@@ -24,9 +24,12 @@ export async function GET() {
   const { data, error } = await supabase
     .from("service_billing_reminders")
     .select(
-      "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, paid_at, notes, created_at, updated_at, platform_services(slug, name, category)"
+      // Story 78-14 (AC13): expõe os campos de assinatura fixa para a Story 78-15 sem rota nova.
+      "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, paid_at, notes, is_fixed_subscription, subscription_plan, subscription_seats, value_source, seats_source, excluded_from_subscription_total, last_enriched_at, created_at, updated_at, platform_services(slug, name, category)"
     )
-    .order("due_date", { ascending: true })
+    // due_date agora nullable (172): NULLS LAST para não jogar as assinaturas fixas sem data
+    // de renovação no topo da lista de vencimentos.
+    .order("due_date", { ascending: true, nullsFirst: false })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
