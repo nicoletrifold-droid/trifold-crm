@@ -1,6 +1,6 @@
 # Story 75-154 — Relatório diário: "Leads de entrada" (funil) × cadastros manuais + origem das redistribuições
 
-**Status:** Review
+**Status:** Done
 **Epic:** Relatório diário do diretor / métricas de leads
 **Relacionado:** 75-45 (relatório diário original), 75-57/75-58 (dia comercial ciente da agenda), Epic 64 / 75-149 (bolsão + `pegar_lead_bolsao`), 75-151 ("Leads hoje" = volume bruto)
 **Complexidade:** M (2 arquivos TS + testes + 1 template Meta novo; sem migration, sem UI)
@@ -110,6 +110,7 @@ Bom dia! Relatório gerado automaticamente.
 | 2026-07-14 | 0.4 | QA gate (@qa): **PASS 9/10**. 7 checks PASS; AC1-AC9 traçados; verificações adversariais (X≤Y garantido, guard carryover testado, sem query duplicada, messages sem org_id). vitest 966/966. Gate: docs/qa/gates/75.154-relatorio-diario-entrada-vs-manual.yml. −1 = dependência externa (aprovação do template Meta v2 antes do deploy). Pendente @devops: submeter template v2 (APPROVED) + push junto. | @qa (Quinn) |
 | 2026-07-14 | 0.5 | @devops (parcial): template HSM `relatorio_diario_leads_v2` (pt_BR, UTILITY, 7 params) **submetido via Graph API** ao WABA `35524602787124855` — **id `1571227027692653`, status PENDING**. Corpo clona o estilo do v1 (blocos separados por linha em branco; `{{3}}` canais e `{{5}}` corretores em linha própria) + 2 linhas novas ("Leads de entrada" e "Cadastros manuais"). **Push/deploy AGUARDANDO APPROVED** (decisão do usuário: só após aprovação). Código ainda NÃO commitado/pushado. | @devops (Gage) |
 | 2026-07-14 | 0.6 | Template `relatorio_diario_leads_v2` (id `1571227027692653`) **APPROVED** pela Meta (~16 min após submissão). Dependência externa resolvida → liberado para commit + push. | @devops (Gage) |
+| 2026-07-14 | 0.7 | @devops: commit + push + **PR #193 mergeado (squash) na `main`** após build de preview Vercel verde → deploy de produção. Template v2 APPROVED antes do merge (envio roda no cron 07:59 BRT). Status Review → **Done**. | @devops (Gage) |
 
 ## Dev Agent Record
 ### Agent Model Used
