@@ -85,7 +85,27 @@ Sem esta story, o teste A/B configurado no wizard (Story 80-2) não tem nenhum e
 - `packages/web/src/app/dashboard/sistema/email-blasts/novo/_components/wizard.tsx`
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `a3dc2c74` (diff isolado, 3 arquivos de produto + story). Story de maior risco do epic até agora — revisão feita com atenção redobrada, incluindo verificação independente da evidência de teste do @dev.
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Diff cirúrgico, split e lookup de variante isolados em poucas linhas, reusa `sendTemplateEmail`/`distributeOverDays` sem duplicar lógica |
+| 2. Testes | ✅ Sem teste automatizado, mas o @dev fez teste manual real contra produção (ver verificação independente abaixo) — proporcional ao risco Médio da story |
+| 3. Acceptance Criteria | ✅ AC1, AC2, AC4, AC5, AC8 confirmados diretamente no diff |
+| 4. **AC6/AC7 (paridade — verificado com atenção redobrada, por afetar TODOS os blasts em produção hoje)** | ✅ Tracei manualmente o caminho `abTestEnabled=false`: `variant = false ? ... : undefined` (curto-circuito, nunca toca o `variantMap`) → sempre `undefined`; `effectiveSubjectOverride` cai sempre no `else` (`subjectOverride` original) já que `variant !== "a"` e `variant !== "b"`; `email_blasts` insert grava `subject_variant_a/b` sempre `null` quando `abTestEnabled=false`, independente do que viesse no body. Comportamento idêntico ao pré-existente, byte a byte na lógica. `distributeOverDays` e o cálculo de `effectiveStart`/quota não foram tocados (Story 78-1 continua valendo). |
+| 5. **AC3 (split determinístico)** | ✅ Validei a matemática: `Math.ceil(n/2)` — n=2→1/1 (50/50 exato), n=3→2/1 (extra em A, como documentado), n=1→1/0 (caso degenerado aceitável). Ordenação por `id` via `localeCompare`, não randômica — auditável. |
+| 6. Segurança | ✅ N/A — mesma superfície de risco já existente (rota já exigia `role==="admin"`), campos novos são strings simples |
+| 7. Documentação | ✅ Story completa, Dev Notes detalha exatamente onde e como cada AC foi implementado |
+
+**Verificação independente da evidência de teste manual:** não me limitei a confiar no relato do @dev — rodei minha própria consulta em produção (`email_logs` filtrando por `triggered_by=eq.test:story-80-3`) e confirmei `[]` (nenhum resíduo). Também confirmei que o script temporário (`.tmp-test-ab-send.ts`) foi de fato removido do disco.
+
+**Observação (não bloqueante, defesa em profundidade):** se `ab_test_enabled=true` for enviado com `subject_variant_a`/`b` como **string vazia** (não `undefined`) diretamente à API (bypassando o wizard), `effectiveSubjectOverride` seria `""` e `sendTemplateEmail` usaria `"" ?? template.subject` → permanece `""` (o operador `??` só cai no fallback para `null`/`undefined`, não para string vazia) — resultaria em assunto vazio no email. **Não é explorável pelo fluxo real**: o `wizard.tsx` usa `content.subjectVariantA || undefined` (não `??`), convertendo string vazia em `undefined` antes de enviar, e a Story 80-2 já exige os campos preenchidos (`canProceed`) para chegar a este ponto. Risco real: baixo, exigiria uma chamada direta e deliberada à API (já autenticada como admin) fora da UI. Registro como débito técnico leve para eventual hardening (validar `subject_variant_a`/`b` não-vazios no backend quando `ab_test_enabled=true`), não bloqueia o gate.
+
+**CodeRabbit:** não executado (WSL indisponível neste ambiente macOS) — mitigado com ESLint independente (0 erros, 1 warning pré-existente confirmado via `git show` do commit anterior, não introduzido por esta story) + revisão manual completa incluindo rastreamento lógico dos casos AC3/AC6/AC7 + verificação independente da limpeza pós-teste em produção.
+
+Pronta para `@devops *push`. **Recomendação:** primeiro blast real com A/B ativado em produção deve usar um segmento pequeno (poucos leads), como já sugerido no Dev Notes original, antes de qualquer campanha com volume maior.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, terceira de 5 stories (schema e UI do Passo 2 já Done). Primeira story do epic que toca o caminho real de envio — risco classificado como Médio, com mitigação via AC6 (paridade total do caminho sem A/B).
