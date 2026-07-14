@@ -1,0 +1,40 @@
+schema: 1
+story: '78.13'
+gate: PASS
+status_reason: 'Todas as 12 ACs satisfeitas com evidência; 16/16 testes puros passando, lint/typecheck limpos (4 erros pré-existentes fora de escopo), zero migration, sinal honesto (Article IV), dedup atômico via UNIQUE existente e alinhamento temporal correto (D-1..D-3).'
+reviewer: 'Quinn'
+updated: '2026-07-14T00:00:00Z'
+
+evidence:
+  tests: '16/16 passed — npx vitest run packages/web/src/lib/billing/collection-health.test.ts'
+  typecheck: '0 erros novos (4 pré-existentes: visual-editor.tsx x3, fill.ts x1 — fora do escopo)'
+  lint: '0 erros / 0 warnings nos 3 arquivos novos'
+  ac8_grep: 'grep ai-gateway.vercel.sh|AI_GATEWAY|@vercel/ai em packages/ → zero (Sinal 1 N/A confirmado)'
+  temporal_alignment: 'run-collector grava snapshot_date=window.to=ontem(D-1); diasAlvo=[D-1,D-2,D-3] — sem off-by-one'
+  cron_schedule: '"30 14 * * *" único em vercel.json — sem colisão (30 11 e 30 15 são de 78-12; roda após todos os coletores do dia)'
+
+traceability:
+  AC1: 'detectarFalhaConsecutiva (3/3 dias) + buildMensagem com name+billing_url — collection-health.ts:72, route.ts:54,195 (teste :48)'
+  AC2: 'exige diasAlvo.every(); 2/3 não detecta — collection-health.ts:95 (teste :57)'
+  AC3: 'query só metric=collection_error; 0 linhas → Set vazio — route.ts:96, collection-health.ts:77 (teste :65)'
+  AC4: 'filter(s => s.enabled) após detecção — route.ts:137'
+  AC5: 'INSERT (não upsert) + code 23505 → dedupPulados++/continue, sem 500; atômico pelo UNIQUE(migration 164) — route.ts:165-180'
+  AC6: 'novo dia → snapshot_date=hojeIso (D) novo → INSERT sucesso → novo alerta — route.ts:168,88'
+  AC7: 'sequência quebrada → detectarFalhaConsecutiva exclui; nenhum reset manual — collection-health.ts:94'
+  AC8: 'nenhum coletor de crédito criado; grep zero — verificado'
+  AC9: 'reusa hojeSaoPaulo/toIsoDate/pad2 de reminder-schedule.ts — imports route.ts:6, collection-health.ts:12'
+  AC10: 'sem migration; marcador respeita schema 164 (currency=null, collection_status=ok∈CHECK, value=1) — route.ts:165-173'
+  AC11: 'CRON_SECRET ausente → 503; header incorreto → 401 (padrão idêntico a billing-reminders) — route.ts:76-82'
+  AC12: 'mensagem diz coleta falhou (não cobrança); sem valor de saldo inventado — route.ts:54-73'
+
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'sendEmail resolve com {error} em falha de config (não rejeita) → o .catch por envio não contabiliza esse tipo de falha em alertErrors, e o marcador de dedup é gravado ANTES do envio, então uma falha de envio não é reenviada no mesmo dia.'
+    suggested_action: 'Aceito — comportamento best-effort idêntico ao padrão estabelecido de billing-reminders (78-8/78-11). Nenhuma ação nesta story. Se futuramente quiser garantia de reenvio, mover o marcador para depois de envio confirmado exigiria repensar a atomicidade do dedup.'
+  - id: 'REL-002'
+    severity: low
+    finding: 'Comportamento de banco AC5/AC6/AC7 (colisão 23505, persistência entre dias, cessação) validado por lógica estática + constraint UNIQUE já aplicada (164), não por execução em banco nesta sessão (proibido aplicar em prod/dev).'
+    suggested_action: 'Executar a validação manual em DEV descrita na seção Testing da story (popular collection_error sintético, ?dry=1, depois sem dry, confirmar dedup na 2ª chamada) antes de considerar produção plenamente exercitada.'
+
+waiver: { active: false }
