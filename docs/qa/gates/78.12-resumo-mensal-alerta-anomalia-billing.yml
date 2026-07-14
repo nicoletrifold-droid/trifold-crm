@@ -1,0 +1,65 @@
+schema: 1
+story: '78.12'
+slug: resumo-mensal-alerta-anomalia-billing
+gate: CONCERNS
+status_reason: >-
+  13/13 ACs implementados e verificados (24/24 testes, lint 0, typecheck só 4 pré-existentes).
+  Única ressalva não-bloqueante: a race de dedup do resumo mensal (SELECT-check → envia → INSERT)
+  pode, em execução concorrente rara, gerar e-mail duplicado; impacto baixo (e-mail informativo,
+  sem corrupção de dado). Recomendado swap para INSERT-claim-first (mesmo padrão já usado no cron de anomalia).
+reviewer: 'Quinn'
+updated: '2026-07-13T20:40:00Z'
+
+evidence:
+  tests_run: 'npx vitest run packages/web/src/lib/billing/cost-summary.test.ts'
+  tests_result: '24/24 passing'
+  lint: 'eslint 4 arquivos novos → exit 0 (limpo)'
+  typecheck: 'tsc --noEmit → apenas 4 erros pré-existentes (react-email-editor x2, visual-editor any, pdf-lib); nenhum nos arquivos da story'
+  migration_number: '171 (renumerada 170→171 no deploy: 170 consumida por 170_email_blast_ab_test_assunto.sql / Story 80-1 em origin/main)'
+  cron_collision: 'sem colisão — 30 11 e 30 15 únicos; boleto-scan é minuto 0; 30 14 é 78-13'
+
+traceability:
+  AC1: 'PASS — mesAnterior() + query snapshot_date BETWEEN inicio/fim + somarMonetarioPorServicoMoeda()'
+  AC2: 'PASS — somarTotalPorMoeda() keyed por currency; teste confirma USD/BRL separados'
+  AC3: 'PASS — MEDIA_BUDGET_SLUG excluído do total via metaAdsIds; linha própria "budget de mídia"; join !inner → sem linha se meta_ads não coletar'
+  AC4: 'PASS — somarTecnicoPorServicoMetrica() filtra currency IS NULL e exclui BOOKKEEPING_METRICS (correção @po aplicada e testada)'
+  AC5: 'PASS (com ressalva race) — guard hoje.d!==1 + SELECT billing_monthly_summary_log; ver REL-001'
+  AC6: 'PASS — avaliarAnomalias() com ANOMALY_MOM_THRESHOLD=0.5, funciona com threshold=null'
+  AC7: 'PASS — teste +30% → 0 triggers'
+  AC8: 'PASS — threshold_absolute independente do percentual; teste com queda MoM dispara'
+  AC9: 'PASS — INSERT + UNIQUE(service_id,alert_type,period) + 23505; dedup por tipo antes do INSERT'
+  AC10: 'PASS — query .eq(cost_alerts_enabled, true)'
+  AC11: 'PASS — query .not(currency, is, null) + skip se atualRows vazio'
+  AC12: 'PASS — ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS / DROP POLICY IF EXISTS + CREATE / CREATE INDEX IF NOT EXISTS (idempotente)'
+  AC13: 'PASS — hojeSaoPaulo() via Intl TZ America/Sao_Paulo; testes de virada de ano e clamp fim-de-mês'
+
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: >-
+      Race no dedup do resumo mensal: SELECT-check → envia → INSERT em billing_monthly_summary_log.
+      Dois runs verdadeiramente concorrentes passariam ambos no SELECT e enviariam 2 e-mails
+      (o 2º INSERT falharia só no PK, tarde demais). Retries do Vercel são sequenciais (mitiga o
+      caso real do AC5). O cron de anomalia (mesma story) JÁ usa o padrão robusto INSERT-claim
+      (23505) — inconsistência interna.
+    suggested_action: >-
+      Trocar para INSERT-claim-first (INSERT ... ON CONFLICT (period) DO NOTHING RETURNING;
+      só enviar se retornou linha). Preserva a AUTO-DECISION "sem retry" da story e fecha a race.
+      Não-bloqueante — impacto é e-mail informativo duplicado, sem corrupção de dado.
+  - id: 'REL-002'
+    severity: low
+    finding: >-
+      Métrica emailsSent infla quando RESEND não está configurado: sendEmail RESOLVE com
+      {id:null,error} em falha de config (não rejeita), então o .then(sent++) conta como enviado
+      e o .catch nunca dispara para erro de config. Só afeta observabilidade do log, não a lógica.
+    suggested_action: >-
+      Inspecionar o retorno de sendEmail ({id, error}) para contabilizar sent/errors com precisão.
+      Cosmético/observabilidade — opcional.
+
+nfr:
+  security: 'PASS — CRON_SECRET/Bearer nas 2 rotas; RLS admin-only (user_role()=admin) nas 2 tabelas novas; service_role bypassa RLS; sem secret exposto'
+  reliability: 'CONCERNS — ver REL-001 (race dedup, baixo impacto) / REL-002'
+  maintainability: 'PASS — REUSE integral de reminder-schedule/email/push-service/createAdminClient; lógica pura isolada em cost-summary.ts com 24 testes'
+  performance: 'PASS — queries indexadas (snapshot_date), 2 janelas em paralelo; agregação em memória sobre volume mensal pequeno'
+
+waiver: { active: false }
