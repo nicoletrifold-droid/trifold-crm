@@ -1,0 +1,40 @@
+storyId: "75-153"
+title: "Corretor: contagens e lista NÃO contam Perdido / Não Qualificado (por ETAPA)"
+verdict: PASS
+readiness: 10/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-14
+
+checks:
+  code_review: PASS          # mig 170 é CREATE OR REPLACE idêntico à 136 + 1 linha aditiva por bloco; TSX reusa PERDIDO_STAGE_IDS (sem hardcode), mesmo padrão PostgREST do admin
+  unit_tests: PASS           # vitest 914/914 (84 files) sem regressão; sem teste novo (server components + SQL) — coerente com 75-151
+  acceptance_criteria: PASS  # AC1-AC8 (ver trace)
+  regressions: PASS          # mudança puramente aditiva; filtros existentes (segmento/is_active/lost_reason/org/broker) preservados; acervo intocado; simulação prod total 101→89 (Δ=12 = exatamente os perdidos)
+  performance: PASS          # sem custo adicional relevante — 1 predicado NOT IN de 2 UUIDs por count; sem novos joins
+  security: PASS             # SECURITY DEFINER inalterado; assinatura/tipo de retorno jsonb idênticos; sem SQL dinâmica; UUIDs literais
+  documentation: PASS        # cabeçalho SQL cita Story 75-153 + razão; comentário no TSX; Dev Agent Record completo
+
+acceptance_criteria_trace:
+  AC1: "v_sem_tarefas exclui PERDIDO_STAGE_IDS inclusive com lost_reason NULL (mig 170 linha 43)."
+  AC2: "v_total exclui PERDIDO (linha 35); trabalhados = v_total - v_novos (derivado, corrige-se sozinho)."
+  AC3: "Lista broker/leads: .not('stage_id','in',(PERDIDO_STAGE_IDS)) no nível da query → filtro ?tasks=sem-tarefas (em memória) herda a exclusão."
+  AC4: "Critério de perdido passa a ser a ETAPA — corretor alinhado ao admin, independente de lost_reason."
+  AC5: "Acervo NÃO tocado: SQL usa só os 2 UUIDs de PERDIDO; TSX importa PERDIDO_STAGE_IDS (não EM_ATENDIMENTO_EXCLUDED_IDS). Simulação prod acervo 7→7."
+  AC6: "novos/atrasadas/para_hoje/futuras: exclusão idêntica adicionada, só remove perdidos; demais filtros intactos."
+  AC7: "CREATE OR REPLACE idêntico à mig 136 (assinatura, SECURITY DEFINER, 6 counts, v_aguardando_stage_id, janela America/Sao_Paulo); só +6 exclusões (uma por SELECT)."
+  AC8: "TSX importa PERDIDO_STAGE_IDS de @web/lib/leads/stage-filters (sem UUID hardcoded); SQL usa os 2 mesmos literais — paridade confirmada."
+
+verificacoes_adversariais:
+  - "Diff vs main: apenas 3 arquivos (story + page.tsx +5 linhas + mig 170 nova). Nada fora de escopo."
+  - "Paridade linha-a-linha com mig 136: corpo idêntico; exatamente 6 ocorrências de NOT IN (nem mais nem menos)."
+  - "Mig 170 define SÓ get_broker_dashboard_counts — as outras 3 funções da 136 (get_dashboard_stage_counts, get_broker_funnel_stats, get_analytics_summary_ranged) NÃO foram tocadas."
+  - "UUIDs SQL '00000000-0000-0000-0001-000000000008' + '95327bd7-3e88-4038-aa16-250a74ab085c' == PERDIDO_STAGE_IDS. Acervo (62075f72.../...010) ausente da 170."
+  - "Padrão PostgREST idêntico ao admin (dashboard/page.tsx:55), trocando corretamente EM_ATENDIMENTO_EXCLUDED_IDS por PERDIDO_STAGE_IDS."
+  - "type-check: 0 erros. vitest: 914/914. Lint: 12 erros PRÉ-EXISTENTES em arquivos não tocados (weather-widget/informe-pdf/distributor.test) — fora de escopo."
+
+observations:
+  - "Semântica de NOT IN + NULL: um lead com stage_id NULL passaria a ser excluído de todas as contagens. NÃO é regressão — é exatamente o comportamento já adotado pelo admin (mesmo predicado), e a simulação prod (Δ total = 12 = só os perdidos) confirma que não há leads de stage_id NULL sendo derrubados. stage_id é sempre preenchido no fluxo do CRM."
+  - "Migration 170 NÃO aplicada em prod (deferida p/ @devops). O código TSX só reflete o comportamento após a mig 170 estar aplicada — ambos devem ir juntos no deploy."
+  - "CodeRabbit N/A (WSL indisponível em macOS)."
+
+notes: "Aprovada. Pendências para @devops *push: (1) aplicar migration 170 em prod via Management API; (2) push. Status → Done após deploy + migração aplicadas (transição de @devops, conforme story-lifecycle)."

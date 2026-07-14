@@ -197,4 +197,48 @@ inalterado (7 → 7), confirmando que a exclusão usa `PERDIDO_STAGE_IDS`, não 
 - `packages/web/src/app/broker/leads/page.tsx` (modificado — import + `.not("stage_id","in",...)`)
 
 ## QA Results
-_(a preencher pelo @qa)_
+
+### Review Date: 2026-07-14
+### Reviewed By: Quinn (Test Architect & Quality Advisor)
+
+**Veredito: PASS** (readiness 10/10)
+
+Revisão adversarial da branch `fix/75-153-corretor-excluir-perdidos`. Mudança mínima, aditiva e
+totalmente rastreável aos 8 AC. Nenhum defeito, regressão ou desvio de escopo encontrado.
+
+| Check | Resultado | Nota |
+|---|---|---|
+| 1. Code review | PASS | mig 170 = CREATE OR REPLACE idêntico à 136 + 1 linha aditiva por bloco; TSX reusa `PERDIDO_STAGE_IDS` (sem hardcode), mesmo padrão PostgREST do admin |
+| 2. Unit tests | PASS | vitest **914/914 (84 files)**, sem regressão; sem teste novo (server components + SQL), coerente c/ 75-151 |
+| 3. Acceptance criteria | PASS | AC1-AC8 cobertos (trace no gate) |
+| 4. No regressions | PASS | filtros existentes (segmento/is_active/lost_reason/org/broker) preservados; acervo intocado |
+| 5. Performance | PASS | +1 predicado `NOT IN` de 2 UUIDs por count; sem novos joins |
+| 6. Security | PASS | `SECURITY DEFINER` + assinatura + retorno jsonb idênticos; sem SQL dinâmica |
+| 7. Documentation | PASS | cabeçalho SQL + comentário TSX citam a story; Dev Agent Record completo |
+
+**Verificações-foco (adversariais):**
+- **6 dos 6 `SELECT ... INTO`** receberam a exclusão — `grep -c` = exatamente **6** ocorrências de
+  `NOT IN ('...008','95327bd7...')` (nem mais nem menos). Corpo confirmado **idêntico linha-a-linha** à
+  mig 136, só a adição.
+- Mig 170 define **só** `get_broker_dashboard_counts`; as outras 3 funções da 136
+  (`get_dashboard_stage_counts`, `get_broker_funnel_stats`, `get_analytics_summary_ranged`) **não
+  foram tocadas**.
+- **Paridade SQL×TS:** UUIDs literais da SQL == `PERDIDO_STAGE_IDS` de `stage-filters.ts`. **Acervo
+  ausente** da 170 (usa `PERDIDO_STAGE_IDS`, não `EM_ATENDIMENTO_EXCLUDED_IDS`) → AC5 garantido.
+- **Lista** usa `.not("stage_id","in",(${PERDIDO_STAGE_IDS.join(",")}))` no nível da query → `?tasks=sem-tarefas`
+  (em memória) herda a exclusão; padrão idêntico ao admin em `dashboard/page.tsx:55`.
+- **Diff vs main:** apenas story + `broker/leads/page.tsx` (+5 linhas) + mig 170 (nova). Nada fora de escopo.
+- **type-check:** 0 erros. **Lint:** 12 erros PRÉ-EXISTENTES em arquivos NÃO tocados
+  (`weather-widget.tsx`, `informe-pdf.tsx`, `distributor.test.ts`) — fora de escopo, desconsiderados.
+
+**Observação (não bloqueante):** semântica `NOT IN` + `stage_id` NULL excluiria o lead — porém é
+exatamente o predicado que o admin já usa, e a simulação em prod (Δ total = 12 = só os perdidos)
+confirma que nenhum lead de `stage_id` NULL é derrubado. `stage_id` é sempre preenchido no fluxo.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/75.153-corretor-contagens-excluir-perdidos.yml
+
+**Pendências para @devops (`*push`):** (1) aplicar migration 170 em prod (Management API); (2) push.
+Status → **Done** após deploy + migração aplicadas (transição de @devops, conforme `story-lifecycle.md`).
+Code TSX e mig 170 devem ir **juntos** no deploy.
