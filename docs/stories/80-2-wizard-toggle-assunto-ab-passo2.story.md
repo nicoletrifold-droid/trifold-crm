@@ -73,7 +73,25 @@ Permite ao admin configurar visualmente um teste A/B de assunto antes de qualque
 - `packages/web/src/app/dashboard/sistema/email-blasts/novo/_components/step-schedule.tsx`
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `873a70c5` (diff isolado, 3 arquivos de produto + story).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Diff idiomático, reusa padrões já existentes (checkbox estilo `accent-indigo-600` igual ao já usado em `step-schedule.tsx`, campos com `text-stone-800 bg-white` das Stories 76-1/77-1) |
+| 2. Testes | ⚠️ Sem teste automatizado novo (componente sem suíte prévia). Validação lógica feita nesta revisão via análise da expressão `canProceed` (ver AC3 abaixo). Não bloqueante. |
+| 3. Acceptance Criteria | ✅ AC1, AC2, AC4, AC6, AC7 confirmados diretamente no diff |
+| 4. Regressões (**AC3 verificado com atenção**) | ✅ Analisei a expressão `canProceed = !!templateId && !!campaignName.trim() && (!abTestEnabled \|\| (...))`. Quando `abTestEnabled=false` (padrão), `!abTestEnabled` é `true`, e `true \|\| X` sempre colapsa pra `true` — a expressão inteira se reduz exatamente a `!!templateId && !!campaignName.trim()`, idêntica à original. Paridade confirmada por análise lógica, não só por leitura superficial. |
+| 5. AC8 (payload não alterado) | ✅ Confirmado no diff — `wizard.tsx` só tem a adição de 3 campos em `defaultContent`; `handleConfirm` e o corpo do `fetch(POST)` não aparecem no diff, ou seja, não foram tocados |
+| 6. Segurança | ✅ N/A — sem novo input externo relevante, campos de texto simples, mesma superfície de risco de XSS já presente (React escapa por padrão) |
+| 7. Documentação | ✅ Story com Contexto, ACs, Dev Notes/Completion Notes e Change Log completos |
+
+**Observação (não bloqueante):** o Dev adicionou, por conta própria, a exibição do "Assunto" único no resumo do Passo 3 para o caso sem A/B (antes essa info só existia no Passo 2). É uma mudança aditiva e de baixo risco, documentada no Dev Notes — considero dentro do espírito do AC7, mas registro que tecnicamente extrapola a letra do AC original (que só falava do caso A/B). Não bloqueia o gate.
+
+**CodeRabbit:** não executado (WSL indisponível neste ambiente macOS) — mitigado com ESLint independente (0 erros) + revisão manual completa do diff, incluindo análise lógica da expressão de validação (AC3).
+
+Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, segunda de 5 stories (schema já Done na 80-1).
