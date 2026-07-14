@@ -27,12 +27,21 @@ export interface BillingPanelData {
   generated_at: string
 }
 
+// Fontes dos campos de assinatura fixa (Story 78-14 AC13). `null` = ainda não informado.
+export type ValueSource = "api_price_table" | "manual" | null
+export type SeatsSource = "api" | "manual" | null
+
 // Contrato de GET /api/admin/billing-reminders (Story 78-8): { data: [...] } com
 // platform_services(slug, name, category) aninhado (objeto ou array, dependendo do driver).
+//
+// Story 78-15 (T2.1): `due_date` passa a ser nullable (78-14 AC1 relaxa a coluna) e os 7 campos
+// de assinatura fixa são adicionados como OPCIONAIS — assim um payload antigo (pré-78-14, sem
+// essas chaves) continua a tipar/renderizar sem crash (AC9): `undefined` é tratado como
+// equivalente a `null`/`false` em todos os consumidores.
 export interface ReminderRow {
   id: string
   service_id: string
-  due_date: string
+  due_date: string | null
   expected_amount: number | string | null
   currency: string
   billing_cycle: string
@@ -40,6 +49,13 @@ export interface ReminderRow {
   status: string
   paid_at: string | null
   notes: string | null
+  is_fixed_subscription?: boolean
+  subscription_plan?: string | null
+  subscription_seats?: number | null
+  value_source?: ValueSource
+  seats_source?: SeatsSource
+  excluded_from_subscription_total?: boolean
+  last_enriched_at?: string | null
   platform_services:
     | { slug: string; name: string; category: string }
     | { slug: string; name: string; category: string }[]
