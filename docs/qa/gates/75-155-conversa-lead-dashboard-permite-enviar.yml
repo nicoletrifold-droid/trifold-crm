@@ -1,0 +1,47 @@
+storyId: "75-155"
+title: "Conversa do lead no /dashboard permite ENVIAR (paridade com o corretor)"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-14
+branch: fix/75-155-conversa-dashboard-enviar
+commit: 2c77382f
+
+checks:
+  code_review: PASS         # REUSO limpo do ConversationThread em place; props derivadas espelham 1:1 o /broker; gate por CAN_SEND_ROLES; bloco brokerNames removido sem sobras (grep=0)
+  unit_tests: PASS          # sem teste novo (server component + client chat, mesmo padrão 75-151/153); suíte existente 89 files / 975 tests PASS, sem regressão
+  acceptance_criteria: PASS # AC1-AC8 rastreados (ver trace)
+  regressions: PASS         # /broker 0 arquivos tocados; nenhuma rota de API; sem migration; SELECT de conversations só ADICIONA is_ai_active (aditivo); abas info/timeline/resumo intactas
+  performance: PASS         # sem query nova (removida a busca de brokerNames em users → 1 round-trip a menos); cap de 50 msgs client-side
+  security: PASS            # nenhuma permissão nova; gate de UI por role; backend (send-message/start-whatsapp) já tratava supervisor/admin/gerente-comercial como privilegiado
+  documentation: PASS       # story com Dev Agent Record completo + esta gate
+
+acceptance_criteria_trace:
+  AC1: "Aba Conversa do /dashboard renderiza <ConversationThread> com canSend=true p/ admin/supervisor/gerente-comercial → composer BrokerMessageInput visível (mesmo do /broker)."
+  AC2: "canSendConversa = CAN_SEND_ROLES.includes(user.role); lista idêntica ao /broker [broker,admin,supervisor,gerente-comercial]. Perfis fora (gerente-relacionamento/obras) recebem canSend=false; composer só monta dentro de {canSend && ...} (conversation-thread.tsx:286)."
+  AC3: "Envio usa as rotas existentes internas ao BrokerMessageInput (send-message / start-whatsapp). Nenhuma rota criada/alterada (diff-stat: 0 arquivos de API)."
+  AC4: "Reuso completo: WindowStatusBadge (janela 24h), botão Iniciar atendimento (janela fechada), realtime, mídia — tudo via ConversationThread."
+  AC5: "Bolhas de histórico renderizam independente de canSend (thread mapeia allMessages fora do gate); lista vazia → 'Nenhuma mensagem ainda.'"
+  AC6: "/broker inalterado (0 arquivos), backend inalterado, sem migration. Demais abas do /dashboard/leads/[id] intactas."
+  AC7: "Auditoria estática das classes: bubble-styles, window-status-badge, ai-status-banner, chat-scroll-area, broker-message-input e o container raiz do thread (bg-white ... dark:bg-stone-900) TODOS têm variante light + dark:. Nenhum fundo/texto só-dark."
+  AC8: "Sem migration e sem user_permission_exceptions; liberação por paridade de role."
+
+observations:
+  - "type-check: tsc --noEmit → 0 erros."
+  - "npm test (raiz): 89 test files / 975 tests PASS, 0 regressão."
+  - "Diff limitado a 2 arquivos: a própria story (novo) + app/dashboard/leads/[id]/page.tsx. Confirma AC6 (nada em /broker, API ou migrations)."
+  - "Serializabilidade server→client OK: props são messages (objetos planos), lead (objeto plano), Date (lastMessageAt — já usado pelo /broker, RSC-serializável), booleans e string[]. Nenhuma função passada."
+  - "ThreadMessage importado de conversation-thread-merge (fonte real do type, re-exportado pelo conversation-thread) — divergência apenas cosmética vs. o texto da story; type-check confirma o path correto."
+  - "CodeRabbit N/A (WSL indisponível em macOS)."
+
+manual_verification_post_deploy:
+  - "AC7 (visual em LIGHT): abrir a aba Conversa no /dashboard em tema claro e confirmar contraste do composer, badge de janela, banner de IA e bolhas — auditoria estática OK, mas E2E visual não roda sem browser aqui."
+  - "AC1/AC4 fluxo real: supervisor Jonathan envia com janela ABERTA (mensagem grava + aparece) e, com janela FECHADA, vê 'Iniciar atendimento' e/ou 'me avisar quando responder'."
+  - "AC2 negativo: abrir com perfil gerente-relacionamento/obras e confirmar que NÃO aparece o campo de envio (só leitura)."
+  - "Layout: o container do thread usa h-[calc(100dvh-8rem)] / lg:h-[34rem] (herdado do /broker); conferir a altura no /dashboard (header/sidebar diferentes) — cosmético, baixo risco."
+  - "Realtime p/ supervisor: INSERTs de messages via canal Supabase dependem da RLS de select do perfil; se não chegar em tempo real, o router.refresh() pós-envio cobre. Baixo risco."
+
+top_issues: []
+waiver: { active: false }
+
+notes: "PASS. Paridade de frontend limpa, sem tocar backend/broker/migration; type-check e 975 testes verdes. Pronta para @devops *push. Itens acima são conferência visual/E2E pós-deploy (sem browser no ambiente de QA), não bloqueantes."

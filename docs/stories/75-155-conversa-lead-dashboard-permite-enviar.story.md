@@ -237,4 +237,54 @@ privilegiados — a mudança é 100% de frontend por paridade.
 - `packages/web/src/app/dashboard/leads/[id]/page.tsx` (modificado)
 
 ## QA Results
-_(a preencher pelo @qa)_
+
+### Review Date: 2026-07-14
+### Reviewed By: Quinn (Test Architect)
+### Branch/Commit: `fix/75-155-conversa-dashboard-enviar` @ `2c77382f`
+
+**Escopo real conferido:** diff `main...fix/75-155-conversa-dashboard-enviar` toca **apenas 2 arquivos**
+— a própria story (novo) e `packages/web/src/app/dashboard/leads/[id]/page.tsx`. **Zero** arquivos em
+`/broker`, **zero** rotas de API, **zero** migration → AC6/AC8 confirmados pelo próprio diff-stat.
+
+**Traceability AC→código (7 checks):**
+
+| # | Check | Veredito | Evidência |
+|---|-------|----------|-----------|
+| 1 | Code review | **PASS** | REUSO limpo do `ConversationThread` em place; props derivadas espelham 1:1 o `/broker` (messages flat+ASC cap 50, lastMessageAt, isAiActive, isWhatsApp, conversationIds, notifyOnReply, canSend). Bloco `brokerNames` removido sem sobras (grep=0). |
+| 2 | Unit tests | **PASS** | Sem teste novo (server component + client chat, mesmo padrão 75-151/153). Suíte existente **89 files / 975 tests PASS**, sem regressão. |
+| 3 | Acceptance criteria | **PASS** | AC1-AC8 rastreados (ver gate). Gate de UI `canSend = CAN_SEND_ROLES.includes(user.role)`; composer só monta dentro de `{canSend && ...}` (`conversation-thread.tsx:286`); bolhas renderizam sempre (AC5). `is_ai_active` de fato adicionado ao SELECT de `conversations`. |
+| 4 | No regressions | **PASS** | `/broker` 0 arquivos; SELECT de `conversations` só **adiciona** `is_ai_active` (aditivo, não quebra info/timeline/resumo); sub-select de `messages` inalterado; cap 20/conversa era pré-existente. |
+| 5 | Performance | **PASS** | Removida a busca de `brokerNames` em `users` → **1 round-trip a menos**. Cap de 50 msgs client-side. |
+| 6 | Security | **PASS** | Nenhuma permissão nova; gate por role no frontend; backend (`send-message`/`start-whatsapp`) já tratava supervisor/admin/gerente-comercial como privilegiado. Sem exceção por-usuário. |
+| 7 | Documentation | **PASS** | Story com Dev Agent Record completo + gate file. |
+
+**Fronteira server/client:** OK. Props passadas do server para o client `ConversationThread` são todas
+serializáveis — `messages` (objetos planos), `lead` (objeto plano), `lastMessageAt` (`Date`, já usado pelo
+`/broker`, RSC-serializável), booleans e `string[]`. **Nenhuma função** passada como prop. type-check confirma
+o import cross-route por alias `@web`.
+
+**Tema (AC7) — auditoria estática:** `bubble-styles`, `window-status-badge`, `ai-status-banner`,
+`chat-scroll-area`, `broker-message-input` e o container raiz do thread (`bg-white ... dark:bg-stone-900`)
+**todos** têm variante light + `dark:`. Nenhuma classe com fundo/texto só-dark. Sem ajuste necessário.
+
+**Build/qualidade:** `npm run type-check` → **0 erros**. `npm test` (raiz) → **975 passed / 89 files**.
+
+**Observação cosmética (não bloqueante):** `ThreadMessage` foi importado de `conversation-thread-merge`
+(fonte real do type, re-exportado pelo `conversation-thread`) — diverge apenas do texto da Task 1 da story;
+type-check valida o path correto.
+
+**A conferir manualmente em prod (E2E, sem browser no ambiente de QA — NÃO bloqueia):**
+1. AC7 visual em **LIGHT**: contraste do composer/badge/banner/bolhas na aba Conversa do `/dashboard`.
+2. AC1/AC4: supervisor envia com janela **aberta** (grava + aparece) e, com janela **fechada**, vê
+   "Iniciar atendimento"/"me avisar quando responder".
+3. AC2 negativo: perfil `gerente-relacionamento`/`obras` **não** vê o campo de envio (só leitura).
+4. Layout: altura `h-[calc(100dvh-8rem)]/lg:h-[34rem]` herdada do `/broker` no `/dashboard` (header/sidebar
+   diferentes) — cosmético, baixo risco.
+5. Realtime p/ supervisor depende da RLS de select do perfil; se não chegar em tempo real, o
+   `router.refresh()` pós-envio cobre. Baixo risco.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/75-155-conversa-lead-dashboard-permite-enviar.yml
+
+— Quinn, guardião da qualidade 🛡️
