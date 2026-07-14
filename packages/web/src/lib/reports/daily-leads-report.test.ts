@@ -9,6 +9,7 @@ import {
   formatTempo,
   formatDistribuidos,
   formatDateBR,
+  isLeadFunil,
 } from "./daily-leads-report"
 
 describe("channelLabel", () => {
@@ -126,43 +127,112 @@ describe("formatTempo", () => {
   })
 })
 
+describe("isLeadFunil", () => {
+  const semSinal = { metadata: {}, ai_summary: null }
+  it("cadastro manual puro (nenhum sinal) → false", () => {
+    expect(isLeadFunil(semSinal, false, false)).toBe(false)
+    expect(isLeadFunil({ metadata: null, ai_summary: "" }, false, false)).toBe(false)
+  })
+  it("metadata de campanha (Meta Ads/CTWA) → funil", () => {
+    expect(isLeadFunil({ metadata: { ad_id: "123" }, ai_summary: null }, false, false)).toBe(true)
+  })
+  it("ai_summary (Nicole atuou) → funil", () => {
+    expect(isLeadFunil({ metadata: {}, ai_summary: "resumo" }, false, false)).toBe(true)
+  })
+  it("tem mensagem → funil", () => {
+    expect(isLeadFunil(semSinal, true, false)).toBe(true)
+  })
+  it("foi distribuído → funil", () => {
+    expect(isLeadFunil(semSinal, false, true)).toBe(true)
+  })
+})
+
 describe("formatDistribuidos", () => {
-  it("caso do relatório: cobertura + envios + redistribuições", () => {
-    // 9 recebidos, 8 deles distribuídos, 13 eventos, 10 leads únicos → 3 redistrib.
+  it("caso do relatório 13/07: cobertura + envios + origem das redistribuições", () => {
+    // 15 de entrada, 14 distribuídos, 18 envios, 14 únicos → 4 redistrib, todas de bolsão.
     expect(
-      formatDistribuidos({ recebidos: 9, coberturaUnica: 8, totalEventos: 13, leadsUnicos: 10 })
-    ).toBe("8 de 9 recebidos · 13 envios no total (3 redistribuições)")
+      formatDistribuidos({
+        funil: 15,
+        coberturaUnica: 14,
+        totalEventos: 18,
+        leadsUnicos: 14,
+        redistribBolsao: 4,
+      })
+    ).toBe("14 de 15 do funil · 18 envios no total (4 redistribuições: bolsão 4 · roleta 0)")
   })
 
-  it("nunca mais 'X de Y' com X > Y (o bug do 13 de 9)", () => {
-    const s = formatDistribuidos({ recebidos: 9, coberturaUnica: 8, totalEventos: 13, leadsUnicos: 10 })
-    expect(s.startsWith("8 de 9")).toBe(true)
-    expect(s).not.toContain("13 de 9")
+  it("redistribuição mista bolsão + roleta", () => {
+    expect(
+      formatDistribuidos({
+        funil: 10,
+        coberturaUnica: 9,
+        totalEventos: 13,
+        leadsUnicos: 10,
+        redistribBolsao: 1,
+      })
+    ).toBe("9 de 10 do funil · 13 envios no total (3 redistribuições: bolsão 1 · roleta 2)")
   })
 
-  it("1:1 (sem redistribuição nem carryover) → só a cobertura", () => {
+  it("guard carryover: bolsão não passa do total de redistribuições, roleta nunca negativa", () => {
+    // pulls (2) > redistrib da janela (1) → bolsão clampado a 1, roleta 0.
     expect(
-      formatDistribuidos({ recebidos: 5, coberturaUnica: 5, totalEventos: 5, leadsUnicos: 5 })
-    ).toBe("5 de 5 recebidos")
+      formatDistribuidos({
+        funil: 3,
+        coberturaUnica: 3,
+        totalEventos: 4,
+        leadsUnicos: 3,
+        redistribBolsao: 2,
+      })
+    ).toBe("3 de 3 do funil · 4 envios no total (1 redistribuição: bolsão 1 · roleta 0)")
+  })
+
+  it("1:1 (sem envio extra) → só a cobertura", () => {
+    expect(
+      formatDistribuidos({
+        funil: 5,
+        coberturaUnica: 5,
+        totalEventos: 5,
+        leadsUnicos: 5,
+        redistribBolsao: 0,
+      })
+    ).toBe("5 de 5 do funil")
   })
 
   it("carryover sem redistribuição (leads de dias anteriores, sem repetição)", () => {
-    // 3 recebidos, todos distribuídos; +2 leads antigos distribuídos hoje = 5 eventos, 5 únicos
+    // 3 de entrada, todos distribuídos; +2 leads antigos distribuídos hoje = 5 eventos, 5 únicos.
     expect(
-      formatDistribuidos({ recebidos: 3, coberturaUnica: 3, totalEventos: 5, leadsUnicos: 5 })
-    ).toBe("3 de 3 recebidos · 5 envios no total")
+      formatDistribuidos({
+        funil: 3,
+        coberturaUnica: 3,
+        totalEventos: 5,
+        leadsUnicos: 5,
+        redistribBolsao: 0,
+      })
+    ).toBe("3 de 3 do funil · 5 envios no total")
   })
 
-  it("singular: 1 redistribuição / 1 recebido / 1 envio", () => {
+  it("singular: 1 redistribuição (roleta) / 1 funil / 1 envio", () => {
     expect(
-      formatDistribuidos({ recebidos: 1, coberturaUnica: 1, totalEventos: 2, leadsUnicos: 1 })
-    ).toBe("1 de 1 recebido · 2 envios no total (1 redistribuição)")
+      formatDistribuidos({
+        funil: 1,
+        coberturaUnica: 1,
+        totalEventos: 2,
+        leadsUnicos: 1,
+        redistribBolsao: 0,
+      })
+    ).toBe("1 de 1 do funil · 2 envios no total (1 redistribuição: bolsão 0 · roleta 1)")
   })
 
-  it("zero recebidos", () => {
+  it("zero funil", () => {
     expect(
-      formatDistribuidos({ recebidos: 0, coberturaUnica: 0, totalEventos: 0, leadsUnicos: 0 })
-    ).toBe("0 de 0 recebidos")
+      formatDistribuidos({
+        funil: 0,
+        coberturaUnica: 0,
+        totalEventos: 0,
+        leadsUnicos: 0,
+        redistribBolsao: 0,
+      })
+    ).toBe("0 de 0 do funil")
   })
 })
 
