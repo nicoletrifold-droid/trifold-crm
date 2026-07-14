@@ -1,7 +1,7 @@
 # Story 80-1 — Schema: colunas de teste A/B de assunto em email_blasts e email_logs
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 18 — Central de Email (extensão: `docs/stories/epics/epic-18-ab-test-assunto-email-blast.md`)
 - **Branch:** main
 
@@ -82,3 +82,5 @@ Pronta para `@devops *push`.
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto (docs/stories/epics/epic-18-ab-test-assunto-email-blast.md), primeira de 5 stories do epic.
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Status Draft → Ready.
 - @dev (Dex): migration 170 criada, aplicada e verificada em dev e prod. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks), verificação independente do AC5 em produção. Pronta para @devops *push.
+- @devops (Gage): local main estava 10 commits atrás de origin/main (confirmou que migration 169 já estava em uso por outra sessão, validando a decisão do @dev de usar 170). Rebase limpo + push (`f23bf319`). Status InReview → Done.
