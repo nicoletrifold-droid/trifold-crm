@@ -58,7 +58,25 @@ Base necessária para todo o epic de A/B de assunto — sem essas colunas, nenhu
 - Nenhuma coluna de índice novo criada nesta story, conforme decidido no Dev Notes original — Story 80.4 decide se precisa na hora de escrever a query de agregação.
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `262c0ffb` (migration + story + epic).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Migration mínima e idiomática — `ADD COLUMN IF NOT EXISTS` para as 3 colunas de `email_blasts`, `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT` para o CHECK de `email_logs.variant` (padrão idempotente correto, permite re-rodar sem erro) |
+| 2. Testes | ⚠️ Sem teste automatizado (migration pura, sem lógica de aplicação ainda) — verificação feita via consulta direta a `information_schema`/`pg_constraint` em dev e prod. Aceitável para este escopo. |
+| 3. Acceptance Criteria | ✅ AC1-AC4 confirmados via consulta a `information_schema.columns` (tipos e nullability corretos); AC7 (numeração) com evidência real de conflito evitado (169 já reservado por outra branch) |
+| 4. Regressões | ✅ **AC6 verificado**: policies RLS de `email_blasts`/`email_logs` (`018_email_central.sql` linhas 123-152) são todas `USING (org_id = ...)` — row-level, não dependem de lista de colunas. Novas colunas nullable/com default não alteram nenhuma policy nem quebram `select("*")` existente no código. |
+| 5. Performance | ✅ N/A — `ALTER TABLE ADD COLUMN` com default simples em Postgres 17 é rápido mesmo em tabelas grandes (sem rewrite de tabela para default constante) |
+| 6. Segurança | ✅ N/A — sem novo dado sensível, mesma superfície RLS já existente |
+| 7. Documentação | ✅ Story e epic completos, decisão de "sem vencedor" documentada em 3 lugares (epic, story, comentário SQL) |
+
+**AC5 (ausência de coluna de vencedor) — verificação independente feita nesta revisão:** rodei uma consulta própria em produção (`information_schema.columns` filtrando por `ab_winner`/`winner` além das 3 esperadas) — só as 3 colunas documentadas existem. Confirmado, não apenas por confiança no relato do @dev.
+
+**Observação sobre timing (não bloqueante):** a migration já foi aplicada em dev e produção antes desta revisão de QA. Dado o risco real (colunas aditivas, nullable/com default, sem alteração de RLS, sem dado existente afetado), considero aceitável neste caso — mas registro como nota de processo: para migrations com risco maior (ex: `DROP COLUMN`, mudança de tipo, `NOT NULL` sem default em tabela populada), o ideal é @qa revisar o SQL *antes* da aplicação em produção, não depois.
+
+Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto (docs/stories/epics/epic-18-ab-test-assunto-email-blast.md), primeira de 5 stories do epic.
