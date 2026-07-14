@@ -1,7 +1,7 @@
 # Story 80-4 — Agregação de métricas por variante (Teste A/B de Assunto)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 18 — Central de Email (extensão: `docs/stories/epics/epic-18-ab-test-assunto-email-blast.md`)
 - **Branch:** main
 
@@ -92,3 +92,5 @@ Pronta para `@devops *push`.
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, quarta de 5 stories. Identificado reuso de endpoint já existente (`[id]/stats/route.ts`, órfão/sem consumidor) em vez de criar rota nova.
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Status Draft → Ready.
 - @dev (Dex): AC1-AC7 implementados, teste manual com dados fabricados batendo com contagem esperada, ESLint OK. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks), verificação independente do AC4/AC6 e confirmação própria de ausência de resíduo em produção. Pronta para @devops *push.
+- @devops (Gage): sem divergência com origin/main. Push direto (`a7b4e692`). Status InReview → Done.
