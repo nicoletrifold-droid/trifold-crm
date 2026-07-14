@@ -1,7 +1,7 @@
 # Story 80-2 — Wizard: toggle de teste A/B + campo de Assunto B no Passo 2
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 18 — Central de Email (extensão: `docs/stories/epics/epic-18-ab-test-assunto-email-blast.md`)
 - **Branch:** main
 
@@ -97,3 +97,5 @@ Pronta para `@devops *push`.
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, segunda de 5 stories (schema já Done na 80-1).
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Status Draft → Ready.
 - @dev (Dex): AC1-AC8 implementados nos 3 arquivos, ESLint OK. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks), análise lógica da expressão `canProceed` confirmando paridade do AC3. Pronta para @devops *push.
+- @devops (Gage): local main 1 commit atrás de origin/main (billing, sem conflito). Rebase limpo + push (`de0218fb`). Status InReview → Done.
