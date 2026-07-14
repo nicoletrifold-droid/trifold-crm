@@ -1,6 +1,6 @@
 # Story 75-153 — Corretor: contagens e lista NÃO contam Perdido / Não Qualificado
 
-**Status:** Review
+**Status:** Done
 **Epic:** Dashboard / métricas de leads (mundo do corretor)
 **Relacionado:** 75-151 (stage-filters como fonte única), 75-118 (Perdido = terminal p/ automação), 136 (RPCs segmento principal)
 **Complexidade:** S (1 migration CREATE OR REPLACE + 1 query TSX; sem UI nova, sem tabela nova)
@@ -155,6 +155,7 @@ real e batam com a regra de perdidos que o admin já usa.
 | 2026-07-14 | 0.1 | Story criada (corretor: excluir Perdido/Não Qualificado por ETAPA das contagens e da lista; acervo out of scope; mig 170 CREATE OR REPLACE + query TSX). | @sm (River) |
 | 2026-07-14 | 0.2 | Validação PO (10-point checklist): GO, score 9/10. Fidelidade técnica confirmada — mig 170 livre (maior atual = 169), UUIDs batem com stage-filters.ts, RPC mig 136 (6 counts, filtros, v_total-v_novos) confere, referências de arquivo/linha existem (broker/leads/page.tsx:57, broker/page.tsx:116, dashboard/page.tsx:55), get_broker_funnel_stats corretamente OUT OF SCOPE. Sem invenção (Article IV OK). Status Draft → Ready. | @po (Pax) |
 | 2026-07-14 | 0.3 | Implementação @dev: mig 170 (CREATE OR REPLACE `get_broker_dashboard_counts` + exclusão `PERDIDO_STAGE_IDS` nos 6 counts) + query da lista `broker/leads/page.tsx` (`.not("stage_id","in",...)` + import `PERDIDO_STAGE_IDS`). type-check OK, lint sem novos erros, vitest 914/914. Simulação SQL read-only em prod (Robson Silva): sem_tarefas 12→0, total 101→89, acervo 7→7 inalterado. Migration NÃO aplicada em prod (deferida p/ @devops). Status Ready → Review. | @dev (Dex) |
+| 2026-07-14 | 1.0 | Deploy @devops: type-check limpo, PR #192 (squash merge → main `41bd92eb`). Migration 170 APLICADA em prod (`dsopqkqjkmhytudaaolv`, Management API, HTTP 201). Verificação prod pós-deploy — RPC `get_broker_dashboard_counts` p/ Robson Silva: **sem_tarefas = 0** (era 12), total = 90, sem Perdido/Não Qualificado vazando. Deploy Vercel Production `● Ready` + alias `crm.trifold.eng.br`. Nota: colisão de numeração `170_*` na main (`170_email_blast_ab_test_assunto.sql` + `170_broker_counts_excluir_perdidos.sql`, CREATEs independentes — sem impacto). Status Review → **Done**. | @devops (Gage) |
 
 ## Dev Agent Record
 ### Agent Model Used
