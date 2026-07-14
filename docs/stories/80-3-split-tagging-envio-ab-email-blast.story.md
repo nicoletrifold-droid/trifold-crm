@@ -1,7 +1,7 @@
 # Story 80-3 — Split 50/50 + tagging de variante no enfileiramento do blast
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 18 — Central de Email (extensão: `docs/stories/epics/epic-18-ab-test-assunto-email-blast.md`)
 - **Branch:** main
 
@@ -111,3 +111,5 @@ Pronta para `@devops *push`. **Recomendação:** primeiro blast real com A/B ati
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, terceira de 5 stories (schema e UI do Passo 2 já Done). Primeira story do epic que toca o caminho real de envio — risco classificado como Médio, com mitigação via AC6 (paridade total do caminho sem A/B).
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). AC6/AC7 revisados com atenção — paridade bem especificada e testável. DoD já exige teste manual com blast pequeno antes do gate, adequado ao risco Médio. Status Draft → Ready.
 - @dev (Dex): AC1-AC8 implementados, teste manual real contra produção executado e limpo (sem resíduo), ESLint OK. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): QA gate PASS (7/7 checks), revisão reforçada dado o risco Médio — tracei manualmente AC6/AC7 e validei a matemática do split (AC3), além de confirmar de forma independente a ausência de resíduo do teste manual. 1 observação não bloqueante registrada (edge case de string vazia em chamada direta à API, mitigado pelo fluxo real via wizard). Pronta para @devops *push.
+- @devops (Gage): local main 6 commits atrás de origin/main (billing/relatórios, sem conflito). Nota: encontrada colisão de numeração de migration "170" com outra sessão concorrente (`170_broker_counts_excluir_perdidos.sql`, Story 75-153) — ambas já mergeadas independentemente, sem sobreposição de tabelas, registrado como problema de convenção (não de dados). Rebase limpo + push (`95e08021`). Status InReview → Done.
