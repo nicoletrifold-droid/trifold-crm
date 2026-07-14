@@ -64,6 +64,9 @@ export async function POST(request: NextRequest) {
     subject_override?: string
     segment_filter: SegmentFilter
     scheduled_for?: string
+    ab_test_enabled?: boolean
+    subject_variant_a?: string
+    subject_variant_b?: string
   }
 
   if (!body.name?.trim()) return NextResponse.json({ error: "name é obrigatório" }, { status: 400 })
@@ -93,6 +96,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nenhum lead com email encontrado para o segmento." }, { status: 400 })
   }
 
+  const abTestEnabled = !!body.ab_test_enabled
+  // Split determinístico por id (não randômico) — metade A, metade B (extra vai para A em contagem ímpar).
+  const variantMap = new Map<string, "a" | "b">()
+  if (abTestEnabled) {
+    const sorted = [...recipients].sort((a, b) => a.id.localeCompare(b.id))
+    const splitIndex = Math.ceil(sorted.length / 2)
+    sorted.slice(0, splitIndex).forEach((lead) => variantMap.set(lead.id, "a"))
+    sorted.slice(splitIndex).forEach((lead) => variantMap.set(lead.id, "b"))
+  }
+
   // Create blast record
   const startDate = body.scheduled_for ? new Date(body.scheduled_for) : new Date()
   const { data: blast, error: blastError } = await supabase
@@ -108,6 +121,9 @@ export async function POST(request: NextRequest) {
       status: "scheduled",
       scheduled_for: startDate.toISOString(),
       created_by: user.id,
+      ab_test_enabled: abTestEnabled,
+      subject_variant_a: abTestEnabled ? (body.subject_variant_a ?? null) : null,
+      subject_variant_b: abTestEnabled ? (body.subject_variant_b ?? null) : null,
     })
     .select("id")
     .single()
@@ -131,6 +147,8 @@ export async function POST(request: NextRequest) {
   const blastId = blast.id
   const templateSlug = body.template_slug
   const subjectOverride = body.subject_override
+  const subjectVariantA = body.subject_variant_a
+  const subjectVariantB = body.subject_variant_b
 
   after(async () => {
     await supabase
@@ -139,6 +157,13 @@ export async function POST(request: NextRequest) {
       .eq("id", blastId)
 
     for (const { lead, scheduledFor } of distributed) {
+      const variant = abTestEnabled ? variantMap.get(lead.id) : undefined
+      const effectiveSubjectOverride = variant === "a"
+        ? subjectVariantA
+        : variant === "b"
+          ? subjectVariantB
+          : subjectOverride
+
       await sendTemplateEmail({
         templateSlug,
         to: { email: lead.email, name: lead.name ?? undefined },
@@ -151,7 +176,8 @@ export async function POST(request: NextRequest) {
         orgId: user.orgId,
         scheduledFor,
         priority: 10,
-        subjectOverride,
+        subjectOverride: effectiveSubjectOverride,
+        variant,
       })
     }
   })

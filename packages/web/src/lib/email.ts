@@ -89,8 +89,9 @@ export async function sendTemplateEmail(params: {
   scheduledFor?: Date
   priority?: 1 | 5 | 10
   subjectOverride?: string
+  variant?: "a" | "b"
 }): Promise<{ logId: string; queued: boolean; error?: string }> {
-  const { templateSlug, to, variables, triggeredBy, orgId, scheduledFor, priority = 5, subjectOverride } = params
+  const { templateSlug, to, variables, triggeredBy, orgId, scheduledFor, priority = 5, subjectOverride, variant } = params
 
   const supabase = createServiceClient()
 
@@ -126,6 +127,7 @@ export async function sendTemplateEmail(params: {
       status: "pending",
       variables_used: variables,
       triggered_by: triggeredBy,
+      variant: variant ?? null,
       tags,
     })
     .select("id")

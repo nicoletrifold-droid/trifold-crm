@@ -54,6 +54,9 @@ export function BlastWizard() {
         subject_override: content.subjectOverride || undefined,
         segment_filter: segmentFilter,
         scheduled_for: scheduledFor ?? undefined,
+        ab_test_enabled: content.abTestEnabled,
+        subject_variant_a: content.subjectVariantA || undefined,
+        subject_variant_b: content.subjectVariantB || undefined,
       }),
     })
 
