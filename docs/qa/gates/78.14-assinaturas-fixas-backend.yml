@@ -1,0 +1,79 @@
+schema: 1
+story: '78.14'
+slug: assinaturas-fixas-backend
+gate: CONCERNS
+status_reason: >-
+  15 ACs implementados; o fix crítico do cron (AC12) está correto e completo — o cron
+  billing-reminders não quebra com as 3 linhas due_date=NULL. Um risco simétrico de runtime
+  permanece no PATCH de recorrência-ao-pagar (avancarCiclo com due_date=NULL), que a mudança
+  aditiva de nullable introduziu e a story não cobriu — não bloqueia o deploy atual (sem UI
+  que o alcance), mas deve ser tratado antes/na 78-15.
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-14T13:35:00Z'
+
+quality_checks:
+  code_review: PASS
+  unit_tests: PASS       # 7/7 subscription-summary; 73/73 billing (sem regressão)
+  acceptance_criteria: CONCERNS  # 14/15 completos; AC10 deferido ao @devops (safe default); risco adjacente no PATCH
+  no_regressions: PASS   # GET/PATCH estendidos, CRUD 78-8 preservado; tsc/eslint só 4 erros pré-existentes não-relacionados
+  performance: PASS
+  security: PASS         # CRON_SECRET no enricher; RLS admin-only; value_source/seats_source/last_enriched_at nunca crus do cliente
+  documentation: PASS
+
+traceability:
+  AC1:  { status: met, evidence: 'migration 172 L25-40 — 6 ADD COLUMN IF NOT EXISTS + ALTER due_date DROP NOT NULL; CHECKs value_source/seats_source espelhados' }
+  AC2:  { status: met, evidence: 'migration 172 L74-80 — INSERT claude_team ON CONFLICT(slug) DO NOTHING; billing_url_confirmed=false; sem catálogo p/ vercel/supabase' }
+  AC3:  { status: met, evidence: 'migration 172 L62-64 — CREATE UNIQUE INDEX ... (service_id) WHERE is_fixed_subscription=true' }
+  AC4:  { status: met, evidence: 'migration 172 L94-104 — 3 linhas via subquery slug; vercel excluded=TRUE, supabase plan=NULL, claude_team plan=team; ON CONFLICT idempotente' }
+  AC5:  { status: met, evidence: 'nenhuma escrita em service_cost_snapshots; assinatura fixa vive só em service_billing_reminders (is_fixed_subscription)' }
+  AC6:  { status: met, evidence: 'subscription-summary.ts — somarAssinaturasFixasPorMoeda filtra is_fixed_subscription=true AND excluded=false AND amount!=null; agrupa por currency (NFR-7)' }
+  AC7:  { status: met, evidence: 'enrich-supabase.ts — GET /v1/organizations/{slug} (plan) + /members (array.length); buildSupabaseUpdate aplica price-table só se value_source != manual' }
+  AC8:  { status: met, evidence: 'enrich-vercel.ts — GET /v3/teams/{teamId}/members (correção factual v2->v3); só seats; nunca expected_amount' }
+  AC9:  { status: met, evidence: 'buildSupabaseUpdate/buildVercelUpdate — expected_amount pulado se value_source=manual; seats pulado se seats_source=manual; plan sempre; due_date/status/notes intocados' }
+  AC10: { status: deferred, evidence: 'T-Vercel-Dedup delegada ao @devops no deploy (sem token real na sessão dev). Safe default: seed vercel excluded=true + price-table sem vercel + enricher não seta amount => Vercel NUNCA soma por construção. AC6 filtra excluded=false. Aceitável por design (Article IV).' }
+  AC11: { status: met, evidence: 'cron billing-subscription-enrich/route.ts — CRON_SECRET, Promise.allSettled best-effort por serviço, 200 c/ resumo; vercel.json 45 10 UTC único, sem colisão (vizinhos 20:10 e 59:10)' }
+  AC12: { status: met, evidence: 'billing-reminders/route.ts L36-51 due_date:string|null; L151-153 filtro .filter(r => r.due_date !== null) ANTES de deveAlertar()/diffDias(); dry-run path também usa r já estreitado. CRON NÃO QUEBRA com as 3 linhas NULL. Verificado estaticamente contra reminder-schedule.ts (diffDias faz .split num null).' }
+  AC13: { status: met, evidence: 'GET route.ts L28 — SELECT inclui os 7 campos novos; order due_date nullsFirst:false' }
+  AC14: { status: met, evidence: '[id]/route.ts L57-62 deriva value_source=manual / seats_source=manual; reminder-validation.ts L201-218 aceita subscription_plan(str|null)/subscription_seats(int>=0|null); is_fixed_subscription/excluded fora do whitelist (Scope OUT)' }
+  AC15: { status: met, evidence: 'subscription-summary.test.ts — 7 casos (soma por moeda, exclusão excluded=true, exclusão null, não-mistura USD/BRL, coerção string, is_fixed=false, vazio). 7/7 passando.' }
+
+top_issues:
+  - id: 'REL-001'
+    severity: medium
+    category: reliability
+    finding: >-
+      PATCH /api/admin/billing-reminders/[id] com status='paid' sobre uma assinatura fixa
+      seedada (due_date=NULL, billing_cycle='monthly') entra no ramo de recorrência-ao-pagar
+      e chama avancarCiclo(atual.due_date, cicloEfetivo) com due_date=NULL. avancarCiclo faz
+      dueDateIso.split("T") num valor null -> TypeError -> HTTP 500. É o MESMO risco de runtime
+      que a AC12 corrigiu no cron, mas num segundo consumidor de due_date (o PATCH) que a
+      mudança de nullable (AC1) tornou vulnerável e a story não cobriu.
+    reachability: >-
+      Não alcançável por nenhuma UI hoje (78-15 não existe) nem pelo cron. Alcançável por
+      chamada direta à API admin, e será alcançável pela UI da 78-15 se ela marcar 'paid'
+      antes de o admin preencher due_date. Não afeta o risco de produção nº 1 (cron), que
+      está seguro.
+    suggested_action: >-
+      Guardar avancarCiclo contra due_date null no [id]/route.ts (ex.: só entrar no ramo de
+      recorrência se atual.due_date != null), tratado em/antes da 78-15. @dev.
+  - id: 'REQ-001'
+    severity: low
+    category: requirements
+    finding: >-
+      AC10 (T-Vercel-Dedup, chamada real a GET /v1/billing/charges) permanece [ ] — verificação
+      factual do overlap de dupla contagem não executável na sessão dev (sem token real).
+    reachability: 'Não é defeito: default seguro (excluded=true) garante que a Vercel nunca soma até prova em contrário.'
+    suggested_action: 'Executar a chamada real e escolher o ramo da AC10 no deploy. @devops. Enquanto pendente, manter excluded=true.'
+
+waiver: { active: false }
+
+test_results:
+  subscription_summary: '7/7 passed (vitest run)'
+  billing_suite: '73/73 passed (sem regressão)'
+  typecheck: '4 erros pré-existentes (react-email-editor x2, pdf-lib x1, implicit any em visual-editor.tsx) — nenhum nos arquivos da 78-14'
+  lint: 'clean (0 erros) em todos os arquivos da story'
+
+next_step: >-
+  CONCERNS: pode seguir para @devops push (cron seguro, sem regressão). REL-001 deve ser
+  corrigido pelo @dev antes/durante a 78-15 (a story que constrói a UI que dispara o path).
+  @devops executa a verificação AC10 no deploy mantendo o default seguro.
