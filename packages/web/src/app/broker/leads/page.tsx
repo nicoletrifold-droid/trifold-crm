@@ -12,6 +12,7 @@ import { selectLatestMessageAt, type ConversationRef } from "@web/lib/broker/lea
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 import { TaskDateFilter } from "./_components/task-date-filter"
 import { taskDateRange, taskDateLabel } from "@web/lib/broker/task-date-range"
+import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
 
 const TASK_LABELS: Record<string, string> = {
   atrasadas: "Tarefas atrasadas",
@@ -55,6 +56,10 @@ export default async function BrokerLeadsPage({
         .eq("assigned_broker_id", user.id)
         .eq("is_active", true)
         .is("lost_reason", null)
+        // Story 75-153 — exclui Perdido / Não Qualificado por ETAPA (lost_reason pode ser NULL
+        // nesses stages). Acervo (Corretores Antigos/Represamento) NÃO é excluído: usar
+        // PERDIDO_STAGE_IDS, não EM_ATENDIMENTO_EXCLUDED_IDS. Mudança aditiva (lost_reason IS NULL fica).
+        .not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
         .order("updated_at", { ascending: false }),
 
       // Tarefas pendentes — para filtro por status (tasks) e por data (td).
