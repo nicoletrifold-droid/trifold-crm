@@ -62,6 +62,23 @@ export function StepSchedule({ audience, content, onConfirm, onBack, submitting 
           <span className="text-xs text-stone-500">Template</span>
           <span className="text-sm text-stone-700">{content.templateName}</span>
         </div>
+        {content.abTestEnabled ? (
+          <>
+            <div className="grid grid-cols-2 px-4 py-3 gap-2">
+              <span className="text-xs text-stone-500">Teste A/B — Assunto A</span>
+              <span className="text-sm text-stone-700">{content.subjectVariantA}</span>
+            </div>
+            <div className="grid grid-cols-2 px-4 py-3 gap-2">
+              <span className="text-xs text-stone-500">Teste A/B — Assunto B</span>
+              <span className="text-sm text-stone-700">{content.subjectVariantB}</span>
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 px-4 py-3 gap-2">
+            <span className="text-xs text-stone-500">Assunto</span>
+            <span className="text-sm text-stone-700">{content.subjectOverride}</span>
+          </div>
+        )}
         <div className="grid grid-cols-2 px-4 py-3 gap-2">
           <span className="text-xs text-stone-500">Segmento</span>
           <span className="text-sm text-stone-700">{SEGMENT_LABELS[audience.segmentType]}</span>

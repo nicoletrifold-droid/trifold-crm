@@ -10,6 +10,9 @@ export type ContentData = {
   templateName: string
   campaignName: string
   subjectOverride: string
+  abTestEnabled: boolean
+  subjectVariantA: string
+  subjectVariantB: string
 }
 
 interface Props {
@@ -24,6 +27,9 @@ export function StepContent({ initial, onNext, onBack }: Props) {
   const [templateName, setTemplateName] = useState(initial.templateName)
   const [campaignName, setCampaignName] = useState(initial.campaignName)
   const [subjectOverride, setSubjectOverride] = useState(initial.subjectOverride)
+  const [abTestEnabled, setAbTestEnabled] = useState(initial.abTestEnabled)
+  const [subjectVariantA, setSubjectVariantA] = useState(initial.subjectVariantA)
+  const [subjectVariantB, setSubjectVariantB] = useState(initial.subjectVariantB)
   const [templates, setTemplates] = useState<Template[]>([])
 
   useEffect(() => {
@@ -37,14 +43,32 @@ export function StepContent({ initial, onNext, onBack }: Props) {
 
   const handleTemplateChange = (id: string) => {
     const t = templates.find((x) => x.id === id)
-    if (!t) { setTemplateId(""); setTemplateSlug(""); setTemplateName(""); setSubjectOverride(""); return }
+    if (!t) {
+      setTemplateId("")
+      setTemplateSlug("")
+      setTemplateName("")
+      setSubjectOverride("")
+      setSubjectVariantA("")
+      setSubjectVariantB("")
+      return
+    }
     setTemplateId(t.id)
     setTemplateSlug(t.slug)
     setTemplateName(t.name)
     setSubjectOverride(t.subject)
+    setSubjectVariantA(t.subject)
+    setSubjectVariantB("")
   }
 
-  const canProceed = !!templateId && !!campaignName.trim()
+  const handleToggleAbTest = (enabled: boolean) => {
+    setAbTestEnabled(enabled)
+    if (enabled && !subjectVariantA) {
+      setSubjectVariantA(subjectOverride)
+    }
+  }
+
+  const canProceed = !!templateId && !!campaignName.trim() &&
+    (!abTestEnabled || (!!subjectVariantA.trim() && !!subjectVariantB.trim()))
 
   return (
     <div className="space-y-6">
@@ -83,6 +107,20 @@ export function StepContent({ initial, onNext, onBack }: Props) {
 
       {templateId && (
         <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={abTestEnabled}
+              onChange={(e) => handleToggleAbTest(e.target.checked)}
+              className="accent-indigo-600"
+            />
+            <span className="text-sm text-stone-700">Ativar teste A/B de assunto</span>
+          </label>
+        </div>
+      )}
+
+      {templateId && !abTestEnabled && (
+        <div>
           <label className="block text-sm font-medium text-stone-700">Assunto</label>
           <input
             type="text"
@@ -91,6 +129,30 @@ export function StepContent({ initial, onNext, onBack }: Props) {
             className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           <p className="mt-1 text-[11px] text-stone-400">Pré-preenchido com o assunto do template. Editável.</p>
+        </div>
+      )}
+
+      {templateId && abTestEnabled && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-stone-700">Assunto A</label>
+            <input
+              type="text"
+              value={subjectVariantA}
+              onChange={(e) => setSubjectVariantA(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700">Assunto B</label>
+            <input
+              type="text"
+              value={subjectVariantB}
+              onChange={(e) => setSubjectVariantB(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <p className="text-[11px] text-stone-400">A audiência será dividida automaticamente ~50/50 entre as duas versões.</p>
         </div>
       )}
 
@@ -104,7 +166,16 @@ export function StepContent({ initial, onNext, onBack }: Props) {
         <button
           onClick={() =>
             canProceed &&
-            onNext({ templateId, templateSlug, templateName, campaignName: campaignName.trim(), subjectOverride })
+            onNext({
+              templateId,
+              templateSlug,
+              templateName,
+              campaignName: campaignName.trim(),
+              subjectOverride,
+              abTestEnabled,
+              subjectVariantA,
+              subjectVariantB,
+            })
           }
           disabled={!canProceed}
           className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"

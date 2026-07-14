@@ -22,6 +22,9 @@ const defaultContent: ContentData = {
   templateName: "",
   campaignName: "",
   subjectOverride: "",
+  abTestEnabled: false,
+  subjectVariantA: "",
+  subjectVariantB: "",
 }
 
 export function BlastWizard() {
