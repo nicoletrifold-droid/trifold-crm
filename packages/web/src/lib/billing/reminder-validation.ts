@@ -119,6 +119,11 @@ export type ReminderUpdate = Partial<{
   status: ReminderStatus
   expected_amount: number | null
   notes: string | null
+  // Story 78-14 (AC14): edição manual dos campos de assinatura fixa. value_source/seats_source/
+  // last_enriched_at NÃO entram aqui — são derivados pelo servidor (rota [id]) / pelo enriquecedor.
+  // is_fixed_subscription/excluded_from_subscription_total NÃO entram (Scope OUT da 78-14).
+  subscription_plan: string | null
+  subscription_seats: number | null
 }>
 
 /**
@@ -190,6 +195,25 @@ export function validateUpdate(body: unknown): ValidationResult<ReminderUpdate> 
       return { ok: false, error: "notes deve ser texto" }
     } else {
       out.notes = b.notes
+    }
+  }
+  // Story 78-14 (AC14): campos de assinatura fixa editáveis manualmente (78-15).
+  if (b.subscription_plan !== undefined) {
+    if (b.subscription_plan === null) {
+      out.subscription_plan = null
+    } else if (typeof b.subscription_plan !== "string") {
+      return { ok: false, error: "subscription_plan deve ser texto ou null" }
+    } else {
+      out.subscription_plan = b.subscription_plan
+    }
+  }
+  if (b.subscription_seats !== undefined) {
+    if (b.subscription_seats === null) {
+      out.subscription_seats = null
+    } else if (!isInteger(b.subscription_seats) || b.subscription_seats < 0) {
+      return { ok: false, error: "subscription_seats deve ser um inteiro >= 0 ou null" }
+    } else {
+      out.subscription_seats = b.subscription_seats
     }
   }
 

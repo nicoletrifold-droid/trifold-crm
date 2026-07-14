@@ -51,6 +51,16 @@ export async function PATCH(
 
   const update: Record<string, unknown> = { ...validation.value }
 
+  // Story 78-14 (AC14): uma edição manual marca a FONTE como 'manual' no MESMO request, para que
+  // o próximo ciclo do enriquecedor (AC9) nunca sobrescreva silenciosamente o valor cadastrado.
+  // value_source/seats_source NUNCA são aceitos crus do cliente — são derivados aqui.
+  if (validation.value.expected_amount !== undefined) {
+    update.value_source = "manual"
+  }
+  if (validation.value.subscription_seats !== undefined) {
+    update.seats_source = "manual"
+  }
+
   // paid_at é derivado da transição de status (não aceito cru do cliente).
   if (validation.value.status !== undefined) {
     if (validation.value.status === "paid") {
@@ -73,7 +83,15 @@ export async function PATCH(
       }
 
       const cicloEfetivo = (validation.value.billing_cycle ?? atual.billing_cycle) as string
-      if (cicloEfetivo === "monthly" || cicloEfetivo === "annual") {
+      // Story 78-14 (REL-001): a migration 172 tornou due_date nullable (assinaturas fixas
+      // recém-seedadas nascem sem vencimento). Só há ciclo a avançar se houver uma data-base;
+      // com due_date=null, apenas registra paid_at (já setado acima) sem avançar — não inventa
+      // data nem estoura em avancarCiclo(null) (TypeError → 500). Simétrico ao filtro de null do
+      // cron (AC12). Comportamento inalterado para reminders com due_date preenchido.
+      if (
+        (cicloEfetivo === "monthly" || cicloEfetivo === "annual") &&
+        atual.due_date != null
+      ) {
         const proximo = avancarCiclo(atual.due_date as string, cicloEfetivo)
         if (proximo) {
           update.due_date = proximo
@@ -95,7 +113,8 @@ export async function PATCH(
     .update(update)
     .eq("id", id)
     .select(
-      "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, paid_at, last_alerted_on, notes, created_at, updated_at"
+      // Story 78-14 (AC14): retorna também os campos de assinatura fixa após a edição manual.
+      "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, paid_at, last_alerted_on, notes, is_fixed_subscription, subscription_plan, subscription_seats, value_source, seats_source, excluded_from_subscription_total, last_enriched_at, created_at, updated_at"
     )
     .maybeSingle()
 

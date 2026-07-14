@@ -1,0 +1,65 @@
+schema: 1
+story: '78.15'
+gate: PASS
+status_reason: 'Todos os 10 ACs implementados e verificados estaticamente contra o código real; type-check/eslint limpos nos 6 arquivos (só 4 erros pré-existentes alheios). Validação funcional em browser deferida ao deploy.'
+reviewer: 'Quinn'
+updated: '2026-07-14T00:00:00Z'
+
+top_issues: []
+
+waiver: { active: false }
+
+# ----------------------------------------------------------------------------
+# Traceability AC → evidência (estática)
+# ----------------------------------------------------------------------------
+traceability:
+  AC1_secao_lista_fixas:
+    status: MET
+    evidence: 'fixed-subscriptions.tsx L123 filter(is_fixed_subscription===true); renderizada em page.tsx L174 entre "Saúde dos serviços" (L149) e "Próximos vencimentos" (L181); card com nome/plano/assentos/valor(formatMoney)/renovação(renewalLabel+daysUntil) + deep-link billing_url via panelBySlug (target=_blank rel=noreferrer, L238-247).'
+  AC2_badges_fonte:
+    status: MET
+    evidence: 'value_source api_price_table→"Tabela de preços", manual→"Manual", ambos-null→NotInformed (L207-211); seats_source api→"Auto via API", manual→"Manual", ambos-null→NotInformed (L194-196); subscription_plan auto badge só p/ vercel/supabase com last_enriched_at!=null (planAuto L153, L181).'
+  AC3_cta_completar:
+    status: MET
+    evidence: 'needsSetup = due_date==null || expected_amount==null (L148); borda âmbar (L160) + bloco CTA botão "Completar cadastro" (L219-234).'
+  AC4_form_editabilidade:
+    status: MET
+    evidence: 'fixed-subscription-form.tsx: isEnriched(vercel/supabase)→seats/plan read-only (L226-235, L266-275); planEditable=claude_team p/ plan texto livre; sempre editáveis amount/currency/due_date/cycle(monthly|annual)/alert_days; admin-only herdado (PATCH requireAuth+requireRole).'
+  AC5_patch_parcial_merge:
+    status: MET
+    evidence: 'handleSubmit monta payload só com campos alterados (L66-114); Number() em amount/alertDays/seats (não string); 200→onSaved(j.data)→merge por id em page.tsx L75-79 (spread {...r,...updated} preserva platform_services ausente no select do PATCH); erro→form aberto + mensagem, valores preservados (L128-131).'
+  AC6_total_por_moeda:
+    status: MET
+    evidence: 'importa e chama somarAssinaturasFixasPorMoeda (L5, L96) — NÃO reimplementa; normaliza undefined→false; formatMoneyList no meta do SectionHeader (L108-110); função agrupa por currency, ignora excluded_from_subscription_total e expected_amount null (subscription-summary.ts L32-40); nunca soma USD+BRL.'
+  AC7_dedup_proximos_vencimentos:
+    status: MET
+    evidence: 'upcoming-reminders.tsx L45-51 filter(!is_fixed_subscription && due_date!=null) antes de sort/localeCompare/daysUntil — remove crash com due_date null.'
+  AC8_claude_team_fora_saude:
+    status: MET
+    evidence: 'page.tsx L155 e L161 filter(slug!=="claude_team"); vercel/supabase permanecem; filtro client-side, billing-panel/route.ts intocado.'
+  AC9_estados_vazio_erro_premigration:
+    status: MET
+    evidence: 'errored (L112), empty fixed.length===0 (L125), campos opcionais undefined tratados como null/false (shared.ts L52-58); funciona antes do enricher (planAuto gate em last_enriched_at).'
+  AC10_nao_admin_403:
+    status: MET
+    evidence: 'herdado: page redireciona em 401/403 (L30-33, L91-95); PATCH guarda requireAuth+requireRole(["admin"]) ([id]/route.ts L31-36); rota não modificada por esta story.'
+
+# ----------------------------------------------------------------------------
+# 7 quality checks
+# ----------------------------------------------------------------------------
+quality_checks:
+  code_review: PASS      # Tailwind puro, HTML nativo controlado; extração de section-header.tsx limpa (quebra ciclo page.tsx <-> fixed-subscriptions.tsx)
+  unit_tests: N/A        # sem suíte de UI/E2E nesta área (padrão 78-9); somarAssinaturasFixasPorMoeda tem teste próprio (78-14)
+  acceptance_criteria: PASS  # 10/10 ACs verificados estaticamente
+  no_regressions: PASS   # upcoming-reminders reforçado (guard due_date null); billing-panel/route.ts e PATCH intocados; merge preserva platform_services
+  performance: PASS      # correlação client-side O(n) via Map; zero chamadas de API novas
+  security: PASS         # PATCH admin-guardado; value_source/seats_source derivados server-side (não crus); deep-link rel=noreferrer; sem injeção
+  documentation: PASS    # File List/Dev Notes/Change Log completos; decisões AUTO-DECISION registradas
+
+lint_typecheck:
+  type_check: 'clean nos 6 arquivos da story (4 erros pré-existentes alheios: react-email-editor x3, pdf-lib x1)'
+  eslint: 'exit 0 / 0 erros / 0 warnings nos 6 arquivos'
+
+observations:
+  - 'T8 (validação manual em DEV / renderização real em browser) deferida ao deploy — não é FAIL; requer 78-14 aplicada (schema+seed) e login admin.'
+  - 'billing_cycle é normalizado silenciosamente para monthly em qualquer save quando o valor cru é "usage" (AUTO-DECISION documentada, intencional — a UI não oferece usage p/ assinatura recorrente). Baixo impacto.'

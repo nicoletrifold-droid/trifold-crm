@@ -2,23 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Activity, CalendarClock, Wallet, type LucideIcon } from "lucide-react"
+import { Activity, CalendarClock, Wallet } from "lucide-react"
 import { ServiceCard } from "./_components/service-card"
 import { UpcomingReminders } from "./_components/upcoming-reminders"
 import { MetaAdsSection } from "./_components/meta-ads-section"
+import { FixedSubscriptions } from "./_components/fixed-subscriptions"
+import { SectionHeader } from "./_components/section-header"
 import { type BillingPanelData, type ReminderRow, formatMoneyList } from "./_components/shared"
-
-function SectionHeader({ icon: Icon, title, meta }: { icon: LucideIcon; title: string; meta?: string }) {
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <Icon className="h-4 w-4 text-orange-600" />
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-        {title}
-      </h2>
-      {meta && <div className="ml-auto text-xs text-stone-400 dark:text-stone-500">{meta}</div>}
-    </div>
-  )
-}
 
 export default function BillingPanelPage() {
   const router = useRouter()
@@ -78,6 +68,14 @@ export default function BillingPanelPage() {
     } catch {
       setRemindersError(true)
     }
+  }, [])
+
+  // Story 78-15 (AC5/T7.2): merge local pós-PATCH — atualiza a linha por `id` sem esperar o
+  // próximo ciclo de polling (30s), para o card refletir a edição (e o CTA sumir) imediatamente.
+  const handleReminderUpdated = useCallback((updated: ReminderRow) => {
+    setReminders((prev) =>
+      prev ? prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)) : prev
+    )
   }, [])
 
   useEffect(() => {
@@ -154,11 +152,16 @@ export default function BillingPanelPage() {
           <div className="rounded-lg border border-stone-200 bg-white p-4 text-sm text-stone-500 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400">
             Não foi possível carregar os serviços. Tente novamente em instantes.
           </div>
-        ) : panel && panel.services.length > 0 ? (
+        ) : panel && panel.services.filter((s) => s.slug !== "claude_team").length > 0 ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {panel.services.map((service) => (
-              <ServiceCard key={service.slug} service={service} />
-            ))}
+            {/* Story 78-15 (AC8): `claude_team` fora do grid de custo de USO — nunca terá coleta
+               automática (has_auto_cost_collection=false), viraria card "Sem dado" eterno. Ele só
+               aparece na seção "Assinaturas Fixas". Filtro client-side (não toca billing-panel/route.ts). */}
+            {panel.services
+              .filter((service) => service.slug !== "claude_team")
+              .map((service) => (
+                <ServiceCard key={service.slug} service={service} />
+              ))}
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-stone-200 bg-white p-6 text-center text-sm text-stone-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-500">
@@ -166,6 +169,14 @@ export default function BillingPanelPage() {
           </div>
         )}
       </div>
+
+      {/* Assinaturas Fixas (Story 78-15 — reusa os 2 fetches já feitos; PATCH via merge local) */}
+      <FixedSubscriptions
+        reminders={reminders}
+        panelServices={panel?.services ?? []}
+        errored={remindersError}
+        onUpdated={handleReminderUpdated}
+      />
 
       {/* Próximos vencimentos (AC4 — consome API da Story 78-8) */}
       <div>

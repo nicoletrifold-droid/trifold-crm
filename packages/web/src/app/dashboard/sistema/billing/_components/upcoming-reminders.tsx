@@ -38,10 +38,19 @@ export function UpcomingReminders({
     )
   }
 
+  // Story 78-15 (AC7): assinaturas fixas (`is_fixed_subscription`) vivem só na seção própria —
+  // removê-las aqui evita a duplicação E, por construção, qualquer chamada de `.localeCompare`/
+  // `daysUntil` sobre `due_date=null` (nullable a partir da 78-14 AC1), já que essas linhas são
+  // justamente as que podem estar sem data de renovação cadastrada.
   const list = (reminders ?? [])
-    .filter((r) => r.status === "pending" || r.status === "alerted")
+    .filter(
+      (r) =>
+        (r.status === "pending" || r.status === "alerted") &&
+        !r.is_fixed_subscription &&
+        r.due_date != null
+    )
     .slice()
-    .sort((a, b) => a.due_date.localeCompare(b.due_date))
+    .sort((a, b) => (a.due_date as string).localeCompare(b.due_date as string))
 
   if (list.length === 0) {
     return (
@@ -55,7 +64,7 @@ export function UpcomingReminders({
     <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white dark:divide-stone-800 dark:border-stone-800 dark:bg-stone-900">
       {list.map((r) => {
         const svc = firstService(r.platform_services)
-        const days = daysUntil(r.due_date)
+        const days = daysUntil(r.due_date as string)
         const isDue = days <= r.alert_days_before
         const isOverdue = days < 0
         const highlight = isOverdue

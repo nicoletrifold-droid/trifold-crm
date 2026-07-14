@@ -36,7 +36,11 @@ const STATUS_SUPRIMIDOS = ["paid", "postponed", "skipped"] as const
 type ReminderRow = {
   id: string
   service_id: string
-  due_date: string
+  // Story 78-14 (AC12): due_date passou a ser nullable na migration 172 (uma assinatura fixa
+  // pode existir "cadastrada" antes de o admin informar a data de renovação). Linhas com
+  // due_date=null são filtradas ANTES de deveAlertar()/diffDiasAteVencer() (ver abaixo), pois
+  // diffDias() faz .split() num valor null e quebraria em runtime.
+  due_date: string | null
   expected_amount: number | null
   currency: string
   billing_cycle: string
@@ -139,8 +143,14 @@ export async function GET(request: NextRequest) {
 
   const candidatos = (candidatosRaw ?? []) as unknown as ReminderRow[]
 
+  // Story 78-14 (AC12): exclui explicitamente due_date=null ANTES de deveAlertar() — as
+  // assinaturas fixas seedadas (migration 172) nascem com due_date=null e quebrariam
+  // diffDias()/deveAlertar() em runtime (.split() num null). O type guard também estreita o
+  // tipo de due_date para string no restante do fluxo.
   // Gatilho D-N/D-0/vencida + dedup por dia (last_alerted_on != hoje) — em memória.
-  const paraAlertar = candidatos.filter((r) => deveAlertar(r, hoje))
+  const paraAlertar = candidatos
+    .filter((r): r is ReminderRow & { due_date: string } => r.due_date !== null)
+    .filter((r) => deveAlertar(r, hoje))
 
   if (paraAlertar.length > 0) {
     if (dryRun) {
@@ -172,7 +182,10 @@ export async function GET(request: NextRequest) {
       if (updErr) {
         console.error("[billing-reminders] erro ao marcar alerted:", updErr.message)
       } else {
-        const alertadas = (alertadasRaw ?? []) as unknown as ReminderRow[]
+        // due_date garantidamente non-null: alertadas vêm de paraAlertar (já filtrado, AC12).
+        const alertadas = (alertadasRaw ?? []) as unknown as Array<
+          ReminderRow & { due_date: string }
+        >
 
         // Destinatários: TODOS os admins ativos, SEM filtro org_id (dado da plataforma).
         const { data: adminsRaw } = await admin
