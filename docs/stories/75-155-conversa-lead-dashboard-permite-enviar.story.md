@@ -1,6 +1,6 @@
 # Story 75-155 — Conversa do lead no /dashboard permite ENVIAR (paridade com o corretor)
 
-**Status:** Review
+**Status:** Done
 **Epic:** Corretor atende WhatsApp pelo sistema ([[project-corretor-whatsapp-atendimento]])
 **Relacionado:** 75-139/140 (ícone + botão → conversa), 75-142 (Iniciar atendimento / template `abertura_atendimento_corretor`), 63-5 (extração do `ConversationThread`), 76-4 (rotas privilegiam supervisor/gerente-relacionamento)
 **Complexidade:** S (mudança de FRONTEND por PARIDADE — provável 1 arquivo alterado: `app/dashboard/leads/[id]/page.tsx`; sem migration, sem backend novo)
@@ -183,6 +183,7 @@ que o corretor tem no `/broker`, sem precisar de um login/rota diferente.
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-14 | 0.1 | Story criada (paridade de FRONTEND: aba "Conversa" do /dashboard passa a permitir ENVIAR para admin/supervisor/gerente-comercial, reusando `ConversationThread`/regra `CAN_SEND_ROLES` do /broker; backend/RLS já autorizam; sem migration, sem exceção por-usuário; alternativa mínima com `BrokerMessageInput`; risco de tema light e de acoplamento cross-route destacados). | @sm (River) |
+| 2026-07-14 | 1.2 | Push por @devops (Gage). PR #195 squash-merged em `main` (`abe68278`). Pre-push gate OK (type-check 0 erros, vitest 975 pass, build success). Deploy Vercel de produção disparado pelo merge. Status Review→Done. | @devops (Gage) |
 | 2026-07-14 | 1.1 | Implementada por @dev (Dex). Abordagem REUSO: `ConversationThread` importado em place no `/dashboard/leads/[id]` aba Conversa, gate por `CAN_SEND_ROLES`, `is_ai_active` adicionado ao SELECT, mensagens achatadas ASC (cap 50), bloco `brokerNames` read-only removido. 1 arquivo alterado (`app/dashboard/leads/[id]/page.tsx`), sem tocar `/broker`/backend/migration. type-check OK, lint 0, 975 testes verdes, build OK. Status Ready→Review. | @dev (Dex) |
 | 2026-07-14 | 1.0 | Validada por @po (10/10, GO). Todas as referências arquivo:linha conferidas contra o código real (drawer L192-201; broker page L10/53/83/169-189; conversation-thread props L27-51/67-76; dashboard read-only L311-402 + select conversations L93-105 SEM `is_ai_active`; bulk-table L147; send-message route L46 + start-whatsapp route L21 já tratam supervisor como privilegiado). Backend inalterado confirmado. Article IV OK (nada inventado). Status Draft→Ready. | @po (Pax) |
 
