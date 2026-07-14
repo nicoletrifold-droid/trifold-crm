@@ -1,0 +1,46 @@
+storyId: "75-154"
+title: "Relatório diário: Leads de entrada (funil) × cadastros manuais + origem das redistribuições"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-14
+
+checks:
+  code_review: PASS          # funções puras (isLeadFunil, formatDistribuidos) + buildDailyLeadsReport reordenado sem query duplicada; ordem de declarações correta; messages consultada sem org_id (convenção do projeto)
+  unit_tests: PASS           # vitest 966/966 (87 files); +5 casos isLeadFunil, 7 casos formatDistribuidos (guard carryover, mista, singular/plural)
+  acceptance_criteria: PASS  # AC1-AC9 (ver trace)
+  regressions: PASS          # "Por corretor" e "Tempo médio" intocados; cron route apenas repassa vars; nenhum outro consumidor lê campos de DailyReportVars
+  performance: PASS          # +2 queries leves por execução diária (messages por lead_id; count de bolsao_pull head:true); volume diário pequeno
+  security: PASS             # tudo via PostgREST parametrizado (admin client já usado); sem SQL dinâmica; sem novo dado exposto
+  documentation: PASS        # cabeçalhos citam Story 75-154; corpo do template v2 documentado na story; Dev Agent Record + File List completos
+
+acceptance_criteria_trace:
+  AC1: "entrada = |funilIds| via isLeadFunil; return.entrada = String(entrada). Simulação prod 13/07 = 15."
+  AC2: "manuais = total - entrada; nova linha ✍️ no template v2 ({{4}}). Simulação = 23."
+  AC3: "canalCounts calculado só sobre funilIds (continue se !funil). Simulação = 'Meta Ads 9 · WhatsApp 6'."
+  AC4: "formatDistribuidos base = '{coberturaUnica} de {funil} do funil'. Simulação = '14 de 15 do funil'."
+  AC5: "sufixo '(R redistribuições: bolsão X · roleta Y)' com guard carryover (min/max). Simulação = 'bolsão 4 · roleta 0'; sem redistrib → só cobertura (testado)."
+  AC6: "aggregateBrokerRows/formatBrokers e bloco de tempo inalterados (diff não os toca)."
+  AC7: "send-daily-report.ts template.name='relatorio_diario_leads_v2'; params 7 na ordem data·entrada·canais·manuais·corretores·distribuidos·tempo."
+  AC8: "isLeadFunil e formatDistribuidos exportadas e cobertas por testes unitários."
+  AC9: "Sem migration — sinais já existem em leads/messages/lead_distribution_log/activities. Diff não inclui .sql."
+
+verificacoes_adversariais:
+  - "Diff vs main: 4 arquivos (story + gate + 2 .ts de código + test). Nada fora de escopo do relatório diário."
+  - "Todo lead distribuído é classificado funil (isLeadFunil retorna true se hasDistribution) → coberturaUnica ⊆ funil, garantindo 'X de Y' com X ≤ Y (14 ≤ 15). Impossível estourar como o antigo '13 de 9'."
+  - "Guard carryover: bolsão = min(pulls, redistrib), roleta = max(0, redistrib - bolsão). Teste dedicado (pulls 2 > redistrib 1 → bolsão 1 · roleta 0). Roleta nunca negativa."
+  - "messages consultada SÓ por lead_id (sem org_id) — correto: tabela messages não tem org_id (convenção project-nicole-envio-midia-proativo). Query de bolsao_pull filtra org_id + tipo + janela."
+  - "Nenhuma query duplicada: lead_distribution_log da janela movida para o topo e reusada; a 2ª query de distribution_log (seção de tempo) é a original, filtrada por attendedRows — inalterada."
+  - "type-check 0 erros; lint 0 nos 3 arquivos tocados; vitest 966/966."
+  - "Simulação read-only prod (janela 13/07) reproduz 1:1 as 4 linhas afetadas; total bruto 38 = 15 funil + 23 manuais (explica o '38 de vdd?' do diretor)."
+
+observations:
+  - "Dependência EXTERNA bloqueante do deploy: o código já referencia 'relatorio_diario_leads_v2'. Se o template não estiver APPROVED na Meta no momento do 1º envio (cron 07:59 BRT), TODOS os envios falham (template inexistente). @devops DEVE submeter e confirmar APPROVED antes do deploy — template e código vão juntos."
+  - "Classificação depende de 4 sinais; um lead inbound sem NENHUM (sem metadata/ai_summary/mensagem/distribuição) contaria como manual (subcontagem de entrada). Cobertura dos 4 sinais valida os caminhos reais de origem; risco residual baixo, aceito."
+  - "CodeRabbit N/A (WSL indisponível em macOS)."
+
+notes: >
+  Aprovada (PASS, 9/10 — o -1 é a dependência externa de aprovação do template, fora do controle do dev).
+  Pendências para @devops *push: (1) submeter template HSM 'relatorio_diario_leads_v2' (pt_BR, corpo na
+  story) na Meta e aguardar APPROVED; (2) push + deploy JUNTO com a aprovação do template. Status → Done
+  após deploy + template APPROVED (transição de @devops, conforme story-lifecycle).

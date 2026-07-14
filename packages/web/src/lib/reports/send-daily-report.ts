@@ -4,9 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { DailyReportVars } from "./daily-leads-report"
 
 /**
- * Story 75-45 — Envia o relatório diário via template HSM `relatorio_diario_leads`
- * (pt_BR) para cada destinatário (E.164). Espelha o envio de template já usado em
- * notificacoes.ts (sendWhatsApp). Não lança por destinatário: acumula erros.
+ * Story 75-45 / 75-154 — Envia o relatório diário via template HSM
+ * `relatorio_diario_leads_v2` (pt_BR, 7 params) para cada destinatário (E.164).
+ * Espelha o envio de template já usado em notificacoes.ts (sendWhatsApp). Não lança
+ * por destinatário: acumula erros. Ordem dos params = corpo do template v2:
+ * {{1}} data · {{2}} entrada · {{3}} canais · {{4}} manuais · {{5}} corretores ·
+ * {{6}} distribuídos · {{7}} tempo.
  */
 export async function sendDailyReport(
   admin: SupabaseClient,
@@ -27,8 +30,9 @@ export async function sendDailyReport(
   const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
   const params = [
     vars.data,
-    vars.total,
+    vars.entrada,
     vars.canais,
+    vars.manuais,
     vars.corretores,
     vars.distribuidos,
     vars.tempo,
@@ -50,7 +54,7 @@ export async function sendDailyReport(
           to,
           type: "template",
           template: {
-            name: "relatorio_diario_leads",
+            name: "relatorio_diario_leads_v2",
             language: { code: "pt_BR" },
             components: [
               {

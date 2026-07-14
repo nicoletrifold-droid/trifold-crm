@@ -5,18 +5,23 @@ import { previousCommercialDayRangeForOrg } from "@web/lib/metrics/commercial-da
 import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 
 /**
- * Story 75-45 — Relatório diário de leads (últimas 24h) para o diretor, via
- * WhatsApp. As 6 strings abaixo alimentam o template HSM `relatorio_diario_leads`
- * (pt_BR), nesta ordem. Regras da Meta: parâmetro de template NÃO pode ter quebra
- * de linha/tab/4+ espaços — por isso canais e corretores usam separador " · ".
+ * Story 75-45 / 75-154 — Relatório diário de leads (dia comercial anterior) para o
+ * diretor, via WhatsApp. As 7 strings abaixo alimentam o template HSM
+ * `relatorio_diario_leads_v2` (pt_BR), nesta ordem. Regras da Meta: parâmetro de
+ * template NÃO pode ter quebra de linha/tab/4+ espaços — por isso canais,
+ * corretores e distribuídos usam separador " · ".
  */
+// Story 75-154 — template Meta `relatorio_diario_leads_v2` (7 params). O número do
+// topo agora é só o funil (entrada real); cadastros manuais do corretor saem numa
+// linha própria e não inflam o "recebidos".
 export interface DailyReportVars {
   data: string // {{1}} ex.: "24/06/2026"
-  total: string // {{2}} ex.: "20"
-  canais: string // {{3}} ex.: "WhatsApp 12 · Meta Ads 7 · Site 1"
-  corretores: string // {{4}} ex.: "Robson 8→8 · Odair 3→2"
-  distribuidos: string // {{5}} ex.: "8 de 9 recebidos · 13 envios no total (3 redistribuições)"
-  tempo: string // {{6}} ex.: "14 min (mín 3 · máx 1h12)"
+  entrada: string // {{2}} leads de entrada (funil) ex.: "15"
+  canais: string // {{3}} canais SÓ do funil ex.: "Meta Ads 9 · WhatsApp 6"
+  manuais: string // {{4}} cadastros manuais de corretor ex.: "23"
+  corretores: string // {{5}} ex.: "Robson 8→8 · Odair 3→2"
+  distribuidos: string // {{6}} ex.: "14 de 15 do funil · 18 envios no total (4 redistribuições: bolsão 4 · roleta 0)"
+  tempo: string // {{7}} ex.: "14 min (mín 3 · máx 1h12)"
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -33,6 +38,25 @@ export function channelLabel(canal: string): string {
   if (CHANNEL_LABELS[canal]) return CHANNEL_LABELS[canal]
   if (!canal) return "Desconhecido"
   return canal.charAt(0).toUpperCase() + canal.slice(1)
+}
+
+/**
+ * Story 75-154 — um lead conta como ENTRADA (funil) se tiver QUALQUER sinal de
+ * origem real: `metadata` de campanha (Meta Ads/CTWA), OU `ai_summary` (a Nicole
+ * atuou), OU ≥1 mensagem, OU distribuição na roleta. Sem nenhum sinal → é cadastro
+ * manual do corretor (lançado direto no CRM, às vezes com channel="whatsapp"
+ * enganoso). Puro/exportado para teste.
+ */
+export function isLeadFunil(
+  lead: { metadata: unknown; ai_summary: string | null },
+  hasMessage: boolean,
+  hasDistribution: boolean
+): boolean {
+  const hasCampaignMeta =
+    !!lead.metadata &&
+    typeof lead.metadata === "object" &&
+    Object.keys(lead.metadata as Record<string, unknown>).length > 0
+  return hasCampaignMeta || !!lead.ai_summary || hasMessage || hasDistribution
 }
 
 export function formatChannels(counts: Record<string, number>): string {
@@ -101,35 +125,40 @@ export function formatTempo(durationsMin: number[]): string {
 }
 
 /**
- * Formata a linha "Distribuídos" ({{5}}) medindo a INTENÇÃO original (cobertura:
- * quantos DOS leads recebidos foram distribuídos) e, quando há eventos além
- * disso, mostra o total de envios e as redistribuições. Corrige o "13 de 9":
- * antes contava eventos de distribuição contra os recebidos (denominadores
- * diferentes → estourava). Story 75-45-b.
+ * Formata a linha "Distribuídos" ({{6}}) medindo a cobertura do FUNIL (quantos dos
+ * leads de entrada foram distribuídos) e, quando há eventos além disso, o total de
+ * envios e as redistribuições — agora com a ORIGEM (bolsão × roleta). Story 75-154.
  *
- * - `recebidos`     = leads criados na janela
- * - `coberturaUnica`= dos recebidos, quantos tiveram ao menos 1 distribuição
- * - `totalEventos`  = eventos de distribuição na janela (inclui redistribuições)
- * - `leadsUnicos`   = leads distintos distribuídos na janela (inclui carryover de dias anteriores)
+ * - `funil`          = leads de entrada na janela (denominador; ver isLeadFunil)
+ * - `coberturaUnica` = dos leads de entrada, quantos tiveram ao menos 1 distribuição
+ * - `totalEventos`   = eventos de distribuição na janela (inclui redistribuições)
+ * - `leadsUnicos`    = leads distintos distribuídos na janela (inclui carryover de dias anteriores)
+ * - `redistribBolsao`= puxadas do bolsão na janela (activity `bolsao_pull`); cada uma
+ *                      é um evento `distributed` extra → uma redistribuição de bolsão
  *
  * Uma linha só, sem quebra/tab (regra de parâmetro de template da Meta).
  */
 export function formatDistribuidos(params: {
-  recebidos: number
+  funil: number
   coberturaUnica: number
   totalEventos: number
   leadsUnicos: number
+  redistribBolsao: number
 }): string {
-  const { recebidos, coberturaUnica, totalEventos, leadsUnicos } = params
+  const { funil, coberturaUnica, totalEventos, leadsUnicos, redistribBolsao } = params
   const redistrib = Math.max(0, totalEventos - leadsUnicos)
-  const base = `${coberturaUnica} de ${recebidos} recebido${recebidos === 1 ? "" : "s"}`
-  // Sem eventos extras (tudo 1:1 com os recebidos) → só a cobertura.
+  const base = `${coberturaUnica} de ${funil} do funil`
+  // Sem eventos extras (tudo 1:1 com o funil) → só a cobertura.
   if (totalEventos <= coberturaUnica) return base
   const envios = `${totalEventos} envio${totalEventos === 1 ? "" : "s"} no total`
-  const red =
-    redistrib > 0
-      ? ` (${redistrib} ${redistrib === 1 ? "redistribuição" : "redistribuições"})`
-      : ""
+  let red = ""
+  if (redistrib > 0) {
+    // Guard carryover: bolsão nunca passa do total de redistribuições; roleta = resto.
+    const bolsao = Math.min(Math.max(0, redistribBolsao), redistrib)
+    const roleta = redistrib - bolsao
+    const plural = redistrib === 1 ? "redistribuição" : "redistribuições"
+    red = ` (${redistrib} ${plural}: bolsão ${bolsao} · roleta ${roleta})`
+  }
   return `${base} · ${envios}${red}`
 }
 
@@ -169,23 +198,74 @@ export async function buildDailyLeadsReport(
     .maybeSingle()
   const novoId = (novoStage?.id as string | undefined) ?? null
 
-  // (1)(2)(3) Leads criados na janela + por canal
+  // (1) Leads criados na janela (bruto) + sinais para classificar entrada × manual
   const { data: leads } = await admin
     .from("leads")
-    .select("id, channel, source")
+    .select("id, channel, source, metadata, ai_summary")
     .eq("org_id", orgId)
     .eq("segmento", "principal") // Story 75-98: relatório do mundo principal, sem IMOB
     .eq("is_active", true)
     .gte("created_at", sinceIso)
     .lt("created_at", untilIso)
-  const leadRows = (leads ?? []) as Array<{ id: string; channel: string | null; source: string | null }>
+  const leadRows = (leads ?? []) as Array<{
+    id: string
+    channel: string | null
+    source: string | null
+    metadata: unknown
+    ai_summary: string | null
+  }>
   const total = leadRows.length
   const recebidosIds = new Set(leadRows.map((l) => l.id))
+
+  // Distribuições da janela (usadas na classificação e nas linhas de distribuídos).
+  const { data: dist } = await admin
+    .from("lead_distribution_log")
+    .select("lead_id, broker_id")
+    .eq("org_id", orgId)
+    .eq("status", "distributed")
+    .gte("created_at", sinceIso)
+    .lt("created_at", untilIso)
+  const distRows = (dist ?? []) as Array<{ lead_id: string; broker_id: string }>
+  const totalDistribuidos = distRows.length
+  const distinctDistributedIds = new Set(distRows.map((d) => d.lead_id))
+
+  // Leads com ao menos 1 mensagem (sinal de conversa real, não cadastro à mão).
+  const { data: msgRows } =
+    recebidosIds.size > 0
+      ? await admin.from("messages").select("lead_id").in("lead_id", [...recebidosIds])
+      : { data: [] }
+  const withMsg = new Set((msgRows ?? []).map((m) => (m as { lead_id: string }).lead_id))
+
+  // (2)(4) Classificação: ENTRADA (funil) × cadastro manual do corretor.
+  const funilIds = new Set<string>()
+  for (const l of leadRows) {
+    if (isLeadFunil(l, withMsg.has(l.id), distinctDistributedIds.has(l.id))) funilIds.add(l.id)
+  }
+  const entrada = funilIds.size
+  const manuais = total - entrada
+
+  // (3) Por canal — SÓ os leads do funil (não os cadastros manuais).
   const canalCounts: Record<string, number> = {}
   for (const l of leadRows) {
+    if (!funilIds.has(l.id)) continue
     const canal = l.channel ?? l.source ?? "desconhecido"
     canalCounts[canal] = (canalCounts[canal] ?? 0) + 1
   }
+
+  // Cobertura (dos leads de entrada, quantos distribuídos) + únicos (inclui carryover).
+  const coberturaUnica = [...recebidosIds].filter((id) => distinctDistributedIds.has(id)).length
+  const leadsUnicosDistribuidos = distinctDistributedIds.size
+
+  // Redistribuições de BOLSÃO = puxadas do bolsão na janela (activity `bolsao_pull`);
+  // a RPC pegar_lead_bolsao grava um `distributed` extra a cada puxada (mig 164).
+  const { count: bolsaoPulls } = await admin
+    .from("activities")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .eq("type", "bolsao_pull")
+    .gte("created_at", sinceIso)
+    .lt("created_at", untilIso)
+  const redistribBolsao = bolsaoPulls ?? 0
 
   // (6) Tempo de atendimento (Story 75-46): da DISTRIBUIÇÃO (corretor recebeu o
   // lead) até o atendimento (saiu de "Aguardando atendimento" = primeiro_atendimento_em).
@@ -227,22 +307,8 @@ export async function buildDailyLeadsReport(
     }
   }
 
-  // (4)(5) Distribuídos por corretor na janela + quantos saíram de "novo"
-  const { data: dist } = await admin
-    .from("lead_distribution_log")
-    .select("lead_id, broker_id")
-    .eq("org_id", orgId)
-    .eq("status", "distributed")
-    .gte("created_at", sinceIso)
-    .lt("created_at", untilIso)
-  const distRows = (dist ?? []) as Array<{ lead_id: string; broker_id: string }>
-  const totalDistribuidos = distRows.length
-  // Cobertura (intenção original do "X de Y"): dos recebidos, quantos foram
-  // distribuídos ao menos uma vez. + leads únicos distribuídos (inclui carryover).
-  const distinctDistributedIds = new Set(distRows.map((d) => d.lead_id))
-  const coberturaUnica = [...recebidosIds].filter((id) => distinctDistributedIds.has(id)).length
-  const leadsUnicosDistribuidos = distinctDistributedIds.size
-
+  // (5) Distribuídos por corretor na janela + quantos saíram de "novo".
+  // (distRows / distinctDistributedIds / cobertura já computados acima.)
   let brokerRows: Array<{ name: string; distribuidos: number; atenderam: number }> = []
   if (distRows.length > 0) {
     const brokerIds = [...new Set(distRows.map((d) => d.broker_id))]
@@ -269,14 +335,16 @@ export async function buildDailyLeadsReport(
 
   return {
     data: formatDateBR(reportedDay),
-    total: String(total),
+    entrada: String(entrada),
     canais: formatChannels(canalCounts),
+    manuais: String(manuais),
     corretores: formatBrokers(brokerRows),
     distribuidos: formatDistribuidos({
-      recebidos: total,
+      funil: entrada,
       coberturaUnica,
       totalEventos: totalDistribuidos,
       leadsUnicos: leadsUnicosDistribuidos,
+      redistribBolsao,
     }),
     tempo: formatTempo(durations),
   }
