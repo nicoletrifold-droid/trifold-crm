@@ -140,6 +140,18 @@
     {
       "path": "/api/cron/billing-collect-resend",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/billing-collection-health",
+      "schedule": "30 14 * * *"
+    },
+    {
+      "path": "/api/cron/billing-monthly-summary",
+      "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/billing-cost-anomaly",
+      "schedule": "30 15 * * *"
     }
   ]
 }
