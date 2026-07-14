@@ -6,8 +6,18 @@ import { isUuid } from "@web/lib/uuid"
 import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
 import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS } from "@web/lib/leads/enrich"
+// Story 75-155 — reuso do componente de conversa do corretor para dar PARIDADE de
+// ENVIO na aba "Conversa" do /dashboard (admin/supervisor/gerente-comercial).
+// Importado EM PLACE (sem mover o componente do /broker — fora de escopo).
+import { ConversationThread } from "@web/app/broker/leads/[id]/_components/conversation-thread"
+import type { ThreadMessage } from "@web/app/broker/leads/[id]/_components/conversation-thread-merge"
 
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, SOURCE_LABELS as sourceLabels } from "@web/lib/constants"
+
+// Story 75-155 — MESMA lista de roles do /broker (broker/leads/[id]/page.tsx:10).
+// `broker` é inócuo aqui (corretor não abre /dashboard/leads). Perfis fora da
+// lista (ex.: gerente-relacionamento, obras) ficam só-leitura.
+const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
 const TABS = [
   { key: "info", label: "Info" },
@@ -94,7 +104,7 @@ export default async function LeadDetailPage({
     .from("conversations")
     .select(
       `
-      id, channel, status, last_message_at,
+      id, channel, status, last_message_at, is_ai_active,
       messages:messages(id, role, content, created_at, metadata)
     `
     )
@@ -104,25 +114,32 @@ export default async function LeadDetailPage({
     .limit(5)
     .limit(20, { referencedTable: "messages" })
 
-  // Resolve broker names for messages with role='broker'
-  const brokerUserIds = [
-    ...new Set(
-      (conversations ?? [])
-        .flatMap((c) => c.messages ?? [])
-        .filter((m) => m.role === "broker" && (m.metadata as Record<string, unknown>)?.sent_by)
-        .map((m) => (m.metadata as Record<string, unknown>).sent_by as string)
-    ),
-  ]
-  const brokerNames: Record<string, string> = {}
-  if (brokerUserIds.length > 0) {
-    const { data: brokerUsers } = await supabase
-      .from("users")
-      .select("id, name")
-      .in("id", brokerUserIds)
-    brokerUsers?.forEach((u) => {
-      if (u.id) brokerNames[u.id] = ((u.name as string) ?? "").split(" ")[0] ?? (u.name as string)
-    })
-  }
+  // Story 75-155 — dados para o `ConversationThread` (paridade de envio com o
+  // /broker). Achata as mensagens aninhadas por conversa num único array flat,
+  // ordena por `created_at` ASC e mantém as 50 mais recentes (cap alinhado ao
+  // /broker, que faz `.order(created_at asc).limit(50)`).
+  const threadMessages: ThreadMessage[] = (conversations ?? [])
+    .flatMap((c) => (c.messages ?? []) as ThreadMessage[])
+    .sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    .slice(-50)
+  // `conversations` já vem ordenado por `last_message_at desc` (L102) → [0] é a
+  // conversa ativa, mesmo critério do /broker.
+  const activeConversation = conversations?.[0]
+  const conversationIds = (conversations ?? []).map((c) => c.id as string)
+  const conversaLastMessageAt = activeConversation?.last_message_at
+    ? new Date(activeConversation.last_message_at as string)
+    : null
+  // Telegram (phone "tg:") não tem restrição de janela — mesmo cálculo do broker.
+  const conversaIsWhatsApp = !String(lead.phone).startsWith("tg:")
+  const conversaIsAiActive = Boolean(activeConversation?.is_ai_active)
+  const conversaNotifyOnReply = Boolean(
+    (lead.metadata as { notify_broker_on_reply?: boolean } | null)
+      ?.notify_broker_on_reply
+  )
+  const canSendConversa = CAN_SEND_ROLES.includes(user.role)
 
   // Fetch conversation state (collected_data)
   const { data: convState } = await supabase
@@ -309,96 +326,25 @@ export default async function LeadDetailPage({
       )}
 
       {activeTab === "conversa" && (
-        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-stone-100">
-            Conversas
-          </h2>
-          {conversations && conversations.length > 0 ? (
-            <div className="space-y-6">
-              {conversations.map((conv) => {
-                const messages = (conv.messages ?? []) as Array<{
-                  id: string
-                  role: string
-                  content: string
-                  created_at: string
-                  metadata: Record<string, unknown> | null
-                }>
-                const sortedMessages = [...messages].sort(
-                  (a, b) =>
-                    new Date(a.created_at).getTime() -
-                    new Date(b.created_at).getTime()
-                )
-
-                const channelBadge =
-                  conv.channel === "whatsapp"
-                    ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                    : conv.channel === "telegram"
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-                      : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
-
-                return (
-                  <div key={conv.id} className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
-                      <span
-                        className={`rounded-full px-2 py-0.5 ${channelBadge}`}
-                      >
-                        {conv.channel}
-                      </span>
-                      <span>— {conv.status}</span>
-                    </div>
-                    <div className="max-h-[500px] space-y-2 overflow-y-auto">
-                      {sortedMessages.map((msg) => {
-                        const isUser = msg.role === "user"
-                        return (
-                          <div
-                            key={msg.id}
-                            className={`flex ${isUser ? "justify-start" : "justify-end"}`}
-                          >
-                            <div
-                              className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                                isUser
-                                  ? "bg-gray-100 text-gray-800 dark:bg-stone-800 dark:text-stone-200"
-                                  : msg.role === "broker"
-                                    ? "bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-200"
-                                    : "bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-200"
-                              }`}
-                            >
-                              <div className="mb-1 text-[10px] font-medium uppercase opacity-60">
-                                {msg.role === "user"
-                                  ? "Lead"
-                                  : msg.role === "assistant"
-                                    ? "IA"
-                                    : msg.role === "broker"
-                                      ? // Story 75-119 — só o nome de quem enviou (não "Corretor",
-                                        // que rotula errado gerente de relacionamento/admin).
-                                        brokerNames[msg.metadata?.sent_by as string] ?? "Equipe"
-                                      : msg.role}
-                              </div>
-                              <p className="whitespace-pre-wrap">{msg.content}</p>
-                              <div className="mt-1 text-[10px] opacity-50">
-                                {new Date(msg.created_at).toLocaleString(
-                                  "pt-BR",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma conversa registrada.</p>
-          )}
-        </div>
+        // Story 75-155 — REUSO do `ConversationThread` do /broker: dá PARIDADE de
+        // envio (BrokerMessageInput, badge de janela 24h, "Iniciar atendimento",
+        // realtime). O gate de envio é `canSend` (CAN_SEND_ROLES); perfis fora da
+        // lista recebem `canSend=false` e continuam só-leitura. Componentes já são
+        // theme-aware (light + dark:), coerente com o /dashboard.
+        <ConversationThread
+          messages={threadMessages}
+          lead={{
+            id: lead.id as string,
+            phone: lead.phone as string,
+            name: lead.name as string | null,
+          }}
+          lastMessageAt={conversaLastMessageAt}
+          isAiActive={conversaIsAiActive}
+          isWhatsApp={conversaIsWhatsApp}
+          canSend={canSendConversa}
+          conversationIds={conversationIds}
+          notifyOnReply={conversaNotifyOnReply}
+        />
       )}
 
       {activeTab === "timeline" && (
