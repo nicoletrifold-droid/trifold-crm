@@ -68,7 +68,25 @@ Sem esta story, mesmo com o envio A/B funcionando (Story 80-3), não há como co
 - `packages/web/src/app/api/admin/email-blasts/[id]/stats/route.ts`
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+**Veredito: PASS**
+
+Revisão sobre o commit `7c81cb9d` (diff isolado, 1 arquivo de produto + story).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | ✅ Diff mínimo e aditivo — reusa exatamente o endpoint já existente, helper `aggregateVariant` isolado e simples |
+| 2. Testes | ✅ Sem teste automatizado, mas teste manual com dados fabricados e verificação independente (ver abaixo) — proporcional ao risco baixo desta story |
+| 3. Acceptance Criteria | ✅ AC1, AC2, AC3, AC5, AC7 confirmados diretamente no diff |
+| 4. **AC4 (contagem por opened_at/clicked_at, não por status)** | ✅ Confirmado no código: `variantLogs.filter((l) => l.opened_at != null)` e `l.clicked_at != null` — não usa `status` para essa contagem. Isso é semanticamente correto: um log com `status='clicked'` também tem `opened_at` preenchido (progressão cumulativa), então contaria como aberto E clicado, como esperado. |
+| 5. **AC6 (zero regressão sem A/B)** | ✅ `byVariant = blast.ab_test_enabled ? {...} : null` — quando falsy, `by_variant` é `null` e o resto do objeto de resposta (`...blast, ...stats, total_logs`) é exatamente o mesmo spread de antes, só com uma chave nova adicionada ao final. Não há nenhum consumidor hoje (endpoint órfão), então mesmo essa adição é 100% segura. |
+| 6. Segurança | ✅ N/A — mesma superfície de risco já existente (rota já exigia `role==="admin"` e filtro por `org_id`) |
+| 7. Documentação | ✅ Story completa, Dev Notes detalha exatamente a lógica e a evidência de teste |
+
+**Verificação independente da evidência de teste manual:** não me limitei ao relato do @dev — rodei minhas próprias consultas em produção: `email_blasts` filtrando por nome `ilike.*TESTE STORY 80-4*` → `[]`; `email_logs` filtrando por `to_email=eq.teste-80-4@example.invalid` → `[]`. Confirmei também que o script temporário (`.tmp-test-80-4.ts`) não existe mais no disco. Nenhum resíduo em produção.
+
+**CodeRabbit:** não executado (WSL indisponível neste ambiente macOS) — mitigado com ESLint independente (0 erros) + revisão manual completa do diff, incluindo verificação semântica do AC4 (por que `opened_at`/`clicked_at` é o critério correto, não `status`).
+
+Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, quarta de 5 stories. Identificado reuso de endpoint já existente (`[id]/stats/route.ts`, órfão/sem consumidor) em vez de criar rota nova.
