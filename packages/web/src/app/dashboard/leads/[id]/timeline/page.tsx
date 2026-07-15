@@ -51,6 +51,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   note_added: "Nota",
   lead_lost: "Lead perdido",
   lead: "Lead perdido",
+  lead_reactivated: "Lead reativado",
   qualification_updated: "Qualificação atualizada",
   appointment_created: "Agendamento criado",
   appointment_updated: "Agendamento remarcado",
@@ -82,6 +83,7 @@ const ACTIVITY_ICONS: Record<string, string> = {
   note_added: "📝",
   lead_lost: "❌",
   lead: "❌",
+  lead_reactivated: "♻️",
   qualification_updated: "📈",
   appointment_created: "📅",
   appointment_updated: "📅",
@@ -574,7 +576,7 @@ async function fetchTimelineData(
       // permanece útil.
       let description = activity.description || ""
       if (type === "stage_change" || type === "broker_assigned") description = ""
-      if (type === "transfer" && typeof meta.motivo === "string") description = `Motivo: ${meta.motivo}`
+      if ((type === "transfer" || type === "lead_reactivated") && typeof meta.motivo === "string") description = `Motivo: ${meta.motivo}`
       if ((type === "lead_lost" || type === "lead") && typeof meta.reason === "string" && meta.reason)
         description = `Motivo: ${meta.reason}`
 

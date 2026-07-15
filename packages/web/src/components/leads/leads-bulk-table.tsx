@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { MessageCircle } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
+import { ReativarLeadButton } from "@web/components/leads/reativar-lead-button"
 
 const LOST_REASONS = [
   "Cliente Não Atende/Responde Mais",
@@ -39,9 +40,13 @@ type Broker = { id: string; name: string }
 export function LeadsBulkTable({
   leads,
   brokers,
+  view = "ativos",
+  canReactivate = false,
 }: {
   leads: Lead[]
   brokers: Broker[]
+  view?: "ativos" | "perdidos"
+  canReactivate?: boolean
 }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -232,12 +237,17 @@ export function LeadsBulkTable({
                   className="px-6 py-4 text-right"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Link
-                    href={`/dashboard/leads/${lead.id}`}
-                    className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
-                  >
-                    Ver
-                  </Link>
+                  <div className="flex items-center justify-end gap-3">
+                    {view === "perdidos" && canReactivate && (
+                      <ReativarLeadButton leadId={lead.id} leadName={lead.name} />
+                    )}
+                    <Link
+                      href={`/dashboard/leads/${lead.id}`}
+                      className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
+                    >
+                      Ver
+                    </Link>
+                  </div>
                 </td>
               </tr>
             )

@@ -317,6 +317,8 @@ export default async function LeadsPage({
               }
             })}
             brokers={allBrokers}
+            view={view}
+            canReactivate={["admin", "supervisor", "gerente-comercial"].includes(user.role)}
           />
         </ScrollableX>
         {totalPages > 1 && (
