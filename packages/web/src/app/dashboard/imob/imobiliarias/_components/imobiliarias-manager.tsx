@@ -122,6 +122,7 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
                   <td className="px-3 py-2">
                     <div className="font-medium text-stone-900 dark:text-stone-100">{i.nome}</div>
                     {i.cnpj && <div className="text-xs text-stone-400">{i.cnpj}</div>}
+                    {i.creci_juridico && <div className="text-xs text-stone-400">CRECI {i.creci_juridico}</div>}
                   </td>
                   <td className="px-3 py-2 text-stone-700 dark:text-stone-300">{i.gerente_nome || "—"}</td>
                   <td className="px-3 py-2 text-stone-700 dark:text-stone-300">

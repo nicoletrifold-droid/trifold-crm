@@ -1,0 +1,44 @@
+storyId: "imob-creci-juridico"
+title: "CRECI jurídico no cadastro de imobiliárias"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: feat/imob-creci-juridico
+commit: pending-push
+
+checks:
+  code_review: PASS         # campo no ImobiliariaFormModal (cobre as 3 entradas); whitelist IMOBILIARIA_TEXT_FIELDS + interface atualizados; exibido na lista
+  unit_tests: PASS          # 89 files / 975 tests PASS
+  acceptance_criteria: PASS # AC1-AC5
+  regressions: PASS         # migration aditiva/nullable; endpoints POST/PATCH e queries select(*) inalterados
+  performance: PASS         # sem query nova
+  security: PASS            # endpoints IMOB já gateados; campo sanitizado pelo whitelist
+  documentation: PASS       # story + gate
+
+migration:
+  file: "173_imobiliarias_creci_juridico.sql"
+  applied_prod: true
+  detail: "ALTER TABLE imobiliarias ADD COLUMN IF NOT EXISTS creci_juridico text — aplicada via Management API; coluna confirmada (data_type=text)."
+
+acceptance_criteria_trace:
+  AC1: "Input 'CRECI jurídico' após CNPJ no form compartilhado (interno + fluxo do link/Pastas)."
+  AC2: "Persistido via whitelist no POST e PATCH de /api/imob/imobiliarias."
+  AC3: "toForm() pré-preenche na edição."
+  AC4: "imobiliarias-manager exibe 'CRECI {valor}' abaixo do CNPJ."
+  AC5: "Migration aditiva/nullable — sem impacto no existente."
+
+note: "Não existe form público de auto-cadastro de imobiliária; o form compartilhado cobre 'uso interno' e 'cadastro no fluxo do link'."
+
+build:
+  tsc: "0 erros"
+  eslint: "0 erros"
+  next_build: "Compiled successfully"
+  tests: "vitest 89 files / 975 tests passed"
+
+files:
+  - supabase/migrations/173_imobiliarias_creci_juridico.sql
+  - packages/web/src/lib/imob/imobiliarias.ts
+  - packages/web/src/app/dashboard/imob/imobiliarias/_components/imobiliaria-form-modal.tsx
+  - packages/web/src/app/dashboard/imob/imobiliarias/_components/imobiliarias-manager.tsx
+  - docs/stories/imob-creci-juridico.story.md
