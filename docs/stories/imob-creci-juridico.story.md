@@ -50,6 +50,7 @@ formulário compartilhado **cobre os dois casos citados** (uso interno + cadastr
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-15 | 1.0 | Campo CRECI jurídico no cadastro de imobiliárias (form compartilhado cobre interno + fluxo do link). Migration 173 aplicada em prod. tsc/eslint/build OK, 975 testes. Done. | @dev+@qa |
+| 2026-07-15 | 1.1 | Push por @devops. PR #204 squash-merged em `main` (`d3d7e9f8`). Deploy Vercel disparado (coluna 173 já em prod → entra funcionando). | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
