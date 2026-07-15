@@ -29,6 +29,7 @@ export function NewLeadModal({
     utm_campaign: "",
     property_interest_id: "",
     stage_id: "",
+    observacao: "",
   })
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function NewLeadModal({
   }, [open])
 
   function reset() {
-    setForm({ name: "", phone: "", email: "", source: "other", utm_campaign: "", property_interest_id: "", stage_id: "" })
+    setForm({ name: "", phone: "", email: "", source: "other", utm_campaign: "", property_interest_id: "", stage_id: "", observacao: "" })
     setError(null)
   }
 
@@ -61,6 +62,7 @@ export function NewLeadModal({
         utm_campaign: form.utm_campaign || null,
         property_interest_id: form.property_interest_id || null,
         stage_id: form.stage_id || null,
+        observacao: form.observacao || null,
       }),
     })
 
@@ -192,6 +194,17 @@ export function NewLeadModal({
                   </select>
                 </div>
               )}
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">Observação</label>
+                <textarea
+                  value={form.observacao}
+                  onChange={(e) => setForm(f => ({ ...f, observacao: e.target.value }))}
+                  rows={3}
+                  placeholder="Anotações livres sobre o lead (perfil, contexto, o que foi conversado…)"
+                  className="w-full resize-none rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                />
+              </div>
 
               {error && (
                 <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
