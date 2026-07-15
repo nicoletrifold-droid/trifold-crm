@@ -1,6 +1,6 @@
 # Story (UX) — Área de mensagens da conversa maior (altura responsiva)
 
-**Status:** Ready (aguardando conferência de preview + merge)
+**Status:** Done
 **Tipo:** UX / polish
 **Epic:** UI / Conversa (chat do lead)
 **Relacionado:** Story 75-155 (`ConversationThread` compartilhado /dashboard + /broker), [[project-transferir-conversa]]
@@ -49,6 +49,7 @@ Trocar a altura fixa desktop por **responsiva à tela**, com piso e teto:
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-15 | 1.0 | Altura da conversa desktop → responsiva (`calc(100dvh-13rem)`, min 34rem, max 52rem); área de mensagens cresce sem tocar banner/composer. eslint 0, build OK, 975 testes. | @ux-design-expert (Uma) + @dev |
+| 2026-07-15 | 1.1 | Preview conferido + aprovado. Push por @devops. PR #202 squash-merged em `main` (`52b22bd0`). Deploy Vercel de produção disparado. Done. | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
