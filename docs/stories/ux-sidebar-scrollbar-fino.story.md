@@ -35,6 +35,7 @@ scrollbar global (que serve tabelas, kanban, etc. — evitar regressão nessas t
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-15 | 1.0 | Scrollbar do sidebar → fino/discreto via `.sidebar-scroll` (escopado), sem tocar o global. build OK, 975 testes. Done. | @ux-design-expert (Uma) + @dev |
+| 2026-07-15 | 1.1 | Ajuste após preview: thumb um pouco mais visível (55%, hover 80%). Push por @devops. PR #201 squash-merged em `main` (`b7b348ed`). Deploy Vercel de produção disparado. | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
