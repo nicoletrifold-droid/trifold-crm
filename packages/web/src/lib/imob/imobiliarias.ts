@@ -40,6 +40,7 @@ export interface Imobiliaria {
   nome: string
   razao_social: string | null
   cnpj: string | null
+  creci_juridico: string | null
   telefone: string | null
   email: string | null
   cidade: string | null
@@ -65,7 +66,7 @@ export interface Imobiliaria {
 
 // Campos de texto livres (whitelist para sanitizar o body da API).
 export const IMOBILIARIA_TEXT_FIELDS = [
-  "nome", "razao_social", "cnpj", "telefone", "email", "cidade", "estado", "endereco",
+  "nome", "razao_social", "cnpj", "creci_juridico", "telefone", "email", "cidade", "estado", "endereco",
   "gerente_nome", "gerente_telefone", "gerente_email",
   "socio_nome", "socio_telefone", "socio_email",
   "contato_nome", "contato_telefone", "contato_email", "observacoes",

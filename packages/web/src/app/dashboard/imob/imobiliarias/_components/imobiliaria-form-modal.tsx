@@ -16,7 +16,7 @@ import {
 // fluxos "Nova pasta" e "Gerar link" (botão "+ Cadastrar nova imobiliária"). Cadastro COMPLETO.
 
 type FormState = {
-  nome: string; razao_social: string; cnpj: string; telefone: string; email: string
+  nome: string; razao_social: string; cnpj: string; creci_juridico: string; telefone: string; email: string
   cidade: string; estado: string; endereco: string; num_corretores: string
   gerente_nome: string; gerente_telefone: string; gerente_email: string
   socio_nome: string; socio_telefone: string; socio_email: string
@@ -26,7 +26,7 @@ type FormState = {
 }
 
 const EMPTY: FormState = {
-  nome: "", razao_social: "", cnpj: "", telefone: "", email: "", cidade: "", estado: "",
+  nome: "", razao_social: "", cnpj: "", creci_juridico: "", telefone: "", email: "", cidade: "", estado: "",
   endereco: "", num_corretores: "", gerente_nome: "", gerente_telefone: "", gerente_email: "",
   socio_nome: "", socio_telefone: "", socio_email: "", tipos_produto: [],
   contato_nome: "", contato_telefone: "", contato_email: "", status: "prospeccao", observacoes: "",
@@ -34,7 +34,7 @@ const EMPTY: FormState = {
 
 function toForm(i: Imobiliaria): FormState {
   return {
-    nome: i.nome ?? "", razao_social: i.razao_social ?? "", cnpj: i.cnpj ?? "",
+    nome: i.nome ?? "", razao_social: i.razao_social ?? "", cnpj: i.cnpj ?? "", creci_juridico: i.creci_juridico ?? "",
     telefone: i.telefone ?? "", email: i.email ?? "", cidade: i.cidade ?? "", estado: i.estado ?? "",
     endereco: i.endereco ?? "", num_corretores: i.num_corretores != null ? String(i.num_corretores) : "",
     gerente_nome: i.gerente_nome ?? "", gerente_telefone: i.gerente_telefone ?? "", gerente_email: i.gerente_email ?? "",
@@ -123,6 +123,10 @@ export function ImobiliariaFormModal({
           <div>
             <label className={labelCls}>CNPJ</label>
             <input className={inputCls} value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>CRECI jurídico</label>
+            <input className={inputCls} value={form.creci_juridico} onChange={(e) => set("creci_juridico", e.target.value)} placeholder="CRECI da imobiliária" />
           </div>
           <div>
             <label className={labelCls}>Telefone</label>
