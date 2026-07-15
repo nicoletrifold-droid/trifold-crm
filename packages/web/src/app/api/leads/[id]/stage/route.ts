@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
 
 export async function POST(
   request: NextRequest,
@@ -57,10 +58,18 @@ export async function POST(
   }> | null
   const fromStage = fromStageArr?.[0] ?? null
 
+  // Ao SAIR de Perdido/Não Qualificado (reativação por mudança de etapa manual), limpa o
+  // lost_reason residual. A etapa destino aqui é sempre is_active=true (validada acima), então
+  // nunca é Perdido — se a origem era Perdido, o lead está sendo reativado e não pode carregar
+  // lost_reason (senão some do pipeline / fica read-only). Convenção: "perdido = ETAPA".
+  const leavingPerdido = PERDIDO_STAGE_IDS.includes(lead.stage_id)
+  const stageUpdate: { stage_id: string; lost_reason?: null } = { stage_id: body.stage_id }
+  if (leavingPerdido) stageUpdate.lost_reason = null
+
   // Update lead stage
   const { data: updatedLead, error: updateError } = await supabase
     .from("leads")
-    .update({ stage_id: body.stage_id })
+    .update(stageUpdate)
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .eq("is_active", true)

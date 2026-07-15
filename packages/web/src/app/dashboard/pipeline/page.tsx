@@ -108,7 +108,10 @@ export default async function PipelinePage({
         .eq("is_active", true)
         .eq("segmento", "principal") // Story 75-98: pipeline principal não mostra o mundo IMOB
         .eq("stage_id", stage.id)
-        .is("lost_reason", null) // safeguard: leads marcados como perdidos não aparecem no kanban
+        // "Perdido" é ETAPA, não lost_reason (convenção 75-153). As colunas do kanban já
+        // vêm só de etapas is_active=true (Perdido/Não Qualificado são is_active=false), então
+        // filtrar por etapa basta. NÃO filtrar por lost_reason: um lead reativado (que voltou
+        // a uma etapa ativa) pode ter lost_reason residual e sumia indevidamente do pipeline.
 
       if (filters.property_id) {
         query = query.eq("property_interest_id", filters.property_id)

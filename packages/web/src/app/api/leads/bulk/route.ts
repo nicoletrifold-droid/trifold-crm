@@ -34,6 +34,9 @@ export async function POST(request: NextRequest) {
     // Transferência de corretor → o lead volta para "Aguardando atendimento"
     // (STAGE_IDS.novo), independente do estágio em que estava com o corretor anterior.
     update.stage_id = STAGE_IDS.novo
+    // Se o lead estava Perdido, ao voltar para etapa ativa não pode carregar lost_reason
+    // residual (senão some do pipeline / fica read-only). Convenção: "perdido = ETAPA".
+    update.lost_reason = null
   }
 
   if (lost_reason) {

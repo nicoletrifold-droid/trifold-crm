@@ -134,7 +134,8 @@ export default async function BrokerHomePage() {
       .eq("assigned_broker_id", user.id)
       .eq("stage_id", AGUARDANDO_STAGE_ID)
       .eq("is_active", true)
-      .is("lost_reason", null)
+      // "Perdido" é ETAPA, não lost_reason: já filtramos pela etapa "Aguardando atendimento"
+      // (ativa). Não filtrar por lost_reason — leads reativados podem ter lost_reason residual.
       .order("created_at", { ascending: false })
       .limit(5),
     supabase

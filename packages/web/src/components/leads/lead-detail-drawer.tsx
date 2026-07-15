@@ -305,7 +305,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     "00000000-0000-0000-0001-000000000008",
     "95327bd7-3e88-4038-aa16-250a74ab085c",
   ]
-  const isPerdido = (!!lead?.stage && PERDIDO_STAGE_IDS.includes(lead.stage.id)) || !!lead?.lost_reason
+  // "Perdido" é ETAPA, não lost_reason (convenção 75-153). Um lead reativado volta a uma
+  // etapa ativa mas pode manter lost_reason residual — não pode ser tratado como perdido
+  // (senão fica read-only indevidamente). Portanto: gate SÓ por etapa.
+  const isPerdido = !!lead?.stage && PERDIDO_STAGE_IDS.includes(lead.stage.id)
 
   // ── Task actions ──────────────────────────────────────────────────────
 
