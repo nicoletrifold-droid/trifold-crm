@@ -55,10 +55,10 @@ export default async function BrokerLeadsPage({
         )
         .eq("assigned_broker_id", user.id)
         .eq("is_active", true)
-        .is("lost_reason", null)
-        // Story 75-153 — exclui Perdido / Não Qualificado por ETAPA (lost_reason pode ser NULL
-        // nesses stages). Acervo (Corretores Antigos/Represamento) NÃO é excluído: usar
-        // PERDIDO_STAGE_IDS, não EM_ATENDIMENTO_EXCLUDED_IDS. Mudança aditiva (lost_reason IS NULL fica).
+        // "Perdido" é ETAPA, não lost_reason (convenção 75-153). Excluímos Perdido / Não
+        // Qualificado por ETAPA. O antigo `.is("lost_reason", null)` foi REMOVIDO: escondia
+        // leads reativados (etapa ativa) que ainda tinham lost_reason residual. Acervo
+        // (Corretores Antigos/Represamento) NÃO é excluído: usar PERDIDO_STAGE_IDS.
         .not("stage_id", "in", `(${PERDIDO_STAGE_IDS.join(",")})`)
         .order("updated_at", { ascending: false }),
 

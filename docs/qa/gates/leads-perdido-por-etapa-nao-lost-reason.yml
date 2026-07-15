@@ -1,0 +1,49 @@
+storyId: "leads-perdido-por-etapa-nao-lost-reason"
+title: "BUG: lead reativado sumia do pipeline e ficava read-only (lost_reason residual)"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: fix/leads-perdido-por-etapa
+commit: pending-push
+
+checks:
+  code_review: PASS         # 4 superfícies passam a gate por ETAPA (não lost_reason); 2 write-paths limpam lost_reason ao sair de Perdido; hotfix de dado (1 lead)
+  unit_tests: PASS          # 89 files / 975 tests PASS, sem regressão
+  acceptance_criteria: PASS # AC1-AC6
+  regressions: PASS         # Perdido/Não Qualificado são is_active=false → nunca eram colunas/listas ativas; remover filtro lost_reason não os revela; "finalizar como perdido" no bulk prevalece
+  performance: PASS         # só remoção/ajuste de filtros; sem query nova
+  security: PASS            # stage/route mantém requireRole admin/supervisor
+  documentation: PASS       # story + gate
+
+root_cause: >
+  Lead reativado (movido de Perdido→ativo por mudança de etapa manual) mantinha lost_reason
+  residual. Pipeline, drawer e listas do corretor tratavam lost_reason!=null como "perdido",
+  escondendo/travando o lead. Convenção correta: "perdido = ETAPA, nunca lost_reason".
+
+fixes:
+  - "pipeline/page.tsx: remove .is(lost_reason,null) — colunas já são só etapas ativas"
+  - "lead-detail-drawer.tsx: isPerdido só por ETAPA (PERDIDO_STAGE_IDS)"
+  - "broker/leads/page.tsx: remove .is(lost_reason,null) — exclusão por ETAPA já existia (75-153)"
+  - "broker/page.tsx: remove .is(lost_reason,null) — já escopado à etapa Aguardando"
+  - "api/leads/[id]/stage/route.ts: limpa lost_reason ao sair de PERDIDO_STAGE_IDS"
+  - "api/leads/bulk/route.ts: limpa lost_reason ao atribuir corretor (volta p/ Aguardando)"
+  - "HOTFIX DADO: Maria Inês (3612d0a9) lost_reason 'invalido' -> null (1 lead afetado no total)"
+
+build:
+  tsc: "0 erros"
+  eslint: "0 erros (warnings pré-existentes)"
+  next_build: "Compiled successfully"
+  tests: "vitest 89 files / 975 tests passed"
+
+out_of_scope:
+  - "Analytics ainda conta 'perdido' por lost_reason (coerente daqui pra frente, pois reativação limpa). Alinhar por ETAPA = story futura."
+
+files:
+  - packages/web/src/app/dashboard/pipeline/page.tsx
+  - packages/web/src/components/leads/lead-detail-drawer.tsx
+  - packages/web/src/app/broker/leads/page.tsx
+  - packages/web/src/app/broker/page.tsx
+  - packages/web/src/app/api/leads/[id]/stage/route.ts
+  - packages/web/src/app/api/leads/bulk/route.ts
+  - docs/stories/leads-perdido-por-etapa-nao-lost-reason.story.md
