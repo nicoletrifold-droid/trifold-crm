@@ -206,7 +206,7 @@ export function ConversationThread({
   const allMessages = mergeMessages(serverPlusRealtime, optimistic)
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-lg bg-white shadow-sm lg:h-[34rem] dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+    <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-lg bg-white shadow-sm lg:h-[calc(100dvh-13rem)] lg:max-h-[52rem] lg:min-h-[34rem] dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       <div className="shrink-0 border-b border-gray-100 dark:border-stone-800">
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4">
           <h2 className="text-lg font-semibold dark:text-stone-100">Conversa com o Agente</h2>
