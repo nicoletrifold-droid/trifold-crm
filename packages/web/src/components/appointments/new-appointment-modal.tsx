@@ -16,12 +16,16 @@ const PROPERTY_MAP: Record<string, { id: string; name: string } | null> = {
 
 const LOCATIONS = Object.keys(PROPERTY_MAP) as Array<keyof typeof PROPERTY_MAP>
 
-const DURATION_OPTIONS = [
-  { value: 30, label: "30 minutos" },
-  { value: 45, label: "45 minutos" },
-  { value: 60, label: "60 minutos" },
-  { value: 90, label: "90 minutos" },
-]
+// Todo compromisso da agenda é fixo em 1 hora, em hora cheia (decisão de produto:
+// visitas/compromissos de 1 em 1 hora). A duração não é mais escolhida pelo usuário.
+const APPOINTMENT_DURATION_MIN = 60
+
+// Garante hora cheia ("HH:MM" → "HH:00"); string vazia continua vazia.
+function snapToWholeHour(value: string): string {
+  if (!value) return ""
+  const h = value.split(":")[0] ?? "00"
+  return `${h.padStart(2, "0")}:00`
+}
 
 interface Lead {
   id: string
@@ -46,7 +50,6 @@ export function NewAppointmentModal({
   const [location, setLocation] = useState("")
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
-  const [duration, setDuration] = useState(30)
   const [notes, setNotes] = useState("")
 
   // Lead section
@@ -122,14 +125,15 @@ export function NewAppointmentModal({
       return setError("Nome do cliente é obrigatório.")
     }
 
-    const scheduledAt = new Date(`${date}T${time}:00`)
+    const scheduledAt = new Date(`${date}T${snapToWholeHour(time)}:00`)
     if (isNaN(scheduledAt.getTime())) {
       return setError("Data ou hora inválida.")
     }
+    scheduledAt.setMinutes(0, 0, 0) // garante hora cheia
 
     const payload: Record<string, unknown> = {
       scheduled_at: scheduledAt.toISOString(),
-      duration_minutes: duration,
+      duration_minutes: APPOINTMENT_DURATION_MIN,
       location,
       property_id: property?.id ?? null,
       notes: notes.trim() || null,
@@ -266,30 +270,22 @@ export function NewAppointmentModal({
                 <input
                   type="time"
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  step={1800}
+                  onChange={(e) => setTime(snapToWholeHour(e.target.value))}
+                  step={3600}
                   className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
                   required
                 />
               </div>
             </div>
 
-            {/* Duration */}
+            {/* Duração — fixa em 1 hora (compromissos de 1 em 1 hora) */}
             <div>
               <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
                 Duração
               </label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
-              >
-                {DURATION_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <div className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-400">
+                1 hora (horário fixo)
+              </div>
             </div>
 
             {/* Lead section */}
