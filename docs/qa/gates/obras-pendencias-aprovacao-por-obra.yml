@@ -1,0 +1,39 @@
+storyId: "obras-pendencias-aprovacao-por-obra"
+title: "Badge de aprovações pendentes por obra na lista de Obras"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: fix/obras-pendencias-por-obra
+commit: pending-push
+
+checks:
+  code_review: PASS         # PendenciaCell limpo; reusa a MESMA fonte do badge do menu (obra_upload_aprovacoes/status=pendente/org_id), agregando por obra_id em memória; deep-link ?tab=aprovacoes reusado
+  unit_tests: PASS          # sem teste novo (server component, padrão 75-151/153); nenhuma suíte tocada
+  acceptance_criteria: PASS # AC1-AC6 rastreados (ver trace)
+  regressions: PASS         # colunas existentes intactas; coluna/query só sob canApprove; next build gera /dashboard/obras sem erro server/client
+  performance: PASS         # 1 select extra só p/ admin/supervisor; volume = nº pendências da org; agregação O(n) em memória
+  security: PASS            # nenhuma permissão nova; gate por role espelha o do layout; leitura via client server-side já existente (RLS vigente)
+  documentation: PASS       # story + Dev Agent Record + esta gate
+
+acceptance_criteria_trace:
+  AC1: "Coluna 'Pendências' + selo laranja '● N a aprovar' (ou '—') por obra, só p/ admin/supervisor."
+  AC2: "Soma dos selos (ativas + arquivadas) = badge 'Obras' do menu (mesma fonte; arquivadas incluídas pois o menu não filtra deleted_at)."
+  AC3: "Selo linka /dashboard/obras/{id}?tab=aprovacoes; página abre já na aba Aprovações (obra-detail-tabs.tsx:419-424 lê initialTab)."
+  AC4: "Gate canApprove = admin/supervisor; outros perfis não veem a coluna nem disparam a query."
+  AC5: "Colunas existentes + estado vazio preservados; colSpan 6 (com coluna) / 5 (sem)."
+  AC6: "Sem migration, sem backend, sem RLS; só leitura server-side existente."
+
+build:
+  tsc: "0 erros"
+  eslint: "0 (arquivo tocado)"
+  next_build: "Compiled successfully — /dashboard/obras = ƒ dynamic"
+
+manual_e2e_pending:  # não bloqueia; conferir em preview/prod
+  - "Soma dos selos == número do badge Obras do menu"
+  - "Clique no selo abre a obra na aba Aprovações"
+  - "Perfil obras/corretor não vê a coluna"
+
+files:
+  - packages/web/src/app/dashboard/obras/page.tsx
+  - docs/stories/obras-pendencias-aprovacao-por-obra.story.md
