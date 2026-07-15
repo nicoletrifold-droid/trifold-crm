@@ -97,6 +97,7 @@ empreendimento do lead),
 | 2026-07-15 | 1.0 | Validada (@po). ACs testáveis; escopo IN/OUT claro; gotchas (broker_id×user_id, guard por etapa, campos de SLA) conferidos contra o código. GO. Draft→Ready. | @po (Pax) |
 | 2026-07-15 | 1.1 | Implementada (@dev). Endpoint reativar GET+POST, componente ReativarLeadButton, props view/canReactivate na tabela, timeline lead_reactivated. tsc 0, eslint 0, build OK, 975 testes verdes. Ready→Review. | @dev (Dex) |
 | 2026-07-15 | 1.2 | QA gate **PASS** (@qa). 7 checks OK; sem regressão (975 pass); gate por role no servidor + guard 422 fora de Perdido; SLA reiniciado conforme decisão. E2E delegado a preview/prod. Review→Done. | @qa (Quinn) |
+| 2026-07-15 | 1.3 | Push por @devops. PR #197 squash-merged em `main` (`b6264990`). Deploy Vercel de produção disparado. Status confirmado Done. | @devops (Gage) |
 
 ## Dev Agent Record
 ### Agent Model Used
