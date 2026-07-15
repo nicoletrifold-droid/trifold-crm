@@ -1,0 +1,35 @@
+storyId: "ux-conversa-area-mensagens-maior"
+title: "UX: área de mensagens da conversa maior (altura responsiva)"
+verdict: PASS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: ux/conversa-area-maior
+commit: pending-push
+
+checks:
+  code_review: PASS         # 1 className na raiz do ConversationThread; scroll area já flex-1 min-h-0; header/composer shrink-0 intactos
+  unit_tests: PASS          # 89 files / 975 tests PASS
+  acceptance_criteria: PASS # AC1-AC5 (visual final no preview)
+  regressions: PASS         # só altura do container raiz; nenhum outro componente/página tocado; mobile inalterado
+  performance: PASS         # CSS puro
+  security: PASS            # n/a
+  documentation: PASS       # story + gate
+
+acceptance_criteria_trace:
+  AC1: "Desktop: área de mensagens maior (h = calc(100dvh-13rem), cresce com a tela)."
+  AC2: "Banner IA, aviso janela, botões e composer intactos (shrink-0); extra vai só pras mensagens."
+  AC3: "Piso min-h-[34rem] = nunca menor que hoje."
+  AC4: "Compartilhado /dashboard + /broker; light/dark."
+  AC5: "Mobile inalterado; sem migration/lógica."
+
+build:
+  eslint: "0 erros"
+  next_build: "Compiled successfully (Tailwind compila arbitrary values calc/min/max)"
+  tests: "vitest 89 files / 975 tests passed"
+
+note: "Mudança visual — conferir altura em telas diferentes no preview; composer/botões devem ficar fixos."
+
+files:
+  - packages/web/src/app/broker/leads/[id]/_components/conversation-thread.tsx
+  - docs/stories/ux-conversa-area-mensagens-maior.story.md
