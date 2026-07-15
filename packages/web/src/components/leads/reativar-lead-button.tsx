@@ -6,6 +6,18 @@ import { RotateCcw } from "lucide-react"
 
 type EligibleBroker = { userId: string; name: string }
 
+const ROLETA = "__roleta__"
+
+// Mensagens quando a roleta não conseguiu distribuir na hora (lead já saiu de Perdido).
+const ROLETA_PENDING_MSG: Record<string, string> = {
+  sem_corretor_disponivel: "Lead reativado. Nenhum corretor livre agora — a roleta distribui assim que houver.",
+  fora_horario: "Lead reativado. Fora do horário comercial — a roleta distribui na próxima janela.",
+  roleta_inativa: "Lead reativado, mas a roleta está desativada — o lead ficou sem corretor aguardando.",
+  sem_config: "Lead reativado, mas a roleta não está configurada — o lead ficou sem corretor aguardando.",
+  em_bolsao: "Lead reativado; aguardando distribuição.",
+  perdido: "Lead reativado; aguardando distribuição.",
+}
+
 export function ReativarLeadButton({
   leadId,
   leadName,
@@ -62,7 +74,7 @@ export function ReativarLeadButton({
 
   async function submit() {
     setError(null)
-    if (!brokerId) { setError("Selecione o corretor."); return }
+    if (!brokerId) { setError("Selecione o corretor ou a roleta."); return }
     if (!motivo.trim()) { setError("O motivo é obrigatório."); return }
     setSaving(true)
     try {
@@ -71,8 +83,17 @@ export function ReativarLeadButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ broker_id: brokerId, motivo: motivo.trim() }),
       })
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        via_roleta?: boolean
+        status?: string
+      }
       if (res.ok) {
+        // Roleta pediu distribuição mas não conseguiu agora (fora de horário / sem corretor
+        // livre / roleta inativa): o lead saiu de Perdido e fica aguardando a roleta.
+        if (data.via_roleta && data.status && data.status !== "distributed") {
+          alert(ROLETA_PENDING_MSG[data.status] ?? "Lead reativado; aguardando a roleta distribuir.")
+        }
         setOpen(false)
         setBrokerId("")
         setMotivo("")
@@ -115,7 +136,7 @@ export function ReativarLeadButton({
             </p>
 
             <label className="mt-4 block text-xs font-medium text-stone-600 dark:text-stone-300">
-              Enviar para o corretor <span className="text-red-500">*</span>
+              Enviar para <span className="text-red-500">*</span>
             </label>
             <select
               value={brokerId}
@@ -123,18 +144,24 @@ export function ReativarLeadButton({
               disabled={loading}
               className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-white"
             >
-              <option value="">{loading ? "Carregando…" : "Selecione um corretor…"}</option>
+              <option value="">{loading ? "Carregando…" : "Selecione uma opção…"}</option>
+              <option value={ROLETA}>🎲 Devolver para a roleta (distribuição automática)</option>
+              {brokers.length > 0 && <option disabled>──── ou escolha um corretor ────</option>}
               {brokers.map((b) => (
                 <option key={b.userId} value={b.userId}>
                   {b.name}
                 </option>
               ))}
             </select>
-            {fallback && !loading && (
+            {brokerId === ROLETA ? (
+              <p className="mt-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-500/10 dark:text-emerald-300">
+                🎲 A roleta vai distribuir automaticamente, na ordem dela, para o próximo corretor do empreendimento.
+              </p>
+            ) : fallback && !loading ? (
               <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                 Nenhum corretor vinculado ao empreendimento — mostrando todos os corretores ativos.
               </p>
-            )}
+            ) : null}
 
             <label className="mt-4 block text-xs font-medium text-stone-600 dark:text-stone-300">
               Motivo da reativação <span className="text-red-500">*</span>

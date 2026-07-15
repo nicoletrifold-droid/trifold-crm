@@ -1,0 +1,41 @@
+storyId: "leads-reativar-roleta"
+title: "Reativar lead perdido: opção Devolver para a roleta"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: fix/leads-reativar-roleta
+commit: pending-push
+
+checks:
+  code_review: PASS         # sentinela __roleta__ → pré-update distribuível (assigned=null, stage=novo, SLA zerado) + distributeLeadToNextBroker; modo corretor específico intacto
+  unit_tests: PASS          # 89 files / 975 tests PASS, sem regressão
+  acceptance_criteria: PASS # AC1-AC6
+  regressions: PASS         # modo corretor inalterado; distributor/crons/bolsão não tocados
+  performance: PASS         # 1 update + 1 chamada roleta (awaited); activity/audit fire-and-forget
+  security: PASS            # requireRole(admin/supervisor/gerente-comercial); admin client por org; 422 fora de Perdido
+  documentation: PASS       # story + gate
+
+acceptance_criteria_trace:
+  AC1: "Opção '🎲 Devolver para a roleta' 1ª no seletor + aviso destacado (emerald); motivo obrigatório."
+  AC2: "Update tira de Perdido (stage=novo, assigned=null, SLA zerado) → distributeLeadToNextBroker atribui o próximo corretor na ordem da roleta."
+  AC3: "Status não-distributed (sem_corretor/fora_horario/roleta_inativa/sem_config): lead fica em Aguardando atendimento; roleta-retry reprocessa; UI avisa."
+  AC4: "activity lead_reactivated via_roleta=true + roleta_status + audit; is_ai_active=false."
+  AC5: "Modo corretor específico idêntico à story base."
+  AC6: "requireRole gestores; 422 se não está em PERDIDO_STAGE_IDS; sem migration."
+
+build:
+  tsc: "0 erros"
+  eslint: "0 erros"
+  next_build: "Compiled successfully"
+  tests: "vitest 89 files / 975 tests passed"
+
+manual_e2e_pending:
+  - "Selecionar roleta → aviso destacado aparece; reativar distribui pelo rodízio e notifica o corretor"
+  - "Reativar com corretor específico continua funcionando"
+  - "Fora de horário/sem corretor: lead sai de Perdidos e fica aguardando; alerta informa o gestor"
+
+files:
+  - packages/web/src/app/api/leads/[id]/reativar/route.ts
+  - packages/web/src/components/leads/reativar-lead-button.tsx
+  - docs/stories/leads-reativar-roleta.story.md
