@@ -157,6 +157,7 @@ export async function POST(request: Request) {
       interest_level: body.interest_level || null,
       source: body.source || "other",
       utm_campaign: body.utm_campaign?.trim() || null,
+      observacao: body.observacao?.trim() || null,
       assigned_broker_id: assignedBrokerId,
       org_id: appUser.org_id,
       is_active: true,

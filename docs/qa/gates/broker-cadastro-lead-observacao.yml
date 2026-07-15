@@ -1,0 +1,34 @@
+storyId: "broker-cadastro-lead-observacao"
+title: "Campo Observação no cadastro de lead do corretor"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: feat/broker-lead-observacao
+commit: pending-push
+
+checks:
+  code_review: PASS         # textarea bound a form.observacao; enviado no POST; /api/leads persiste em leads.observacao (padrão do admin)
+  unit_tests: PASS          # 89 files / 975 tests PASS, sem regressão
+  acceptance_criteria: PASS # AC1-AC4
+  regressions: PASS         # aditivo: novo campo opcional + 1 chave no insert; demais campos intactos
+  performance: PASS         # nenhuma query nova
+  security: PASS            # /api/leads já autoriza broker; sem mudança de escopo
+  documentation: PASS       # story + gate
+
+acceptance_criteria_trace:
+  AC1: "Modal do corretor (/broker/leads) tem textarea Observação com placeholder igual ao admin."
+  AC2: "Salvo em leads.observacao; lead-edit-form já lê/exibe."
+  AC3: "Opcional; vazio grava null; demais campos inalterados."
+  AC4: "Sem migration (coluna existe — mig 154)."
+
+build:
+  tsc: "0 erros"
+  eslint: "0 erros"
+  next_build: "Compiled successfully"
+  tests: "vitest 89 files / 975 tests passed"
+
+files:
+  - packages/web/src/app/broker/_components/new-lead-modal.tsx
+  - packages/web/src/app/api/leads/route.ts
+  - docs/stories/broker-cadastro-lead-observacao.story.md
