@@ -27,6 +27,23 @@ function formatDeliveryDate(date: string | null): string {
   })
 }
 
+// Selo por obra com a fatia de aprovações pendentes (soma = badge "Obras" do menu).
+// Clica → cai direto na aba Aprovações daquela obra.
+function PendenciaCell({ obraId, count }: { obraId: string; count: number }) {
+  if (count <= 0) {
+    return <span className="text-sm text-gray-400 dark:text-stone-500">—</span>
+  }
+  return (
+    <Link
+      href={`/dashboard/obras/${obraId}?tab=aprovacoes`}
+      className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700 hover:bg-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:hover:bg-orange-500/25"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+      {count} a aprovar
+    </Link>
+  )
+}
+
 export default async function ObrasPage() {
   const user = await getServerUser()
 
@@ -48,6 +65,23 @@ export default async function ObrasPage() {
 
   const ativas = (obras ?? []).filter((o) => !o.deleted_at)
   const arquivadas = (obras ?? []).filter((o) => !!o.deleted_at)
+
+  // Aprovações de upload pendentes, quebradas por obra — mesma fonte do badge
+  // "Obras" no menu lateral (obra_upload_aprovacoes, status='pendente'), mas
+  // agrupadas por obra_id para que cada linha mostre a sua fatia. Só admin/
+  // supervisor aprovam, então só eles veem a coluna (igual ao gate do menu).
+  const canApprove = user.role === "admin" || user.role === "supervisor"
+  const pendentesPorObra: Record<string, number> = {}
+  if (canApprove) {
+    const { data: pendentes } = await supabase
+      .from("obra_upload_aprovacoes")
+      .select("obra_id")
+      .eq("org_id", user.orgId)
+      .eq("status", "pendente")
+    for (const p of pendentes ?? []) {
+      if (p.obra_id) pendentesPorObra[p.obra_id] = (pendentesPorObra[p.obra_id] ?? 0) + 1
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -84,6 +118,7 @@ export default async function ObrasPage() {
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-6 py-3">Nome</th>
               <th className="px-6 py-3">Status</th>
+              {canApprove && <th className="px-6 py-3">Pendências</th>}
               <th className="px-6 py-3">Progresso</th>
               <th className="px-6 py-3">Data prevista</th>
               <th className="px-6 py-3"></th>
@@ -106,6 +141,11 @@ export default async function ObrasPage() {
                       {statusLabel}
                     </span>
                   </td>
+                  {canApprove && (
+                    <td className="px-6 py-4">
+                      <PendenciaCell obraId={obra.id} count={pendentesPorObra[obra.id] ?? 0} />
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-24 rounded-full bg-gray-200 dark:bg-stone-700">
@@ -143,6 +183,11 @@ export default async function ObrasPage() {
                     Arquivada
                   </span>
                 </td>
+                {canApprove && (
+                  <td className="px-6 py-4">
+                    <PendenciaCell obraId={obra.id} count={pendentesPorObra[obra.id] ?? 0} />
+                  </td>
+                )}
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-24 rounded-full bg-gray-200 dark:bg-stone-700">
@@ -169,7 +214,7 @@ export default async function ObrasPage() {
             {ativas.length === 0 && arquivadas.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={canApprove ? 6 : 5}
                   className="px-6 py-12 text-center text-sm text-gray-500 dark:text-stone-400"
                 >
                   <p className="mb-3">Nenhuma obra cadastrada.</p>
