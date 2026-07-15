@@ -100,10 +100,20 @@ export async function PATCH(
   // Story 75-103: ao remarcar (muda horário/duração/local), revalida conflito.
   const reschedules = "scheduled_at" in updateFields || "duration_minutes" in updateFields || "location" in updateFields
   if (reschedules) {
+    // Compromissos de 1 em 1 hora: ao MUDAR o horário, normaliza p/ hora cheia + 1h
+    // (edições só de local/nota mantêm a duração existente).
+    const changingTime = "scheduled_at" in updateFields
     const newStart = new Date((updateFields.scheduled_at as string) ?? existing.scheduled_at)
-    const newDuration = (updateFields.duration_minutes as number) ?? existing.duration_minutes ?? 30
+    if (changingTime) newStart.setMinutes(0, 0, 0)
+    const newDuration = changingTime
+      ? 60
+      : ((updateFields.duration_minutes as number) ?? existing.duration_minutes ?? 30)
     const newLocation = ((updateFields.location as string) ?? existing.location ?? "Stand Trifold")
     const newEnd = new Date(newStart.getTime() + newDuration * 60000)
+    if (changingTime) {
+      updateFields.scheduled_at = newStart.toISOString()
+      updateFields.duration_minutes = 60
+    }
 
     const { data: others } = await supabase
       .from("appointments")

@@ -137,8 +137,11 @@ export async function POST(request: Request) {
   // existente é do Calendly — que ocupa o horário independente do local, pois o
   // Calendly não sincroniza com Google/nosso sistema).
   const location = body.location?.trim() || "Stand Trifold"
-  const duration = body.duration_minutes || 30
+  // Compromissos de 1 em 1 hora: duração fixa de 60min e início em hora cheia
+  // (guard de servidor, independente do que o cliente enviar).
+  const duration = 60
   const newStart = new Date(body.scheduled_at)
+  newStart.setMinutes(0, 0, 0)
   const newEnd = new Date(newStart.getTime() + duration * 60000)
 
   {
@@ -188,7 +191,7 @@ export async function POST(request: Request) {
       lead_id: leadId,
       broker_id: body.broker_id || appUser.id,
       property_id: body.property_id || null,
-      scheduled_at: body.scheduled_at,
+      scheduled_at: newStart.toISOString(),
       duration_minutes: duration,
       location,
       status: body.status || "scheduled",

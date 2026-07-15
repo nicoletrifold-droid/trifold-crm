@@ -1,0 +1,40 @@
+storyId: "agenda-visitas-1-hora"
+title: "Agenda: compromissos travados em 1 hora (hora cheia)"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: feat/agenda-1-hora
+commit: pending-push
+
+checks:
+  code_review: PASS         # modal trava hora cheia (step 3600 + snap) + duração fixa 60; servidor força 60 + hora cheia no POST e no PATCH (só ao mudar horário)
+  unit_tests: PASS          # 89 files / 975 tests PASS
+  acceptance_criteria: PASS # AC1-AC7 (visual final no preview)
+  regressions: PASS         # conflito por local intacto; Nicole (visit-slot.ts) e Calendly-sync não tocados; edições não-horário mantêm duração existente
+  performance: PASS         # sem query nova
+  security: PASS            # endpoints já autenticados; sem mudança de role/escopo
+  documentation: PASS       # story + gate
+
+acceptance_criteria_trace:
+  AC1: "Modal: horário em hora cheia (step 3600) + normaliza :00."
+  AC2: "Duração fixa 1h (rótulo, sem seletor)."
+  AC3: "POST força duration=60 + setMinutes(0,0,0); insert usa horário normalizado."
+  AC4: "PATCH: ao mudar horário, normaliza (hora cheia + 60) e persiste; edição não-horário mantém duração."
+  AC5: "Conflito por local (Story 75-103) segue travando sobreposição — 1 por hora/local."
+  AC6: "Sem restrição de faixa; Nicole/Calendly inalterados."
+  AC7: "Sem migration."
+
+build:
+  tsc: "0 erros"
+  eslint: "0 erros"
+  next_build: "Compiled successfully"
+  tests: "vitest 89 files / 975 tests passed"
+
+note: "Componente de modal compartilhado (dashboard + broker) — conferir no preview: modal mostra hora cheia + '1 hora', salvar e remarcar OK."
+
+files:
+  - packages/web/src/components/appointments/new-appointment-modal.tsx
+  - packages/web/src/app/api/appointments/route.ts
+  - packages/web/src/app/api/appointments/[id]/route.ts
+  - docs/stories/agenda-visitas-1-hora.story.md
