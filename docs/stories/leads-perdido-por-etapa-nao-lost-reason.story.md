@@ -67,6 +67,7 @@ para contar "perdido" por ETAPA pode ser uma story futura, se desejado.
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-15 | 1.0 | Bug fix: superfícies (pipeline, drawer, listas do corretor) passam a gate por ETAPA e não por lost_reason; limpa lost_reason ao sair de Perdido (stage + bulk); hotfix de dado 1 lead. tsc/eslint/build OK, 975 testes. Done. | @dev+@qa |
+| 2026-07-15 | 1.1 | Push por @devops. PR #199 squash-merged em `main` (`8557b15f`). Deploy Vercel de produção disparado. Hotfix de dado (Maria Inês) já aplicado antes do deploy. | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
