@@ -4,7 +4,12 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
+import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { STAGE_IDS } from "@trifold/shared"
+
+// Valor sentinela do seletor: em vez de um corretor específico, devolve o lead à roleta
+// (distribuição automática na ordem dela).
+const ROLETA = "__roleta__"
 
 // Reativar lead perdido — admin/supervisor/gerente-comercial retomam o atendimento de um
 // lead que estava em Perdido/Não Qualificado, escolhendo o corretor (do empreendimento do
@@ -126,6 +131,69 @@ export async function POST(
     return NextResponse.json({ error: "Este lead não está perdido." }, { status: 422 })
   }
 
+  const now = new Date().toISOString()
+
+  // ── Modo ROLETA: devolve o lead à roleta (distribuição automática na ordem dela) ──────
+  if (brokerUserId === ROLETA) {
+    // Coloca o lead em estado distribuível (sem corretor, fora de Perdido, SLA zerado). A
+    // roleta só pega leads assim (distributor.ts bail se assigned_broker_id/bolsao_em/perdido).
+    const { error: updateErr } = await admin
+      .from("leads")
+      .update({
+        assigned_broker_id: null,
+        stage_id: STAGE_IDS.novo,
+        distribuido_em: null, // a roleta carimba ao distribuir
+        primeiro_atendimento_em: null,
+        sla_alerta_corretor_em: null,
+        sla_alerta_gestor_em: null,
+        bolsao_em: null,
+        lost_reason: null,
+        updated_at: now,
+      })
+      .eq("id", id)
+      .eq("org_id", appUser.org_id)
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+    await admin.from("conversations").update({ is_ai_active: false }).eq("lead_id", id)
+
+    // Chama a roleta (usa admin client próprio; carimba corretor + distribuido_em + stage).
+    const result = await distributeLeadToNextBroker(id, appUser.org_id)
+    const distributed = result.status === "distributed"
+
+    await admin.from("activities").insert({
+      org_id: lead.org_id,
+      lead_id: id,
+      user_id: appUser.id,
+      type: "lead_reactivated",
+      description: distributed
+        ? "Lead reativado e distribuído pela roleta"
+        : "Lead reativado e devolvido à roleta (aguardando distribuição)",
+      metadata: {
+        motivo,
+        via_roleta: true,
+        roleta_status: result.status,
+        to_broker_id: result.brokerUserId ?? null,
+        from_broker_id: lead.assigned_broker_id,
+        previous_lost_reason: lead.lost_reason ?? null,
+      },
+    })
+
+    void logAudit({
+      org_id: lead.org_id,
+      user_id: appUser.id,
+      user_name: appUser.name,
+      action: "lead.reactivate",
+      entity_type: "lead",
+      entity_id: id,
+      entity_name: lead.name ?? id,
+      metadata: { motivo, via_roleta: true, roleta_status: result.status, previous_lost_reason: lead.lost_reason ?? null },
+      ip_address: getRequestIp(request.headers),
+    })
+
+    return NextResponse.json({ ok: true, via_roleta: true, status: result.status })
+  }
+
+  // ── Modo CORRETOR específico ──────────────────────────────────────────────────────────
   // Valida o corretor destino (usuário ativo da org, corretor ou gerente-comercial).
   const { data: target } = await admin
     .from("users")
@@ -136,8 +204,6 @@ export async function POST(
   if (!target || !target.is_active || !["broker", "gerente-comercial"].includes(target.role)) {
     return NextResponse.json({ error: "Corretor destino inválido." }, { status: 422 })
   }
-
-  const now = new Date().toISOString()
 
   // Reabre o lead: atribui corretor, volta para "Aguardando atendimento" e reinicia o
   // relógio de SLA (trata como distribuição nova — decisão de produto).
