@@ -40,6 +40,7 @@ direto); corretor via `POST /api/leads`, cujo insert **não** incluía `observac
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-15 | 1.0 | Add campo Observação no modal de cadastro de lead do corretor + persistência em `/api/leads`. tsc/eslint/build OK, 975 testes. Done. | @dev+@qa |
+| 2026-07-15 | 1.1 | Push por @devops. PR #200 squash-merged em `main` (`56ba17b9`). Deploy Vercel de produção disparado. | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
