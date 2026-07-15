@@ -1,0 +1,47 @@
+storyId: "leads-reativar-perdido"
+title: "Reativar lead perdido (motivo + corretor do empreendimento)"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-15
+branch: fix/leads-reativar-perdido
+commit: pending-push
+
+checks:
+  code_review: PASS         # endpoint espelha transferir/mark-lost; GET resolve corretores do empreendimento (broker_assignments→brokers.user_id) c/ fallback; POST valida Perdido + corretor destino
+  unit_tests: PASS          # sem teste novo (padrão telas de leads); suíte 89 files / 975 tests PASS, sem regressão
+  acceptance_criteria: PASS # AC1-AC8 (ver trace)
+  regressions: PASS         # aditivo (rota/componente novos, props c/ default); mark-lost/roleta/broker_assignments intactos; next build gera a rota
+  performance: PASS         # GET 1-2 queries pequenas; POST 1 update + inserts; push/audit fire-and-forget (void)
+  security: PASS            # requireRole(admin/supervisor/gerente-comercial) no GET e POST; admin client escopado por org_id; corretor destino validado
+  documentation: PASS       # story + Dev Agent Record + esta gate
+
+acceptance_criteria_trace:
+  AC1: "Botão Reativar por linha, só na aba Perdidos e só p/ admin/supervisor/gerente-comercial (props view+canReactivate)."
+  AC2: "Modal pede corretor (do empreendimento via broker_assignments) + motivo, ambos obrigatórios; default no corretor atual."
+  AC3: "Fallback p/ todos ativos (broker+gerente-comercial) c/ aviso quando sem empreendimento/sem vínculo disponível."
+  AC4: "Update: assigned_broker_id + stage=novo + distribuido_em=now + primeiro_atendimento_em/sla_*_em/bolsao_em=null + lost_reason=null."
+  AC5: "activity lead_reactivated (metadata.motivo, to/from broker, previous_lost_reason) + logAudit lead.reactivate + push ao corretor; timeline exibe label+motivo."
+  AC6: "Gate requireRole no GET/POST; 422 se lead não está em PERDIDO_STAGE_IDS; 422 corretor inválido."
+  AC7: "conversations.is_ai_active=false (IA não reassume; transferência manual)."
+  AC8: "Sem migration; mark-lost/roleta/broker inalterados."
+
+build:
+  tsc: "0 erros"
+  eslint: "0 erros (2 warnings pré-existentes: isAdmin não usado; ternário toggleOne)"
+  next_build: "Compiled successfully — /api/leads/[id]/reativar gerada (ƒ)"
+  tests: "vitest 89 files / 975 tests passed"
+
+manual_e2e_pending:  # não bloqueia; conferir em preview/prod
+  - "Botão só na aba Perdidos p/ gestor; corretor não vê"
+  - "Seletor lista corretores do empreendimento (ou fallback c/ aviso)"
+  - "Reativar → some de Perdidos, entra em atendimento com o corretor; push chega"
+  - "Timeline mostra 'Lead reativado' + motivo"
+
+files:
+  - packages/web/src/app/api/leads/[id]/reativar/route.ts
+  - packages/web/src/components/leads/reativar-lead-button.tsx
+  - packages/web/src/components/leads/leads-bulk-table.tsx
+  - packages/web/src/app/dashboard/leads/page.tsx
+  - packages/web/src/app/dashboard/leads/[id]/timeline/page.tsx
+  - docs/stories/leads-reativar-perdido.story.md
