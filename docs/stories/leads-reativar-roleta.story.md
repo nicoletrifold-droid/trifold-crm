@@ -70,6 +70,7 @@ roleta distribui automaticamente, **na ordem dela**, para o próximo corretor el
 | 2026-07-15 | 1.0 | Validada (@po). ACs testáveis; ordem update→distribuir e tratamento de status conferidos contra `distributor.ts`. GO. | @po (Pax) |
 | 2026-07-15 | 1.1 | Implementada (@dev). Sentinela `__roleta__` no endpoint + opção destacada no modal. tsc 0, eslint 0, build OK, 975 testes verdes. | @dev (Dex) |
 | 2026-07-15 | 1.2 | QA gate **PASS** (@qa). Sem regressão (975 pass); modo corretor inalterado; gate por role + 422 fora de Perdido; ordem update→roleta correta. E2E delegado a preview/prod. | @qa (Quinn) |
+| 2026-07-15 | 1.3 | Push por @devops. PR #198 squash-merged em `main` (`04aae9c9`). Deploy Vercel de produção disparado. Status confirmado Done. | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
