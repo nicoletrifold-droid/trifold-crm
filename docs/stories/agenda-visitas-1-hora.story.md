@@ -1,6 +1,6 @@
 # Story — Agenda: compromissos travados em 1 hora (hora cheia)
 
-**Status:** Ready (aguardando conferência de preview + merge)
+**Status:** Done
 **Epic:** Agenda comercial ([[project-agenda-comercial-flexivel]], [[project-agenda-governanca]])
 **Relacionado:** [[project-nicole-agendamento]] (Nicole já agenda visita em 1h/hora cheia — `visit-slot.ts`), conflito por local (Story 75-103)
 **Complexidade:** S (modal + POST + PATCH; sem migration)
@@ -52,6 +52,7 @@ horário/local). A Nicole já cria visita em 1h/hora cheia — isso alinha o cad
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-07-15 | 1.0 | Agenda: todo compromisso travado em 1h/hora cheia (modal + POST + PATCH); sem faixa de horário; Nicole/Calendly inalterados. tsc/eslint/build OK, 975 testes. | @dev+@qa |
+| 2026-07-15 | 1.1 | Preview conferido + aprovado. Push por @devops. PR #203 squash-merged em `main` (`684ce135`). Deploy Vercel de produção disparado. Done. | @devops (Gage) |
 
 ## Dev Agent Record
 ### File List
