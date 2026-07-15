@@ -106,6 +106,7 @@ nos itens em um clique.
 | 2026-07-15 | 1.0 | Validada (@po). ACs testáveis, escopo IN/OUT claro, dependências (migration 033, deep-link `?tab=aprovacoes`, gate do layout) conferidas contra o código. GO. Draft→Ready. | @po (Pax) |
 | 2026-07-15 | 1.1 | Implementada (@dev). `obras/page.tsx`: `canApprove` + query agrupada por `obra_id` + coluna/selo `PendenciaCell` linkando `?tab=aprovacoes`, ativas+arquivadas, colSpan ajustado. tsc 0 erros, eslint 0. Ready→Review. | @dev (Dex) |
 | 2026-07-15 | 1.2 | QA gate **PASS** (@qa). tsc 0, eslint 0, `next build` Compiled successfully (rota `/dashboard/obras` gerada como dynamic, sem erro server/client). Sem regressão nas colunas existentes; gate por role confere com o badge do menu; deep-link `?tab=aprovacoes` reusado. E2E visual (soma = badge do menu, clique abre aba) delegado à conferência em preview/prod. Review→Done. | @qa (Quinn) |
+| 2026-07-15 | 1.3 | Push por @devops. PR #196 squash-merged em `main` (`c75c03d7`). Deploy Vercel de produção disparado pelo merge. Status confirmado Done. | @devops (Gage) |
 
 ## Dev Agent Record
 ### Agent Model Used
