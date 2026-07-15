@@ -88,7 +88,7 @@ body {
    que só ganha destaque no hover). Escopado ao menu lateral para não afetar tabelas/kanban. */
 .sidebar-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(120, 113, 108, 0.35) transparent; /* stone-500 @ 35% */
+  scrollbar-color: rgba(120, 113, 108, 0.6) transparent; /* stone-500 @ 60% */
 }
 .sidebar-scroll::-webkit-scrollbar {
   width: 6px;
@@ -97,11 +97,11 @@ body {
   background: transparent;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(120, 113, 108, 0.3);
+  background: rgba(120, 113, 108, 0.55);
   border-radius: 9999px;
 }
 .sidebar-scroll:hover::-webkit-scrollbar-thumb {
-  background: rgba(120, 113, 108, 0.55);
+  background: rgba(120, 113, 108, 0.8);
 }
 
 /* Smooth page transitions */
