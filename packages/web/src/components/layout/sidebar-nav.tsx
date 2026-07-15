@@ -113,7 +113,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
           </div>
 
           {/* Nav Items — scrollable */}
-          <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
             <ul className="flex flex-col gap-0.5">
               {items.map((item) => {
                 const active = isActive(item.href)
