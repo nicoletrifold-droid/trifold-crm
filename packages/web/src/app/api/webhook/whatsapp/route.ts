@@ -18,6 +18,8 @@ import { sendLibraryMediaIfRequested } from "@web/lib/ai/send-library-media"
 import { maybeRouteInboundToRelationship } from "@web/lib/relacionamento/route-inbound"
 import { transcribeAudio } from "@web/lib/transcription/transcribe"
 import { uploadInboundMedia } from "@web/lib/media/inbound-media"
+import { sendWhatsAppTypingIndicator } from "@web/lib/whatsapp/send-typing-indicator"
+import { calculateTypingDelay } from "@web/lib/whatsapp/typing-delay"
 
 export const maxDuration = 60
 
@@ -796,6 +798,11 @@ export async function POST(request: NextRequest) {
 
       // Nicole pipeline
       if (isAiActive) {
+        // Story 75-156 — humanização: mostra "digitando…" no WhatsApp do lead
+        // enquanto a Nicole pensa. Fire-and-forget (nunca bloqueia/lança); a Meta
+        // exige o wamid inbound e também marca a mensagem como lida (✓✓).
+        void sendWhatsAppTypingIndicator(config, messageId)
+
         const { processMessage, createAnthropicClient } = await import(
           "@trifold/ai"
         )
@@ -859,6 +866,14 @@ export async function POST(request: NextRequest) {
             }
           },
         })
+
+        // Story 75-156 — atraso "humano" curto antes de enviar (teto 3s no
+        // componente por caractere). Completa o efeito do "digitando…" iniciado
+        // acima. Roda no caminho assíncrono (após o ACK do webhook), então não
+        // afeta a resposta HTTP 200 à Meta.
+        await new Promise((resolve) =>
+          setTimeout(resolve, calculateTypingDelay(response))
+        )
 
         const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
         await fetch(whatsappUrl, {
