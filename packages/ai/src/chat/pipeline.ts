@@ -29,7 +29,7 @@ import {
   guardStageForAssignedLead,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
-import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -212,6 +212,8 @@ export interface ProcessMessageParams {
   onEvent?: (event: PipelineEvent) => void
   /** Opcional: empurra a visita criada pela Nicole para o Google Calendar. */
   createCalendarEvent?: CreateCalendarEvent
+  /** Story 75-163 — remove um evento do Google Calendar (injetado pela web) — usado ao remarcar/cancelar. */
+  deleteCalendarEvent?: (googleEventId: string) => Promise<void>
   /**
    * Story 75-157 — disponibilidade REAL de mídia neste turno, computada ANTES da
    * fala pelo caller (webhook) via `resolveSendableMedia`. Torna a fala honesta:
@@ -336,6 +338,7 @@ export async function processMessageWithMetadata(
   const { supabase, anthropic, conversationId, message, orgId } = params
   const emit = params.onEvent ?? (() => {})
   const createCalendarEvent = params.createCalendarEvent
+  const deleteCalendarEvent = params.deleteCalendarEvent
 
   // 1. Load conversation state
   const state = await loadConversationState(supabase, conversationId)
@@ -540,17 +543,19 @@ export async function processMessageWithMetadata(
   let messageWithContext = message
   // Story 73-1: slot pedido pelo cliente que está LIVRE e pode ser agendado neste turno.
   let bookableSlotUtc: Date | null = null
-  // Story 75-162 — roda quando a Nicole está em modo agendamento (visit_proposed)
-  // OU quando já capturou um slot (visit_availability). Antes só visit_proposed —
-  // que quase nunca ficava true (frágil casamento de frase), então a Nicole
-  // confirmava a visita mas NÃO criava o compromisso.
+  // Story 75-163 — sinais de remarcação/cancelamento (mutação feita após a resposta).
+  let rescheduleSlotUtc: Date | null = null
+  let apptToReschedule: { id: string; googleEventId: string | null; fromWhen: string; brokerId: string | null } | null = null
+  let apptToCancel: { id: string; googleEventId: string | null; when: string; brokerId: string | null } | null = null
+  // Story 75-162 — modo agendamento: visit_proposed OU visit_availability capturado.
   const hasVisitAvailability =
     typeof (collectedData as Record<string, unknown>).visit_availability === "string"
-  if ((state?.visit_proposed || hasVisitAvailability) && conversation?.lead_id) {
-    // 1) Já existe visita futura para este lead? → só lembrar (nunca duplicar).
+  // Story 75-163 — roda SEMPRE que há lead: se existe visita ativa, permite
+  // remarcar/cancelar em qualquer etapa/dia (não depende de "modo agendamento").
+  if (conversation?.lead_id) {
     const { data: activeAppointment } = await supabase
       .from("appointments")
-      .select("scheduled_at, status")
+      .select("id, scheduled_at, status, google_event_id, broker_id")
       .eq("lead_id", conversation.lead_id)
       .in("status", ["scheduled", "confirmed"])
       .gte("scheduled_at", new Date().toISOString())
@@ -559,11 +564,60 @@ export async function processMessageWithMetadata(
       .maybeSingle()
 
     if (activeAppointment) {
-      const visitDate = new Date(activeAppointment.scheduled_at)
-      const formatted = visitDate.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" })
-      const hora = visitDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
-      messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. NÃO pergunte dia nem horário. Se perguntar, confirme: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
-    } else {
+      // Story 75-163 — visita existe: detecta REMARCAR / CANCELAR / (senão) reconfirma.
+      const apptId = activeAppointment.id as string
+      const apptWhen = new Date(activeAppointment.scheduled_at)
+      const formatted = apptWhen.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" })
+      const hora = apptWhen.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })
+      const existingWhenStr = formatBrtDateTime(apptWhen)
+      const cdA = collectedData as Record<string, unknown>
+      const nowA = new Date()
+      const pDay = typeof cdA.visit_pending_date === "string" ? isoToDayParts(cdA.visit_pending_date) : null
+      const pTime = typeof cdA.visit_pending_hour === "number"
+        ? { hour: cdA.visit_pending_hour as number, minute: (cdA.visit_pending_minute as number | undefined) ?? 0 }
+        : null
+      // Novo slot vem da MENSAGEM + pendências (NÃO do visit_availability, que guarda o slot ANTIGO).
+      const resolved = resolveVisitSlotParts({ message, now: nowA, pendingDay: pDay, pendingTime: pTime, visitAvailability: null })
+      let nDay = resolved.day
+      const nTime = resolved.time
+      // Só hora (sem dia) → assume o MESMO dia da visita atual (troca de horário no dia).
+      if (nTime && !nDay) nDay = dayPartsFromUtc(apptWhen)
+      const cancelIntent = detectCancelIntent(message)
+      const rescheduleIntent = detectRescheduleIntent(message)
+      const ev = nDay && nTime ? evaluateSlot(nDay, nTime, nowA) : { startUtc: null as Date | null, outsideHours: false }
+      const newStartUtc = ev.startUtc
+      const differs = newStartUtc ? Math.abs(newStartUtc.getTime() - apptWhen.getTime()) > 30 * 60_000 : false
+      const clearPending = () => { delete cdA.visit_pending_date; delete cdA.visit_pending_hour; delete cdA.visit_pending_minute }
+
+      if (newStartUtc && differs) {
+        // REMARCAR — novo dia+hora concreto e diferente do atual.
+        clearPending()
+        const { free, alternatives } = await checkSlotAvailability(supabase, orgId, newStartUtc, apptId)
+        const whenStr = formatBrtDateTime(newStartUtc)
+        if (free) {
+          rescheduleSlotUtc = newStartUtc
+          apptToReschedule = { id: apptId, googleEventId: (activeAppointment.google_event_id as string | null) ?? null, fromWhen: existingWhenStr, brokerId: (activeAppointment.broker_id as string | null) ?? null }
+          messageWithContext = `[SISTEMA: O cliente quer REMARCAR a visita de ${existingWhenStr} para ${whenStr}. O novo horário está LIVRE. Confirme a remarcação reafirmando o NOVO dia e horário (${whenStr}).]\n\n${message}`
+        } else {
+          const alts = alternatives.map(formatBrtDateTime).join(" ou ")
+          messageWithContext = `[SISTEMA: O cliente quer remarcar para ${whenStr}, mas esse horário está ocupado. NÃO confirme. Ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"} e mantenha a visita atual (${existingWhenStr}) até ele escolher.]\n\n${message}`
+        }
+      } else if ((rescheduleIntent || cancelIntent) && nDay && nTime && !newStartUtc) {
+        // Novo horário fora do atendimento (evaluateSlot devolveu null).
+        messageWithContext = `[SISTEMA: O novo horário pedido não serve (já passou ou fora do atendimento: seg–sex 8h–18h, sáb 8h–12h). Peça um horário válido. A visita atual (${existingWhenStr}) segue mantida.]\n\n${message}`
+      } else if (cancelIntent && !nTime && !nDay) {
+        // CANCELAR — intenção clara, sem nova data.
+        clearPending()
+        apptToCancel = { id: apptId, googleEventId: (activeAppointment.google_event_id as string | null) ?? null, when: existingWhenStr, brokerId: (activeAppointment.broker_id as string | null) ?? null }
+        messageWithContext = `[SISTEMA: O cliente quer CANCELAR a visita de ${existingWhenStr}. Confirme com gentileza que a visita foi cancelada e ofereça remarcar quando ele quiser. NÃO insista.]\n\n${message}`
+      } else if (rescheduleIntent && nDay && !nTime) {
+        cdA.visit_pending_date = dayPartsToIso(nDay)
+        messageWithContext = `[SISTEMA: O cliente quer remarcar e indicou o novo dia mas não o horário. Pergunte qual horário prefere (seg–sex 8h–18h, sáb 8h–12h).]\n\n${message}`
+      } else {
+        // Sem pedido de mudança → reconfirma o existente.
+        messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. Se o cliente NÃO pediu para mudar nem cancelar, apenas confirme com simpatia: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
+      }
+    } else if (state?.visit_proposed || hasVisitAvailability) {
       // 2) Sem visita ainda → entende o dia/horário pedido (combinando com o que
       //    ficou pendente de turnos anteriores), confere a agenda interna (que inclui
       //    Calendly) e injeta o contexto para a Nicole responder certo na MESMA mensagem.
@@ -943,6 +997,62 @@ export async function processMessageWithMetadata(
         emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker — lead not yet assigned by roleta", metadata: { lead_id: leadId, property_id: propertyId ?? null } })
       }
       } // Story 75-162 — fim do bloco de sucesso do INSERT
+    }
+
+    // Story 75-163 — REMARCAR: move o appointment, ressincroniza Google, loga e notifica.
+    if (rescheduleSlotUtc && apptToReschedule && conversation.org_id) {
+      const newStart = rescheduleSlotUtc
+      const newEnd = new Date(newStart.getTime() + VISIT_DURATION_MIN * 60_000)
+      const whenStr = formatBrtDateTime(newStart)
+      const { error: updErr } = await supabase
+        .from("appointments")
+        .update({ scheduled_at: newStart.toISOString(), status: "scheduled", notes: `Remarcada pelo cliente via Nicole (de ${apptToReschedule.fromWhen} para ${whenStr}).` })
+        .eq("id", apptToReschedule.id)
+      if (updErr) {
+        emit({ level: "error", category: "ai", event_type: "APPOINTMENT_RESCHEDULE_FAILED", message: `Falha ao remarcar: ${updErr.message}`, metadata: { lead_id: leadId, appointment_id: apptToReschedule.id } })
+      } else {
+        // Google: sem update in-place → apaga o antigo e cria o novo (best-effort).
+        if (createCalendarEvent) {
+          try {
+            if (apptToReschedule.googleEventId && deleteCalendarEvent) await deleteCalendarEvent(apptToReschedule.googleEventId)
+            const googleEventId = await createCalendarEvent({
+              title: `Visita ao decorado${leadName ? ` — ${leadName}` : ""}`,
+              description: `Visita remarcada pela Nicole.${leadPhone ? ` Telefone: ${leadPhone}.` : ""}`,
+              startAt: newStart,
+              endAt: newEnd,
+              attendeeEmail: (finalData.email as string | undefined) ?? undefined,
+            })
+            await supabase.from("appointments").update({ google_event_id: googleEventId ?? null }).eq("id", apptToReschedule.id)
+          } catch (err) {
+            emit({ level: "warn", category: "ai", event_type: "GOOGLE_CALENDAR_PUSH_FAILED", message: "Falha ao ressincronizar Google (remarcação)", metadata: { lead_id: leadId, appointment_id: apptToReschedule.id, error: String(err) } })
+          }
+        }
+        leadPatch.visit_scheduled_at = newStart.toISOString()
+        await supabase.from("activities").insert({ org_id: conversation.org_id, lead_id: leadId, type: "appointment_updated", description: `Nicole remarcou a visita de ${apptToReschedule.fromWhen} para ${whenStr} (a pedido do cliente).` })
+        emit({ level: "info", category: "ai", event_type: "APPOINTMENT_RESCHEDULED", message: `Visit rescheduled to ${whenStr}`, metadata: { lead_id: leadId, appointment_id: apptToReschedule.id, broker_user_id: apptToReschedule.brokerId, notification_broker_user_id: apptToReschedule.brokerId, lead_name: leadName, lead_phone: leadPhone, from: apptToReschedule.fromWhen, to: whenStr, scheduled_at: newStart.toISOString() } })
+      }
+    }
+
+    // Story 75-163 — CANCELAR: soft-cancel, remove do Google, loga e notifica.
+    if (apptToCancel && conversation.org_id) {
+      const { error: cancErr } = await supabase
+        .from("appointments")
+        .update({ status: "cancelled", notes: `Cancelada pelo cliente via Nicole (era ${apptToCancel.when}).` })
+        .eq("id", apptToCancel.id)
+      if (cancErr) {
+        emit({ level: "error", category: "ai", event_type: "APPOINTMENT_CANCEL_FAILED", message: `Falha ao cancelar: ${cancErr.message}`, metadata: { lead_id: leadId, appointment_id: apptToCancel.id } })
+      } else {
+        if (apptToCancel.googleEventId && deleteCalendarEvent) {
+          try {
+            await deleteCalendarEvent(apptToCancel.googleEventId)
+          } catch (err) {
+            emit({ level: "warn", category: "ai", event_type: "GOOGLE_CALENDAR_PUSH_FAILED", message: "Falha ao remover do Google (cancelamento)", metadata: { lead_id: leadId, appointment_id: apptToCancel.id, error: String(err) } })
+          }
+        }
+        leadPatch.visit_scheduled_at = null
+        await supabase.from("activities").insert({ org_id: conversation.org_id, lead_id: leadId, type: "appointment_cancelled", description: `Nicole cancelou a visita de ${apptToCancel.when} (a pedido do cliente).` })
+        emit({ level: "info", category: "ai", event_type: "APPOINTMENT_CANCELLED", message: `Visit cancelled (was ${apptToCancel.when})`, metadata: { lead_id: leadId, appointment_id: apptToCancel.id, broker_user_id: apptToCancel.brokerId, notification_broker_user_id: apptToCancel.brokerId, lead_name: leadName, lead_phone: leadPhone, was: apptToCancel.when } })
+      }
     }
 
     // Handoff — entrega ao corretor. Story 73-1: NÃO move para "Visita Agendada"
