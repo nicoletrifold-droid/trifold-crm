@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
 import { BrokerMessageInput, type OptimisticMessage } from "./broker-message-input"
-import { getBubbleStyle } from "./bubble-styles"
+import { getBubbleStyle, resolveBubbleLabel } from "./bubble-styles"
 import { WindowStatusBadge } from "./window-status-badge"
 import { AiStatusBanner } from "./ai-status-banner"
 import { ChatScrollArea } from "./chat-scroll-area"
@@ -48,6 +48,10 @@ interface ConversationThreadProps {
    * para receber INSERTs de `messages` sem reload.
    */
   conversationIds?: string[]
+  /** Story 75-165 — id do espectador: bolha do corretor mostra "Você" só se for ele. */
+  currentUserId?: string | null
+  /** Story 75-165 — mapa sent_by → nome, p/ rotular bolhas de outros corretores. */
+  senderNames?: Record<string, string>
 }
 
 /**
@@ -73,6 +77,8 @@ export function ConversationThread({
   canSend,
   notifyOnReply = false,
   conversationIds = [],
+  currentUserId = null,
+  senderNames = {},
 }: ConversationThreadProps) {
   const router = useRouter()
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
@@ -225,6 +231,7 @@ export function ConversationThread({
           <div className="space-y-3">
             {allMessages.map((msg) => {
               const style = getBubbleStyle(msg.role)
+              const label = resolveBubbleLabel(msg, { currentUserId, senderNames })
               const time = new Date(msg.created_at).toLocaleTimeString("pt-BR", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -247,9 +254,9 @@ export function ConversationThread({
                     style.side === "right" ? "items-end" : "items-start"
                   }`}
                 >
-                  {style.label && (
+                  {label && (
                     <span className="mb-0.5 px-1 text-xs text-stone-500 dark:text-stone-400">
-                      {style.label}
+                      {label}
                     </span>
                   )}
                   <div

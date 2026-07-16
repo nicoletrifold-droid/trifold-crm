@@ -25,6 +25,25 @@ export interface BubbleStyle {
   label: string
 }
 
+/**
+ * Story 75-165 — rótulo da bolha considerando QUEM enviou (atendimento compartilhado).
+ * Para mensagens do corretor (`broker`): "Você" só quando o remetente é o próprio
+ * espectador; senão o nome real de quem enviou (via `metadata.sent_by` + mapa).
+ * Sem `sent_by` (mensagens legadas/otimistas) mantém o rótulo padrão ("Você").
+ * Demais roles (lead/Nicole/sistema) usam o rótulo padrão do `getBubbleStyle`.
+ */
+export function resolveBubbleLabel(
+  msg: { role: string; metadata?: Record<string, unknown> | null },
+  opts: { currentUserId?: string | null; senderNames?: Record<string, string> }
+): string {
+  const base = getBubbleStyle(msg.role).label
+  if (msg.role !== "broker") return base
+  const sentBy = msg.metadata?.sent_by
+  if (typeof sentBy !== "string" || !sentBy) return base
+  if (opts.currentUserId && sentBy === opts.currentUserId) return "Você"
+  return opts.senderNames?.[sentBy] ?? "Corretor"
+}
+
 export function getBubbleStyle(role: string): BubbleStyle {
   switch (role) {
     case "broker":

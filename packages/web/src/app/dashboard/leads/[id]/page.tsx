@@ -129,6 +129,21 @@ export default async function LeadDetailPage({
   // conversa ativa, mesmo critério do /broker.
   const activeConversation = conversations?.[0]
   const conversationIds = (conversations ?? []).map((c) => c.id as string)
+
+  // Story 75-165 — nomes dos corretores que enviaram (metadata.sent_by), para a
+  // conversa mostrar QUEM falou (não "Você" para todos).
+  const senderIds = [
+    ...new Set(
+      threadMessages
+        .filter((m) => m.role === "broker" && typeof m.metadata?.sent_by === "string")
+        .map((m) => m.metadata!.sent_by as string)
+    ),
+  ]
+  let senderNames: Record<string, string> = {}
+  if (senderIds.length > 0) {
+    const { data: senders } = await supabase.from("users").select("id, name").in("id", senderIds)
+    senderNames = Object.fromEntries((senders ?? []).map((u) => [u.id as string, (u.name as string) ?? ""]))
+  }
   const conversaLastMessageAt = activeConversation?.last_message_at
     ? new Date(activeConversation.last_message_at as string)
     : null
@@ -344,6 +359,8 @@ export default async function LeadDetailPage({
           canSend={canSendConversa}
           conversationIds={conversationIds}
           notifyOnReply={conversaNotifyOnReply}
+          currentUserId={user.id}
+          senderNames={senderNames}
         />
       )}
 
