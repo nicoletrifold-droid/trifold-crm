@@ -65,6 +65,21 @@ export default async function BrokerLeadDetailPage({
         .limit(50)
     : { data: [] }
 
+  // Story 75-165 — nomes de quem enviou (metadata.sent_by) p/ rotular as bolhas
+  // do corretor com o remetente real (não "Você" para todos no atendimento compartilhado).
+  const senderIds = [
+    ...new Set(
+      (messages ?? [])
+        .filter((m) => m.role === "broker" && typeof (m.metadata as Record<string, unknown> | null)?.sent_by === "string")
+        .map((m) => (m.metadata as Record<string, unknown>).sent_by as string)
+    ),
+  ]
+  let senderNames: Record<string, string> = {}
+  if (senderIds.length > 0) {
+    const { data: senders } = await supabase.from("users").select("id, name").in("id", senderIds)
+    senderNames = Object.fromEntries((senders ?? []).map((u) => [u.id as string, (u.name as string) ?? ""]))
+  }
+
   const stage = Array.isArray(lead.kanban_stages)
     ? lead.kanban_stages[0]
     : lead.kanban_stages
@@ -186,6 +201,8 @@ export default async function BrokerLeadDetailPage({
           (lead.metadata as { notify_broker_on_reply?: boolean } | null)
             ?.notify_broker_on_reply
         )}
+        currentUserId={user.id}
+        senderNames={senderNames}
       />
     </div>
   )
