@@ -15,7 +15,7 @@ interface Blast {
   email_templates: { name: string } | null
 }
 
-const STATUS_STYLES: Record<string, string> = {
+export const STATUS_STYLES: Record<string, string> = {
   draft: "bg-stone-100 text-stone-500",
   scheduled: "bg-blue-100 text-blue-700",
   in_progress: "bg-amber-100 text-amber-700",
@@ -23,7 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-red-100 text-red-500",
 }
 
-const STATUS_LABELS: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   draft: "Rascunho",
   scheduled: "Agendado",
   in_progress: "Em andamento",
@@ -168,6 +168,12 @@ export function BlastList() {
                     {STATUS_LABELS[b.status] ?? b.status}
                   </span>
                   <div className="flex items-center justify-end gap-3">
+                    <Link
+                      href={`/dashboard/sistema/email-blasts/${b.id}`}
+                      className="text-xs text-indigo-600 hover:underline"
+                    >
+                      Ver detalhes
+                    </Link>
                     {canCancel && (
                       <button
                         onClick={() => setCancelId(b.id)}
