@@ -1,7 +1,7 @@
 # Story 75-166 — Texto-espelho da abertura acompanha o template Meta ("da equipe Trifold")
 
 ## Metadata
-- **Status:** Done · **Epic:** Atendimento WhatsApp do corretor · **PR:** — · **Complexidade:** XS (1 ponto) · **Branch:** feat/75-166-espelho-abertura-da-equipe-trifold
+- **Status:** Done · **Epic:** Atendimento WhatsApp do corretor · **PR:** #215 · deploy 47b3a65 · **Complexidade:** XS (1 ponto) · **Branch:** feat/75-166-espelho-abertura-da-equipe-trifold
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
