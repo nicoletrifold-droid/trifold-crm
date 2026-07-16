@@ -1,7 +1,7 @@
 # Story 75-159 — Mídia enviada pelo corretor não aparece na conversa (org_id quebra o INSERT)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Nicole envia mídia (biblioteca) · **PR:** — · **Complexidade:** S (2 pontos) · **Branch:** feat/75-159-midia-corretor-nao-aparece-conversa
+- **Status:** Done · **Epic:** Nicole envia mídia (biblioteca) · **PR:** #208 · **Complexidade:** S (2 pontos) · **Branch:** feat/75-159-midia-corretor-nao-aparece-conversa
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -43,6 +43,7 @@ Causa raiz (confirmada no código + banco): o endpoint `POST /api/nicole/media/[
 - Coverage: sem unit test (rota de API sem harness de mock no repo; idem send-file). Fix espelha caminho comprovado (send-file) + evidência no banco de que inserts broker funcionam. Validação definitiva = envio real.
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #208** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit 47035c4). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 4 ACs, 1007/1007.
 - 2026-07-16 — @dev — Fix aplicado (remove org_id + top-level cols + guard de erro). tsc/eslint/1007. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
