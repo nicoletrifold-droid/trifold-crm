@@ -1,7 +1,7 @@
 # Story 75-161 — Capturar o nome do lead mesmo em minúsculas (quando a Nicole acabou de perguntar)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Nicole — qualificação · **PR:** — · **Complexidade:** S (3 pontos) · **Branch:** feat/75-161-capturar-nome-minusculo
+- **Status:** Done · **Epic:** Nicole — qualificação · **PR:** #210 · **Complexidade:** S (3 pontos) · **Branch:** feat/75-161-capturar-nome-minusculo
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -44,6 +44,7 @@ Decisão do Marcos: capturar o minúsculo **só quando a Nicole acabou de pergun
 - **PASS.** AC1 (minúsculo "maicon" → "Maicon" quando nameExpected) ✓ · AC2 (sem nameExpected não captura) ✓ · AC3 (stoplist: quero/não sei/apartamento não viram nome) ✓ · AC4 (fluxo capitalizado sem regressão + capitaliza) ✓ · AC5 (tsc/vitest 1012/1012, +5) ✓.
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #210** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit 9507cf3). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 5 ACs, 1012/1012.
 - 2026-07-16 — @dev — Implementado (nameExpected + stoplist + capitalizeName). tsc/1012. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
