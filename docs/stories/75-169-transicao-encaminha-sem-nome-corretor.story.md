@@ -1,7 +1,7 @@
 # Story 75-169 — Mensagem de transição: Nicole encaminha (sem citar o nome do corretor)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Transferir conversa / atendimento · **PR:** — · **Complexidade:** XS (1 ponto) · **Branch:** feat/75-169-transicao-encaminha-sem-nome-corretor
+- **Status:** Done · **Epic:** Transferir conversa / atendimento · **PR:** #218 · deploy d216261 · **Complexidade:** XS (1 ponto) · **Branch:** feat/75-169-transicao-encaminha-sem-nome-corretor
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -33,6 +33,7 @@ A mensagem automática de transição dizia *"Olá {lead}! Sou {corretor}, da eq
 - **PASS.** AC1 (novo texto, sem nome) ✓ · AC2 (sem nome do lead → "Olá! …", sem undefined) ✓ · AC3 (idempotência `shouldSendTransition` mantida) ✓ · AC4 (não cita "Sou {nome}") ✓ · AC5 (tsc/eslint/1033) ✓.
 
 ## Change Log
+- 2026-07-16 — @devops — PR #218 + merge. Deploy prod **SUCCESS** (d216261). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 5 ACs, 1033/1033.
 - 2026-07-16 — @dev — Novo texto de transição sem nome do corretor.
 - 2026-07-16 — @po/@sm — GO. Story criada.
