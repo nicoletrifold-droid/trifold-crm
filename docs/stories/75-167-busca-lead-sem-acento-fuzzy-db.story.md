@@ -1,7 +1,7 @@
 # Story 75-167 — Busca de lead sem acento + fuzzy (lado banco: Leads, Pipeline, API)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Busca de leads · **PR:** — · **Complexidade:** M (5 pontos) · **Branch:** feat/75-167-busca-lead-sem-acento-fuzzy-db
+- **Status:** Done · **Epic:** Busca de leads · **PR:** #216 · deploy 567f7cb · **Complexidade:** M (5 pontos) · **Branch:** feat/75-167-busca-lead-sem-acento-fuzzy-db
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -41,6 +41,7 @@ Marcos: buscar "andreia" não acha "Andréia" (acento), e "maicon" não acha "ma
 - **PASS.** AC1 (acento nos 3 sites — validado em prod) ✓ · AC2 (fuzzy/typo via RPC — validado) ✓ · AC3 (filtros/paginação preservados: só o trecho de nome muda) ✓ · AC4 (telefone por dígitos) ✓ · AC5 (termo vazio → sem filtro) ✓ · AC6 (migration aditiva; tsc/eslint/1030) ✓. Nota: fuzzy traz nomes ranqueados por similaridade (esperado; trade-off avisado ao Marcos).
 
 ## Change Log
+- 2026-07-16 — @devops — PR #216 + merge. Deploy prod **SUCCESS** (567f7cb). Migration 174 já aplicada. Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 6 ACs, 1030/1030.
 - 2026-07-16 — @dev — Migration 174 (prod) + helper + 3 sites DB. tsc/eslint/1030. Status Ready → InReview.
 - 2026-07-16 — @po — **GO**. Draft → Ready.
