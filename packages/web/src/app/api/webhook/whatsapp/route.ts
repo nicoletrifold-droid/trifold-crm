@@ -810,7 +810,7 @@ export async function POST(request: NextRequest) {
           "@trifold/ai"
         )
         // Story 73-1: injeta o push pro Google Calendar (mantém packages/ai desacoplado).
-        const { createCalendarEvent } = await import("@web/lib/google-calendar")
+        const { createCalendarEvent, deleteCalendarEvent } = await import("@web/lib/google-calendar")
 
         const anthropic = createAnthropicClient()
 
@@ -836,6 +836,7 @@ export async function POST(request: NextRequest) {
           orgId,
           mediaBlock: asyncMediaBlock,
           createCalendarEvent,
+          deleteCalendarEvent,
           mediaContext: {
             requested: sendableMedia.kinds.length > 0,
             willSend: sendableMedia.chosen.length > 0,
@@ -880,6 +881,32 @@ export async function POST(request: NextRequest) {
                   leadPhone: (event.metadata?.lead_phone as string | null) ?? null,
                 }).catch((err) =>
                   console.error("[appointment-notify] dispatch error:", err)
+                )
+              }
+            }
+
+            // Story 75-163 — notifica o corretor quando a Nicole REMARCA ou CANCELA.
+            if (
+              event.event_type === "APPOINTMENT_RESCHEDULED" ||
+              event.event_type === "APPOINTMENT_CANCELLED"
+            ) {
+              const notifyBrokerUserId =
+                (event.metadata?.notification_broker_user_id as string | null) ??
+                (event.metadata?.broker_user_id as string | null)
+              if (notifyBrokerUserId) {
+                const isCancel = event.event_type === "APPOINTMENT_CANCELLED"
+                void notifyBrokerOfAppointment({
+                  orgId,
+                  brokerUserId: notifyBrokerUserId,
+                  leadId: (event.metadata?.lead_id as string) ?? lead!.id,
+                  leadName: (event.metadata?.lead_name as string | null) ?? null,
+                  leadPhone: (event.metadata?.lead_phone as string | null) ?? null,
+                  variant: isCancel ? "cancelled" : "rescheduled",
+                  whenStr: isCancel
+                    ? (event.metadata?.was as string | null) ?? null
+                    : (event.metadata?.to as string | null) ?? null,
+                }).catch((err) =>
+                  console.error("[appointment-notify] reschedule/cancel dispatch error:", err)
                 )
               }
             }

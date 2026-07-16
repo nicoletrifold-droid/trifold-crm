@@ -26,12 +26,16 @@ export interface NotifyAppointmentParams {
   leadId: string
   leadName: string | null
   leadPhone: string | null
+  /** Story 75-163 — tipo do evento (default "created"). */
+  variant?: "created" | "rescheduled" | "cancelled"
+  /** Story 75-163 — data/hora relevante (novo horário na remarcação; horário cancelado). */
+  whenStr?: string | null
 }
 
 export async function notifyBrokerOfAppointment(
   params: NotifyAppointmentParams
 ): Promise<void> {
-  const { orgId, brokerUserId, leadId, leadName, leadPhone } = params
+  const { orgId, brokerUserId, leadId, leadName, leadPhone, variant = "created", whenStr } = params
 
   // AC3: no broker assigned → no notification.
   if (!brokerUserId) return
@@ -82,10 +86,21 @@ export async function notifyBrokerOfAppointment(
         notify_email: cfg?.notify_email ?? true,
         notify_whatsapp: cfg?.notify_whatsapp ?? true,
       },
-      context: {
-        title: "Visita Agendada!",
-        body: `${leadDisplayName} agendou uma visita com a Nicole.`,
-      },
+      context:
+        variant === "cancelled"
+          ? {
+              title: "Visita cancelada",
+              body: `${leadDisplayName} cancelou a visita${whenStr ? ` de ${whenStr}` : ""} (via Nicole).`,
+            }
+          : variant === "rescheduled"
+          ? {
+              title: "Visita remarcada",
+              body: `${leadDisplayName} remarcou a visita${whenStr ? ` para ${whenStr}` : ""} (via Nicole).`,
+            }
+          : {
+              title: "Visita Agendada!",
+              body: `${leadDisplayName} agendou uma visita com a Nicole.`,
+            },
     })
   } catch (err) {
     // AC6: best-effort — never break the scheduling flow.

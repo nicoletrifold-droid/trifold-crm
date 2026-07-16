@@ -7,10 +7,36 @@ import {
   dayPartsToIso,
   isoToDayParts,
   resolveVisitSlotParts,
+  detectCancelIntent,
+  detectRescheduleIntent,
 } from "./visit-slot"
 
 // Âncora: 2026-06-18T17:00:00Z = quinta-feira 14:00 em BRT (UTC-3).
 const NOW = new Date("2026-06-18T17:00:00Z")
+
+describe("detectCancelIntent / detectRescheduleIntent (Story 75-163)", () => {
+  it("cancelar: pega variações comuns", () => {
+    expect(detectCancelIntent("quero cancelar a visita")).toBe(true)
+    expect(detectCancelIntent("preciso desmarcar")).toBe(true)
+    expect(detectCancelIntent("não vou poder ir mais")).toBe(true)
+    expect(detectCancelIntent("desisti da visita")).toBe(true)
+  })
+  it("cancelar: não dispara em conversa normal", () => {
+    expect(detectCancelIntent("que horas é a visita?")).toBe(false)
+    expect(detectCancelIntent("confirmo sim, estarei lá")).toBe(false)
+    expect(detectCancelIntent(null)).toBe(false)
+  })
+  it("remarcar: pega variações comuns", () => {
+    expect(detectRescheduleIntent("posso remarcar?")).toBe(true)
+    expect(detectRescheduleIntent("dá pra mudar o horário?")).toBe(true)
+    expect(detectRescheduleIntent("queria trocar pra outro dia")).toBe(true)
+    expect(detectRescheduleIntent("consigo antecipar a visita?")).toBe(true)
+  })
+  it("remarcar: não dispara em conversa normal", () => {
+    expect(detectRescheduleIntent("obrigado, até sábado")).toBe(false)
+    expect(detectRescheduleIntent(null)).toBe(false)
+  })
+})
 
 describe("resolveVisitSlotParts (Story 75-162)", () => {
   it("resolve dia+hora só do visit_availability quando a msg não traz (caso Andréia)", () => {

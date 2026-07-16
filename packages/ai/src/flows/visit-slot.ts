@@ -142,6 +142,23 @@ export function parseTimeParts(message: string): { hour: number; minute: number 
 
 export type TimeParts = { hour: number; minute: number }
 
+// Story 75-163 — intenção de CANCELAR a visita (sem nova data).
+const CANCEL_RE = /\bcancelar?\b|\bcancela\b|\bdesmarcar?\b|\bdesmarca\b|\bnao vou (?:poder|conseguir)? ?(?:mais )?ir\b|\bnao (?:posso|vou) mais\b|\bdesist[oiê]|\bnao quero mais (?:a )?visita\b/
+// Story 75-163 — intenção de REMARCAR (trocar dia/horário).
+const RESCHEDULE_RE = /\bremarca\w*\b|\breagenda\w*\b|\bmuda\w*\b|\btroca\w*\b|\badia\w*\b|\bantecipa\w*\b|\boutro dia\b|\boutro hor[aá]rio\b|\boutra hora\b|\bpassar para\b|\btransferir\b|\bmudar o (?:dia|hor[aá]rio)\b/
+
+/** Story 75-163 — intenção clara de CANCELAR a visita (texto normalizado). */
+export function detectCancelIntent(text: string | null | undefined): boolean {
+  if (!text) return false
+  return CANCEL_RE.test(stripAccents(text).toLowerCase())
+}
+
+/** Story 75-163 — intenção de REMARCAR (trocar dia/horário) a visita. */
+export function detectRescheduleIntent(text: string | null | undefined): boolean {
+  if (!text) return false
+  return RESCHEDULE_RE.test(stripAccents(text).toLowerCase())
+}
+
 /**
  * Story 75-162 — resolve dia+hora do slot combinando as fontes, na ordem:
  * 1) mensagem atual do lead, 2) pendências de turnos anteriores, 3) `visit_availability`
@@ -164,6 +181,12 @@ export function resolveVisitSlotParts(input: {
     if (!time) time = parseTimeParts(visitAvailability)
   }
   return { day, time }
+}
+
+/** Story 75-163 — DayParts (BRT) de uma data UTC (ex.: dia da visita atual, p/ troca só-de-horário). */
+export function dayPartsFromUtc(d: Date): DayParts {
+  const p = brtParts(d)
+  return { y: p.y, m: p.m, d: p.d }
 }
 
 /** "YYYY-MM-DD" (mês 1-based) para persistir o dia pendente em conversation_state. */
@@ -224,24 +247,30 @@ export function parseRequestedSlot(message: string, now: Date): ParsedSlot {
   return result
 }
 
-/** Slot livre se não há appointment ativo sobrepondo [start, start+60min). */
+/**
+ * Slot livre se não há appointment ativo sobrepondo [start, start+60min).
+ * Story 75-163 — `excludeAppointmentId` ignora a PRÓPRIA visita do lead ao remarcar
+ * (senão mover pra perto do mesmo horário conflitaria consigo mesma).
+ */
 async function isSlotFree(
   supabase: SupabaseClient,
   orgId: string,
-  startUtc: Date
+  startUtc: Date,
+  excludeAppointmentId?: string | null
 ): Promise<boolean> {
   const windowStart = new Date(startUtc.getTime() - (VISIT_DURATION_MIN - 1) * 60_000).toISOString()
   const windowEnd = new Date(startUtc.getTime() + (VISIT_DURATION_MIN - 1) * 60_000).toISOString()
 
-  const { data } = await supabase
+  let q = supabase
     .from("appointments")
     .select("id")
     .eq("org_id", orgId)
     .in("status", ["scheduled", "confirmed"])
     .gt("scheduled_at", windowStart)
     .lt("scheduled_at", windowEnd)
-    .limit(1)
-    .maybeSingle()
+  if (excludeAppointmentId) q = q.neq("id", excludeAppointmentId)
+
+  const { data } = await q.limit(1).maybeSingle()
 
   return !data
 }
@@ -253,9 +282,10 @@ async function isSlotFree(
 export async function checkSlotAvailability(
   supabase: SupabaseClient,
   orgId: string,
-  startUtc: Date
+  startUtc: Date,
+  excludeAppointmentId?: string | null
 ): Promise<{ free: boolean; alternatives: Date[] }> {
-  if (await isSlotFree(supabase, orgId, startUtc)) {
+  if (await isSlotFree(supabase, orgId, startUtc, excludeAppointmentId)) {
     return { free: true, alternatives: [] }
   }
 
@@ -287,7 +317,7 @@ export async function checkSlotAvailability(
 
   for (const c of candidates) {
     if (alternatives.length >= 3) break
-    if (await isSlotFree(supabase, orgId, c)) alternatives.push(c)
+    if (await isSlotFree(supabase, orgId, c, excludeAppointmentId)) alternatives.push(c)
   }
 
   return { free: false, alternatives }
