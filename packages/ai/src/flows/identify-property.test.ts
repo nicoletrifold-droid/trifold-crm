@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { identifyProperty } from "./identify-property"
+import { identifyProperty, identifyPropertyUnique } from "./identify-property"
 
 const PROPERTIES = [
   { id: "vind-id", name: "Vind Residence", slug: "vind-residence" },
@@ -94,5 +94,30 @@ describe("identifyProperty", () => {
     // Falls back to checking [slug, name.toLowerCase()] = ["vind-residence", "vind residence"]
     const result = identifyProperty("Gosto do Vind Residence", {}, PROPERTIES)
     expect(result).toBe("vind-id")
+  })
+})
+
+describe("identifyPropertyUnique (Story 75-158)", () => {
+  it("resolve quando exatamente 1 empreendimento casa", () => {
+    expect(identifyPropertyUnique("quero o Vind", PROPERTIES_MATCHING)).toBe("vind-id")
+    expect(identifyPropertyUnique("me fale do Yarden", PROPERTIES_MATCHING)).toBe("yarden-id")
+  })
+
+  it("resolve pelo CONTEXTO (frase da Nicole citando so um)", () => {
+    const ctx = "O Vind tem tudo a ver com voce, Maicon! O que achou?"
+    expect(identifyPropertyUnique(ctx, PROPERTIES_MATCHING)).toBe("vind-id")
+  })
+
+  it("NAO adivinha quando 2+ empreendimentos aparecem (ambiguo → null)", () => {
+    expect(identifyPropertyUnique("vi o Vind e o Yarden", PROPERTIES_MATCHING)).toBeNull()
+  })
+
+  it("null quando nenhum casa ou texto vazio", () => {
+    expect(identifyPropertyUnique("bom dia, tudo bem?", PROPERTIES_MATCHING)).toBeNull()
+    expect(identifyPropertyUnique("", PROPERTIES_MATCHING)).toBeNull()
+  })
+
+  it("keyword de amenidade unica de um empreendimento resolve (rooftop → Yarden)", () => {
+    expect(identifyPropertyUnique("tem rooftop?", PROPERTIES_MATCHING)).toBe("yarden-id")
   })
 })

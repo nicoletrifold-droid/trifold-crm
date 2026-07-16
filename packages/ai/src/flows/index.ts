@@ -1,4 +1,4 @@
-export { identifyProperty } from "./identify-property"
+export { identifyProperty, identifyPropertyUnique } from "./identify-property"
 export {
   calculateQualificationScore,
   getNextQualificationStep,
