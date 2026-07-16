@@ -4,6 +4,7 @@ import {
   detectMaterialRequest,
   selectAssets,
   sendLibraryMediaIfRequested,
+  resolveSendableMedia,
   MAX_MEDIA_PER_TURN,
   type MediaAsset,
 } from "./send-library-media"
@@ -135,6 +136,7 @@ function fakeAdmin(config: {
     b.select = chain
     b.eq = chain
     b.not = chain
+    b.order = chain
     b.limit = chain
     b.maybeSingle = () => Promise.resolve({ data: tables[table]?.single ?? null })
     b.insert = (row: Record<string, unknown>) => {
@@ -209,6 +211,113 @@ describe("sendLibraryMediaIfRequested (I/O)", () => {
     const n = await sendLibraryMediaIfRequested(admin as never, { ...baseArgs, text: "bom dia" })
     expect(n).toBe(0)
     expect(fetch).not.toHaveBeenCalled()
+  })
+})
+
+// Fake admin por tabela, com suporte a .order (usado por resolveSendableMedia).
+function fakeDb(tables: Record<string, { list?: unknown[]; single?: unknown }>) {
+  function builder(table: string) {
+    const b: Record<string, unknown> = {}
+    const chain = () => b
+    b.select = chain
+    b.eq = chain
+    b.not = chain
+    b.order = chain
+    b.limit = chain
+    b.maybeSingle = () => Promise.resolve({ data: tables[table]?.single ?? null })
+    b.insert = () => Promise.resolve({ error: null })
+    b.then = (resolve: (v: unknown) => void) => resolve({ data: tables[table]?.list ?? [] })
+    return b
+  }
+  return { from: (t: string) => builder(t) } as never
+}
+
+const VIND_FULL = [
+  { id: "planta", title: "Planta", category: "planta", file_url: "u", file_name: "p.png", file_type: "image", property_id: "vind", property: { name: "Vind Residence" } },
+  { id: "fachada", title: "Fachada", category: "fachada", file_url: "u", file_name: "f.jpg", file_type: "image", property_id: "vind", property: { name: "Vind Residence" } },
+]
+
+describe("resolveSendableMedia (Story 75-157)", () => {
+  it("AC1 — caso Maicon: resolve pelo empreendimento estabelecido no CONTEXTO ('Vind'), sem property_interest_id", async () => {
+    const admin = fakeDb({
+      leads: { single: { property_interest_id: null } },
+      agent_media_assets: { list: VIND_FULL },
+      messages: { list: [{ content: "O Vind tem tudo a ver com voce, Maicon!" }] },
+      properties: { single: { name: "Vind Residence" } },
+    })
+    const r = await resolveSendableMedia(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "voce tem alguma imagem?",
+    })
+    expect(r.skipReason).toBeNull()
+    expect(r.propertyId).toBe("vind")
+    expect(r.propertyName).toBe("Vind Residence")
+    expect(r.chosen.length).toBeGreaterThan(0)
+  })
+
+  it("usa property_interest_id direto quando presente", async () => {
+    const admin = fakeDb({
+      leads: { single: { property_interest_id: "vind" } },
+      agent_media_assets: { list: VIND_FULL },
+      messages: { list: [] },
+      properties: { single: { name: "Vind Residence" } },
+    })
+    const r = await resolveSendableMedia(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+    })
+    expect(r.skipReason).toBeNull()
+    expect(r.chosen.some((a) => a.id === "planta")).toBe(true)
+  })
+
+  it("ambíguo (Vind E Yarden citados) → NÃO adivinha (no_property)", async () => {
+    const MIX = [
+      ...VIND_FULL,
+      { id: "y1", title: "Fachada Y", category: "fachada", file_url: "u", file_name: "y.jpg", file_type: "image", property_id: "yarden", property: { name: "Yarden" } },
+    ]
+    const admin = fakeDb({
+      leads: { single: { property_interest_id: null } },
+      agent_media_assets: { list: MIX },
+      messages: { list: [{ content: "vi o Vind e o Yarden" }] },
+    })
+    const r = await resolveSendableMedia(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "quero fotos",
+    })
+    expect(r.skipReason).toBe("no_property")
+    expect(r.chosen).toHaveLength(0)
+  })
+
+  it("empreendimento definido mas sem asset ativo → no_assets", async () => {
+    const admin = fakeDb({
+      leads: { single: { property_interest_id: "vind" } },
+      agent_media_assets: { list: [] },
+      messages: { list: [] },
+    })
+    const r = await resolveSendableMedia(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+    })
+    expect(r.skipReason).toBe("no_assets")
+    expect(r.propertyId).toBe("vind")
+  })
+
+  it("tudo já enviado antes (dedup) → none_selected", async () => {
+    const admin = fakeDb({
+      leads: { single: { property_interest_id: "vind" } },
+      agent_media_assets: { list: VIND_FULL },
+      messages: { list: [{ metadata: { media_asset_id: "planta" } }, { metadata: { media_asset_id: "fachada" } }] },
+      properties: { single: { name: "Vind Residence" } },
+    })
+    const r = await resolveSendableMedia(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta e a fachada",
+    })
+    expect(r.skipReason).toBe("none_selected")
+  })
+
+  it("sem pedido de material → no_request", async () => {
+    const admin = fakeDb({ leads: { single: { property_interest_id: "vind" } }, agent_media_assets: { list: VIND_FULL } })
+    const r = await resolveSendableMedia(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "bom dia",
+    })
+    expect(r.skipReason).toBe("no_request")
+    expect(r.chosen).toHaveLength(0)
   })
 })
 

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { hasConfirmedDay, resolveOffHoursResponse, buildNoReintroContext } from "./pipeline"
+import {
+  hasConfirmedDay,
+  resolveOffHoursResponse,
+  buildNoReintroContext,
+  mediaContextLine,
+} from "./pipeline"
 import { OFF_HOURS_PROMPT } from "../prompts"
 
 describe("hasConfirmedDay", () => {
@@ -136,5 +141,35 @@ describe("buildNoReintroContext", () => {
   it("returns instruction when first message is from assistant", () => {
     const history = [{ role: "assistant", content: "Olá!" }]
     expect(buildNoReintroContext(history)).toContain("JA se apresentou")
+  })
+})
+
+describe("mediaContextLine (Story 75-157 — fala honesta sobre mídia)", () => {
+  it("sem pedido de material → null (nada a instruir)", () => {
+    expect(mediaContextLine(undefined)).toBeNull()
+    expect(mediaContextLine({ requested: false, willSend: false })).toBeNull()
+  })
+
+  it("willSend=true → instrui a comentar o envio", () => {
+    const line = mediaContextLine({ requested: true, willSend: true, empreendimento: "Vind Residence" })
+    expect(line).toContain("ESTAO SENDO ENVIADAS")
+    expect(line).toContain("Vind Residence")
+  })
+
+  it("sem empreendimento definido → manda PERGUNTAR, não prometer", () => {
+    const line = mediaContextLine({ requested: true, willSend: false, empreendimento: null, reason: "no_property" })
+    expect(line).toContain("NAO diga que enviou")
+    expect(line?.toLowerCase()).toContain("qual empreendimento")
+  })
+
+  it("empreendimento sem material → oferece visita, não promete", () => {
+    const line = mediaContextLine({ requested: true, willSend: false, empreendimento: "Yarden", reason: "no_assets" })
+    expect(line).toContain("NAO ha esse material disponivel")
+    expect(line).toContain("decorado")
+  })
+
+  it("tudo já enviado (dedup) → não reenviar/prometer de novo", () => {
+    const line = mediaContextLine({ requested: true, willSend: false, empreendimento: "Vind Residence", reason: "none_selected" })
+    expect(line).toContain("ja foram enviadas antes")
   })
 })

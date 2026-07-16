@@ -211,6 +211,44 @@ export interface ProcessMessageParams {
   onEvent?: (event: PipelineEvent) => void
   /** Opcional: empurra a visita criada pela Nicole para o Google Calendar. */
   createCalendarEvent?: CreateCalendarEvent
+  /**
+   * Story 75-157 — disponibilidade REAL de mídia neste turno, computada ANTES da
+   * fala pelo caller (webhook) via `resolveSendableMedia`. Torna a fala honesta:
+   * a Nicole só afirma que enviou quando `willSend` for true.
+   */
+  mediaContext?: MediaAvailability
+}
+
+/** Story 75-157 — sinal de disponibilidade de mídia passado ao prompt. */
+export interface MediaAvailability {
+  /** O lead pediu material neste turno. */
+  requested: boolean
+  /** Há material que SERÁ enviado agora (após dedup). */
+  willSend: boolean
+  /** Nome do empreendimento resolvido, se houver. */
+  empreendimento?: string | null
+  /** Motivo de não enviar, quando `willSend` é false. */
+  reason?: "no_request" | "no_property" | "no_assets" | "none_selected" | null
+}
+
+/**
+ * Story 75-157 — Monta a linha honesta de MATERIAL VISUAL para o CONVERSATION
+ * CONTEXT (vem DEPOIS das guardrails, então prevalece por turno). Pura/testável.
+ * Retorna `null` quando não há pedido de material (nada a instruir).
+ */
+export function mediaContextLine(mc: MediaAvailability | undefined): string | null {
+  if (!mc || !mc.requested) return null
+  const emp = mc.empreendimento ? ` do ${mc.empreendimento}` : ""
+  if (mc.willSend) {
+    return `MATERIAL VISUAL: neste turno as imagens${emp} ESTAO SENDO ENVIADAS junto com a sua resposta. Comente de forma curta e natural que esta enviando (ex: "Te mandei aqui a planta e umas fotos, da uma olhada!").`
+  }
+  if (mc.reason === "none_selected") {
+    return "MATERIAL VISUAL: o lead pediu material, mas as imagens que voce tem ja foram enviadas antes nesta conversa. NAO diga que esta enviando de novo; pergunte o que ele quer ver de diferente OU ofereca a visita ao decorado."
+  }
+  if (!mc.empreendimento || mc.reason === "no_property") {
+    return "MATERIAL VISUAL: o lead pediu material, mas o empreendimento de interesse ainda NAO esta definido. NAO diga que enviou nem que esta enviando imagens. Pergunte de forma leve de qual empreendimento ele quer ver (nao repergunte se ja estiver claro na conversa)."
+  }
+  return `MATERIAL VISUAL: o lead pediu material${emp}, mas NAO ha esse material disponivel agora. NAO diga que enviou nem que esta enviando. Ofereca conhecer o decorado pessoalmente OU diga que a equipe vai enviar, com naturalidade.`
 }
 
 export interface ProcessMessageResult {
@@ -424,7 +462,7 @@ export async function processMessageWithMetadata(
   // - `dynamicSuffix` = todos os contextos por-conversa (data/hora, property data,
   //   memória do lead, no-show, flow, yarden gate). Concatenados em UM bloco
   //   sem cache_control. Story 21.2 (lead context) deve ser incluída aqui.
-  const staticBlocks = buildSystemPrompt(agentConfig, ragContext, state, emit)
+  const staticBlocks = buildSystemPrompt(agentConfig, ragContext, state, emit, params.mediaContext)
   const dynamicSuffix =
     dateTimeContext +
     propertyDataContext +
@@ -1088,7 +1126,8 @@ function buildSystemPrompt(
   config: AgentConfig,
   ragContext: string,
   state: ConversationState | null,
-  emit: (event: PipelineEvent) => void
+  emit: (event: PipelineEvent) => void,
+  mediaContext?: MediaAvailability
 ): Anthropic.Messages.TextBlockParam[] {
   // Static blocks (cacheable) + optional RAG block (uncached) come from buildPromptFromCode.
   // Story 53-1 — passa os overrides do banco (config.prompt_overrides) como 3º arg;
@@ -1110,6 +1149,8 @@ function buildSystemPrompt(
   )
 
   // Build CONVERSATION CONTEXT (dynamic — varies per turn).
+  // Story 75-157: linha honesta de MATERIAL VISUAL (só a Nicole afirma envio real).
+  const mediaLine = mediaContextLine(mediaContext)
   const convoLines: string[] = []
   if (state) {
     convoLines.push("=== CONVERSATION CONTEXT ===")
@@ -1134,7 +1175,12 @@ function buildSystemPrompt(
         )
       }
     }
+    if (mediaLine) convoLines.push(mediaLine)
     convoLines.push("=== END CONVERSATION CONTEXT ===")
+  } else if (mediaLine) {
+    // Sem state ainda (conversa nova), mas o lead já pediu material: emite só a
+    // linha de MATERIAL VISUAL para a fala não prometer envio indevido.
+    convoLines.push("=== CONVERSATION CONTEXT ===", mediaLine, "=== END CONVERSATION CONTEXT ===")
   }
 
   // Preserve legacy behavior: original code appended raw ragContext at the end
