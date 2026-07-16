@@ -1,7 +1,7 @@
 # Story 75-157 — Nicole não promete mídia que não envia (+ resolução por contexto + observabilidade)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Nicole envia mídia (biblioteca) · **PR:** — · **Complexidade:** M (5 pontos) · **Branch:** feat/75-157-nicole-nao-promete-midia-que-nao-envia
+- **Status:** Done · **Epic:** Nicole envia mídia (biblioteca) · **PR:** #206 · **Complexidade:** M (5 pontos) · **Branch:** feat/75-157-nicole-nao-promete-midia-que-nao-envia
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -55,6 +55,7 @@ Causa raiz (confirmada no banco + código):
 - **Ação obrigatória no deploy:** atualizar `agent_prompts.guardrails` (org default) — a RN12 do banco mascara o código e ainda diz "imagens enviadas automaticamente"; sem isso a fala não fica 100% honesta. A linha dinâmica MATERIAL VISUAL (código) já mitiga.
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #206** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit 56df336). ✅ `agent_prompts.guardrails` (org default) atualizado: RN12 nova (defere ao MATERIAL VISUAL; backup guardado). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS** (com ação obrigatória de deploy: update agent_prompts.guardrails). 6 ACs, 995/995.
 - 2026-07-16 — @dev — Implementado (resolveSendableMedia + mediaContext/prompt honesto + observabilidade + RN12). tsc/eslint/995. Status Ready → InReview. ⏳ update DB agent_prompts.guardrails no deploy.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
