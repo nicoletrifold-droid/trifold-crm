@@ -6,10 +6,57 @@ import {
   evaluateSlot,
   dayPartsToIso,
   isoToDayParts,
+  resolveVisitSlotParts,
 } from "./visit-slot"
 
 // Âncora: 2026-06-18T17:00:00Z = quinta-feira 14:00 em BRT (UTC-3).
 const NOW = new Date("2026-06-18T17:00:00Z")
+
+describe("resolveVisitSlotParts (Story 75-162)", () => {
+  it("resolve dia+hora só do visit_availability quando a msg não traz (caso Andréia)", () => {
+    const r = resolveVisitSlotParts({
+      message: "9 horas",
+      now: NOW,
+      visitAvailability: "Sábado, 20 de junho, às 9h",
+    })
+    expect(r.day).not.toBeNull() // sábado (próximo)
+    expect(r.time).toEqual({ hour: 9, minute: 0 })
+  })
+
+  it("mensagem do lead tem prioridade sobre visit_availability", () => {
+    const r = resolveVisitSlotParts({
+      message: "pode ser sexta às 10h",
+      now: NOW,
+      visitAvailability: "sábado às 9h",
+    })
+    expect(r.time).toEqual({ hour: 10, minute: 0 })
+  })
+
+  it("combina dia da msg com hora pendente", () => {
+    const r = resolveVisitSlotParts({
+      message: "sexta",
+      now: NOW,
+      pendingTime: { hour: 15, minute: 0 },
+    })
+    expect(r.day).not.toBeNull()
+    expect(r.time).toEqual({ hour: 15, minute: 0 })
+  })
+
+  it("só dia (sem hora em lugar nenhum) → time null (não agenda)", () => {
+    const r = resolveVisitSlotParts({
+      message: "quero visitar",
+      now: NOW,
+      visitAvailability: "quero visitar sábado",
+    })
+    expect(r.time).toBeNull()
+  })
+
+  it("sem sinais → dia e hora null", () => {
+    const r = resolveVisitSlotParts({ message: "bom dia", now: NOW, visitAvailability: "quero conhecer" })
+    expect(r.day).toBeNull()
+    expect(r.time).toBeNull()
+  })
+})
 
 describe("parseRequestedSlot", () => {
   it("dia + hora explícitos dentro do horário → startUtc", () => {

@@ -59,7 +59,9 @@ const WEEKDAYS: Array<{ re: RegExp; dow: number }> = [
 
 /** Resolve o dia pedido (em componentes BRT) a partir do texto. */
 function parseDay(text: string, now: Date): { y: number; m: number; d: number } | null {
-  const t = stripAccents(text)
+  // Story 75-162 — minúsculo: o visit_availability costuma vir capitalizado
+  // ("Sábado, 18 de julho…") e os padrões (weekday/dia/amanhã) são case-sensitive.
+  const t = stripAccents(text).toLowerCase()
   const today = brtParts(now)
 
   const addDays = (n: number) => {
@@ -101,7 +103,7 @@ function parseDay(text: string, now: Date): { y: number; m: number; d: number } 
 
 /** Resolve a hora pedida (BRT, 0-23) a partir do texto, ou null. */
 function parseHour(text: string): { hour: number; minute: number } | null {
-  const t = stripAccents(text)
+  const t = stripAccents(text).toLowerCase() // Story 75-162 — robusto a "9H"/capitalização
 
   if (/\bmeio[\s-]?dia\b/.test(t)) return { hour: 12, minute: 0 }
 
@@ -136,6 +138,32 @@ export function parseDayParts(message: string, now: Date): DayParts | null {
 /** Extrai só o horário referenciado (ou null). Exposto para combinar dia+hora entre turnos. */
 export function parseTimeParts(message: string): { hour: number; minute: number } | null {
   return parseHour(message)
+}
+
+export type TimeParts = { hour: number; minute: number }
+
+/**
+ * Story 75-162 — resolve dia+hora do slot combinando as fontes, na ordem:
+ * 1) mensagem atual do lead, 2) pendências de turnos anteriores, 3) `visit_availability`
+ * (slot que a Nicole já capturou, ex.: "Sábado, 18 de julho, às 9h"). Torna o
+ * agendamento robusto quando dia e hora vieram em turnos diferentes ou só constam
+ * no visit_availability — em vez de depender do frágil flag `visit_proposed`. Puro.
+ */
+export function resolveVisitSlotParts(input: {
+  message: string
+  now: Date
+  pendingDay?: DayParts | null
+  pendingTime?: TimeParts | null
+  visitAvailability?: string | null
+}): { day: DayParts | null; time: TimeParts | null } {
+  const { message, now, pendingDay = null, pendingTime = null, visitAvailability } = input
+  let day = parseDayParts(message, now) ?? pendingDay
+  let time = parseTimeParts(message) ?? pendingTime
+  if ((!day || !time) && visitAvailability) {
+    if (!day) day = parseDayParts(visitAvailability, now)
+    if (!time) time = parseTimeParts(visitAvailability)
+  }
+  return { day, time }
 }
 
 /** "YYYY-MM-DD" (mês 1-based) para persistir o dia pendente em conversation_state. */

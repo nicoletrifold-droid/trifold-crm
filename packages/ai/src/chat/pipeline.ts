@@ -29,7 +29,7 @@ import {
   guardStageForAssignedLead,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
-import { parseDayParts, parseTimeParts, evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -540,7 +540,13 @@ export async function processMessageWithMetadata(
   let messageWithContext = message
   // Story 73-1: slot pedido pelo cliente que está LIVRE e pode ser agendado neste turno.
   let bookableSlotUtc: Date | null = null
-  if (state?.visit_proposed && conversation?.lead_id) {
+  // Story 75-162 — roda quando a Nicole está em modo agendamento (visit_proposed)
+  // OU quando já capturou um slot (visit_availability). Antes só visit_proposed —
+  // que quase nunca ficava true (frágil casamento de frase), então a Nicole
+  // confirmava a visita mas NÃO criava o compromisso.
+  const hasVisitAvailability =
+    typeof (collectedData as Record<string, unknown>).visit_availability === "string"
+  if ((state?.visit_proposed || hasVisitAvailability) && conversation?.lead_id) {
     // 1) Já existe visita futura para este lead? → só lembrar (nunca duplicar).
     const { data: activeAppointment } = await supabase
       .from("appointments")
@@ -563,14 +569,20 @@ export async function processMessageWithMetadata(
       //    Calendly) e injeta o contexto para a Nicole responder certo na MESMA mensagem.
       const cd = collectedData as Record<string, unknown>
       const now = new Date()
-      const curDay = parseDayParts(message, now)
-      const curTime = parseTimeParts(message)
       const pendingDay = typeof cd.visit_pending_date === "string" ? isoToDayParts(cd.visit_pending_date) : null
       const pendingTime = typeof cd.visit_pending_hour === "number"
         ? { hour: cd.visit_pending_hour as number, minute: (cd.visit_pending_minute as number | undefined) ?? 0 }
         : null
-      const day = curDay ?? pendingDay
-      const time = curTime ?? pendingTime
+      // Story 75-162 — combina msg do lead → pendências → visit_availability (slot
+      // já capturado pela Nicole), para agendar mesmo quando dia/hora vieram em
+      // turnos diferentes ou só constam no visit_availability.
+      const { day, time } = resolveVisitSlotParts({
+        message,
+        now,
+        pendingDay,
+        pendingTime,
+        visitAvailability: typeof cd.visit_availability === "string" ? cd.visit_availability : null,
+      })
 
       if (day && time) {
         // Dia + hora completos (no turno ou combinando com o pendente) → resolve e limpa pendência.
@@ -859,7 +871,7 @@ export async function processMessageWithMetadata(
       const whenStr = formatBrtDateTime(scheduledAt)
       const clientEmail = (finalData.email as string | undefined) ?? null
 
-      const { data: createdAppt } = await supabase
+      const { data: createdAppt, error: apptErr } = await supabase
         .from("appointments")
         .insert({
           org_id: conversation.org_id,
@@ -878,6 +890,18 @@ export async function processMessageWithMetadata(
         .select("id")
         .maybeSingle()
 
+      // Story 75-162 — não falhar em silêncio: se o INSERT não gravou, logar e NÃO
+      // emitir APPOINTMENT_CREATED (antes emitia mesmo sem linha → notificava o
+      // corretor de uma visita inexistente).
+      if (apptErr || !createdAppt?.id) {
+        emit({
+          level: "error",
+          category: "ai",
+          event_type: "APPOINTMENT_INSERT_FAILED",
+          message: `Falha ao criar appointment da Nicole: ${apptErr?.message ?? "sem retorno"}`,
+          metadata: { lead_id: leadId, scheduled_at: scheduledAt.toISOString(), error: apptErr?.message ?? null },
+        })
+      } else {
       // Empurra para o Google Calendar (fecha a brecha de duplicação com o Calendly).
       // Injetado pela camada web; best-effort — nunca derruba o agendamento.
       if (createdAppt?.id && createCalendarEvent) {
@@ -918,6 +942,7 @@ export async function processMessageWithMetadata(
       if (!assignedBrokerId) {
         emit({ level: "warn", category: "ai", event_type: "APPOINTMENT_NO_BROKER", message: "Appointment created without broker — lead not yet assigned by roleta", metadata: { lead_id: leadId, property_id: propertyId ?? null } })
       }
+      } // Story 75-162 — fim do bloco de sucesso do INSERT
     }
 
     // Handoff — entrega ao corretor. Story 73-1: NÃO move para "Visita Agendada"
