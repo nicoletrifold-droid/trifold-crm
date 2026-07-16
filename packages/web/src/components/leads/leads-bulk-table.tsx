@@ -30,6 +30,8 @@ type Lead = {
   qualification_score: number | null
   updated_at: string | null
   source: string | null
+  /** Story 75-160 — comprovado por conversa/canal de WhatsApp (vence o formato do número). */
+  hasWhatsappConversation?: boolean
   stage: { id: string; name: string; color: string | null } | null
   property_interest: { id: string; name: string } | null
   broker: { id: string; name: string } | null
@@ -147,7 +149,7 @@ export function LeadsBulkTable({
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                   <div className="flex items-center gap-2">
-                    {whatsAppState({ phone: lead.phone, source: lead.source }) !== "none" && (
+                    {whatsAppState({ phone: lead.phone, source: lead.source, hasWhatsappConversation: lead.hasWhatsappConversation }) !== "none" && (
                       <Link
                         href={`/dashboard/leads/${lead.id}?tab=conversa`}
                         onClick={(e) => e.stopPropagation()}
