@@ -1,7 +1,7 @@
 # Story 75-165 — Conversa rotula o remetente real (não "Você" para todos)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Transferir conversa / atendimento compartilhado · **PR:** — · **Complexidade:** S (3 pontos) · **Branch:** feat/75-165-conversa-rotula-remetente-real
+- **Status:** Done · **Epic:** Transferir conversa / atendimento compartilhado · **PR:** #214 · **Complexidade:** S (3 pontos) · **Branch:** feat/75-165-conversa-rotula-remetente-real
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -36,6 +36,7 @@ Caso real (Marcos, 2026-07-16): na conversa, mensagens do corretor aparecem como
 - **PASS.** AC1 (msg da Valeria → "Valeria Costa") ✓ · AC2 (própria → "Você") ✓ · AC3 (sem sent_by → "Você", sem regressão) ✓ · AC4 (desconhecido → "Corretor") ✓ · AC5 (lead/Nicole/sistema inalterados) ✓ · AC6 (tsc/eslint/1026) ✓. Realtime de remetente novo fora do mapa → "Corretor" até refresh (aceitável).
 
 ## Change Log
+- 2026-07-16 — @devops — PR #214 + squash-merge. Deploy prod **SUCCESS** (206f05a). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 6 ACs, 1026/1026.
 - 2026-07-16 — @dev — Implementado (resolveBubbleLabel + props + mapa nas páginas). Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Draft → Ready.
