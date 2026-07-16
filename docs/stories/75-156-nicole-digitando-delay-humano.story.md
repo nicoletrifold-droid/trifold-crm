@@ -46,10 +46,12 @@ Decisão de escopo do Marcos: **apenas o lado do lead no WhatsApp** (maior impac
 - **Checks:** tsc 0 · eslint 0 · vitest **984/984** (+9). Sem regressão (webhook/whatsapp 34/34).
 - **Branch:** `feat/75-156-nicole-digitando-delay-humano`.
 
-## QA Results (@qa)
-_(a preencher no quality gate)_
+## QA Results (@qa — 2026-07-16)
+- **PASS.** 7 checks OK. AC1 (typing+read dentro de `isAiActive`, delay antes do send) ✓ · AC2 (guard `isAiActive`, não dispara em handoff) ✓ · AC3 (falha do typing engolida, envio segue) ✓ · AC4 (teto 3s + `maxDuration=60`, pós-ACK) ✓ · AC5 (tsc 0 / eslint 0 / vitest 984/984, +9) ✓.
+- Observações: primeira chamada que marca a mensagem como lida (✓✓) no fluxo — comportamento aprovado pelo Marcos. Sem regressão (webhook/whatsapp 34/34).
 
 ## Change Log
+- 2026-07-16 — @qa — **QA GATE: PASS**. 5 ACs, 984/984. Aguardando @devops push.
 - 2026-07-16 — @dev — Implementado (2 helpers + wiring no webhook + 9 testes). tsc/eslint/984. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
 - 2026-07-16 — @sm — Story criada (Draft).
