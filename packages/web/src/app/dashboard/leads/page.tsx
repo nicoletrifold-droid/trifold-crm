@@ -79,7 +79,7 @@ export default async function LeadsPage({
     .from("leads")
     .select(
       `
-      id, name, phone, email, qualification_score, interest_level, updated_at, source, lost_reason,
+      id, name, phone, email, qualification_score, interest_level, updated_at, source, lost_reason, channel,
       stage:kanban_stages(id, name, color),
       property_interest:properties!property_interest_id(id, name),
       broker:users!assigned_broker_id(id, name)
@@ -197,6 +197,23 @@ export default async function LeadsPage({
       : Promise.resolve({ count: 0 }),
   ])
   const leads = leadsResult.data
+
+  // Story 75-160 — sinal robusto de WhatsApp: existe conversa com channel='whatsapp'?
+  // Uma query batelada pelos ids da página (sem N+1) — o número cru/atípico não
+  // deve esconder o balão de quem comprovadamente já conversou no WhatsApp.
+  const pageLeadIds = (leads ?? []).map((l) => l.id)
+  const waConversationLeadIds = new Set<string>()
+  if (pageLeadIds.length > 0) {
+    const { data: waConvs } = await supabase
+      .from("conversations")
+      .select("lead_id")
+      .eq("channel", "whatsapp")
+      .in("lead_id", pageLeadIds)
+    for (const c of waConvs ?? []) {
+      if (c.lead_id) waConversationLeadIds.add(c.lead_id as string)
+    }
+  }
+
   const totalCount = countResult.count ?? 0
   const perdidosCount = perdidosCountResult.count ?? 0
   const ativosCount = ativosCountResult.count ?? 0
@@ -311,6 +328,10 @@ export default async function LeadsPage({
                 qualification_score: lead.qualification_score ?? null,
                 updated_at: lead.updated_at ?? null,
                 source: (lead as unknown as Record<string, unknown>).source as string | null,
+                // Story 75-160 — WhatsApp comprovado por conversa OU canal de aquisição.
+                hasWhatsappConversation:
+                  waConversationLeadIds.has(lead.id) ||
+                  ((lead as unknown as Record<string, unknown>).channel as string | null) === "whatsapp",
                 stage: Array.isArray(stageRaw) ? stageRaw[0] ?? null : stageRaw ?? null,
                 property_interest: Array.isArray(propertyRaw) ? propertyRaw[0] ?? null : propertyRaw ?? null,
                 broker: Array.isArray(brokerRaw) ? brokerRaw[0] ?? null : brokerRaw ?? null,
