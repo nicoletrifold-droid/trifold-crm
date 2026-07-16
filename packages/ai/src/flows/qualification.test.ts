@@ -172,6 +172,32 @@ describe("extractCollectedData", () => {
     expect(result.name).toBe("Ana")
   })
 
+  // Story 75-161 — nome em minúsculas quando a Nicole acabou de perguntar
+  it("captura nome em minúsculas quando nameExpected (caso maicon) e capitaliza", () => {
+    const result = extractCollectedData("maicon", {}, { nameExpected: true })
+    expect(result.name).toBe("Maicon")
+  })
+
+  it("NÃO captura minúsculo sem nameExpected (comportamento antigo)", () => {
+    const result = extractCollectedData("maicon", {})
+    expect(result.name).toBeUndefined()
+  })
+
+  it("nameExpected + resposta que NÃO é nome (stopword) não vira nome", () => {
+    expect(extractCollectedData("quero", {}, { nameExpected: true }).name).toBeUndefined()
+    expect(extractCollectedData("não sei", {}, { nameExpected: true }).name).toBeUndefined()
+    expect(extractCollectedData("apartamento", {}, { nameExpected: true }).name).toBeUndefined()
+  })
+
+  it("captura nome composto em minúsculas quando nameExpected", () => {
+    const result = extractCollectedData("joao pedro", {}, { nameExpected: true })
+    expect(result.name).toBe("Joao Pedro")
+  })
+
+  it("stopword capitalizada também não vira nome", () => {
+    expect(extractCollectedData("Sim", {}).name).toBeUndefined()
+  })
+
   it("extracts property interest 'vind'", () => {
     const result = extractCollectedData("Gostaria de saber mais sobre o Vind", {})
     expect(result.property_interest).toBe("vind")

@@ -79,12 +79,35 @@ function parsePortugueseNumber(text: string): number | null {
 }
 
 /**
+ * Story 75-161 — palavras que NÃO são nome (evita gravar "Sim"/"Quero"/"Vind"
+ * como nome quando o lead responde curto). Comparadas em minúsculas, por palavra.
+ */
+const NAME_STOPWORDS = new Set<string>([
+  "sim", "nao", "não", "oi", "ola", "olá", "ok", "okay", "blz", "beleza", "claro",
+  "quero", "queria", "gostaria", "preciso", "tenho", "sei", "nada", "tudo", "certo",
+  "bom", "boa", "dia", "tarde", "noite", "obrigado", "obrigada", "valeu", "opa", "eae",
+  "vind", "yarden", "apartamento", "apto", "ape", "apê", "casa", "imovel", "imóvel",
+  "info", "informacao", "informação", "informacoes", "informações", "material", "materiais",
+  "foto", "fotos", "imagem", "imagens", "planta", "preco", "preço", "valor", "valores",
+  "meu", "nome", "sou", "eu", "voce", "você", "aqui", "isso", "esse", "essa",
+])
+
+/** Story 75-161 — capitaliza cada palavra do nome ("maicon" → "Maicon"). */
+function capitalizeName(raw: string): string {
+  return raw
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ")
+}
+
+/**
  * Extracts newly collected data from an AI response and merges it with current data.
  * Looks for structured patterns in the response that indicate data collection.
  */
 export function extractCollectedData(
   aiResponse: string,
-  currentData: Record<string, unknown>
+  currentData: Record<string, unknown>,
+  opts?: { nameExpected?: boolean }
 ): Record<string, unknown> {
   const updated = { ...currentData }
   const lower = aiResponse.toLowerCase()
@@ -103,19 +126,26 @@ export function extractCollectedData(
       if (match?.[1]) {
         const extractedName = match[1].trim()
         if (extractedName.toLowerCase() !== "nicole") {
-          updated.name = extractedName
+          updated.name = capitalizeName(extractedName)
           break
         }
       }
     }
-    // Short message fallback: if message is 1-3 words and starts with capital, treat as name
+    // Short message fallback: mensagem de 1-3 palavras tratada como nome.
+    // Aceita quando começa com maiúscula OU (Story 75-161) quando a Nicole
+    // ACABOU de perguntar o nome (nameExpected) — cobre respostas em minúsculas
+    // como "maicon". Guarda contra falsos positivos via stoplist por palavra.
     if (!updated.name) {
       const trimmed = aiResponse.trim()
       const words = trimmed.split(/\s+/)
-      if (words.length >= 1 && words.length <= 3 && /^[A-ZÀ-Ÿ]/.test(trimmed)) {
-        const candidate = words.filter(w => /^[A-Za-zÀ-ÿ]+$/.test(w)).join(" ")
-        if (candidate && candidate.toLowerCase() !== "nicole" && candidate.length >= 2) {
-          updated.name = candidate
+      const startsCapital = /^[A-ZÀ-Ÿ]/.test(trimmed)
+      const allowLower = opts?.nameExpected === true && words.length >= 1 && words.length <= 2
+      if (words.length >= 1 && words.length <= 3 && (startsCapital || allowLower)) {
+        const candidate = words.filter((w) => /^[A-Za-zÀ-ÿ]+$/.test(w)).join(" ")
+        const parts = candidate.toLowerCase().split(/\s+/).filter(Boolean)
+        const hasStopword = parts.some((w) => NAME_STOPWORDS.has(w))
+        if (candidate && !hasStopword && candidate.toLowerCase() !== "nicole" && candidate.length >= 2) {
+          updated.name = capitalizeName(candidate)
         }
       }
     }
