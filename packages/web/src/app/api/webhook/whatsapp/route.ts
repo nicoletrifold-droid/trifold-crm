@@ -14,7 +14,10 @@ import {
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
-import { sendLibraryMediaIfRequested } from "@web/lib/ai/send-library-media"
+import {
+  sendLibraryMediaIfRequested,
+  resolveSendableMedia,
+} from "@web/lib/ai/send-library-media"
 import { maybeRouteInboundToRelationship } from "@web/lib/relacionamento/route-inbound"
 import { transcribeAudio } from "@web/lib/transcription/transcribe"
 import { uploadInboundMedia } from "@web/lib/media/inbound-media"
@@ -815,6 +818,16 @@ export async function POST(request: NextRequest) {
         // para aplicar o handoff (is_ai_active=false) após enviar a confirmação.
         let appointmentCreated = false
 
+        // Story 75-157 — resolve ANTES da fala o que realmente dá para enviar,
+        // para a Nicole não prometer imagem que não vai sair. A MESMA resolução é
+        // reaproveitada no envio real (abaixo), evitando fala e envio divergirem.
+        const sendableMedia = await resolveSendableMedia(supabase, {
+          orgId,
+          leadId: lead!.id,
+          conversationId: conversation!.id,
+          text: asyncText,
+        })
+
         const response = await processMessage({
           supabase,
           anthropic,
@@ -823,6 +836,12 @@ export async function POST(request: NextRequest) {
           orgId,
           mediaBlock: asyncMediaBlock,
           createCalendarEvent,
+          mediaContext: {
+            requested: sendableMedia.kinds.length > 0,
+            willSend: sendableMedia.chosen.length > 0,
+            empreendimento: sendableMedia.propertyName,
+            reason: sendableMedia.skipReason,
+          },
           onEvent: (event) => {
             logEvent({
               ...event,
@@ -895,16 +914,37 @@ export async function POST(request: NextRequest) {
         // só envia com pedido claro + property_interest_id + asset ativo; nunca
         // quebra o fluxo (helper trata erros internamente).
         try {
-          await sendLibraryMediaIfRequested(supabase, {
-            orgId,
-            leadId: lead!.id,
-            leadPhone: fromRaw,
-            // asyncText = texto resolvido (transcrição de áudio / caption de imagem);
-            // `text` traz placeholder "[Mensagem de voz recebida]" para áudio (Story 56-2 AC6).
-            text: asyncText,
-            conversationId: conversation!.id,
-            phoneNumberId: config.phone_number_id,
-            accessToken: config.access_token,
+          // Story 75-157: reusa a resolução pré-fala (mesma verdade da fala) e
+          // loga o resultado (enviados/skip/erro) — antes era descartado/silencioso.
+          const enviados = await sendLibraryMediaIfRequested(
+            supabase,
+            {
+              orgId,
+              leadId: lead!.id,
+              leadPhone: fromRaw,
+              // asyncText = texto resolvido (transcrição de áudio / caption de imagem);
+              // `text` traz placeholder "[Mensagem de voz recebida]" para áudio (Story 56-2 AC6).
+              text: asyncText,
+              conversationId: conversation!.id,
+              phoneNumberId: config.phone_number_id,
+              accessToken: config.access_token,
+            },
+            sendableMedia
+          )
+          logEvent({
+            level: "info",
+            category: "webhook",
+            event_type: "nicole_media_result",
+            message: `Envio de mídia da Nicole: ${enviados} enviada(s)`,
+            source: "webhook/whatsapp",
+            org_id: orgId,
+            metadata: {
+              enviados,
+              will_send: sendableMedia.chosen.length,
+              skip_reason: sendableMedia.skipReason,
+              conversation_id: conversation!.id,
+              lead_id: lead!.id,
+            },
           })
         } catch (err) {
           console.error("[nicole-media] send error:", err)

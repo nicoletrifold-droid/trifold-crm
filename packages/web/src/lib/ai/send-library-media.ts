@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { createAdminClient } from "@web/lib/supabase/admin"
+import { logEvent } from "@web/lib/logger"
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -191,61 +192,170 @@ async function loadAlreadySentIds(
   return sent
 }
 
+/** Motivo pelo qual nenhuma mídia foi (ou seria) enviada neste turno. */
+export type MediaSkipReason =
+  | "no_request" // o lead não pediu material
+  | "no_property" // não deu para identificar o empreendimento
+  | "no_assets" // empreendimento sem asset ativo
+  | "none_selected" // tudo que casaria já foi enviado antes (dedup) / sem match de tipo
+
+export interface SendableMedia {
+  /** Tipos de material detectados no pedido do lead. */
+  kinds: MediaKind[]
+  propertyId: string | null
+  propertyName: string | null
+  /** Assets que SERIAM enviados agora (após dedup). Vazio = nada a enviar. */
+  chosen: MediaAsset[]
+  /** Preenchido quando `chosen` está vazio; `null` quando há material a enviar. */
+  skipReason: MediaSkipReason | null
+}
+
+/**
+ * Story 75-157 — Resolve, SEM enviar, o que a Nicole conseguiria mandar AGORA
+ * para este lead. É a FONTE ÚNICA de verdade usada tanto pela checagem pré-fala
+ * (para o prompt ser honesto — não prometer o que não vai enviar) quanto pelo
+ * envio real. Assim a fala e o envio não divergem.
+ *
+ * Diferença-chave vs. a lógica antiga: o fallback por NOME do empreendimento
+ * considera o CONTEXTO RECENTE da conversa (não só a mensagem atual) — cobre o
+ * caso comum de empreendimento já estabelecido mas sem `property_interest_id`.
+ */
+export async function resolveSendableMedia(
+  admin: Admin,
+  args: { orgId: string; leadId: string; conversationId: string | null; text: string }
+): Promise<SendableMedia> {
+  const kinds = detectMediaRequest(args.text)
+  const result = (
+    skipReason: MediaSkipReason | null,
+    propertyId: string | null = null,
+    propertyName: string | null = null,
+    chosen: MediaAsset[] = []
+  ): SendableMedia => ({ kinds, propertyId, propertyName, chosen, skipReason })
+
+  if (kinds.length === 0) return result("no_request")
+
+  // Texto recente da conversa (para o match por NOME do empreendimento) — não só
+  // a mensagem atual: o empreendimento costuma já estar estabelecido na conversa.
+  let matchText = args.text
+  if (args.conversationId) {
+    const { data } = await admin
+      .from("messages")
+      .select("content")
+      .eq("conversation_id", args.conversationId)
+      .order("created_at", { ascending: false })
+      .limit(12)
+    matchText = [args.text, ...(data ?? []).map((m) => (m.content as string) ?? "")].join("  ")
+  }
+
+  // 1) Empreendimento de interesse do lead (preferencial).
+  const { data: lead } = await admin
+    .from("leads")
+    .select("property_interest_id")
+    .eq("id", args.leadId)
+    .maybeSingle()
+  let propertyId: string | null = lead?.property_interest_id ?? null
+  let propertyName: string | null = null
+
+  // 2) Fallback: identifica o empreendimento pelo NOME citado no contexto recente,
+  //    entre os que têm mídia ativa. Só usa se houver exatamente 1 match.
+  if (!propertyId) {
+    const { data: assetProps } = await admin
+      .from("agent_media_assets")
+      .select("property_id, property:properties(name)")
+      .eq("org_id", args.orgId)
+      .eq("is_active", true)
+      .not("property_id", "is", null)
+    const t = norm(matchText)
+    // Conjunto de palavras do contexto, para casar por TOKEN distintivo do nome
+    // (ex.: nome "Vind Residence" casa quando o lead diz so "Vind").
+    const words = new Set(t.split(/[^a-z0-9]+/).filter(Boolean))
+    const nomes = new Map<string, string>()
+    for (const a of assetProps ?? []) {
+      const p = a.property as { name?: string } | { name?: string }[] | null
+      const name = Array.isArray(p) ? p[0]?.name : p?.name
+      if (a.property_id && name) nomes.set(a.property_id as string, name)
+    }
+    const matches = [...nomes.entries()].filter(([, name]) => {
+      const n = norm(name)
+      if (n.length >= 4 && t.includes(n)) return true // nome completo citado
+      const first = n.split(/\s+/)[0] // token distintivo (1ª palavra)
+      return !!first && first.length >= 4 && words.has(first)
+    })
+    // Só resolve com match ÚNICO — nunca adivinha entre 2+ empreendimentos.
+    if (matches.length === 1 && matches[0]) {
+      propertyId = matches[0][0]
+      propertyName = matches[0][1]
+    }
+  }
+
+  if (!propertyId) return result("no_property")
+
+  // 3) Todos os assets ativos do empreendimento (a seleção fina é local).
+  const { data: assets } = await admin
+    .from("agent_media_assets")
+    .select("id, title, category, file_url, file_name, file_type")
+    .eq("org_id", args.orgId)
+    .eq("property_id", propertyId)
+    .eq("is_active", true)
+  if (!assets || assets.length === 0) return result("no_assets", propertyId, propertyName)
+
+  if (!propertyName) {
+    const { data: p } = await admin
+      .from("properties")
+      .select("name")
+      .eq("id", propertyId)
+      .maybeSingle()
+    propertyName = (p?.name as string) ?? null
+  }
+
+  const alreadySent = await loadAlreadySentIds(admin, args.conversationId)
+  const chosen = selectAssets(assets as MediaAsset[], kinds, alreadySent)
+  if (chosen.length === 0) return result("none_selected", propertyId, propertyName)
+
+  return { kinds, propertyId, propertyName, chosen, skipReason: null }
+}
+
 export async function sendLibraryMediaIfRequested(
   admin: Admin,
-  args: SendArgs
+  args: SendArgs,
+  /** Resolução pré-computada (checagem pré-fala) — evita divergência e re-query. */
+  preResolved?: SendableMedia
 ): Promise<number> {
-  const kinds = detectMediaRequest(args.text)
-  if (kinds.length === 0) return 0
-
   try {
-    // 1) Empreendimento de interesse do lead (preferencial).
-    const { data: lead } = await admin
-      .from("leads")
-      .select("property_interest_id")
-      .eq("id", args.leadId)
-      .maybeSingle()
-    let propertyId: string | null = lead?.property_interest_id ?? null
+    const resolved =
+      preResolved ??
+      (await resolveSendableMedia(admin, {
+        orgId: args.orgId,
+        leadId: args.leadId,
+        conversationId: args.conversationId,
+        text: args.text,
+      }))
 
-    // 2) Fallback: identifica o empreendimento pelo NOME citado no texto, entre
-    //    os que têm mídia ativa. Só usa se houver exatamente 1 match (sem adivinhar).
-    if (!propertyId) {
-      const { data: assetProps } = await admin
-        .from("agent_media_assets")
-        .select("property_id, property:properties(name)")
-        .eq("org_id", args.orgId)
-        .eq("is_active", true)
-        .not("property_id", "is", null)
-      const t = norm(args.text)
-      const nomes = new Map<string, string>()
-      for (const a of assetProps ?? []) {
-        const p = a.property as { name?: string } | { name?: string }[] | null
-        const name = Array.isArray(p) ? p[0]?.name : p?.name
-        if (a.property_id && name) nomes.set(a.property_id as string, name)
+    if (resolved.chosen.length === 0) {
+      // Observabilidade (Story 75-157): loga quando HOUVE pedido mas nada saiu —
+      // sinal acionável (antes era 100% silencioso). Não loga "no_request".
+      if (resolved.skipReason && resolved.skipReason !== "no_request") {
+        logEvent({
+          level: "info",
+          category: "ai",
+          event_type: "nicole_media_skip",
+          message: `Mídia pedida mas não enviada: ${resolved.skipReason}`,
+          source: "ai/send-library-media",
+          org_id: args.orgId,
+          metadata: {
+            skip_reason: resolved.skipReason,
+            lead_id: args.leadId,
+            conversation_id: args.conversationId,
+            property_id: resolved.propertyId,
+            kinds: resolved.kinds,
+          },
+        })
       }
-      const matches = [...nomes.entries()].filter(
-        ([, name]) => name.length >= 4 && t.includes(norm(name))
-      )
-      if (matches.length === 1 && matches[0]) propertyId = matches[0][0]
+      return 0
     }
 
-    if (!propertyId) return 0
-
-    // 3) Todos os assets ativos do empreendimento (a seleção fina é local).
-    const { data: assets } = await admin
-      .from("agent_media_assets")
-      .select("id, title, category, file_url, file_name, file_type")
-      .eq("org_id", args.orgId)
-      .eq("property_id", propertyId)
-      .eq("is_active", true)
-    if (!assets || assets.length === 0) return 0
-
-    const alreadySent = await loadAlreadySentIds(admin, args.conversationId)
-    const chosen = selectAssets(assets as MediaAsset[], kinds, alreadySent)
-    if (chosen.length === 0) return 0
-
     let enviados = 0
-    for (const asset of chosen) {
+    for (const asset of resolved.chosen) {
       const isImage = asset.file_type === "image"
       const body = isImage
         ? {
@@ -293,11 +403,57 @@ export async function sendLibraryMediaIfRequested(
               },
             })
           }
+        } else {
+          // Story 75-157: a Meta rejeitou (4xx/5xx) — antes era engolido em silêncio.
+          logEvent({
+            level: "warn",
+            category: "ai",
+            event_type: "nicole_media_send_failed",
+            message: `Falha ao enviar mídia (HTTP ${res.status})`,
+            source: "ai/send-library-media",
+            org_id: args.orgId,
+            metadata: {
+              status: res.status,
+              asset_id: asset.id,
+              lead_id: args.leadId,
+              conversation_id: args.conversationId,
+            },
+          })
         }
-      } catch {
-        /* falha de um asset não impede os demais */
+      } catch (err) {
+        // falha de um asset não impede os demais — mas agora é logada (75-157).
+        logEvent({
+          level: "warn",
+          category: "ai",
+          event_type: "nicole_media_send_error",
+          message: "Erro de rede/timeout ao enviar mídia",
+          source: "ai/send-library-media",
+          org_id: args.orgId,
+          metadata: {
+            asset_id: asset.id,
+            error: err instanceof Error ? err.message : String(err),
+            lead_id: args.leadId,
+            conversation_id: args.conversationId,
+          },
+        })
       }
     }
+
+    logEvent({
+      level: enviados < resolved.chosen.length ? "warn" : "info",
+      category: "ai",
+      event_type: "nicole_media_sent",
+      message: `Nicole enviou ${enviados}/${resolved.chosen.length} mídia(s)`,
+      source: "ai/send-library-media",
+      org_id: args.orgId,
+      metadata: {
+        enviados,
+        chosen: resolved.chosen.length,
+        property_id: resolved.propertyId,
+        lead_id: args.leadId,
+        conversation_id: args.conversationId,
+      },
+    })
     return enviados
   } catch (err) {
     console.error("[send-library-media] error:", err)
