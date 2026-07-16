@@ -13,11 +13,9 @@
  * na seção Testing da story; aqui isolamos a parte pura/testável.
  */
 import { describe, it, expect } from "vitest"
-import {
-  buildTransitionText,
-  shouldSendTransition,
-  BROKER_NAME_FALLBACK,
-} from "./transition-message"
+import { buildTransitionText, shouldSendTransition } from "./transition-message"
+
+const EXPECTED = "Já vou te encaminhar para o nosso consultor especialista da Trifold. Ele vai continuar seu atendimento por aqui. 😉"
 
 describe("shouldSendTransition", () => {
   it("cenário 1: nenhuma mensagem role='broker' → 1ª mensagem → envia transição", () => {
@@ -30,55 +28,25 @@ describe("shouldSendTransition", () => {
   })
 })
 
-describe("buildTransitionText", () => {
+describe("buildTransitionText (Story 75-169 — sem nome do corretor)", () => {
   it("inclui o nome do lead quando presente", () => {
-    const text = buildTransitionText("João", "Maria")
-    expect(text).toBe(
-      "Olá João! Sou Maria, da equipe Trifold. Estou aqui para continuar te ajudando. 😊"
-    )
+    expect(buildTransitionText("João")).toBe(`Olá João! ${EXPECTED}`)
   })
 
-  it("omite a saudação com nome quando leadName é null", () => {
-    const text = buildTransitionText(null, "Maria")
-    expect(text).toBe(
-      "Olá! Sou Maria, da equipe Trifold. Estou aqui para continuar te ajudando. 😊"
-    )
-    expect(text).not.toContain("undefined")
-    expect(text).not.toContain("null")
+  it("NÃO cita nome de corretor nem 'Sou ...'", () => {
+    const text = buildTransitionText("Andréia")
+    expect(text).not.toMatch(/\bSou\b/)
+    expect(text).toContain("consultor especialista")
   })
 
-  it("omite a saudação com nome quando leadName é string vazia/espaços", () => {
-    expect(buildTransitionText("", "Maria")).toBe(
-      "Olá! Sou Maria, da equipe Trifold. Estou aqui para continuar te ajudando. 😊"
-    )
-    expect(buildTransitionText("   ", "Maria")).toBe(
-      "Olá! Sou Maria, da equipe Trifold. Estou aqui para continuar te ajudando. 😊"
-    )
+  it("omite a saudação com nome quando leadName é null/vazio", () => {
+    expect(buildTransitionText(null)).toBe(`Olá! ${EXPECTED}`)
+    expect(buildTransitionText("")).toBe(`Olá! ${EXPECTED}`)
+    expect(buildTransitionText("   ")).toBe(`Olá! ${EXPECTED}`)
+    expect(buildTransitionText(null)).not.toContain("undefined")
   })
 
-  it("usa fallback gracioso quando brokerName é null", () => {
-    const text = buildTransitionText("João", null)
-    expect(text).toBe(
-      `Olá João! Sou ${BROKER_NAME_FALLBACK}, da equipe Trifold. Estou aqui para continuar te ajudando. 😊`
-    )
-  })
-
-  it("usa fallback gracioso quando brokerName é string vazia/espaços", () => {
-    expect(buildTransitionText("João", "")).toContain(BROKER_NAME_FALLBACK)
-    expect(buildTransitionText("João", "   ")).toContain(BROKER_NAME_FALLBACK)
-  })
-
-  it("aplica fallback de corretor e omite nome do lead simultaneamente", () => {
-    const text = buildTransitionText(null, undefined)
-    expect(text).toBe(
-      `Olá! Sou ${BROKER_NAME_FALLBACK}, da equipe Trifold. Estou aqui para continuar te ajudando. 😊`
-    )
-  })
-
-  it("faz trim dos nomes (sem espaços nas bordas no texto final)", () => {
-    const text = buildTransitionText("  João  ", "  Maria  ")
-    expect(text).toBe(
-      "Olá João! Sou Maria, da equipe Trifold. Estou aqui para continuar te ajudando. 😊"
-    )
+  it("faz trim do nome do lead", () => {
+    expect(buildTransitionText("  João  ")).toBe(`Olá João! ${EXPECTED}`)
   })
 })
