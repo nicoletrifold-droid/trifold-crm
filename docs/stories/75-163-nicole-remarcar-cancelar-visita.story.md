@@ -1,7 +1,7 @@
 # Story 75-163 — Nicole remarca e cancela visita (com disponibilidade + notifica corretor)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Nicole — agendamento confirmado · **PR:** — · **Complexidade:** L (8 pontos) · **Branch:** feat/75-163-nicole-remarcar-cancelar-visita
+- **Status:** Done · **Epic:** Nicole — agendamento confirmado · **PR:** #212 · **Complexidade:** L (8 pontos) · **Branch:** feat/75-163-nicole-remarcar-cancelar-visita
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -54,6 +54,7 @@ Gaps confirmados: (a) sem detecção de intenção remarcar/cancelar; (b) branch
 - Risco (Nicole com poder de mover/cancelar): mitigado por intent + slot-diff + disponibilidade + auditoria + notificação. Falha de mutação → `APPOINTMENT_*_FAILED` (não finge sucesso). **Validação definitiva = teste real** (remarcar/cancelar por chat e conferir Agenda + Google + aviso ao corretor).
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #212** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit a375cba). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 7 ACs, 1021/1021.
 - 2026-07-16 — @dev — Implementado (remarcar/cancelar + exclude-self + intents + Google sync + notificação). tsc/eslint/1021. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
