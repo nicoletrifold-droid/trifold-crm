@@ -168,7 +168,7 @@ export async function POST(
     // Envia ANTES da mensagem do corretor para o lead ver a transição primeiro.
     // Falha silenciosa: nunca bloqueia a mensagem principal do corretor (AC4).
     try {
-      const transitionText = buildTransitionText(lead.name, appUser.name)
+      const transitionText = buildTransitionText(lead.name)
 
       const transitionDispatch = await dispatchBrokerMessage({
         phone: lead.phone,

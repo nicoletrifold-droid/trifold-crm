@@ -2,8 +2,9 @@
  * Story 51-2 (Epic 51) — Mensagem de transição ao lead (apresentação do corretor).
  *
  * Quando o corretor assume a conversa (1ª mensagem `role='broker'` daquela
- * conversa), o lead recebe ANTES uma mensagem automática apresentando o
- * corretor pelo nome. A detecção de "1ª mensagem" e o despacho/gravação
+ * conversa), o lead recebe ANTES uma mensagem automática da Nicole encaminhando
+ * para o atendimento humano (Story 75-169: SEM citar o nome de quem vai atender).
+ * A detecção de "1ª mensagem" e o despacho/gravação
  * acontecem no route (`send-message/route.ts`); este módulo concentra apenas
  * a lógica PURA de montagem do texto, para testabilidade isolada.
  *
@@ -17,26 +18,21 @@
  *    `dispatch-broker-message.ts` (alias `@web/*` não resolve no vitest).
  */
 
-/** Fallback gracioso quando `users.name` do corretor está ausente/vazio. */
-export const BROKER_NAME_FALLBACK = "um corretor da equipe Trifold"
-
 /**
- * Monta o texto da mensagem de transição.
+ * Story 75-169 — Monta o texto da mensagem de transição. A Nicole faz a passagem
+ * de bastão para o atendimento humano SEM citar o nome de quem vai atender
+ * (decisão do Marcos, 2026-07-16). Assim a mensagem soa genuinamente como a Nicole
+ * encaminhando (coerente com o `role='assistant'`), e o corretor se apresenta
+ * quando quiser, sem apresentação em dobro.
  *
- * - Com `leadName`: `"Olá {leadName}! Sou {brokerName}, da equipe Trifold..."`
- * - Sem `leadName` (null/vazio): omite a saudação com nome.
- * - `brokerName` ausente/vazio → fallback gracioso ("um corretor da equipe Trifold").
+ * - Com `leadName`: saúda pelo nome; sem (null/vazio): omite o nome.
  */
-export function buildTransitionText(
-  leadName: string | null | undefined,
-  brokerName: string | null | undefined
-): string {
-  const broker = normalizeName(brokerName) ?? BROKER_NAME_FALLBACK
+export function buildTransitionText(leadName: string | null | undefined): string {
   const lead = normalizeName(leadName)
 
   return lead
-    ? `Olá ${lead}! Sou ${broker}, da equipe Trifold. Estou aqui para continuar te ajudando. 😊`
-    : `Olá! Sou ${broker}, da equipe Trifold. Estou aqui para continuar te ajudando. 😊`
+    ? `Olá ${lead}! Já vou te encaminhar para o nosso consultor especialista da Trifold. Ele vai continuar seu atendimento por aqui. 😉`
+    : `Olá! Já vou te encaminhar para o nosso consultor especialista da Trifold. Ele vai continuar seu atendimento por aqui. 😉`
 }
 
 /**
