@@ -23,7 +23,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: lead } = await db
     .from("leads")
-    .select("id, name, phone, assigned_broker_id, property_interest:property_interest_id(name), assigned_broker:users!assigned_broker_id(name)")
+    .select("id, name, phone, assigned_broker_id, property_interest:property_interest_id(name)")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -43,10 +43,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // Variáveis do template (não podem ser vazias — fallbacks).
   const one = (v: unknown): v is { name?: string } => !!v && typeof v === "object"
   const nome = (lead.name as string | null)?.trim() || "tudo bem"
-  const brokerRel = Array.isArray(lead.assigned_broker) ? lead.assigned_broker[0] : lead.assigned_broker
-  const corretor = (one(brokerRel) ? brokerRel.name : null)?.trim() || "Trifold"
+  // Story 75-164 — nomeia QUEM ASSUMIU (usuário logado), não o assigned_broker do
+  // lead. Consistente com a mensagem de transição (buildTransitionText usa appUser).
+  const corretor = (appUser.name as string | null)?.trim() || "Trifold"
   const propRel = Array.isArray(lead.property_interest) ? lead.property_interest[0] : lead.property_interest
-  const empreendimento = (one(propRel) ? propRel.name : null)?.trim() || "nosso empreendimento"
+  // Story 75-164 — fallback lê natural após "no empreendimento " (evita "empreendimento nosso empreendimento").
+  const empreendimento = (one(propRel) ? propRel.name : null)?.trim() || "que você procura"
 
   // Credenciais da empresa (admin p/ bypass de RLS do token).
   const admin = createAdminClient()
