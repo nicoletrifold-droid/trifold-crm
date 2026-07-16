@@ -1,7 +1,7 @@
 # Story 75-158 — Auto-persistir property_interest_id por contexto (confiável + sem clobber)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Nicole envia mídia (biblioteca) · **PR:** — · **Complexidade:** M (5 pontos) · **Branch:** feat/75-158-auto-persistir-property-interest-por-contexto
+- **Status:** Done · **Epic:** Nicole envia mídia (biblioteca) · **PR:** #207 · **Complexidade:** M (5 pontos) · **Branch:** feat/75-158-auto-persistir-property-interest-por-contexto
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -54,6 +54,7 @@ Blast radius de `property_interest_id` (por isso guardas são críticos): roleta
 - Sem mudança de banco/prompt (só código). Blast radius (roleta/mídia): net mais seguro — preenche mais, nunca clobber.
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #207** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit 5cff3c3). Só código, sem mudança de banco. Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 6 ACs, 1007/1007. Aguardando @devops.
 - 2026-07-16 — @dev — Implementado (identifyPropertyUnique + resolvePropertyInterestWrite + guard no pipeline). tsc/eslint/1007. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
