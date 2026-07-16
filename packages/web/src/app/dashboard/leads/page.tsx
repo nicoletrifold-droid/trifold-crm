@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
@@ -107,9 +108,13 @@ export default async function LeadsPage({
   }
 
   if (params.search) {
-    const orFilter = `name.ilike.%${params.search}%,phone.ilike.%${params.search}%`
-    query = query.or(orFilter)
-    countQuery = countQuery.or(orFilter)
+    // Story 75-167 — busca sem acento (name_search) + fuzzy/typo (RPC). Preserva os
+    // demais filtros/paginação abaixo (só o trecho de busca muda).
+    const orFilter = await buildLeadSearchOrFilter(supabase, user.orgId, params.search)
+    if (orFilter) {
+      query = query.or(orFilter)
+      countQuery = countQuery.or(orFilter)
+    }
   }
 
   if (params.stage_id) {

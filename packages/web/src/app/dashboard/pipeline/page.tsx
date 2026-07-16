@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
+import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
 import { fetchCreativesForLeads, resolveCreativeForLead, canSeeCreatives } from "@web/lib/pipeline/fetch-creatives"
 import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
@@ -122,16 +123,9 @@ export default async function PipelinePage({
         query = query.eq("assigned_broker_id", filters.broker_id)
       }
       if (filters.q) {
-        const term = filters.q.trim()
-        if (term) {
-          const digitsOnly = term.replace(/\D/g, "")
-          // Busca por nome OU por dígitos do telefone (se o termo contém números)
-          if (digitsOnly.length >= 3) {
-            query = query.or(`name.ilike.%${term}%,phone.ilike.%${digitsOnly}%`)
-          } else {
-            query = query.ilike("name", `%${term}%`)
-          }
-        }
+        // Story 75-167 — busca sem acento (name_search) + fuzzy/typo (RPC).
+        const orFilter = await buildLeadSearchOrFilter(supabase, user.orgId, filters.q)
+        if (orFilter) query = query.or(orFilter)
       }
       // Filtro de período de captura (created_at) — timezone America/Sao_Paulo (UTC-3)
       if (filters.date_from) {

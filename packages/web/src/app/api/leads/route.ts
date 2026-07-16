@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { canAccess } from "@web/lib/permissions"
@@ -40,6 +41,10 @@ export async function GET(request: NextRequest) {
     wantPrincipal = true
   }
 
+  // Story 75-167 — filtro de busca sem acento (name_search) + fuzzy/typo (RPC),
+  // computado uma vez (async) e reusado no buildQuery (que é síncrono).
+  const searchOr = search ? await buildLeadSearchOrFilter(supabase, appUser.org_id, search) : ""
+
   // Monta a query de leads de um segmento, aplicando os mesmos filtros de busca.
   // `client` decide o escopo de visibilidade (ver abaixo por que IMOB usa admin).
   const buildQuery = (
@@ -58,7 +63,7 @@ export async function GET(request: NextRequest) {
       .order("updated_at", { ascending: false })
       .range(from, to)
 
-    if (search) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+    if (searchOr) q = q.or(searchOr)
     if (stageId) q = q.eq("stage_id", stageId)
     if (propertyId) q = q.eq("property_interest_id", propertyId)
     return q
