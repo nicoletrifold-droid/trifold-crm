@@ -1,7 +1,7 @@
 # Story 75-164 — Abertura de atendimento nomeia quem ASSUMIU (não o corretor atribuído)
 
 ## Metadata
-- **Status:** Ready · **Epic:** Atendimento WhatsApp do corretor · **PR:** — · **Complexidade:** S (2 pontos) · **Branch:** feat/75-164-abertura-nomeia-quem-assumiu
+- **Status:** Done · **Epic:** Atendimento WhatsApp do corretor · **PR:** #213 · **Complexidade:** S (2 pontos) · **Branch:** feat/75-164-abertura-nomeia-quem-assumiu
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -33,6 +33,7 @@ Caso real (Marcos, 2026-07-16): a mensagem de "Iniciar atendimento" saiu **"Aqui
 - **PASS.** AC1 (nomeia quem assumiu — appUser) ✓ · AC2 (dono clica → próprio nome) ✓ · AC3 (fallback "que você procura", sem duplicar) ✓ · AC4 (fallback "Trifold" não-vazio) ✓ · AC5 (tsc/eslint/1021) ✓. Follow-up do gênero no template registrado.
 
 ## Change Log
+- 2026-07-16 — @devops — PR #213 + squash-merge. Deploy prod **SUCCESS** (4df3e04). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**.
 - 2026-07-16 — @dev — Implementado (corretor = appUser + fallback empreendimento). Status Ready → InReview.
 - 2026-07-16 — @po — **GO**. Draft → Ready.
