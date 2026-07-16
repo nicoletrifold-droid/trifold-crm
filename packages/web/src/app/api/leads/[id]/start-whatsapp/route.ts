@@ -94,7 +94,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     conversation = created ?? null
   }
 
-  const renderedText = `Olá ${nome}! Aqui é ${corretor}, corretor da Trifold. Vi seu interesse no empreendimento ${empreendimento} e vou te acompanhar por aqui. Posso te enviar as informações agora?`
+  // Story 75-166 — espelho do template Meta `abertura_atendimento_corretor` (APPROVED
+  // 2026-07-16 com wording neutro): "da equipe Trifold" (era "corretor da Trifold").
+  // Mantém paridade com o texto que o lead efetivamente recebe.
+  const renderedText = `Olá ${nome}! Aqui é ${corretor}, da equipe Trifold. Vi seu interesse no empreendimento ${empreendimento} e vou te acompanhar por aqui. Posso te enviar as informações agora?`
 
   if (conversation) {
     await db.from("messages").insert({
