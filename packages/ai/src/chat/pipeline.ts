@@ -17,6 +17,7 @@ import { searchKnowledge } from "../rag/search"
 import { buildContextFromRAG } from "../rag/context-builder"
 import {
   identifyProperty,
+  identifyPropertyUnique,
   calculateQualificationScore,
   getNextQualificationStep,
   extractCollectedData,
@@ -249,6 +250,38 @@ export function mediaContextLine(mc: MediaAvailability | undefined): string | nu
     return "MATERIAL VISUAL: o lead pediu material, mas o empreendimento de interesse ainda NAO esta definido. NAO diga que enviou nem que esta enviando imagens. Pergunte de forma leve de qual empreendimento ele quer ver (nao repergunte se ja estiver claro na conversa)."
   }
   return `MATERIAL VISUAL: o lead pediu material${emp}, mas NAO ha esse material disponivel agora. NAO diga que enviou nem que esta enviando. Ofereca conhecer o decorado pessoalmente OU diga que a equipe vai enviar, com naturalidade.`
+}
+
+/**
+ * Story 75-158 — Decide se e como persistir `leads.property_interest_id`, de
+ * forma segura (política confirmada pelo Marcos 2026-07-16):
+ *  - VAZIO hoje → preenche com a melhor identificação ÚNICA disponível: msg do
+ *    lead, senão contexto recente da conversa, senão collectedData.
+ *  - JÁ SETADO → só TROCA quando o PRÓPRIO lead nomeia, explicita e unicamente,
+ *    outro empreendimento (troca real de interesse). Nunca faz clobber por
+ *    contexto — alinha com os demais writers (guard "só se null").
+ * Pura/testável. Retorna `null` quando não deve escrever.
+ */
+export function resolvePropertyInterestWrite(input: {
+  currentPropertyId: string | null
+  explicitFromLead: string | null // match ÚNICO na msg atual do lead
+  contextPropertyId: string | null // match ÚNICO no contexto recente
+  collectedPropertyId: string | null // fallback do collectedData
+}): {
+  propertyId: string
+  origin: "lead_message" | "conversation_context" | "collected_data" | "lead_switch"
+} | null {
+  const { currentPropertyId, explicitFromLead, contextPropertyId, collectedPropertyId } = input
+  if (!currentPropertyId) {
+    if (explicitFromLead) return { propertyId: explicitFromLead, origin: "lead_message" }
+    if (contextPropertyId) return { propertyId: contextPropertyId, origin: "conversation_context" }
+    if (collectedPropertyId) return { propertyId: collectedPropertyId, origin: "collected_data" }
+    return null
+  }
+  if (explicitFromLead && explicitFromLead !== currentPropertyId) {
+    return { propertyId: explicitFromLead, origin: "lead_switch" }
+  }
+  return null
 }
 
 export interface ProcessMessageResult {
@@ -722,17 +755,47 @@ export async function processMessageWithMetadata(
       .eq("id", leadId)
       .single()
 
-    // Sync property_interest_id — identifyProperty has priority, fallback only if no existing value
-    if (identifiedPropertyId) {
-      leadPatch.property_interest_id = identifiedPropertyId
-    } else if (finalData.property_interest && !currentLead?.property_interest_id) {
+    // Story 75-158 — property_interest_id: preenche por CONTEXTO quando vazio; só
+    // TROCA valor existente com afirmação explícita e única do PRÓPRIO lead
+    // (nunca clobber por contexto). Antes o pipeline sobrescrevia incondicionalmente
+    // e só olhava a msg atual do lead (caso Maicon ficava NULL).
+    const currentPropId = currentLead?.property_interest_id ?? null
+    const explicitFromLead = identifyPropertyUnique(message, properties)
+    // Contexto recente (msg atual + histórico) só é usado para PREENCHER quando vazio.
+    const contextPropertyId = currentPropId
+      ? null
+      : identifyPropertyUnique(
+          [message, ...history.map((m) => (m as { content?: string }).content ?? "")].join("  "),
+          properties
+        )
+    let collectedPropertyId: string | null = null
+    if (!currentPropId && typeof finalData.property_interest === "string") {
       const interest = (finalData.property_interest as string).toLowerCase()
-      const matchedProperty = properties.find((p) =>
-        p.slug === interest || p.name.toLowerCase() === interest
+      const matchedProperty = properties.find(
+        (p) => p.slug.toLowerCase() === interest || p.name.toLowerCase() === interest
       )
-      if (matchedProperty) {
-        leadPatch.property_interest_id = matchedProperty.id
-      }
+      collectedPropertyId = matchedProperty?.id ?? null
+    }
+    const propWrite = resolvePropertyInterestWrite({
+      currentPropertyId: currentPropId,
+      explicitFromLead,
+      contextPropertyId,
+      collectedPropertyId,
+    })
+    if (propWrite) {
+      leadPatch.property_interest_id = propWrite.propertyId
+      emit({
+        level: "info",
+        category: "ai",
+        event_type: "nicole_property_interest_set",
+        message: `property_interest_id definido (${propWrite.origin})`,
+        metadata: {
+          lead_id: leadId,
+          property_id: propWrite.propertyId,
+          previous: currentPropId,
+          origin: propWrite.origin,
+        },
+      })
     }
 
     // Sync collected_data → lead fields

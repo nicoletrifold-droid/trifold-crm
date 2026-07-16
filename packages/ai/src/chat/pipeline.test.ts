@@ -4,6 +4,7 @@ import {
   resolveOffHoursResponse,
   buildNoReintroContext,
   mediaContextLine,
+  resolvePropertyInterestWrite,
 } from "./pipeline"
 import { OFF_HOURS_PROMPT } from "../prompts"
 
@@ -171,5 +172,43 @@ describe("mediaContextLine (Story 75-157 — fala honesta sobre mídia)", () => 
   it("tudo já enviado (dedup) → não reenviar/prometer de novo", () => {
     const line = mediaContextLine({ requested: true, willSend: false, empreendimento: "Vind Residence", reason: "none_selected" })
     expect(line).toContain("ja foram enviadas antes")
+  })
+})
+
+describe("resolvePropertyInterestWrite (Story 75-158 — política confirmada Marcos)", () => {
+  const base = { currentPropertyId: null, explicitFromLead: null, contextPropertyId: null, collectedPropertyId: null }
+
+  it("VAZIO + identificação por contexto → preenche (origin conversation_context) — caso Maicon", () => {
+    const r = resolvePropertyInterestWrite({ ...base, contextPropertyId: "vind" })
+    expect(r).toEqual({ propertyId: "vind", origin: "conversation_context" })
+  })
+
+  it("VAZIO + lead cita explicitamente → preenche (origin lead_message, prioridade sobre contexto)", () => {
+    const r = resolvePropertyInterestWrite({ ...base, explicitFromLead: "vind", contextPropertyId: "yarden" })
+    expect(r).toEqual({ propertyId: "vind", origin: "lead_message" })
+  })
+
+  it("VAZIO + só collectedData → preenche (origin collected_data)", () => {
+    const r = resolvePropertyInterestWrite({ ...base, collectedPropertyId: "yarden" })
+    expect(r).toEqual({ propertyId: "yarden", origin: "collected_data" })
+  })
+
+  it("JÁ SETADO + menção incidental por contexto → NÃO sobrescreve (null)", () => {
+    const r = resolvePropertyInterestWrite({ currentPropertyId: "yarden", explicitFromLead: null, contextPropertyId: "vind", collectedPropertyId: "vind" })
+    expect(r).toBeNull()
+  })
+
+  it("JÁ SETADO + lead troca explicitamente → atualiza (origin lead_switch)", () => {
+    const r = resolvePropertyInterestWrite({ currentPropertyId: "yarden", explicitFromLead: "vind", contextPropertyId: null, collectedPropertyId: null })
+    expect(r).toEqual({ propertyId: "vind", origin: "lead_switch" })
+  })
+
+  it("JÁ SETADO + lead reafirma o MESMO → não escreve (null)", () => {
+    const r = resolvePropertyInterestWrite({ currentPropertyId: "vind", explicitFromLead: "vind", contextPropertyId: null, collectedPropertyId: null })
+    expect(r).toBeNull()
+  })
+
+  it("VAZIO e nada identificado → null", () => {
+    expect(resolvePropertyInterestWrite(base)).toBeNull()
   })
 })
