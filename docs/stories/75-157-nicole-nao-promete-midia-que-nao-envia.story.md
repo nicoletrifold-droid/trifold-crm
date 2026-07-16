@@ -50,10 +50,12 @@ Causa raiz (confirmada no banco + código):
 
 **PENDENTE no deploy (@devops):** atualizar a linha `guardrails` em `agent_prompts` (org default) — substituir o texto da RN12 antiga pela nova (deferir ao MATERIAL VISUAL). Só APÓS o deploy do código (a linha dinâmica passa a existir). SQL preparado pelo @dev.
 
-## QA Results (@qa)
-_(a preencher no quality gate)_
+## QA Results (@qa — 2026-07-16)
+- **PASS** (com ação obrigatória de deploy). 7 checks OK. AC1 (contexto resolve "Vind" sem interest_id) ✓ · AC2 (sem empreendimento → pergunta, sem claim falso) ✓ · AC3 (sem asset → visita) ✓ · AC4 (`!res.ok` logado, não conta) ✓ · AC5 (logEvent + webhook loga) ✓ · AC6 (tsc web+ai / eslint web / vitest 995/995, +11) ✓.
+- **Ação obrigatória no deploy:** atualizar `agent_prompts.guardrails` (org default) — a RN12 do banco mascara o código e ainda diz "imagens enviadas automaticamente"; sem isso a fala não fica 100% honesta. A linha dinâmica MATERIAL VISUAL (código) já mitiga.
 
 ## Change Log
+- 2026-07-16 — @qa — **QA GATE: PASS** (com ação obrigatória de deploy: update agent_prompts.guardrails). 6 ACs, 995/995.
 - 2026-07-16 — @dev — Implementado (resolveSendableMedia + mediaContext/prompt honesto + observabilidade + RN12). tsc/eslint/995. Status Ready → InReview. ⏳ update DB agent_prompts.guardrails no deploy.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
 - 2026-07-16 — @sm — Story criada (Draft).
