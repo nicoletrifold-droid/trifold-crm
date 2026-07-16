@@ -49,10 +49,12 @@ Blast radius de `property_interest_id` (por isso guardas são críticos): roleta
 - **Checks:** tsc 0 (web+ai) · eslint web 0 · vitest **1007/1007** (+12). Sem regressão. Sem mudança de banco/prompt (só código).
 - **Branch:** `feat/75-158-auto-persistir-property-interest-por-contexto`.
 
-## QA Results (@qa)
-_(a preencher no quality gate)_
+## QA Results (@qa — 2026-07-16)
+- **PASS.** 7 checks OK. AC1 (contexto preenche vazio — Maicon) ✓ · AC2 (menção incidental NÃO sobrescreve) ✓ · AC3 (troca explícita do lead atualiza + loga previous) ✓ · AC4 (ambíguo → não persiste) ✓ · AC5 (emit `nicole_property_interest_set` com origem/anterior) ✓ · AC6 (tsc web+ai / eslint web / vitest 1007/1007, +12) ✓.
+- Sem mudança de banco/prompt (só código). Blast radius (roleta/mídia): net mais seguro — preenche mais, nunca clobber.
 
 ## Change Log
+- 2026-07-16 — @qa — **QA GATE: PASS**. 6 ACs, 1007/1007. Aguardando @devops.
 - 2026-07-16 — @dev — Implementado (identifyPropertyUnique + resolvePropertyInterestWrite + guard no pipeline). tsc/eslint/1007. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
 - 2026-07-16 — @sm — Story criada (Draft).
