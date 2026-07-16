@@ -172,25 +172,48 @@ export async function POST(
     }
   }
 
-  // Gravar em messages independente do resultado do envio
+  // Gravar em messages independente do resultado do envio.
+  // NOTA: `messages` NÃO tem coluna `org_id` (isolamento via conversation_id →
+  // conversations.org_id, inclusive RLS). Setar org_id aqui fazia o INSERT falhar
+  // ("column does not exist") em silêncio → a mídia enviada não aparecia na
+  // conversa (Story 75-159; mesmo bug da 56-3/75-40).
   const messageContent = `[Mídia] ${asset.title}`
-  await supabase.from("messages").insert({
-    conversation_id: conversation.id,
-    org_id: appUser.org_id,
-    role: "broker",
-    content: messageContent,
-    metadata: {
-      is_media: true,
-      media_asset_id: asset.id,
+  const { data: insertedMsg, error: insertErr } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: conversation.id,
+      role: "broker",
+      content: messageContent,
       media_url: asset.file_url,
       media_type: asset.file_type,
-      sent_via_whatsapp: sent,
-    },
-  })
+      metadata: {
+        is_media: true,
+        media_asset_id: asset.id,
+        media_url: asset.file_url,
+        media_type: asset.file_type,
+        sent_via_whatsapp: sent,
+        source: "broker_library",
+      },
+    })
+    .select("id")
+    .single()
+
+  // Não falhar em silêncio: o WhatsApp pode ter sido enviado, mas se não gravou
+  // no histórico o operador fica sem saber o que mandou (Story 75-159).
+  if (insertErr || !insertedMsg) {
+    console.error(
+      `[nicole-media-send] insert em messages falhou (asset=${asset.id}): ${insertErr?.message}`
+    )
+    return NextResponse.json(
+      { success: false, error: "MESSAGE_INSERT_FAILED", message: insertErr?.message, sent },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({
     success: true,
     sent,
     error: sendError,
+    messageId: insertedMsg.id,
   })
 }
