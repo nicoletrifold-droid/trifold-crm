@@ -58,3 +58,46 @@ export async function buildLeadSearchOrFilter(
 
   return parts.join(",")
 }
+
+// ————— Story 75-168 — matcher client-side (listas filtradas em JS) —————
+
+/** Trigramas de um texto (pad como o pg_trgm: 2 espaços à esquerda, 1 à direita). */
+function trigrams(s: string): Set<string> {
+  const t = `  ${s} `
+  const set = new Set<string>()
+  for (let i = 0; i < t.length - 2; i++) set.add(t.slice(i, i + 3))
+  return set
+}
+
+/** Similaridade por trigramas (Jaccard) — aproxima o pg_trgm para uso no navegador. */
+export function trigramSimilarity(a: string, b: string): number {
+  const A = trigrams(a)
+  const B = trigrams(b)
+  if (A.size === 0 && B.size === 0) return 1
+  let inter = 0
+  for (const g of A) if (B.has(g)) inter++
+  const union = A.size + B.size - inter
+  return union === 0 ? 0 : inter / union
+}
+
+/**
+ * Story 75-168 — casa um lead (nas listas filtradas em JS) contra o termo:
+ * sem acento (substring) + fuzzy (trigram, termos ≥4) nos campos de texto, e por
+ * dígitos nos campos de telefone. Espelha o comportamento do lado-banco (75-167).
+ */
+export function leadMatchesSearch(
+  fields: Array<string | null | undefined>,
+  rawTerm: string | null | undefined
+): boolean {
+  const term = normalizeSearchTerm(rawTerm)
+  if (!term) return true
+  const digits = (rawTerm ?? "").replace(/\D/g, "")
+
+  for (const f of fields) {
+    const nf = normalizeSearchTerm(f)
+    if (nf && nf.includes(term)) return true
+    if (term.length >= 4 && nf && trigramSimilarity(nf, term) >= 0.35) return true
+    if (digits.length >= 3 && (f ?? "").replace(/\D/g, "").includes(digits)) return true
+  }
+  return false
+}

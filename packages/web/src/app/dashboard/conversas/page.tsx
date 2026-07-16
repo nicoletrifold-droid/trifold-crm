@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { leadMatchesSearch } from "@web/lib/leads/search"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { MessageSquare, SearchX, User } from "lucide-react"
@@ -135,11 +136,8 @@ export default async function ConversasPage({
       const last = conv.last_message_at ? new Date(conv.last_message_at).getTime() : 0
       if (last > staleCutoff) return false
     }
-    if (search) {
-      const name = (lead.name ?? "").toLowerCase()
-      const phone = (lead.phone ?? "").toLowerCase()
-      if (!name.includes(search) && !phone.includes(search)) return false
-    }
+    // Story 75-168 — busca sem acento + fuzzy (espelha o lado-banco 75-167).
+    if (search && !leadMatchesSearch([lead.name, lead.phone], search)) return false
     return true
   })
 
