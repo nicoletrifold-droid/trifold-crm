@@ -695,7 +695,18 @@ export async function processMessageWithMetadata(
     VISIT_INVITE_PATTERNS.some((p) => p.test(assistantMessage))
 
   // 9. Extract collected data from user message FIRST (name comes from user, not AI)
-  const updatedData = extractCollectedData(message, collectedData)
+  // Story 75-161 — se a Nicole ACABOU de perguntar o nome (última msg dela no
+  // histórico) e ainda não temos nome, aceitamos uma resposta curta em minúsculas
+  // como nome (ex.: "maicon"). Contexto claro → baixo risco de falso positivo.
+  const lastAssistantMsg =
+    [...history].reverse().find((m) => (m as { role?: string }).role === "assistant")
+      ?.content ?? ""
+  const nameExpected =
+    !collectedData.name &&
+    /\bnome\b|\bcomo (?:posso|devo|gostaria de|prefere) (?:te )?chamar\b|\bcom quem (?:eu )?(?:falo|estou falando)\b/i.test(
+      lastAssistantMsg
+    )
+  const updatedData = extractCollectedData(message, collectedData, { nameExpected })
 
   // If Nicole already asked about a visit date, check if the client is now confirming one.
   // extractVisitConfirmation requires a day reference AND a positive signal — not just any mention.
