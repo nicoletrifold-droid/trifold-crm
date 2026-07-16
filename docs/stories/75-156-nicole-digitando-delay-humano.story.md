@@ -1,7 +1,7 @@
 # Story 75-156 — Nicole "digitando…" + atraso humano antes de responder (WhatsApp)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Humanização da Nicole (WhatsApp) · **PR:** — · **Complexidade:** S (3 pontos) · **Branch:** feat/75-156-nicole-digitando-delay-humano
+- **Status:** Done · **Epic:** Humanização da Nicole (WhatsApp) · **PR:** #205 · **Complexidade:** S (3 pontos) · **Branch:** feat/75-156-nicole-digitando-delay-humano
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -51,6 +51,7 @@ Decisão de escopo do Marcos: **apenas o lado do lead no WhatsApp** (maior impac
 - Observações: primeira chamada que marca a mensagem como lida (✓✓) no fluxo — comportamento aprovado pelo Marcos. Sem regressão (webhook/whatsapp 34/34).
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #205** + squash-merge na main. Deploy produção (Vercel) **SUCCESS** (commit 442fa60). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 5 ACs, 984/984. Aguardando @devops push.
 - 2026-07-16 — @dev — Implementado (2 helpers + wiring no webhook + 9 testes). tsc/eslint/984. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
