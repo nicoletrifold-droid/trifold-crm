@@ -1,7 +1,7 @@
 # Story 75-168 — Busca de lead sem acento + fuzzy (client-side: Broker leads, Broker chat, Conversas)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Busca de leads · **PR:** — · **Complexidade:** S (2 pontos) · **Branch:** feat/75-168-busca-lead-sem-acento-fuzzy-client
+- **Status:** Done · **Epic:** Busca de leads · **PR:** #217 · deploy 10b8dbe · **Complexidade:** S (2 pontos) · **Branch:** feat/75-168-busca-lead-sem-acento-fuzzy-client
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -33,6 +33,7 @@ Complemento da 75-167 (que cobriu os 3 sites no banco). Os 3 sites restantes fil
 - **PASS.** AC1 (acento) ✓ · AC2 (fuzzy/typo) ✓ · AC3 (telefone dígitos) ✓ · AC4 (vazio→todos) ✓ · AC5 (tsc/eslint/1036) ✓. Consistente com o lado-banco (75-167).
 
 ## Change Log
+- 2026-07-16 — @devops — PR #217 + merge. Deploy prod **SUCCESS** (10b8dbe). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 5 ACs, 1036/1036.
 - 2026-07-16 — @dev — matcher JS + 3 sites client. Status Ready → InReview.
 - 2026-07-16 — @po/@sm — GO. Story criada.
