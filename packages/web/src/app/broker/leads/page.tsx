@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { leadMatchesSearch } from "@web/lib/leads/search"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
 import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
@@ -146,14 +147,15 @@ export default async function BrokerLeadsPage({
     // Filtro "Data da Tarefa"
     if (taskDateLeadIds && !taskDateLeadIds.has(lead.id as string)) return false
     if (!search) return true
-    const name = ((lead.name as string) ?? "").toLowerCase()
-    const phone = ((lead.phone as string) ?? "").toLowerCase()
-    const email = ((lead.email as string) ?? "").toLowerCase()
+    // Story 75-168 — busca sem acento + fuzzy (espelha o lado-banco 75-167).
     const stageName = (() => {
       const s = Array.isArray(lead.kanban_stages) ? lead.kanban_stages[0] : lead.kanban_stages
-      return ((s as { name?: string } | null)?.name ?? "").toLowerCase()
+      return (s as { name?: string } | null)?.name ?? ""
     })()
-    return name.includes(search) || phone.includes(search) || email.includes(search) || stageName.includes(search)
+    return leadMatchesSearch(
+      [lead.name as string, lead.phone as string, lead.email as string, stageName],
+      search
+    )
   })
 
   const tdLabel = taskDateLabel(td, tdfrom, tdto)
