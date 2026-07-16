@@ -1,7 +1,7 @@
 # Story 75-162 — Nicole cria o agendamento quando confirma a visita (desacopla de visit_proposed)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Nicole — agendamento confirmado · **PR:** — · **Complexidade:** M (5 pontos) · **Branch:** feat/75-162-nicole-agenda-visita-confirmada
+- **Status:** Done · **Epic:** Nicole — agendamento confirmado · **PR:** #211 · **Complexidade:** M (5 pontos) · **Branch:** feat/75-162-nicole-agenda-visita-confirmada
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -48,6 +48,7 @@ Decisão do Marcos: **desacoplar** — agendar a partir do slot que a Nicole JÁ
 - Risco de dupla-marcação coberto pelos guards existentes. Validação definitiva = teste real (Nicole confirma visita → aparece na Agenda).
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #211** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit c9a014d). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 6 ACs, 1017/1017.
 - 2026-07-16 — @dev — Implementado (resolveVisitSlotParts + gate visit_availability + parse case-insensitive + insert error-check). tsc/1017. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
