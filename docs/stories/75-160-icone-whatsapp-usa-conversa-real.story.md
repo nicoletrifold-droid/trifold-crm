@@ -1,7 +1,7 @@
 # Story 75-160 — Ícone de WhatsApp na lista usa a conversa/canal real (não só formato do número)
 
 ## Metadata
-- **Status:** InReview · **Epic:** Atendimento WhatsApp do corretor · **PR:** — · **Complexidade:** S (2 pontos) · **Branch:** feat/75-160-icone-whatsapp-conversa-real
+- **Status:** Done · **Epic:** Atendimento WhatsApp do corretor · **PR:** #209 · **Complexidade:** S (2 pontos) · **Branch:** feat/75-160-icone-whatsapp-conversa-real
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -42,6 +42,7 @@ Caso real (Marcos, 2026-07-16): um lead que **conversou via WhatsApp** não most
 - Helper `whatsAppState`/`isWhatsAppConfirmed` já tem testes do caminho `confirmed`; mudança é só plumbing (query + prop).
 
 ## Change Log
+- 2026-07-16 — @devops — Push + **PR #209** + squash-merge. Deploy produção (Vercel) **SUCCESS** (commit 28b6e74). Status → **Done**.
 - 2026-07-16 — @qa — **QA GATE: PASS**. 5 ACs, 1007/1007.
 - 2026-07-16 — @dev — Implementado (channel + conversa batelada → hasWhatsappConversation). tsc/eslint/1007. Status Ready → InReview.
 - 2026-07-16 — @po — **GO (10/10)**. Status Draft → Ready.
