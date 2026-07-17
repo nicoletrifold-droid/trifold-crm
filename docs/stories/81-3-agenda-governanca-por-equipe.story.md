@@ -1,7 +1,7 @@
 # Story 81-3 — Agenda: governança de edição/cancelamento por equipe
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-3-agenda-governanca-equipe
 
@@ -103,3 +103,4 @@ Pronta para `@devops *push`.
 - @po (Pax): validação checklist 10 pontos → **GO (10/10)**; confirmado 0 usos de canMutateAppointment no packages/ai (Nicole intacta). Status Draft → Ready.
 - @dev (Dex): matriz por equipe no canMutateAppointment + team nos selects DELETE/mark_completed + 6 testes. Status Ready → InReview.
 - @qa (Quinn): QA gate **PASS** (7/7), call sites auditados por grep. 
+- @devops (Gage): CI verde, squash-merge PR #221, deploy prod automático. Status InReview → Done.
