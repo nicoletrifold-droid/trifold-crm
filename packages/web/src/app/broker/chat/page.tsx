@@ -73,6 +73,20 @@ export default async function BrokerChatPage({
 
   const rows = (conversations ?? []) as unknown as ConversationRow[]
 
+  // Story 75-171 — busca no CONTEÚDO das mensagens (espelha 75-170 do dashboard).
+  // RPC security INVOKER: a RLS de messages restringe o corretor às conversas DELE
+  // — a busca só encontra o que ele já pode ler.
+  const contentMatches = new Map<string, { snippet: string; count: number }>()
+  if (search) {
+    const { data: found } = await supabase.rpc("search_conversation_messages", {
+      p_org: user.orgId,
+      p_term: search,
+    })
+    for (const f of (found ?? []) as Array<{ conversation_id: string; snippet: string | null; match_count: number }>) {
+      contentMatches.set(f.conversation_id, { snippet: f.snippet ?? "", count: Number(f.match_count) })
+    }
+  }
+
   // Corte do filtro "Sem contato" (parado N dias). 0 = sem filtro.
   const staleCutoff = staleCutoffMs(days ? parseInt(days, 10) : 0)
 
@@ -90,8 +104,11 @@ export default async function BrokerChatPage({
       const last = conv.last_message_at ? new Date(conv.last_message_at).getTime() : 0
       if (last > staleCutoff) return false
     }
-    // Story 75-168 — busca sem acento + fuzzy (espelha o lado-banco 75-167).
-    if (search && !leadMatchesSearch([lead.name, lead.phone], search)) return false
+    // Story 75-168 — busca sem acento + fuzzy nos dados do lead; Story 75-171 —
+    // OU no conteúdo das mensagens (FTS). Basta casar um dos dois.
+    if (search && !leadMatchesSearch([lead.name, lead.phone], search) && !contentMatches.has(conv.id)) {
+      return false
+    }
     return true
   })
 
@@ -123,7 +140,7 @@ export default async function BrokerChatPage({
         </p>
       </div>
 
-      <LeadSearch />
+      <LeadSearch placeholder="Buscar por nome, telefone ou qualquer palavra da conversa…" />
       <LeadFilters
         stages={(stages ?? []).map((s) => ({ id: s.id, name: s.name, color: s.color }))}
         properties={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
@@ -167,9 +184,12 @@ export default async function BrokerChatPage({
 
             // Prefixo do preview (Story 63-17 AC4): broker → "Você:",
             // assistant → "🤖", user → sem prefixo.
+            // Story 75-171: achado por CONTEÚDO → preview vira o trecho que casou.
+            const contentHit = search ? contentMatches.get(conv.id) : undefined
             const rawPreview = conv.last_message_preview ?? ""
-            const preview =
-              conv.last_message_role === "broker"
+            const preview = contentHit
+              ? `💬 ${contentHit.snippet.replace(/\s+/g, " ").slice(0, 140)}${contentHit.count > 1 ? `  (+${contentHit.count - 1})` : ""}`
+              : conv.last_message_role === "broker"
                 ? `Você: ${rawPreview}`
                 : conv.last_message_role === "assistant"
                 ? `🤖 ${rawPreview}`
