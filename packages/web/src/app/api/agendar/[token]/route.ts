@@ -4,6 +4,7 @@ import { getOrgSchedule } from "@web/lib/roleta/business-time"
 import { imobSlotsForDay, isValidImobSlot, type ImobBusySlot } from "@web/lib/appointments/imob-slots"
 import { PROPERTY_MAP, LOCATIONS, isBookableLocation } from "@web/lib/appointments/locations"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { notifyImobVisitWhatsApp } from "@web/lib/appointments/notify-imob-visit"
 import { overlaps } from "@web/lib/appointments/governance"
 import { normalizePhoneBR } from "@trifold/shared"
 
@@ -241,7 +242,15 @@ export async function POST(
     metadata: { appointment_id: appointment.id, imobiliaria_id: imob.id, origem: "link_imob" },
   })
 
-  // Push para a equipe IMOB interna (Daiana) — fire-and-forget.
+  // Notifica a equipe IMOB (Daiana) — fire-and-forget. Push (in-app) + WhatsApp
+  // (Story 75-174, template nova_visita_imob) para os usuários IMOB ativos.
+  const when = new Date(appointment.scheduled_at).toLocaleString("pt-BR", {
+    timeZone: timezone,
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
   void (async () => {
     const { data: imobUsers } = await admin
       .from("users")
@@ -249,13 +258,6 @@ export async function POST(
       .eq("org_id", imob.org_id)
       .eq("role", "imob")
       .eq("is_active", true)
-    const when = new Date(appointment.scheduled_at).toLocaleString("pt-BR", {
-      timeZone: timezone,
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
     await Promise.all(
       (imobUsers ?? []).map((u) =>
         sendPushToUser(admin, u.id as string, {
@@ -266,6 +268,15 @@ export async function POST(
       )
     )
   })()
+  void notifyImobVisitWhatsApp(admin, imob.org_id, {
+    leadName: clientName,
+    whenLabel: when,
+    imobiliariaNome: imob.nome,
+  })
+    .then((r) => {
+      if (r.errors.length) console.error("[agendar-imob] whatsapp:", r.errors.join(" | "))
+    })
+    .catch((e: unknown) => console.error("[agendar-imob] whatsapp:", e))
 
   return NextResponse.json(
     {
