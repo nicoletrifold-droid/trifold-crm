@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   parseRequestedSlot,
   parseDayParts,
@@ -9,6 +10,7 @@ import {
   resolveVisitSlotParts,
   detectCancelIntent,
   detectRescheduleIntent,
+  checkSlotAvailability,
 } from "./visit-slot"
 
 // Âncora: 2026-06-18T17:00:00Z = quinta-feira 14:00 em BRT (UTC-3).
@@ -200,5 +202,75 @@ describe("partes (combinação dia+hora entre turnos)", () => {
     const { startUtc, outsideHours } = evaluateSlot(isoToDayParts("2026-06-21")!, { hour: 10, minute: 0 }, NOW)
     expect(startUtc).toBeNull()
     expect(outsideHours).toBe(true)
+  })
+})
+
+// ─────────── Story 81-1 — Nicole house-only (Epic 81 HOUSE × IMOB) ───────────
+
+interface FakeApptRow {
+  id: string
+  org_id: string
+  team: string
+  status: string
+  scheduled_at: string
+}
+
+/**
+ * Fake mínimo do query-builder do supabase-js para `isSlotFree` (via
+ * checkSlotAvailability): suporta a cadeia .from().select().eq().in().gt()
+ * .lt().neq().limit().maybeSingle() aplicando os filtros de verdade sobre um
+ * array de linhas — assim o teste exercita o COMPORTAMENTO (imob não bloqueia),
+ * não só a presença do filtro.
+ */
+function fakeSupabase(rows: FakeApptRow[]): SupabaseClient {
+  function builder(current: FakeApptRow[]) {
+    const q = {
+      select: () => q,
+      eq: (col: string, val: unknown) => builder(current.filter((r) => (r as unknown as Record<string, unknown>)[col] === val)),
+      neq: (col: string, val: unknown) => builder(current.filter((r) => (r as unknown as Record<string, unknown>)[col] !== val)),
+      in: (col: string, vals: unknown[]) => builder(current.filter((r) => vals.includes((r as unknown as Record<string, unknown>)[col]))),
+      gt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) > val)),
+      lt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) < val)),
+      limit: () => q,
+      maybeSingle: async () => ({ data: current[0] ?? null }),
+    }
+    return q
+  }
+  return { from: () => builder(rows) } as unknown as SupabaseClient
+}
+
+describe("checkSlotAvailability por equipe (Story 81-1)", () => {
+  // Segunda-feira 2026-07-20 14:00 BRT = 17:00Z (dentro do expediente)
+  const SLOT = new Date("2026-07-20T17:00:00Z")
+  const row = (team: string, iso: string): FakeApptRow => ({
+    id: `appt-${team}-${iso}`,
+    org_id: "org1",
+    team,
+    status: "scheduled",
+    scheduled_at: iso,
+  })
+
+  it("compromisso IMOB no mesmo horário NÃO bloqueia a Nicole (equipes independentes)", async () => {
+    const sb = fakeSupabase([row("imob", "2026-07-20T17:00:00.000Z")])
+    const { free } = await checkSlotAvailability(sb, "org1", SLOT)
+    expect(free).toBe(true)
+  })
+
+  it("compromisso HOUSE no mesmo horário bloqueia (comportamento original preservado)", async () => {
+    const sb = fakeSupabase([row("house", "2026-07-20T17:00:00.000Z")])
+    const { free, alternatives } = await checkSlotAvailability(sb, "org1", SLOT)
+    expect(free).toBe(false)
+    expect(alternatives.length).toBeGreaterThan(0)
+  })
+
+  it("alternativas oferecidas também ignoram compromissos IMOB", async () => {
+    // house ocupa 14h; imob ocupa 15h — a 1ª alternativa deve ser 15h mesmo assim
+    const sb = fakeSupabase([
+      row("house", "2026-07-20T17:00:00.000Z"),
+      row("imob", "2026-07-20T18:00:00.000Z"),
+    ])
+    const { free, alternatives } = await checkSlotAvailability(sb, "org1", SLOT)
+    expect(free).toBe(false)
+    expect(alternatives[0]?.toISOString()).toBe("2026-07-20T18:00:00.000Z")
   })
 })

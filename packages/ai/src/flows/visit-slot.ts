@@ -251,6 +251,9 @@ export function parseRequestedSlot(message: string, now: Date): ParsedSlot {
  * Slot livre se não há appointment ativo sobrepondo [start, start+60min).
  * Story 75-163 — `excludeAppointmentId` ignora a PRÓPRIA visita do lead ao remarcar
  * (senão mover pra perto do mesmo horário conflitaria consigo mesma).
+ * Story 81-1 — a Nicole é da equipe HOUSE: só compromissos `team='house'` ocupam
+ * o slot dela. Compromisso IMOB (Daiana/imobiliárias) no mesmo horário NÃO
+ * bloqueia — equipes independentes (Epic 81), comportamento desejado.
  */
 async function isSlotFree(
   supabase: SupabaseClient,
@@ -265,6 +268,7 @@ async function isSlotFree(
     .from("appointments")
     .select("id")
     .eq("org_id", orgId)
+    .eq("team", "house")
     .in("status", ["scheduled", "confirmed"])
     .gt("scheduled_at", windowStart)
     .lt("scheduled_at", windowEnd)
