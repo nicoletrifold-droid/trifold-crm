@@ -4,7 +4,16 @@ const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n")
 const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID
 
+// Story 81-4 (Epic 81) — Google Calendar DESLIGADO (decisão do diretor, 2026-07-17):
+// a agenda do CRM é a fonte única (link público por imobiliária substituiu a
+// necessidade). Kill-switch em CONSTANTE (não env var — gotcha de env vazia do
+// Vercel): para RELIGAR, troque para `false` e faça redeploy. Todos os pontos de
+// criação/exclusão de evento (rotas web e Nicole, que recebe a função injetada)
+// passam por este arquivo — nenhum outro ponto a mexer.
+const GOOGLE_CALENDAR_DISABLED = true
+
 function isConfigured(): boolean {
+  if (GOOGLE_CALENDAR_DISABLED) return false
   return !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID)
 }
 
