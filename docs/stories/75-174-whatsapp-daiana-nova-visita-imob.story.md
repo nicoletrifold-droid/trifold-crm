@@ -1,7 +1,7 @@
 # Story 75-174 — WhatsApp para a Daiana quando imobiliária marca visita pelo link
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/75-174-whatsapp-daiana-nova-visita
 
@@ -14,7 +14,7 @@ SÓ sai por **template HSM aprovado** — mesmo padrão do relatório do diretor
 ## O que foi feito
 - [x] **Template Meta** `nova_visita_imob` (pt_BR, UTILITY, 3 params posicionais + botão URL
   "Ver agenda"): {{1}} lead · {{2}} dia/hora BRT · {{3}} imobiliária. Submetido via WhatsApp
-  Business Management API (waba_id da whatsapp_config). **Só mergear com status APPROVED.**
+  Business Management API (waba_id da whatsapp_config). **APROVADO pela Meta em 2026-07-17** (merge saiu minutos antes — degradação graciosa cobria o intervalo).
 - [x] Helper `lib/appointments/notify-imob-visit.ts` (`notifyImobVisitWhatsApp`): envia o
   template para TODOS os usuários role=imob ativos com telefone (hoje: Daiana; à prova de
   futuro). Espelha `reports/send-daily-report.ts`. Fire-and-forget: acumula erros, nunca lança.
@@ -47,3 +47,4 @@ SÓ sai por **template HSM aprovado** — mesmo padrão do relatório do diretor
 ## Change Log
 - @dev (Dex): template Meta submetido + helper + integração no POST do link.
 - @qa (Quinn): PASS — fire-and-forget confirmado; dedup por telefone; gate de merge = template APPROVED.
+- @devops (Gage): CI verde, squash-merge PR #234; template APPROVED pela Meta minutos depois — fluxo ativo ponta-a-ponta. Status InReview → Done.
