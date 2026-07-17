@@ -17,9 +17,9 @@ const TZ = "America/Sao_Paulo"
 const NOW = new Date("2026-07-19T22:00:00Z")
 const DAY = { y: 2026, mo: 7, d: 20 }
 
-describe("imobSlotsForDay (Story 81-4)", () => {
+describe("imobSlotsForDay (Story 81-4 → 81-9)", () => {
   it("dia útil sem ocupação → grade completa 08..17, todos livres", () => {
-    const slots = imobSlotsForDay({ ...DAY, location: "Decorado Vind", week: WEEK, timezone: TZ, busy: [], now: NOW })
+    const slots = imobSlotsForDay({ ...DAY, week: WEEK, timezone: TZ, busy: [], now: NOW })
     expect(slots).toHaveLength(10) // 08:00..17:00
     expect(slots[0]?.labelLocal).toBe("08:00")
     expect(slots.at(-1)?.labelLocal).toBe("17:00")
@@ -27,40 +27,29 @@ describe("imobSlotsForDay (Story 81-4)", () => {
   })
 
   it("domingo (fechado) → sem slots", () => {
-    const slots = imobSlotsForDay({ y: 2026, mo: 7, d: 19, location: "Decorado Vind", week: WEEK, timezone: TZ, busy: [], now: NOW })
+    const slots = imobSlotsForDay({ y: 2026, mo: 7, d: 19, week: WEEK, timezone: TZ, busy: [], now: NOW })
     expect(slots).toHaveLength(0)
   })
 
-  it("compromisso IMOB no MESMO local ocupa o slot; local diferente NÃO", () => {
-    // 14:00 BRT = 17:00Z
-    const busy = [{ scheduled_at: "2026-07-20T17:00:00.000Z", duration_minutes: 60, location: "Decorado Vind" }]
-    const vind = imobSlotsForDay({ ...DAY, location: "Decorado Vind", week: WEEK, timezone: TZ, busy, now: NOW })
-    const yarden = imobSlotsForDay({ ...DAY, location: "Decorado Yarden", week: WEEK, timezone: TZ, busy, now: NOW })
-    expect(vind.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
-    expect(vind.find((s) => s.labelLocal === "13:00")?.free).toBe(true)
-    expect(yarden.find((s) => s.labelLocal === "14:00")?.free).toBe(true)
+  it("compromisso ativo da equipe ocupa o slot em QUALQUER local (Story 81-9)", () => {
+    // 14:00 BRT = 17:00Z — compromisso num decorado bloqueia o horário da equipe toda
+    const busy = [{ scheduled_at: "2026-07-20T17:00:00.000Z", duration_minutes: 60 }]
+    const slots = imobSlotsForDay({ ...DAY, week: WEEK, timezone: TZ, busy, now: NOW })
+    expect(slots.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
+    expect(slots.find((s) => s.labelLocal === "13:00")?.free).toBe(true)
+    expect(slots.find((s) => s.labelLocal === "15:00")?.free).toBe(true)
   })
 
   it("slots já passados não são oferecidos", () => {
     const midday = new Date("2026-07-20T15:30:00Z") // 12:30 BRT
-    const slots = imobSlotsForDay({ ...DAY, location: "Decorado Vind", week: WEEK, timezone: TZ, busy: [], now: midday })
+    const slots = imobSlotsForDay({ ...DAY, week: WEEK, timezone: TZ, busy: [], now: midday })
     expect(slots[0]?.labelLocal).toBe("13:00")
   })
 
   it("sábado usa a janela do sábado (08..11)", () => {
-    const slots = imobSlotsForDay({ y: 2026, mo: 7, d: 25, location: "Decorado Vind", week: WEEK, timezone: TZ, busy: [], now: NOW })
+    const slots = imobSlotsForDay({ y: 2026, mo: 7, d: 25, week: WEEK, timezone: TZ, busy: [], now: NOW })
     expect(slots[0]?.labelLocal).toBe("08:00")
     expect(slots.at(-1)?.labelLocal).toBe("11:00")
-  })
-
-  it("Calendly legado ocupa o horário em QUALQUER local (Story 81-8, regra 75-103)", () => {
-    const busy = [
-      { scheduled_at: "2026-07-20T17:00:00.000Z", duration_minutes: 60, location: "Calendly", calendly_event_uri: "uri" },
-    ]
-    const vind = imobSlotsForDay({ ...DAY, location: "Decorado Vind", week: WEEK, timezone: TZ, busy, now: NOW })
-    const yarden = imobSlotsForDay({ ...DAY, location: "Decorado Yarden", week: WEEK, timezone: TZ, busy, now: NOW })
-    expect(vind.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
-    expect(yarden.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
   })
 })
 

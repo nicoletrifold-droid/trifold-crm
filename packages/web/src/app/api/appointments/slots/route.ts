@@ -6,15 +6,16 @@ import {
   buildDayOptions,
   type ImobBusySlot,
 } from "@web/lib/appointments/imob-slots"
-import { isBookableLocation } from "@web/lib/appointments/locations"
 
 // Story 81-8 (Epic 81) — disponibilidade da agenda para o MODAL INTERNO, no mesmo
 // formato do link público: dias abertos + grade de horários livres/ocupados da
 // EQUIPE pedida (house × imob não se enxergam — 81-1). O usuário só escolhe entre
 // horários livres; o POST segue como guarda final (409 na corrida).
+// Story 81-9: a grade é POR EQUIPE, sem local — qualquer compromisso ativo da
+// equipe ocupa o horário (o local segue obrigatório só para criar).
 //
-// GET /api/appointments/slots?team=house|imob&date=YYYY-MM-DD&location=Decorado%20Vind
-//  → { days } sempre; { slots } quando date+location válidos.
+// GET /api/appointments/slots?team=house|imob&date=YYYY-MM-DD
+//  → { days } sempre; { slots } quando date válido.
 //
 // Equipe efetiva espelha o resolveTeam do POST: perfil imob → imob; admin/supervisor
 // escolhem via query; demais → house.
@@ -36,15 +37,14 @@ export async function GET(request: NextRequest) {
   const payload: Record<string, unknown> = { team, days: buildDayOptions(timezone, week) }
 
   const date = url.searchParams.get("date")
-  const location = url.searchParams.get("location") ?? ""
-  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && isBookableLocation(location)) {
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const [y, mo, d] = date.split("-").map(Number) as [number, number, number]
     // Janela com folga de fuso; a grade filtra por sobreposição real.
     const dayStart = new Date(Date.UTC(y, mo - 1, d - 1, 0, 0)).toISOString()
     const dayEnd = new Date(Date.UTC(y, mo - 1, d + 2, 0, 0)).toISOString()
     const { data: busy } = await supabase
       .from("appointments")
-      .select("scheduled_at, duration_minutes, location, calendly_event_uri")
+      .select("scheduled_at, duration_minutes")
       .eq("org_id", appUser.org_id)
       .eq("team", team)
       .in("status", ["scheduled", "confirmed"])
@@ -54,7 +54,6 @@ export async function GET(request: NextRequest) {
       y,
       mo,
       d,
-      location,
       week,
       timezone,
       busy: (busy ?? []) as ImobBusySlot[],

@@ -8,8 +8,8 @@
 //      IMOB  → só perfil `imob` (Daiana).
 //  - Compromisso do CALENDLY (cliente marcou sozinho; tem calendly_event_uri, sem
 //    broker_id): edição/cancelamento LIVRES (não há dono interno; será desligado na 81-4).
-//  - Conflito por LOCAL dentro da MESMA equipe; equipes diferentes nunca conflitam
-//    (Story 81-1); para o Calendly, conflito por HORÁRIO (ignora local).
+//  - Conflito por HORÁRIO dentro da MESMA equipe, independente do local (Story 81-9);
+//    equipes diferentes nunca conflitam (Story 81-1).
 //  - Nicole remarca/cancela via service role (packages/ai) SEM passar por aqui.
 
 export const APPOINTMENT_ADMIN_ROLES = ["admin", "supervisor"] as const
@@ -48,23 +48,17 @@ export function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: num
 export type AppointmentTeam = "house" | "imob"
 
 /**
- * Um candidato conflita com um existente? (Epic 81 / Story 81-1)
+ * Um candidato conflita com um existente? (Epic 81 / Stories 81-1 + 81-9)
  * EQUIPES DIFERENTES NUNCA CONFLITAM — nem no mesmo local (decisão do diretor:
- * são operações independentes, HOUSE × IMOB). Dentro da MESMA equipe vale a
- * regra original: sobrepõe no tempo E (mesmo local OU o existente é do
- * Calendly — que ocupa horário independente do local).
+ * são operações independentes, HOUSE × IMOB). Dentro da MESMA equipe, sobrepor
+ * no tempo JÁ é conflito — o local/empreendimento não importa (Story 81-9:
+ * 1 compromisso por horário por equipe; antes exigia mesmo local, o que deixava
+ * a grade oferecer horário já comprometido em outro decorado).
  */
 export function isConflict(
-  candidate: { start: number; end: number; location: string; team: AppointmentTeam },
-  existing: {
-    start: number
-    end: number
-    location: string
-    team: AppointmentTeam
-    calendly_event_uri: string | null
-  }
+  candidate: { start: number; end: number; team: AppointmentTeam },
+  existing: { start: number; end: number; team: AppointmentTeam }
 ): boolean {
   if (candidate.team !== existing.team) return false
-  if (!overlaps(candidate.start, candidate.end, existing.start, existing.end)) return false
-  return existing.location === candidate.location || existing.calendly_event_uri != null
+  return overlaps(candidate.start, candidate.end, existing.start, existing.end)
 }

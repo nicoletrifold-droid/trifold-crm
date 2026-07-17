@@ -5,12 +5,11 @@
 //  - Slots de 1h em hora cheia (mesma convenção da agenda interna).
 //  - Grade segue o horário comercial da org (roleta_schedule/WeekSchedule) no
 //    fuso da org — dia fechado = sem slots.
-//  - Um slot está OCUPADO se um compromisso ATIVO **da mesma equipe** no MESMO
-//    local sobrepõe o horário (regra intra-equipe da 81-1) — o chamador passa
-//    SÓ appointments da equipe em questão, com status ativo.
-//  - Story 81-8: compromisso do Calendly (legado, `calendly_event_uri`) ocupa o
-//    horário INDEPENDENTE do local (mesma regra do isConflict/75-103) — só
-//    acontece na equipe house.
+//  - Um slot está OCUPADO se QUALQUER compromisso ATIVO **da mesma equipe**
+//    sobrepõe o horário — o local/empreendimento NÃO importa (Story 81-9:
+//    1 compromisso por horário por equipe; antes filtrava por local e a grade
+//    oferecia horário já comprometido em outro decorado). O chamador passa SÓ
+//    appointments da equipe em questão, com status ativo.
 //  - Pura/testável; sem I/O.
 
 import type { WeekSchedule } from "@web/lib/roleta/business-time"
@@ -19,9 +18,6 @@ import { overlaps } from "./governance"
 export interface ImobBusySlot {
   scheduled_at: string // ISO
   duration_minutes: number | null
-  location: string | null
-  /** Story 81-8: Calendly legado bloqueia qualquer local (só existe no house). */
-  calendly_event_uri?: string | null
 }
 
 export interface SlotOption {
@@ -59,21 +55,21 @@ function dowOf(y: number, mo: number, d: number, timeZone: string): number {
 }
 
 /**
- * Grade de slots (hora cheia) de UM dia-calendário (no fuso da org) para UM local,
- * marcando livre/ocupado contra os compromissos IMOB ativos fornecidos.
+ * Grade de slots (hora cheia) de UM dia-calendário (no fuso da org) de UMA equipe,
+ * marcando livre/ocupado contra os compromissos ativos fornecidos (Story 81-9:
+ * qualquer local da equipe ocupa o slot).
  * `now` remove slots já passados (slot cujo início <= now não é oferecido).
  */
 export function imobSlotsForDay(params: {
   y: number
   mo: number // 1-12
   d: number
-  location: string
   week: WeekSchedule
   timezone: string
   busy: ImobBusySlot[]
   now: Date
 }): SlotOption[] {
-  const { y, mo, d, location, week, timezone, busy, now } = params
+  const { y, mo, d, week, timezone, busy, now } = params
   const day = week[dowOf(y, mo, d, timezone)]
   if (!day?.isOpen) return []
 
@@ -89,8 +85,6 @@ export function imobSlotsForDay(params: {
     if (startMs <= now.getTime()) continue // passado não se oferece
 
     const taken = busy.some((b) => {
-      // Calendly legado ocupa o horário em qualquer local (regra 75-103).
-      if ((b.location ?? "") !== location && !b.calendly_event_uri) return false
       const bStart = new Date(b.scheduled_at).getTime()
       const bEnd = bStart + (b.duration_minutes ?? 60) * 60_000
       return overlaps(startMs, endMs, bStart, bEnd)
