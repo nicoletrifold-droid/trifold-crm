@@ -1,7 +1,7 @@
 # Story 81-7 — Modal interno: imobiliária vinculada + corretor parceiro na equipe IMOB
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-7-modal-interno-imob-campos
 
@@ -40,3 +40,4 @@ seletor); corretores/gerente-comercial não veem seletor nem campos IMOB. Já ga
 - @dev (Dex): bloco IMOB no modal + POST com validação org-scoped; fix no meio do caminho:
   lookup de imobiliárias via admin client (RLS sem policy — user client retornaria vazio).
 - @qa (Quinn): PASS — extras só com team=imob; segurança de equipe inalterada (2 camadas).
+- @devops (Gage): CI verde, squash-merge PR #227, deploy prod automático. Status InReview → Done.
