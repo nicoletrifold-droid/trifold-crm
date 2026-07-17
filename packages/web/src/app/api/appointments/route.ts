@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { createCalendarEvent } from "@web/lib/google-calendar"
 import { normalizePhoneBR } from "@trifold/shared"
 import { isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
@@ -199,6 +200,47 @@ export async function POST(request: Request) {
     createdBy = body.created_by
   }
 
+  // Story 81-7 — extras da equipe IMOB (opcionais): imobiliária vinculada (validada
+  // na org) + corretor parceiro. Mesma gravação do link público (81-4/81-5):
+  // imobiliaria_id na coluna, nomes em metadata, linha humana nas notes.
+  let imobiliariaId: string | null = null
+  let imobiliariaNome: string | null = null
+  const partnerName = typeof body.partner_broker_name === "string" ? body.partner_broker_name.trim() : ""
+  const partnerPhone = typeof body.partner_broker_phone === "string" ? body.partner_broker_phone.trim() : ""
+  if (team === "imob") {
+    if (typeof body.imobiliaria_id === "string" && body.imobiliaria_id) {
+      // Tabela imobiliarias tem RLS sem policy — leitura só via admin client
+      // (mesma razão do imobiliariasGuard). Filtro de org aplicado manualmente.
+      const { data: imob } = await createAdminClient()
+        .from("imobiliarias")
+        .select("id, nome")
+        .eq("id", body.imobiliaria_id)
+        .eq("org_id", appUser.org_id)
+        .maybeSingle()
+      if (!imob) {
+        return NextResponse.json({ error: "Imobiliária inválida." }, { status: 422 })
+      }
+      imobiliariaId = imob.id as string
+      imobiliariaNome = (imob.nome as string) ?? null
+    }
+  }
+  const imobMetadata =
+    team === "imob" && (imobiliariaNome || partnerName || partnerPhone)
+      ? {
+          ...(imobiliariaNome ? { imobiliaria_nome: imobiliariaNome } : {}),
+          ...(partnerName || partnerPhone
+            ? { corretor_parceiro: { nome: partnerName || null, telefone: partnerPhone || null } }
+            : {}),
+        }
+      : null
+  const notesBase = body.notes?.trim() || null
+  const notesFinal =
+    team === "imob" && partnerName
+      ? [notesBase, `Corretor parceiro: ${partnerName}${partnerPhone ? ` · ${partnerPhone}` : ""}`]
+          .filter(Boolean)
+          .join("\n")
+      : notesBase
+
   const { data: appointment, error } = await supabase
     .from("appointments")
     .insert({
@@ -210,9 +252,11 @@ export async function POST(request: Request) {
       duration_minutes: duration,
       location,
       team,
+      imobiliaria_id: imobiliariaId,
       status: body.status || "scheduled",
-      notes: body.notes?.trim() || null,
+      notes: notesFinal,
       created_by: createdBy,
+      ...(imobMetadata ? { metadata: imobMetadata } : {}),
       client_name: body.client_name?.trim() || null,
       client_email: body.client_email?.trim() || null,
       client_phone: body.client_phone?.trim() || null,
