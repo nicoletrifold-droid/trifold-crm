@@ -1,7 +1,7 @@
 # Story 75-170 — Conversas: busca no CONTEÚDO das mensagens (estilo WhatsApp)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** — (story avulsa, pedido direto do diretor 2026-07-17)
 - **Branch:** feat/75-170-busca-conteudo-conversas
 
@@ -40,3 +40,4 @@ resolve com folga e escala.
 - @dev (Dex): mig 177 dev+prod + RPC + integração na página + placeholder. Smoke real em prod.
 - @qa (Quinn): PASS — invoker preserva RLS por perfil; fallback: termo sem match não quebra
   a busca por lead; suíte 1061/1061.
+- @devops (Gage): CI verde, squash-merge PR #229, deploy prod automático. Status InReview → Done.
