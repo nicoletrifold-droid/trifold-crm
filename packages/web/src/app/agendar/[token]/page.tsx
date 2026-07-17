@@ -1,6 +1,7 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getOrgSchedule } from "@web/lib/roleta/business-time"
 import { LOCATIONS } from "@web/lib/appointments/locations"
+import { buildDayOptions } from "@web/lib/appointments/imob-slots"
 import { BookingForm } from "./booking-form"
 
 // Story 81-4 (Epic 81) — página PÚBLICA de agendamento da imobiliária parceira
@@ -8,41 +9,6 @@ import { BookingForm } from "./booking-form"
 // revogado → aviso amigável, sem vazar nada.
 
 export const dynamic = "force-dynamic"
-
-interface DayOption {
-  date: string // YYYY-MM-DD (no fuso da org)
-  label: string // ex.: "seg 20/07"
-}
-
-/** Próximos 14 dias (no fuso da org), só os ABERTOS na agenda da org. */
-function buildDayOptions(timezone: string, openDows: Set<number>): DayOption[] {
-  const out: DayOption[] = []
-  const wk: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
-  for (let i = 0; i < 14; i++) {
-    const instant = new Date(Date.now() + i * 86_400_000)
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      weekday: "short",
-    }).formatToParts(instant)
-    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ""
-    const dow = wk[get("weekday")] ?? 0
-    if (!openDows.has(dow)) continue
-    const y = get("year")
-    const mo = get("month")
-    const d = get("day")
-    const label = new Intl.DateTimeFormat("pt-BR", {
-      timeZone: timezone,
-      weekday: "short",
-      day: "2-digit",
-      month: "2-digit",
-    }).format(instant)
-    out.push({ date: `${y}-${mo}-${d}`, label })
-  }
-  return out
-}
 
 export default async function AgendarImobiliariaPage({
   params,
@@ -77,8 +43,7 @@ export default async function AgendarImobiliariaPage({
   }
 
   const { week, timezone } = await getOrgSchedule(imob.org_id as string, admin)
-  const openDows = new Set(week.map((d, i) => (d.isOpen ? i : -1)).filter((i) => i >= 0))
-  const days = buildDayOptions(timezone, openDows)
+  const days = buildDayOptions(timezone, week)
 
   return (
     <div className="min-h-screen bg-stone-950 px-4 py-8">
