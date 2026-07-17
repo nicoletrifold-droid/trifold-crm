@@ -1,7 +1,7 @@
 # Story 81-6 — Agenda: visibilidade IMOB na visão SEMANA + painel de detalhes
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** fix/81-6-agenda-semana-visibilidade-imob
 
@@ -34,3 +34,4 @@ mostram os dois badges explícitos). Marcar todos os chips geraria ruído.
 - @ux (Uma): tratamento visual p/ chips densos (marcar exceção IMOB; house sem marca na semana).
 - @dev (Dex): semana+detalhes nas 2 agendas + month do broker + metadata nos selects. 1059/1059.
 - @qa (Quinn): PASS — cobertura agora fecha TODAS as visões (dia/semana/mês × dashboard/broker + 2 painéis).
+- @devops (Gage): CI verde, squash-merge PR #225, deploy prod automático. Status InReview → Done.
