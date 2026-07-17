@@ -35,3 +35,4 @@ mostram os dois badges explícitos). Marcar todos os chips geraria ruído.
 - @dev (Dex): semana+detalhes nas 2 agendas + month do broker + metadata nos selects. 1059/1059.
 - @qa (Quinn): PASS — cobertura agora fecha TODAS as visões (dia/semana/mês × dashboard/broker + 2 painéis).
 - @devops (Gage): CI verde, squash-merge PR #225, deploy prod automático. Status InReview → Done.
+- @ux (Uma) pós-validação visual do Marcos: retoque — linha "Corretor parceiro:" das notes ocultada nos painéis de detalhe (redundante com o campo estruturado). Follow-up 81-6b.
