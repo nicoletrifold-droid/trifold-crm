@@ -1,7 +1,7 @@
 # Story 81-1 — Agenda: coluna `team` + conflito por equipe + Nicole house-only
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-1-agenda-team-conflito-equipe
 
@@ -131,3 +131,4 @@ Pronta para `@devops *push`.
 - @po (Pax): validação checklist 10 pontos → **GO (10/10)**. Referências de código verificadas contra o repo (anti-alucinação). Status Draft → Ready.
 - @dev (Dex): migration 175 criada e aplicada em dev+prod; isConflict/isSlotFree por equipe; stamping server-side no POST; testes novos passando. Status Ready → InReview.
 - @qa (Quinn): QA gate **PASS** (7/7), CHECK verificado com insert real em DEV, todos os caminhos de insert auditados. Nota p/ 81-2: GET precisa expor `team`.
+- @devops (Gage): CI verde (Vercel), squash-merge PR #219 (`71cb866e`), deploy prod automático. Status InReview → Done.
