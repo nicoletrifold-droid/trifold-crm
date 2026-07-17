@@ -1,7 +1,7 @@
 # Story 81-8 — Modal interno: dia + grade de horários LIVRES (padrão do link público)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-8-modal-slots-disponiveis
 
@@ -47,3 +47,4 @@ Nicole não sobrepõe house (isSlotFree), corretor não sobrepõe house no mesmo
   no modal; fix de ordem de declaração de estado pego pelo type-check.
 - @qa (Quinn): PASS — 1061/1061; equipe efetiva do endpoint espelha resolveTeam (corretor não
   vê grade imob); POST permanece como guarda final.
+- @devops (Gage): CI verde, squash-merge PR #228, deploy prod automático. Status InReview → Done.
