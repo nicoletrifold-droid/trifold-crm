@@ -1,7 +1,7 @@
 # Story 75-175 — Notificação de novo documento: por CLIENTE, não pela obra inteira
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** — (bug de produção achado pelo Marcos, 2026-07-17)
 - **Branch:** fix/75-175-notif-doc-por-cliente
 
@@ -48,3 +48,4 @@ Diagnóstico:
 - @dev (Dex): targeting por cliente_obra_id + coalescing por cliente + 2 callers de documento.
 - @qa (Quinn): PASS — confirmado que clienteObraId da rota == cliente_obras.id (destinatário e
   RLS coerentes); fotos permanecem obra-wide; sem vazamento (RLS já escopava).
+- @devops (Gage): CI verde, squash-merge PR #235, deploy prod automático. Status InReview → Done.
