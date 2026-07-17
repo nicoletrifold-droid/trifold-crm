@@ -1,7 +1,7 @@
 # Story 81-2 — Agenda: badge/cores HOUSE·IMOB, só decorados, seletor de equipe
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-2-agenda-badges-house-imob
 
@@ -100,3 +100,4 @@ Pronta para `@devops *push`.
 - @po (Pax): validação checklist 10 pontos → **GO (10/10)**. Status Draft → Ready.
 - @dev (Dex): helper team-badge + badges/acentos nas 2 agendas + month view + seletor no modal + Sala de Reuniões removida. Status Ready → InReview.
 - @qa (Quinn): QA gate **PASS** (7/7), incl. verificação do Tailwind v4 content detection p/ src/lib. 
+- @devops (Gage): CI verde, squash-merge PR #220, deploy prod automático. Status InReview → Done.
