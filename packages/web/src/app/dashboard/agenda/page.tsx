@@ -133,7 +133,7 @@ export default async function AgendaPage({
   if (params.mark_completed) {
     const { data: target } = await supabase
       .from("appointments")
-      .select("id, broker_id, calendly_event_uri")
+      .select("id, broker_id, calendly_event_uri, team")
       .eq("id", params.mark_completed)
       .single()
     if (target && canMutateAppointment(appUser.role, appUser.id, target)) {
