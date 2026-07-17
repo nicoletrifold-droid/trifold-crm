@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { imobSlotsForDay, isValidImobSlot } from "./imob-slots"
+import { imobSlotsForDay, isValidImobSlot, buildDayOptions } from "./imob-slots"
 import type { WeekSchedule } from "@web/lib/roleta/business-time"
 
 // Agenda: seg-sex 08:00-18:00; sáb 08:00-12:00; dom fechado.
@@ -51,6 +51,29 @@ describe("imobSlotsForDay (Story 81-4)", () => {
     const slots = imobSlotsForDay({ y: 2026, mo: 7, d: 25, location: "Decorado Vind", week: WEEK, timezone: TZ, busy: [], now: NOW })
     expect(slots[0]?.labelLocal).toBe("08:00")
     expect(slots.at(-1)?.labelLocal).toBe("11:00")
+  })
+
+  it("Calendly legado ocupa o horário em QUALQUER local (Story 81-8, regra 75-103)", () => {
+    const busy = [
+      { scheduled_at: "2026-07-20T17:00:00.000Z", duration_minutes: 60, location: "Calendly", calendly_event_uri: "uri" },
+    ]
+    const vind = imobSlotsForDay({ ...DAY, location: "Decorado Vind", week: WEEK, timezone: TZ, busy, now: NOW })
+    const yarden = imobSlotsForDay({ ...DAY, location: "Decorado Yarden", week: WEEK, timezone: TZ, busy, now: NOW })
+    expect(vind.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
+    expect(yarden.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
+  })
+})
+
+describe("buildDayOptions (Story 81-8)", () => {
+  it("gera até 14 dias pulando os fechados (domingo fora)", () => {
+    const days = buildDayOptions(TZ, WEEK, NOW)
+    expect(days.length).toBeGreaterThan(0)
+    expect(days.length).toBeLessThanOrEqual(14)
+    // domingo 2026-07-26 não aparece (WEEK[0].isOpen = false)
+    expect(days.some((d) => d.date === "2026-07-26")).toBe(false)
+    // formato YYYY-MM-DD e label pt-BR
+    expect(days[0]?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(days[0]?.label.length).toBeGreaterThan(3)
   })
 })
 

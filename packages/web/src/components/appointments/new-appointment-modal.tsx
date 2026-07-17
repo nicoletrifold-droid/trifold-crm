@@ -12,14 +12,8 @@ import type { Imobiliaria } from "@web/lib/imob/imobiliarias"
 
 // Todo compromisso da agenda é fixo em 1 hora, em hora cheia (decisão de produto:
 // visitas/compromissos de 1 em 1 hora). A duração não é mais escolhida pelo usuário.
+// Story 81-8: o horário vem da grade de slots livres — sem input livre de hora.
 const APPOINTMENT_DURATION_MIN = 60
-
-// Garante hora cheia ("HH:MM" → "HH:00"); string vazia continua vazia.
-function snapToWholeHour(value: string): string {
-  if (!value) return ""
-  const h = value.split(":")[0] ?? "00"
-  return `${h.padStart(2, "0")}:00`
-}
 
 interface Lead {
   id: string
@@ -85,8 +79,61 @@ export function NewAppointmentModal({
     setImobiliariaId(nova.id)
     setShowNewImobiliaria(false)
   }
+  // Story 81-8 — dia + horário no padrão do link público: só horários LIVRES da
+  // equipe aparecem (grade via /api/appointments/slots). O POST segue como guarda
+  // final de conflito (409 na corrida).
   const [date, setDate] = useState("")
-  const [time, setTime] = useState("")
+  const [days, setDays] = useState<Array<{ date: string; label: string }> | null>(null)
+  const [slots, setSlots] = useState<Array<{ startIso: string; labelLocal: string; free: boolean }>>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState("")
+
+  // Story 81-8 — dias abertos (uma vez) + grade de horários quando local+dia+equipe mudam.
+  const teamKey = isImobTeam ? "imob" : "house"
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/appointments/slots?team=${teamKey}`)
+      .then(async (res) => (res.ok ? ((await res.json()) as { days: Array<{ date: string; label: string }> }) : null))
+      .then((json) => {
+        if (cancelled || !json) return
+        setDays(json.days)
+        setDate((d) => d || json.days[0]?.date || "")
+      })
+      .catch(() => {
+        if (!cancelled) setDays([])
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!location || !date) {
+      setSlots([])
+      return
+    }
+    let cancelled = false
+    setSlotsLoading(true)
+    setSelectedSlot("")
+    fetch(`/api/appointments/slots?team=${teamKey}&date=${date}&location=${encodeURIComponent(location)}`)
+      .then(async (res) =>
+        res.ok ? ((await res.json()) as { slots?: Array<{ startIso: string; labelLocal: string; free: boolean }> }) : null
+      )
+      .then((json) => {
+        if (!cancelled) setSlots(json?.slots ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setSlots([])
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [location, date, teamKey])
+
   const [notes, setNotes] = useState("")
 
   // Lead section
@@ -149,8 +196,8 @@ export function NewAppointmentModal({
     setError("")
 
     if (!location) return setError("Selecione um local.")
-    if (!date) return setError("Selecione uma data.")
-    if (!time) return setError("Selecione um horário.")
+    if (!date) return setError("Selecione um dia.")
+    if (!selectedSlot) return setError("Escolha um horário disponível.")
 
     if (leadMode === "search" && !selectedLead) {
       return setError("Selecione um lead ou mude para Novo Cliente.")
@@ -162,14 +209,9 @@ export function NewAppointmentModal({
       return setError("Nome do cliente é obrigatório.")
     }
 
-    const scheduledAt = new Date(`${date}T${snapToWholeHour(time)}:00`)
-    if (isNaN(scheduledAt.getTime())) {
-      return setError("Data ou hora inválida.")
-    }
-    scheduledAt.setMinutes(0, 0, 0) // garante hora cheia
-
+    // Story 81-8: o horário vem da grade de slots livres (ISO pronto, hora cheia).
     const payload: Record<string, unknown> = {
-      scheduled_at: scheduledAt.toISOString(),
+      scheduled_at: selectedSlot,
       duration_minutes: APPOINTMENT_DURATION_MIN,
       location,
       property_id: property?.id ?? null,
@@ -211,6 +253,15 @@ export function NewAppointmentModal({
       if (res.status === 409) {
         const json = (await res.json()) as { error?: string }
         setError(json.error ?? "Conflito de horário.")
+        // Story 81-8: corrida — outro usuário pegou o slot; recarrega a grade.
+        setSelectedSlot("")
+        setSlots([])
+        setSlotsLoading(true)
+        fetch(`/api/appointments/slots?team=${teamKey}&date=${date}&location=${encodeURIComponent(location)}`)
+          .then(async (r) => (r.ok ? ((await r.json()) as { slots?: typeof slots }) : null))
+          .then((j) => setSlots(j?.slots ?? []))
+          .catch(() => setSlots([]))
+          .finally(() => setSlotsLoading(false))
         return
       }
 
@@ -399,34 +450,65 @@ export function NewAppointmentModal({
               </div>
             )}
 
-            {/* Date + Time */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
-                  Data <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
-                  Hora <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(snapToWholeHour(e.target.value))}
-                  step={3600}
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
-                  required
-                />
-              </div>
+            {/* Story 81-8 — Dia + Horário no padrão do link público (só horários LIVRES da equipe) */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
+                Dia <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                required
+              >
+                {(days ?? []).map((d) => (
+                  <option key={d.date} value={d.date}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+              {days === null && (
+                <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">Carregando dias…</p>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
+                Horário <span className="text-red-500">*</span>
+              </label>
+              {!location ? (
+                <p className="py-1 text-sm text-stone-400 dark:text-stone-500">
+                  Selecione o local para ver os horários disponíveis.
+                </p>
+              ) : slotsLoading ? (
+                <p className="py-1 text-sm text-stone-400 dark:text-stone-500">Carregando horários…</p>
+              ) : slots.filter((s) => s.free).length === 0 ? (
+                <p className="py-1 text-sm text-stone-400 dark:text-stone-500">
+                  Sem horários livres neste dia — escolha outro dia.
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                  {slots.map((s) => (
+                    <button
+                      key={s.startIso}
+                      type="button"
+                      disabled={!s.free}
+                      onClick={() => setSelectedSlot(s.startIso)}
+                      className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${
+                        selectedSlot === s.startIso
+                          ? isImobTeam
+                            ? "border-violet-500 bg-violet-600 text-white"
+                            : "border-orange-500 bg-orange-600 text-white"
+                          : s.free
+                            ? "border-stone-300 text-stone-700 hover:border-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:border-orange-400"
+                            : "cursor-not-allowed border-stone-200 text-stone-300 line-through dark:border-stone-800 dark:bg-stone-900 dark:text-stone-600"
+                      }`}
+                    >
+                      {s.labelLocal}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Duração — fixa em 1 hora (compromissos de 1 em 1 hora) */}

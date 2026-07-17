@@ -1,14 +1,16 @@
-// Story 81-4 (Epic 81) — grade de horários LIVRES da equipe IMOB para o link
-// público de agendamento (/agendar/[token]).
+// Story 81-4/81-8 (Epic 81) — grade de horários LIVRES de UMA equipe, usada pelo
+// link público de imobiliárias (/agendar/[token]) e pelo modal interno da agenda.
 //
 // Regras:
 //  - Slots de 1h em hora cheia (mesma convenção da agenda interna).
 //  - Grade segue o horário comercial da org (roleta_schedule/WeekSchedule) no
 //    fuso da org — dia fechado = sem slots.
-//  - Um slot está OCUPADO apenas se um compromisso ATIVO da equipe IMOB no MESMO
-//    local sobrepõe o horário (regra intra-equipe da 81-1; house é invisível e
-//    nunca bloqueia). O chamador é responsável por passar SÓ appointments
-//    team='imob' com status ativo.
+//  - Um slot está OCUPADO se um compromisso ATIVO **da mesma equipe** no MESMO
+//    local sobrepõe o horário (regra intra-equipe da 81-1) — o chamador passa
+//    SÓ appointments da equipe em questão, com status ativo.
+//  - Story 81-8: compromisso do Calendly (legado, `calendly_event_uri`) ocupa o
+//    horário INDEPENDENTE do local (mesma regra do isConflict/75-103) — só
+//    acontece na equipe house.
 //  - Pura/testável; sem I/O.
 
 import type { WeekSchedule } from "@web/lib/roleta/business-time"
@@ -18,6 +20,8 @@ export interface ImobBusySlot {
   scheduled_at: string // ISO
   duration_minutes: number | null
   location: string | null
+  /** Story 81-8: Calendly legado bloqueia qualquer local (só existe no house). */
+  calendly_event_uri?: string | null
 }
 
 export interface SlotOption {
@@ -85,7 +89,8 @@ export function imobSlotsForDay(params: {
     if (startMs <= now.getTime()) continue // passado não se oferece
 
     const taken = busy.some((b) => {
-      if ((b.location ?? "") !== location) return false
+      // Calendly legado ocupa o horário em qualquer local (regra 75-103).
+      if ((b.location ?? "") !== location && !b.calendly_event_uri) return false
       const bStart = new Date(b.scheduled_at).getTime()
       const bEnd = bStart + (b.duration_minutes ?? 60) * 60_000
       return overlaps(startMs, endMs, bStart, bEnd)
@@ -98,6 +103,41 @@ export function imobSlotsForDay(params: {
     })
   }
   return slots
+}
+
+export interface DayOption {
+  date: string // YYYY-MM-DD (no fuso da org)
+  label: string // ex.: "seg., 20/07"
+}
+
+/**
+ * Próximos 14 dias (no fuso da org), só os ABERTOS na agenda. Story 81-8: movido
+ * da página pública para cá — o modal interno usa a mesma lista via API.
+ */
+export function buildDayOptions(timezone: string, week: WeekSchedule, now: Date = new Date()): DayOption[] {
+  const out: DayOption[] = []
+  const wk: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  for (let i = 0; i < 14; i++) {
+    const instant = new Date(now.getTime() + i * 86_400_000)
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+    }).formatToParts(instant)
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ""
+    const dow = wk[get("weekday")] ?? 0
+    if (!week[dow]?.isOpen) continue
+    const label = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: timezone,
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+    }).format(instant)
+    out.push({ date: `${get("year")}-${get("month")}-${get("day")}`, label })
+  }
+  return out
 }
 
 /** O instante está dentro do expediente do dia (no fuso) e em hora cheia? */
