@@ -53,6 +53,10 @@ Do lado do lead, toda mensagem chega pelo número da EMPRESA (perfil WhatsApp Bu
 - Caminhos OUT intocados (AC6): webhook Nicole, send-file, start-whatsapp, cron followup — diff toca só os 3 arquivos acima.
 - tsc web 0 · eslint 0 · vitest **1069/1069**.
 
+## QA Results (@qa — 2026-07-17)
+- **PASS.** AC1/AC2/AC5 ✓ (9 testes do helper) · AC3 ✓ (transição usa `transitionText` puro, inspeção do diff) · AC4 ✓ (check de 4096 com prefixo ANTES de criar conversation/enviar transição) · AC6 ✓ (diff toca só route + helper + testes; webhook/send-file/start-whatsapp/cron intocados) · AC7 ✓ (tsc 0 · eslint 0 · vitest 1069/1069).
+- Sem regressão; helper puro segue o padrão de `dispatch-broker-message.ts` (REUSE do padrão vitest-friendly).
+
 ## Change Log
 - 2026-07-17 — @po — Validação 10/10 → **GO**. Status Draft → Ready.
 - 2026-07-17 — @sm — Story criada (decisão: opção 1, assinatura automática).
