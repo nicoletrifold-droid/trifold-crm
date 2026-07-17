@@ -67,38 +67,27 @@ describe("overlaps", () => {
   })
 })
 
-describe("isConflict (Story 75-103)", () => {
-  const cand = { start: 1000, end: 2000, location: "Stand Trifold", team: "house" as const }
+describe("isConflict (Story 81-9 — por horário, independente do local)", () => {
+  const cand = { start: 1000, end: 2000, team: "house" as const }
 
-  it("mesmo local + sobreposto = conflito", () => {
-    expect(isConflict(cand, { start: 1500, end: 2500, location: "Stand Trifold", team: "house", calendly_event_uri: null })).toBe(true)
+  it("mesma equipe + sobreposto = conflito (o local não importa)", () => {
+    expect(isConflict(cand, { start: 1500, end: 2500, team: "house" })).toBe(true)
   })
-  it("local diferente + interno = SEM conflito", () => {
-    expect(isConflict(cand, { start: 1500, end: 2500, location: "Sala 2", team: "house", calendly_event_uri: null })).toBe(false)
-  })
-  it("Calendly sobreposto = conflito mesmo com local diferente", () => {
-    expect(isConflict(cand, { start: 1500, end: 2500, location: "Calendly", team: "house", calendly_event_uri: "uri" })).toBe(true)
-  })
-  it("Calendly mas SEM sobreposição = sem conflito", () => {
-    expect(isConflict(cand, { start: 3000, end: 4000, location: "Calendly", team: "house", calendly_event_uri: "uri" })).toBe(false)
+  it("mesma equipe SEM sobreposição = sem conflito", () => {
+    expect(isConflict(cand, { start: 3000, end: 4000, team: "house" })).toBe(false)
+    expect(isConflict(cand, { start: 2000, end: 3000, team: "house" })).toBe(false) // encosta
   })
 })
 
 describe("isConflict por equipe (Story 81-1 — Epic 81 HOUSE × IMOB)", () => {
-  const house = { start: 1000, end: 2000, location: "Decorado Vind", team: "house" as const }
-  const imob = { start: 1000, end: 2000, location: "Decorado Vind", team: "imob" as const }
+  const house = { start: 1000, end: 2000, team: "house" as const }
+  const imob = { start: 1000, end: 2000, team: "imob" as const }
 
-  it("equipes DIFERENTES + mesmo local + mesmo horário = NÃO conflita (decisão do diretor)", () => {
-    expect(isConflict(house, { ...imob, calendly_event_uri: null })).toBe(false)
-    expect(isConflict(imob, { ...house, calendly_event_uri: null })).toBe(false)
+  it("equipes DIFERENTES + mesmo horário = NÃO conflita (decisão do diretor)", () => {
+    expect(isConflict(house, imob)).toBe(false)
+    expect(isConflict(imob, house)).toBe(false)
   })
-  it("equipe cruzada nem com Calendly bloqueia (Calendly é house; candidato imob passa)", () => {
-    expect(isConflict(imob, { start: 1500, end: 2500, location: "Calendly", team: "house", calendly_event_uri: "uri" })).toBe(false)
-  })
-  it("MESMA equipe imob + mesmo local + sobreposto = conflita (regra intra-equipe preservada)", () => {
-    expect(isConflict(imob, { start: 1500, end: 2500, location: "Decorado Vind", team: "imob", calendly_event_uri: null })).toBe(true)
-  })
-  it("MESMA equipe imob + local diferente = sem conflito (igual à regra house)", () => {
-    expect(isConflict(imob, { start: 1500, end: 2500, location: "Decorado Yarden", team: "imob", calendly_event_uri: null })).toBe(false)
+  it("MESMA equipe imob + sobreposto = conflita (regra intra-equipe)", () => {
+    expect(isConflict(imob, { start: 1500, end: 2500, team: "imob" })).toBe(true)
   })
 })

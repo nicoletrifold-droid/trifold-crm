@@ -146,10 +146,9 @@ export async function POST(request: Request) {
     }
   }
 
-  // Double-booking check (Story 75-103): sobrepõe no horário E (mesmo local OU o
-  // existente é do Calendly — que ocupa o horário independente do local, pois o
-  // Calendly não sincroniza com Google/nosso sistema).
-  // Story 81-1: conflito SÓ dentro da mesma equipe (HOUSE × IMOB não se bloqueiam).
+  // Double-booking check (Story 81-9): sobrepor no horário dentro da MESMA equipe
+  // já é conflito — o local não importa (1 compromisso por horário por equipe).
+  // Story 81-1: HOUSE × IMOB não se bloqueiam.
   const team = resolveTeam(appUser.role, body.team)
   const location = body.location?.trim() || "Stand Trifold"
   // Compromissos de 1 em 1 hora: duração fixa de 60min e início em hora cheia
@@ -162,7 +161,7 @@ export async function POST(request: Request) {
   {
     const { data: conflicts } = await supabase
       .from("appointments")
-      .select("id, scheduled_at, duration_minutes, location, team, calendly_event_uri")
+      .select("id, scheduled_at, duration_minutes, team")
       .eq("org_id", appUser.org_id)
       .in("status", ["scheduled", "confirmed"])
       .gte(
@@ -173,20 +172,18 @@ export async function POST(request: Request) {
 
     const trueConflict = (conflicts ?? []).some((existing) =>
       isConflict(
-        { start: newStart.getTime(), end: newEnd.getTime(), location, team },
+        { start: newStart.getTime(), end: newEnd.getTime(), team },
         {
           start: new Date(existing.scheduled_at).getTime(),
           end: new Date(existing.scheduled_at).getTime() + (existing.duration_minutes ?? 30) * 60000,
-          location: existing.location ?? "",
           team: (existing.team as AppointmentTeam) ?? "house",
-          calendly_event_uri: existing.calendly_event_uri,
         }
       )
     )
 
     if (trueConflict) {
       return NextResponse.json(
-        { error: "Conflito de horário: já existe um agendamento nesse local e horário." },
+        { error: "Conflito de horário: a equipe já tem um agendamento nesse horário." },
         { status: 409 }
       )
     }

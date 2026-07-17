@@ -108,7 +108,6 @@ export async function PATCH(
     const newDuration = changingTime
       ? 60
       : ((updateFields.duration_minutes as number) ?? existing.duration_minutes ?? 30)
-    const newLocation = ((updateFields.location as string) ?? existing.location ?? "Stand Trifold")
     const newEnd = new Date(newStart.getTime() + newDuration * 60000)
     if (changingTime) {
       updateFields.scheduled_at = newStart.toISOString()
@@ -121,7 +120,7 @@ export async function PATCH(
 
     const { data: others } = await supabase
       .from("appointments")
-      .select("id, scheduled_at, duration_minutes, location, team, calendly_event_uri")
+      .select("id, scheduled_at, duration_minutes, team")
       .eq("org_id", appUser.org_id)
       .in("status", ["scheduled", "confirmed"])
       .neq("id", id)
@@ -130,19 +129,17 @@ export async function PATCH(
 
     const conflict = (others ?? []).some((o) =>
       isConflict(
-        { start: newStart.getTime(), end: newEnd.getTime(), location: newLocation, team: existingTeam },
+        { start: newStart.getTime(), end: newEnd.getTime(), team: existingTeam },
         {
           start: new Date(o.scheduled_at).getTime(),
           end: new Date(o.scheduled_at).getTime() + (o.duration_minutes ?? 30) * 60000,
-          location: o.location ?? "",
           team: (o.team as AppointmentTeam) ?? "house",
-          calendly_event_uri: o.calendly_event_uri,
         }
       )
     )
     if (conflict) {
       return NextResponse.json(
-        { error: "Conflito de horário: já existe um agendamento nesse local e horário." },
+        { error: "Conflito de horário: a equipe já tem um agendamento nesse horário." },
         { status: 409 }
       )
     }

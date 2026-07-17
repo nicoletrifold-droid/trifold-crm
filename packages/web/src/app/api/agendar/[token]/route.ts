@@ -15,6 +15,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 // Tudo que a imobiliária vê/faz é da equipe IMOB: disponibilidade só considera
 // compromissos team='imob' (house é invisível e não bloqueia — Story 81-1) e a
 // marcação nasce team='imob' com a imobiliária carimbada (imobiliaria_id).
+// Story 81-9: dentro da equipe IMOB o conflito é por HORÁRIO, independente do
+// local — a grade e o recheck do POST não filtram por local.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -41,7 +43,7 @@ async function imobBusyBetween(orgId: string, fromIso: string, toIso: string): P
   const admin = createAdminClient()
   const { data } = await admin
     .from("appointments")
-    .select("scheduled_at, duration_minutes, location")
+    .select("scheduled_at, duration_minutes")
     .eq("org_id", orgId)
     .eq("team", "imob")
     .in("status", ["scheduled", "confirmed"])
@@ -62,14 +64,13 @@ export async function GET(
 
   const url = new URL(request.url)
   const date = url.searchParams.get("date") // YYYY-MM-DD (dia no fuso da org)
-  const location = url.searchParams.get("location") ?? LOCATIONS[0]!
 
   const payload: Record<string, unknown> = {
     imobiliaria: { nome: imob.nome },
     locations: LOCATIONS,
   }
 
-  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && isBookableLocation(location)) {
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const [y, mo, d] = date.split("-").map(Number) as [number, number, number]
     const admin = createAdminClient()
     const { week, timezone } = await getOrgSchedule(imob.org_id, admin)
@@ -77,7 +78,7 @@ export async function GET(
     const dayStart = new Date(Date.UTC(y, mo - 1, d - 1, 0, 0)).toISOString()
     const dayEnd = new Date(Date.UTC(y, mo - 1, d + 2, 0, 0)).toISOString()
     const busy = await imobBusyBetween(imob.org_id, dayStart, dayEnd)
-    payload.slots = imobSlotsForDay({ y, mo, d, location, week, timezone, busy, now: new Date() })
+    payload.slots = imobSlotsForDay({ y, mo, d, week, timezone, busy, now: new Date() })
   }
 
   return NextResponse.json(payload)
@@ -133,8 +134,9 @@ export async function POST(
     return NextResponse.json({ error: "Horário fora do expediente. Escolha um horário disponível." }, { status: 400 })
   }
 
-  // Conflito SÓ contra a equipe IMOB, mesmo local (Story 81-1). Recheca na hora
-  // do POST (corrida entre imobiliárias → 409 amigável, a página pede outro slot).
+  // Conflito SÓ contra a equipe IMOB, por HORÁRIO — local não importa (Story 81-9).
+  // Recheca na hora do POST (corrida entre imobiliárias → 409 amigável, a página
+  // pede outro slot).
   const endAt = new Date(scheduledAt.getTime() + 60 * 60_000)
   const busy = await imobBusyBetween(
     imob.org_id,
@@ -142,7 +144,6 @@ export async function POST(
     endAt.toISOString()
   )
   const taken = busy.some((b) => {
-    if ((b.location ?? "") !== location) return false
     const bStart = new Date(b.scheduled_at).getTime()
     const bEnd = bStart + (b.duration_minutes ?? 60) * 60_000
     return overlaps(scheduledAt.getTime(), endAt.getTime(), bStart, bEnd)
