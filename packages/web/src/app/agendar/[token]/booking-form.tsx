@@ -35,6 +35,9 @@ export function BookingForm({ token, locations, days }: BookingFormProps) {
   const [clientName, setClientName] = useState("")
   const [clientPhone, setClientPhone] = useState("")
   const [clientEmail, setClientEmail] = useState("")
+  // Story 81-5: corretor DA IMOBILIÁRIA que acompanha a visita (opcional — pode não ir ninguém)
+  const [brokerName, setBrokerName] = useState("")
+  const [brokerPhone, setBrokerPhone] = useState("")
   const [notes, setNotes] = useState("")
 
   const [submitting, setSubmitting] = useState(false)
@@ -81,6 +84,8 @@ export function BookingForm({ token, locations, days }: BookingFormProps) {
           client_name: clientName.trim(),
           client_phone: clientPhone.trim(),
           client_email: clientEmail.trim() || null,
+          broker_name: brokerName.trim() || null,
+          broker_phone: brokerPhone.trim() || null,
           notes: notes.trim() || null,
         }),
       })
@@ -213,6 +218,28 @@ export function BookingForm({ token, locations, days }: BookingFormProps) {
       <div>
         <label className="mb-1 block text-sm font-medium text-stone-300">E-mail (opcional)</label>
         <input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className={inputCls} placeholder="cliente@email.com" type="email" />
+      </div>
+
+      {/* Story 81-5 — corretor da imobiliária que acompanha (opcional) */}
+      <div className="rounded-lg border border-stone-800 bg-stone-900/60 p-3">
+        <p className="mb-2 text-xs font-medium text-stone-400">
+          Corretor da sua equipe que vai acompanhar a visita (opcional)
+        </p>
+        <div className="space-y-3">
+          <input
+            value={brokerName}
+            onChange={(e) => setBrokerName(e.target.value)}
+            className={inputCls}
+            placeholder="Nome do corretor"
+          />
+          <input
+            value={brokerPhone}
+            onChange={(e) => setBrokerPhone(e.target.value)}
+            className={inputCls}
+            placeholder="Telefone do corretor — (44) 99999-9999"
+            inputMode="tel"
+          />
+        </div>
       </div>
 
       <div>
