@@ -935,6 +935,7 @@ export async function processMessageWithMetadata(
           duration_minutes: VISIT_DURATION_MIN,
           location: "Sede Trifold - Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby",
           status: "scheduled",
+          team: "house", // Story 81-1: Nicole é equipe house (default cobre, explícito documenta)
           created_by: "nicole",
           client_name: leadName,
           client_phone: leadPhone,

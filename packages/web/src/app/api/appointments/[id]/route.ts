@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { buildUpdatePayload } from "@web/lib/api-utils"
 import { deleteCalendarEvent } from "@web/lib/google-calendar"
-import { canMutateAppointment, isConflict } from "@web/lib/appointments/governance"
+import { canMutateAppointment, isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
 
 // Campos cuja alteração exige justificativa (edição de dados do compromisso).
 // Mudança só de status (completed/confirmed/no_show) não é "edição de dados".
@@ -57,7 +57,7 @@ export async function PATCH(
   // Fetch current appointment to get google_event_id before updating
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id, google_event_id, lead_id, broker_id, calendly_event_uri, scheduled_at, duration_minutes, location")
+    .select("id, google_event_id, lead_id, broker_id, calendly_event_uri, scheduled_at, duration_minutes, location, team")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -115,9 +115,13 @@ export async function PATCH(
       updateFields.duration_minutes = 60
     }
 
+    // Story 81-1: o conflito é avaliado com a EQUIPE do próprio compromisso
+    // (team não é editável — quem cria define a equipe).
+    const existingTeam = (existing.team as AppointmentTeam) ?? "house"
+
     const { data: others } = await supabase
       .from("appointments")
-      .select("id, scheduled_at, duration_minutes, location, calendly_event_uri")
+      .select("id, scheduled_at, duration_minutes, location, team, calendly_event_uri")
       .eq("org_id", appUser.org_id)
       .in("status", ["scheduled", "confirmed"])
       .neq("id", id)
@@ -126,11 +130,12 @@ export async function PATCH(
 
     const conflict = (others ?? []).some((o) =>
       isConflict(
-        { start: newStart.getTime(), end: newEnd.getTime(), location: newLocation },
+        { start: newStart.getTime(), end: newEnd.getTime(), location: newLocation, team: existingTeam },
         {
           start: new Date(o.scheduled_at).getTime(),
           end: new Date(o.scheduled_at).getTime() + (o.duration_minutes ?? 30) * 60000,
           location: o.location ?? "",
+          team: (o.team as AppointmentTeam) ?? "house",
           calendly_event_uri: o.calendly_event_uri,
         }
       )
