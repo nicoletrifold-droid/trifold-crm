@@ -9,6 +9,10 @@ import {
   buildTransitionText,
   shouldSendTransition,
 } from "@web/lib/broker/transition-message"
+import {
+  buildSignedMessage,
+  senderFirstName,
+} from "@web/lib/broker/message-signature"
 
 const MAX_MESSAGE_LENGTH = 4096 // Limite do WhatsApp
 
@@ -103,6 +107,22 @@ export async function POST(
 
   // --- Conversation (AC2 / R3: criar se não existir) ---
   const channel = resolveChannel(lead.phone)
+
+  // --- Story 75-171: assinatura automática do remetente humano ---
+  // O lead só vê o número da empresa; o prefixo identifica quem escreveu.
+  // Aplica-se SÓ à mensagem principal (role='broker') — a transição abaixo
+  // fala como equipe (role='assistant') e segue sem assinatura.
+  const signedMessage = buildSignedMessage(appUser.name, message, channel)
+  if (signedMessage.length > MAX_MESSAGE_LENGTH) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "MESSAGE_TOO_LONG",
+        message: `A mensagem excede o limite de ${MAX_MESSAGE_LENGTH} caracteres (a assinatura "${senderFirstName(appUser.name)}:" conta no limite).`,
+      },
+      { status: 400 }
+    )
+  }
   let { data: conversation } = await db
     .from("conversations")
     .select("id, last_message_at, is_ai_active")
@@ -220,7 +240,7 @@ export async function POST(
   // --- Dispatch (verifica janela 24h internamente p/ WhatsApp; AC3/AC4) ---
   const dispatch = await dispatchBrokerMessage({
     phone: lead.phone,
-    message,
+    message: signedMessage,
     conversationLastMessageAt: conversation.last_message_at,
     waCredentials,
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? null,
@@ -247,9 +267,13 @@ export async function POST(
     )
   }
 
+  // Story 75-171: `content` guarda o texto ORIGINAL (a UI interna já rotula o
+  // remetente — 75-165); `signed_as` registra o prefixo que o lead recebeu.
+  const signedAs = senderFirstName(appUser.name)
   const metadata: Record<string, unknown> = {
     sent_via: channel,
     sent_by: appUser.id,
+    ...(signedAs ? { signed_as: signedAs } : {}),
   }
   if (!dispatch.sent) {
     metadata.send_error = dispatch.error ?? "SEND_FAILED"
