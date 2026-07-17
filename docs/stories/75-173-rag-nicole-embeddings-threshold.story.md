@@ -1,7 +1,7 @@
 # Story 75-173 — RAG da Nicole: base sem embeddings + threshold errado (estava MORTO)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** — (incidente achado ao atender pedido do diretor: "informar a Nicole sobre seguros")
 - **Branch:** fix/75-173-rag-threshold-embeddings
 
@@ -42,3 +42,4 @@ A Nicole respondia só com prompts/property data — sem NENHUM FAQ da base (por
 ## Change Log
 - @dev (Dex): diagnóstico (2 causas), fix de dados via script (embeddings 38/38) + threshold.
 - @qa (Quinn): PASS — validação com pergunta real do lead contra match_knowledge em prod.
+- @devops (Gage): CI verde, squash-merge PR #233, deploy prod automático. RAG da Nicole operacional. Status InReview → Done.
