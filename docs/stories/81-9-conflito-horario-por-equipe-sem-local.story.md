@@ -1,7 +1,7 @@
 # Story 81-9 — Conflito intra-equipe por HORÁRIO (independente do local)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** fix/81-9-conflito-horario-por-equipe
 - **Tipo:** Bug fix (regra de negócio)
@@ -51,3 +51,4 @@ A Nicole (`packages/ai/src/flows/visit-slot.ts:isSlotFree`) JÁ segue essa regra
   409 fala em "horário". Nicole intocada (já correta).
 - @qa (Quinn): PASS — 1056/1056, typecheck verde, lint limpo no raio da mudança. Efeito aceito:
   duplicados legados (pré-fix) aparecem ocupados e podem 409 ao editar — comportamento desejado.
+- @devops (Gage): CI verde, squash-merge PR #230, deploy prod automático. Status InReview → Done.
