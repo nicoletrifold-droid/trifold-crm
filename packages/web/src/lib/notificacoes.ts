@@ -94,8 +94,19 @@ export function portalNotificacoesPausadas(): boolean {
 export async function notifyClientes(
   obraId: string,
   evento: EventoNotificacao,
-  obraName: string
+  obraName: string,
+  opts?: {
+    /**
+     * Story 75-175 — quando o evento é de UM cliente específico (documento de
+     * unidade, com `obra_documentos.cliente_obra_id`), passa o id do vínculo
+     * (`cliente_obras.id`) para notificar SÓ o dono daquela unidade — não a obra
+     * inteira. Nulo/ausente = comportamento original (fan-out para todos os
+     * vinculados). Fotos/progresso/mensagem são sempre da obra → não usam isto.
+     */
+    clienteObraId?: string | null
+  }
 ): Promise<void> {
+  const clienteObraId = opts?.clienteObraId ?? null
   try {
     if (portalNotificacoesPausadas()) {
       console.log(
@@ -111,7 +122,14 @@ export async function notifyClientes(
     // da janela dispara envio; os demais (ex.: várias fotos/docs no mesmo período) são suprimidos —
     // o cliente vê tudo no portal. `nova_mensagem` tem grupo null → nunca coalesce, sempre passa.
     // Fallback seguro: se a RPC falhar (ex.: ainda não aplicada), NÃO bloqueia — segue e envia.
+    // Story 75-175 — quando é doc de uma unidade, o coalescing é POR CLIENTE
+    // (sufixo :clienteObraId): um lote com docs de várias unidades gera 1 aviso
+    // POR unidade (antes 1 aviso da obra suprimia todos os outros clientes).
     const coalesceKey = COALESCE_GROUP[evento]
+      ? clienteObraId
+        ? `${COALESCE_GROUP[evento]}:${clienteObraId}`
+        : COALESCE_GROUP[evento]
+      : null
     if (coalesceKey) {
       const { data: claimed, error: claimError } = await admin.rpc("claim_obra_notif", {
         p_obra_id: obraId,
@@ -145,9 +163,14 @@ export async function notifyClientes(
     // disparo, pulamos qualquer portal user cujo `sienge_customer_id` esteja no
     // conjunto. É tolerante (LEFT-join lógico): user sem vínculo CRM ou com
     // `sienge_customer_id` nulo recebe normalmente.
+    // Story 75-175 — se o evento é de uma unidade específica, os vinculados = SÓ
+    // o dono daquele `cliente_obras.id` (não todos da obra).
+    const vinculosQuery = admin.from("cliente_obras").select("user_id").eq("obra_id", obraId)
+    if (clienteObraId) vinculosQuery.eq("id", clienteObraId)
+
     const [obraRes, vinculosRes, distratadosRes] = await Promise.all([
       admin.from("obras").select("org_id").eq("id", obraId).single(),
-      admin.from("cliente_obras").select("user_id").eq("obra_id", obraId),
+      vinculosQuery,
       admin
         .from("clientes_obras_vinculos")
         .select("cliente_id")

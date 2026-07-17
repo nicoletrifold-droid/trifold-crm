@@ -101,6 +101,25 @@ describe("notifyClientes — coalescing (Story 75-66)", () => {
     expect(rpcSpy).not.toHaveBeenCalled()
     expect(fromSpy).toHaveBeenCalled()
   })
+
+  // Story 75-175 — documento de UNIDADE: coalescing por cliente (sufixo :clienteObraId)
+  it("doc de unidade → claim usa chave POR cliente (novo_documento:<id>)", async () => {
+    rpcResult = { data: null, error: null } // coalescido → basta inspecionar o claim
+    await notifyClientes("obra-1", "novo_documento", "Vind Residence", { clienteObraId: "co-301" })
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "claim_obra_notif",
+      expect.objectContaining({ p_obra_id: "obra-1", p_evento: "novo_documento:co-301" })
+    )
+  })
+
+  it("doc SEM cliente (geral da obra) → mantém a chave da obra (novo_documento)", async () => {
+    rpcResult = { data: null, error: null }
+    await notifyClientes("obra-1", "novo_documento", "Vind Residence", { clienteObraId: null })
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "claim_obra_notif",
+      expect.objectContaining({ p_evento: "novo_documento" })
+    )
+  })
 })
 
 // Story 75-141 — notifyBoletoLembrete: pausa, toggles por canal, template por marco,

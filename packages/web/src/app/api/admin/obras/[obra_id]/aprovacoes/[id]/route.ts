@@ -162,10 +162,14 @@ export async function PATCH(
   // Story 75-5: ao aprovar um UPLOAD (foto/documento), notifica os clientes.
   // 'exclusao_foto' é exclusão — não notifica cliente.
   if (acao === "aprovar" && aprovacao.tipo !== "exclusao_foto") {
+    // Story 75-175 — doc de unidade avisa só o dono (usa cliente_obra_id do metadata
+    // da aprovação); foto é sempre da obra (null → fan-out para todos).
+    const aprovMeta = aprovacao.metadata as { cliente_obra_id?: string | null } | null
     notifyClientes(
       obra_id,
       aprovacao.tipo === "foto" ? "nova_foto" : "novo_documento",
-      obraName
+      obraName,
+      { clienteObraId: aprovacao.tipo === "foto" ? null : aprovMeta?.cliente_obra_id ?? null }
     ).catch(() => {})
   }
 

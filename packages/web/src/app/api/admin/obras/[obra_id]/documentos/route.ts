@@ -221,8 +221,9 @@ export async function POST(
     return NextResponse.json({ error: dbError.message }, { status: 500 })
   }
 
-  // Fire-and-forget: notificar clientes vinculados
-  notifyClientes(obra_id, "novo_documento", obra.name).catch(() => {})
+  // Fire-and-forget: notificar clientes. Story 75-175 — doc de unidade
+  // (cliente_obra_id) avisa SÓ o dono; doc geral da obra (null) avisa todos.
+  notifyClientes(obra_id, "novo_documento", obra.name, { clienteObraId: clienteObraId ?? null }).catch(() => {})
 
   void logAudit({
     org_id: appUser.org_id,
