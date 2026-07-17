@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 
+// Story 81-2: só DECORADOS como local (decisão do diretor — "Sala de Reuniões" removida
+// das opções; compromissos antigos com esse local seguem renderizando normalmente).
 const PROPERTY_MAP: Record<string, { id: string; name: string } | null> = {
   "Decorado Vind": {
     id: "00000000-0000-0000-0004-000000000001",
@@ -11,7 +13,6 @@ const PROPERTY_MAP: Record<string, { id: string; name: string } | null> = {
     id: "00000000-0000-0000-0004-000000000002",
     name: "Yarden",
   },
-  "Sala de Reuniões": null,
 }
 
 const LOCATIONS = Object.keys(PROPERTY_MAP) as Array<keyof typeof PROPERTY_MAP>
@@ -36,6 +37,12 @@ interface Lead {
 
 interface NewAppointmentModalProps {
   brokerId?: string
+  /**
+   * Story 81-2: role do usuário logado. admin/supervisor veem o seletor de EQUIPE
+   * (HOUSE × IMOB) e mandam `team` no POST; perfil `imob` vê indicação fixa "IMOB";
+   * demais não veem nada (o servidor força a equipe — Story 81-1 `resolveTeam`).
+   */
+  userRole?: string
   onClose: () => void
   onSuccess?: () => void
 }
@@ -44,10 +51,13 @@ type LeadMode = "search" | "new"
 
 export function NewAppointmentModal({
   brokerId,
+  userRole,
   onClose,
   onSuccess,
 }: NewAppointmentModalProps) {
   const [location, setLocation] = useState("")
+  const [team, setTeam] = useState<"house" | "imob">("house") // Story 81-2
+  const canPickTeam = userRole === "admin" || userRole === "supervisor"
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
   const [notes, setNotes] = useState("")
@@ -139,6 +149,11 @@ export function NewAppointmentModal({
       notes: notes.trim() || null,
     }
 
+    // Story 81-2: só admin/supervisor escolhem a equipe (o servidor valida/força — 81-1).
+    if (canPickTeam) {
+      payload.team = team
+    }
+
     if (brokerId) {
       payload.broker_id = brokerId
     }
@@ -216,6 +231,51 @@ export function NewAppointmentModal({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5 px-6 py-5">
+            {/* Team (Story 81-2 — admin/supervisor escolhem; imob fixo; resto oculto) */}
+            {canPickTeam ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
+                  Equipe
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTeam("house")}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors ${
+                      team === "house"
+                        ? "border-orange-400 bg-orange-50 text-orange-700 dark:border-orange-400 dark:bg-orange-500/15 dark:text-orange-300"
+                        : "border-stone-300 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-400 dark:hover:bg-stone-800"
+                    }`}
+                  >
+                    HOUSE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeam("imob")}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors ${
+                      team === "imob"
+                        ? "border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500 dark:bg-violet-500/15 dark:text-violet-300"
+                        : "border-stone-300 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-400 dark:hover:bg-stone-800"
+                    }`}
+                  >
+                    IMOB
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  Equipes não disputam horário entre si — o conflito vale só dentro da mesma equipe.
+                </p>
+              </div>
+            ) : userRole === "imob" ? (
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+                  IMOB
+                </span>
+                <span className="text-[11px] text-stone-400 dark:text-stone-500">
+                  Compromisso da equipe IMOB
+                </span>
+              </div>
+            ) : null}
+
             {/* Location */}
             <div>
               <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
