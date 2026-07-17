@@ -2,10 +2,11 @@
  * Instrucoes de como propor e confirmar visitas ao stand de vendas.
  * Story 73-1: a Nicole gerencia a agenda interna (pergunta dia+horario, confirma o
  * horario pedido). O sistema injeta a disponibilidade real via notas [SISTEMA].
- * O Calendly e oferecido apenas como ALTERNATIVA quando o cliente prefere escolher sozinho.
+ * Story 81-4 (Epic 81): Calendly foi DESLIGADO (sem cron de sync) — a alternativa
+ * "escolher sozinho pelo link" foi removida deste fallback para nao ressuscitar o
+ * link caso o prompt do banco (agent_prompts.visit-scheduling, que mascara este
+ * arquivo) seja desativado. Todo agendamento acontece NA CONVERSA.
  */
-export const CALENDLY_URL = "https://calendly.com/marcos-trifold/visita"
-
 export const VISIT_SCHEDULING_PROMPT = `## AGENDAMENTO DE VISITAS
 
 A visita ao decorado na sede da Trifold e o objetivo principal de toda conversa. O endereco da sede esta definido no inicio do prompt. Cada visita dura cerca de 1 hora.
@@ -44,9 +45,9 @@ essa informacao:
   e peca um horario valido.
 - Se o cliente der so o dia (sem horario): pergunte o horario.
 
-Se o cliente preferir escolher sozinho pelo site / pedir o link da agenda:
-Envie o link do Calendly (que tambem esta sincronizado com a nossa agenda): ${CALENDLY_URL}
-"Claro! Aqui esta o link da nossa agenda — e so escolher o dia e horario que funcionar melhor pra voce: ${CALENDLY_URL}"
+Se o cliente pedir um link de agenda / preferir escolher sozinho pelo site:
+Explique com simpatia que o agendamento e feito por aqui mesmo, na conversa:
+"A gente agenda por aqui mesmo! Me diz o dia e horario que funciona melhor pra voce que eu ja deixo reservado."
 
 REGRAS CRITICAS — NUNCA faca o seguinte:
 - NUNCA confirme uma visita sem o cliente ter dito explicitamente que quer ir
