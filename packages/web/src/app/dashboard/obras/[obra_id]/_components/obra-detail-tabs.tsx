@@ -408,7 +408,11 @@ export function ObraDetailTabs({
   initialTab,
 }: ObraDetailTabsProps) {
   const isAdminOrSupervisor = userRole === "admin" || userRole === "supervisor"
-  const isObras = userRole === "obras"
+  // Story 75-176 — quem sobe via FILA DE APROVAÇÃO (não publica direto) vê os
+  // próprios uploads pendentes/rejeitados inline nas abas Fotos/Documentos, com
+  // selo "Aguardando aprovação". São os mesmos roles que caem na fila no upload:
+  // `obras` E `gerente-relacionamento` (a Samara). Antes só cobria `obras`.
+  const mostraPendentes = userRole === "obras" || userRole === "gerente-relacionamento"
 
   // Story 75-3: fotos publicadas agrupadas por fase, na sequência das fases (order_index).
   const fotoGroups = groupFotosByFaseOrder(fotos, fases)
@@ -463,10 +467,10 @@ export function ObraDetailTabs({
   }, [lightboxFoto])
 
   // Uploads pendentes/rejeitados do role obras nas abas fotos/documentos
-  const pendenteFotos = isObras
+  const pendenteFotos = mostraPendentes
     ? aprovacoes.filter((a) => a.tipo === "foto")
     : []
-  const pendenteDocumentos = isObras
+  const pendenteDocumentos = mostraPendentes
     ? aprovacoes.filter((a) => a.tipo === "documento")
     : []
 
@@ -583,7 +587,7 @@ export function ObraDetailTabs({
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-              Fotos ({fotos.length + (isObras ? pendenteFotos.length : 0)})
+              Fotos ({fotos.length + (mostraPendentes ? pendenteFotos.length : 0)})
             </h2>
             {fotos.length === 0 && pendenteFotos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -635,7 +639,7 @@ export function ObraDetailTabs({
                           <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
                         )}
                         {/* Story 75-14 — obras solicita exclusão (com motivo → aprovação) */}
-                        {isObras && (
+                        {mostraPendentes && (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setExcluindoFotoId(foto.id) }}
@@ -660,7 +664,7 @@ export function ObraDetailTabs({
                 ))}
 
                 {/* Fotos pendentes/rejeitadas do próprio usuário obras */}
-                {isObras && pendenteFotos.length > 0 && (
+                {mostraPendentes && pendenteFotos.length > 0 && (
                   <div>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
                       Aguardando aprovação
@@ -737,7 +741,7 @@ export function ObraDetailTabs({
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-              Documentos ({documentos.length + (isObras ? pendenteDocumentos.length : 0)})
+              Documentos ({documentos.length + (mostraPendentes ? pendenteDocumentos.length : 0)})
             </h2>
             {documentos.length === 0 && pendenteDocumentos.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
@@ -796,7 +800,7 @@ export function ObraDetailTabs({
                 ))}
 
                 {/* Documentos pendentes/rejeitados do próprio usuário obras */}
-                {isObras && pendenteDocumentos.map((item) => {
+                {mostraPendentes && pendenteDocumentos.map((item) => {
                   const isPendente = item.status === "pendente"
                   const isRejeitado = item.status === "rejeitado"
                   const meta = item.metadata as { name?: string; category?: string; file_size_bytes?: number }
