@@ -1,7 +1,7 @@
 # Story 75-171 — Assinatura automática do remetente humano na mensagem ao lead
 
 ## Metadata
-- **Status:** InReview · **Epic:** Atendimento WhatsApp do corretor · **Complexidade:** S (2 pontos) · **Branch:** feat/75-171-assinatura-corretor-mensagem
+- **Status:** Done · **Epic:** Atendimento WhatsApp do corretor · **PR:** #232 · deploy b9fb4f9e · **Complexidade:** S (2 pontos) · **Branch:** feat/75-171-assinatura-corretor-mensagem
 - **executor:** @dev · **quality_gate:** @qa
 
 ## Contexto
@@ -58,5 +58,8 @@ Do lado do lead, toda mensagem chega pelo número da EMPRESA (perfil WhatsApp Bu
 - Sem regressão; helper puro segue o padrão de `dispatch-broker-message.ts` (REUSE do padrão vitest-friendly).
 
 ## Change Log
+- 2026-07-17 — @devops — PR #232 + squash-merge (b9fb4f9e) + deploy prod (Vercel auto). Status → **Done**.
+- 2026-07-17 — @qa — **PASS** (tsc 0 · eslint 0 · vitest 1069/1069).
+- 2026-07-17 — @dev — Implementação (helper + route + 9 testes).
 - 2026-07-17 — @po — Validação 10/10 → **GO**. Status Draft → Ready.
 - 2026-07-17 — @sm — Story criada (decisão: opção 1, assinatura automática).
