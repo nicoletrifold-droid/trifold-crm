@@ -637,6 +637,16 @@ function AppointmentDetail({
   const tb = teamBadge(apt.team)
   const meta = apptMeta(apt)
   const corretorParceiro = meta.corretor_parceiro
+  // A linha "Corretor parceiro: ..." das notes (81-5, p/ telas sem campo próprio) é
+  // redundante AQUI — o painel tem o campo estruturado logo acima. Oculta só na exibição.
+  const displayNotes =
+    corretorParceiro?.nome && apt.notes
+      ? apt.notes
+          .split("\n")
+          .filter((l) => !l.startsWith("Corretor parceiro:"))
+          .join("\n")
+          .trim() || null
+      : apt.notes
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
@@ -745,11 +755,11 @@ function AppointmentDetail({
           <p className="text-sm text-gray-900 dark:text-stone-100">{apt.location ?? "-"}</p>
         </div>
 
-        {apt.notes && (
+        {displayNotes && (
           <div className="sm:col-span-2">
             <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">Notas</p>
             <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-stone-300">
-              {apt.notes}
+              {displayNotes}
             </p>
           </div>
         )}
