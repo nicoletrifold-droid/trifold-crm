@@ -99,12 +99,18 @@ export async function POST(
     client_name?: string
     client_phone?: string
     client_email?: string
+    broker_name?: string // Story 81-5: corretor DA PARCEIRA que acompanha (opcional)
+    broker_phone?: string
     notes?: string
   } | null
   if (!body) return NextResponse.json({ error: "Payload inválido." }, { status: 400 })
 
   const clientName = body.client_name?.trim()
   const clientPhone = body.client_phone?.trim()
+  // Story 81-5 — corretor da imobiliária (opcional): vai estruturado no metadata
+  // (p/ futura notificação a ele) E numa linha humana nas notes (visível em toda tela).
+  const brokerName = body.broker_name?.trim() || null
+  const brokerPhone = body.broker_phone?.trim() || null
   const location = body.location?.trim() ?? ""
   if (!clientName) return NextResponse.json({ error: "Informe o nome do cliente." }, { status: 400 })
   if (!clientPhone) return NextResponse.json({ error: "Informe o telefone do cliente." }, { status: 400 })
@@ -203,11 +209,22 @@ export async function POST(
       imobiliaria_id: imob.id,
       status: "scheduled",
       created_by: "admin", // decisão da story: enum intacto; origem real = imobiliaria_id + metadata
-      notes: body.notes?.trim() || null,
+      notes: [
+        body.notes?.trim() || null,
+        brokerName ? `Corretor parceiro: ${brokerName}${brokerPhone ? ` · ${brokerPhone}` : ""}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n") || null,
       client_name: clientName,
       client_phone: clientPhone,
       client_email: body.client_email?.trim() || null,
-      metadata: { origem: "link_imob", imobiliaria_nome: imob.nome },
+      metadata: {
+        origem: "link_imob",
+        imobiliaria_nome: imob.nome,
+        ...(brokerName || brokerPhone
+          ? { corretor_parceiro: { nome: brokerName, telefone: brokerPhone } }
+          : {}),
+      },
     })
     .select("id, scheduled_at, location, cancel_token")
     .single()
@@ -242,7 +259,7 @@ export async function POST(
       (imobUsers ?? []).map((u) =>
         sendPushToUser(admin, u.id as string, {
           title: `Nova visita — ${imob.nome}`,
-          body: `${clientName} · ${when} · ${location}`,
+          body: `${clientName} · ${when} · ${location}${brokerName ? ` · corr. ${brokerName}` : ""}`,
           url: `${APP_URL}/dashboard/agenda`,
         }).catch((e: unknown) => console.error("[agendar-imob] push:", e))
       )
