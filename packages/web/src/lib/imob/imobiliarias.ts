@@ -60,6 +60,8 @@ export interface Imobiliaria {
   contato_email: string | null
   status: ImobiliariaStatus
   observacoes: string | null
+  /** Story 81-4: token do link público de agendamento (NULL = revogado). */
+  booking_token: string | null
   created_at: string
   updated_at: string
 }

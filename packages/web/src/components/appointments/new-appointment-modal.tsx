@@ -2,20 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 
-// Story 81-2: só DECORADOS como local (decisão do diretor — "Sala de Reuniões" removida
-// das opções; compromissos antigos com esse local seguem renderizando normalmente).
-const PROPERTY_MAP: Record<string, { id: string; name: string } | null> = {
-  "Decorado Vind": {
-    id: "00000000-0000-0000-0004-000000000001",
-    name: "Vind Residence",
-  },
-  "Decorado Yarden": {
-    id: "00000000-0000-0000-0004-000000000002",
-    name: "Yarden",
-  },
-}
-
-const LOCATIONS = Object.keys(PROPERTY_MAP) as Array<keyof typeof PROPERTY_MAP>
+// Story 81-2: só DECORADOS como local (decisão do diretor — "Sala de Reuniões" removida).
+// Story 81-4: mapa movido para lib compartilhada (o link público usa o mesmo).
+import { PROPERTY_MAP, LOCATIONS } from "@web/lib/appointments/locations"
 
 // Todo compromisso da agenda é fixo em 1 hora, em hora cheia (decisão de produto:
 // visitas/compromissos de 1 em 1 hora). A duração não é mais escolhida pelo usuário.

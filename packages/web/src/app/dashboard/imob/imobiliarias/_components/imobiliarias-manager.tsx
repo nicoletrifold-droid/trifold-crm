@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Building2 } from "lucide-react"
+import { Plus, Building2, Link2, Copy, Check, RefreshCw, Ban } from "lucide-react"
 import {
   STATUS_LABELS,
   IMOBILIARIA_STATUS,
@@ -30,6 +30,31 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
 
   function openNew() { setEditing(null); setOpen(true) }
   function openEdit(i: Imobiliaria) { setEditing(i); setOpen(true) }
+
+  // Story 81-4 — link público de agendamento por imobiliária (copiar/gerar/revogar).
+  const [copied, setCopied] = useState<string | null>(null)
+  const [savingToken, setSavingToken] = useState<string | null>(null)
+  async function copyBookingLink(i: Imobiliaria) {
+    if (!i.booking_token) return
+    await navigator.clipboard.writeText(`${window.location.origin}/agendar/${i.booking_token}`)
+    setCopied(i.id)
+    setTimeout(() => setCopied(null), 1500)
+  }
+  async function bookingTokenAction(id: string, action: "regenerate" | "revoke") {
+    if (action === "revoke" && !window.confirm("Revogar o link desta imobiliária? Ela não conseguirá mais agendar até você gerar um novo.")) return
+    if (action === "regenerate" && !window.confirm("Gerar novo link? O link antigo para de funcionar na hora.")) return
+    setSavingToken(id)
+    try {
+      await fetch(`/api/imob/imobiliarias/${id}/booking-token`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      router.refresh()
+    } finally {
+      setSavingToken(null)
+    }
+  }
 
   // Story 75-100 — engajamento é editado INLINE na lista (não no modal). Salva na hora.
   const [savingEngaj, setSavingEngaj] = useState<string | null>(null)
@@ -93,6 +118,7 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
                 <th className="px-3 py-2 font-medium">Cidade</th>
                 <th className="px-3 py-2 font-medium">Produtos</th>
                 <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Agenda</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
@@ -150,6 +176,50 @@ export function ImobiliariasManager({ initial }: { initial: Imobiliaria[] }) {
                     <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_TONE[i.status]}`}>
                       {STATUS_LABELS[i.status]}
                     </span>
+                  </td>
+                  {/* Story 81-4 — link público de agendamento (copiar · gerar novo · revogar) */}
+                  <td className="px-3 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1">
+                      {i.booking_token ? (
+                        <>
+                          <button
+                            onClick={() => void copyBookingLink(i)}
+                            title="Copiar link de agendamento"
+                            className="inline-flex items-center gap-1 rounded-md bg-violet-100 px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:hover:bg-violet-500/25"
+                          >
+                            {copied === i.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            {copied === i.id ? "Copiado!" : "Link"}
+                          </button>
+                          <button
+                            onClick={() => void bookingTokenAction(i.id, "revoke")}
+                            disabled={savingToken === i.id}
+                            title="Revogar link"
+                            className="rounded-md p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                          >
+                            <Ban className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => void bookingTokenAction(i.id, "regenerate")}
+                          disabled={savingToken === i.id}
+                          title="Gerar link de agendamento"
+                          className="inline-flex items-center gap-1 rounded-md border border-stone-300 px-2 py-1 text-[11px] font-medium text-stone-500 hover:border-violet-400 hover:text-violet-600 disabled:opacity-50 dark:border-stone-700 dark:text-stone-400 dark:hover:border-violet-500 dark:hover:text-violet-300"
+                        >
+                          <Link2 className="h-3 w-3" /> Gerar link
+                        </button>
+                      )}
+                      {i.booking_token && (
+                        <button
+                          onClick={() => void bookingTokenAction(i.id, "regenerate")}
+                          disabled={savingToken === i.id}
+                          title="Gerar novo link (invalida o atual)"
+                          className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600 disabled:opacity-50 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
