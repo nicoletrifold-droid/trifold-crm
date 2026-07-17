@@ -85,9 +85,19 @@ interface Appointment {
   status: string
   notes: string | null
   team: string | null // Story 81-2: 'house' | 'imob'
+  metadata: unknown // Story 81-6: origem/imobiliária/corretor parceiro (link IMOB)
   lead: unknown
   broker: unknown
   property: unknown
+}
+
+// Story 81-6 — metadados do agendamento vindo do link IMOB (81-4/81-5).
+interface ApptMeta {
+  imobiliaria_nome?: string
+  corretor_parceiro?: { nome?: string | null; telefone?: string | null }
+}
+function apptMeta(apt: Appointment): ApptMeta {
+  return (apt.metadata ?? {}) as ApptMeta
 }
 
 interface RelatedLead {
@@ -191,7 +201,7 @@ export default async function AgendaPage({
     .from("appointments")
     .select(
       `
-      id, scheduled_at, duration_minutes, location, status, notes, team,
+      id, scheduled_at, duration_minutes, location, status, notes, team, metadata,
       lead:leads!lead_id(id, name, phone),
       broker:users!broker_id(id, name),
       property:properties!property_id(id, name)
@@ -537,6 +547,10 @@ export default async function AgendaPage({
                   const lead = extractRelation<RelatedLead>(apt.lead)
                   const broker = extractRelation<RelatedBroker>(apt.broker)
                   const isSelected = params.apt === apt.id
+                  // Story 81-6: na visão densa marca-se a EXCEÇÃO — IMOB ganha
+                  // borda violeta + flag "IMOB" + nome da imobiliária (linha do corretor).
+                  const isImob = apt.team === "imob"
+                  const imobNome = isImob ? apptMeta(apt).imobiliaria_nome : undefined
 
                   return (
                     <Link
@@ -545,6 +559,8 @@ export default async function AgendaPage({
                         apt: isSelected ? undefined : apt.id,
                       })}
                       className={`block rounded border px-1.5 py-1 text-[11px] leading-tight transition-all ${s.bg} ${s.border} ${s.color} ${
+                        isImob ? "border-l-4 border-l-violet-500" : ""
+                      } ${
                         isSelected
                           ? "ring-2 ring-orange-400"
                           : "hover:brightness-95"
@@ -556,6 +572,11 @@ export default async function AgendaPage({
                           minute: "2-digit",
                           timeZone: "America/Sao_Paulo",
                         })}
+                        {isImob && (
+                          <span className="ml-1 font-bold tracking-wide text-violet-600 dark:text-violet-300">
+                            IMOB
+                          </span>
+                        )}
                       </p>
                       <p className="truncate">
                         {lead ? (
@@ -567,6 +588,11 @@ export default async function AgendaPage({
                       {broker && (
                         <p className="truncate text-[10px] opacity-75">
                           {broker.name}
+                        </p>
+                      )}
+                      {imobNome && (
+                        <p className="truncate text-[10px] font-medium text-violet-600 dark:text-violet-300">
+                          {imobNome}
                         </p>
                       )}
                     </Link>
@@ -607,12 +633,19 @@ function AppointmentDetail({
   const lead = extractRelation<RelatedLead>(apt.lead)
   const broker = extractRelation<RelatedBroker>(apt.broker)
   const property = extractRelation<RelatedProperty>(apt.property)
+  // Story 81-6: equipe sempre visível; p/ IMOB, imobiliária + corretor parceiro.
+  const tb = teamBadge(apt.team)
+  const meta = apptMeta(apt)
+  const corretorParceiro = meta.corretor_parceiro
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-stone-100">
           Detalhes do Agendamento
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tb.chip}`}>
+            {tb.label}
+          </span>
         </h2>
         <div className="flex items-center gap-2">
           {apt.status !== "cancelled" && (
@@ -675,6 +708,30 @@ function AppointmentDetail({
           </p>
           <p className="text-sm text-gray-900 dark:text-stone-100">{broker?.name ?? "-"}</p>
         </div>
+
+        {/* Story 81-6 — origem IMOB: qual imobiliária marcou e quem acompanha */}
+        {meta.imobiliaria_nome && (
+          <div>
+            <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
+              Imobiliária
+            </p>
+            <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+              {meta.imobiliaria_nome}
+            </p>
+          </div>
+        )}
+
+        {corretorParceiro?.nome && (
+          <div>
+            <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
+              Corretor parceiro
+            </p>
+            <p className="text-sm text-gray-900 dark:text-stone-100">{corretorParceiro.nome}</p>
+            {corretorParceiro.telefone && (
+              <p className="text-xs text-gray-500 dark:text-stone-400">{corretorParceiro.telefone}</p>
+            )}
+          </div>
+        )}
 
         <div>
           <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">

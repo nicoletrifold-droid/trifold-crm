@@ -85,8 +85,18 @@ interface Appointment {
   notes: string | null
   broker_id: string | null
   team: string | null // Story 81-2: 'house' | 'imob'
+  metadata: unknown // Story 81-6: origem/imobiliária/corretor parceiro (link IMOB)
   lead: unknown
   property: unknown
+}
+
+// Story 81-6 — metadados do agendamento vindo do link IMOB (81-4/81-5).
+interface ApptMeta {
+  imobiliaria_nome?: string
+  corretor_parceiro?: { nome?: string | null; telefone?: string | null }
+}
+function apptMeta(apt: Appointment): ApptMeta {
+  return (apt.metadata ?? {}) as ApptMeta
 }
 
 interface RelatedLead {
@@ -155,7 +165,7 @@ export default async function BrokerAgendaPage({
     .from("appointments")
     .select(
       `
-      id, scheduled_at, duration_minutes, location, status, notes, broker_id, team,
+      id, scheduled_at, duration_minutes, location, status, notes, broker_id, team, metadata,
       lead:leads!lead_id(id, name, phone),
       property:properties!property_id(id, name)
     `
@@ -393,8 +403,10 @@ export default async function BrokerAgendaPage({
                       {dayAppts.slice(0, 3).map((apt) => {
                         const s = statusConfig[apt.status] ?? statusConfig.scheduled!
                         const lead = extractRelation<RelatedLead>(apt.lead)
+                        // Story 81-6: IMOB distinto também no month view do corretor
+                        const teamEdge = apt.team === "imob" ? "border-l-2 border-l-violet-500" : ""
                         return (
-                          <div key={apt.id} className={`truncate rounded px-1 py-0.5 text-[9px] font-medium ${s.bg} ${s.color}`}>
+                          <div key={apt.id} className={`truncate rounded px-1 py-0.5 text-[9px] font-medium ${s.bg} ${s.color} ${teamEdge}`}>
                             {new Date(apt.scheduled_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} {lead?.name ?? ""}
                           </div>
                         )
@@ -488,6 +500,9 @@ export default async function BrokerAgendaPage({
                   const time = new Date(apt.scheduled_at)
                   const lead = extractRelation<RelatedLead>(apt.lead)
                   const isSelected = params.apt === apt.id
+                  // Story 81-6: IMOB visível também na semana do corretor
+                  const isImob = apt.team === "imob"
+                  const imobNome = isImob ? apptMeta(apt).imobiliaria_nome : undefined
 
                   const isOwn = apt.broker_id === user.id
                   return (
@@ -500,7 +515,7 @@ export default async function BrokerAgendaPage({
                         isOwn
                           ? `${s.bg} ${s.border} ${s.color}`
                           : "border-gray-300 bg-gray-100 text-gray-400 dark:border-stone-700 dark:bg-stone-800/50 dark:text-stone-400"
-                      } ${isSelected ? "ring-2 ring-orange-400" : "hover:brightness-95"}`}
+                      } ${isImob ? "border-l-4 border-l-violet-500" : ""} ${isSelected ? "ring-2 ring-orange-400" : "hover:brightness-95"}`}
                     >
                       <p className="font-semibold">
                         {time.toLocaleTimeString("pt-BR", {
@@ -508,10 +523,20 @@ export default async function BrokerAgendaPage({
                           minute: "2-digit",
                           timeZone: "America/Sao_Paulo",
                         })}
+                        {isImob && (
+                          <span className="ml-1 font-bold tracking-wide text-violet-600 dark:text-violet-300">
+                            IMOB
+                          </span>
+                        )}
                       </p>
                       <p className="truncate">
                         {lead?.name ?? "Lead"}
                       </p>
+                      {imobNome && (
+                        <p className="truncate text-[10px] font-medium text-violet-600 dark:text-violet-300">
+                          {imobNome}
+                        </p>
+                      )}
                     </Link>
                   )
                 })}
@@ -555,12 +580,19 @@ function AppointmentDetail({
   const lead = extractRelation<RelatedLead>(apt.lead)
   const property = extractRelation<RelatedProperty>(apt.property)
   const isPastScheduled = apt.status === "scheduled" && date.getTime() < nowMs
+  // Story 81-6: equipe sempre visível; p/ IMOB, imobiliária + corretor parceiro.
+  const tb = teamBadge(apt.team)
+  const meta = apptMeta(apt)
+  const corretorParceiro = meta.corretor_parceiro
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-stone-100">
           Detalhes do Agendamento
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tb.chip}`}>
+            {tb.label}
+          </span>
         </h2>
         <div className="flex items-center gap-2">
           {apt.status === "completed" && (
@@ -641,6 +673,30 @@ function AppointmentDetail({
           <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">Local</p>
           <p className="text-sm text-gray-900 dark:text-stone-100">{apt.location ?? "-"}</p>
         </div>
+
+        {/* Story 81-6 — origem IMOB: qual imobiliária marcou e quem acompanha */}
+        {meta.imobiliaria_nome && (
+          <div>
+            <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
+              Imobiliária
+            </p>
+            <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+              {meta.imobiliaria_nome}
+            </p>
+          </div>
+        )}
+
+        {corretorParceiro?.nome && (
+          <div>
+            <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
+              Corretor parceiro
+            </p>
+            <p className="text-sm text-gray-900 dark:text-stone-100">{corretorParceiro.nome}</p>
+            {corretorParceiro.telefone && (
+              <p className="text-xs text-gray-500 dark:text-stone-400">{corretorParceiro.telefone}</p>
+            )}
+          </div>
+        )}
 
         {apt.notes && (
           <div className="sm:col-span-2">
