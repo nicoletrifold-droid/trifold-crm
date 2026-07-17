@@ -1,9 +1,9 @@
 ---
 epic: 81
 title: Agenda HOUSE × IMOB — duas equipes na mesma agenda, link público por imobiliária
-status: Draft
+status: Done
 created_at: 2026-07-17
-updated_at: 2026-07-17
+updated_at: 2026-07-17 (completo — 4/4 stories em prod)
 created_by: Morgan (@pm)
 priority: P1
 objetivo_negocio:
