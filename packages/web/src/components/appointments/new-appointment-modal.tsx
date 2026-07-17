@@ -5,6 +5,10 @@ import { useState, useEffect, useRef, useCallback } from "react"
 // Story 81-2: só DECORADOS como local (decisão do diretor — "Sala de Reuniões" removida).
 // Story 81-4: mapa movido para lib compartilhada (o link público usa o mesmo).
 import { PROPERTY_MAP, LOCATIONS } from "@web/lib/appointments/locations"
+// Story 81-7: compromisso IMOB interno vincula imobiliária (opcional, com cadastro
+// inline via "+ Nova") + corretor parceiro — mesmos campos do link público.
+import { ImobiliariaFormModal } from "@web/app/dashboard/imob/imobiliarias/_components/imobiliaria-form-modal"
+import type { Imobiliaria } from "@web/lib/imob/imobiliarias"
 
 // Todo compromisso da agenda é fixo em 1 hora, em hora cheia (decisão de produto:
 // visitas/compromissos de 1 em 1 hora). A duração não é mais escolhida pelo usuário.
@@ -47,6 +51,40 @@ export function NewAppointmentModal({
   const [location, setLocation] = useState("")
   const [team, setTeam] = useState<"house" | "imob">("house") // Story 81-2
   const canPickTeam = userRole === "admin" || userRole === "supervisor"
+  // Story 81-7 — compromisso da equipe IMOB (Daiana ou admin/supervisor com IMOB
+  // selecionado): vincular imobiliária (opcional) + corretor parceiro (opcional).
+  const isImobTeam = userRole === "imob" || (canPickTeam && team === "imob")
+  const [imobiliarias, setImobiliarias] = useState<Array<{ id: string; nome: string }> | null>(null)
+  const [imobiliariaId, setImobiliariaId] = useState("")
+  const [showNewImobiliaria, setShowNewImobiliaria] = useState(false)
+  const [partnerBrokerName, setPartnerBrokerName] = useState("")
+  const [partnerBrokerPhone, setPartnerBrokerPhone] = useState("")
+
+  // Carrega a lista de imobiliárias na 1ª vez que a equipe IMOB entra em cena.
+  useEffect(() => {
+    if (!isImobTeam || imobiliarias !== null) return
+    let cancelled = false
+    fetch("/api/imob/imobiliarias")
+      .then(async (res) => (res.ok ? ((await res.json()) as { imobiliarias: Array<{ id: string; nome: string }> }) : null))
+      .then((json) => {
+        if (!cancelled) setImobiliarias(json?.imobiliarias ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setImobiliarias([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isImobTeam, imobiliarias])
+
+  function handleImobiliariaCreated(nova: Imobiliaria) {
+    setImobiliarias((prev) => {
+      const list = [...(prev ?? []), { id: nova.id, nome: nova.nome }]
+      return list.sort((a, b) => a.nome.localeCompare(b.nome))
+    })
+    setImobiliariaId(nova.id)
+    setShowNewImobiliaria(false)
+  }
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
   const [notes, setNotes] = useState("")
@@ -141,6 +179,13 @@ export function NewAppointmentModal({
     // Story 81-2: só admin/supervisor escolhem a equipe (o servidor valida/força — 81-1).
     if (canPickTeam) {
       payload.team = team
+    }
+
+    // Story 81-7: extras da equipe IMOB (todos opcionais — Daiana pode atender direto).
+    if (isImobTeam) {
+      if (imobiliariaId) payload.imobiliaria_id = imobiliariaId
+      if (partnerBrokerName.trim()) payload.partner_broker_name = partnerBrokerName.trim()
+      if (partnerBrokerPhone.trim()) payload.partner_broker_phone = partnerBrokerPhone.trim()
     }
 
     if (brokerId) {
@@ -264,6 +309,63 @@ export function NewAppointmentModal({
                 </span>
               </div>
             ) : null}
+
+            {/* Story 81-7 — extras da equipe IMOB: imobiliária (opcional, com cadastro
+                inline) + corretor parceiro (opcional) — mesmos campos do link público */}
+            {isImobTeam && (
+              <div className="space-y-3 rounded-lg border border-violet-500/30 bg-violet-500/5 p-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">
+                    Imobiliária parceira <span className="text-xs font-normal text-stone-400">(opcional)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={imobiliariaId}
+                      onChange={(e) => setImobiliariaId(e.target.value)}
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                    >
+                      <option value="">Sem imobiliária (atendimento direto)</option>
+                      {(imobiliarias ?? []).map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewImobiliaria(true)}
+                      title="Cadastrar nova imobiliária"
+                      className="shrink-0 rounded-lg border border-violet-400 px-3 py-2 text-sm font-semibold text-violet-600 hover:bg-violet-50 dark:border-violet-500 dark:text-violet-300 dark:hover:bg-violet-500/10"
+                    >
+                      + Nova
+                    </button>
+                  </div>
+                  {imobiliarias === null && (
+                    <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">Carregando imobiliárias…</p>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-stone-500 dark:text-stone-400">
+                    Corretor parceiro que acompanha (opcional)
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={partnerBrokerName}
+                      onChange={(e) => setPartnerBrokerName(e.target.value)}
+                      placeholder="Nome do corretor"
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                    />
+                    <input
+                      value={partnerBrokerPhone}
+                      onChange={(e) => setPartnerBrokerPhone(e.target.value)}
+                      placeholder="Telefone — (44) 99999-9999"
+                      inputMode="tel"
+                      className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Location */}
             <div>
@@ -520,6 +622,15 @@ export function NewAppointmentModal({
           </form>
         )}
       </div>
+
+      {/* Story 81-7 — cadastro inline de imobiliária (reusa o modal do módulo IMOB, 75-148) */}
+      {showNewImobiliaria && (
+        <ImobiliariaFormModal
+          editing={null}
+          onClose={() => setShowNewImobiliaria(false)}
+          onSaved={handleImobiliariaCreated}
+        />
+      )}
     </div>
   )
 }
