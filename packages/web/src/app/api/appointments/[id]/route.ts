@@ -198,7 +198,7 @@ export async function DELETE(
   // Fetch current appointment to get google_event_id before soft-deleting
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id, google_event_id, lead_id, broker_id, calendly_event_uri")
+    .select("id, google_event_id, lead_id, broker_id, calendly_event_uri, team")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
