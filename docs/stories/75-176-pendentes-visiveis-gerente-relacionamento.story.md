@@ -1,7 +1,7 @@
 # Story 75-176 — Uploads pendentes visíveis para a gerente-relacionamento (Samara)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** — (falha de UX achada pelo Marcos, 2026-07-17)
 - **Branch:** fix/75-176-pendentes-gerente-relacionamento
 
@@ -43,3 +43,4 @@ status pendente/rejeitado) — o dado chegava, só não era renderizado.
 - @dev (Dex): gate `isObras` → `mostraPendentes` (inclui gerente-relacionamento). Dado já vinha
   do servidor; era só render. Rename global no arquivo.
 - @qa (Quinn): PASS — nenhum `isObras` restante; aba Aprovações segue admin/supervisor; fotos+docs cobertos.
+- @devops (Gage): CI verde, squash-merge PR #236, deploy prod automático. Status InReview → Done.
