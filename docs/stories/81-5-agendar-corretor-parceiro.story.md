@@ -1,7 +1,7 @@
 # Story 81-5 — Link público: campos do corretor parceiro (nome + telefone, opcionais)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-5-corretor-parceiro-form
 
@@ -32,3 +32,4 @@ costuma vir acompanhada de um **corretor da parceira** — o form precisa captur
 - @sm/@po: story P criada e validada no fluxo mínimo (pedido direto do diretor, escopo trivial).
 - @dev (Dex): campos no form + metadata.corretor_parceiro + linha nas notes + push. 1059/1059.
 - @qa (Quinn): PASS (opcionais não bloqueiam; dado estruturado p/ notificação futura).
+- @devops (Gage): CI verde, squash-merge PR #224, deploy prod automático. Status InReview → Done.
