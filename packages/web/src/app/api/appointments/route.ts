@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     .from("appointments")
     .select(
       `
-      id, scheduled_at, duration_minutes, location, status, notes, created_by, created_at, updated_at,
+      id, scheduled_at, duration_minutes, location, status, notes, team, created_by, created_at, updated_at,
       lead:leads!lead_id(id, name, phone),
       broker:users!broker_id(id, name, email),
       property:properties!property_id(id, name)

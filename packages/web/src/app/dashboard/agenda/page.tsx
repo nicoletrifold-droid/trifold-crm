@@ -5,6 +5,7 @@ import Link from "next/link"
 import { NewAppointmentButton } from "@web/app/dashboard/_components/new-appointment-modal"
 import { DeleteAppointmentButton } from "@web/app/dashboard/_components/delete-appointment-button"
 import { canMutateAppointment } from "@web/lib/appointments/governance"
+import { teamBadge } from "@web/lib/appointments/team-badge"
 
 const statusConfig: Record<
   string,
@@ -83,6 +84,7 @@ interface Appointment {
   location: string | null
   status: string
   notes: string | null
+  team: string | null // Story 81-2: 'house' | 'imob'
   lead: unknown
   broker: unknown
   property: unknown
@@ -189,7 +191,7 @@ export default async function AgendaPage({
     .from("appointments")
     .select(
       `
-      id, scheduled_at, duration_minutes, location, status, notes,
+      id, scheduled_at, duration_minutes, location, status, notes, team,
       lead:leads!lead_id(id, name, phone),
       broker:users!broker_id(id, name),
       property:properties!property_id(id, name)
@@ -260,7 +262,7 @@ export default async function AgendaPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Agenda</h1>
-          <NewAppointmentButton brokerId={params.broker_id} />
+          <NewAppointmentButton brokerId={params.broker_id} userRole={appUser.role} />
           {/* View toggle */}
           <div className="flex rounded-lg border border-stone-200 bg-white p-0.5 dark:border-stone-800 dark:bg-stone-900">
             {(["day", "week", "month"] as const).map((v) => (
@@ -336,10 +338,11 @@ export default async function AgendaPage({
                 const broker = extractRelation<RelatedBroker>(apt.broker)
                 const property = extractRelation<RelatedProperty>(apt.property)
                 const s = statusConfig[apt.status] ?? statusConfig.scheduled!
+                const tb = teamBadge(apt.team) // Story 81-2: HOUSE × IMOB de relance
                 const time = new Date(apt.scheduled_at)
                 const isPastScheduled = apt.status === "scheduled" && time.getTime() < nowMs
                 return (
-                  <div key={apt.id} className={`rounded-lg border p-4 ${s.border} ${s.bg}`}>
+                  <div key={apt.id} className={`rounded-lg border p-4 ${s.border} ${s.bg} ${tb.accent}`}>
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
@@ -356,6 +359,7 @@ export default async function AgendaPage({
                         {apt.notes && <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">{apt.notes}</p>}
                       </div>
                       <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tb.chip}`}>{tb.label}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.bg} ${s.color}`}>{s.label}</span>
                         {apt.status === "completed" && lead && (
                           <Link
@@ -435,8 +439,10 @@ export default async function AgendaPage({
                       {dayAppts.slice(0, 3).map((apt) => {
                         const s = statusConfig[apt.status] ?? statusConfig.scheduled!
                         const lead = extractRelation<RelatedLead>(apt.lead)
+                        // Story 81-2: IMOB distinto também no month view (borda violeta no mini-chip)
+                        const teamEdge = apt.team === "imob" ? "border-l-2 border-l-violet-500" : ""
                         return (
-                          <div key={apt.id} className={`truncate rounded px-1 py-0.5 text-[9px] font-medium ${s.bg} ${s.color}`}>
+                          <div key={apt.id} className={`truncate rounded px-1 py-0.5 text-[9px] font-medium ${s.bg} ${s.color} ${teamEdge}`}>
                             {new Date(apt.scheduled_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} {lead?.name ?? ""}
                           </div>
                         )

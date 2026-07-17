@@ -4,6 +4,7 @@ import { now } from "@web/lib/time"
 import Link from "next/link"
 import { NewAppointmentButton } from "@web/app/broker/_components/new-appointment-modal"
 import { DeleteAppointmentButton } from "@web/app/dashboard/_components/delete-appointment-button"
+import { teamBadge } from "@web/lib/appointments/team-badge"
 
 const statusConfig: Record<
   string,
@@ -83,6 +84,7 @@ interface Appointment {
   status: string
   notes: string | null
   broker_id: string | null
+  team: string | null // Story 81-2: 'house' | 'imob'
   lead: unknown
   property: unknown
 }
@@ -153,7 +155,7 @@ export default async function BrokerAgendaPage({
     .from("appointments")
     .select(
       `
-      id, scheduled_at, duration_minutes, location, status, notes, broker_id,
+      id, scheduled_at, duration_minutes, location, status, notes, broker_id, team,
       lead:leads!lead_id(id, name, phone),
       property:properties!property_id(id, name)
     `
@@ -285,12 +287,13 @@ export default async function BrokerAgendaPage({
                 const lead = extractRelation<RelatedLead>(apt.lead)
                 const property = extractRelation<RelatedProperty>(apt.property)
                 const s = statusConfig[apt.status] ?? statusConfig.scheduled!
+                const tb = teamBadge(apt.team) // Story 81-2: HOUSE × IMOB de relance
                 const time = new Date(apt.scheduled_at)
                 const isPastScheduled = apt.status === "scheduled" && time.getTime() < nowMs
 
                 const isOwn = apt.broker_id === user.id
                 return (
-                  <div key={apt.id} className={`rounded-lg border p-4 ${isOwn ? `${s.border} ${s.bg}` : "border-gray-200 bg-gray-100 opacity-75 dark:border-stone-700 dark:bg-stone-800/40"}`}>
+                  <div key={apt.id} className={`rounded-lg border p-4 ${tb.accent} ${isOwn ? `${s.border} ${s.bg}` : "border-gray-200 bg-gray-100 opacity-75 dark:border-stone-700 dark:bg-stone-800/40"}`}>
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
@@ -307,6 +310,7 @@ export default async function BrokerAgendaPage({
                         {apt.notes && <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">{apt.notes}</p>}
                       </div>
                       <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tb.chip}`}>{tb.label}</span>
                         {!isOwn && (
                           <span className="rounded-full border border-stone-600 px-2 py-0.5 text-[10px] font-medium text-stone-400">Equipe</span>
                         )}

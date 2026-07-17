@@ -6,9 +6,10 @@ import { Plus } from "lucide-react"
 
 interface NewAppointmentButtonProps {
   brokerId?: string
+  userRole?: string // Story 81-2: habilita o seletor de equipe (admin/supervisor)
 }
 
-export function NewAppointmentButton({ brokerId }: NewAppointmentButtonProps) {
+export function NewAppointmentButton({ brokerId, userRole }: NewAppointmentButtonProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -23,6 +24,7 @@ export function NewAppointmentButton({ brokerId }: NewAppointmentButtonProps) {
       {open && (
         <NewAppointmentModal
           brokerId={brokerId}
+          userRole={userRole}
           onClose={() => setOpen(false)}
           onSuccess={() => setOpen(false)}
         />
