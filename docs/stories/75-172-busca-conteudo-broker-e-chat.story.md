@@ -1,7 +1,7 @@
 # Story 75-172 — Busca no conteúdo: /broker/chat + /dashboard/chat (Relacionamento)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** — (extensão da 75-170, pedido direto do diretor 2026-07-17)
 - **Branch:** feat/75-172-busca-conteudo-broker-chat
 
@@ -36,3 +36,4 @@ Extensão da 75-170 (Conversas do dashboard) para as outras duas telas de chat:
 - @sm/@po: fluxo mínimo (espelha 75-170 já validada em prod).
 - @dev (Dex): as 2 telas; achado no caminho: /dashboard/chat não tinha busca nenhuma.
 - @qa (Quinn): PASS — escopos de segurança distintos por tela documentados e corretos.
+- @devops (Gage): CI verde, squash-merge PR #231, deploy prod automático. Status InReview → Done.
