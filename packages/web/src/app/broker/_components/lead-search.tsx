@@ -4,7 +4,13 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { useCallback, useState } from "react"
 import { Search, X } from "lucide-react"
 
-export function LeadSearch() {
+// Story 75-170: placeholder configurável (a tela de Conversas busca também no
+// CONTEÚDO das mensagens; as demais mantêm o texto padrão).
+export function LeadSearch({
+  placeholder = "Buscar por nome, e-mail, telefone…",
+}: {
+  placeholder?: string
+} = {}) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -31,7 +37,7 @@ export function LeadSearch() {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && apply(value)}
-        placeholder="Buscar por nome, e-mail, telefone…"
+        placeholder={placeholder}
         className="h-9 w-64 rounded-lg border border-stone-200 bg-white pl-9 pr-8 text-sm text-stone-700 placeholder-stone-400 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:placeholder-stone-500"
       />
       {value && (

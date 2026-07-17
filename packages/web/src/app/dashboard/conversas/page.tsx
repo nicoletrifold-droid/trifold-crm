@@ -76,6 +76,21 @@ export default async function ConversasPage({
 
   const rows = (conversations ?? []) as unknown as ConversationRow[]
 
+  // Story 75-170 — busca no CONTEÚDO das mensagens (estilo WhatsApp): FTS português
+  // + unaccent via RPC (mig 177, security invoker — RLS de messages vale). O termo
+  // também segue casando nome/telefone do lead (leadMatchesSearch abaixo) — a conversa
+  // entra se casar QUALQUER um dos dois.
+  const contentMatches = new Map<string, { snippet: string; count: number }>()
+  if (search) {
+    const { data: found } = await supabase.rpc("search_conversation_messages", {
+      p_org: user.orgId,
+      p_term: search,
+    })
+    for (const f of (found ?? []) as Array<{ conversation_id: string; snippet: string | null; match_count: number }>) {
+      contentMatches.set(f.conversation_id, { snippet: f.snippet ?? "", count: Number(f.match_count) })
+    }
+  }
+
   // Lista de corretores p/ o dropdown (id = users.id, que é o assigned_broker_id do lead).
   const brokers = ((brokerRows ?? []) as unknown as { user: { id: string; name: string | null } | { id: string; name: string | null }[] | null }[])
     .map((b) => one(b.user))
@@ -136,8 +151,11 @@ export default async function ConversasPage({
       const last = conv.last_message_at ? new Date(conv.last_message_at).getTime() : 0
       if (last > staleCutoff) return false
     }
-    // Story 75-168 — busca sem acento + fuzzy (espelha o lado-banco 75-167).
-    if (search && !leadMatchesSearch([lead.name, lead.phone], search)) return false
+    // Story 75-168 — busca sem acento + fuzzy nos dados do lead; Story 75-170 —
+    // OU no conteúdo das mensagens (FTS). Basta casar um dos dois.
+    if (search && !leadMatchesSearch([lead.name, lead.phone], search) && !contentMatches.has(conv.id)) {
+      return false
+    }
     return true
   })
 
@@ -152,7 +170,7 @@ export default async function ConversasPage({
         </p>
       </div>
 
-      <LeadSearch />
+      <LeadSearch placeholder="Buscar por nome, telefone ou qualquer palavra da conversa…" />
       <LeadFilters
         stages={(stages ?? []).map((s) => ({ id: s.id, name: s.name, color: s.color }))}
         properties={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
@@ -197,9 +215,13 @@ export default async function ConversasPage({
               msgsByConv.get(conv.id) ?? []
             )
 
+            // Story 75-170: se a conversa entrou pela busca de CONTEÚDO, o preview vira
+            // o trecho da mensagem que casou (estilo WhatsApp), com contagem de matches.
+            const contentHit = search ? contentMatches.get(conv.id) : undefined
             const rawPreview = conv.last_message_preview ?? ""
-            const preview =
-              conv.last_message_role === "broker"
+            const preview = contentHit
+              ? `💬 ${contentHit.snippet.replace(/\s+/g, " ").slice(0, 140)}${contentHit.count > 1 ? `  (+${contentHit.count - 1})` : ""}`
+              : conv.last_message_role === "broker"
                 ? `Corretor: ${rawPreview}`
                 : conv.last_message_role === "assistant"
                 ? `🤖 ${rawPreview}`
