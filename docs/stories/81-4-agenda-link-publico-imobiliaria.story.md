@@ -1,7 +1,7 @@
 # Story 81-4 — Agenda: link público por imobiliária + desligar Google Calendar e Calendly
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 81 — Agenda HOUSE × IMOB (`docs/stories/epics/epic-81-agenda-house-imob.md`)
 - **Branch:** feat/81-4-agenda-link-publico-imob
 
@@ -144,3 +144,4 @@ Pronta para `@devops *push`.
 - @po (Pax): validação checklist 10 pontos → **GO (10/10)**; decisões de design (segmento imob, created_by admin+metadata) aprovadas como coerentes com o mundo IMOB isolado. Status Draft → Ready.
 - @dev (Dex): migration 176 (prod), rota+página públicas, UI cadastro IMOB, kill-switch Google, cron Calendly removido. Status Ready → InReview.
 - @qa (Quinn): QA gate **PASS com observações** (e2e do POST fica p/ validação humana pós-deploy).
+- @devops (Gage): CI verde, squash-merge PR #222, deploy prod automático. Google Calendar e Calendly desligados neste deploy. Status InReview → Done.
