@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation"
 import { isUuid } from "@web/lib/uuid"
 import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
+import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS, formatLeadPerfil } from "@web/lib/leads/enrich"
 // Story 75-155 — reuso do componente de conversa do corretor para dar PARIDADE de
 // ENVIO na aba "Conversa" do /dashboard (admin/supervisor/gerente-comercial).
@@ -187,6 +188,21 @@ export default async function LeadDetailPage({
     return v !== null && v !== undefined && v !== "" ? String(v) : null
   }
 
+  // Story 75-186 — agendamento pendente de feedback (mesma regra da página do
+  // corretor, 75-185): visita já passada sem visit_feedback → botão no header.
+  const { data: pastAppointments } = await supabase
+    .from("appointments")
+    .select("id, scheduled_at, status, feedback:visit_feedback(id)")
+    .eq("lead_id", id)
+    .in("status", ["scheduled", "confirmed", "completed"])
+    .lte("scheduled_at", new Date().toISOString())
+    .order("scheduled_at", { ascending: false })
+    .limit(3)
+  const pendingFeedbackApt = (pastAppointments ?? []).find((a) => {
+    const fb = Array.isArray(a.feedback) ? a.feedback : a.feedback ? [a.feedback] : []
+    return fb.length === 0
+  })
+
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -218,6 +234,14 @@ export default async function LeadDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Story 75-186 — feedback da visita direto da página do lead (dashboard) */}
+            {pendingFeedbackApt && (
+              <VisitFeedbackButton
+                appointmentId={pendingFeedbackApt.id as string}
+                title="Feedback da visita"
+                subtitle={(lead.name as string | null) ?? undefined}
+              />
+            )}
             {stage && (
               <span
                 className="rounded-full px-3 py-1 text-xs font-medium"

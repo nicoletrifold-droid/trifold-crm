@@ -207,10 +207,12 @@ interface VisitFeedbackButtonProps {
   /** Contexto p/ o header do modal. */
   title?: string
   subtitle?: string
+  /** Story 75-186 — callback extra no sucesso (ex.: drawer esconder o botão). */
+  onSuccess?: () => void
 }
 
 /** Botão autocontido: abre o modal e dá router.refresh() no sucesso. */
-export function VisitFeedbackButton({ appointmentId, label = "Registrar visita", className, title, subtitle }: VisitFeedbackButtonProps) {
+export function VisitFeedbackButton({ appointmentId, label = "Registrar visita", className, title, subtitle, onSuccess }: VisitFeedbackButtonProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
@@ -231,6 +233,7 @@ export function VisitFeedbackButton({ appointmentId, label = "Registrar visita",
           onSuccess={() => {
             setOpen(false)
             router.refresh()
+            onSuccess?.()
           }}
         />
       )}
