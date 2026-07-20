@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
+import { POST_VISIT_STAGE_IDS } from "@web/lib/appointments/no-show-decision"
 
 export async function POST(
   request: NextRequest,
@@ -81,6 +82,18 @@ export async function POST(
       { error: "Failed to update lead" },
       { status: 500 }
     )
+  }
+
+  // Story 75-177 — mover para etapa pós-visita resolve os agendamentos abertos do lead
+  // (fecha a lacuna na origem: senão o detector de no-show reverteria o lead 48h depois).
+  // Best-effort: falha aqui não deve quebrar a mudança de etapa (que já foi persistida).
+  if (POST_VISIT_STAGE_IDS.includes(body.stage_id)) {
+    await supabase
+      .from("appointments")
+      .update({ status: "completed" })
+      .eq("lead_id", id)
+      .eq("org_id", appUser.org_id)
+      .in("status", ["scheduled", "confirmed"])
   }
 
   // O log em `activities` (type 'stage_change') é gravado pelo trigger
