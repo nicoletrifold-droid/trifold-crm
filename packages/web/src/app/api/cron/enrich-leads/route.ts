@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient()
   const { createAnthropicClient } = await import("@trifold/ai")
-  const { enrichLeadFromConversation, mapExtractedDataToLeadFields } = await import("@trifold/ai")
+  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil } = await import("@trifold/ai")
   const anthropic = createAnthropicClient()
 
   const cutoff = new Date(Date.now() - ENRICHMENT_WINDOW_MINUTES * 60 * 1000).toISOString()
@@ -81,10 +81,10 @@ export async function GET(request: NextRequest) {
 
       const currentData = (state?.collected_data as Record<string, unknown>) ?? {}
 
-      // Load current lead data for merge logic
+      // Load current lead data for merge logic (Story 75-183: + campos de perfil p/ o guard)
       const { data: currentLead } = await supabase
         .from("leads")
-        .select("name, email, preferred_bedrooms, preferred_floor, preferred_view, preferred_garage_count, has_down_payment, source, qualification_score, property_interest_id")
+        .select("name, email, preferred_bedrooms, preferred_floor, preferred_view, preferred_garage_count, has_down_payment, source, qualification_score, property_interest_id, profissao, renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, cidade_bairro, tem_pet")
         .eq("id", conv.lead_id)
         .single()
 
@@ -108,6 +108,11 @@ export async function GET(request: NextRequest) {
 
       // AC8: Always update ai_summary
       leadPatch.ai_summary = enrichment.summary
+
+      // Story 75-183 — guard "não sobrescrever humano": campo de PERFIL já preenchido
+      // no lead (pelo corretor ou por extração anterior) nunca é atualizado pela IA.
+      // Score/summary continuam dinâmicos — o guard é só p/ os campos de perfil.
+      stripAlreadyFilledPerfil(leadPatch, (currentLead ?? {}) as Record<string, unknown>)
 
       // AC10: Resolve property_interest to property_interest_id
       if (enrichment.extracted_data.property_interest) {

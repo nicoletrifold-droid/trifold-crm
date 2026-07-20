@@ -28,11 +28,20 @@ Campos possiveis em extracted_data:
 - has_down_payment: true | false
 - source: "meta_ads" | "website" | "referral" | "walk_in"
 - visit_availability: string (dia/horario mencionado)
+- profissao: string (profissao do lead, como ele disse; ex: "professora", "empresario")
+- renda_familiar: "ate_2850" | "2850_4700" | "4700_8000" | "8000_12000" | "12000_20000" | "acima_20000" (SOMENTE se o lead falou valor/faixa de renda; mapeie o valor mencionado para a faixa em R$/mes)
+- filhos: "nenhum" | "1" | "2" | "3_mais" (quantos filhos o lead disse ter)
+- estado_civil: "solteiro" | "casado_uniao" | "divorciado" | "viuvo" (casado ou uniao estavel → "casado_uniao")
+- faixa_etaria: "18_24" | "25_34" | "35_44" | "45_54" | "55_64" | "65_mais" (SOMENTE se o lead disse a idade; NUNCA deduza pelo tom da conversa)
+- situacao_moradia: "aluguel" | "propria" | "com_familia" (onde/como mora hoje; "pago aluguel" → "aluguel", "moro com meus pais" → "com_familia")
+- cidade_bairro: string (cidade e/ou bairro onde o lead mora hoje)
+- tem_pet: "sim" | "nao" (se mencionou ter/nao ter animal de estimacao)
 
 REGRAS:
 - Retorne APENAS JSON valido, sem markdown, sem code blocks
 - Em extracted_data, inclua SOMENTE campos que o lead mencionou explicitamente
 - NAO invente dados — se o lead nao falou, nao inclua o campo
+- Para os campos de enum (renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, tem_pet) use EXATAMENTE um dos valores listados — nunca outro texto
 - Se o lead mencionou interesse em ambos empreendimentos, use o que ele demonstrou MAIS interesse
 - Para source, mapeie: instagram/facebook/tiktok → "meta_ads", google/youtube → "website", indicacao/amigo → "referral", placa/stand/passou na frente → "walk_in"`
 
@@ -92,6 +101,48 @@ export function parseEnrichmentResponse(text: string): EnrichmentResult | null {
 }
 
 /**
+ * Story 75-183 — Campos de perfil (mig 179). Enums espelham os CHECKs do banco;
+ * PERFIL_LEAD_FIELDS é usado pelo cron p/ o guard "não sobrescrever humano".
+ */
+const PERFIL_ENUM_FIELDS = {
+  renda_familiar: ["ate_2850", "2850_4700", "4700_8000", "8000_12000", "12000_20000", "acima_20000"],
+  filhos: ["nenhum", "1", "2", "3_mais"],
+  estado_civil: ["solteiro", "casado_uniao", "divorciado", "viuvo"],
+  faixa_etaria: ["18_24", "25_34", "35_44", "45_54", "55_64", "65_mais"],
+  situacao_moradia: ["aluguel", "propria", "com_familia"],
+  tem_pet: ["sim", "nao"],
+} as const
+
+export const PERFIL_LEAD_FIELDS = [
+  "profissao",
+  "renda_familiar",
+  "filhos",
+  "estado_civil",
+  "faixa_etaria",
+  "situacao_moradia",
+  "cidade_bairro",
+  "tem_pet",
+] as const
+
+/**
+ * Story 75-183 — Guard "não sobrescrever humano": remove do patch qualquer campo de
+ * PERFIL que já esteja preenchido no lead (corretor/manual — ou extração anterior —
+ * sempre vence a IA). Score/summary não passam por aqui (continuam dinâmicos).
+ * Muta e retorna o próprio patch, p/ uso in-place no cron.
+ */
+export function stripAlreadyFilledPerfil(
+  patch: Record<string, unknown>,
+  leadRow: Record<string, unknown>
+): Record<string, unknown> {
+  for (const field of PERFIL_LEAD_FIELDS) {
+    if (leadRow[field] != null && leadRow[field] !== "" && field in patch) {
+      delete patch[field]
+    }
+  }
+  return patch
+}
+
+/**
  * Maps extracted_data fields to leads table column names.
  * Returns only non-null fields that should be updated.
  */
@@ -127,6 +178,22 @@ export function mapExtractedDataToLeadFields(
     if (validSources.includes(extractedData.source)) {
       patch.source = extractedData.source
     }
+  }
+
+  // Story 75-183 — Perfil (marketing): enums validados contra os CHECKs da mig 179
+  // (valor fora da lista é DESCARTADO — a extração nunca pode quebrar o CHECK).
+  // Texto livre (profissao/cidade_bairro) é saneado: trim + limite de tamanho.
+  for (const [field, allowed] of Object.entries(PERFIL_ENUM_FIELDS)) {
+    const v = extractedData[field]
+    if (typeof v === "string" && (allowed as readonly string[]).includes(v)) {
+      patch[field] = v
+    }
+  }
+  if (typeof extractedData.profissao === "string" && extractedData.profissao.trim()) {
+    patch.profissao = extractedData.profissao.trim().slice(0, 80)
+  }
+  if (typeof extractedData.cidade_bairro === "string" && extractedData.cidade_bairro.trim()) {
+    patch.cidade_bairro = extractedData.cidade_bairro.trim().slice(0, 120)
   }
 
   // Recalculate qualification score from merged data
