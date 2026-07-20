@@ -299,12 +299,10 @@ export async function buildAnalyticsReportData(
           : "Período"
 
   // ── Métricas dos cards do PDF ──────────────────────────────────────────────
-  const { count: perdidosCount } = await supabase
-    .from("leads").select("id", { count: "exact", head: true })
-    .eq("org_id", orgId).eq("segmento", "principal").eq("is_active", true)
-    .not("lost_reason", "is", null)
-    .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
-  const perdidos = perdidosCount ?? 0
+  // Story 75-178: Perdidos = sum(lost_reasons) da MESMA RPC que a tela usa (fonte
+  // única). Antes o PDF fazia query própria com filtro is_active=true, que excluía
+  // perdidos inativos e divergia da tela (16 vs 29).
+  const perdidos = Object.values(summary?.lost_reasons ?? {}).reduce<number>((s, v) => s + toN(v), 0)
 
   // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
   const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
@@ -319,11 +317,12 @@ export async function buildAnalyticsReportData(
     .not("status", "in", "(cancelled,no_show)")
   const visitasRealizadas = visitasCount ?? 0
 
-  // "Novos leads" e sua variação saem da linha Total do comparativo — assim o
-  // card casa 1:1 com a tabela de comparação (mesma fonte/filtro).
+  // Story 75-178: "Novos leads" = new_leads da RPC (fonte única, igual à tela).
+  // É numericamente idêntico ao total do comparativo (currLeads.length, mesmos
+  // filtros/janela) — a variação segue saindo da linha Total (período anterior).
   const totalItem = comparison.find((g) => g.title === "Total")?.items[0]
-  const novosLeads = totalItem?.current ?? 0
-  const novosLeadsDelta = (totalItem?.current ?? 0) - (totalItem?.previous ?? 0)
+  const novosLeads = toN(summary?.new_leads)
+  const novosLeadsDelta = novosLeads - (totalItem?.previous ?? 0)
 
   // Tempo médio agregado, ponderado pelo nº de leads de cada corretor (mesma
   // fonte da tabela por corretor). null quando não houve atendimentos no período.
