@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { requireAuth } from "@web/lib/api-auth"
 
 function getServiceClient() {
   return createAdminClient()
 }
 
+/** Story 75-185 — perfis que registram feedback de qualquer agendamento da org. */
+const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial"]
+
 /**
  * POST /api/appointments/[id]/feedback
  * Records visit feedback, updates appointment status, and creates activity log.
+ *
+ * Story 75-185 — endpoint era PÚBLICO (sem auth); agora exige sessão + org e
+ * espelha a governança da 75-103: admin/supervisor/gerente-comercial sempre;
+ * corretor só se for o dono do agendamento OU o responsável pelo lead.
  *
  * Body: {
  *   feedback: string,
@@ -21,6 +29,10 @@ export async function POST(
 ) {
   try {
     const { id } = await params
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { appUser } = auth
+
     const supabase = getServiceClient()
     const body = await request.json()
 
@@ -42,7 +54,7 @@ export async function POST(
     // Verify appointment exists
     const { data: appointment, error: fetchError } = await supabase
       .from("appointments")
-      .select("id, lead_id, org_id, status")
+      .select("id, lead_id, org_id, status, broker_id")
       .eq("id", id)
       .single()
 
@@ -51,6 +63,26 @@ export async function POST(
         { error: "Appointment not found" },
         { status: 404 }
       )
+    }
+
+    // Story 75-185 — org + permissão (o client é service_role, então o check é manual)
+    if (appointment.org_id !== appUser.org_id) {
+      return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
+    }
+    if (!FEEDBACK_ADMIN_ROLES.includes(appUser.role)) {
+      const isApptOwner = appointment.broker_id === appUser.id
+      let isLeadOwner = false
+      if (!isApptOwner) {
+        const { data: leadRow } = await supabase
+          .from("leads")
+          .select("assigned_broker_id")
+          .eq("id", appointment.lead_id)
+          .single()
+        isLeadOwner = leadRow?.assigned_broker_id === appUser.id
+      }
+      if (!isApptOwner && !isLeadOwner) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
     }
 
     // Create visit feedback entry

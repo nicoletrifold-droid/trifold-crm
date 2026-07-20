@@ -22,6 +22,8 @@ import { SourceBadge } from "@web/components/ui/source-badge"
 import { createClient } from "@web/lib/supabase/client"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import type { CreativeData } from "@web/lib/pipeline/types"
+import { STAGE_IDS } from "@trifold/shared"
+import { VisitFeedbackModal } from "@web/components/appointments/visit-feedback-form"
 
 interface Stage {
   id: string
@@ -116,6 +118,8 @@ export function KanbanBoard({
   const [showSourceFilter, setShowSourceFilter] = useState(false)
   const [selectedCreatives, setSelectedCreatives] = useState<string[]>([])
   const [showCreativeFilter, setShowCreativeFilter] = useState(false)
+  // Story 75-185 (porta 3) — arrastou p/ Visitou com agendamento aberto → oferece o feedback.
+  const [feedbackApt, setFeedbackApt] = useState<{ id: string; leadName: string | null } | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -339,6 +343,24 @@ export function KanbanBoard({
       // O log de mudança de etapa (activities type 'stage_change') é gravado
       // automaticamente pelo trigger trg_log_lead_stage_change no UPDATE acima
       // (migration 124, Story 75-72) — captura todos os caminhos com org_id correto.
+
+      // Story 75-185 (porta 3) — moveu p/ Visitou e há agendamento aberto (já passado):
+      // oferece o feedback na hora. Best-effort e NÃO bloqueia o arrasto (fechar o
+      // modal mantém a mudança de etapa; o cron de no-show tem os guards da 75-177).
+      if (newStageId === STAGE_IDS.visitou) {
+        const { data: openApt } = await supabase
+          .from("appointments")
+          .select("id")
+          .eq("lead_id", leadId)
+          .in("status", ["scheduled", "confirmed"])
+          .lte("scheduled_at", new Date().toISOString())
+          .order("scheduled_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (openApt) {
+          setFeedbackApt({ id: openApt.id as string, leadName: movedLead.name ?? null })
+        }
+      }
     },
     [stageMap, initialStages]
   )
@@ -556,6 +578,17 @@ export function KanbanBoard({
         />
       </DndContext>
       </div>
+
+      {/* Story 75-185 (porta 3) — feedback da visita oferecido após arrastar p/ Visitou */}
+      {feedbackApt && (
+        <VisitFeedbackModal
+          appointmentId={feedbackApt.id}
+          title="Registrar feedback da visita?"
+          subtitle={feedbackApt.leadName ?? undefined}
+          onClose={() => setFeedbackApt(null)}
+          onSuccess={() => setFeedbackApt(null)}
+        />
+      )}
     </>
   )
 }
