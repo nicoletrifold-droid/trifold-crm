@@ -5,19 +5,8 @@ import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/
 import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
-
-type AnalyticsFunnelEntry = { stage_id: string; name: string; slug: string; color: string; position: number; count: number | string }
-type AnalyticsPropertyEntry = { property_id: string; name: string; count: number | string }
-type AnalyticsBrokerEntry = { user_id: string; name: string; count: number | string; avg_score: number | null }
-type AnalyticsSummary = {
-  funnel: AnalyticsFunnelEntry[] | null
-  by_property: AnalyticsPropertyEntry[] | null
-  by_broker: AnalyticsBrokerEntry[] | null
-  source_counts: Record<string, number | string> | null
-  lost_reasons: Record<string, number | string> | null
-  total_leads: number | string
-  new_leads: number | string
-}
+// Story 75-179: tipo da RPC + derivação de métricas centralizados (dedup tela/PDF).
+import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
 
 type RawLead = {
   created_at: string
@@ -50,15 +39,24 @@ function buildComparison(
   const groups: WeekComparisonGroup[] = [
     {
       title: "Total",
-      items: [{ label: "Novos leads", current: currLeads.length, previous: prevLeads.length }],
+      items: [{ label: "Novos leads (ativos)", current: currLeads.length, previous: prevLeads.length }],
     },
   ]
 
   // ── Por empreendimento ───────────────────────────────────────────────────
   const propCurr = new Map<string, number>()
   const propPrev = new Map<string, number>()
-  for (const l of currLeads) if (l.property_interest_id) propCurr.set(l.property_interest_id, (propCurr.get(l.property_interest_id) ?? 0) + 1)
-  for (const l of prevLeads) if (l.property_interest_id) propPrev.set(l.property_interest_id, (propPrev.get(l.property_interest_id) ?? 0) + 1)
+  // Story 75-179: leads sem property_interest_id sumiam do detalhamento (soma < total).
+  let semEmpCurr = 0
+  let semEmpPrev = 0
+  for (const l of currLeads) {
+    if (l.property_interest_id) propCurr.set(l.property_interest_id, (propCurr.get(l.property_interest_id) ?? 0) + 1)
+    else semEmpCurr++
+  }
+  for (const l of prevLeads) {
+    if (l.property_interest_id) propPrev.set(l.property_interest_id, (propPrev.get(l.property_interest_id) ?? 0) + 1)
+    else semEmpPrev++
+  }
 
   const propIds = new Set([...propCurr.keys(), ...propPrev.keys()])
   const propItems = [...propIds]
@@ -68,6 +66,11 @@ function buildComparison(
       previous: propPrev.get(id) ?? 0,
     }))
     .sort((a, b) => b.current - a.current)
+
+  // "Sem empreendimento" fica por último — fecha o total do comparativo (75-179).
+  if (semEmpCurr > 0 || semEmpPrev > 0) {
+    propItems.push({ label: "Sem empreendimento", current: semEmpCurr, previous: semEmpPrev })
+  }
 
   if (propItems.length > 0) groups.push({ title: "Por Empreendimento", items: propItems })
 
@@ -156,6 +159,7 @@ export async function buildAnalyticsReportData(
 
   const [
     { data: analytics },
+    { data: analyticsPrev },
     { count: lpYardenCount },
     { count: lpVindCount },
     { data: recentLeadsRaw },
@@ -163,6 +167,8 @@ export async function buildAnalyticsReportData(
     { data: responseLeadsRaw },
   ] = await Promise.all([
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: aggSince.toISOString(), p_until: aggUntil.toISOString() }),
+    // Story 75-179: período anterior (mesma duração) p/ a variação de Entradas do card herói.
+    supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: compPrevStart.toISOString(), p_until: compCurrStart.toISOString() }),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
     supabase.from("leads")
@@ -184,6 +190,9 @@ export async function buildAnalyticsReportData(
   ])
 
   const summary = (analytics as AnalyticsSummary | null) ?? null
+  // Story 75-179: métricas de topo via helper único (mesma fonte da tela).
+  const metrics = deriveAnalyticsMetrics(summary)
+  const prevMetrics = deriveAnalyticsMetrics((analyticsPrev as AnalyticsSummary | null) ?? null)
 
   const stages = (summary?.funnel ?? []).map((st) => ({
     name: st.name,
@@ -298,11 +307,9 @@ export async function buildAnalyticsReportData(
         : period.range === "90d" ? "Últimos 90 dias"
           : "Período"
 
-  // ── Métricas dos cards do PDF ──────────────────────────────────────────────
-  // Story 75-178: Perdidos = sum(lost_reasons) da MESMA RPC que a tela usa (fonte
-  // única). Antes o PDF fazia query própria com filtro is_active=true, que excluía
-  // perdidos inativos e divergia da tela (16 vs 29).
-  const perdidos = Object.values(summary?.lost_reasons ?? {}).reduce<number>((s, v) => s + toN(v), 0)
+  // ── Métricas dos cards do PDF (Story 75-179: fonte única = deriveAnalyticsMetrics) ──
+  const { entradas, ativos, perdidos } = metrics
+  const entradasDelta = entradas - prevMetrics.entradas
 
   // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
   const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
@@ -316,13 +323,6 @@ export async function buildAnalyticsReportData(
     .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
     .not("status", "in", "(cancelled,no_show)")
   const visitasRealizadas = visitasCount ?? 0
-
-  // Story 75-178: "Novos leads" = new_leads da RPC (fonte única, igual à tela).
-  // É numericamente idêntico ao total do comparativo (currLeads.length, mesmos
-  // filtros/janela) — a variação segue saindo da linha Total (período anterior).
-  const totalItem = comparison.find((g) => g.title === "Total")?.items[0]
-  const novosLeads = toN(summary?.new_leads)
-  const novosLeadsDelta = novosLeads - (totalItem?.previous ?? 0)
 
   // Tempo médio agregado, ponderado pelo nº de leads de cada corretor (mesma
   // fonte da tabela por corretor). null quando não houve atendimentos no período.
@@ -341,8 +341,9 @@ export async function buildAnalyticsReportData(
     generatedAt,
     periodRange,
     rangeLabel,
-    novosLeads,
-    novosLeadsDelta,
+    entradas,
+    entradasDelta,
+    ativos,
     visitou,
     visitasRealizadas,
     perdidos,
