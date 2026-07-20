@@ -6,6 +6,7 @@ import { NewAppointmentButton } from "@web/app/dashboard/_components/new-appoint
 import { DeleteAppointmentButton } from "@web/app/dashboard/_components/delete-appointment-button"
 import { canMutateAppointment } from "@web/lib/appointments/governance"
 import { teamBadge } from "@web/lib/appointments/team-badge"
+import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 
 const statusConfig: Record<
   string,
@@ -86,6 +87,9 @@ interface Appointment {
   notes: string | null
   team: string | null // Story 81-2: 'house' | 'imob'
   metadata: unknown // Story 81-6: origem/imobiliária/corretor parceiro (link IMOB)
+  // Story 75-185 — governança do botão "Registrar visita" (canMutateAppointment)
+  broker_id: string | null
+  calendly_event_uri: string | null
   lead: unknown
   broker: unknown
   property: unknown
@@ -130,7 +134,6 @@ export default async function AgendaPage({
     date?: string
     view?: string
     apt?: string
-    mark_completed?: string
   }>
 }) {
   const appUser = await getServerUser()
@@ -138,21 +141,9 @@ export default async function AgendaPage({
   const params = await searchParams
   const view = params.view ?? "week" // week, month, day
 
-  // Handle mark_completed action — Story 75-103: só o dono (corretor) ou
-  // admin/supervisor/gerente-comercial podem marcar como realizado (Calendly = livre).
-  if (params.mark_completed) {
-    const { data: target } = await supabase
-      .from("appointments")
-      .select("id, broker_id, calendly_event_uri, team")
-      .eq("id", params.mark_completed)
-      .single()
-    if (target && canMutateAppointment(appUser.role, appUser.id, target)) {
-      await supabase
-        .from("appointments")
-        .update({ status: "completed" })
-        .eq("id", params.mark_completed)
-    }
-  }
+  // Story 75-185 — o antigo caminho `mark_completed` (completava SEM feedback, sem
+  // pós-visita da Nicole) foi removido: "Marcar como realizado" agora abre o modal
+  // de feedback compartilhado, que completa o agendamento com o ciclo inteiro.
 
   // Determine the current week
   const today = new Date()
@@ -202,6 +193,7 @@ export default async function AgendaPage({
     .select(
       `
       id, scheduled_at, duration_minutes, location, status, notes, team, metadata,
+      broker_id, calendly_event_uri,
       lead:leads!lead_id(id, name, phone),
       broker:users!broker_id(id, name),
       property:properties!property_id(id, name)
@@ -379,13 +371,15 @@ export default async function AgendaPage({
                             Ver feedback
                           </Link>
                         )}
-                        {isPastScheduled && (
-                          <Link
-                            href={`/dashboard/agenda?view=day&date=${formatDateISO(selectedDate)}&mark_completed=${apt.id}${params.broker_id ? `&broker_id=${params.broker_id}` : ""}`}
+                        {isPastScheduled && canMutateAppointment(appUser.role, appUser.id, apt) && (
+                          /* Story 75-185 (porta 2) — abre o modal de feedback (ciclo completo) */
+                          <VisitFeedbackButton
+                            appointmentId={apt.id}
+                            label="Registrar visita"
                             className="rounded-md bg-orange-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-orange-700"
-                          >
-                            Marcar como realizado
-                          </Link>
+                            title="Feedback da visita"
+                            subtitle={lead?.name ?? undefined}
+                          />
                         )}
                       </div>
                     </div>

@@ -6,6 +6,7 @@ import { isUuid } from "@web/lib/uuid"
 import { LeadDetailsPanel } from "./_components/lead-details-panel"
 import { ConversationThread } from "./_components/conversation-thread"
 import { markLeadConversationsRead } from "./_actions/mark-read"
+import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
@@ -97,6 +98,21 @@ export default async function BrokerLeadDetailPage({
     : null
   const isWhatsApp = !String(lead.phone).startsWith("tg:")
 
+  // Story 75-185 (porta 1) — agendamento pendente de feedback: visita já passada
+  // (scheduled/confirmed) ou realizada sem visit_feedback → botão "Registrar visita".
+  const { data: pastAppointments } = await supabase
+    .from("appointments")
+    .select("id, scheduled_at, status, feedback:visit_feedback(id)")
+    .eq("lead_id", id)
+    .in("status", ["scheduled", "confirmed", "completed"])
+    .lte("scheduled_at", new Date().toISOString())
+    .order("scheduled_at", { ascending: false })
+    .limit(3)
+  const pendingFeedbackApt = (pastAppointments ?? []).find((a) => {
+    const fb = Array.isArray(a.feedback) ? a.feedback : a.feedback ? [a.feedback] : []
+    return fb.length === 0
+  })
+
   return (
     <div className="space-y-6">
       <Link
@@ -141,6 +157,14 @@ export default async function BrokerLeadDetailPage({
             >
               Score: {lead.qualification_score}
             </span>
+          )}
+          {/* Story 75-185 (porta 1) — feedback da visita direto da página do lead */}
+          {pendingFeedbackApt && (
+            <VisitFeedbackButton
+              appointmentId={pendingFeedbackApt.id as string}
+              title="Feedback da visita"
+              subtitle={(lead.name as string | null) ?? undefined}
+            />
           )}
           {/*
             Story 63-7 — detalhes/edição do lead movidos para slide-over,
