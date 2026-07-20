@@ -9,6 +9,7 @@ import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as 
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
 import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
+import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -190,6 +191,29 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   const [state, dispatch] = useReducer(reducer, initialState)
   const supabase = useMemo(() => createClient(), [])
   const [leadBasePath, setLeadBasePath] = useState("/broker/leads")
+  // Story 75-186 — agendamento pendente de feedback (visita passada sem visit_feedback)
+  const [pendingFeedbackAptId, setPendingFeedbackAptId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from("appointments")
+      .select("id, status, feedback:visit_feedback(id)")
+      .eq("lead_id", leadId)
+      .in("status", ["scheduled", "confirmed", "completed"])
+      .lte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: false })
+      .limit(3)
+      .then(({ data }) => {
+        if (cancelled) return
+        const pending = (data ?? []).find((a) => {
+          const fb = Array.isArray(a.feedback) ? a.feedback : a.feedback ? [a.feedback] : []
+          return fb.length === 0
+        })
+        setPendingFeedbackAptId((pending?.id as string | undefined) ?? null)
+      })
+    return () => { cancelled = true }
+  }, [leadId, supabase])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -511,15 +535,29 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               {lead.property_interest && <span>{lead.property_interest.name}</span>}
             </div>
             {/* Story 75-140 — atender no WhatsApp pelo número da empresa (abre a Conversa). */}
-            {whatsAppState({ phone: lead.phone, source: lead.source }) !== "none" && (
-              <Link
-                href={`${leadBasePath}/${leadId}?tab=conversa`}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Conversar no WhatsApp
-              </Link>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {whatsAppState({ phone: lead.phone, source: lead.source }) !== "none" && (
+                <Link
+                  href={`${leadBasePath}/${leadId}?tab=conversa`}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Conversar no WhatsApp
+                </Link>
+              )}
+              {/* Story 75-186 — feedback da visita direto do drawer do pipeline */}
+              {pendingFeedbackAptId && (
+                <span className="mt-3 inline-flex">
+                  <VisitFeedbackButton
+                    appointmentId={pendingFeedbackAptId}
+                    title="Feedback da visita"
+                    subtitle={lead.name ?? undefined}
+                    className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
+                    onSuccess={() => setPendingFeedbackAptId(null)}
+                  />
+                </span>
+              )}
+            </div>
             {isPerdido && (
               <div className="mt-3 rounded-lg bg-red-50 p-3 dark:bg-red-500/10">
                 <div className="flex items-start gap-2">
