@@ -99,6 +99,10 @@ export default async function AnalyticsPage({
   let brokers: { id: string; name: string; count: number; avgScore: number }[] = []
   const sourceCounts: Record<string, number> = {}
   const lostReasons: Record<string, number> = {}
+  // Story 75-178: "Novos leads no período" — fonte única = new_leads da RPC (leads criados
+  // na janela, ativos, não-perdidos). Antes a tela somava o funil (excluía etapas não
+  // exibidas → divergia do PDF). Agora tela e PDF leem a MESMA métrica.
+  let newLeads = 0
 
   if (!propertyId) {
     // SEM filtro de empreendimento — usa o RPC período-aware
@@ -119,6 +123,7 @@ export default async function AnalyticsPage({
       .map((b) => ({ id: b.user_id, name: b.name, count: toCount(b.count), avgScore: b.avg_score ?? 0 }))
     for (const [k, v] of Object.entries(summary?.source_counts ?? {})) sourceCounts[k] = toCount(v)
     for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) lostReasons[k] = toCount(v)
+    newLeads = toCount(summary?.new_leads)
   } else {
     // COM filtro de empreendimento — queries diretas, limitadas ao período
     const [stagesData, leadsForAggData] = await Promise.all([
@@ -169,11 +174,16 @@ export default async function AnalyticsPage({
       if (l.source) sourceCounts[l.source] = (sourceCounts[l.source] ?? 0) + 1
     }
 
+    // Story 75-178: novos leads = ativos, não-perdidos, criados na janela (mesma
+    // definição do new_leads da RPC no branch sem filtro).
+    newLeads = allLeads.length
+
     // Lost reasons — perdidos do empreendimento no período (query separada, pois
-    // allLeads exclui lost_reason)
+    // allLeads exclui lost_reason). Story 75-178: sem filtro is_active, para casar
+    // com o lost_reasons da RPC (que conta todos os perdidos da janela).
     const lostData = await supabase
       .from("leads").select("lost_reason")
-      .eq("org_id", appUser.orgId).eq("segmento", "principal").eq("is_active", true)
+      .eq("org_id", appUser.orgId).eq("segmento", "principal")
       .not("lost_reason", "is", null)
       .eq("property_interest_id", propertyId)
       .gte("created_at", sinceISO).lt("created_at", untilISO)
@@ -209,7 +219,7 @@ export default async function AnalyticsPage({
   if (sourceCounts.other === 0) delete sourceCounts.other
 
   // ── Métricas do período (cards de topo) ────────────────────────────────────
-  const totalLeads = stages.reduce((sum, s) => sum + s.count, 0)
+  const totalLeads = newLeads
   const perdidos = Object.values(lostReasons).reduce((sum, n) => sum + n, 0)
   const fechamento = stages.find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count ?? 0
   const conversao = totalLeads > 0 ? Math.round((fechamento / totalLeads) * 100) : 0
@@ -332,7 +342,7 @@ export default async function AnalyticsPage({
       {/* Cards do período */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Total no período</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Novos leads</p>
           <p className="mt-1 text-3xl font-bold dark:text-stone-100">{totalLeads}</p>
           <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{rangeLabel}</p>
         </div>
