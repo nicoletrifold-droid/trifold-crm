@@ -32,6 +32,15 @@ export function EditLeadToggle({ lead, properties }: Props) {
           orcamento: lead.orcamento as string | null,
           prazo_compra: lead.prazo_compra as string | null,
           forma_pagamento: lead.forma_pagamento as string | null,
+          // Story 75-181 — perfil p/ marketing
+          profissao: lead.profissao as string | null,
+          renda_familiar: lead.renda_familiar as string | null,
+          filhos: lead.filhos as string | null,
+          estado_civil: lead.estado_civil as string | null,
+          faixa_etaria: lead.faixa_etaria as string | null,
+          situacao_moradia: lead.situacao_moradia as string | null,
+          cidade_bairro: lead.cidade_bairro as string | null,
+          tem_pet: lead.tem_pet as string | null,
         }}
         properties={properties}
         onClose={() => setEditing(false)}
