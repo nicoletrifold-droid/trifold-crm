@@ -26,9 +26,13 @@ export interface AnalyticsReportData {
   periodRange: string
   /** Rótulo curto do período (ex.: "Últimos 7 dias"). */
   rangeLabel: string
-  // Cards de topo — todos referentes ao período.
-  novosLeads: number
-  novosLeadsDelta: number
+  // Cards de topo — todos referentes ao período (Story 75-179).
+  /** Todas as entradas do período (inclui perdidos). */
+  entradas: number
+  /** Variação de entradas vs período anterior. */
+  entradasDelta: number
+  /** Entradas ativas e não-perdidas (subconjunto). */
+  ativos: number
   visitou: number
   /** Visitas realizadas (agendamentos ≠ cancelado/no-show) no período. */
   visitasRealizadas: number
@@ -206,11 +210,14 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
         {/* Cards — todos referentes ao período */}
         <View style={s.cardsRow} wrap={false}>
           <View style={s.cardHero}>
-            <Text style={s.cardLabel}>Novos leads</Text>
+            <Text style={s.cardLabel}>Novos leads (entradas)</Text>
             <View style={s.cardValueRow}>
-              <Text style={s.cardValueOrange}>{data.novosLeads}</Text>
-              <CardDelta delta={data.novosLeadsDelta} />
+              <Text style={s.cardValueOrange}>{data.entradas}</Text>
+              <CardDelta delta={data.entradasDelta} />
             </View>
+            <Text style={s.cardSub}>
+              <Text style={s.cardSubStrong}>{data.ativos}</Text> ativos · <Text style={s.cardSubStrong}>{data.perdidos}</Text> perdidos
+            </Text>
           </View>
           <View style={s.card}>
             <Text style={s.cardLabel}>Visitas (7d)</Text>

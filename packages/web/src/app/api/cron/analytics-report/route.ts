@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
           <p>Segue o relatório semanal de analytics da plataforma Trifold CRM.</p>
           <p><strong>Período:</strong> ${data.rangeLabel} (${data.periodRange})</p>
           <ul>
-            <li>Novos leads: <strong>${data.novosLeads}</strong> (${data.novosLeadsDelta >= 0 ? "+" : ""}${data.novosLeadsDelta} vs. período anterior)</li>
+            <li>Novos leads (entradas): <strong>${data.entradas}</strong> (${data.entradasDelta >= 0 ? "+" : ""}${data.entradasDelta} vs. período anterior) · <strong>${data.ativos}</strong> ativos</li>
             <li>Visitas realizadas (7d): <strong>${data.visitasRealizadas}</strong> (${data.visitou} na etapa Visitou)</li>
             <li>Perdidos: <strong>${data.perdidos}</strong></li>
           </ul>

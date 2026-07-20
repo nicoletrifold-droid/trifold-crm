@@ -6,33 +6,8 @@ import { LeadsChart } from "@web/components/analytics/leads-chart"
 import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { resolvePeriod } from "@web/lib/analytics/period"
-
-// Story 30.1 / 75-31: shape do retorno da RPC get_analytics_summary_ranged.
-type AnalyticsFunnelEntry = {
-  stage_id: string
-  name: string
-  slug: string
-  color: string
-  position: number
-  count: number | string
-}
-type AnalyticsPropertyEntry = { property_id: string; name: string; count: number | string }
-type AnalyticsBrokerEntry = { user_id: string; name: string; count: number | string; avg_score: number | null }
-type AnalyticsSummary = {
-  funnel: AnalyticsFunnelEntry[] | null
-  by_property: AnalyticsPropertyEntry[] | null
-  by_broker: AnalyticsBrokerEntry[] | null
-  source_counts: Record<string, number | string> | null
-  lost_reasons: Record<string, number | string> | null
-  total_leads: number | string
-  new_leads: number | string
-}
-
-const toCount = (v: number | string | null | undefined): number => {
-  if (v === null || v === undefined) return 0
-  const n = typeof v === "string" ? Number(v) : v
-  return Number.isFinite(n) ? n : 0
-}
+// Story 75-179: fonte única das métricas (tipo da RPC + derivação) — dedup tela/PDF.
+import { type AnalyticsSummary, deriveAnalyticsMetrics, toCount } from "@web/lib/analytics/metrics"
 
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
 
@@ -99,10 +74,10 @@ export default async function AnalyticsPage({
   let brokers: { id: string; name: string; count: number; avgScore: number }[] = []
   const sourceCounts: Record<string, number> = {}
   const lostReasons: Record<string, number> = {}
-  // Story 75-178: "Novos leads no período" — fonte única = new_leads da RPC (leads criados
-  // na janela, ativos, não-perdidos). Antes a tela somava o funil (excluía etapas não
-  // exibidas → divergia do PDF). Agora tela e PDF leem a MESMA métrica.
-  let newLeads = 0
+  // Story 75-179: Entradas (todas do período) + Ativos (subconjunto ativo/não-perdido),
+  // via helper único deriveAnalyticsMetrics (mesma fonte da tela e do PDF).
+  let entradas = 0
+  let ativos = 0
 
   if (!propertyId) {
     // SEM filtro de empreendimento — usa o RPC período-aware
@@ -123,7 +98,9 @@ export default async function AnalyticsPage({
       .map((b) => ({ id: b.user_id, name: b.name, count: toCount(b.count), avgScore: b.avg_score ?? 0 }))
     for (const [k, v] of Object.entries(summary?.source_counts ?? {})) sourceCounts[k] = toCount(v)
     for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) lostReasons[k] = toCount(v)
-    newLeads = toCount(summary?.new_leads)
+    const m = deriveAnalyticsMetrics(summary)
+    entradas = m.entradas
+    ativos = m.ativos
   } else {
     // COM filtro de empreendimento — queries diretas, limitadas ao período
     const [stagesData, leadsForAggData] = await Promise.all([
@@ -174,9 +151,15 @@ export default async function AnalyticsPage({
       if (l.source) sourceCounts[l.source] = (sourceCounts[l.source] ?? 0) + 1
     }
 
-    // Story 75-178: novos leads = ativos, não-perdidos, criados na janela (mesma
-    // definição do new_leads da RPC no branch sem filtro).
-    newLeads = allLeads.length
+    // Story 75-179: Ativos = criados na janela, ativos e não-perdidos (allLeads já filtra).
+    ativos = allLeads.length
+    // Entradas = TODOS os criados na janela p/ o empreendimento (inclui perdidos/inativos).
+    const { count: entradasCount } = await supabase
+      .from("leads").select("id", { count: "exact", head: true })
+      .eq("org_id", appUser.orgId).eq("segmento", "principal")
+      .eq("property_interest_id", propertyId)
+      .gte("created_at", sinceISO).lt("created_at", untilISO)
+    entradas = entradasCount ?? 0
 
     // Lost reasons — perdidos do empreendimento no período (query separada, pois
     // allLeads exclui lost_reason). Story 75-178: sem filtro is_active, para casar
@@ -219,11 +202,12 @@ export default async function AnalyticsPage({
   if (sourceCounts.other === 0) delete sourceCounts.other
 
   // ── Métricas do período (cards de topo) ────────────────────────────────────
-  const totalLeads = newLeads
+  // Story 75-179: Entradas = todas as entradas; Ativos = subconjunto ativo/não-perdido.
+  // Conversão e média diária usam ENTRADAS (denominador honesto).
   const perdidos = Object.values(lostReasons).reduce((sum, n) => sum + n, 0)
   const fechamento = stages.find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count ?? 0
-  const conversao = totalLeads > 0 ? Math.round((fechamento / totalLeads) * 100) : 0
-  const mediaDiaria = period.days > 0 ? (totalLeads / period.days) : 0
+  const conversao = entradas > 0 ? Math.round((fechamento / entradas) * 100) : 0
+  const mediaDiaria = period.days > 0 ? (entradas / period.days) : 0
 
   // ── Tempo médio de atendimento por corretor (Story 75-47) ──────────────────
   // DISTRIBUIÇÃO (corretor recebeu, lead_distribution_log) → ATENDIMENTO (saiu de
@@ -339,21 +323,22 @@ export default async function AnalyticsPage({
       {/* Seletor de período GLOBAL — aplica à página inteira (Story 75-31) */}
       <AnalyticsPeriodSelector />
 
-      {/* Cards do período */}
+      {/* Cards do período (Story 75-179: Entradas + Ativos + Conversão + Perdidos) */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Novos leads</p>
-          <p className="mt-1 text-3xl font-bold dark:text-stone-100">{totalLeads}</p>
-          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{rangeLabel}</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Entradas</p>
+          <p className="mt-1 text-3xl font-bold dark:text-stone-100">{entradas}</p>
+          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{mediaDiaria.toFixed(1)}/dia · {rangeLabel}</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Média diária</p>
-          <p className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-300">{mediaDiaria.toFixed(1)}</p>
+          <p className="text-sm text-gray-500 dark:text-stone-400">Ativos</p>
+          <p className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-300">{ativos}</p>
+          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">em atendimento</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Conversão</p>
           <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-300">{conversao}%</p>
-          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{fechamento} fechados</p>
+          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{fechamento} de {entradas}</p>
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Perdidos</p>
