@@ -89,6 +89,15 @@ export async function PATCH(
     "orcamento",
     "prazo_compra",
     "forma_pagamento",
+    // Story 75-181 — perfil p/ marketing
+    "profissao",
+    "renda_familiar",
+    "filhos",
+    "estado_civil",
+    "faixa_etaria",
+    "situacao_moradia",
+    "cidade_bairro",
+    "tem_pet",
   ]
 
   const { fields, error: payloadError } = buildUpdatePayload(body, allowedFields)

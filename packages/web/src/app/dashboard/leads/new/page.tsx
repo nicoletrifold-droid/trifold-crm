@@ -8,6 +8,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { canAccess } from "@web/lib/permissions"
 import { SOURCE_OPTIONS } from "@web/lib/constants"
 import { FINALIDADE_OPTIONS, PRAZO_COMPRA_OPTIONS, FORMA_PAGAMENTO_OPTIONS } from "@web/lib/leads/enrich"
+import { LeadPerfilFieldsFormData } from "@web/components/leads/perfil-fields"
 
 async function createLead(formData: FormData) {
   "use server"
@@ -50,6 +51,16 @@ async function createLead(formData: FormData) {
   const formaPagamento = formData.get("forma_pagamento")?.toString() || null
   const observacao     = formData.get("observacao")?.toString().trim() || null
 
+  // Story 75-181 — perfil p/ marketing (todos opcionais; "" → null)
+  const profissao       = formData.get("profissao")?.toString().trim() || null
+  const rendaFamiliar   = formData.get("renda_familiar")?.toString() || null
+  const filhos          = formData.get("filhos")?.toString() || null
+  const estadoCivil     = formData.get("estado_civil")?.toString() || null
+  const faixaEtaria     = formData.get("faixa_etaria")?.toString() || null
+  const situacaoMoradia = formData.get("situacao_moradia")?.toString() || null
+  const cidadeBairro    = formData.get("cidade_bairro")?.toString().trim() || null
+  const temPet          = formData.get("tem_pet")?.toString() || null
+
   if (!phone && !name) {
     return // validação básica
   }
@@ -75,6 +86,15 @@ async function createLead(formData: FormData) {
         prazo_compra:        prazoCompra,
         forma_pagamento:     formaPagamento,
         observacao,
+        // Story 75-181 — perfil p/ marketing
+        profissao,
+        renda_familiar:      rendaFamiliar,
+        filhos,
+        estado_civil:        estadoCivil,
+        faixa_etaria:        faixaEtaria,
+        situacao_moradia:    situacaoMoradia,
+        cidade_bairro:       cidadeBairro,
+        tem_pet:             temPet,
       },
       { onConflict: "org_id,phone_normalized", ignoreDuplicates: false }
     )
@@ -232,6 +252,16 @@ export default async function NewLeadPage() {
               {FORMA_PAGAMENTO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+        </div>
+
+        {/* Story 75-181 — Perfil (marketing): nenhum campo obrigatório */}
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
+            Perfil (marketing)
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <LeadPerfilFieldsFormData inputClass={inputCls} labelClass={labelCls} />
         </div>
 
         {/* Observação */}

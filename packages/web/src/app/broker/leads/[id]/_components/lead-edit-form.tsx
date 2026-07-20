@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Save, Loader2 } from "lucide-react"
 import { FINALIDADE_OPTIONS, PRAZO_COMPRA_OPTIONS, FORMA_PAGAMENTO_OPTIONS } from "@web/lib/leads/enrich"
+import { LeadPerfilFields, leadPerfilFromLead, leadPerfilToPayload, type LeadPerfilValue } from "@web/components/leads/perfil-fields"
 
 interface LeadEditData {
   id: string
@@ -22,6 +23,15 @@ interface LeadEditData {
   orcamento: string | null
   prazo_compra: string | null
   forma_pagamento: string | null
+  // Story 75-181 — perfil p/ marketing
+  profissao: string | null
+  renda_familiar: string | null
+  filhos: string | null
+  estado_civil: string | null
+  faixa_etaria: string | null
+  situacao_moradia: string | null
+  cidade_bairro: string | null
+  tem_pet: string | null
 }
 
 interface Property { id: string; name: string }
@@ -61,6 +71,8 @@ export function LeadEditForm({ lead, properties }: Props) {
   const [prazoCompra, setPrazoCompra] = useState(lead.prazo_compra ?? "")
   const [formaPagamento, setFormaPagamento] = useState(lead.forma_pagamento ?? "")
   const [observacao, setObservacao] = useState(lead.observacao ?? "")
+  // Story 75-181 — perfil p/ marketing (bloco compartilhado)
+  const [perfil, setPerfil] = useState<LeadPerfilValue>(leadPerfilFromLead(lead))
 
   async function handleSave() {
     setSaving(true)
@@ -83,6 +95,7 @@ export function LeadEditForm({ lead, properties }: Props) {
       prazo_compra: prazoCompra || null,
       forma_pagamento: formaPagamento || null,
       observacao: observacao.trim() || null,
+      ...leadPerfilToPayload(perfil), // Story 75-181
     }
 
     const res = await fetch(`/api/leads/${lead.id}`, {
@@ -251,6 +264,19 @@ export function LeadEditForm({ lead, properties }: Props) {
             {FORMA_PAGAMENTO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
+        {/* Story 75-181 — Perfil (marketing): nenhum campo obrigatório */}
+        <div className="sm:col-span-2">
+          <p className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
+            Perfil (marketing)
+          </p>
+        </div>
+        <LeadPerfilFields
+          value={perfil}
+          onChange={(patch) => setPerfil((p) => ({ ...p, ...patch }))}
+          inputClass={inputClass}
+          labelClass={labelClass}
+        />
+
         <div className="sm:col-span-2">
           <label className={labelClass}>Observação</label>
           <textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={3}

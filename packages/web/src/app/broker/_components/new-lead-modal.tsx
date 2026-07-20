@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, X } from "lucide-react"
 import { SOURCE_OPTIONS } from "@web/lib/constants"
+import { LeadPerfilFields, leadPerfilToPayload, EMPTY_LEAD_PERFIL, type LeadPerfilValue } from "@web/components/leads/perfil-fields"
 
 interface Property { id: string; name: string }
 interface Stage { id: string; name: string; color: string }
@@ -31,6 +32,8 @@ export function NewLeadModal({
     stage_id: "",
     observacao: "",
   })
+  // Story 75-181 — perfil p/ marketing (bloco compartilhado)
+  const [perfil, setPerfil] = useState<LeadPerfilValue>(EMPTY_LEAD_PERFIL)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -42,6 +45,7 @@ export function NewLeadModal({
 
   function reset() {
     setForm({ name: "", phone: "", email: "", source: "other", utm_campaign: "", property_interest_id: "", stage_id: "", observacao: "" })
+    setPerfil(EMPTY_LEAD_PERFIL)
     setError(null)
   }
 
@@ -63,6 +67,7 @@ export function NewLeadModal({
         property_interest_id: form.property_interest_id || null,
         stage_id: form.stage_id || null,
         observacao: form.observacao || null,
+        ...leadPerfilToPayload(perfil), // Story 75-181
       }),
     })
 
@@ -93,7 +98,7 @@ export function NewLeadModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             ref={dialogRef}
-            className="w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900"
           >
             <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4 dark:border-stone-800">
               <h2 className="text-base font-semibold text-stone-900 dark:text-white">Cadastrar Lead</h2>
@@ -194,6 +199,21 @@ export function NewLeadModal({
                   </select>
                 </div>
               )}
+
+              {/* Story 75-181 — Perfil (marketing): nenhum campo obrigatório */}
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+                  Perfil (marketing) — opcional
+                </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <LeadPerfilFields
+                    value={perfil}
+                    onChange={(patch) => setPerfil((p) => ({ ...p, ...patch }))}
+                    inputClass="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:border-orange-300 focus:outline-none focus:ring-1 focus:ring-orange-300 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                    labelClass="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300"
+                  />
+                </div>
+              </div>
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-stone-700 dark:text-stone-300">Observação</label>

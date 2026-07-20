@@ -22,6 +22,15 @@ interface LeadEditData {
   orcamento: string | null
   prazo_compra: string | null
   forma_pagamento: string | null
+  // Story 75-181 — perfil p/ marketing
+  profissao: string | null
+  renda_familiar: string | null
+  filhos: string | null
+  estado_civil: string | null
+  faixa_etaria: string | null
+  situacao_moradia: string | null
+  cidade_bairro: string | null
+  tem_pet: string | null
 }
 
 interface Property {
