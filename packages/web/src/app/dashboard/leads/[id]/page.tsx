@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation"
 import { isUuid } from "@web/lib/uuid"
 import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
-import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS } from "@web/lib/leads/enrich"
+import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS, formatLeadPerfil } from "@web/lib/leads/enrich"
 // Story 75-155 — reuso do componente de conversa do corretor para dar PARIDADE de
 // ENVIO na aba "Conversa" do /dashboard (admin/supervisor/gerente-comercial).
 // Importado EM PLACE (sem mover o componente do /broker — fora de escopo).
@@ -311,6 +311,10 @@ export default async function LeadDetailPage({
             <InfoRow label="Orçamento" value={lead.orcamento} />
             <InfoRow label="Prazo de compra" value={lead.prazo_compra ? (PRAZO_COMPRA_LABELS[lead.prazo_compra as string] ?? lead.prazo_compra) : null} />
             <InfoRow label="Forma de pagamento" value={lead.forma_pagamento ? (FORMA_PAGAMENTO_LABELS[lead.forma_pagamento as string] ?? lead.forma_pagamento) : null} />
+            {/* Story 75-182 — Perfil (marketing): só campos preenchidos */}
+            {formatLeadPerfil(lead as Record<string, string | null>).map((r) => (
+              <InfoRow key={r.label} label={r.label} value={r.value} />
+            ))}
             <InfoRow label="Observação" value={lead.observacao} />
             <InfoRow label="Origem" value={lead.source ? (lead.source === "website" && lead.utm_content ? lead.utm_content : (sourceLabels[lead.source] ?? lead.source)) : null} />
             <InfoRow label="Canal" value={lead.channel} />
