@@ -606,12 +606,19 @@ export async function GET(request: NextRequest) {
 }
 
 import { STAGE_IDS } from "@trifold/shared"
+import { decideStaleAppointment, BROKER_ACTIVITY_TYPES } from "@web/lib/appointments/no-show-decision"
 
 const NO_SHOW_STAGE_ID = STAGE_IDS.no_show
 
 /**
  * Detect appointments that are 48h+ past scheduled_at with no feedback.
  * Mark as no_show, move lead to No-Show stage, reset conversation state.
+ *
+ * Story 75-177: antes de marcar no_show, consulta a etapa atual do lead e a última
+ * atividade humana do corretor. Se a visita já foi resolvida (lead avançou p/ pós-visita
+ * ou corretor tratou depois do horário) marca o agendamento `completed`; se o lead é
+ * terminal/parqueado (perdido/represamento) cancela — sem nunca mover/ressuscitar o lead.
+ * Só quando NÃO há sinal de tratamento é que o no-show real dispara (comportamento antigo).
  */
 async function processNoShowDetection(
   supabase: SupabaseClient,
@@ -627,8 +634,49 @@ async function processNoShowDetection(
 
   if (!staleAppointments || staleAppointments.length === 0) return 0
 
+  // Batch: etapa atual de cada lead (guard 1/terminal) — nunca atropelar lead resolvido.
+  const leadIds = [...new Set(staleAppointments.map((a) => a.lead_id))]
+  const { data: leadRows } = await supabase
+    .from("leads")
+    .select("id, stage_id")
+    .in("id", leadIds)
+  const stageByLead = new Map<string, string | null>(
+    (leadRows ?? []).map((l) => [l.id as string, (l.stage_id as string | null) ?? null])
+  )
+
+  // Batch: última atividade humana do corretor por lead (guard 2) — corretor tratando.
+  const { data: brokerActivities } = await supabase
+    .from("activities")
+    .select("lead_id, created_at")
+    .in("lead_id", leadIds)
+    .in("type", BROKER_ACTIVITY_TYPES as string[])
+    .order("created_at", { ascending: false })
+  const latestActivityByLead = new Map<string, string>()
+  for (const act of brokerActivities ?? []) {
+    if (!latestActivityByLead.has(act.lead_id)) latestActivityByLead.set(act.lead_id, act.created_at)
+  }
+
   let count = 0
   for (const appt of staleAppointments) {
+    const action = decideStaleAppointment({
+      leadStageId: stageByLead.get(appt.lead_id) ?? null,
+      scheduledAt: appt.scheduled_at,
+      latestBrokerActivityAt: latestActivityByLead.get(appt.lead_id) ?? null,
+    })
+
+    // Visita resolvida (lead avançou ou corretor tratou): fecha o agendamento, não move o lead.
+    if (action === "complete") {
+      await supabase.from("appointments").update({ status: "completed" }).eq("id", appt.id)
+      continue
+    }
+
+    // Lead terminal/parqueado: cancela o agendamento pendente, não ressuscita o lead.
+    if (action === "cancel") {
+      await supabase.from("appointments").update({ status: "cancelled" }).eq("id", appt.id)
+      continue
+    }
+
+    // action === "no_show": no-show real — comportamento original preservado.
     // Mark appointment as no_show
     await supabase
       .from("appointments")
