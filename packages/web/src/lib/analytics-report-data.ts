@@ -39,7 +39,7 @@ function buildComparison(
   const groups: WeekComparisonGroup[] = [
     {
       title: "Total",
-      items: [{ label: "Novos leads (ativos)", current: currLeads.length, previous: prevLeads.length }],
+      items: [{ label: "Novos leads", current: currLeads.length, previous: prevLeads.length }],
     },
   ]
 
@@ -77,9 +77,13 @@ function buildComparison(
   // ── Por corretor ─────────────────────────────────────────────────────────
   const brokerCurr = new Map<string, { name: string; count: number }>()
   const brokerPrev = new Map<string, { name: string; count: number }>()
+  // Story 75-180: leads sem corretor atribuído (comum entre entradas/perdidos) — linha
+  // "Sem corretor" p/ o detalhamento fechar o total, análogo a "Sem empreendimento".
+  let semCorretorCurr = 0
+  let semCorretorPrev = 0
 
   for (const l of currLeads) {
-    if (!l.assigned_broker_id) continue
+    if (!l.assigned_broker_id) { semCorretorCurr++; continue }
     const name = brokerName(l)
     if (!name || HIDDEN_BROKERS.has(name.toLowerCase().trim())) continue
     const cur = brokerCurr.get(l.assigned_broker_id) ?? { name, count: 0 }
@@ -87,7 +91,7 @@ function buildComparison(
     brokerCurr.set(l.assigned_broker_id, cur)
   }
   for (const l of prevLeads) {
-    if (!l.assigned_broker_id) continue
+    if (!l.assigned_broker_id) { semCorretorPrev++; continue }
     const name = brokerName(l)
     if (!name || HIDDEN_BROKERS.has(name.toLowerCase().trim())) continue
     const cur = brokerPrev.get(l.assigned_broker_id) ?? { name, count: 0 }
@@ -103,6 +107,11 @@ function buildComparison(
       previous: brokerPrev.get(id)?.count ?? 0,
     }))
     .sort((a, b) => b.current - a.current)
+
+  // "Sem corretor" fica por último — fecha o total do comparativo (75-180).
+  if (semCorretorCurr > 0 || semCorretorPrev > 0) {
+    brokerItems.push({ label: "Sem corretor", current: semCorretorCurr, previous: semCorretorPrev })
+  }
 
   if (brokerItems.length > 0) groups.push({ title: "Por Corretor", items: brokerItems })
 
@@ -171,11 +180,12 @@ export async function buildAnalyticsReportData(
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: compPrevStart.toISOString(), p_until: compCurrStart.toISOString() }),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    // Story 75-180: comparativo na base ENTRADAS — TODAS as entradas da janela
+    // (sem filtro is_active/lost_reason), para o Total bater com o card Entradas.
     supabase.from("leads")
       .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
       .eq("org_id", orgId)
       .eq("segmento", "principal") // Story 75-98
-      .eq("is_active", true).is("lost_reason", null)
       .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
       .order("created_at"),
     supabase.from("properties").select("id, name").eq("is_active", true),
