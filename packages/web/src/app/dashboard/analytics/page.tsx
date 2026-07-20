@@ -8,6 +8,7 @@ import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { resolvePeriod } from "@web/lib/analytics/period"
 // Story 75-179: fonte única das métricas (tipo da RPC + derivação) — dedup tela/PDF.
 import { type AnalyticsSummary, deriveAnalyticsMetrics, toCount } from "@web/lib/analytics/metrics"
+import { aggregatePerfil, type PerfilRow } from "@web/lib/analytics/perfil"
 
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
 
@@ -200,6 +201,20 @@ export default async function AnalyticsPage({
     sourceCounts.other = Math.max(0, (sourceCounts.other ?? 0) - lpVind)
   }
   if (sourceCounts.other === 0) delete sourceCounts.other
+
+  // ── Perfil dos Leads (Story 75-184) ────────────────────────────────────────
+  // Base ENTRADAS (todos os criados na janela, inclusive perdidos — perfil
+  // demográfico independe do desfecho). Agregação pura em aggregatePerfil.
+  let perfilQuery = supabase
+    .from("leads")
+    .select("profissao, renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, tem_pet")
+    .eq("org_id", appUser.orgId)
+    .eq("segmento", "principal")
+    .gte("created_at", sinceISO).lt("created_at", untilISO)
+    .limit(5000)
+  if (propertyId) perfilQuery = perfilQuery.eq("property_interest_id", propertyId)
+  const { data: perfilRows } = await perfilQuery
+  const perfil = aggregatePerfil((perfilRows ?? []) as PerfilRow[])
 
   // ── Métricas do período (cards de topo) ────────────────────────────────────
   // Story 75-179: Entradas = todas as entradas; Ativos = subconjunto ativo/não-perdido.
@@ -474,6 +489,47 @@ export default async function AnalyticsPage({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Perfil dos Leads — Story 75-184 (insights p/ marketing) */}
+      <div>
+        <div className="mb-3 flex items-baseline gap-3">
+          <h2 className="text-lg font-semibold dark:text-stone-100">Perfil dos Leads</h2>
+          <span className="text-sm text-stone-400 dark:text-stone-500">
+            {perfil.comPerfil} de {perfil.total} leads com perfil · {rangeLabel}
+          </span>
+        </div>
+        {perfil.comPerfil === 0 ? (
+          <div className="rounded-lg bg-white p-5 text-sm text-gray-400 shadow-sm dark:bg-stone-900 dark:text-stone-500 dark:ring-1 dark:ring-stone-800">
+            Nenhum lead com perfil preenchido no período. Os campos são preenchidos no cadastro/edição do lead — e pela Nicole, automaticamente, quando o lead menciona na conversa.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {([
+              { title: "Profissão", items: perfil.profissao, badge: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300" },
+              { title: "Renda familiar", items: perfil.renda, badge: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300" },
+              { title: "Faixa etária", items: perfil.faixaEtaria, badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300" },
+              { title: "Filhos", items: perfil.filhos, badge: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" },
+              { title: "Estado civil", items: perfil.estadoCivil, badge: "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300" },
+              { title: "Moradia & Pet", items: [...perfil.moradia, ...perfil.pet.map((p) => ({ ...p, label: `Pet: ${p.label}` }))], badge: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300" },
+            ] as { title: string; items: { label: string; count: number }[]; badge: string }[]).map((card) => (
+              <div key={card.title} className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+                <h3 className="mb-3 text-base font-semibold dark:text-stone-100">{card.title}</h3>
+                <div className="space-y-2.5">
+                  {card.items.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-stone-300">{item.label}</span>
+                      <span className={`rounded-full px-3 py-0.5 text-sm font-medium ${card.badge}`}>{item.count}</span>
+                    </div>
+                  ))}
+                  {card.items.length === 0 && (
+                    <p className="text-sm text-gray-400 dark:text-stone-500">Sem dados no período.</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
