@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { MoreVertical, X } from "lucide-react"
 import { LeadEditForm } from "./lead-edit-form"
-import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS } from "@web/lib/leads/enrich"
+import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS, formatLeadPerfil } from "@web/lib/leads/enrich"
 
 interface LeadEditData {
   id: string
@@ -208,6 +208,13 @@ export function LeadDetailsPanel({
                   <dd className="font-medium dark:text-stone-100">{FORMA_PAGAMENTO_LABELS[lead.forma_pagamento] ?? lead.forma_pagamento}</dd>
                 </div>
               )}
+              {/* Story 75-182 — Perfil (marketing): só campos preenchidos */}
+              {formatLeadPerfil(lead).map((r) => (
+                <div key={r.label} className="flex justify-between">
+                  <dt className="text-gray-500 dark:text-stone-400">{r.label}</dt>
+                  <dd className="font-medium dark:text-stone-100">{r.value}</dd>
+                </div>
+              ))}
               {lead.observacao && (
                 <div className="pt-1">
                   <dt className="mb-0.5 text-gray-500 dark:text-stone-400">Observação</dt>

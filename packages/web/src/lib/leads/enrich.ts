@@ -140,3 +140,33 @@ export const PRAZO_COMPRA_LABELS: Record<string, string> = {
 export const FORMA_PAGAMENTO_LABELS: Record<string, string> = {
   financiamento: "Financiamento", a_vista: "À vista", fgts: "FGTS", consorcio: "Consórcio",
 }
+
+/** Shape mínimo do lead p/ exibição do perfil (colunas da 75-181, todas nullable). */
+export interface LeadPerfilDisplay {
+  profissao?: string | null
+  renda_familiar?: string | null
+  filhos?: string | null
+  estado_civil?: string | null
+  faixa_etaria?: string | null
+  situacao_moradia?: string | null
+  cidade_bairro?: string | null
+  tem_pet?: string | null
+}
+
+/**
+ * Story 75-182 — Linhas de exibição do "Perfil (marketing)": só campos preenchidos,
+ * com label legível resolvido. Fonte única p/ página do lead (dashboard) e painel
+ * Detalhes (corretor). `profissao`/`cidade_bairro` já são texto legível (75-181).
+ */
+export function formatLeadPerfil(lead: LeadPerfilDisplay): { label: string; value: string }[] {
+  const rows: { label: string; value: string }[] = []
+  if (lead.profissao) rows.push({ label: "Profissão", value: lead.profissao })
+  if (lead.renda_familiar) rows.push({ label: "Renda familiar", value: RENDA_FAMILIAR_LABELS[lead.renda_familiar] ?? lead.renda_familiar })
+  if (lead.filhos) rows.push({ label: "Filhos", value: FILHOS_LABELS[lead.filhos] ?? lead.filhos })
+  if (lead.estado_civil) rows.push({ label: "Estado civil", value: ESTADO_CIVIL_LABELS[lead.estado_civil] ?? lead.estado_civil })
+  if (lead.faixa_etaria) rows.push({ label: "Faixa etária", value: FAIXA_ETARIA_LABELS[lead.faixa_etaria] ?? lead.faixa_etaria })
+  if (lead.situacao_moradia) rows.push({ label: "Moradia", value: SITUACAO_MORADIA_LABELS[lead.situacao_moradia] ?? lead.situacao_moradia })
+  if (lead.cidade_bairro) rows.push({ label: "Cidade/Bairro", value: lead.cidade_bairro })
+  if (lead.tem_pet) rows.push({ label: "Tem pet", value: TEM_PET_LABELS[lead.tem_pet] ?? lead.tem_pet })
+  return rows
+}
