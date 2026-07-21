@@ -54,7 +54,7 @@ export async function POST(
     // Verify appointment exists
     const { data: appointment, error: fetchError } = await supabase
       .from("appointments")
-      .select("id, lead_id, org_id, status, broker_id")
+      .select("id, lead_id, org_id, status, broker_id, property_id, scheduled_at")
       .eq("id", id)
       .single()
 
@@ -92,6 +92,12 @@ export async function POST(
         appointment_id: id,
         lead_id: appointment.lead_id,
         org_id: appointment.org_id,
+        // Story 75-188 — visited_at é NOT NULL e o empreendimento vem do
+        // agendamento (nullable): sem eles o insert falhava (23502) em prod.
+        // broker_id fica de fora: visit_feedback.broker_id referencia brokers(id),
+        // mas appointments.broker_id aponta para users(id) — FKs incompatíveis.
+        property_id: appointment.property_id ?? null,
+        visited_at: appointment.scheduled_at ?? new Date().toISOString(),
         feedback: body.feedback.trim(),
         interest_after: body.interest_after,
         next_steps: body.next_steps?.trim() || null,

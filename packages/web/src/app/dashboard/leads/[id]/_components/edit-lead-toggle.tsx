@@ -7,10 +7,12 @@ import { DashboardLeadEditForm } from "./dashboard-lead-edit-form"
 interface Props {
   lead: Record<string, unknown>
   properties: { id: string; name: string }[]
+  /** Story 75-188 — abre já em modo edição (deep-link `?edit=1` do drawer). */
+  initialEditing?: boolean
 }
 
-export function EditLeadToggle({ lead, properties }: Props) {
-  const [editing, setEditing] = useState(false)
+export function EditLeadToggle({ lead, properties, initialEditing = false }: Props) {
+  const [editing, setEditing] = useState(initialEditing)
 
   if (editing) {
     return (

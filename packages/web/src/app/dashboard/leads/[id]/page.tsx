@@ -34,12 +34,15 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; edit?: string }>
 }) {
   const { id } = await params
   // Story 75-67: link malformado (botão de template WhatsApp com "{{1}}" literal) → lista, não 404.
   if (!isUuid(id)) redirect("/dashboard/leads")
-  const { tab: rawTab } = await searchParams
+  // Story 75-188 — ?edit=1 (lápis/"Editar Lead" do drawer) abre o formulário de
+  // edição direto na aba Info.
+  const { tab: rawTab, edit } = await searchParams
+  const openEdit = edit === "1"
   const activeTab: TabKey = (
     ["info", "conversa", "timeline", "resumo"] as TabKey[]
   ).includes(rawTab as TabKey)
@@ -225,6 +228,7 @@ export default async function LeadDetailPage({
                 <EditLeadToggle
                   lead={lead as Record<string, unknown>}
                   properties={(properties ?? []).map(p => ({ id: p.id as string, name: p.name as string }))}
+                  initialEditing={openEdit}
                 />
               )}
             </div>
