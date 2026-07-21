@@ -7,6 +7,8 @@ import { LeadDetailsPanel } from "./_components/lead-details-panel"
 import { ConversationThread } from "./_components/conversation-thread"
 import { markLeadConversationsRead } from "./_actions/mark-read"
 import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
+// Story 82-3 — Análise IA para o corretor (painel compartilhado com o /dashboard)
+import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 
 const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
@@ -118,6 +120,34 @@ export default async function BrokerLeadDetailPage({
     const fb = Array.isArray(a.feedback) ? a.feedback : a.feedback ? [a.feedback] : []
     return fb.length === 0
   })
+
+  // Story 82-3 — staleness da Análise IA (última mensagem/activity/agendamento).
+  const lastMsgCreatedAt =
+    messages && messages.length > 0
+      ? (messages[messages.length - 1]!.created_at as string)
+      : null
+  const [{ data: lastActivity }, { data: lastApptCreated }] = await Promise.all([
+    supabase
+      .from("activities")
+      .select("created_at")
+      .eq("lead_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from("appointments")
+      .select("created_at")
+      .eq("lead_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ])
+  const staleCandidates = [
+    lastMsgCreatedAt,
+    lastActivity?.[0]?.created_at as string | undefined,
+    lastApptCreated?.[0]?.created_at as string | undefined,
+  ].filter((t): t is string => Boolean(t))
+  const lastActivityAt = staleCandidates.length
+    ? [...staleCandidates].sort()[staleCandidates.length - 1]!
+    : null
 
   return (
     <div className="space-y-6">
@@ -243,6 +273,17 @@ export default async function BrokerLeadDetailPage({
         )}
         currentUserId={user.id}
         senderNames={senderNames}
+      />
+
+      {/* Story 82-3 — Análise IA abaixo do chat (não atrapalha o caminho de resposta) */}
+      <BehaviorAnalysisPanel
+        leadId={lead.id as string}
+        analysis={(lead.behavior_analysis as BehaviorAnalysisData | null) ?? null}
+        analyzedAt={(lead.behavior_analyzed_at as string | null) ?? null}
+        currentStage={(stage?.name as string | undefined) ?? null}
+        lastActivityAt={lastActivityAt}
+        aiSummary={(lead.ai_summary as string | null) ?? null}
+        theme="dark"
       />
     </div>
   )

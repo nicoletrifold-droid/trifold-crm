@@ -9,8 +9,8 @@ import { fetchLeadChronology } from "@web/lib/leads/behavior-chronology"
  * leads.behavior_analysis + behavior_analyzed_at. NENHUMA outra escrita no
  * lead (stage/score intocados — IA só sugere, corretor decide).
  *
- * Acesso nesta story: admin/supervisor (paridade com /summary).
- * Ampliação para gerente-comercial/corretor é a Story 82-3.
+ * Acesso (Story 82-3): admin, supervisor, gerente-comercial e corretor
+ * (`broker`) — corretor SOMENTE nos leads atribuídos a ele.
  */
 export async function POST(
   _req: NextRequest,
@@ -22,8 +22,27 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = requireRole(appUser, [
+    "admin",
+    "supervisor",
+    "gerente-comercial",
+    "broker",
+  ])
   if (forbidden) return forbidden
+
+  // Story 82-3 — corretor só analisa lead dele (mesma regra das notas/tarefas).
+  if (appUser.role === "broker") {
+    const { data: owned } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("id", id)
+      .eq("org_id", appUser.org_id)
+      .eq("assigned_broker_id", appUser.id)
+      .maybeSingle()
+    if (!owned) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+  }
 
   const chronology = await fetchLeadChronology(supabase, id, appUser.org_id)
   if (!chronology) {

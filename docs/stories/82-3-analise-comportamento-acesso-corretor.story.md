@@ -58,11 +58,23 @@ Corretor só pode analisar lead atribuído a ele (`assigned_broker_id`).
 - Lembrete de produto: análise NUNCA oferece mover etapa — no /broker a tentação de "aplicar
   sugestão" é maior; não criar atalho de mudança de etapa a partir da análise.
 
-## File List (planejado)
+## File List
 - `docs/stories/82-3-analise-comportamento-acesso-corretor.story.md` (this file)
-- `packages/web/src/app/api/leads/[id]/behavior-analysis/route.ts` (matriz de roles + guard dono)
-- `packages/web/src/app/broker/leads/[id]/page.tsx` (+ componente de aba/seção local se necessário)
-- `packages/web/src/app/dashboard/leads/[id]/page.tsx` (gate do gerente-comercial, se necessário)
+- `packages/web/src/app/api/leads/[id]/behavior-analysis/route.ts` (matriz de 4 roles + guard assigned_broker_id p/ broker)
+- `packages/web/src/app/broker/leads/[id]/page.tsx` (painel abaixo do chat, theme="dark", staleness)
+
+## Dev Agent Record (@dev Dex — 2026-07-21)
+- Nome real do role de corretor no sistema é **`broker`** (mesma convenção do CAN_SEND_ROLES).
+- Rota: requireRole [admin, supervisor, gerente-comercial, broker]; broker passa por check
+  adicional `assigned_broker_id = appUser.id` (403 se não-dono) — mesma regra das notas.
+- /broker/leads/[id]: o próprio page query já filtra `assigned_broker_id = user.id`, então a
+  página só existe para o dono; painel entra ABAIXO do chat (decisão de UX: não empurrar o
+  composer — mesmo racional da Story 63-7 que moveu detalhes p/ slide-over).
+- Gerente-comercial no /dashboard: a página não tem gate de role próprio (o middleware já
+  restringe /dashboard) e o painel renderiza para todos os roles com acesso — AC3 atendido
+  sem mudança extra; a rota agora aceita o role.
+- Checks: vitest 1103/1103, tsc limpo, eslint limpo nos arquivos tocados.
+- Branch: feat/82-1-analise-comportamento-backend (PR único do épico)
 
 ## PO Validation (@po Pax — 2026-07-21)
 **GO (9/10).** Matriz de permissões explícita e testável; risco do gate por nome de role coberto nos
