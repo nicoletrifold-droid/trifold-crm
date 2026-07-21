@@ -72,7 +72,21 @@ Permite ao usuário configurar de fato um teste A/B de corpo — sem esta story,
 - `docs/stories/83-2-wizard-seletor-corpo-template-ab.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: PASS**
+
+Revisão do diff completo (`1458a8e5`, 4 arquivos) contra os 8 ACs, com verificação independente:
+
+- **AC1:** seletor "O que testar?" confirmado no JSX, gated por `templateId && abTestEnabled` (não depende da variável escolhida) — aparece corretamente sempre que A/B está ligado.
+- **AC2 (risco de regressão, checado com atenção):** o bloco de Assunto A/B mudou de `{templateId && abTestEnabled && (...)}` para `{templateId && abTestEnabled && abTestVariable === "subject" && (...)}`. Como `abTestVariable` tem default `"subject"` (confirmado em `wizard.tsx` `defaultContent`), o comportamento visual e de fluxo é idêntico ao anterior sem nenhum clique extra necessário. `canProceed` para o ramo `subject` é textualmente a mesma expressão booleana de antes. **Sem regressão.**
+- **AC3/AC4:** dropdowns "Template A"/"Template B" reaproveitam o array `templates` já buscado (nenhum novo `fetch` no diff). `canProceed` no ramo `body` exige `bodyVariantATemplateId`, `bodyVariantBTemplateId` truthy **e** diferentes entre si — testei mentalmente os 3 casos (ambos vazios, só um preenchido, os dois iguais) e todos corretamente bloqueiam o avanço. Aviso inline quando A === B confirmado no JSX.
+- **AC5/AC6:** `ContentData` e `defaultContent` conferem campo a campo com a migration 183 (mesmos nomes: `body_variant_a/b_template_id`, `_slug`).
+- **AC7:** confirmado nos 3 ramos mutuamente exclusivos em `step-schedule.tsx` (`abTestVariable === "subject"`, `=== "body"`, `!abTestEnabled`).
+- **AC8:** `git show --stat` do commit não lista `api/admin/email-blasts/route.ts` — backend genuinamente intocado nesta story.
+- **Campos extras (`bodyVariantAName`/`bodyVariantBName`), verificação independente da justificativa do dev:** confirmei que `StepSchedule` recebe apenas `content: ContentData` como prop (sem acesso a `templates`) — os campos de nome são de fato a única forma de exibir o resumo no Passo 3 sem duplicar a busca de templates. Justificativa procede, mesmo padrão já usado para `templateName` (carregado junto de `templateId`/`templateSlug`). Os campos de nome corretamente **não** são enviados ao backend no `POST` (só os ids/slugs, que têm coluna correspondente) — nenhuma sujeira de payload.
+- **Lint/typecheck:** reconferidos de forma independente — 0 erros em ambos.
+
+Nenhum CONCERNS. Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir da seção 83.2 do Epic 83. Li o estado atual de `step-content.tsx`, `step-schedule.tsx` e `wizard.tsx` para garantir que os Dev Notes referenciam os padrões exatos já existentes (reaproveitar fetch de templates, mesmo estilo de defaultContent, extensão do resumo condicional em 3 ramos). Story 83-1 confirmada como dependência, ainda InReview mas já em produção.
