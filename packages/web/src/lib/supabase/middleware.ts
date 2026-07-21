@@ -107,6 +107,11 @@ export async function updateSession(request: NextRequest) {
   // - `/api/*`        — webhooks/cron use service-role keys; auth handled per-route
   // - `/auth/*`       — OAuth/OTP callbacks (token exchange, story 23.1)
   // - `/reset-senha`  — password reset form after verifyOtp (story 23.1)
+  // - `/agendar/*`    — Story 75-189: link público de agendamento da imobiliária
+  //                     (81-4) + cancelamento; a página valida o booking_token e
+  //                     responde "link inválido" sem vazar nada.
+  // - `/pasta/*`      — Story 75-189: link público de upload de documentos +
+  //                     auto-cadastro de imobiliária; mesmas garantias por token.
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/sw" ||
@@ -116,6 +121,8 @@ export async function updateSession(request: NextRequest) {
     pathname === "/cliente/offline" ||
     pathname === "/politica-de-privacidade" ||
     pathname === "/reset-senha" ||
+    pathname.startsWith("/agendar/") ||
+    pathname.startsWith("/pasta/") ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/")
 
