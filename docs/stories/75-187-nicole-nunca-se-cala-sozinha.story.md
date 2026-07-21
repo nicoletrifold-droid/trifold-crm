@@ -1,7 +1,7 @@
 # Story 75-187 — Nicole nunca se cala sozinha (remove auto-handoff que silencia a IA)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 75 — CRM core (Nicole / atendimento)
 - **Branch:** fix/75-187-nicole-nunca-se-cala-sozinha
 - **Tipo:** Bug de produto — reportado pelo Marcos (caso real: lead Luiz, 2026-07-21)
@@ -75,3 +75,12 @@ O sinal de compra do handoff por conteúdo é ÚTIL e será PRESERVADO: activity
   `conversations`; memória (12.5) roda sempre; webhook perde o bloco 63-15 e a flag
   `appointmentCreated` (notify do corretor preservado). Nenhum teste amarrava no
   comportamento antigo (handoff.test.ts testa a função pura, inalterada) — File List ajustada.
+- @qa (Quinn): PASS — 1093/1093 testes, tsc verde nos 2 pacotes, lint limpo nos arquivos
+  tocados (12 erros pré-existentes fora do escopo). Verificado raio de impacto: follow-up
+  cron não filtra is_ai_active (reengajamento intacto); reativação 24h e pausas humanas
+  preservadas. Observação (baixa): ai_summary de handoff pode ser sobrescrito pelo resumo
+  vivo do Haiku — aceitável, a activity guarda o sinal permanente.
+- Ops (backfill, 2026-07-21): 13 conversas em prod presas com is_ai_active=false por
+  handoff automático da IA (5 fora-de-escopo, 7 score+preço, 1 appointment) reativadas
+  via PATCH guardado (nenhuma tinha corretor ativo nas últimas 24h). Restam só
+  broker_reply (95) e relationship (8) — pausas humanas legítimas.
