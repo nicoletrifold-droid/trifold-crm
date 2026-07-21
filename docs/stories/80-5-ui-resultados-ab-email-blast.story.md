@@ -69,7 +69,22 @@ Fecha o epic de Teste A/B de Assunto de ponta a ponta — sem esta story, config
 - `packages/web/src/app/dashboard/sistema/email-blasts/_components/blast-list.tsx`
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: PASS**
+
+Revisão do diff completo (`3f02cd62`, 3 arquivos: 2 novos + 1 alterado) contra os 7 ACs, com verificação independente (não apenas aceitando o relato do dev):
+
+- **AC1/AC3:** `[id]/page.tsx` renderiza `BlastDetail`, que busca `GET /api/admin/email-blasts/{id}/stats` e exibe os campos gerais (`sent/delivered/opened/clicked/bounced/failed/pending`) sempre. Confirmado campo a campo contra o `route.ts` real (li o handler): a interface `BlastStats` do componente bate exatamente com o shape retornado (`id, name, status, total_recipients, scheduled_for, created_at, ab_test_enabled, subject_variant_a, subject_variant_b, sent, delivered, opened, clicked, bounced, failed, pending, total_logs, by_variant`).
+- **AC2:** Link "Ver detalhes" adicionado em `blast-list.tsx` na coluna de Ações, ao lado do botão Cancelar — `next/link` como no resto do arquivo.
+- **AC4:** Seção "Teste A/B de assunto" renderiza Variante A e B lado a lado (grid 2 colunas), cada uma com enviados/abertos+`opened_rate` formatada/clicados+`click_rate` formatada. `formatPct` multiplica por 100 e arredonda, compatível com o decimal (`0.5`→`50%`) devolvido pelo endpoint.
+- **AC5 (verificação de risco de produto):** inspecionei o JSX linha a linha — não há nenhum texto, ícone, badge, ordenação ou destaque condicional (`className` diferencial) entre Variante A e B. Ambas usam o mesmo markup, apenas trocando `a`/`b`. Decisão de "sem vencedor automático" respeitada.
+- **AC6:** o bloco A/B é gated por `{stats.by_variant && (...)}` — quando `null` (100% dos blasts reais hoje), nenhum elemento vazio é renderizado, só o card de stats gerais. Confirmado lendo o JSX, não apenas a prévia visual.
+- **AC7:** `[id]/page.tsx` usa exatamente o mesmo padrão de `getServerUser()` + `canAccess(user.id, user.orgId, "sistema")` + `redirect("/dashboard")` das duas páginas irmãs (`email-blasts/page.tsx`, `email-blasts/novo/page.tsx`) — comparei os 3 arquivos lado a lado, idênticos. O endpoint `/stats` usa `user.role !== "admin"` → 403, que é o mesmo padrão já usado no endpoint irmão `GET /api/admin/email-blasts` (não é uma inconsistência introduzida por esta story).
+- **Evidência de teste manual do dev:** validada de forma independente — reli a lógica de `aggregateVariant()` no `route.ts` e confirmei que o formato bate com o que o dev relatou ter testado contra dados fabricados em produção (já removidos).
+- **Lint:** rodei `eslint` de novo, isoladamente, nos 3 arquivos: 0 erros, 1 warning pré-existente em `blast-list.tsx` (`Unused eslint-disable directive`), não relacionado a esta story.
+- **Typecheck:** `tsc --noEmit` sem erros nos arquivos desta story.
+
+Nenhum CONCERNS. Sem regressão nos blasts sem A/B (caminho `by_variant: null` testado e confirmado). Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, quinta e última story. Descoberta de que não existe nenhuma página de detalhe de blast hoje — story precisa criar do zero, não só consumir.
