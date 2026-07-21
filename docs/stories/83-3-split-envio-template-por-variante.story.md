@@ -68,7 +68,19 @@ Fecha o loop funcional do teste A/B de corpo — sem esta story, os dados enviad
 - `docs/stories/83-3-split-envio-template-por-variante.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: CONCERNS** (aprovado, com uma observação documentada — não bloqueante)
+
+Esta é a story de maior risco do epic (toca a lógica de envio real, já em produção, usada por todo blast existente). Revisão com rigor extra, lado a lado com o código anterior:
+
+- **AC5/AC6 (não-regressão, checado com máxima atenção):** comparei o `effectiveTemplateSlug`/`effectiveSubjectOverride` novos contra a expressão antiga. Quando `isBodyVariant` é `false` (modo `subject`, default, ou sem A/B): `effectiveTemplateSlug` resolve para `templateSlug` (a mesma constante fixa de sempre) e `effectiveSubjectOverride` é **textualmente a mesma expressão ternária** que existia antes (`variant === "a" ? subjectVariantA : variant === "b" ? subjectVariantB : subjectOverride`). Confirmado: **zero mudança de comportamento** nesses dois caminhos.
+- **AC4:** `effectiveSubjectOverride = isBodyVariant ? undefined : (...)` — o `undefined` é retornado diretamente pelo ternário no modo `body`, sem passar por nenhuma variável que pudesse carregar um valor antigo. Confirmado que não há vazamento possível.
+- **Colunas mutuamente exclusivas no insert (mudança além do AC literal):** avaliei o risco — os valores usados na *lógica de envio* (`subjectVariantA/B`, `bodyVariantASlug/BSlug`) vêm diretamente de `body.*` (o payload da requisição), não de uma releitura da linha inserida em `email_blasts`. Ou seja, mesmo que essa mudança no insert tivesse um bug, ela **não afetaria a correção do envio** — são caminhos de código independentes. A mudança é segura e, como nenhuma story ainda lê essas colunas de volta (Story 83-4 é quem vai ler), não há consumidor afetado hoje.
+- **Evidência do teste manual — reconferida de forma independente (não apenas aceita):** consultei `email_logs` e `email_sends_queue` filtrando por `triggered_by = 'blast:TESTE-STORY-83-3'` e por `to_email LIKE '%83-3%'` diretamente em produção — **zero resíduo confirmado**, batendo com o relato do dev.
+- **⚠️ CONCERNS — fallback `?? templateSlug` no `effectiveTemplateSlug`:** quando `isBodyVariant` é `true` mas `bodyVariantASlug`/`bodyVariantBSlug` vierem vazios/`undefined` (ex.: bug de integração entre Stories 83-2→83-3, ou uma chamada direta à API que burla a validação do wizard), o código cai silenciosamente para `templateSlug` (o template "principal" selecionado no Passo 2) — **sem erro, sem log, sem sinalização**. Isso significaria que ambas as variantes do teste A/B enviariam o mesmo template, degradando o teste A/B para um teste A/A **sem que ninguém percebesse**. Probabilidade baixa (o wizard já exige os 2 templates preenchidos antes de permitir o envio), mas o impacto de uma falha silenciosa numa feature de teste A/B é justamente comprometer a confiabilidade dos dados que o usuário vai analisar. **Recomendação (não bloqueante):** considerar logar um aviso (ex.: `console.warn` ou marcar o `email_log` de alguma forma) quando esse fallback for acionado, para que uma eventual falha de integração futura seja detectável — não é necessário fazer isso agora nesta story, mas registrar como débito técnico leve.
+- **Lint/typecheck:** reconferidos de forma independente — 0 erros, mesmo warning pré-existente.
+
+Nenhum item bloqueante. Pronta para `@devops *push` — a observação acima é só uma recomendação de hardening futuro, não uma correção obrigatória.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir da seção 83.3 do Epic 83. Reli o estado atual de `api/admin/email-blasts/route.ts` para confirmar que os Dev Notes referenciam exatamente as variáveis existentes (`variantMap`, `templateSlug`, `subjectOverride`, `effectiveSubjectOverride`). Dependências (Stories 83-1, 83-2) confirmadas Done e em produção.
