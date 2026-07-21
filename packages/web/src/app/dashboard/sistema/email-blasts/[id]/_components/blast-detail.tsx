@@ -21,8 +21,11 @@ interface BlastStats {
   scheduled_for: string | null
   created_at: string
   ab_test_enabled: boolean
+  ab_test_variable: "subject" | "body"
   subject_variant_a: string | null
   subject_variant_b: string | null
+  body_variant_a_name: string | null
+  body_variant_b_name: string | null
   sent: number
   delivered: number
   opened: number
@@ -130,11 +133,15 @@ export function BlastDetail({ id }: Props) {
 
       {stats.by_variant && (
         <div className="rounded-lg border border-stone-200 bg-white p-5">
-          <h2 className="text-sm font-medium text-stone-700">Teste A/B de assunto</h2>
+          <h2 className="text-sm font-medium text-stone-700">
+            {stats.ab_test_variable === "body" ? "Teste A/B de corpo" : "Teste A/B de assunto"}
+          </h2>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-stone-100 bg-stone-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Variante A</p>
-              <p className="mt-1 text-sm text-stone-700 truncate">{stats.subject_variant_a}</p>
+              <p className="mt-1 text-sm text-stone-700 truncate">
+                {stats.ab_test_variable === "body" ? `Template: ${stats.body_variant_a_name}` : stats.subject_variant_a}
+              </p>
               <div className="mt-3 space-y-1.5 text-sm">
                 <p className="text-stone-600">Enviados: <span className="font-medium text-stone-800">{stats.by_variant.a.sent}</span></p>
                 <p className="text-stone-600">Abertos: <span className="font-medium text-stone-800">{stats.by_variant.a.opened}</span> ({formatPct(stats.by_variant.a.opened_rate)})</p>
@@ -143,7 +150,9 @@ export function BlastDetail({ id }: Props) {
             </div>
             <div className="rounded-lg border border-stone-100 bg-stone-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Variante B</p>
-              <p className="mt-1 text-sm text-stone-700 truncate">{stats.subject_variant_b}</p>
+              <p className="mt-1 text-sm text-stone-700 truncate">
+                {stats.ab_test_variable === "body" ? `Template: ${stats.body_variant_b_name}` : stats.subject_variant_b}
+              </p>
               <div className="mt-3 space-y-1.5 text-sm">
                 <p className="text-stone-600">Enviados: <span className="font-medium text-stone-800">{stats.by_variant.b.sent}</span></p>
                 <p className="text-stone-600">Abertos: <span className="font-medium text-stone-800">{stats.by_variant.b.opened}</span> ({formatPct(stats.by_variant.b.opened_rate)})</p>

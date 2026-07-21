@@ -15,13 +15,27 @@ export async function GET(
   const { data: blast } = await supabase
     .from("email_blasts")
     .select(
-      "id, name, status, total_recipients, scheduled_for, created_at, ab_test_enabled, subject_variant_a, subject_variant_b"
+      "id, name, status, total_recipients, scheduled_for, created_at, ab_test_enabled, ab_test_variable, subject_variant_a, subject_variant_b, body_variant_a_template_id, body_variant_b_template_id"
     )
     .eq("id", id)
     .eq("org_id", user.orgId)
     .single()
 
   if (!blast) return NextResponse.json({ error: "Blast não encontrado" }, { status: 404 })
+
+  let bodyVariantAName: string | null = null
+  let bodyVariantBName: string | null = null
+  if (blast.ab_test_variable === "body") {
+    const templateIds = [blast.body_variant_a_template_id, blast.body_variant_b_template_id].filter(
+      (v): v is string => !!v
+    )
+    const { data: variantTemplates } = await supabase
+      .from("email_templates")
+      .select("id, name")
+      .in("id", templateIds)
+    bodyVariantAName = variantTemplates?.find((t) => t.id === blast.body_variant_a_template_id)?.name ?? null
+    bodyVariantBName = variantTemplates?.find((t) => t.id === blast.body_variant_b_template_id)?.name ?? null
+  }
 
   const { data: logs } = await supabase
     .from("email_logs")
@@ -43,7 +57,14 @@ export async function GET(
     : null
 
   return NextResponse.json({
-    data: { ...blast, ...stats, total_logs: logs?.length ?? 0, by_variant: byVariant },
+    data: {
+      ...blast,
+      ...stats,
+      total_logs: logs?.length ?? 0,
+      by_variant: byVariant,
+      body_variant_a_name: bodyVariantAName,
+      body_variant_b_name: bodyVariantBName,
+    },
   })
 }
 
