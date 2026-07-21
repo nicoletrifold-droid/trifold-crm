@@ -32,6 +32,9 @@ interface Props {
   /** resumo da conversa (leads.ai_summary) — contexto no topo */
   aiSummary: string | null
   theme?: "auto" | "dark"
+  /** Story 82-5 — modo colapsável (broker: acima do chat sem empurrar o composer).
+   *  Inicia fechado mostrando só o cabeçalho; expande ao clicar/gerar. */
+  collapsible?: boolean
 }
 
 function formatDateTime(iso: string): string {
@@ -52,10 +55,12 @@ export function BehaviorAnalysisPanel({
   lastActivityAt,
   aiSummary,
   theme = "auto",
+  collapsible = false,
 }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [expanded, setExpanded] = useState(!collapsible)
   const router = useRouter()
 
   const dark = theme === "dark"
@@ -87,6 +92,7 @@ export function BehaviorAnalysisPanel({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error || "Erro ao gerar a análise")
       }
+      setExpanded(true) // gerar sempre revela o resultado (modo colapsável)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido")
@@ -98,11 +104,32 @@ export function BehaviorAnalysisPanel({
   return (
     <div className={c.card}>
       <div className="flex items-center justify-between gap-4">
-        <h2 className={`text-lg font-semibold ${c.title}`}>Análise IA</h2>
+        {collapsible ? (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className={`flex items-center gap-2 text-lg font-semibold ${c.title}`}
+            aria-expanded={expanded}
+          >
+            <span aria-hidden>{expanded ? "▾" : "▸"}</span>
+            Análise IA
+            {!expanded && isStale && (
+              <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-300">
+                desatualizada
+              </span>
+            )}
+            {!expanded && !analysis && (
+              <span className={`text-xs font-normal ${c.muted}`}>
+                descubra o estágio real e como abordar
+              </span>
+            )}
+          </button>
+        ) : (
+          <h2 className={`text-lg font-semibold ${c.title}`}>Análise IA</h2>
+        )}
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+          className="shrink-0 rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
         >
           {loading
             ? "Analisando..."
@@ -112,6 +139,18 @@ export function BehaviorAnalysisPanel({
         </button>
       </div>
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+      {collapsible && !expanded && analysis && (
+        <button
+          onClick={() => setExpanded(true)}
+          className={`mt-2 block w-full truncate text-left text-sm ${c.text} hover:underline`}
+          title="Ver análise completa"
+        >
+          <span className="font-medium text-orange-600 dark:text-orange-300">Próxima ação: </span>
+          {analysis.proxima_acao}
+        </button>
+      )}
+      {(!collapsible || expanded) && (<>
+
 
       {/* Resumo da conversa (contexto — mantido pelo cron de enriquecimento) */}
       {aiSummary && (
@@ -216,6 +255,7 @@ export function BehaviorAnalysisPanel({
           )}
         </div>
       )}
+      </>)}
     </div>
   )
 }

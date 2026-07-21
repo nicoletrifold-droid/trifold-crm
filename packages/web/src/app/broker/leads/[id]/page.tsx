@@ -266,6 +266,19 @@ export default async function BrokerLeadDetailPage({
         </div>
       </div>
 
+      {/* Story 82-5 — Análise IA ACIMA do chat, colapsável (uma linha fechada):
+          visível sem rolar, sem empurrar o composer. Abaixo do chat ninguém achava. */}
+      <BehaviorAnalysisPanel
+        leadId={lead.id as string}
+        analysis={(lead.behavior_analysis as BehaviorAnalysisData | null) ?? null}
+        analyzedAt={(lead.behavior_analyzed_at as string | null) ?? null}
+        currentStage={(stage?.name as string | undefined) ?? null}
+        lastActivityAt={lastActivityAt}
+        aiSummary={(lead.ai_summary as string | null) ?? null}
+        theme="dark"
+        collapsible
+      />
+
       {/*
         Conversation — Story 63-5: a área de chat (header + histórico + bolhas +
         composer + badge de janela) foi extraída para o componente reutilizável
@@ -296,16 +309,6 @@ export default async function BrokerLeadDetailPage({
         senderNames={senderNames}
       />
 
-      {/* Story 82-3 — Análise IA abaixo do chat (não atrapalha o caminho de resposta) */}
-      <BehaviorAnalysisPanel
-        leadId={lead.id as string}
-        analysis={(lead.behavior_analysis as BehaviorAnalysisData | null) ?? null}
-        analyzedAt={(lead.behavior_analyzed_at as string | null) ?? null}
-        currentStage={(stage?.name as string | undefined) ?? null}
-        lastActivityAt={lastActivityAt}
-        aiSummary={(lead.ai_summary as string | null) ?? null}
-        theme="dark"
-      />
     </div>
   )
 }
