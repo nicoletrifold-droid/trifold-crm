@@ -1056,13 +1056,13 @@ export async function processMessageWithMetadata(
       }
     }
 
-    // Handoff — entrega ao corretor. Story 73-1: NÃO move para "Visita Agendada"
-    // (mesmo com visita confirmada) — o corretor reposiciona o card manualmente.
+    // Handoff — SINAL de compra, não silêncio. Story 75-187: a Nicole NUNCA se
+    // cala sozinha por conteúdo — quem entrega o lead ao humano é a roleta (por
+    // tempo) ou um humano agindo (broker_reply/manual). Aqui só registramos o
+    // sinal (activity + resumo rico) e seguimos atendendo. Story 73-1: NÃO move
+    // etapa — o corretor reposiciona o card manualmente.
     if (handoffResult.trigger && conversation.org_id) {
-      // Story 75-56: handoff entrega o lead ao corretor (desativa IA, notifica,
-      // registra activity) mas NÃO muda a etapa — quem reposiciona é o corretor.
       leadPatch.ai_summary = handoffSummary
-
 
       await supabase.from("activities").insert({
         org_id: conversation.org_id,
@@ -1076,11 +1076,6 @@ export async function processMessageWithMetadata(
       })
 
       emit({ level: "info", category: "ai", event_type: "HANDOFF_TRIGGERED", message: `Handoff: ${handoffResult.reason} (score=${updatedScore})`, metadata: { lead_id: leadId, reason: handoffResult.reason, score: updatedScore, property_id: identifiedPropertyId } })
-
-      await supabase
-        .from("conversations")
-        .update({ is_ai_active: false, handoff_at: new Date().toISOString(), handoff_reason: handoffResult.reason })
-        .eq("id", conversationId)
     }
 
     // Regra (Story 75-56, generaliza 65-1): a Nicole NUNCA escreve etapa.
@@ -1106,7 +1101,9 @@ export async function processMessageWithMetadata(
   })
 
   // 12.5 Memory system — regex extraction + lead_facts + Haiku batch (MemPalace-inspired)
-  if (conversation?.lead_id && !handoffResult.trigger) {
+  // Story 75-187: roda também quando o handoff (sinal) dispara — a Nicole continua
+  // atendendo, então a memória continua sendo alimentada.
+  if (conversation?.lead_id) {
     const leadId = conversation.lead_id
 
     // 12.5a Deterministic regex extraction → lead_facts (zero-cost, every message)
