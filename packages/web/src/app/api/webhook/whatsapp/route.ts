@@ -814,10 +814,6 @@ export async function POST(request: NextRequest) {
 
         const anthropic = createAnthropicClient()
 
-        // Story 63-15 — sinaliza que a Nicole agendou uma visita nesta interação,
-        // para aplicar o handoff (is_ai_active=false) após enviar a confirmação.
-        let appointmentCreated = false
-
         // Story 75-157 — resolve ANTES da fala o que realmente dá para enviar,
         // para a Nicole não prometer imagem que não vai sair. A MESMA resolução é
         // reaproveitada no envio real (abaixo), evitando fala e envio divergirem.
@@ -868,7 +864,6 @@ export async function POST(request: NextRequest) {
             // ownership. Prefer notification_broker_user_id (the lead owner kept by
             // the guard); fall back to broker_user_id for backward compatibility.
             if (event.event_type === "APPOINTMENT_CREATED") {
-              appointmentCreated = true
               const notifyBrokerUserId =
                 (event.metadata?.notification_broker_user_id as string | null) ??
                 (event.metadata?.broker_user_id as string | null)
@@ -977,23 +972,10 @@ export async function POST(request: NextRequest) {
           console.error("[nicole-media] send error:", err)
         }
 
-        // Story 63-15 — Handoff após agendamento: a Nicole acabou de confirmar a
-        // visita; desliga is_ai_active para ela parar de responder as próximas
-        // mensagens do lead (o corretor assume). `handoff_at` ancora a reativação
-        // de 24h (resolveTakeoverAnchor). `notifyBrokerOfAppointment` (no onEvent
-        // acima) já avisa o corretor. Por-conversa, admin client. `.eq(is_ai_active,
-        // true)` garante idempotência (só desliga se ainda estava ativa).
-        if (appointmentCreated) {
-          await supabase
-            .from("conversations")
-            .update({
-              is_ai_active: false,
-              handoff_at: new Date().toISOString(),
-              handoff_reason: "appointment",
-            })
-            .eq("id", conversation!.id)
-            .eq("is_ai_active", true)
-        }
+        // Story 75-187 — REMOVIDO o handoff pós-agendamento (63-15): a Nicole
+        // continua respondendo após confirmar a visita. Ela só pausa quando um
+        // humano age (broker_reply/manual). `notifyBrokerOfAppointment` (no
+        // onEvent acima) segue avisando o corretor.
       }
 
       logEvent({
