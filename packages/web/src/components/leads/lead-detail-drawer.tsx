@@ -449,8 +449,9 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               <h2 className="truncate text-lg font-bold text-stone-900 dark:text-stone-100">
                 {lead?.name || lead?.phone || "..."}
               </h2>
+              {/* Story 75-188 — ?edit=1 abre a edição direto na página de destino */}
               <Link
-                href={`${leadBasePath}/${leadId}`}
+                href={`${leadBasePath}/${leadId}?edit=1`}
                 title="Editar lead"
                 className="shrink-0 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-orange-500 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-orange-400"
               >
@@ -461,7 +462,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`${leadBasePath}/${leadId}`}
+            href={`${leadBasePath}/${leadId}?edit=1`}
             className="rounded-md bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
           >
             Editar Lead

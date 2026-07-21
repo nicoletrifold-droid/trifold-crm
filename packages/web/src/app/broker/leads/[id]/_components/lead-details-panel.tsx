@@ -45,6 +45,8 @@ interface LeadDetailsPanelProps {
   propertyName: string | null
   /** Resumo gerado pela Nicole (ou null se ainda não houve conversa). */
   aiSummary: string | null
+  /** Story 75-188 — abre o painel já aberto (deep-link `?edit=1` do drawer). */
+  initialOpen?: boolean
 }
 
 /**
@@ -72,8 +74,9 @@ export function LeadDetailsPanel({
   properties,
   propertyName,
   aiSummary,
+  initialOpen = false,
 }: LeadDetailsPanelProps) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initialOpen)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
 

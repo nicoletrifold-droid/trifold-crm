@@ -12,10 +12,16 @@ const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
 
 export default async function BrokerLeadDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string }>
 }) {
   const { id } = await params
+  // Story 75-188 — ?edit=1 (lápis/"Editar Lead" do drawer) abre o painel de
+  // detalhes/edição já aberto, em vez de largar o corretor na conversa.
+  const { edit } = await searchParams
+  const openEdit = edit === "1"
   // Story 75-67: link malformado (ex.: botão de template WhatsApp com "{{1}}" literal) → lista, não 404.
   if (!isUuid(id)) redirect("/broker/leads")
   const user = await getServerUser()
@@ -171,6 +177,7 @@ export default async function BrokerLeadDetailPage({
             acionado pelo botão ⋯ no header, fora do caminho de resposta do chat.
           */}
           <LeadDetailsPanel
+            initialOpen={openEdit}
             lead={{
               id: lead.id as string,
               name: lead.name as string | null,
