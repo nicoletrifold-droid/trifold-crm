@@ -65,8 +65,13 @@ export async function POST(request: NextRequest) {
     segment_filter: SegmentFilter
     scheduled_for?: string
     ab_test_enabled?: boolean
+    ab_test_variable?: "subject" | "body"
     subject_variant_a?: string
     subject_variant_b?: string
+    body_variant_a_template_id?: string
+    body_variant_a_slug?: string
+    body_variant_b_template_id?: string
+    body_variant_b_slug?: string
   }
 
   if (!body.name?.trim()) return NextResponse.json({ error: "name é obrigatório" }, { status: 400 })
@@ -97,6 +102,7 @@ export async function POST(request: NextRequest) {
   }
 
   const abTestEnabled = !!body.ab_test_enabled
+  const abTestVariable = body.ab_test_variable ?? "subject"
   // Split determinístico por id (não randômico) — metade A, metade B (extra vai para A em contagem ímpar).
   const variantMap = new Map<string, "a" | "b">()
   if (abTestEnabled) {
@@ -122,8 +128,13 @@ export async function POST(request: NextRequest) {
       scheduled_for: startDate.toISOString(),
       created_by: user.id,
       ab_test_enabled: abTestEnabled,
-      subject_variant_a: abTestEnabled ? (body.subject_variant_a ?? null) : null,
-      subject_variant_b: abTestEnabled ? (body.subject_variant_b ?? null) : null,
+      ab_test_variable: abTestVariable,
+      subject_variant_a: abTestEnabled && abTestVariable === "subject" ? (body.subject_variant_a ?? null) : null,
+      subject_variant_b: abTestEnabled && abTestVariable === "subject" ? (body.subject_variant_b ?? null) : null,
+      body_variant_a_template_id: abTestEnabled && abTestVariable === "body" ? (body.body_variant_a_template_id ?? null) : null,
+      body_variant_a_slug: abTestEnabled && abTestVariable === "body" ? (body.body_variant_a_slug ?? null) : null,
+      body_variant_b_template_id: abTestEnabled && abTestVariable === "body" ? (body.body_variant_b_template_id ?? null) : null,
+      body_variant_b_slug: abTestEnabled && abTestVariable === "body" ? (body.body_variant_b_slug ?? null) : null,
     })
     .select("id")
     .single()
@@ -149,6 +160,9 @@ export async function POST(request: NextRequest) {
   const subjectOverride = body.subject_override
   const subjectVariantA = body.subject_variant_a
   const subjectVariantB = body.subject_variant_b
+  const bodyVariantASlug = body.body_variant_a_slug
+  const bodyVariantBSlug = body.body_variant_b_slug
+  const isBodyVariant = abTestEnabled && abTestVariable === "body"
 
   after(async () => {
     await supabase
@@ -158,14 +172,21 @@ export async function POST(request: NextRequest) {
 
     for (const { lead, scheduledFor } of distributed) {
       const variant = abTestEnabled ? variantMap.get(lead.id) : undefined
-      const effectiveSubjectOverride = variant === "a"
-        ? subjectVariantA
-        : variant === "b"
-          ? subjectVariantB
-          : subjectOverride
+
+      const effectiveTemplateSlug = isBodyVariant
+        ? (variant === "a" ? bodyVariantASlug : bodyVariantBSlug) ?? templateSlug
+        : templateSlug
+
+      const effectiveSubjectOverride = isBodyVariant
+        ? undefined
+        : variant === "a"
+          ? subjectVariantA
+          : variant === "b"
+            ? subjectVariantB
+            : subjectOverride
 
       await sendTemplateEmail({
-        templateSlug,
+        templateSlug: effectiveTemplateSlug,
         to: { email: lead.email, name: lead.name ?? undefined },
         variables: {
           nome: lead.name ?? "",
