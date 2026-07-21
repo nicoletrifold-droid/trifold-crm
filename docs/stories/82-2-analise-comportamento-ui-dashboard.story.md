@@ -95,3 +95,6 @@ Status: Draft → Approved.
 eslint limpo nos arquivos tocados, `next build` OK. CONCERNS (não bloqueantes):
 sem rate-limit server-side na geração (custo baixo, monitorar) e mig 182 deve ir a
 PROD antes do deploy do código (instrução ao @devops no gate).
+- 2026-07-21 @dev (Dex): implementação completa (ver Dev Agent Record). Checks verdes.
+- 2026-07-21 @qa (Quinn): PASS (gate epic-82-analise-comportamento.yml).
+- 2026-07-21 @devops (Gage): mig 182 aplicada em PROD e DEV (verificada via Management API); PR #253.
