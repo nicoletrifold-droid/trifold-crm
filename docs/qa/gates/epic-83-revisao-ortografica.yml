@@ -1,0 +1,29 @@
+schema: 1
+storyId: "epic-83"
+story: "83-1 / 83-2 / 83-3"
+title: "Quality Gate — Epic 83 (Revisão ortográfica na saída)"
+epic: 83
+gate: PASS
+verdict: PASS
+status_reason: >
+  Guarda ortográfica no envio para toda escrita humana que sai do CRM. 83-1: flow
+  message-review (Haiku, mudança mínima, preserva tom/abreviações/emojis/nomes/números),
+  parse defensivo com normalização anti-ruído (has_errors=true com corrected igual/vazio
+  → false, testado), extração por blocos text (lição 82-4, testado com thinking-first),
+  rota /api/messages/review com skip de triviais (isReviewEligible, testado) e FAIL-OPEN
+  em todo caminho de erro (200 has_errors=false — o composer nunca deixa de enviar).
+  83-2: BrokerMessageInput (serve chat do lead em TODAS as telas) — spellCheck+lang pt-BR,
+  gate no handleSend, caixa de sugestão com decisão humana obrigatória (corrigida × como
+  escrevi), editar invalida sugestão, "como escrevi" NÃO re-revisa (sem loop), auditoria
+  metadata.reviewed_original no send-message (só quando difere). 83-3: admin-chat-feed
+  (portal lado empresa) — mesmo helper/caixa, zero duplicação; upload de arquivo intocado.
+  Regressões: caminho de erro WHATSAPP_WINDOW_CLOSED, optimistic update (75-141/165) e
+  assinatura (75-171) preservados no refactor dispatch. Checks: vitest 1117/1117 (10
+  novos), tsc limpo, eslint limpo nos tocados, next build OK.
+concerns:
+  - severity: low
+    category: latency
+    description: "+~1-2s por envio elegível (Haiku). Aceito por decisão (opção b); triviais pulam."
+    recommendation: "Se a equipe reclamar, medir p95 e considerar revisão em paralelo à digitação."
+date: 2026-07-21
+reviewer: "@qa Quinn"
