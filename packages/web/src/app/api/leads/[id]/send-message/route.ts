@@ -275,6 +275,15 @@ export async function POST(
     sent_by: appUser.id,
     ...(signedAs ? { signed_as: signedAs } : {}),
   }
+  // Story 83-2 — auditoria da revisão ortográfica: quando o corretor aceitou a
+  // versão corrigida, o que ele digitou originalmente fica registrado.
+  if (
+    typeof body?.original_message === "string" &&
+    body.original_message.trim() &&
+    body.original_message.trim() !== message
+  ) {
+    metadata.reviewed_original = body.original_message.trim()
+  }
   if (!dispatch.sent) {
     metadata.send_error = dispatch.error ?? "SEND_FAILED"
   }

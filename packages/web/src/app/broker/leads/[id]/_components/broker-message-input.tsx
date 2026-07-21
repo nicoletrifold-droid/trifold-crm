@@ -13,6 +13,9 @@ import {
 import { MediaPickerModal } from "./media-picker-modal"
 import { AudioRecorder } from "./audio-recorder"
 import { brokerSendErrorMessage } from "@web/lib/broker/send-errors"
+// Story 83-2 — guarda ortográfica no envio (Epic 83)
+import { reviewOutgoing } from "@web/lib/messages/review-outgoing"
+import { ReviewSuggestion } from "@web/components/messages/review-suggestion"
 
 const MAX_MESSAGE_LENGTH = 4096
 
@@ -60,6 +63,8 @@ export function BrokerMessageInput({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showMediaPicker, setShowMediaPicker] = useState(false)
+  // Story 83-2 — sugestão da revisão ortográfica pendente de decisão do corretor.
+  const [suggestion, setSuggestion] = useState<string | null>(null)
   // Story 63-10 — caminho de saída quando a janela de 24h está fechada.
   const [notifyEnabled, setNotifyEnabled] = useState(notifyOnReply)
   const [notifyLoading, setNotifyLoading] = useState(false)
@@ -117,16 +122,16 @@ export function BrokerMessageInput({
   // Story 63-4 — combina o disabled interno (loading/conteúdo) com o bloqueio por janela.
   const isDisabled = disabled || disabledByWindow
 
-  async function handleSend() {
-    if (isDisabled) return
-    setLoading(true)
-    setError(null)
-
+  // Story 83-2 — envio efetivo (com auditoria do original quando corrigida).
+  async function dispatch(outgoing: string, reviewedOriginal?: string) {
     try {
       const res = await fetch(`/api/leads/${leadId}/send-message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({
+          message: outgoing,
+          ...(reviewedOriginal ? { original_message: reviewedOriginal } : {}),
+        }),
       })
       const data = await res.json().catch(() => null)
 
@@ -145,11 +150,12 @@ export function BrokerMessageInput({
       onSent?.({
         id: data.messageId,
         role: "broker",
-        content: trimmed,
+        content: outgoing,
         created_at: new Date().toISOString(),
         failed: data.sent === false,
       })
       setText("")
+      setSuggestion(null)
       // Story 75-141 — mensagem gravada, mas não entregue (ex.: número sem WhatsApp):
       // avisa o motivo (a bolha já fica marcada como não enviada).
       if (data.sent === false) {
@@ -162,6 +168,22 @@ export function BrokerMessageInput({
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleSend() {
+    if (isDisabled) return
+    setLoading(true)
+    setError(null)
+
+    // Story 83-2 — guarda ortográfica: erro claro → sugestão; falha/limpo → envia
+    // (fail-open, a revisão nunca bloqueia).
+    const corrected = await reviewOutgoing(trimmed)
+    if (corrected) {
+      setSuggestion(corrected)
+      setLoading(false)
+      return
+    }
+    await dispatch(trimmed)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -240,6 +262,23 @@ export function BrokerMessageInput({
             )}
           </div>
         )}
+        {suggestion && (
+          <ReviewSuggestion
+            corrected={suggestion}
+            disabled={loading}
+            onAcceptCorrected={() => {
+              setLoading(true)
+              setError(null)
+              void dispatch(suggestion, trimmed)
+            }}
+            onSendOriginal={() => {
+              setLoading(true)
+              setError(null)
+              setSuggestion(null)
+              void dispatch(trimmed)
+            }}
+          />
+        )}
         {error && (
           <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
             {error}
@@ -258,8 +297,13 @@ export function BrokerMessageInput({
           </button>
           <textarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value)
+              if (suggestion) setSuggestion(null) // editar invalida a sugestão
+            }}
             onKeyDown={handleKeyDown}
+            spellCheck
+            lang="pt-BR"
             maxLength={MAX_MESSAGE_LENGTH}
             rows={2}
             placeholder="Digite sua mensagem para o lead…"

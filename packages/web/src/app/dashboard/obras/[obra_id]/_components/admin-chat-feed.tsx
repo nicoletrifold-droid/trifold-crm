@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import { Paperclip, Send, User } from "lucide-react"
+import { reviewOutgoing } from "@web/lib/messages/review-outgoing"
+import { ReviewSuggestion } from "@web/components/messages/review-suggestion"
 
 interface Mensagem {
   id: string
@@ -313,6 +315,8 @@ export function AdminChatFeed({
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [text, setText] = useState("")
+  // Story 83-3 — guarda ortográfica no envio (Epic 83)
+  const [suggestion, setSuggestion] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -406,9 +410,9 @@ export function AdminChatFeed({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [mensagens])
 
-  async function sendText() {
-    const content = text.trim()
-    if (!content || sending || !selectedClienteId) return
+  // Story 83-3 — envio efetivo (após a guarda ortográfica).
+  async function dispatchText(content: string) {
+    if (!content || !selectedClienteId) return
     setError(null)
     setSending(true)
     try {
@@ -424,6 +428,7 @@ export function AdminChatFeed({
       const { mensagem } = await res.json()
       setMensagens((prev) => [...prev, mensagem])
       setText("")
+      setSuggestion(null)
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto"
       }
@@ -432,6 +437,21 @@ export function AdminChatFeed({
     } finally {
       setSending(false)
     }
+  }
+
+  async function sendText() {
+    const content = text.trim()
+    if (!content || sending || !selectedClienteId) return
+    setError(null)
+    setSending(true)
+    // Story 83-3 — guarda ortográfica (fail-open: falha → envia normal).
+    const corrected = await reviewOutgoing(content)
+    if (corrected) {
+      setSuggestion(corrected)
+      setSending(false)
+      return
+    }
+    await dispatchText(content)
   }
 
   async function handleFileUpload(file: File) {
@@ -535,6 +555,18 @@ export function AdminChatFeed({
           </div>
 
           <div className="border-t border-gray-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900">
+            {/* Story 83-3 — sugestão da revisão ortográfica (mesma caixa do chat do lead) */}
+            {suggestion && (
+              <ReviewSuggestion
+                corrected={suggestion}
+                disabled={sending}
+                onAcceptCorrected={() => void dispatchText(suggestion)}
+                onSendOriginal={() => {
+                  setSuggestion(null)
+                  void dispatchText(text.trim())
+                }}
+              />
+            )}
             {error && <p className="mb-2 text-xs text-red-600 dark:text-red-300">{error}</p>}
             <div className="flex items-end gap-2">
               <button
@@ -562,8 +594,11 @@ export function AdminChatFeed({
               <textarea
                 ref={textareaRef}
                 value={text}
+                spellCheck
+                lang="pt-BR"
                 onChange={(e) => {
                   setText(e.target.value)
+                  if (suggestion) setSuggestion(null) // editar invalida a sugestão
                   e.target.style.height = "auto"
                   e.target.style.height = `${Math.min(e.target.scrollHeight, 96)}px`
                 }}
