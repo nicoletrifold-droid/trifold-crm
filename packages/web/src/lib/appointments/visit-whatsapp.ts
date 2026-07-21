@@ -38,6 +38,7 @@ export interface VisitTemplateSend {
     | "visita_confirmada_corretor"
     | "lembrete_visita_cliente"
     | "lembrete_visita_corretor"
+    | "visita_cancelada_aviso"
   bodyParams: string[]
   /** Presente → adiciona o parâmetro do botão URL "Cancelar visita". */
   cancelToken?: string | null
@@ -146,6 +147,123 @@ export async function notifyVisitBookedWhatsApp(
     })
     if (r.ok) sent++
     else errors.push(r.error ?? "erro desconhecido")
+  }
+
+  return { sent, errors }
+}
+
+/**
+ * Story 75-192 — cliente cancelou pelo link público: avisa quem ia atender.
+ * - team='house' → corretor interno (appointments.broker_id; fallback: responsável
+ *   do lead), via template `visita_cancelada_aviso`.
+ * - team='imob'  → corretor parceiro (metadata.corretor_parceiro) + TODOS os
+ *   usuários role=imob ativos com telefone (Daiana) — mesmo público da 75-174.
+ * Best-effort: nunca lança; dedup por telefone.
+ */
+export async function notifyVisitCancelledWhatsApp(
+  admin: SupabaseClient,
+  appointment: {
+    org_id: string
+    team: string | null
+    broker_id: string | null
+    lead_id: string | null
+    metadata: Record<string, unknown> | null
+    client_name: string | null
+    location: string | null
+    scheduled_at: string
+    propertyName?: string | null
+  }
+): Promise<{ sent: number; errors: string[] }> {
+  const errors: string[] = []
+  const { data: config } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", appointment.org_id)
+    .eq("status", "active")
+    .maybeSingle()
+  if (!config?.phone_number_id || !config?.access_token) {
+    return { sent: 0, errors: ["whatsapp_config ausente/inativa"] }
+  }
+
+  // Nome do cliente: client_name (link IMOB) ou nome do lead.
+  let clientName = appointment.client_name?.trim() || null
+  if (!clientName && appointment.lead_id) {
+    const { data: lead } = await admin
+      .from("leads")
+      .select("name")
+      .eq("id", appointment.lead_id)
+      .maybeSingle()
+    clientName = (lead?.name as string | null) ?? null
+  }
+
+  const propertyName =
+    appointment.propertyName ??
+    appointment.location?.replace(/^Decorado\s+/i, "") ??
+    "Trifold"
+  const whenLabel = new Date(appointment.scheduled_at).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
+  const recipients: Array<{ name: string; phone: string }> = []
+
+  if (appointment.team === "imob") {
+    const parceiro = appointment.metadata?.corretor_parceiro as
+      | { nome?: string | null; telefone?: string | null }
+      | undefined
+    if (parceiro?.telefone) {
+      recipients.push({ name: parceiro.nome ?? "Corretor", phone: parceiro.telefone })
+    }
+    const { data: imobUsers } = await admin
+      .from("users")
+      .select("name, phone")
+      .eq("org_id", appointment.org_id)
+      .eq("role", "imob")
+      .eq("is_active", true)
+      .not("phone", "is", null)
+    for (const u of imobUsers ?? []) {
+      recipients.push({ name: (u.name as string) ?? "Equipe IMOB", phone: u.phone as string })
+    }
+  } else {
+    // House: corretor do agendamento; fallback = responsável do lead.
+    let brokerUserId = appointment.broker_id
+    if (!brokerUserId && appointment.lead_id) {
+      const { data: lead } = await admin
+        .from("leads")
+        .select("assigned_broker_id")
+        .eq("id", appointment.lead_id)
+        .maybeSingle()
+      brokerUserId = (lead?.assigned_broker_id as string | null) ?? null
+    }
+    if (brokerUserId) {
+      const { data: broker } = await admin
+        .from("users")
+        .select("name, phone")
+        .eq("id", brokerUserId)
+        .maybeSingle()
+      if (broker?.phone) {
+        recipients.push({ name: (broker.name as string) ?? "Corretor", phone: broker.phone as string })
+      }
+    }
+  }
+
+  let sent = 0
+  const seen = new Set<string>()
+  for (const r of recipients) {
+    const to = waPhone(r.phone)
+    if (!to || seen.has(to)) continue
+    seen.add(to)
+    const res = await sendVisitTemplate(config, {
+      to,
+      template: "visita_cancelada_aviso",
+      bodyParams: [r.name, clientName ?? "Cliente", propertyName, whenLabel],
+    })
+    if (res.ok) sent++
+    else errors.push(res.error ?? "erro desconhecido")
   }
 
   return { sent, errors }
