@@ -1,5 +1,5 @@
 ---
-epic: 82
+epic: 83
 title: Central de Email — Teste A/B de Corpo no Email Blast
 status: Draft
 created_at: 2026-07-21
@@ -8,10 +8,10 @@ created_by: Morgan (@pm)
 priority: Medium
 parent_epic: docs/stories/epics/epic-18-ab-test-assunto-email-blast.md
 stories_done: []
-stories_next: [82.1, 82.2, 82.3, 82.4]
+stories_next: [83.1, 83.2, 83.3, 83.4]
 ---
 
-# Epic 82 — Teste A/B de Corpo no Email Blast
+# Epic 83 — Teste A/B de Corpo no Email Blast
 
 ## Objetivo do Epic
 
@@ -43,12 +43,12 @@ Estender o sistema de teste A/B do Email Blast (Epic 18, Done — hoje só testa
 
 | Story | Título | Executor | Quality Gate | Complexidade |
 |---|---|---|---|---|
-| 82.1 | Schema: `ab_test_variable` + colunas de template por variante em `email_blasts` | @data-engineer | @dev | P |
-| 82.2 | Wizard: seletor "Assunto ou Corpo" + dropdowns de Template A/B no Passo 2 | @dev | @qa | M |
-| 82.3 | Split + envio usando o template correto por variante (sem override de assunto) | @dev | @qa | M |
-| 82.4 | Endpoint de stats devolve label da variante (template) + UI de detalhe exibe corretamente | @dev | @qa | M |
+| 83.1 | Schema: `ab_test_variable` + colunas de template por variante em `email_blasts` | @data-engineer | @dev | P |
+| 83.2 | Wizard: seletor "Assunto ou Corpo" + dropdowns de Template A/B no Passo 2 | @dev | @qa | M |
+| 83.3 | Split + envio usando o template correto por variante (sem override de assunto) | @dev | @qa | M |
+| 83.4 | Endpoint de stats devolve label da variante (template) + UI de detalhe exibe corretamente | @dev | @qa | M |
 
-### 82.1 — Schema: `ab_test_variable` + colunas de template por variante
+### 83.1 — Schema: `ab_test_variable` + colunas de template por variante
 
 **Descrição:** Nova migration (próximo número livre, verificar antes de criar — 181 é a última aplicada no momento da criação deste epic) adicionando em `email_blasts`:
 - `ab_test_variable TEXT NOT NULL DEFAULT 'subject' CHECK (ab_test_variable IN ('subject', 'body'))`
@@ -64,7 +64,7 @@ Nenhuma coluna nova em `email_logs` — a coluna `variant` (Epic 18) já é sufi
 - [ ] `ab_test_variable` default `'subject'` não quebra nenhum blast existente (todos os blasts do Epic 18 continuam válidos, implicitamente testando assunto)
 - [ ] Colunas novas nullable, sem impacto em queries existentes
 
-### 82.2 — Wizard: seletor "Assunto ou Corpo" + dropdowns de Template A/B
+### 83.2 — Wizard: seletor "Assunto ou Corpo" + dropdowns de Template A/B
 
 **Descrição:** Em `step-content.tsx`, quando "Ativar teste A/B" estiver marcado, mostrar um seletor (radio) "O que testar?" com opções "Assunto" (default) e "Corpo". Modo Assunto = comportamento atual, sem mudança. Modo Corpo: esconder os campos de Assunto A/B e mostrar 2 dropdowns "Template A" e "Template B" (mesmo fetch de `/api/admin/email-templates` já usado no dropdown de template único).
 
@@ -73,7 +73,7 @@ Nenhuma coluna nova em `email_logs` — a coluna `variant` (Epic 18) já é sufi
 - [ ] Modo "Corpo" exige os 2 templates selecionados antes de avançar (`canProceed` estendido)
 - [ ] Passo 3 (Confirmação) mostra resumo indicando quais 2 templates estão sendo testados quando o modo é "Corpo"
 
-### 82.3 — Split + envio usando o template correto por variante
+### 83.3 — Split + envio usando o template correto por variante
 
 **Descrição:** Em `api/admin/email-blasts/route.ts` (POST), quando `ab_test_variable === 'body'`: reaproveitar o split determinístico já existente (Story 80-3, mesma lógica de ordenação por `id` do lead), mas no loop de envio (`sendTemplateEmail`) usar `templateSlug` = slug do Template A ou B conforme a variante do lead, **sem** passar `subjectOverride` (cada template usa seu próprio assunto cadastrado).
 
@@ -82,7 +82,7 @@ Nenhuma coluna nova em `email_logs` — a coluna `variant` (Epic 18) já é sufi
 - [ ] Envio usa o `html_body` e `subject` do template correto por variante, validado com teste manual (dados fabricados em produção, removidos após)
 - [ ] Modo "Assunto" (Epic 18) e blasts sem A/B continuam usando exatamente o fluxo atual, sem alteração
 
-### 82.4 — Endpoint de stats + UI de detalhe exibem a variante corretamente
+### 83.4 — Endpoint de stats + UI de detalhe exibem a variante corretamente
 
 **Descrição:** Em `[id]/stats/route.ts`, incluir no payload `ab_test_variable` e, quando `'body'`, os nomes dos templates A/B (join simples em `email_templates` pelos ids já salvos). Em `blast-detail.tsx`, usar esse campo para decidir o label de cada variante: "Assunto: {texto}" (modo atual) ou "Template: {nome}" (modo novo) — mesma estrutura lado a lado, mesmas métricas, **sem indicador de vencedor** (herdado do Epic 18).
 
@@ -111,4 +111,4 @@ Nenhuma coluna nova em `email_logs` — a coluna `variant` (Epic 18) já é sufi
 
 ## Notes
 
-Epic criado em 2026-07-21 por @pm (Morgan) a partir de pergunta direta do usuário ("Consigo mandar 2 tipos de copy, para fazer o teste A/B?") em sessão de trabalho subsequente ao fechamento do Epic 18. Decisões de escopo (fonte dos corpos = templates existentes; uma variável por vez) confirmadas pelo usuário via pergunta direta antes da criação deste documento. Numeração: epic 82, stories 82.1–82.4, migration a partir de 182 (verificar numeração livre no momento de cada implementação — repositório de alta concorrência).
+Epic criado em 2026-07-21 por @pm (Morgan) a partir de pergunta direta do usuário ("Consigo mandar 2 tipos de copy, para fazer o teste A/B?") em sessão de trabalho subsequente ao fechamento do Epic 18. Decisões de escopo (fonte dos corpos = templates existentes; uma variável por vez) confirmadas pelo usuário via pergunta direta antes da criação deste documento. Numeração: epic 83, stories 83.1–83.4, migration a partir de 182 (verificar numeração livre no momento de cada implementação — repositório de alta concorrência).

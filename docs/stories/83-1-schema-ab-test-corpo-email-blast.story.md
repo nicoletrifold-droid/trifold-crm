@@ -1,14 +1,14 @@
-# Story 82-1 — Schema: ab_test_variable + colunas de template por variante
+# Story 83-1 — Schema: ab_test_variable + colunas de template por variante
 
 ## Metadata
 - **Status:** InReview
-- **Epic:** 82 — Teste A/B de Corpo no Email Blast (`docs/stories/epics/epic-82-ab-test-corpo-email-blast.md`)
+- **Epic:** 83 — Teste A/B de Corpo no Email Blast (`docs/stories/epics/epic-83-ab-test-corpo-email-blast.md`)
 - **Branch:** main
 
 ## Context
-Primeira story do Epic 82, que estende o Epic 18 (Done, 5/5 stories) para permitir testar **corpo** do email além de assunto — uma variável por vez, nunca as duas juntas no mesmo blast. Esta story só cria o schema; wizard, envio e UI vêm nas próximas stories (82.2–82.4).
+Primeira story do Epic 83, que estende o Epic 18 (Done, 5/5 stories) para permitir testar **corpo** do email além de assunto — uma variável por vez, nunca as duas juntas no mesmo blast. Esta story só cria o schema; wizard, envio e UI vêm nas próximas stories (83.2–83.4).
 
-**Nota de processo:** o arquivo do epic (`docs/stories/epics/epic-82-ab-test-corpo-email-blast.md`) foi criado pelo @pm mas ainda não foi commitado (agente PM não tem ferramenta git). Esta story deve commitar o arquivo do epic junto com a migration — mesmo padrão usado quando a Story 80-1 commitou o `epic-18` doc junto com a primeira migration daquele epic.
+**Nota de processo:** o arquivo do epic (`docs/stories/epics/epic-83-ab-test-corpo-email-blast.md`) foi criado pelo @pm mas ainda não foi commitado (agente PM não tem ferramenta git). Esta story deve commitar o arquivo do epic junto com a migration — mesmo padrão usado quando a Story 80-1 commitou o `epic-18` doc junto com a primeira migration daquele epic.
 
 ## Acceptance Criteria
 - [x] AC1: Nova migration em `supabase/migrations/` adicionando em `email_blasts`: `ab_test_variable TEXT NOT NULL DEFAULT 'subject' CHECK (ab_test_variable IN ('subject', 'body'))`
@@ -19,9 +19,9 @@ Primeira story do Epic 82, que estende o Epic 18 (Done, 5/5 stories) para permit
 - [x] AC6: Nenhuma coluna nova em `email_logs` — confirmar que a coluna `variant` (já existente, Epic 18) é suficiente e agnóstica ao que está sendo testado
 
 ## Out of Scope
-- Wizard (seletor Assunto/Corpo, dropdowns de template) — Story 82.2
-- Lógica de split/envio usando o template por variante — Story 82.3
-- Endpoint de stats e UI de detalhe — Story 82.4
+- Wizard (seletor Assunto/Corpo, dropdowns de template) — Story 83.2
+- Lógica de split/envio usando o template por variante — Story 83.3
+- Endpoint de stats e UI de detalhe — Story 83.4
 - Qualquer lógica de vencedor automático — não existe neste epic (herdado do Epic 18)
 
 ## Dependencies
@@ -40,13 +40,13 @@ Habilita a extensão do teste A/B para testar corpo do email (via templates exis
 - ACs atendidos, migration aplicada em dev e prod, verificação independente via `information_schema.columns`/`pg_constraint` (mesmo padrão da Story 80-1), QA gate PASS, commit/push via @devops.
 
 ## File List
-- `docs/stories/82-1-schema-ab-test-corpo-email-blast.story.md` (this file)
-- `docs/stories/epics/epic-82-ab-test-corpo-email-blast.md` (criado pelo @pm, commitado junto por não ter o @pm ferramenta git)
+- `docs/stories/83-1-schema-ab-test-corpo-email-blast.story.md` (this file)
+- `docs/stories/epics/epic-83-ab-test-corpo-email-blast.md` (criado pelo @pm, commitado junto por não ter o @pm ferramenta git)
 - `supabase/migrations/183_email_blast_ab_test_corpo.sql` (novo — número a reconfirmar no momento da implementação)
 
 ## Dev Notes (@dev / Dex)
 - Reconfirmar numeração da migration antes de criar o arquivo (checar `ls supabase/migrations/` + branches remotos, mesmo processo já usado nas Stories 80-1, 78-1 etc.) — 182 já estava reservado por outra sessão (`182_leads_behavior_analysis.sql`) no momento do draft desta story.
-- `body_variant_a_slug`/`body_variant_b_slug` existem para evitar um join extra no momento do envio (Story 82.3) — mesmo padrão já usado para o template principal do blast (`template_slug` é passado separado do `template_id` na criação do blast).
+- `body_variant_a_slug`/`body_variant_b_slug` existem para evitar um join extra no momento do envio (Story 83.3) — mesmo padrão já usado para o template principal do blast (`template_slug` é passado separado do `template_id` na criação do blast).
 - Aplicar em dev primeiro, depois prod, via Supabase Management API (ver memória de projeto sobre PAT e endpoint de queries diretas).
 - Teste de verificação: consulta a `information_schema.columns` confirmando as 5 colunas novas + `pg_constraint` confirmando o CHECK de `ab_test_variable`, em ambos os ambientes.
 
@@ -61,8 +61,8 @@ Habilita a extensão do teste A/B para testar corpo do email (via templates exis
 
 ### File List
 - `supabase/migrations/183_email_blast_ab_test_corpo.sql` (novo)
-- `docs/stories/epics/epic-82-ab-test-corpo-email-blast.md` (commitado junto — criado pelo @pm, sem ferramenta git)
-- `docs/stories/82-1-schema-ab-test-corpo-email-blast.story.md` (this file)
+- `docs/stories/epics/epic-83-ab-test-corpo-email-blast.md` (commitado junto — criado pelo @pm, sem ferramenta git)
+- `docs/stories/83-1-schema-ab-test-corpo-email-blast.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
 
@@ -76,11 +76,11 @@ Revisão do diff (`238e5070`, 3 arquivos: migration + story + epic doc) contra o
 - **AC6:** consultei `email_logs` diretamente em dev e prod buscando por `ab_test_variable`/`body_variant_a_slug`/`body_variant_b_slug` — retorno vazio (`[]`) em ambos, confirmando que nenhuma coluna nova foi criada nessa tabela.
 - **Constraint:** `email_blasts_ab_test_variable_check` presente e correto (`CHECK (ab_test_variable = ANY (ARRAY['subject','body']))`) em ambos os ambientes.
 - **Migration em si:** idempotente (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` antes de recriar), consistente com o estilo da migration 170 (Epic 18).
-- **Epic doc:** `docs/stories/epics/epic-82-ab-test-corpo-email-blast.md` confirmado presente no commit, criado pelo @pm e corretamente incluído (nota de processo do @sm sobre isso se confirmou correta na prática).
+- **Epic doc:** `docs/stories/epics/epic-83-ab-test-corpo-email-blast.md` confirmado presente no commit, criado pelo @pm e corretamente incluído (nota de processo do @sm sobre isso se confirmou correta na prática).
 
 Nenhum CONCERNS. Migration puramente aditiva, sem risco a dados/queries existentes. Pronta para `@devops *push`.
 
 ## Change Log
-- @sm (River): story criada em Draft a partir do Epic 82, primeira story. Confirmada numeração de migration livre (183, já que 182 foi reservado por outra sessão concorrente durante o draft). Epic doc do @pm marcado no File List para ser commitado junto por esta story.
-- @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Título claro, contexto completo (inclusive a nota de processo sobre commitar o epic doc junto), 6 ACs testáveis e específicos por coluna/constraint, escopo bem delimitado (Out of Scope lista as 3 próximas stories), dependência do Epic 18 mapeada, complexidade e valor de negócio claros, risco de numeração de migration documentado e reconfirmado nesta validação (183 continua livre — sem colisão com branches remotos). Alinhamento com a seção 82.1 do epic confirmado. Status Draft → Ready.
+- @sm (River): story criada em Draft a partir do Epic 83, primeira story. Confirmada numeração de migration livre (183, já que 182 foi reservado por outra sessão concorrente durante o draft). Epic doc do @pm marcado no File List para ser commitado junto por esta story.
+- @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Título claro, contexto completo (inclusive a nota de processo sobre commitar o epic doc junto), 6 ACs testáveis e específicos por coluna/constraint, escopo bem delimitado (Out of Scope lista as 3 próximas stories), dependência do Epic 18 mapeada, complexidade e valor de negócio claros, risco de numeração de migration documentado e reconfirmado nesta validação (183 continua livre — sem colisão com branches remotos). Alinhamento com a seção 83.1 do epic confirmado. Status Draft → Ready.
 - @dev (Dex): AC1-AC6 implementados. Migration 183 aplicada em dev e prod via Supabase Management API, verificada independentemente em ambos (colunas + constraint via `information_schema`/`pg_constraint`). Status Ready → InReview. Pronta para @qa *qa-gate.

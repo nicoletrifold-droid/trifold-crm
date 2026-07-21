@@ -1,5 +1,5 @@
 -- Migration 183: Teste A/B de Corpo no Email Blast
--- Story 82-1 (Epic 82 — extensão do Epic 18): docs/stories/epics/epic-82-ab-test-corpo-email-blast.md
+-- Story 83-1 (Epic 83 — extensão do Epic 18): docs/stories/epics/epic-83-ab-test-corpo-email-blast.md
 --
 -- Adiciona suporte a teste A/B de CORPO do email (via seleção de 2 templates
 -- já existentes), como alternativa ao teste de assunto já existente (Epic 18).
