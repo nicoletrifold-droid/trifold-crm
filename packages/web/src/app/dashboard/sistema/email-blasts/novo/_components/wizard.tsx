@@ -23,8 +23,15 @@ const defaultContent: ContentData = {
   campaignName: "",
   subjectOverride: "",
   abTestEnabled: false,
+  abTestVariable: "subject",
   subjectVariantA: "",
   subjectVariantB: "",
+  bodyVariantATemplateId: "",
+  bodyVariantASlug: "",
+  bodyVariantAName: "",
+  bodyVariantBTemplateId: "",
+  bodyVariantBSlug: "",
+  bodyVariantBName: "",
 }
 
 export function BlastWizard() {
@@ -55,8 +62,13 @@ export function BlastWizard() {
         segment_filter: segmentFilter,
         scheduled_for: scheduledFor ?? undefined,
         ab_test_enabled: content.abTestEnabled,
+        ab_test_variable: content.abTestVariable,
         subject_variant_a: content.subjectVariantA || undefined,
         subject_variant_b: content.subjectVariantB || undefined,
+        body_variant_a_template_id: content.bodyVariantATemplateId || undefined,
+        body_variant_a_slug: content.bodyVariantASlug || undefined,
+        body_variant_b_template_id: content.bodyVariantBTemplateId || undefined,
+        body_variant_b_slug: content.bodyVariantBSlug || undefined,
       }),
     })
 

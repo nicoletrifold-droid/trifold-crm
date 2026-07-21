@@ -62,7 +62,7 @@ export function StepSchedule({ audience, content, onConfirm, onBack, submitting 
           <span className="text-xs text-stone-500">Template</span>
           <span className="text-sm text-stone-700">{content.templateName}</span>
         </div>
-        {content.abTestEnabled ? (
+        {content.abTestEnabled && content.abTestVariable === "subject" && (
           <>
             <div className="grid grid-cols-2 px-4 py-3 gap-2">
               <span className="text-xs text-stone-500">Teste A/B — Assunto A</span>
@@ -73,7 +73,20 @@ export function StepSchedule({ audience, content, onConfirm, onBack, submitting 
               <span className="text-sm text-stone-700">{content.subjectVariantB}</span>
             </div>
           </>
-        ) : (
+        )}
+        {content.abTestEnabled && content.abTestVariable === "body" && (
+          <>
+            <div className="grid grid-cols-2 px-4 py-3 gap-2">
+              <span className="text-xs text-stone-500">Teste A/B — Template A</span>
+              <span className="text-sm text-stone-700">{content.bodyVariantAName}</span>
+            </div>
+            <div className="grid grid-cols-2 px-4 py-3 gap-2">
+              <span className="text-xs text-stone-500">Teste A/B — Template B</span>
+              <span className="text-sm text-stone-700">{content.bodyVariantBName}</span>
+            </div>
+          </>
+        )}
+        {!content.abTestEnabled && (
           <div className="grid grid-cols-2 px-4 py-3 gap-2">
             <span className="text-xs text-stone-500">Assunto</span>
             <span className="text-sm text-stone-700">{content.subjectOverride}</span>

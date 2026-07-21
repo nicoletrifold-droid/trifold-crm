@@ -11,8 +11,15 @@ export type ContentData = {
   campaignName: string
   subjectOverride: string
   abTestEnabled: boolean
+  abTestVariable: "subject" | "body"
   subjectVariantA: string
   subjectVariantB: string
+  bodyVariantATemplateId: string
+  bodyVariantASlug: string
+  bodyVariantAName: string
+  bodyVariantBTemplateId: string
+  bodyVariantBSlug: string
+  bodyVariantBName: string
 }
 
 interface Props {
@@ -28,8 +35,11 @@ export function StepContent({ initial, onNext, onBack }: Props) {
   const [campaignName, setCampaignName] = useState(initial.campaignName)
   const [subjectOverride, setSubjectOverride] = useState(initial.subjectOverride)
   const [abTestEnabled, setAbTestEnabled] = useState(initial.abTestEnabled)
+  const [abTestVariable, setAbTestVariable] = useState(initial.abTestVariable)
   const [subjectVariantA, setSubjectVariantA] = useState(initial.subjectVariantA)
   const [subjectVariantB, setSubjectVariantB] = useState(initial.subjectVariantB)
+  const [bodyVariantATemplateId, setBodyVariantATemplateId] = useState(initial.bodyVariantATemplateId)
+  const [bodyVariantBTemplateId, setBodyVariantBTemplateId] = useState(initial.bodyVariantBTemplateId)
   const [templates, setTemplates] = useState<Template[]>([])
 
   useEffect(() => {
@@ -68,7 +78,10 @@ export function StepContent({ initial, onNext, onBack }: Props) {
   }
 
   const canProceed = !!templateId && !!campaignName.trim() &&
-    (!abTestEnabled || (!!subjectVariantA.trim() && !!subjectVariantB.trim()))
+    (!abTestEnabled ||
+      (abTestVariable === "subject"
+        ? !!subjectVariantA.trim() && !!subjectVariantB.trim()
+        : !!bodyVariantATemplateId && !!bodyVariantBTemplateId && bodyVariantATemplateId !== bodyVariantBTemplateId))
 
   return (
     <div className="space-y-6">
@@ -119,6 +132,32 @@ export function StepContent({ initial, onNext, onBack }: Props) {
         </div>
       )}
 
+      {templateId && abTestEnabled && (
+        <div>
+          <label className="block text-sm font-medium text-stone-700">O que testar?</label>
+          <div className="mt-1 flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                checked={abTestVariable === "subject"}
+                onChange={() => setAbTestVariable("subject")}
+                className="accent-indigo-600"
+              />
+              <span className="text-sm text-stone-700">Assunto</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                checked={abTestVariable === "body"}
+                onChange={() => setAbTestVariable("body")}
+                className="accent-indigo-600"
+              />
+              <span className="text-sm text-stone-700">Corpo</span>
+            </label>
+          </div>
+        </div>
+      )}
+
       {templateId && !abTestEnabled && (
         <div>
           <label className="block text-sm font-medium text-stone-700">Assunto</label>
@@ -132,7 +171,7 @@ export function StepContent({ initial, onNext, onBack }: Props) {
         </div>
       )}
 
-      {templateId && abTestEnabled && (
+      {templateId && abTestEnabled && abTestVariable === "subject" && (
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-stone-700">Assunto A</label>
@@ -156,6 +195,41 @@ export function StepContent({ initial, onNext, onBack }: Props) {
         </div>
       )}
 
+      {templateId && abTestEnabled && abTestVariable === "body" && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-stone-700">Template A</label>
+            <select
+              value={bodyVariantATemplateId}
+              onChange={(e) => setBodyVariantATemplateId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Selecione um template...</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700">Template B</label>
+            <select
+              value={bodyVariantBTemplateId}
+              onChange={(e) => setBodyVariantBTemplateId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Selecione um template...</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          {bodyVariantATemplateId && bodyVariantATemplateId === bodyVariantBTemplateId && (
+            <p className="text-[11px] text-amber-600">Template A e Template B devem ser diferentes.</p>
+          )}
+          <p className="text-[11px] text-stone-400">A audiência será dividida automaticamente ~50/50 entre as duas versões. Cada template usa seu próprio assunto cadastrado.</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
@@ -173,8 +247,15 @@ export function StepContent({ initial, onNext, onBack }: Props) {
               campaignName: campaignName.trim(),
               subjectOverride,
               abTestEnabled,
+              abTestVariable,
               subjectVariantA,
               subjectVariantB,
+              bodyVariantATemplateId,
+              bodyVariantASlug: templates.find((t) => t.id === bodyVariantATemplateId)?.slug ?? "",
+              bodyVariantAName: templates.find((t) => t.id === bodyVariantATemplateId)?.name ?? "",
+              bodyVariantBTemplateId,
+              bodyVariantBSlug: templates.find((t) => t.id === bodyVariantBTemplateId)?.slug ?? "",
+              bodyVariantBName: templates.find((t) => t.id === bodyVariantBTemplateId)?.name ?? "",
             })
           }
           disabled={!canProceed}
