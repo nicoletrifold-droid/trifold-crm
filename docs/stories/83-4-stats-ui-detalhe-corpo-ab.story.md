@@ -71,7 +71,20 @@ Fecha o Epic 83 de ponta a ponta — sem esta story, um usuário que rodar um te
 - `docs/stories/83-4-stats-ui-detalhe-corpo-ab.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: PASS**
+
+Revisão do diff completo (`e457e995`, 3 arquivos) contra os 7 ACs, com verificação independente:
+
+- **AC1/AC2:** `select` estendido corretamente. Confirmei que `aggregateVariant()` (linhas 77-89) é **byte-a-byte idêntica** à versão da Story 80-4 — não há nenhuma alteração na função de agregação. O join com `email_templates` usa uma única query `.in("id", templateIds)`, executada só quando `ab_test_variable === "body"`.
+- **AC3 (não-regressão):** quando o modo não é `"body"`, `bodyVariantAName`/`bodyVariantBName` permanecem `null` (valor inicial nunca sobrescrito) — payload antigo mais 2 campos `null`, mudança aditiva e retrocompatível.
+- **AC4/AC5:** título e conteúdo condicionais confirmados no diff, estrutura visual idêntica entre os 2 modos.
+- **AC6 (verificado com atenção):** inspecionei o JSX final — os 2 cards (Variante A/B) usam markup **idêntico**, apenas alternando o texto (`Template: {nome}` vs texto do assunto) e os números da própria variante. Nenhuma comparação, ordenação condicional, badge ou destaque diferencial entre A e B.
+- **AC7:** o gate `{stats.by_variant && (...)}` não está no diff — confirmado que não foi tocado, blasts sem A/B continuam mostrando só stats gerais.
+- **Evidência do teste manual, reconferida de forma independente:** consultei `email_blasts` (por id e por nome `%STORY 83-4%`) e `email_logs` (`to_email LIKE '%83-4%'`) diretamente em produção — **zero resíduo confirmado** em ambas as tabelas, batendo com o relato do dev.
+- **Lint/typecheck:** reconferidos de forma independente — 0 erros, 0 warnings novos.
+
+Nenhum CONCERNS. Isso fecha o Epic 83 (4/4 stories). Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir da seção 83.4 do Epic 83, última story. Reconferi o estado atual real de `stats/route.ts` e `blast-detail.tsx` antes de fixar os ACs — ambos seguem exatamente como na Story 80-5 (Epic 18), sem alterações nesta sessão. Dependências (83-1, 83-2, 83-3, 80-5) confirmadas Done.
