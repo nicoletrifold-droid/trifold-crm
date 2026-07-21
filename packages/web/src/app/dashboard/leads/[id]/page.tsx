@@ -3,7 +3,8 @@ import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { isUuid } from "@web/lib/uuid"
-import { GenerateSummaryButton } from "@web/components/leads/generate-summary-button"
+// Story 82-2 — aba "Análise IA" (substitui o Resumo IA; painel compartilhado c/ /broker)
+import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
 import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS, formatLeadPerfil } from "@web/lib/leads/enrich"
@@ -24,7 +25,8 @@ const TABS = [
   { key: "info", label: "Info" },
   { key: "conversa", label: "Conversa" },
   { key: "timeline", label: "Histórico" },
-  { key: "resumo", label: "Resumo IA" },
+  // Story 82-2 — key "resumo" mantida (links salvos continuam funcionando)
+  { key: "resumo", label: "Análise IA" },
 ] as const
 
 type TabKey = (typeof TABS)[number]["key"]
@@ -205,6 +207,23 @@ export default async function LeadDetailPage({
     const fb = Array.isArray(a.feedback) ? a.feedback : a.feedback ? [a.feedback] : []
     return fb.length === 0
   })
+
+  // Story 82-2 — staleness da Análise IA: última movimentação conhecida do lead
+  // (mensagem, activity ou agendamento) comparada com behavior_analyzed_at.
+  const { data: lastAppt } = await supabase
+    .from("appointments")
+    .select("created_at")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+  const staleCandidates = [
+    conversations?.[0]?.last_message_at as string | undefined,
+    activities?.[0]?.created_at as string | undefined,
+    lastAppt?.[0]?.created_at as string | undefined,
+  ].filter((t): t is string => Boolean(t))
+  const lastActivityAt = staleCandidates.length
+    ? [...staleCandidates].sort()[staleCandidates.length - 1]!
+    : null
 
   return (
     <div className="space-y-6">
@@ -505,39 +524,14 @@ export default async function LeadDetailPage({
       )}
 
       {activeTab === "resumo" && (
-        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">
-              Resumo IA
-            </h2>
-            <GenerateSummaryButton leadId={id} />
-          </div>
-          <div className="mt-4">
-            {lead.ai_summary ? (
-              <>
-                <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-stone-300">
-                  {lead.ai_summary}
-                </p>
-                {lead.updated_at && (
-                  <p className="mt-3 text-xs text-gray-400 dark:text-stone-500">
-                    Última atualização:{" "}
-                    {new Date(lead.updated_at).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-gray-400 dark:text-stone-500">
-                Nenhum resumo gerado pela IA. Clique em &quot;Gerar resumo&quot; para criar.
-              </p>
-            )}
-          </div>
-        </div>
+        <BehaviorAnalysisPanel
+          leadId={id}
+          analysis={(lead.behavior_analysis as BehaviorAnalysisData | null) ?? null}
+          analyzedAt={(lead.behavior_analyzed_at as string | null) ?? null}
+          currentStage={stage?.name ?? null}
+          lastActivityAt={lastActivityAt}
+          aiSummary={(lead.ai_summary as string | null) ?? null}
+        />
       )}
     </div>
   )

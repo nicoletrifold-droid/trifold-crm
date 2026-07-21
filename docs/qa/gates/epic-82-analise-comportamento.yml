@@ -1,0 +1,47 @@
+schema: 1
+storyId: "epic-82"
+story: "82-1 / 82-2 / 82-3"
+title: "Quality Gate — Epic 82 (Análise de Comportamento IA do lead)"
+epic: 82
+gate: PASS
+verdict: PASS
+status_reason: >
+  Gate sobre a branch feat/82-1-analise-comportamento-backend (3 commits de feature +
+  docs). RESULTADO: PASS com 2 CONCERNS documentados (não bloqueantes). ACs verificados:
+  82-1 — rota POST behavior-analysis monta cronologia das 7 fontes (messages,
+  observacao/perfil, activities [broker_note/stage_change/supremo_contact/lead_lost/
+  ai_resumed], follow_up_log, lead_tasks, appointments, visit_feedback), ordena por
+  timestamp (teste unitário), chama Sonnet (ANTHROPIC_MODELS.sonnet = claude-sonnet-5),
+  persiste APENAS behavior_analysis + behavior_analyzed_at (nenhuma escrita em
+  stage/score — grep confirmado), parse defensivo devolve 502 sem persistir em JSON
+  inválido; prompt exige dados_faltando e proíbe inventar profundidade em base rasa;
+  truncamento (400 eventos) preserva marcos e LOGA o corte (condição @po-b, coberto por
+  teste). /summary unificado em ANTHROPIC_MODELS.haiku (sai a string antiga
+  claude-haiku-4-20250414). 82-2 — aba renomeada mantendo key ?tab=resumo (condição
+  @po), painel renderiza análise estruturada + estágio como SUGESTÃO lado a lado com a
+  etapa (sem ação de mover — inspecionado), staleness server-side (última msg/activity/
+  agendamento vs behavior_analyzed_at), ai_summary colapsável no topo, botão antigo
+  Gerar resumo removido sem usos órfãos (grep zero). 82-3 — matriz de roles
+  [admin, supervisor, gerente-comercial, broker] na rota + guard assigned_broker_id
+  para broker (403 não-dono); is_active=false bloqueado pelo requireAuth (75-54);
+  painel no /broker com theme dark hardcoded (convenção). Segurança: conteúdo do lead
+  entra no prompt mas a saída renderiza como texto puro (sem dangerouslySetInnerHTML);
+  RLS por org em todas as fontes; rota valida org_id em lead e escrita. Checks: vitest
+  1103/1103 (10 novos), tsc --noEmit limpo (ai+web), eslint limpo nos arquivos tocados
+  (12 erros pré-existentes na main, fora do escopo), next build OK.
+concerns:
+  - severity: low
+    category: cost
+    description: >
+      Sem rate-limit server-side na geração (Sonnet on-demand); loading state no client
+      evita duplo clique mas não impede spam via API. Custo por análise é de centavos.
+    recommendation: "Se o custo aparecer no billing, adicionar lock por lead (ex.: negar regeneração < 30s)."
+  - severity: info
+    category: deploy
+    description: >
+      A migration 182 precisa estar aplicada em PROD antes do primeiro clique no botão
+      (o UPDATE referencia colunas novas; a página em si degrada bem — mostra estado
+      vazio). Conferir numeração contra o schema remoto (condição @po-a / lição 75-188).
+    recommendation: "@devops: aplicar mig 182 em prod ANTES do merge/deploy do PR."
+date: 2026-07-21
+reviewer: "@qa Quinn"
