@@ -70,8 +70,9 @@ export default async function BrokerLeadDetailPage({
         .from("messages")
         .select("id, role, content, created_at, metadata")
         .in("conversation_id", conversationIds)
+        // Story 75-195 — conversa INTEIRA, sempre. O limit(50) ASC antigo era
+        // duplamente errado: cortava e ainda mantinha as 50 mais ANTIGAS.
         .order("created_at", { ascending: true })
-        .limit(50)
     : { data: [] }
 
   // Story 75-165 — nomes de quem enviou (metadata.sent_by) p/ rotular as bolhas
