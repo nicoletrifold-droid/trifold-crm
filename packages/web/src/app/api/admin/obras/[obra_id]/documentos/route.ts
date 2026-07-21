@@ -2,44 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
-import { sendEmail } from "@web/lib/email"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { notificarAdminsNovoUpload } from "@web/lib/obras/aprovacao-notifications"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 const VALID_CATEGORIES = ["ART/RRT", "Contratos", "Memoriais", "Outros"]
-
-async function notificarAdminsNovoUpload(params: {
-  supabase: SupabaseClient
-  orgId: string
-  obraName: string
-  obraId: string
-  tipoUpload: "foto" | "documento"
-  nomeEnviador: string
-}) {
-  const { data: admins } = await params.supabase
-    .from("users")
-    .select("name, email")
-    .eq("org_id", params.orgId)
-    .in("role", ["admin", "supervisor"])
-    .not("email", "is", null)
-
-  if (!admins?.length) return
-
-  const link = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/obras/${params.obraId}?tab=aprovacoes`
-
-  await Promise.allSettled(
-    admins.map((u: { name: string; email: string }) =>
-      sendEmail({
-        to: u.email,
-        subject: `[Trifold] Nova pendência de aprovação — ${params.obraName}`,
-        html: `<p>Olá ${u.name},</p>
-               <p><strong>${params.nomeEnviador}</strong> enviou ${params.tipoUpload === "foto" ? "uma foto" : "um documento"} para a obra <strong>${params.obraName}</strong> aguardando sua aprovação.</p>
-               <p><a href="${link}">Clique aqui para revisar</a></p>`,
-      })
-    )
-  )
-}
 
 export async function GET(
   _req: NextRequest,
@@ -194,6 +161,7 @@ export async function POST(
       obraId: obra_id,
       tipoUpload: "documento",
       nomeEnviador: appUser.name,
+      aprovacaoId: aprovacao.id as string,
     }).catch(() => {})
 
     return NextResponse.json({ aprovacao }, { status: 201 })
