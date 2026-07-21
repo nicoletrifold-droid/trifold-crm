@@ -1,7 +1,7 @@
 # Story 83-4 — Endpoint de stats devolve label da variante (template) + UI de detalhe exibe corretamente
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 83 — Teste A/B de Corpo no Email Blast (`docs/stories/epics/epic-83-ab-test-corpo-email-blast.md`)
 - **Branch:** main
 
@@ -90,3 +90,6 @@ Nenhum CONCERNS. Isso fecha o Epic 83 (4/4 stories). Pronta para `@devops *push`
 - @sm (River): story criada em Draft a partir da seção 83.4 do Epic 83, última story. Reconferi o estado atual real de `stats/route.ts` e `blast-detail.tsx` antes de fixar os ACs — ambos seguem exatamente como na Story 80-5 (Epic 18), sem alterações nesta sessão. Dependências (83-1, 83-2, 83-3, 80-5) confirmadas Done.
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Reconferi independentemente: `select` do blast em `stats/route.ts` realmente só traz `ab_test_enabled, subject_variant_a, subject_variant_b` (linha 18), e o título "Teste A/B de assunto" em `blast-detail.tsx` (linha 133) está de fato hardcoded — os Dev Notes descrevem o código real. 7 ACs testáveis, AC3/AC7 (não-regressão) claros e específicos. Alinhamento com a seção 83.4 do epic confirmado. Status Draft → Ready.
 - @dev (Dex): AC1-AC7 implementados (2 arquivos alterados). Teste manual em produção com blast fabricado + templates reaproveitados, payload conferido campo a campo, cleanup e resíduo zero confirmados. Prévia visual dos 3 estados publicada. ESLint/typecheck OK. Status Ready → InReview. Pronta para @qa *qa-gate. **Última story do Epic 83.**
+- @qa (Quinn): Gate PASS — `aggregateVariant()` confirmada idêntica, JSX das variantes confirmado sem indicador de vencedor, não-regressão do modo assunto/sem A/B verificada, zero resíduo do teste reconfirmado. Pronta para @devops *push.
+- @devops (Gage): Push para origin/main (commits `b376c22f` + `5809d59a`). Rebase sem conflitos.
+- @po (Pax): Story fechada. Status InReview → Done. Última story do Epic 83 — épico fechado (4/4 stories concluídas).
