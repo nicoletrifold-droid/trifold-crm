@@ -105,17 +105,23 @@ ${JSON.stringify(input.leadProfile, null, 2)}
 CRONOLOGIA (${input.chronology.length} eventos, do mais antigo ao mais recente):
 ${formatChronology(input.chronology)}`
 
+  // Story 82-4 — Sonnet 5 roda adaptive thinking POR PADRÃO: content[] traz
+  // bloco(s) "thinking" antes do "text". Ler content[0] devolvia o thinking
+  // (vazio) e o parse falhava. Concatenamos só os blocos de texto e damos
+  // max_tokens folgado (thinking consome do mesmo orçamento).
   const response = await anthropic.messages.create(
     {
       model: ANTHROPIC_MODELS.sonnet,
-      max_tokens: 2000,
+      max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
     },
-    { timeout: 45000 }
+    { timeout: 60000 }
   )
 
-  const firstBlock = response.content[0]
-  const text = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+  const text = response.content
+    .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
+    .map((b) => b.text)
+    .join("")
   return parseBehaviorAnalysis(text)
 }
 
@@ -125,7 +131,15 @@ ${formatChronology(input.chronology)}`
  */
 export function parseBehaviorAnalysis(text: string): BehaviorAnalysisResult | null {
   try {
-    const cleaned = text.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim()
+    let cleaned = text.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim()
+    // Story 82-4 — se o modelo escrever prosa em volta do JSON, recorta do
+    // primeiro "{" ao último "}" antes de parsear.
+    if (!cleaned.startsWith("{")) {
+      const start = cleaned.indexOf("{")
+      const end = cleaned.lastIndexOf("}")
+      if (start === -1 || end <= start) return null
+      cleaned = cleaned.slice(start, end + 1)
+    }
     const parsed = JSON.parse(cleaned) as Record<string, unknown>
 
     const str = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0

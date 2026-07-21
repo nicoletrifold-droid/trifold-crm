@@ -12,6 +12,10 @@ import { fetchLeadChronology } from "@web/lib/leads/behavior-chronology"
  * Acesso (Story 82-3): admin, supervisor, gerente-comercial e corretor
  * (`broker`) — corretor SOMENTE nos leads atribuídos a ele.
  */
+// Story 82-4 — Sonnet com adaptive thinking pode levar dezenas de segundos;
+// sem isso a função cai no timeout default do Vercel antes do modelo responder.
+export const maxDuration = 90
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
