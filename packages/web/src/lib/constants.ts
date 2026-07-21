@@ -20,6 +20,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   broker_sponsored: 'Patrocinado Corretor',
   walk_in: 'Walk-in',
   telegram: 'Telegram',
+  imob_link: 'Link Imobiliária',
   other: 'Outro',
 };
 
@@ -34,6 +35,7 @@ export const SOURCE_LABELS_SHORT: Record<string, string> = {
   telegram: 'Telegram',
   lp_yarden: 'Landing Page Yarden',
   lp_vind: 'Landing Page Vind',
+  imob_link: 'Link Imob',
   other: 'Outro',
 };
 
