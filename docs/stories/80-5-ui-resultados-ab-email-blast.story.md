@@ -1,7 +1,7 @@
 # Story 80-5 — UI de resultados do teste A/B de Assunto
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 18 — Central de Email (extensão: `docs/stories/epics/epic-18-ab-test-assunto-email-blast.md`)
 - **Branch:** main
 
@@ -90,3 +90,6 @@ Nenhum CONCERNS. Sem regressão nos blasts sem A/B (caminho `by_variant: null` t
 - @sm (River): story criada em Draft a partir do epic de Teste A/B de Assunto, quinta e última story. Descoberta de que não existe nenhuma página de detalhe de blast hoje — story precisa criar do zero, não só consumir.
 - @po (Pax): validação via checklist de 10 pontos → **GO** (10/10). Confirmei que o padrão de proteção de rota citado no Dev Notes (`getServerUser()` + `canAccess(...,"sistema")` + `redirect`) realmente existe e é idêntico nas duas páginas irmãs (`email-blasts/page.tsx` e `email-blasts/novo/page.tsx`) — AC7 é realista. Status Draft → Ready.
 - @dev (Dex): AC1-AC7 implementados (2 arquivos novos + 1 alterado), teste manual do formato de dados batendo campo a campo, prévia visual dos 2 estados, ESLint OK. Status Ready → InReview. Pronta para @qa *qa-gate.
+- @qa (Quinn): Gate PASS — 7 ACs verificados de forma independente, sem regressão nos blasts sem A/B, nenhum indicador de vencedor confirmado no JSX, proteção de rota idêntica às páginas irmãs. Pronta para @devops *push.
+- @devops (Gage): Push para origin/main (commits `2a3eee72` + `c0a97e1b`). Rebase sem conflitos no código desta story.
+- @po (Pax): Story fechada. Status InReview → Done. Última story do Epic 18 — épico fechado (5/5 stories concluídas).
