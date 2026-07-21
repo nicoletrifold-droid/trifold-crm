@@ -10,6 +10,7 @@ import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
 import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
 import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
+import { STAGE_IDS } from "@trifold/shared"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -193,6 +194,9 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   const [leadBasePath, setLeadBasePath] = useState("/broker/leads")
   // Story 75-186 — agendamento pendente de feedback (visita passada sem visit_feedback)
   const [pendingFeedbackAptId, setPendingFeedbackAptId] = useState<string | null>(null)
+  // Story 75-193 — lead em "Visitou" sem agendamento (ou só no-show/cancelado):
+  // porta retroativa. null = ainda carregando (não mostra nada até saber).
+  const [leadHasFeedback, setLeadHasFeedback] = useState<boolean | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -211,6 +215,15 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           return fb.length === 0
         })
         setPendingFeedbackAptId((pending?.id as string | undefined) ?? null)
+      })
+    supabase
+      .from("visit_feedback")
+      .select("id")
+      .eq("lead_id", leadId)
+      .limit(1)
+      .then(({ data }) => {
+        if (cancelled) return
+        setLeadHasFeedback((data ?? []).length > 0)
       })
     return () => { cancelled = true }
   }, [leadId, supabase])
@@ -555,6 +568,21 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                     subtitle={lead.name ?? undefined}
                     className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
                     onSuccess={() => setPendingFeedbackAptId(null)}
+                  />
+                </span>
+              )}
+              {/* Story 75-193 — lead em "Visitou" sem agendamento pendente e sem
+                  feedback registrado: porta retroativa (cria agendamento + feedback). */}
+              {!pendingFeedbackAptId &&
+                leadHasFeedback === false &&
+                lead.stage?.id === STAGE_IDS.visitou && (
+                <span className="mt-3 inline-flex">
+                  <VisitFeedbackButton
+                    leadId={lead.id}
+                    title="Registrar visita"
+                    subtitle={lead.name ?? undefined}
+                    className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
+                    onSuccess={() => setLeadHasFeedback(true)}
                   />
                 </span>
               )}

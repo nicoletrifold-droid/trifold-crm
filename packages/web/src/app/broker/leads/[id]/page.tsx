@@ -121,6 +121,20 @@ export default async function BrokerLeadDetailPage({
     return fb.length === 0
   })
 
+  // Story 75-193 — porta retroativa: lead em "Visitou" sem agendamento pendente
+  // e sem nenhum feedback registrado (visita combinada por fora / no-show que
+  // compareceu depois) ganha o botão de registrar retroativamente.
+  const { STAGE_IDS } = await import("@trifold/shared")
+  let showRetroVisit = false
+  if (!pendingFeedbackApt && lead.stage_id === STAGE_IDS.visitou) {
+    const { data: existingFb } = await supabase
+      .from("visit_feedback")
+      .select("id")
+      .eq("lead_id", id)
+      .limit(1)
+    showRetroVisit = (existingFb ?? []).length === 0
+  }
+
   // Story 82-3 — staleness da Análise IA (última mensagem/activity/agendamento).
   const lastMsgCreatedAt =
     messages && messages.length > 0
@@ -199,6 +213,13 @@ export default async function BrokerLeadDetailPage({
             <VisitFeedbackButton
               appointmentId={pendingFeedbackApt.id as string}
               title="Feedback da visita"
+              subtitle={(lead.name as string | null) ?? undefined}
+            />
+          )}
+          {showRetroVisit && (
+            <VisitFeedbackButton
+              leadId={lead.id as string}
+              title="Registrar visita"
               subtitle={(lead.name as string | null) ?? undefined}
             />
           )}

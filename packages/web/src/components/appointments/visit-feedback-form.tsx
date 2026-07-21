@@ -12,14 +12,24 @@ import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 
 interface VisitFeedbackFormProps {
-  appointmentId: string
+  /** Porta normal: feedback de um agendamento existente. */
+  appointmentId?: string
+  /** Story 75-193 — porta RETROATIVA: visita sem agendamento no sistema.
+   *  Mostra campo de data e envia para /api/leads/[id]/visit-feedback. */
+  leadId?: string
   /** Chamado após envio com sucesso (fechar modal / navegar). */
   onSuccess: () => void
   /** Chamado no cancelar. Omitido = sem botão cancelar. */
   onCancel?: () => void
 }
 
-export function VisitFeedbackForm({ appointmentId, onSuccess, onCancel }: VisitFeedbackFormProps) {
+function todayLocalISO(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }: VisitFeedbackFormProps) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState("")
@@ -27,6 +37,8 @@ export function VisitFeedbackForm({ appointmentId, onSuccess, onCancel }: VisitF
   const [nextSteps, setNextSteps] = useState("")
   const [wantsProposal, setWantsProposal] = useState(false)
   const [additionalNotes, setAdditionalNotes] = useState("")
+  const retroMode = !appointmentId && !!leadId
+  const [visitedDate, setVisitedDate] = useState(todayLocalISO())
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -48,7 +60,15 @@ export function VisitFeedbackForm({ appointmentId, onSuccess, onCancel }: VisitF
           .join("\n"),
       }
 
-      const res = await fetch(`/api/appointments/${appointmentId}/feedback`, {
+      if (retroMode) {
+        // meio-dia local: evita a data "voltar um dia" ao converter p/ UTC
+        body.visited_at = new Date(`${visitedDate}T12:00:00`).toISOString()
+      }
+
+      const endpoint = retroMode
+        ? `/api/leads/${leadId}/visit-feedback`
+        : `/api/appointments/${appointmentId}/feedback`
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -74,6 +94,23 @@ export function VisitFeedbackForm({ appointmentId, onSuccess, onCancel }: VisitF
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {retroMode && (
+        <div>
+          <label htmlFor="vf-date" className={labelClass}>Quando foi a visita? *</label>
+          <input
+            id="vf-date"
+            type="date"
+            value={visitedDate}
+            onChange={(e) => setVisitedDate(e.target.value)}
+            max={todayLocalISO()}
+            required
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
+            Visita sem agendamento no sistema — será registrada retroativamente.
+          </p>
+        </div>
+      )}
       <div>
         <label htmlFor="vf-feedback" className={labelClass}>Como foi a visita? *</label>
         <textarea
@@ -169,7 +206,8 @@ export function VisitFeedbackForm({ appointmentId, onSuccess, onCancel }: VisitF
 }
 
 interface VisitFeedbackModalProps {
-  appointmentId: string
+  appointmentId?: string
+  leadId?: string
   /** Contexto exibido no header do modal (ex.: nome do lead). */
   title?: string
   subtitle?: string
@@ -178,7 +216,7 @@ interface VisitFeedbackModalProps {
 }
 
 /** Overlay padrão do projeto (new-lead-modal): backdrop + card com scroll. */
-export function VisitFeedbackModal({ appointmentId, title, subtitle, onClose, onSuccess }: VisitFeedbackModalProps) {
+export function VisitFeedbackModal({ appointmentId, leadId, title, subtitle, onClose, onSuccess }: VisitFeedbackModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Feedback da visita">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900">
@@ -192,7 +230,7 @@ export function VisitFeedbackModal({ appointmentId, title, subtitle, onClose, on
           </button>
         </div>
         <div className="p-6">
-          <VisitFeedbackForm appointmentId={appointmentId} onSuccess={onSuccess} onCancel={onClose} />
+          <VisitFeedbackForm appointmentId={appointmentId} leadId={leadId} onSuccess={onSuccess} onCancel={onClose} />
         </div>
       </div>
     </div>
@@ -200,7 +238,9 @@ export function VisitFeedbackModal({ appointmentId, title, subtitle, onClose, on
 }
 
 interface VisitFeedbackButtonProps {
-  appointmentId: string
+  appointmentId?: string
+  /** Story 75-193 — porta retroativa (visita sem agendamento). */
+  leadId?: string
   /** Texto do botão (default "Registrar visita"). */
   label?: string
   className?: string
@@ -212,7 +252,7 @@ interface VisitFeedbackButtonProps {
 }
 
 /** Botão autocontido: abre o modal e dá router.refresh() no sucesso. */
-export function VisitFeedbackButton({ appointmentId, label = "Registrar visita", className, title, subtitle, onSuccess }: VisitFeedbackButtonProps) {
+export function VisitFeedbackButton({ appointmentId, leadId, label = "Registrar visita", className, title, subtitle, onSuccess }: VisitFeedbackButtonProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
@@ -227,6 +267,7 @@ export function VisitFeedbackButton({ appointmentId, label = "Registrar visita",
       {open && (
         <VisitFeedbackModal
           appointmentId={appointmentId}
+          leadId={leadId}
           title={title}
           subtitle={subtitle}
           onClose={() => setOpen(false)}
