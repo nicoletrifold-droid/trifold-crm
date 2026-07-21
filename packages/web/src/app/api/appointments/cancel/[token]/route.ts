@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { deleteCalendarEvent } from "@web/lib/google-calendar"
+import { notifyVisitCancelledWhatsApp } from "@web/lib/appointments/visit-whatsapp"
 
 export async function GET(
   _req: Request,
@@ -45,7 +46,9 @@ export async function POST(
   // Fetch appointment to get google_event_id and current status
   const { data: appointment, error: fetchError } = await supabase
     .from("appointments")
-    .select("id, status, google_event_id")
+    .select(
+      "id, status, google_event_id, org_id, team, broker_id, lead_id, metadata, client_name, location, scheduled_at, property:properties!property_id(name)"
+    )
     .eq("cancel_token", token)
     .single()
 
@@ -69,6 +72,38 @@ export async function POST(
   // Delete Google Calendar event if it exists
   if (appointment.google_event_id) {
     await deleteCalendarEvent(appointment.google_event_id)
+  }
+
+  // Story 75-192 — cliente cancelou pelo link: avisa quem ia atender por
+  // WhatsApp (house → corretor; imob → corretor parceiro + equipe IMOB) e
+  // registra na timeline do lead. Fire-and-forget: nunca bloqueia o cancelamento.
+  const property = Array.isArray(appointment.property)
+    ? appointment.property[0]
+    : appointment.property
+  void notifyVisitCancelledWhatsApp(supabase, {
+    org_id: appointment.org_id as string,
+    team: (appointment.team as string | null) ?? null,
+    broker_id: (appointment.broker_id as string | null) ?? null,
+    lead_id: (appointment.lead_id as string | null) ?? null,
+    metadata: (appointment.metadata as Record<string, unknown> | null) ?? null,
+    client_name: (appointment.client_name as string | null) ?? null,
+    location: (appointment.location as string | null) ?? null,
+    scheduled_at: appointment.scheduled_at as string,
+    propertyName: (property?.name as string | undefined) ?? null,
+  })
+    .then((r) => {
+      if (r.errors.length) console.error("[cancel-visita] whatsapp:", r.errors.join(" | "))
+    })
+    .catch((e: unknown) => console.error("[cancel-visita] whatsapp:", e))
+
+  if (appointment.lead_id) {
+    await supabase.from("activities").insert({
+      org_id: appointment.org_id,
+      lead_id: appointment.lead_id,
+      type: "appointment_cancelled",
+      description: "Cliente cancelou a visita pelo link de cancelamento.",
+      metadata: { appointment_id: appointment.id, origem: "cancel_link" },
+    })
   }
 
   return NextResponse.json({ ok: true })

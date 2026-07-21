@@ -11,10 +11,15 @@ const CRON_SECRET = process.env.CRON_SECRET
 /**
  * Lembretes de visita por WhatsApp — Story 75-191 (reescreve o cron da 61-x).
  *
- * DUAS janelas por execução (cron a cada 30min, tolerância ±15min em cada):
+ * DUAS janelas por execução (cron a cada 30min):
  * - 24h antes → "amanhã às HH:MM"  (flag metadata.whatsapp_reminded_24h)
  * - 3h antes  → "hoje às HH:MM"    (flag metadata.whatsapp_reminded_3h;
  *   `whatsapp_reminded` legado conta como 3h já enviado)
+ *
+ * HORÁRIO IMPORTUNO (Story 75-192, pedido do Marcos): nenhum lembrete sai fora
+ * de 08:00–20:00 BRT. As janelas têm limite inferior LARGO (catch-up): visita às
+ * 09:00 teria lembrete de 3h às 06:00 — em vez de pular, ele sai às 08:00 (1h
+ * antes). O flag por janela garante envio único mesmo com a janela larga.
  *
  * Destinatários por agendamento (todos via TEMPLATE aprovado — o texto livre
  * antigo NÃO entregava para quem estava com a janela de 24h do WhatsApp fechada,
@@ -41,12 +46,27 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
   const now = new Date()
 
+  // Gate de horário: fora de 08:00–20:00 BRT o run inteiro é adiado (o catch-up
+  // das janelas largas cobre quando o horário liberar).
+  const brtHour = Number(
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(now)
+  )
+  if (brtHour < 8 || brtHour >= 20) {
+    return NextResponse.json({ sent: 0, skipped: 0, errors: 0, quietHours: true })
+  }
+
   const windows = [
     {
       key: "3h" as const,
       flag: "whatsapp_reminded_3h",
       legacyFlags: ["whatsapp_reminded"],
-      start: new Date(now.getTime() + (2 * 60 + 45) * 60 * 1000),
+      // Catch-up: de 30min a 3h15 antes — visita cujo "3h antes" caiu na
+      // madrugada é lembrada no primeiro run após as 08:00.
+      start: new Date(now.getTime() + 30 * 60 * 1000),
       end: new Date(now.getTime() + (3 * 60 + 15) * 60 * 1000),
       whenLabel: (hora: string) => `hoje às ${hora}`,
     },
@@ -54,7 +74,9 @@ export async function GET(request: NextRequest) {
       key: "24h" as const,
       flag: "whatsapp_reminded_24h",
       legacyFlags: [],
-      start: new Date(now.getTime() + (23 * 60 + 45) * 60 * 1000),
+      // Catch-up: de 20h a 24h15 antes — sempre cai em "amanhã" (visitas são em
+      // horário comercial), mesmo quando o "24h antes" exato caiu fora do gate.
+      start: new Date(now.getTime() + 20 * 60 * 60 * 1000),
       end: new Date(now.getTime() + (24 * 60 + 15) * 60 * 1000),
       whenLabel: (hora: string) => `amanhã às ${hora}`,
     },
