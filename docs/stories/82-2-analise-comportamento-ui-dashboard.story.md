@@ -63,11 +63,22 @@ o mantém atualizado a cada 30min); a análise estruturada é o conteúdo princi
   `behavior_analyzed_at` e os timestamps de última atividade para o staleness (evita query no client).
 - Reuso futuro no /broker é requisito de design: zero dependência de contexto exclusivo do dashboard.
 
-## File List (planejado)
+## File List
 - `docs/stories/82-2-analise-comportamento-ui-dashboard.story.md` (this file)
-- `packages/web/src/components/leads/behavior-analysis-panel.tsx` (novo)
-- `packages/web/src/app/dashboard/leads/[id]/page.tsx` (aba renomeada + painel novo)
-- `packages/web/src/components/leads/generate-summary-button.tsx` (remoção de uso / arquivo)
+- `packages/web/src/components/leads/behavior-analysis-panel.tsx` (novo — client, prop `theme` p/ reuso no /broker)
+- `packages/web/src/app/dashboard/leads/[id]/page.tsx` (aba renomeada + painel + staleness server-side)
+- `packages/web/src/components/leads/generate-summary-button.tsx` (REMOVIDO — sem outros usos)
+
+## Dev Agent Record (@dev Dex — 2026-07-21)
+- Aba mantém a key `?tab=resumo` (condição @po: links salvos seguem funcionando); só o label muda.
+- Staleness calculado no server (última mensagem via conversations[0].last_message_at + activities[0] +
+  1 query de appointments) e passado ao painel — sem query no client.
+- ai_summary vira bloco colapsável "Resumo da conversa" no topo (cron enrich mantém atualizado);
+  botão "Gerar resumo" e componente antigos removidos.
+- Painel destaca "Próxima ação", apresenta estágio da IA como SUGESTÃO ao lado da etapa do funil
+  (sem ação de mover) e renderiza `dados_faltando` como checklist de registro.
+- Checks: vitest 1103/1103, tsc limpo, eslint limpo nos arquivos tocados.
+- Branch: feat/82-1-analise-comportamento-backend (mesma branch do épico — PR único)
 
 ## PO Validation (@po Pax — 2026-07-21)
 **GO (9/10).** ACs testáveis, escopo claro, dependência da 82-1 mapeada. Condição (não bloqueia):
