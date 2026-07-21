@@ -1,7 +1,7 @@
 # Story 82-3 — Análise IA para corretor e gerente-comercial (rota + /broker)
 
 ## Metadata
-- **Status:** Approved
+- **Status:** Done (QA PASS)
 - **Epic:** 82 — Análise de Comportamento IA do lead
 - **Branch:** feat/82-3-analise-comportamento-acesso-corretor
 - **Tipo:** Feature (permissões + frontend broker)
@@ -85,3 +85,10 @@ Status: Draft → Approved.
 ## Change Log
 - 2026-07-21 @sm (River): story criada a partir do Epic 82. Status: Draft.
 - 2026-07-21 @po (Pax): validação GO 9/10. Status: Approved.
+
+## QA Results (@qa Quinn — 2026-07-21)
+**PASS** — ACs rastreados e confirmados no gate do épico
+(`docs/qa/gates/epic-82-analise-comportamento.yml`). Suíte 1103/1103, tsc limpo,
+eslint limpo nos arquivos tocados, `next build` OK. CONCERNS (não bloqueantes):
+sem rate-limit server-side na geração (custo baixo, monitorar) e mig 182 deve ir a
+PROD antes do deploy do código (instrução ao @devops no gate).
