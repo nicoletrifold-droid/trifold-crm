@@ -5,6 +5,7 @@ import { imobSlotsForDay, isValidImobSlot, type ImobBusySlot } from "@web/lib/ap
 import { PROPERTY_MAP, LOCATIONS, isBookableLocation } from "@web/lib/appointments/locations"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { notifyImobVisitWhatsApp } from "@web/lib/appointments/notify-imob-visit"
+import { notifyVisitBookedWhatsApp } from "@web/lib/appointments/visit-whatsapp"
 import { overlaps } from "@web/lib/appointments/governance"
 import { normalizePhoneBR } from "@trifold/shared"
 
@@ -277,6 +278,22 @@ export async function POST(
       if (r.errors.length) console.error("[agendar-imob] whatsapp:", r.errors.join(" | "))
     })
     .catch((e: unknown) => console.error("[agendar-imob] whatsapp:", e))
+
+  // Story 75-191 — confirmação por WhatsApp (template) ao CLIENTE (com botão de
+  // cancelar) e ao CORRETOR PARCEIRO, no ato do agendamento. Fire-and-forget.
+  void notifyVisitBookedWhatsApp(admin, imob.org_id, {
+    clientName,
+    clientPhone,
+    propertyName: PROPERTY_MAP[location]?.name ?? location,
+    whenLabel: when,
+    cancelToken: (appointment.cancel_token as string | null) ?? null,
+    partnerBrokerName: brokerName,
+    partnerBrokerPhone: brokerPhone,
+  })
+    .then((r) => {
+      if (r.errors.length) console.error("[agendar-imob] whatsapp cliente/corretor:", r.errors.join(" | "))
+    })
+    .catch((e: unknown) => console.error("[agendar-imob] whatsapp cliente/corretor:", e))
 
   return NextResponse.json(
     {
