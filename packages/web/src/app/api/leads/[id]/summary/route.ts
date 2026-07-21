@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
-import { createAnthropicClient } from "@trifold/ai"
+import { createAnthropicClient, ANTHROPIC_MODELS } from "@trifold/ai"
 
 export async function POST(
   _req: NextRequest,
@@ -122,7 +122,8 @@ Seja conciso e objetivo.`
     const anthropic = createAnthropicClient()
 
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-20250414",
+      // Story 82-1: string antiga (claude-haiku-4-20250414) unificada na constante
+      model: ANTHROPIC_MODELS.haiku,
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     })

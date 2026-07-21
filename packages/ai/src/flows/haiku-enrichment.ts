@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk"
+import { ANTHROPIC_MODELS } from "../client/anthropic"
 import { calculateQualificationScore } from "./qualification"
 
 interface EnrichmentInput {
@@ -66,7 +67,7 @@ ${messagesText}`
 
   const response = await anthropic.messages.create(
     {
-      model: "claude-haiku-4-5-20251001",
+      model: ANTHROPIC_MODELS.haiku,
       max_tokens: 800,
       messages: [{ role: "user", content: prompt }],
     },
