@@ -102,39 +102,29 @@ export default async function LeadDetailPage({
   }> | null
   const broker = brokerArr?.[0] ?? null
 
-  // Fetch conversations and messages
-  // Note: order + limit on embedded `messages` use referencedTable to limit
-  // the nested resource to the 20 most-recent rows per conversation (server-side).
-  // The consumer below re-sorts ASC client-side for chronological display.
+  // Story 75-195 — a conversa é exibida INTEIRA, sempre (decisão Marcos):
+  // antes o embed limitava a 20 msgs/conversa + corte em 50, e o começo
+  // (Nicole/entrada do lead) sumia. Fetch flat de TODAS as mensagens.
   const { data: conversations } = await supabase
     .from("conversations")
-    .select(
-      `
-      id, channel, status, last_message_at, is_ai_active,
-      messages:messages(id, role, content, created_at, metadata)
-    `
-    )
+    .select("id, channel, status, last_message_at, is_ai_active")
     .eq("lead_id", id)
     .order("last_message_at", { ascending: false })
-    .order("created_at", { referencedTable: "messages", ascending: false })
-    .limit(5)
-    .limit(20, { referencedTable: "messages" })
 
-  // Story 75-155 — dados para o `ConversationThread` (paridade de envio com o
-  // /broker). Achata as mensagens aninhadas por conversa num único array flat,
-  // ordena por `created_at` ASC e mantém as 50 mais recentes (cap alinhado ao
-  // /broker, que faz `.order(created_at asc).limit(50)`).
-  const threadMessages: ThreadMessage[] = (conversations ?? [])
-    .flatMap((c) => (c.messages ?? []) as ThreadMessage[])
-    .sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
-    .slice(-50)
-  // `conversations` já vem ordenado por `last_message_at desc` (L102) → [0] é a
+  // `conversations` já vem ordenado por `last_message_at desc` → [0] é a
   // conversa ativa, mesmo critério do /broker.
   const activeConversation = conversations?.[0]
   const conversationIds = (conversations ?? []).map((c) => c.id as string)
+
+  const { data: allMessages } = conversationIds.length
+    ? await supabase
+        .from("messages")
+        .select("id, role, content, created_at, metadata")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: true })
+    : { data: [] as ThreadMessage[] }
+
+  const threadMessages: ThreadMessage[] = (allMessages ?? []) as ThreadMessage[]
 
   // Story 75-165 — nomes dos corretores que enviaram (metadata.sent_by), para a
   // conversa mostrar QUEM falou (não "Você" para todos).
