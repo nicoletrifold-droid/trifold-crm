@@ -65,7 +65,20 @@ Habilita a extensão do teste A/B para testar corpo do email (via templates exis
 - `docs/stories/82-1-schema-ab-test-corpo-email-blast.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: PASS**
+
+Revisão do diff (`238e5070`, 3 arquivos: migration + story + epic doc) contra os 6 ACs, com verificação independente direta no banco (não apenas aceitando o relato do dev):
+
+- **AC1/AC2/AC3:** consultei `information_schema.columns` em **dev e prod** separadamente — as 5 colunas existem com tipos e nullability corretos (`ab_test_variable text NOT NULL default 'subject'`, as 4 colunas de template `nullable`). Também confirmei as 2 FKs (`body_variant_a/b_template_id → email_templates(id)`) via `pg_constraint`, não documentadas no relato do dev mas presentes e corretas em ambos os ambientes.
+- **AC4:** confirmado — migration aplicada em dev primeiro (projeto estava `ACTIVE_HEALTHY`), depois prod, ambos retornando `[]` (sucesso) e reverificados por query separada.
+- **AC5:** `ab_test_variable` tem `column_default = 'subject'::text` e `is_nullable = 'NO'` em ambos os ambientes — retrocompatibilidade garantida por construção (blasts existentes recebem o valor default automaticamente, sem exigir backfill).
+- **AC6:** consultei `email_logs` diretamente em dev e prod buscando por `ab_test_variable`/`body_variant_a_slug`/`body_variant_b_slug` — retorno vazio (`[]`) em ambos, confirmando que nenhuma coluna nova foi criada nessa tabela.
+- **Constraint:** `email_blasts_ab_test_variable_check` presente e correto (`CHECK (ab_test_variable = ANY (ARRAY['subject','body']))`) em ambos os ambientes.
+- **Migration em si:** idempotente (`ADD COLUMN IF NOT EXISTS`, `DROP CONSTRAINT IF EXISTS` antes de recriar), consistente com o estilo da migration 170 (Epic 18).
+- **Epic doc:** `docs/stories/epics/epic-82-ab-test-corpo-email-blast.md` confirmado presente no commit, criado pelo @pm e corretamente incluído (nota de processo do @sm sobre isso se confirmou correta na prática).
+
+Nenhum CONCERNS. Migration puramente aditiva, sem risco a dados/queries existentes. Pronta para `@devops *push`.
 
 ## Change Log
 - @sm (River): story criada em Draft a partir do Epic 82, primeira story. Confirmada numeração de migration livre (183, já que 182 foi reservado por outra sessão concorrente durante o draft). Epic doc do @pm marcado no File List para ser commitado junto por esta story.
