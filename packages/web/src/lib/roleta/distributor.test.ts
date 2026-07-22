@@ -14,6 +14,7 @@ vi.mock("@web/lib/roleta/notify-broker", () => ({
 
 const updateCalls: Record<string, unknown>[] = []
 const insertCalls: unknown[] = []
+const orCalls: string[] = []
 
 function makeChain(returnValue: unknown = null) {
   const chain: Record<string, unknown> = {}
@@ -22,6 +23,10 @@ function makeChain(returnValue: unknown = null) {
   chain.neq = vi.fn(() => chain)
   chain.not = vi.fn(() => chain)
   chain.is = vi.fn(() => chain)
+  chain.or = vi.fn((filters: string) => {
+    orCalls.push(filters)
+    return chain
+  })
   chain.order = vi.fn(() => chain)
   chain.limit = vi.fn(() => Promise.resolve({ data: returnValue, error: null }))
   chain.maybeSingle = vi.fn(() => Promise.resolve({ data: returnValue, error: null }))
@@ -87,6 +92,7 @@ function makeAdminClient(overrides: {
 }) {
   updateCalls.length = 0
   insertCalls.length = 0
+  orCalls.length = 0
 
   const configChain = makeChain(overrides.config ?? VALID_CONFIG)
   const leadChain = makeChain(overrides.lead ?? VALID_LEAD)
@@ -217,5 +223,93 @@ describe("distributor — stage assignment on distribution (Story 62-1)", () => 
     // não atribui, não muda stage, não roteia por continuidade
     expect(updateCalls.find((u) => "assigned_broker_id" in u)).toBeUndefined()
     expect(updateCalls.find((u) => "stage_id" in u)).toBeUndefined()
+  })
+})
+
+// Story 75-197 — roleta preserva "Visita Agendada" (Nicole agendou antes da
+// distribuição, 75-196): vincula corretor sem regredir a etapa.
+const VISITA_AGENDADA = "00000000-0000-0000-0001-000000000004"
+
+describe("distributor — preserva Visita Agendada (Story 75-197)", () => {
+  beforeEach(() => {
+    updateCalls.length = 0
+    insertCalls.length = 0
+    orCalls.length = 0
+    vi.mocked(createAdminClient).mockReset()
+  })
+
+  it("caminho normal (RPC): update de stage filtra visita_agendada no WHERE (com is.null p/ stage NULL)", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient({ lead: { ...VALID_LEAD, stage_id: VISITA_AGENDADA } }) as never
+    )
+
+    const result = await distributeLeadToNextBroker("lead-1", "org-1")
+
+    expect(result.status).toBe("distributed")
+    // o payload segue sendo stage novo — quem protege é o filtro no WHERE
+    expect(orCalls).toContain(`stage_id.is.null,stage_id.neq.${VISITA_AGENDADA}`)
+  })
+
+  // Factory dedicada: o caminho de continuidade consulta "leads" 3x (lead,
+  // lead anterior do mesmo telefone, claim atômico) e "brokers" 1x.
+  function makeContinuityClient(leadRow: Record<string, unknown>) {
+    updateCalls.length = 0
+    insertCalls.length = 0
+    orCalls.length = 0
+
+    const configChain = makeChain({ ...VALID_CONFIG, priorizar_lead_ativo: true })
+    const leadFetchChain = makeChain(leadRow)
+    const priorChain = makeChain({ assigned_broker_id: "user-uuid" })
+    // .order().limit(1).maybeSingle() — limit precisa devolver a chain aqui
+    priorChain.limit = vi.fn(() => priorChain)
+    const claimChain = makeChain({ id: "lead-1" })
+    const brokerChain = makeChain({
+      id: "broker-uuid",
+      users: { name: "Corretor", email: "corretor@test.com", phone: null },
+    })
+    const logChain = makeChain(null)
+
+    let leadsCall = 0
+    const leadsChains = [leadFetchChain, priorChain, claimChain]
+    const fromMock = vi.fn((table: string) => {
+      if (table === "roleta_config") return configChain
+      if (table === "leads") return leadsChains[Math.min(leadsCall++, 2)]
+      if (table === "brokers") return brokerChain
+      if (table === "lead_distribution_log") return logChain
+      return makeChain(null)
+    })
+
+    return {
+      from: fromMock,
+      rpc: vi.fn(() => Promise.resolve({ data: RPC_RESULT, error: null })),
+    }
+  }
+
+  it("continuidade: lead em Visita Agendada ganha corretor SEM stage_id no update atômico", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeContinuityClient({ ...VALID_LEAD, stage_id: VISITA_AGENDADA }) as never
+    )
+
+    const result = await distributeLeadToNextBroker("lead-1", "org-1")
+
+    expect(result.status).toBe("distributed")
+    const claim = updateCalls.find((u) => "assigned_broker_id" in u)
+    expect(claim).toBeDefined()
+    expect(claim!.assigned_broker_id).toBe("user-uuid")
+    expect("stage_id" in claim!).toBe(false)
+    expect("distribuido_em" in claim!).toBe(true)
+  })
+
+  it("continuidade: lead em Aguardando atendimento segue recebendo stage novo (sem regressão de comportamento)", async () => {
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeContinuityClient({ ...VALID_LEAD }) as never
+    )
+
+    const result = await distributeLeadToNextBroker("lead-1", "org-1")
+
+    expect(result.status).toBe("distributed")
+    const claim = updateCalls.find((u) => "assigned_broker_id" in u)
+    expect(claim).toBeDefined()
+    expect(claim!.stage_id).toBe("00000000-0000-0000-0001-000000000001")
   })
 })
