@@ -117,9 +117,10 @@ export function LeadsBulkTable({
             <th className="px-6 py-3">Etapa</th>
             <th className="px-6 py-3">Origem</th>
             <th className="px-6 py-3">Corretor</th>
-            <th className="px-6 py-3">Score</th>
+            {/* Story 75-206: Último contato antes do Score (mais relevante à análise) */}
             <th className="px-6 py-3">Último contato</th>
-            <th className="px-6 py-3"></th>
+            <th className="px-6 py-3">Score</th>
+            {view === "perdidos" && canReactivate && <th className="px-6 py-3"></th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
@@ -208,6 +209,17 @@ export function LeadsBulkTable({
                     </span>
                   )}
                 </td>
+                {/* Story 75-206: Último contato antes do Score */}
+                <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
+                  {lead.updated_at
+                    ? new Date(lead.updated_at).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "-"}
+                </td>
                 <td className="px-6 py-4">
                   {lead.qualification_score != null ? (
                     <span
@@ -225,39 +237,23 @@ export function LeadsBulkTable({
                     <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
                   )}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
-                  {lead.updated_at
-                    ? new Date(lead.updated_at).toLocaleDateString("pt-BR", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "-"}
-                </td>
-                <td
-                  className="px-6 py-4 text-right"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-end gap-3">
-                    {view === "perdidos" && canReactivate && (
-                      <ReativarLeadButton leadId={lead.id} leadName={lead.name} />
-                    )}
-                    <Link
-                      href={`/dashboard/leads/${lead.id}`}
-                      className="text-sm text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
-                    >
-                      Ver
-                    </Link>
-                  </div>
-                </td>
+                {/* Story 75-206: botão "Ver" removido (a linha inteira já navega);
+                    a coluna de ação só existe onde há Reativar (perdidos). */}
+                {view === "perdidos" && canReactivate && (
+                  <td
+                    className="px-6 py-4 text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ReativarLeadButton leadId={lead.id} leadName={lead.name} />
+                  </td>
+                )}
               </tr>
             )
           })}
           {leads.length === 0 && (
             <tr>
               <td
-                colSpan={10}
+                colSpan={view === "perdidos" && canReactivate ? 10 : 9}
                 className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
               >
                 Nenhum lead encontrado.
