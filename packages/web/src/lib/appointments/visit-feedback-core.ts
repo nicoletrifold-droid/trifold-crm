@@ -80,12 +80,25 @@ export async function applyVisitFeedback(
       .eq("id", appointment.lead_id)
   }
 
-  // Create activity log
+  // Create activity log — Story 75-202: o RELATO da visita vai na description
+  // (é o que as linhas do tempo exibem; antes só o interesse aparecia e o texto
+  // do formulário ficava invisível fora da Análise IA).
+  const interestLabel =
+    ({ hot: "quente", warm: "morno", cold: "frio" } as Record<string, string>)[
+      body.interest_after
+    ] ?? body.interest_after
+  const description = [
+    `Visita concluída. Interesse: ${interestLabel}`,
+    body.feedback.trim(),
+    body.next_steps?.trim() ? `Próximos passos: ${body.next_steps.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n")
   await supabase.from("activities").insert({
     org_id: appointment.org_id,
     lead_id: appointment.lead_id,
     type: "visit_completed",
-    description: `Visita concluída. Interesse: ${body.interest_after}`,
+    description,
     metadata: {
       appointment_id: appointment.id,
       feedback_id: feedback.id,
