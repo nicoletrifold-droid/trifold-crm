@@ -4,9 +4,11 @@
 
 /**
  * Regra interna (Story 75-56, generaliza a 65-1): a Nicole NUNCA reposiciona um
- * lead no kanban — nem por score, nem por visita agendada, nem por handoff, com
- * ou sem corretor atribuído. Apenas o corretor humano muda de coluna; o único
- * lugar que seta a etapa ("Aguardando atendimento") é a distribuição da roleta.
+ * lead no kanban via patch — nem por score, nem por handoff, com ou sem corretor
+ * atribuído. Apenas o corretor humano muda de coluna; a roleta seta "Aguardando
+ * atendimento" na distribuição. EXCEÇÃO (Story 75-196): agendar/remarcar visita
+ * avança o lead para "Visita Agendada" — mas por update direto via
+ * advanceToVisitaAgendada (@trifold/shared, guard só-avança), nunca pelo patch.
  *
  * Remove (in-place) e INCONDICIONALMENTE o `stage_id` do patch da IA. Demais
  * campos do patch (score, dados, ai_summary) seguem normalmente.
