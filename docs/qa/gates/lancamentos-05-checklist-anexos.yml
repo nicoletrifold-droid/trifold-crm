@@ -1,0 +1,84 @@
+storyId: "lancamentos-05-checklist-anexos"
+title: "Lançamentos-05 — Fix upload de anexos travando em \"Enviando…\""
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-22
+branch: feat/lancamentos-05-checklist-anexos
+commit: pending-push
+
+scope: >
+  Gate sobre a correção de bug do upload de anexos no card do board de Lançamentos.
+  Causa raiz: POST /attachments relayava o binário multipart pela Serverless Function da
+  Vercel (teto real ~4,5 MB « 25 MB anunciados) e o cliente não tratava !res.ok → falha
+  silenciosa. Solução: upload direto ao Storage via signed upload URL (nova rota /sign),
+  /attachments passou a registrar só metadados em JSON, tratamento de erro visível no
+  cliente, e migration 186 define file_size_limit=25MB no bucket.
+
+checks:
+  code_review: PASS         # 3 rotas bem estruturadas; comentários explicam a decisão de arquitetura; erros tratados em todas as etapas
+  unit_tests: NÃO_APLICÁVEL # projeto sem suíte automatizada para este módulo; validação manual + typecheck/lint (padrão da story original)
+  acceptance_criteria: PASS # bug de "trava em Enviando…" corrigido; upload ≤25MB, download e delete funcionais; erro visível ao usuário
+  regressions: PASS         # rotas de download (signed-url) e delete NÃO alteradas; formato de storage_path preservado (${cardId}/...)
+  performance: PASS         # binário deixa de trafegar pela função (menos custo/latência de serverless); upload direto ao Storage
+  security: PASS            # /sign e /attachments gated + card escopado à org; storage_path server-side em /sign e validado com startsWith(${id}/) em /attachments
+  documentation: PASS       # story Change Log atualizado; comentários in-code justificam padrão signed-upload-url
+
+security_trace:
+  sign_endpoint: >
+    lancamentosGuard() (auth + acesso ao módulo) → card verificado por org_id → storagePath
+    montado 100% no servidor como `${id}/${Date.now()}-...`. Cliente só influencia a extensão
+    via file_name; não consegue emitir signed URL para card/org de outro usuário.
+  attachments_post: >
+    lancamentosGuard() → card verificado por org_id → recusa (400) se storage_path não começar
+    com `${id}/`. Impede registrar no banco objeto pertencente a outro card/org. Se o insert
+    falha, remove o objeto do Storage (cleanup).
+  download_delete: >
+    Ambas filtram por eq("org_id", appUser.org_id) e não foram tocadas; compatíveis com o
+    formato de storage_path (inalterado).
+
+size_limit_consistency:
+  client_check: "MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024 (lancamento-card-modal.tsx)"
+  sign_endpoint: "MAX_SIZE_BYTES = 25 * 1024 * 1024 → 413 se exceder"
+  attachments_endpoint: "MAX_SIZE_BYTES = 25 * 1024 * 1024 → 413 + remove objeto se exceder"
+  bucket_migration: "file_size_limit = 26214400 (= 25 * 1024 * 1024)"
+  result: "4 camadas alinhadas em exatamente 25 MB — sem divergência."
+
+migration:
+  file: supabase/migrations/186_lancamentos_bucket_file_size_limit.sql
+  location_ok: true          # diretório correto do projeto (não packages/web/supabase); erro anterior de local já corrigido pelo dev
+  numbering_ok: true         # nenhum outro arquivo 186_* em supabase/migrations/
+  applied_in_prod: false     # NÃO aplicada — handoff @devops. Sem a migration, cliente/API ainda barram >25MB; o bucket só ganha o hard-limit após o deploy.
+
+build:
+  typecheck: "npx tsc --noEmit — sem erros nos arquivos da story. Único erro pré-existente e não relacionado: pastas/termo/fill.ts (módulo pdf-lib ausente), fora do escopo desta correção."
+  lint: "eslint nos 3 arquivos alterados — 0 problemas."
+
+top_issues: []
+
+observations:
+  - id: OBS-001
+    severity: low
+    finding: >
+      O upload direto ao Storage e o registro de metadados (POST /attachments) são operações
+      separadas; se o browser cair entre o passo 2 e o 3, o objeto fica órfão no bucket sem
+      linha em lancamento_card_attachments.
+    suggested_action: >
+      Aceitável para o escopo do fix. Se quiser, agendar limpeza periódica de objetos órfãos
+      (>24h sem attachment correspondente) em story futura. NÃO bloqueia.
+  - id: OBS-002
+    severity: low
+    finding: >
+      Sem suíte de teste automatizada para o módulo (mantém o padrão da story original).
+    suggested_action: "Cobrir os 3 passos do upload com teste de integração em iteração futura. NÃO bloqueia."
+
+waiver: { active: false }
+
+files:
+  - packages/web/src/app/api/lancamentos/cards/[id]/attachments/sign/route.ts
+  - packages/web/src/app/api/lancamentos/cards/[id]/attachments/route.ts
+  - packages/web/src/app/dashboard/lancamentos/_components/lancamento-card-modal.tsx
+  - supabase/migrations/186_lancamentos_bucket_file_size_limit.sql
+  - docs/stories/lancamentos-05-checklist-anexos.story.md
+
+handoff: "@devops — aplicar migration 186 em prod e push. Migration NÃO aplicada durante o gate (por design)."
