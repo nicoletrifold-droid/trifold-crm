@@ -58,7 +58,7 @@ export async function POST(
 
     const { data: lead } = await supabase
       .from("leads")
-      .select("id, org_id, name, assigned_broker_id, property_interest_id")
+      .select("id, org_id, name, assigned_broker_id, property_interest_id, segmento")
       .eq("id", id)
       .eq("org_id", appUser.org_id)
       .eq("is_active", true)
@@ -68,10 +68,14 @@ export async function POST(
       return NextResponse.json({ error: "Lead not found" }, { status: 404 })
     }
 
-    // Permissão: admin/supervisor/gerente-comercial sempre; corretor só dono do lead.
+    // Permissão: admin/supervisor/gerente-comercial sempre; corretor só dono do
+    // lead; perfil imob/consultoria em lead do mundo IMOB (Story 75-201).
+    const isImobLead =
+      ["imob", "consultoria"].includes(appUser.role) && lead.segmento === "imob"
     if (
       !FEEDBACK_ADMIN_ROLES.includes(appUser.role) &&
-      lead.assigned_broker_id !== appUser.id
+      lead.assigned_broker_id !== appUser.id &&
+      !isImobLead
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -110,6 +114,9 @@ export async function POST(
         property_id: lead.property_interest_id ?? null,
         scheduled_at: visitedAt.toISOString(),
         status: "confirmed",
+        // Story 75-201: lead do mundo IMOB gera visita na agenda IMOB — sem isso
+        // o default do banco ('house') sujava a agenda da house (Epic 81).
+        team: lead.segmento === "imob" ? "imob" : "house",
         created_by: appUser.role === "broker" ? "broker" : "admin",
         notes: "Visita registrada retroativamente (sem agendamento prévio no sistema)",
       })

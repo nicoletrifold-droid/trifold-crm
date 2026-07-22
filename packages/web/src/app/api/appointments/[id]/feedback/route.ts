@@ -55,7 +55,7 @@ export async function POST(
     // Verify appointment exists
     const { data: appointment, error: fetchError } = await supabase
       .from("appointments")
-      .select("id, lead_id, org_id, status, broker_id, property_id, scheduled_at")
+      .select("id, lead_id, org_id, status, broker_id, property_id, scheduled_at, team")
       .eq("id", id)
       .single()
 
@@ -72,8 +72,12 @@ export async function POST(
     }
     if (!FEEDBACK_ADMIN_ROLES.includes(appUser.role)) {
       const isApptOwner = appointment.broker_id === appUser.id
+      // Story 75-201: perfil imob/consultoria registra feedback de visita da
+      // equipe IMOB (mesma matriz da governança 81-3 — imob cuida do team imob).
+      const isImobTeam =
+        ["imob", "consultoria"].includes(appUser.role) && appointment.team === "imob"
       let isLeadOwner = false
-      if (!isApptOwner) {
+      if (!isApptOwner && !isImobTeam) {
         const { data: leadRow } = await supabase
           .from("leads")
           .select("assigned_broker_id")
@@ -81,7 +85,7 @@ export async function POST(
           .single()
         isLeadOwner = leadRow?.assigned_broker_id === appUser.id
       }
-      if (!isApptOwner && !isLeadOwner) {
+      if (!isApptOwner && !isImobTeam && !isLeadOwner) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
     }
