@@ -13,6 +13,9 @@ export interface VisitFeedbackBody {
   feedback: string
   interest_after: "cold" | "warm" | "hot"
   next_steps?: string | null
+  /** Story 75-203: quem registrou o feedback (public.users.id) — carimba a
+   * activity p/ a linha do tempo mostrar o autor em vez de "Sistema". */
+  actor_user_id?: string | null
 }
 
 export interface AppointmentForFeedback {
@@ -97,6 +100,7 @@ export async function applyVisitFeedback(
   await supabase.from("activities").insert({
     org_id: appointment.org_id,
     lead_id: appointment.lead_id,
+    user_id: body.actor_user_id ?? null,
     type: "visit_completed",
     description,
     metadata: {
