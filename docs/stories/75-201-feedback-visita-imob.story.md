@@ -1,7 +1,7 @@
 # Story 75-201 — Feedback de visita no mundo IMOB (+ destravar drag do pipeline IMOB)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 75 — CRM core (mundo IMOB) / estende 75-185/186/188/193 (feedback de visita)
 - **Branch:** feat/75-201-feedback-visita-imob
 - **Tipo:** Feature — pedido do Marcos (2026-07-22): levar a solução de feedback de
