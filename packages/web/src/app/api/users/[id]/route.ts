@@ -83,9 +83,8 @@ export async function PATCH(
   // Usuário sem auth_id foi cadastrado pelo fluxo legado — cria conta no Supabase Auth agora.
   let resolvedAuthId: string | undefined = targetUserSnapshot.auth_id as string | undefined
   if (hasNewPassword && !resolvedAuthId) {
-    const emailForAuth = (publicUpdates.email as string | undefined) ?? (
-      (await supabase.from("users").select("email").eq("id", id).single()).data?.email as string | undefined
-    )
+    const { data: authSeed } = await supabase.from("users").select("email, role").eq("id", id).single()
+    const emailForAuth = (publicUpdates.email as string | undefined) ?? (authSeed?.email as string | undefined)
     if (!emailForAuth) {
       return NextResponse.json({ error: "Usuário sem e-mail cadastrado — não é possível criar conta de acesso." }, { status: 422 })
     }
@@ -94,6 +93,8 @@ export async function PATCH(
       email: emailForAuth,
       password: body.new_password as string,
       email_confirm: true,
+      // Story 75-205: role no JWT desde a criação (fonte = public.users)
+      ...(authSeed?.role ? { app_metadata: { role: authSeed.role } } : {}),
     })
     if (createError || !newAuth?.user?.id) {
       return NextResponse.json({ error: createError?.message ?? "Erro ao criar conta de acesso." }, { status: 500 })

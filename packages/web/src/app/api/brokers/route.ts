@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
         email: body.email.trim(),
         password: tempPassword,
         email_confirm: true,
+        app_metadata: { role: "broker" }, // Story 75-205: role no JWT desde a criação
       })
 
     if (authError) {
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
         email: body.email.trim(),
         password: body.password,
         email_confirm: true,
+        app_metadata: { role: "broker" }, // Story 75-205
       })
 
     if (authError) {
@@ -276,6 +278,7 @@ export async function POST(request: NextRequest) {
       email: (targetUser.email as string).trim(),
       password: tempPassword,
       email_confirm: true,
+      app_metadata: { role: "broker" }, // Story 75-205
     })
 
     if (!authError && authData?.user) {
