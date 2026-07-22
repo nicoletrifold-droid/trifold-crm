@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("email_templates")
-    .select("id, name, slug, category, is_active, created_at, variables", { count: "exact" })
+    .select("id, name, slug, subject, category, is_active, created_at, variables", { count: "exact" })
     .eq("org_id", user.orgId)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)
