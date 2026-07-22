@@ -71,7 +71,17 @@ onde `v` = `subjectVariantA` — exatamente a variável apontada pelo erro `eval
 - `docs/stories/85-1-fix-subject-ausente-email-templates-api.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: PASS** (bug crítico bloqueante — revisão rigorosa e eficiente, priorizada)
+
+- **AC1:** confirmado no diff — única mudança é a palavra `subject` inserida no `select` (`route.ts:49`).
+- **AC2 (evidência reconfirmada de forma independente):** repeti a mesma query pós-fix contra produção para o slug exato do template do usuário — `subject` preenchido corretamente.
+- **AC3 (cadeia causal fechada, não apenas aceita a conclusão do dev):** reli `step-content.tsx` — `json.data` é usado direto como `Template[]` sem nenhuma transformação de campo antes de `t.subject` ser lido (linhas 49, 68-69). Como a API agora inclui `subject` na resposta, `t.subject` deixa de ser `undefined`. Cadeia 100% fechada: causa raiz → fix → efeito no consumidor, sem elo faltando.
+- **Achado adicional (não solicitado, mas relevante):** conferi todos os templates ativos em produção — 0 de 2 têm `subject` nulo/vazio. O fix resolve o crash para 100% dos templates existentes hoje, não só para o caso relatado.
+- **AC4:** confirmado via `git show --stat` — único arquivo de código tocado é `route.ts`, exatamente a linha do `select`.
+- **Lint/typecheck:** reconferidos de forma independente — 0 erros.
+
+Fix mínimo, cirúrgico, causa raiz genuinamente fechada com evidência de ponta a ponta (bundle de produção → código → dado real → fix → reconfirmação). Nenhum CONCERNS. Pronta para `@devops *push` com prioridade máxima.
 
 ## Change Log
 - @sm (River): story criada em Draft. Causa raiz já diagnosticada e confirmada contra o bundle real de produção antes da criação da story (usuário forneceu prints do console do Safari). Confirmei que nenhum dos 7 consumidores do endpoint faz checagem de shape exata — adicionar o campo é seguro. Numeração 85-1 confirmada livre.
