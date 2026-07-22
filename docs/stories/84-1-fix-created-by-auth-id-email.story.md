@@ -79,7 +79,20 @@ Este bug é pré-existente (não foi introduzido pelas Stories 80-x/83-x desta s
 - `docs/stories/84-1-fix-created-by-auth-id-email.story.md` (this file)
 
 ## QA Results (@qa / Quinn)
-_Pendente — aguardando QA gate._
+
+**Gate: PASS** (bug crítico bloqueante — revisão rigorosa e eficiente, priorizada)
+
+Revisão do diff completo (`edf36a66`, 2 arquivos de código) contra os 5 ACs, com verificação independente:
+
+- **AC1/AC2:** confirmado no diff — exatamente 1 linha alterada em cada arquivo, `created_by: user.id` → `created_by: user.authId`. Nada além disso tocado nesses arquivos.
+- **AC3 (escopo confirmado por busca própria):** rodei `grep -rn "created_by: user\.id"` em toda `packages/web/src/app/api/` — a única ocorrência restante é `leads/[id]/tasks/route.ts:63`. Reconferi a FK dessa tabela diretamente no banco: `lead_tasks_created_by_fkey` → `REFERENCES users(id)` (tabela da aplicação, não `auth.users`). Confirmado que não tocar ali está correto.
+- **AC4/AC5 (evidência de teste manual, reproduzida de forma independente, não apenas aceita):**
+  - Repeti a reprodução do bug original: insert em `email_blasts` com `users.id` do usuário real → mesma falha exata (`violates foreign key constraint "email_blasts_created_by_fkey"`).
+  - Repeti a validação do fix: insert com `auth_id` → sucesso, `created_by` gravado corretamente.
+  - Limpei meu próprio registro de teste e reconfirmei zero resíduo (contando também o registro do dev, já removido por ele).
+- **Lint/typecheck:** reconferidos de forma independente — 0 erros, mesmo warning pré-existente não relacionado.
+
+Fix mínimo, cirúrgico, causa raiz genuinamente resolvida e comprovada com reprodução real do erro reportado pelo usuário. Nenhum CONCERNS. Pronta para `@devops *push` com prioridade máxima — bug está bloqueando o uso real da feature em produção agora.
 
 ## Change Log
 - @sm (River): story criada em Draft. Causa raiz já diagnosticada pelo usuário/sessão antes da criação da story. Fiz busca ampla por FKs para `auth.users` e por todos os usos de `created_by: user.id` na API — confirmei que o escopo real é exatamente 2 arquivos (email-blasts, email-templates), e que `leads/[id]/tasks/route.ts` NÃO deve ser tocado (referencia tabela diferente). Numeração 84-1 confirmada livre (local e branches remotos).
