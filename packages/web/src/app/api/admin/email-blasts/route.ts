@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
       sent_count: 0,
       status: "scheduled",
       scheduled_for: startDate.toISOString(),
-      created_by: user.id,
+      created_by: user.authId,
       ab_test_enabled: abTestEnabled,
       ab_test_variable: abTestVariable,
       subject_variant_a: abTestEnabled && abTestVariable === "subject" ? (body.subject_variant_a ?? null) : null,

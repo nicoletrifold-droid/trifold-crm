@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       html_body,
       variables: variables ?? [],
       is_active: is_active ?? false,
-      created_by: user.id,
+      created_by: user.authId,
     })
     .select()
     .single()
