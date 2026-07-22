@@ -1,7 +1,7 @@
 # Story 75-196 — Agendou visita → lead entra em "Visita Agendada" (Nicole, link IMOB e agendamento interno)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 75 — CRM core / relacionado aos Epics 81 (agenda HOUSE×IMOB) e 73 (agendamento da Nicole)
 - **Branch:** feat/75-196-visita-agendada-automatica
 - **Tipo:** Feature + fix — reportado pelo Marcos (2026-07-22): lead do link público da
@@ -129,3 +129,8 @@ Roteamento de pipeline (já garantido pelo `segmento`, esta story NÃO mexe niss
   no_show; não move: visitou/proposta/negociando/fechou/perdido/lost_reason);
   sem conflito com 75-193 (agendamento retroativo NÃO passa pelo helper — o
   pós-visita continua dono do movimento p/ "Visitou"); tela de Agenda intocada.
+- @devops (Gage) 2026-07-22: PR #260 squash-merge → main (49598f74), deploy
+  automático Vercel. Migration 184 aplicada em PROD via Management API (ensaio
+  SELECT antes: 1 lead afetado; pós: Kaíke em "Visita Agendada", registrada em
+  supabase_migrations.schema_migrations) e em DEV (no-op defensivo — dev DB não
+  tem leads.segmento; DO block checa a coluna). Status → Done.
