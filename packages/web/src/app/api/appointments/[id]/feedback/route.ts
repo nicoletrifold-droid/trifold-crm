@@ -96,6 +96,7 @@ export async function POST(
       feedback: body.feedback,
       interest_after: body.interest_after,
       next_steps: body.next_steps ?? null,
+      actor_user_id: appUser.id, // Story 75-203: autor na linha do tempo
     })
 
     if ("error" in result) {
