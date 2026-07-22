@@ -50,34 +50,17 @@ export default async function CorretoresPage() {
     })
   }
 
-  // Get active lead counts per broker user
-  const userIds = (brokers ?? [])
-    .map((b) => {
-      const u = b.user as unknown as { id: string } | null
-      return u?.id
-    })
-    .filter(Boolean) as string[]
+  // Contagem de leads ativos por corretor via RPC (Story 75-198): mesma régua do
+  // teto do bolsão/roleta (sem etapas Perdido/Não Qualificado) e sem o corte de
+  // 1000 linhas do PostgREST que truncava a contagem em JS.
+  const leadCounts: Record<string, number> = {}
 
-  let leadCounts: Record<string, number> = {}
+  const { data: counts } = await supabase.rpc("get_brokers_active_lead_counts", {
+    p_org_id: user.orgId,
+  })
 
-  if (userIds.length > 0) {
-    const { data: leads } = await supabase
-      .from("leads")
-      .select("assigned_broker_id")
-      .eq("org_id", user.orgId)
-      .eq("is_active", true)
-      .in("assigned_broker_id", userIds)
-
-    if (leads) {
-      leadCounts = leads.reduce(
-        (acc, lead) => {
-          const brokerId = lead.assigned_broker_id as string
-          acc[brokerId] = (acc[brokerId] || 0) + 1
-          return acc
-        },
-        {} as Record<string, number>
-      )
-    }
+  for (const row of (counts ?? []) as Array<{ user_id: string; active_leads: number }>) {
+    leadCounts[row.user_id] = row.active_leads
   }
 
   return (
