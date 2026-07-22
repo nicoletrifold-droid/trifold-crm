@@ -7,7 +7,7 @@ import { sendPushToUser } from "@web/lib/server/push-service"
 import { notifyImobVisitWhatsApp } from "@web/lib/appointments/notify-imob-visit"
 import { notifyVisitBookedWhatsApp } from "@web/lib/appointments/visit-whatsapp"
 import { overlaps } from "@web/lib/appointments/governance"
-import { normalizePhoneBR } from "@trifold/shared"
+import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 
 // Deep-link do push — SEMPRE o domínio custom (cookie de sessão; ver memória 75-152).
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
@@ -189,6 +189,10 @@ export async function POST(
         segmento: "imob",
         assigned_broker_id: (daiana?.id as string | undefined) ?? null,
         source: "imob_link",
+        // Story 75-196: nasce em "Novo" (stage NULL era invisível no pipeline
+        // IMOB); avança para "Visita Agendada" só DEPOIS do appointment gravar —
+        // se o agendamento falhar, o lead não fica carimbado com visita fantasma.
+        stage_id: STAGE_IDS.novo,
       })
       .select("id")
       .single()
@@ -233,6 +237,14 @@ export async function POST(
     .single()
   if (apptError || !appointment) {
     return NextResponse.json({ error: "Não foi possível agendar. Tente novamente." }, { status: 500 })
+  }
+
+  // Story 75-196: com a visita GRAVADA, o lead avança para "Visita Agendada"
+  // (guard só-avança; não regride nem ressuscita perdido). Segmento fica
+  // intacto — lead imob segue aparecendo só no pipeline IMOB. Best-effort:
+  // falha de etapa não derruba o agendamento já criado.
+  if (leadId) {
+    await advanceToVisitaAgendada(admin, leadId)
   }
 
   await admin.from("activities").insert({

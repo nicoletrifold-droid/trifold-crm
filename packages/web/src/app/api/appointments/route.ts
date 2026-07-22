@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { createCalendarEvent } from "@web/lib/google-calendar"
-import { normalizePhoneBR } from "@trifold/shared"
+import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 import { isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
 
 // Story 81-1 — stamping da EQUIPE do compromisso, decidido no servidor:
@@ -131,6 +131,9 @@ export async function POST(request: Request) {
           phone: body.client_phone.trim(),
           email: body.client_email?.trim() || null,
           assigned_broker_id: assignedBrokerId,
+          // Story 75-196: nasce em "Novo" (antes ficava stage NULL, invisível no
+          // pipeline); avança p/ "Visita Agendada" após o INSERT do appointment.
+          stage_id: STAGE_IDS.novo,
         })
         .select("id")
         .single()
@@ -263,6 +266,13 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Story 75-196: visita gravada → lead avança para "Visita Agendada" (guard
+  // só-avança no WHERE: não regride visitou/proposta/…, não ressuscita perdido,
+  // no_show remarcado volta). Best-effort — não derruba o agendamento criado.
+  if (leadId) {
+    await advanceToVisitaAgendada(supabase, leadId)
   }
 
   // Create Google Calendar event (fire-and-forget)

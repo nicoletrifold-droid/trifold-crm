@@ -35,7 +35,7 @@ import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
 import type { DbPromptOverrides } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
-import { STAGE_IDS } from "@trifold/shared"
+import { STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 
 /**
  * Validates that a visit_availability string contains a day reference,
@@ -894,10 +894,12 @@ export async function processMessageWithMetadata(
     leadPatch.interest_level = updatedScore >= 70 ? "hot" : updatedScore >= 40 ? "warm" : "cold"
 
     // Kanban stage — a Nicole (IA) NUNCA move o lead de etapa (Story 75-56,
-    // generaliza a 65-1). Quem reposiciona no kanban é o corretor humano; o
-    // único lugar que seta a etapa é a distribuição da roleta (distributor.ts),
-    // que coloca em "Aguardando atendimento". A qualificação segue refletida em
-    // qualification_score/qualification_status acima — não na etapa.
+    // generaliza a 65-1), com UMA exceção (Story 75-196, decisão do Marcos
+    // 2026-07-22): ao AGENDAR/REMARCAR visita, o lead avança para "Visita
+    // Agendada" via advanceToVisitaAgendada (guard só-avança; perdido é
+    // terminal). Fora isso, quem reposiciona no kanban é o corretor humano; a
+    // roleta (distributor.ts) coloca em "Aguardando atendimento". A qualificação
+    // segue refletida em qualification_score/qualification_status — não na etapa.
 
     // Visit scheduling — requires explicit confirmation from the client (Story 61-1)
     // Double-check: no existing future appointment for this lead (prevents duplicates)
@@ -976,7 +978,13 @@ export async function processMessageWithMetadata(
         }
       }
 
-      // Story 73-1: NÃO move o lead para "Visita Agendada" — o corretor move manualmente.
+      // Story 75-196 (muda a 73-1): visita agendada → lead avança para "Visita
+      // Agendada" (guard só-avança no WHERE; nunca regride nem ressuscita perdido).
+      // Lead da Nicole é segmento='principal' → aparece no pipeline HOUSE.
+      const { error: stageErr } = await advanceToVisitaAgendada(supabase, leadId)
+      if (stageErr) {
+        emit({ level: "warn", category: "ai", event_type: "STAGE_ADVANCE_FAILED", message: `Falha ao mover lead para Visita Agendada: ${stageErr}`, metadata: { lead_id: leadId, appointment_id: createdAppt.id } })
+      }
       leadPatch.visit_scheduled_at = scheduledAt.toISOString()
 
       // ADR-001: pipeline only sets lead owner when lead has no owner yet (roleta not yet run).
@@ -1027,6 +1035,12 @@ export async function processMessageWithMetadata(
           } catch (err) {
             emit({ level: "warn", category: "ai", event_type: "GOOGLE_CALENDAR_PUSH_FAILED", message: "Falha ao ressincronizar Google (remarcação)", metadata: { lead_id: leadId, appointment_id: apptToReschedule.id, error: String(err) } })
           }
+        }
+        // Story 75-196: remarcação também garante "Visita Agendada" (ex.: lead
+        // em No-show que remarca volta para a etapa; guard nunca regride).
+        const { error: reschedStageErr } = await advanceToVisitaAgendada(supabase, leadId)
+        if (reschedStageErr) {
+          emit({ level: "warn", category: "ai", event_type: "STAGE_ADVANCE_FAILED", message: `Falha ao mover lead para Visita Agendada (remarcação): ${reschedStageErr}`, metadata: { lead_id: leadId, appointment_id: apptToReschedule.id } })
         }
         leadPatch.visit_scheduled_at = newStart.toISOString()
         await supabase.from("activities").insert({ org_id: conversation.org_id, lead_id: leadId, type: "appointment_updated", description: `Nicole remarcou a visita de ${apptToReschedule.fromWhen} para ${whenStr} (a pedido do cliente).` })
