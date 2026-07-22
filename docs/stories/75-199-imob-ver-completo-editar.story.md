@@ -1,7 +1,7 @@
 # Story 75-199 — Perfil imob: "Ver completo"/"Editar Lead" caíam no dashboard
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 75 — CRM core (mundo IMOB)
 - **Branch:** fix/75-199-imob-ver-completo-editar
 - **Tipo:** Bug — reportado pelo Marcos (prints da Daiana, 2026-07-22): no drawer
