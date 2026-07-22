@@ -1,7 +1,7 @@
 # Story Lançamentos-05 — Checklists + anexos no cartão
 
 ## Metadata
-- **Status:** InReview — @dev + @qa · pronto p/ @devops (migration 148 + bucket) · **Epic:** Lançamentos · **Branch:** feat/lancamentos-05-checklist-anexos · **Complexidade:** M-L (3-5 pontos)
+- **Status:** Done — @devops · PR #263 + migration 186 aplicada em prod · **Epic:** Lançamentos · **Branch:** fix/lancamentos-05-upload-trava · **Complexidade:** M-L (3-5 pontos)
 - **quality_gate_tools:** [typecheck, lint, verificação das tabelas/bucket no banco]
 
 ## Story
@@ -36,6 +36,7 @@
 - 2026-07-02 — @sm/@po/@dev/@qa — Checklists + anexos (bucket privado). tsc 0, lint 0. Handoff @devops (migration 148).
 - 2026-07-22 — @dev — Fix "trava em Enviando…". Causa raiz: POST /attachments fazia relay multipart do binário pela Serverless Function (teto ~4.5 MB da Vercel), abaixo dos 25 MB anunciados → arquivos maiores nunca chegavam ao código, e o cliente não tratava `!res.ok` (falha silenciosa). Correções: (1) estado `attachmentError` + mensagem visível; (2) validação de tamanho no cliente antes do envio; (3) upload direto ao Storage via signed upload URL — nova rota `POST /attachments/sign` gera `createSignedUploadUrl`, o browser envia via `uploadToSignedUrl` (binário nunca passa pela função), e `POST /attachments` passou a registrar só metadados em JSON. Criação nova de padrão signed-upload-url justificada: o relay via servidor não é adaptável ao teto fixo de payload da infraestrutura Vercel. (4) migration 186 define `file_size_limit=25MB` no bucket. Handoff @qa/@devops.
 - 2026-07-22 — @qa (Quinn) — QA gate do fix de upload: veredito **PASS**. typecheck/lint limpos nos arquivos da story; segurança (escopo de card/org em /sign e /attachments) verificada; 4 camadas de limite alinhadas em 25 MB; rotas de download/delete intactas; migration 186 no diretório e numeração corretos (NÃO aplicada — handoff @devops). Gate: `docs/qa/gates/lancamentos-05-checklist-anexos.yml`.
+- 2026-07-22 — @devops (Gage) — Push do fix. Branch `fix/lancamentos-05-upload-trava` (a partir de main), commit `d411d1f1`, PR #263 aberto contra main (aguardando review/merge do usuário). Quality gate: secret scan limpo (sem add -A), typecheck sem erros nos arquivos da story (único erro pré-existente e não relacionado: `pastas/termo/fill.ts` / pdf-lib). Migration 186 **aplicada em prod** (`dsopqkqjkmhytudaaolv`) via Supabase Management API: `storage.buckets.file_size_limit` de `null` → `26214400` para `id='lancamentos'` (bucket segue privado); confirmado por SELECT pós-update. Story InReview → Done.
 
 ## QA Results
 
