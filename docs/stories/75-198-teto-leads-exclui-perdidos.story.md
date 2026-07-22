@@ -1,7 +1,7 @@
 # Story 75-198 — Teto de leads ativos: excluir Perdido/Não Qualificado (bolsão + roleta) e corrigir contagem truncada na tela de Corretores
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 75 — CRM core / relacionado ao Epic 64 (bolsão) e à Story 75-153 (perdido = ETAPA)
 - **Branch:** fix/bolsao-limite-robson (worktree isolado)
 - **Tipo:** Bug — reportado pelo corretor Robson via Marcos (2026-07-22, print do WhatsApp):
@@ -69,7 +69,7 @@ stage_id NOT IN (Perdido, Não Qualificado)`.
 - [x] AC1: `broker_active_leads_count` criada com a régua acima + as duas RPCs
   reescritas usando-a; nenhum outro comportamento das RPCs muda (lock, guards
   `gone`/`ex_dono`/`sem_corretor`/`empreendimento`, logging).
-- [ ] AC2: com a mig aplicada, o Robson (89 leads reais / max 300) consegue pegar
+- [x] AC2: com a mig aplicada, o Robson (89 leads reais / max 300) consegue pegar
   lead do bolsão e volta a ser elegível na roleta.
 - [x] AC3: `GET /api/brokers` E a tela Config › Corretores (`corretores/page.tsx`)
   mostram `active_leads_count` exato para TODOS os corretores mesmo com >1000 leads
@@ -77,7 +77,7 @@ stage_id NOT IN (Perdido, Não Qualificado)`.
 - [x] AC4 (não quebrar o que funciona): comportamento intacto para corretor NO teto
   real (contagem nova ≥ max_leads → `teto`); `ex_dono` continua bloqueando antes do
   teto; testes existentes de bolsão/roleta verdes.
-- [ ] AC5: migration aplicada em DEV e PROD (validar schema remoto — lição 75-188)
+- [x] AC5: migration aplicada em DEV e PROD (validar schema remoto — lição 75-188)
   e registrada em `schema_migrations`; conferência pós-aplicação com os números do
   Robson (SELECT da função = 89±movimentação do dia).
 - [x] AC6: type-check/lint/suíte verdes.
@@ -128,3 +128,9 @@ stage_id NOT IN (Perdido, Não Qualificado)`.
   164/156 = somente as linhas do teto; ex_dono continua avaliado ANTES do teto;
   teste novo cobre RPC + fallback 0 + data null + 401. AC2/AC5 pendentes de PROD
   (@devops).
+- @devops (Gage) 2026-07-22: PR #262 squash-merge → main (81c46692), deploy
+  automático Vercel. Migration 185 aplicada em PROD (variante COM segmento;
+  Robson = 89 pela régua nova; get_brokers_active_lead_counts conferida: Valeria
+  271→79, Robson 198→89 reais) e em DEV (variante SEM segmento — coluna ausente);
+  registrada em supabase_migrations.schema_migrations nos dois. Fix do bolsão
+  vale IMEDIATAMENTE (RPC), telas após o deploy. Status → Done.
