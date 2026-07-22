@@ -231,7 +231,11 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const role = (data.user?.app_metadata?.role as string | undefined) ?? ""
-      if (["admin", "supervisor", "gerente-comercial"].includes(role)) {
+      // Story 75-199: só o corretor vive em /broker — qualquer outro perfil
+      // (admin, supervisor, gerente-comercial, imob, obras…) usa a página do
+      // dashboard. O allowlist antigo mandava perfil imob p/ /broker/leads e o
+      // layout de lá expulsava p/ /dashboard (guard role !== "broker").
+      if (role !== "broker") {
         setLeadBasePath("/dashboard/leads")
       }
     })

@@ -46,17 +46,19 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  // Check permission: admin/supervisor/gerente-comercial or assigned broker
+  // Check permission: admin/supervisor/gerente-comercial, assigned broker, or
+  // imob editing an imob-world lead (Story 75-199 — espelha o canEdit da página)
   if (!["admin", "supervisor", "gerente-comercial"].includes(appUser.role)) {
     const { data: lead } = await supabase
       .from("leads")
-      .select("assigned_broker_id")
+      .select("assigned_broker_id, segmento")
       .eq("id", id)
       .eq("org_id", appUser.org_id)
       .eq("is_active", true)
       .single()
 
-    if (!lead || lead.assigned_broker_id !== appUser.id) {
+    const isImobLeadEditor = appUser.role === "imob" && lead?.segmento === "imob"
+    if (!lead || (lead.assigned_broker_id !== appUser.id && !isImobLeadEditor)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
   }

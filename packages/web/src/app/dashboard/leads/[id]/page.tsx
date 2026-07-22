@@ -53,7 +53,6 @@ export default async function LeadDetailPage({
 
   const user = await getServerUser()
   const supabase = await createClient()
-  const canEdit = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
 
   // Fetch lead with relations
   const { data: lead, error } = await supabase
@@ -73,6 +72,12 @@ export default async function LeadDetailPage({
   if (error || !lead) {
     notFound()
   }
+
+  // Story 75-199: perfil imob edita SÓ lead do mundo IMOB (mundo isolado — a
+  // API já permitia via fallback "corretor responsável"; aqui é o gate de UI).
+  const canEdit =
+    ["admin", "supervisor", "gerente-comercial"].includes(user.role) ||
+    (user.role === "imob" && lead.segmento === "imob")
 
   const { data: properties } = canEdit
     ? await supabase.from("properties").select("id, name").eq("is_active", true).order("name")
