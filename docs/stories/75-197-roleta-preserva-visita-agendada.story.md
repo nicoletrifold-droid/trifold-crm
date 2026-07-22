@@ -1,7 +1,7 @@
 # Story 75-197 — Roleta não regride lead em "Visita Agendada" ao distribuir
 
 ## Metadata
-- **Status:** Ready
+- **Status:** Done
 - **Epic:** 75 — CRM core / sequência direta da 75-196
 - **Branch:** fix/75-197-roleta-preserva-visita-agendada
 - **Tipo:** Fix — conflito identificado ao responder pergunta do Marcos (2026-07-22)
