@@ -80,7 +80,11 @@ export function LeadsBulkTable({
     if (!newBroker && !lostReason) return
 
     const body: Record<string, unknown> = { lead_ids: Array.from(selected) }
-    if (newBroker) body.broker_id = newBroker === "__none__" ? null : newBroker
+    if (newBroker === "__roleta__") {
+      body.roleta = true // Story 75-207
+    } else if (newBroker) {
+      body.broker_id = newBroker === "__none__" ? null : newBroker
+    }
     if (lostReason) body.lost_reason = lostReason
 
     startTransition(async () => {
@@ -282,6 +286,8 @@ export function LeadsBulkTable({
             >
               <option value="">Não alterar</option>
               <option value="__none__">Remover corretor</option>
+              {/* Story 75-207: devolve à roleta e redistribui na hora */}
+              <option value="__roleta__">↩ Voltar para a Roleta</option>
               {brokers.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}

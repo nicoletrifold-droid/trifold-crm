@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
+import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { STAGE_IDS } from "@trifold/shared"
 
 export async function POST(request: NextRequest) {
@@ -13,10 +14,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { lead_ids, broker_id, lost_reason } = body as {
+  const { lead_ids, broker_id, lost_reason, roleta } = body as {
     lead_ids: string[]
     broker_id?: string | null
     lost_reason?: string | null
+    roleta?: boolean
   }
 
   if (!Array.isArray(lead_ids) || lead_ids.length === 0) {
@@ -39,6 +41,17 @@ export async function POST(request: NextRequest) {
     update.lost_reason = null
   }
 
+  // Story 75-207 — "Voltar para a Roleta": limpa o corretor E o bolsão (senão a
+  // roleta recusa com em_bolsao) e, após o update, dispara a redistribuição na
+  // hora. Se estiver fora de horário/sem corretor disponível, o lead fica sem
+  // corretor e o cron roleta-retry (*/3) assume.
+  if (roleta) {
+    update.assigned_broker_id = null
+    update.bolsao_em = null
+    update.stage_id = STAGE_IDS.novo
+    update.lost_reason = null
+  }
+
   if (lost_reason) {
     update.lost_reason = lost_reason
     update.stage_id = STAGE_IDS.perdido // finalizar como perdido prevalece sobre a transferência
@@ -54,5 +67,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ updated: count ?? lead_ids.length })
+  // Story 75-207: auditoria + redistribuição imediata, lead a lead (sequencial
+  // para respeitar a ordem da roleta). Falha de um não derruba os demais.
+  let distributed = 0
+  if (roleta) {
+    await supabase.from("activities").insert(
+      lead_ids.map((leadId) => ({
+        org_id: user.orgId,
+        lead_id: leadId,
+        user_id: user.id,
+        type: "transfer",
+        description: `Lead devolvido à Roleta por ${user.name}.`,
+        metadata: { acao: "voltar_roleta" },
+      }))
+    )
+    for (const leadId of lead_ids) {
+      try {
+        const result = await distributeLeadToNextBroker(leadId, user.orgId)
+        if (result.status === "distributed") distributed++
+      } catch {
+        // fica sem corretor; cron roleta-retry assume
+      }
+    }
+  }
+
+  return NextResponse.json({ updated: count ?? lead_ids.length, ...(roleta ? { distributed } : {}) })
 }
