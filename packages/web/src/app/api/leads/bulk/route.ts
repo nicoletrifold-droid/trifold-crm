@@ -6,7 +6,7 @@ import { STAGE_IDS } from "@trifold/shared"
 
 export async function POST(request: NextRequest) {
   const user = await getServerUser()
-  const allowed = ["admin", "supervisor", "gerente-comercial"].includes(user.role) ||
+  const allowed = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role) ||
     await canAccess(user.id, user.orgId, "sistema")
   if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })

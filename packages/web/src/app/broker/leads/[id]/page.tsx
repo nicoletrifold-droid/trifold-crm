@@ -10,7 +10,7 @@ import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback
 // Story 82-3 — Análise IA para o corretor (painel compartilhado com o /dashboard)
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 
-const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
+const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial", "sdr"]
 
 export default async function BrokerLeadDetailPage({
   params,

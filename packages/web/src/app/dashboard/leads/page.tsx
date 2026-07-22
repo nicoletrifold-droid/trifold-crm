@@ -188,7 +188,7 @@ export default async function LeadsPage({
       .not("stage_id", "in", `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`),
     supabase.from("kanban_stages").select("id, name, color").eq("org_id", user.orgId).order("position"),
     supabase.from("properties").select("id, name").eq("is_active", true).order("name"),
-    supabase.from("users").select("id, name").eq("org_id", user.orgId).eq("is_active", true).in("role", ["broker", "gerente-comercial"]).order("name"),
+    supabase.from("users").select("id, name").eq("org_id", user.orgId).eq("is_active", true).in("role", ["broker", "gerente-comercial", "sdr"]).order("name"),
     // Story 75-151 — quebra por situação DO DIA (só no modo "criados=hoje"): perdidos/não qualif. e acervo.
     isCriadosHoje && commercialDayFromIso
       ? supabase.from("leads").select("id", { count: "exact", head: true })
@@ -287,7 +287,7 @@ export default async function LeadsPage({
         <LeadFilters
           stages={allStages.map(s => ({ id: s.id, name: s.name, color: s.color }))}
           properties={allProperties.map(p => ({ id: p.id, name: p.name }))}
-          brokers={["admin", "supervisor", "gerente-comercial"].includes(user.role)
+          brokers={["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)
             ? allBrokers.map(b => ({ id: b.id, name: b.name }))
             : undefined}
           sources={SOURCE_FILTER_KEYS.map(k => ({ value: k, label: SOURCE_LABELS[k] ?? k }))}
@@ -344,7 +344,7 @@ export default async function LeadsPage({
             })}
             brokers={allBrokers}
             view={view}
-            canReactivate={["admin", "supervisor", "gerente-comercial"].includes(user.role)}
+            canReactivate={["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)}
           />
         </ScrollableX>
         {totalPages > 1 && (

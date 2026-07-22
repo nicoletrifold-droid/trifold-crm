@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
+  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial", "sdr"])
   if (roleError) return roleError
 
   const sp = request.nextUrl.searchParams

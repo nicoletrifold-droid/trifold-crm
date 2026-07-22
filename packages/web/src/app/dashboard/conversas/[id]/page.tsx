@@ -6,7 +6,7 @@ import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broke
 import { TransferConversa, type TargetUser } from "./_components/transfer-conversa"
 import { MessageMedia } from "@web/components/conversas/message-media"
 
-const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial"]
+const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
 const CAN_TRANSFER_ROLES = ["admin", "supervisor"]
 
 const roleConfig: Record<

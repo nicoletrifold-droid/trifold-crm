@@ -18,7 +18,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "gerente-relacionamento"].includes(appUser.role)
+  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"].includes(appUser.role)
   const db = isPrivileged ? createAdminClient() : supabase
 
   const { data: lead } = await db

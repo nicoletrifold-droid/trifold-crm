@@ -21,6 +21,12 @@ describe("hierarquia comercial (Story 75-90)", () => {
     it("nível abaixo NÃO passa", () => {
       expect(commercialRoleAtLeast("broker", "gerente-comercial")).toBe(false)
     })
+    it("sdr tem o mesmo nível do gerente-comercial (Story 75-204)", () => {
+      expect(commercialRoleAtLeast("sdr", "gerente-comercial")).toBe(true)
+      expect(commercialRoleAtLeast("sdr", "supervisor")).toBe(false)
+      // bolsão continua fora do perfil sdr (módulo desligado na matriz)
+      expect(canPullBolsaoDashboard("sdr")).toBe(false)
+    })
     it("roles fora da escala comercial (obras, relacionamento, null) → false", () => {
       expect(commercialRoleAtLeast("obras", "gerente-comercial")).toBe(false)
       expect(commercialRoleAtLeast("gerente-relacionamento", "gerente-comercial")).toBe(false)

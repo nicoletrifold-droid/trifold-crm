@@ -18,7 +18,7 @@ async function createLead(formData: FormData) {
   const admin = createAdminClient()
 
   const isBroker     = user.role === "broker"
-  const isAdminLike  = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
+  const isAdminLike  = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)
 
   // Stage padrão: Aguardando atendimento
   const { data: defaultStage } = await supabase
@@ -117,7 +117,7 @@ export default async function NewLeadPage() {
   if (!hasAccess) redirect("/dashboard")
 
   const isBroker    = user.role === "broker"
-  const isAdminLike = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
+  const isAdminLike = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)
 
   // Empreendimentos para o select
   const { data: properties } = await supabase
@@ -133,7 +133,7 @@ export default async function NewLeadPage() {
       .from("users")
       .select("id, name")
       .eq("org_id", user.orgId)
-      .in("role", ["broker", "gerente-comercial"])
+      .in("role", ["broker", "gerente-comercial", "sdr"])
       .eq("is_active", true)
       .order("name")
     brokers = b ?? []

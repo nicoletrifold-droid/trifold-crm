@@ -42,7 +42,7 @@ export async function POST(
   }
 
   // Permissão: admin/supervisor/gerente-comercial OU corretor dono do lead.
-  const isAdmin = ["admin", "supervisor", "gerente-comercial"].includes(
+  const isAdmin = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(
     appUser.role
   )
   if (!isAdmin && lead.assigned_broker_id !== appUser.id) {

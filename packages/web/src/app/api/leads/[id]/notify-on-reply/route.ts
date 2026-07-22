@@ -40,7 +40,7 @@ export async function POST(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial"].includes(
+  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(
     appUser.role
   )
   if (!isPrivileged && lead.assigned_broker_id !== appUser.id) {

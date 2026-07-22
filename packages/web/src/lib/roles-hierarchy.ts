@@ -13,6 +13,7 @@
 export const COMMERCIAL_ROLE_RANK = {
   broker: 1,
   "gerente-comercial": 2,
+  sdr: 2, // Story 75-204: SDR humano — mesmo nível de dados do gerente-comercial
   supervisor: 3,
   admin: 4,
 } as const

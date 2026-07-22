@@ -16,6 +16,7 @@ export interface AppUser {
     | "gerente-relacionamento"
     | "imob"
     | "consultoria"
+    | "sdr"
   avatarUrl: string | null
   theme: "light" | "dark" | "system"
 }

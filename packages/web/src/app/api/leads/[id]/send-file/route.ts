@@ -33,7 +33,7 @@ export async function POST(
   // Story 76-4 — grupo privilegiado (inclui gerente-relacionamento p/ o Chat) lê/escreve
   // via ADMIN client (a RLS de leads/conversations não passa a gerente-relacionamento;
   // p/ admin/supervisor/gerente-comercial é neutro). Corretor → client de sessão.
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "gerente-relacionamento"].includes(appUser.role)
+  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"].includes(appUser.role)
   const db = isPrivileged ? createAdminClient() : supabase
 
   let formData: FormData

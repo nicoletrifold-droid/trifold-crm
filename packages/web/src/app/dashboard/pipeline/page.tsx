@@ -71,7 +71,7 @@ export default async function PipelinePage({
         .from("users")
         .select("id, name")
         .eq("org_id", user.orgId)
-        .in("role", ["broker", "gerente-comercial"])
+        .in("role", ["broker", "gerente-comercial", "sdr"])
         .eq("is_active", true)
         .order("name"),
       supabase

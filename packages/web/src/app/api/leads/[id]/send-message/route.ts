@@ -47,7 +47,7 @@ export async function POST(
   // relacionamento) lê/escreve via ADMIN client. A RLS de leads/conversations exige
   // admin/supervisor/corretor-dono e a gerente-relacionamento não passa; para
   // admin/supervisor/gerente-comercial é neutro (já passavam). Corretor → client de sessão.
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "gerente-relacionamento"].includes(appUser.role)
+  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"].includes(appUser.role)
   const db = isPrivileged ? createAdminClient() : supabase
 
   // --- Validação do payload (AC8) ---
