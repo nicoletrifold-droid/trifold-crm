@@ -180,6 +180,13 @@ export default async function AgendaPage({
   const nextWeekStart = new Date(weekStart)
   nextWeekStart.setDate(weekStart.getDate() + 7)
 
+  // Story 75-200: perfil imob/consultoria vê HOUSE só como slot ocupado
+  // (sem nomes de lead/corretor, sem notas, sem excluir) — a agenda continua
+  // compartilhada p/ evitar choque de horário, mas o CONTEÚDO da house é
+  // mascarado p/ o mundo IMOB. Detalhe pertinente = só team='imob'.
+  const maskHouse = ["imob", "consultoria"].includes(appUser.role)
+  const isMaskedApt = (apt: { team: string | null }) => maskHouse && apt.team !== "imob"
+
   // Fetch brokers for filter
   const { data: brokers } = await supabase
     .from("users")
@@ -283,7 +290,8 @@ export default async function AgendaPage({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Broker filter */}
+          {/* Broker filter — oculto p/ perfil imob (Story 75-200: corretores são detalhe da house) */}
+          {!maskHouse && (
           <form method="get" className="flex items-center gap-2">
             <input type="hidden" name="week" value={formatDateISO(weekStart)} />
             {params.apt && (
@@ -308,6 +316,7 @@ export default async function AgendaPage({
               Filtrar
             </button>
           </form>
+          )}
         </div>
       </div>
 
@@ -349,21 +358,26 @@ export default async function AgendaPage({
                       <div>
                         <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                           {time.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} —{" "}
-                          {lead ? (
+                          {/* Story 75-200: house mascarada p/ perfil imob — só "Lead" */}
+                          {isMaskedApt(apt) ? (
+                            "Lead"
+                          ) : lead ? (
                             <Link href={`/dashboard/leads/${lead.id}`} className="text-orange-600 hover:underline dark:text-orange-300 dark:hover:text-orange-200">
                               {lead.name}
                             </Link>
                           ) : "Sem nome"}
                         </p>
                         <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                          {property?.name ?? ""} {broker ? `· ${broker.name}` : ""} · {apt.duration_minutes}min · {apt.location ?? "Stand Trifold"}
+                          {isMaskedApt(apt)
+                            ? `${apt.duration_minutes}min · horário ocupado (HOUSE)`
+                            : <>{property?.name ?? ""} {broker ? `· ${broker.name}` : ""} · {apt.duration_minutes}min · {apt.location ?? "Stand Trifold"}</>}
                         </p>
-                        {apt.notes && <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">{apt.notes}</p>}
+                        {apt.notes && !isMaskedApt(apt) && <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">{apt.notes}</p>}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tb.chip}`}>{tb.label}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.bg} ${s.color}`}>{s.label}</span>
-                        {apt.status === "completed" && lead && (
+                        {apt.status === "completed" && lead && !isMaskedApt(apt) && (
                           <Link
                             href={`/dashboard/leads/${lead.id}?tab=timeline`}
                             className="rounded-md bg-stone-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-stone-700"
@@ -447,7 +461,7 @@ export default async function AgendaPage({
                         const teamEdge = apt.team === "imob" ? "border-l-2 border-l-violet-500" : ""
                         return (
                           <div key={apt.id} className={`truncate rounded px-1 py-0.5 text-[9px] font-medium ${s.bg} ${s.color} ${teamEdge}`}>
-                            {new Date(apt.scheduled_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} {lead?.name ?? ""}
+                            {new Date(apt.scheduled_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })} {isMaskedApt(apt) ? "Lead" : lead?.name ?? ""}
                           </div>
                         )
                       })}
@@ -573,13 +587,16 @@ export default async function AgendaPage({
                         )}
                       </p>
                       <p className="truncate">
-                        {lead ? (
+                        {/* Story 75-200: house mascarada p/ perfil imob */}
+                        {isMaskedApt(apt) || !lead ? (
+                          "Lead"
+                        ) : (
                           <Link href={`/dashboard/leads/${lead.id}`} className="hover:underline">
                             {lead.name}
                           </Link>
-                        ) : "Lead"}
+                        )}
                       </p>
-                      {broker && (
+                      {broker && !isMaskedApt(apt) && (
                         <p className="truncate text-[10px] opacity-75">
                           {broker.name}
                         </p>
@@ -609,6 +626,8 @@ export default async function AgendaPage({
         <AppointmentDetail
           apt={selectedApt}
           closeUrl={buildUrl({ apt: undefined })}
+          masked={isMaskedApt(selectedApt)}
+          canDelete={canMutateAppointment(appUser.role, appUser.id, selectedApt)}
         />
       )}
     </div>
@@ -618,9 +637,15 @@ export default async function AgendaPage({
 function AppointmentDetail({
   apt,
   closeUrl,
+  masked,
+  canDelete,
 }: {
   apt: Appointment
   closeUrl: string
+  /** Story 75-200: perfil imob vê compromisso HOUSE sem lead/corretor/notas */
+  masked: boolean
+  /** Story 75-200: Excluir segue a matriz canMutateAppointment (antes aparecia p/ todos e a API negava) */
+  canDelete: boolean
 }) {
   const s = statusConfig[apt.status] ?? statusConfig.scheduled!
   const date = new Date(apt.scheduled_at)
@@ -652,7 +677,7 @@ function AppointmentDetail({
           </span>
         </h2>
         <div className="flex items-center gap-2">
-          {apt.status !== "cancelled" && (
+          {apt.status !== "cancelled" && canDelete && (
             <DeleteAppointmentButton
               appointmentId={apt.id}
               redirectUrl={closeUrl}
@@ -697,21 +722,24 @@ function AppointmentDetail({
         <div>
           <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">Lead</p>
           <p className="text-sm text-gray-900 dark:text-stone-100">
-            {lead ? (
+            {/* Story 75-200: house mascarada p/ perfil imob — sem nome/telefone/link */}
+            {!masked && lead ? (
               <Link href={`/dashboard/leads/${lead.id}`} className="text-orange-600 hover:underline dark:text-orange-300 dark:hover:text-orange-200">{lead.name}</Link>
             ) : "-"}
           </p>
-          {lead?.phone && (
+          {lead?.phone && !masked && (
             <p className="text-xs text-gray-500 dark:text-stone-400">{lead.phone}</p>
           )}
         </div>
 
-        <div>
-          <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
-            Corretor
-          </p>
-          <p className="text-sm text-gray-900 dark:text-stone-100">{broker?.name ?? "-"}</p>
-        </div>
+        {!masked && (
+          <div>
+            <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">
+              Corretor
+            </p>
+            <p className="text-sm text-gray-900 dark:text-stone-100">{broker?.name ?? "-"}</p>
+          </div>
+        )}
 
         {/* Story 81-6 — origem IMOB: qual imobiliária marcou e quem acompanha */}
         {meta.imobiliaria_nome && (
@@ -749,7 +777,7 @@ function AppointmentDetail({
           <p className="text-sm text-gray-900 dark:text-stone-100">{apt.location ?? "-"}</p>
         </div>
 
-        {displayNotes && (
+        {displayNotes && !masked && (
           <div className="sm:col-span-2">
             <p className="text-xs font-medium uppercase text-gray-400 dark:text-stone-500">Notas</p>
             <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-stone-300">
