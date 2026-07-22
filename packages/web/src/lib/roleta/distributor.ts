@@ -154,9 +154,11 @@ export async function distributeLeadToNextBroker(
         // Story 75-106: carimba distribuido_em no MESMO UPDATE que atribui o corretor
         // (mesma garantia atômica da RPC roleta_pick_and_advance) — o relógio de SLA/bolsão
         // nunca fica dependente só do insert (não-atômico) em lead_distribution_log.
+        // Story 75-197: lead já em "Visita Agendada" (Nicole agendou antes da
+        // distribuição, 75-196) PRESERVA a etapa — só ganha corretor.
         const { data: claimed } = await admin.from("leads").update({
           assigned_broker_id: assignedUserId,
-          stage_id: STAGE_IDS.novo,
+          ...(lead.stage_id === STAGE_IDS.visita_agendada ? {} : { stage_id: STAGE_IDS.novo }),
           distribuido_em: new Date().toISOString(),
         }).eq("id", leadId).is("assigned_broker_id", null).select("id").maybeSingle()
 
@@ -293,8 +295,15 @@ export async function distributeLeadToNextBroker(
     notified_whatsapp: notifyResult.whatsapp,
   })
 
-  // 8. Mover lead para "Aguardando atendimento" ao ser atribuído via roleta
-  await admin.from("leads").update({ stage_id: STAGE_IDS.novo }).eq("id", leadId)
+  // 8. Mover lead para "Aguardando atendimento" ao ser atribuído via roleta.
+  // Story 75-197: preserva "Visita Agendada" (Nicole pode ter agendado antes da
+  // distribuição — 75-196). O filtro vive no WHERE; `neq` puro deixaria o lead
+  // com stage NULL de fora (NULL <> x é NULL), por isso o `.or` com is.null.
+  await admin
+    .from("leads")
+    .update({ stage_id: STAGE_IDS.novo })
+    .eq("id", leadId)
+    .or(`stage_id.is.null,stage_id.neq.${STAGE_IDS.visita_agendada}`)
 
   // 9. Notificar imobiliária sobre distribuição
   if (cfg.notify_user_on_distribution) {
