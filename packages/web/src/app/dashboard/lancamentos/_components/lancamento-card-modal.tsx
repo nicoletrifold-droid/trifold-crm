@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { X, Trash2, Send, Plus, Paperclip, Download, Truck } from "lucide-react"
+import { createClient } from "@web/lib/supabase/client"
 import { LABEL_COLORS, COR_HEX } from "@web/lib/lancamentos/lancamentos"
 import { CATEGORIA_COR, CATEGORIA_LABEL, STATUS_LABELS, STATUS_TONE, type FornecedorStatus } from "@web/lib/lancamentos/fornecedores"
 import type { BoardCard, Member, FornecedorOption } from "./lancamento-board"
@@ -9,6 +10,8 @@ import type { BoardCard, Member, FornecedorOption } from "./lancamento-board"
 interface Comment { id: string; body: string; created_at: string; author: string }
 interface ChkItem { id: string; text: string; done: boolean; position: number }
 interface Attachment { id: string; file_name: string; file_size_bytes: number | null; mime: string | null; created_at: string }
+
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 function fmtSize(b: number | null): string {
   if (!b) return ""
@@ -39,6 +42,7 @@ export function LancamentoCardModal({ card, members, fornecedores, onClose, onUp
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerQ, setPickerQ] = useState("")
   const [uploading, setUploading] = useState(false)
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -123,15 +127,64 @@ export function LancamentoCardModal({ card, members, fornecedores, onClose, onUp
   }
 
   // ── Anexos ──
+  // Fluxo em 3 passos para contornar o teto de payload (~4.5 MB) das Serverless Functions da Vercel:
+  // 1) /attachments/sign gera uma signed upload URL; 2) o browser envia o arquivo DIRETO ao Supabase
+  // Storage via uploadToSignedUrl (o binário nunca passa pela função); 3) /attachments registra só os
+  // metadados em JSON. Qualquer falha vira mensagem visível em attachmentError.
   async function upload(file: File) {
+    setAttachmentError(null)
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachmentError("Arquivo excede 25 MB.")
+      if (fileRef.current) fileRef.current.value = ""
+      return
+    }
     setUploading(true)
     try {
-      const fd = new FormData(); fd.append("file", file)
-      const res = await fetch(`/api/lancamentos/cards/${card.id}/attachments`, { method: "POST", body: fd })
-      if (res.ok) {
-        const { attachment } = await res.json()
-        const next = [...attachments, attachment]; setAttachments(next); pushCard(checklist, next)
+      // 1) signed upload URL
+      const signRes = await fetch(`/api/lancamentos/cards/${card.id}/attachments/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_name: file.name, file_size_bytes: file.size }),
+      })
+      const signJson = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) {
+        setAttachmentError((signJson as { error?: string }).error ?? "Erro ao preparar o envio.")
+        return
       }
+      const { token, storagePath } = signJson as { token: string; storagePath: string }
+
+      // 2) upload direto ao Storage (não passa pela Serverless Function)
+      const supabase = createClient()
+      const { error: upErr } = await supabase.storage
+        .from("lancamentos")
+        .uploadToSignedUrl(storagePath, token, file, {
+          contentType: file.type || "application/octet-stream",
+        })
+      if (upErr) {
+        setAttachmentError("Falha ao enviar o arquivo. Tente novamente.")
+        return
+      }
+
+      // 3) registrar metadados
+      const metaRes = await fetch(`/api/lancamentos/cards/${card.id}/attachments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storage_path: storagePath,
+          file_name: file.name,
+          file_size_bytes: file.size,
+          mime: file.type || null,
+        }),
+      })
+      const metaJson = await metaRes.json().catch(() => ({}))
+      if (!metaRes.ok) {
+        setAttachmentError((metaJson as { error?: string }).error ?? "Erro ao registrar o anexo.")
+        return
+      }
+      const { attachment } = metaJson as { attachment: Attachment }
+      const next = [...attachments, attachment]; setAttachments(next); pushCard(checklist, next)
+    } catch {
+      setAttachmentError("Erro de conexão. Tente novamente.")
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ""
@@ -238,6 +291,9 @@ export function LancamentoCardModal({ card, members, fornecedores, onClose, onUp
               {uploading ? "Enviando…" : "Clique para anexar arquivo (até 25 MB)"}
             </button>
             <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f) }} />
+            {attachmentError && (
+              <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{attachmentError}</p>
+            )}
 
             <label className={`${lblCls} mt-4`}>Discussão</label>
             <div className="mt-1 max-h-56 space-y-2 overflow-y-auto">
