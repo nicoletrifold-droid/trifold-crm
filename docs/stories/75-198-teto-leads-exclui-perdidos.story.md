@@ -74,7 +74,7 @@ stage_id NOT IN (Perdido, Não Qualificado)`.
 - [x] AC3: `GET /api/brokers` E a tela Config › Corretores (`corretores/page.tsx`)
   mostram `active_leads_count` exato para TODOS os corretores mesmo com >1000 leads
   ativos na org, usando a mesma régua do teto (tela e trava não divergem mais).
-- [ ] AC4 (não quebrar o que funciona): comportamento intacto para corretor NO teto
+- [x] AC4 (não quebrar o que funciona): comportamento intacto para corretor NO teto
   real (contagem nova ≥ max_leads → `teto`); `ex_dono` continua bloqueando antes do
   teto; testes existentes de bolsão/roleta verdes.
 - [ ] AC5: migration aplicada em DEV e PROD (validar schema remoto — lição 75-188)
