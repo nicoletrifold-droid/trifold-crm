@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
     email: email.trim(),
     password,
     email_confirm: true,
+    app_metadata: { role }, // Story 75-205: role no JWT desde a criação
   })
 
   if (authError) {

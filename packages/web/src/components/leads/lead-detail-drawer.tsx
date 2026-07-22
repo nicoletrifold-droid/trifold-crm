@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useReducer, useState, useCallback } from "react"
+import { usePathname } from "next/navigation"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
 import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck } from "lucide-react"
@@ -191,7 +192,11 @@ export function LeadDetailDrawer({ leadId, onClose }: LeadDetailDrawerProps) {
 function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () => void }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const supabase = useMemo(() => createClient(), [])
-  const [leadBasePath, setLeadBasePath] = useState("/broker/leads")
+  // Story 75-205: o destino de "Ver completo"/"Editar Lead" é derivado da URL
+  // ATUAL, não do role no JWT — contas antigas sem app_metadata.role (caso
+  // Elisabete) caíam no mundo errado e o layout as expulsava pro início.
+  const pathname = usePathname()
+  const leadBasePath = pathname?.startsWith("/broker") ? "/broker/leads" : "/dashboard/leads"
   // Story 75-186 — agendamento pendente de feedback (visita passada sem visit_feedback)
   const [pendingFeedbackAptId, setPendingFeedbackAptId] = useState<string | null>(null)
   // Story 75-193 — lead em "Visitou" sem agendamento (ou só no-show/cancelado):
@@ -228,18 +233,6 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     return () => { cancelled = true }
   }, [leadId, supabase])
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const role = (data.user?.app_metadata?.role as string | undefined) ?? ""
-      // Story 75-199: só o corretor vive em /broker — qualquer outro perfil
-      // (admin, supervisor, gerente-comercial, imob, obras…) usa a página do
-      // dashboard. O allowlist antigo mandava perfil imob p/ /broker/leads e o
-      // layout de lá expulsava p/ /dashboard (guard role !== "broker").
-      if (role !== "broker") {
-        setLeadBasePath("/dashboard/leads")
-      }
-    })
-  }, [supabase])
 
   useEffect(() => {
     let cancelled = false
@@ -982,12 +975,26 @@ function TransferBrokerSection({ leadId, supabase }: { leadId: string; supabase:
   const [done, setDone] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const role = (data.user?.app_metadata?.role as string | undefined) ?? ""
+    let cancelled = false
+    supabase.auth.getUser().then(async ({ data }) => {
+      // Story 75-205: fallback igual ao do middleware — contas antigas podem
+      // não ter app_metadata.role no JWT (caso Elisabete/Thielly); a fonte da
+      // verdade é public.users.
+      let role = (data.user?.app_metadata?.role as string | undefined) ?? ""
+      if (!role && data.user?.id) {
+        const { data: row } = await supabase
+          .from("users")
+          .select("role")
+          .eq("auth_id", data.user.id)
+          .maybeSingle()
+        role = (row?.role as string | undefined) ?? ""
+      }
+      if (cancelled) return
       if (["admin", "supervisor", "gerente-comercial", "sdr"].includes(role)) {
         setCanTransfer(true)
       }
     })
+    return () => { cancelled = true }
   }, [supabase])
 
   const fetchBrokers = useCallback(async () => {

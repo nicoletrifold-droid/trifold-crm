@@ -19,7 +19,7 @@ export async function POST(
 
   const { data: targetUser, error: fetchError } = await supabase
     .from("users")
-    .select("id, name, email, auth_id")
+    .select("id, name, email, auth_id, role")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .single()
@@ -40,6 +40,8 @@ export async function POST(
       email: targetUser.email as string,
       email_confirm: true,
       password: crypto.randomUUID(), // senha temporária — será sobrescrita pelo link de recovery
+      // Story 75-205: role no JWT desde a criação (fonte = public.users)
+      ...(targetUser.role ? { app_metadata: { role: targetUser.role } } : {}),
     })
     if (createError || !newAuth?.user?.id) {
       return NextResponse.json({ error: createError?.message ?? "Erro ao criar conta de acesso." }, { status: 500 })
