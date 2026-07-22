@@ -4,7 +4,7 @@ import { requireAuth } from "@web/lib/api-auth"
 import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
 
 /** Mesma matriz do /api/appointments/[id]/feedback (75-185). */
-const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial"]
+const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
 
 /**
  * POST /api/leads/[id]/visit-feedback — Story 75-193

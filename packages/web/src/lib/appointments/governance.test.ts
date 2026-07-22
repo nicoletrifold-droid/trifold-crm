@@ -16,6 +16,12 @@ describe("canMutateAppointment (Story 75-103)", () => {
     expect(canMutateAppointment("supervisor", "x", internal)).toBe(true)
     expect(canMutateAppointment("gerente-comercial", "x", internal)).toBe(true)
   })
+  it("sdr espelha o gerente-comercial no HOUSE, mas NÃO no IMOB (Story 75-204)", () => {
+    expect(canMutateAppointment("sdr", "x", internal)).toBe(true)
+    expect(
+      canMutateAppointment("sdr", "x", { broker_id: null, calendly_event_uri: null, team: "imob" })
+    ).toBe(false)
+  })
   it("perfil não privilegiado e não-dono NÃO pode no HOUSE (ex.: imob/consultoria)", () => {
     expect(canMutateAppointment("imob", "x", internal)).toBe(false)
     expect(canMutateAppointment("consultoria", "x", internal)).toBe(false)

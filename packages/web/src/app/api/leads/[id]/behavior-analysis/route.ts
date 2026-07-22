@@ -30,6 +30,7 @@ export async function POST(
     "admin",
     "supervisor",
     "gerente-comercial",
+    "sdr",
     "broker",
   ])
   if (forbidden) return forbidden

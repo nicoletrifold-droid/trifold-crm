@@ -8,7 +8,7 @@ function getServiceClient() {
 }
 
 /** Story 75-185 — perfis que registram feedback de qualquer agendamento da org. */
-const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial"]
+const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
 
 /**
  * POST /api/appointments/[id]/feedback

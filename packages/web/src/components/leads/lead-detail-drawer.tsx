@@ -984,7 +984,7 @@ function TransferBrokerSection({ leadId, supabase }: { leadId: string; supabase:
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const role = (data.user?.app_metadata?.role as string | undefined) ?? ""
-      if (["admin", "supervisor", "gerente-comercial"].includes(role)) {
+      if (["admin", "supervisor", "gerente-comercial", "sdr"].includes(role)) {
         setCanTransfer(true)
       }
     })

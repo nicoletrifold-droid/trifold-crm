@@ -19,7 +19,7 @@ import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as 
 // Story 75-155 — MESMA lista de roles do /broker (broker/leads/[id]/page.tsx:10).
 // `broker` é inócuo aqui (corretor não abre /dashboard/leads). Perfis fora da
 // lista (ex.: gerente-relacionamento, obras) ficam só-leitura.
-const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial"]
+const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial", "sdr"]
 
 const TABS = [
   { key: "info", label: "Info" },
@@ -76,7 +76,7 @@ export default async function LeadDetailPage({
   // Story 75-199: perfil imob edita SÓ lead do mundo IMOB (mundo isolado — a
   // API já permitia via fallback "corretor responsável"; aqui é o gate de UI).
   const canEdit =
-    ["admin", "supervisor", "gerente-comercial"].includes(user.role) ||
+    ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role) ||
     (user.role === "imob" && lead.segmento === "imob")
 
   const { data: properties } = canEdit

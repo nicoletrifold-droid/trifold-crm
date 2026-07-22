@@ -4,7 +4,7 @@
 //  - Agenda é COMPARTILHADA (todos veem tudo) — isolamento não se aplica.
 //  - Editar/cancelar/completar POR EQUIPE (Story 81-3):
 //      admin/supervisor → tudo (house e imob);
-//      HOUSE → dono (broker_id) ou gerente-comercial;
+//      HOUSE → dono (broker_id), gerente-comercial ou sdr (75-204);
 //      IMOB  → só perfil `imob` (Daiana).
 //  - Compromisso do CALENDLY (cliente marcou sozinho; tem calendly_event_uri, sem
 //    broker_id): edição/cancelamento LIVRES (não há dono interno; será desligado na 81-4).
@@ -34,8 +34,8 @@ export function canMutateAppointment(
   if (appt.calendly_event_uri) return true // cliente marcou sozinho — sem dono interno
   if ((APPOINTMENT_ADMIN_ROLES as readonly string[]).includes(role)) return true
   if (appt.team === "imob") return role === "imob"
-  // HOUSE (ou team ausente — default do banco)
-  if (role === "gerente-comercial") return true
+  // HOUSE (ou team ausente — default do banco). Story 75-204: sdr = gerente.
+  if (role === "gerente-comercial" || role === "sdr") return true
   return appt.broker_id != null && appt.broker_id === userId
 }
 

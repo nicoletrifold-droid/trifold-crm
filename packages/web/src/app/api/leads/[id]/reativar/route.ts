@@ -21,7 +21,7 @@ const ROLETA = "__roleta__"
 // conflito (ver distributor.ts / 156_roleta_pick_no_perdido.sql).
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-const MANAGER_ROLES = ["admin", "supervisor", "gerente-comercial"] as const
+const MANAGER_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"] as const
 
 type EligibleBroker = { userId: string; name: string }
 
@@ -85,7 +85,7 @@ export async function GET(
       .select("id, name")
       .eq("org_id", appUser.org_id)
       .eq("is_active", true)
-      .in("role", ["broker", "gerente-comercial"])
+      .in("role", ["broker", "gerente-comercial", "sdr"])
       .order("name")
     brokers = (all ?? []).map((u) => ({ userId: u.id, name: u.name ?? "Sem nome" }))
   }
@@ -201,7 +201,7 @@ export async function POST(
     .eq("id", brokerUserId)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
-  if (!target || !target.is_active || !["broker", "gerente-comercial"].includes(target.role)) {
+  if (!target || !target.is_active || !["broker", "gerente-comercial", "sdr"].includes(target.role)) {
     return NextResponse.json({ error: "Corretor destino inválido." }, { status: 422 })
   }
 

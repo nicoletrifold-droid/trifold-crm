@@ -19,7 +19,9 @@ type FunnelRow = {
 export default async function DashboardPage() {
   const appUser = await getServerUser()
   const supabase = await createClient()
-  const isGerenteComercial = appUser.role === "gerente-comercial"
+  // Story 75-204: perfil sdr espelha o dashboard do gerente-comercial
+  // (blocos "Leads da Equipe" + "Funil da Equipe", RPCs com p_broker_id null).
+  const isGerenteComercial = ["gerente-comercial", "sdr"].includes(appUser.role)
 
   // Story 75-102: dashboard "espelho". Perfis do mundo IMOB (imob/consultoria) veem o
   // funil DELES (segmento='imob'); todos os demais seguem no mundo principal. Os links de
