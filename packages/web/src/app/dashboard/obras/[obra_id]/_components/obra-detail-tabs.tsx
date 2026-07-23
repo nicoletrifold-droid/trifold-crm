@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { Pencil, Plus, Trash2, Eye, FileText } from "lucide-react"
+import { Pencil, Plus, Trash2, Eye, FileText, Search, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { FotoUploadForm } from "./foto-upload-form"
 import { FotoDeleteButton } from "./foto-delete-button"
@@ -74,6 +74,7 @@ interface Cliente {
   is_primary: boolean
   numero_unidade: string | null
   sienge_customer_id: number | null
+  created_at?: string | null // data do vínculo (Story 75-211)
 }
 
 interface ObraDetailTabsProps {
@@ -108,6 +109,19 @@ const FASE_STATUS_LABEL: Record<string, string> = {
   pausada: "PAUSADA",
   concluida: "CONCLUÍDA",
 }
+
+// Story 75-211 — busca insensível a acento/caixa
+function norm(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+}
+
+type DocSort = "recentes" | "antigos" | "nome"
+
+const DOC_SORT_OPTIONS: { value: DocSort; label: string }[] = [
+  { value: "recentes", label: "Mais recentes" },
+  { value: "antigos", label: "Mais antigos" },
+  { value: "nome", label: "Nome (A–Z)" },
+]
 
 function formatBytes(bytes: number | null): string {
   if (!bytes) return "—"
@@ -435,6 +449,11 @@ export function ObraDetailTabs({
   const [viewingDocId, setViewingDocId] = useState<string | null>(null)
   const [viewErrorDoc, setViewErrorDoc] = useState<{ docId: string; message: string } | null>(null)
 
+  // Story 75-211 — busca, categoria e ordenação dos documentos
+  const [docBusca, setDocBusca] = useState("")
+  const [docCategoria, setDocCategoria] = useState("")
+  const [docSort, setDocSort] = useState<DocSort>("recentes")
+
   async function handleViewDoc(docId: string) {
     setViewingDocId(docId)
     setViewErrorDoc(null)
@@ -505,6 +524,43 @@ export function ObraDetailTabs({
   const pendenteDocumentos = mostraPendentes
     ? aprovacoes.filter((a) => a.tipo === "documento")
     : []
+
+  // Story 75-211 — busca/categoria/ordenação aplicadas no cliente (volume pequeno).
+  // Categorias do seletor = as que existem nos docs da obra (publicados + pendentes).
+  const docCategorias = [
+    ...new Set([
+      ...documentos.map((d) => d.category).filter(Boolean),
+      ...pendenteDocumentos
+        .map((p) => (p.metadata as { category?: string }).category ?? "")
+        .filter(Boolean),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR"))
+
+  const docQ = norm(docBusca.trim())
+  const docFiltroAtivo = docQ.length > 0 || docCategoria !== ""
+
+  const documentosVisiveis = documentos
+    .filter((d) => {
+      if (docCategoria && d.category !== docCategoria) return false
+      if (!docQ) return true
+      if (norm(d.name).includes(docQ)) return true
+      if (norm(d.filename).includes(docQ)) return true
+      const label = d.cliente_obra_id ? destinatarioLabel.get(d.cliente_obra_id) : null
+      return !!label && norm(label).includes(docQ)
+    })
+    .sort((a, b) => {
+      if (docSort === "nome") return a.name.localeCompare(b.name, "pt-BR")
+      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      return docSort === "antigos" ? diff : -diff
+    })
+
+  const pendenteDocumentosVisiveis = pendenteDocumentos.filter((item) => {
+    const meta = item.metadata as { name?: string; category?: string }
+    if (docCategoria && (meta.category ?? "") !== docCategoria) return false
+    if (!docQ) return true
+    const nome = meta.name ?? item.storage_path.split("/").pop() ?? ""
+    return norm(nome).includes(docQ)
+  })
 
   const totalPendentes = aprovacoes.filter((a) => a.status === "pendente").length
 
@@ -807,16 +863,76 @@ export function ObraDetailTabs({
 
           <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-              Documentos ({documentos.length + (mostraPendentes ? pendenteDocumentos.length : 0)})
+              Documentos (
+              {docFiltroAtivo
+                ? `${documentosVisiveis.length + pendenteDocumentosVisiveis.length} de ${
+                    documentos.length + pendenteDocumentos.length
+                  }`
+                : documentos.length + pendenteDocumentos.length}
+              )
             </h2>
+            {/* Story 75-211 — busca + categoria + ordenação */}
+            {(documentos.length > 0 || pendenteDocumentos.length > 0) && (
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-stone-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome do documento ou destinatário..."
+                    value={docBusca}
+                    onChange={(e) => setDocBusca(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-8 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+                  />
+                  {docBusca && (
+                    <button
+                      type="button"
+                      onClick={() => setDocBusca("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
+                      title="Limpar busca"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={docCategoria}
+                  onChange={(e) => setDocCategoria(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                  title="Filtrar por categoria"
+                >
+                  <option value="">Todas as categorias</option>
+                  {docCategorias.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={docSort}
+                  onChange={(e) => setDocSort(e.target.value as DocSort)}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                  title="Ordenar por"
+                >
+                  {DOC_SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {documentos.length === 0 && pendenteDocumentos.length === 0 ? (
               <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
                 Nenhum documento enviado ainda.
               </p>
+            ) : documentosVisiveis.length === 0 && pendenteDocumentosVisiveis.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
+                Nenhum documento encontrado para o filtro.
+              </p>
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-stone-800">
                 {/* Documentos publicados */}
-                {documentos.map((doc) => (
+                {documentosVisiveis.map((doc) => (
                   <div key={doc.id} className="py-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -866,7 +982,7 @@ export function ObraDetailTabs({
                 ))}
 
                 {/* Documentos pendentes/rejeitados do próprio usuário obras */}
-                {mostraPendentes && pendenteDocumentos.map((item) => {
+                {mostraPendentes && pendenteDocumentosVisiveis.map((item) => {
                   const isPendente = item.status === "pendente"
                   const isRejeitado = item.status === "rejeitado"
                   const meta = item.metadata as {

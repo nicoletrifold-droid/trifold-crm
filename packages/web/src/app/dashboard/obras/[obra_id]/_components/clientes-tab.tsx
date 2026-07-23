@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserPlus, Trash2, Pencil, Check, X, Search, Lock, Link2, Link2Off, Loader2, KeyRound } from "lucide-react"
 import { SenhaClienteModal } from "@web/app/dashboard/_components/senha-cliente-modal"
@@ -15,7 +15,21 @@ interface Cliente {
   numero_unidade: string | null
   sienge_customer_id: number | null
   portalUserId?: string | null  // ID da tabela users (portal), se existir
+  created_at?: string | null    // data do vínculo com a obra (Story 75-211)
 }
+
+// Story 75-211 — busca insensível a acento/caixa
+function norm(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+}
+
+type ClienteSort = "nome" | "unidade" | "recentes"
+
+const CLIENTE_SORT_OPTIONS: { value: ClienteSort; label: string }[] = [
+  { value: "nome", label: "Nome (A–Z)" },
+  { value: "unidade", label: "Unidade" },
+  { value: "recentes", label: "Mais recentes" },
+]
 
 interface ClientesTabProps {
   obraId: string
@@ -84,6 +98,44 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
   // ── Sienge vinculation state per client ──────────────────────────────
   const [siengeOpen, setSiengeOpen] = useState<string | null>(null)
   const [siengeState, setSiengeState] = useState<Record<string, SiengeVinculo>>({})
+
+  // ── Busca + ordenação da lista (Story 75-211) ─────────────────────────
+  const [busca, setBusca] = useState("")
+  const [sort, setSort] = useState<ClienteSort>("nome")
+
+  const clientesVisiveis = useMemo(() => {
+    const q = norm(busca.trim())
+    const qDigits = busca.replace(/\D/g, "")
+    const filtrados = q
+      ? clientes.filter((c) => {
+          if (norm(c.name).includes(q)) return true
+          if (c.email && norm(c.email).includes(q)) return true
+          if (c.numero_unidade && norm(c.numero_unidade).includes(q)) return true
+          // CPF casa por dígitos (com ou sem pontuação)
+          if (qDigits && c.cpf && c.cpf.replace(/\D/g, "").includes(qDigits)) return true
+          return false
+        })
+      : [...clientes]
+    return filtrados.sort((a, b) => {
+      if (sort === "unidade") {
+        // Sem unidade vai para o fim; ordenação natural (302 antes de 1201)
+        if (!a.numero_unidade && !b.numero_unidade) return a.name.localeCompare(b.name, "pt-BR")
+        if (!a.numero_unidade) return 1
+        if (!b.numero_unidade) return -1
+        return (
+          a.numero_unidade.localeCompare(b.numero_unidade, "pt-BR", { numeric: true }) ||
+          a.name.localeCompare(b.name, "pt-BR")
+        )
+      }
+      if (sort === "recentes") {
+        return (
+          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime() ||
+          a.name.localeCompare(b.name, "pt-BR")
+        )
+      }
+      return a.name.localeCompare(b.name, "pt-BR")
+    })
+  }, [clientes, busca, sort])
 
   function openSiengePanel(cliente: Cliente) {
     setSiengeOpen(cliente.clienteId)
@@ -436,15 +488,60 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
       {/* Lista de clientes vinculados */}
       <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-          Clientes Vinculados ({clientes.length})
+          Clientes Vinculados (
+          {busca.trim()
+            ? `${clientesVisiveis.length} de ${clientes.length}`
+            : clientes.length}
+          )
         </h2>
+        {/* Story 75-211 — busca + ordenação */}
+        {clientes.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-stone-500" />
+              <input
+                type="text"
+                placeholder="Buscar por nome, CPF, e-mail ou unidade..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-8 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+              />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
+                  title="Limpar busca"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as ClienteSort)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+              title="Ordenar por"
+            >
+              {CLIENTE_SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {clientes.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
             Nenhum cliente vinculado a esta obra.
           </p>
+        ) : clientesVisiveis.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
+            Nenhum cliente encontrado para a busca.
+          </p>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-stone-800">
-            {clientes.map((c) => {
+            {clientesVisiveis.map((c) => {
               const sienge = siengeState[c.clienteId]
               const isOpen = siengeOpen === c.clienteId
 
