@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
   let leadsQuery = supabase
     .from("leads")
     .select("created_at, property_interest_id")
+    .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB (fix: faltava aqui)
     .eq("is_active", true)
     .is("lost_reason", null)
     .gte("created_at", from)
