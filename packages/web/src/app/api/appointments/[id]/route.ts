@@ -100,11 +100,11 @@ export async function PATCH(
   // Story 75-103: ao remarcar (muda horário/duração/local), revalida conflito.
   const reschedules = "scheduled_at" in updateFields || "duration_minutes" in updateFields || "location" in updateFields
   if (reschedules) {
-    // Compromissos de 1 em 1 hora: ao MUDAR o horário, normaliza p/ hora cheia + 1h
+    // Compromissos de 1h: ao MUDAR o horário, alinha o início a :00/:30 + 1h
     // (edições só de local/nota mantêm a duração existente).
     const changingTime = "scheduled_at" in updateFields
     const newStart = new Date((updateFields.scheduled_at as string) ?? existing.scheduled_at)
-    if (changingTime) newStart.setMinutes(0, 0, 0)
+    if (changingTime) newStart.setMinutes(newStart.getMinutes() < 30 ? 0 : 30, 0, 0)
     const newDuration = changingTime
       ? 60
       : ((updateFields.duration_minutes as number) ?? existing.duration_minutes ?? 30)
