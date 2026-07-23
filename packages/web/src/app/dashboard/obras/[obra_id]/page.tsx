@@ -89,7 +89,7 @@ export default async function ObraDetailPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("clientes_obras_vinculos")
-        .select("id, numero_unidade, clientes(id, nome, cpf, email, sienge_customer_id)")
+        .select("id, numero_unidade, created_at, clientes(id, nome, cpf, email, sienge_customer_id)")
         .eq("obra_id", obra_id),
       // Busca aprovações: admin/supervisor vê todos os pendentes; obras vê os próprios
       isAdminOrSupervisor
@@ -160,6 +160,8 @@ export default async function ObraDetailPage({
       numero_unidade: row.numero_unidade ?? null,
       sienge_customer_id: (c as { sienge_customer_id?: number | null } | null)?.sienge_customer_id ?? null,
       portalUserId: portalUsersMap[email] ?? null,
+      // Story 75-211 — data do vínculo, usada na ordenação "Mais recentes"
+      created_at: row.created_at,
     }
   })
 
