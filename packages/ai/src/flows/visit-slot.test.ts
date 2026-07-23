@@ -273,4 +273,40 @@ describe("checkSlotAvailability por equipe (Story 81-1)", () => {
     expect(free).toBe(false)
     expect(alternatives[0]?.toISOString()).toBe("2026-07-20T18:00:00.000Z")
   })
+
+  it("sugestões saem de 30 em 30 min; vizinhos que sobrepõem a visita ocupada ficam fora", async () => {
+    // house ocupa 14:00–15:00 → 14:30 sobrepõe (fora); livres: 15:00, 15:30, 16:00
+    const sb = fakeSupabase([row("house", "2026-07-20T17:00:00.000Z")])
+    const { free, alternatives } = await checkSlotAvailability(sb, "org1", SLOT)
+    expect(free).toBe(false)
+    expect(alternatives.map((a) => a.toISOString())).toEqual([
+      "2026-07-20T18:00:00.000Z", // 15:00 BRT
+      "2026-07-20T18:30:00.000Z", // 15:30 BRT
+      "2026-07-20T19:00:00.000Z", // 16:00 BRT
+    ])
+  })
+
+  it("pedido às 14:30 livre é aceito (passo de 30min também na entrada)", async () => {
+    const sb = fakeSupabase([])
+    const { free } = await checkSlotAvailability(sb, "org1", new Date("2026-07-20T17:30:00Z"))
+    expect(free).toBe(true)
+  })
+})
+
+describe("evaluateSlot — visita precisa caber no expediente (2026-07-23)", () => {
+  it("17:00 com fechamento 18:00 = válido (termina exatamente no fechamento)", () => {
+    const { startUtc, outsideHours } = evaluateSlot(isoToDayParts("2026-07-20")!, { hour: 17, minute: 0 }, NOW)
+    expect(outsideHours).toBe(false)
+    expect(startUtc?.toISOString()).toBe("2026-07-20T20:00:00.000Z")
+  })
+  it("17:30 com fechamento 18:00 = fora (a visita de 1h varia o expediente)", () => {
+    const { startUtc, outsideHours } = evaluateSlot(isoToDayParts("2026-07-20")!, { hour: 17, minute: 30 }, NOW)
+    expect(startUtc).toBeNull()
+    expect(outsideHours).toBe(true)
+  })
+  it("14:30 em dia útil = válido", () => {
+    const { startUtc, outsideHours } = evaluateSlot(isoToDayParts("2026-07-20")!, { hour: 14, minute: 30 }, NOW)
+    expect(outsideHours).toBe(false)
+    expect(startUtc?.toISOString()).toBe("2026-07-20T17:30:00.000Z")
+  })
 })

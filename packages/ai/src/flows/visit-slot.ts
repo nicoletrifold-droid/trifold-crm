@@ -1,7 +1,8 @@
 /**
  * Story 73-1 — parsing do dia/horário pedido pelo cliente (PT-BR) e checagem de
  * disponibilidade na agenda interna (tabela `appointments`, que já recebe Calendly
- * via cron `calendly-sync`). Visita = 60 min, slots de hora em hora.
+ * via cron `calendly-sync`). Visita = 60 min; desde 2026-07-23 as SUGESTÕES da
+ * Nicole saem de 30 em 30 min (mesmo passo da grade interna, SLOT_STEP_MIN).
  *
  * Brasil não tem horário de verão desde 2019 → BRT é fixo em UTC-3.
  */
@@ -9,6 +10,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 const BRT_OFFSET_HOURS = 3
 export const VISIT_DURATION_MIN = 60
+/** Passo (min) do INÍCIO dos slots sugeridos — espelha a grade da agenda interna. */
+const SLOT_STEP_MIN = 30
 const OPEN_HOUR = 8
 
 /** Hora de fechamento (BRT) por dia da semana, ou null se fechado (domingo). */
@@ -218,7 +221,11 @@ export function evaluateSlot(
 
   const targetWeekday = new Date(startUtc.getTime() - BRT_OFFSET_HOURS * 3600_000).getUTCDay()
   const close = closeHourFor(targetWeekday)
-  if (close === null || time.hour < OPEN_HOUR || time.hour >= close) {
+  // A visita de 60min precisa caber inteira no expediente (início + 60 ≤ fechamento)
+  // — mesma regra da grade interna (2026-07-23). Antes 17:30 com fechamento 18:00
+  // era aceito e a visita varava o expediente.
+  const startMin = time.hour * 60 + time.minute
+  if (close === null || startMin < OPEN_HOUR * 60 || startMin + VISIT_DURATION_MIN > close * 60) {
     return { startUtc: null, outsideHours: true }
   }
   return { startUtc, outsideHours: false }
@@ -295,14 +302,17 @@ export async function checkSlotAvailability(
 
   const alternatives: Date[] = []
   const reqParts = brtParts(startUtc)
-  const reqHour = new Date(startUtc.getTime() - BRT_OFFSET_HOURS * 3600_000).getUTCHours()
+  const reqBrt = new Date(startUtc.getTime() - BRT_OFFSET_HOURS * 3600_000)
+  const reqMin = reqBrt.getUTCHours() * 60 + reqBrt.getUTCMinutes()
 
-  // Candidatos: resto do dia pedido + próximo dia útil (manhã)
+  // Candidatos de 30 em 30 min: resto do dia pedido + próximo dia útil (manhã).
+  // A visita de 60min precisa caber inteira no expediente (início + 60 ≤ fechamento).
   const candidates: Date[] = []
   const closeToday = closeHourFor(reqParts.weekday)
   if (closeToday !== null) {
-    for (let h = reqHour + 1; h < closeToday; h++) {
-      candidates.push(brtToUtc(reqParts.y, reqParts.m, reqParts.d, h))
+    const firstAfterReq = Math.floor(reqMin / SLOT_STEP_MIN) * SLOT_STEP_MIN + SLOT_STEP_MIN
+    for (let m = firstAfterReq; m + VISIT_DURATION_MIN <= closeToday * 60; m += SLOT_STEP_MIN) {
+      candidates.push(brtToUtc(reqParts.y, reqParts.m, reqParts.d, Math.floor(m / 60), m % 60))
     }
   }
   // Próximo dia (pula domingo)
@@ -314,8 +324,8 @@ export async function checkSlotAvailability(
   }
   const closeNext = closeHourFor(nextParts.weekday)
   if (closeNext !== null) {
-    for (let h = OPEN_HOUR; h < closeNext; h++) {
-      candidates.push(brtToUtc(nextParts.y, nextParts.m, nextParts.d, h))
+    for (let m = OPEN_HOUR * 60; m + VISIT_DURATION_MIN <= closeNext * 60; m += SLOT_STEP_MIN) {
+      candidates.push(brtToUtc(nextParts.y, nextParts.m, nextParts.d, Math.floor(m / 60), m % 60))
     }
   }
 
