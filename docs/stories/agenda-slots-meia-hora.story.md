@@ -26,11 +26,15 @@
 - Guards de servidor que forçavam `:00` agora alinham a `:00/:30` (snap para baixo):
   POST /api/appointments, PATCH /api/appointments/[id] (remarcar), POST /api/agendar/[token].
 
-## FORA de escopo (registrado)
-- **Nicole**: já ACEITA horário quebrado pedido pelo lead (parseHour entende "15h30" e o
-  insert não faz snap), mas as ALTERNATIVAS que ela oferece seguem de hora em hora
-  (`packages/ai/src/flows/visit-slot.ts`, laços hora-a-hora + expediente hardcoded 8–18/8–12
-  divergente do roleta_schedule). Unificar fica para uma story própria se o Marcos quiser.
+## Parte 2 — Nicole (pedido do Marcos na sequência, mesmo dia)
+- `packages/ai/src/flows/visit-slot.ts`: SUGESTÕES da Nicole agora saem de 30 em 30 min
+  (`SLOT_STEP_MIN = 30`, mesmo passo da grade) — resto do dia + manhã do próximo dia útil.
+- `evaluateSlot` alinhado à regra nova: o horário PEDIDO pelo lead precisa caber inteiro
+  no expediente (17:30 com fechamento 18:00 agora é "fora do horário" → oferece alternativas;
+  antes aceitava e a visita varava o expediente).
+- `formatBrtDateTime` do pipeline já mostra minutos ("segunda... às 15:30") — sem mudança.
+- Segue FORA: expediente da Nicole continua hardcoded (seg–sex 8–18, sáb 8–12), divergente
+  do roleta_schedule — unificar = story futura.
 
 ## File List
 - `packages/web/src/lib/appointments/imob-slots.ts` (SLOT_STEP_MIN=30; grade + isValidImobSlot)
