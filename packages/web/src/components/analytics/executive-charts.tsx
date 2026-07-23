@@ -328,7 +328,8 @@ const OUTCOME_SEGMENTS = [
   { key: "fechados", label: "Fechados" },
   { key: "ativos", label: "Em atendimento" },
   { key: "perdidos", label: "Perdidos" },
-  { key: "outros", label: "Inativos" },
+  // Fora do funil sem perda: classificação não-lead da roleta ou cliente da base (Épico 76).
+  { key: "outros", label: "Não-lead/Cliente" },
 ] as const
 
 function OutcomeBars({
