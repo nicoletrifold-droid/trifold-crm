@@ -68,7 +68,7 @@ describe("buildComparison", () => {
 })
 
 describe("buildSourceTrend", () => {
-  it("top N vira série própria e o resto dobra em Outros", () => {
+  it("top N vira série própria e o resto dobra em Demais origens", () => {
     const rows = [
       { created_at: "2026-07-21T12:00:00Z", source: "meta_ads" },
       { created_at: "2026-07-21T13:00:00Z", source: "meta_ads" },
@@ -76,20 +76,31 @@ describe("buildSourceTrend", () => {
       { created_at: "2026-07-22T13:00:00Z", source: "telegram" },
       { created_at: "2026-07-22T14:00:00Z", source: null },
     ]
-    const r = buildSourceTrend(rows, "2026-07-21T03:00:00Z", "2026-07-22T03:00:00Z", "day", { meta_ads: "Meta Ads" }, 2)
+    const r = buildSourceTrend(
+      rows,
+      "2026-07-21T03:00:00Z",
+      "2026-07-22T03:00:00Z",
+      "day",
+      { meta_ads: "Meta Ads", telegram: "Telegram" },
+      2
+    )
 
     expect(r.periods).toEqual(["2026-07-21", "2026-07-22"])
     expect(r.series.map((s) => s.key)).toEqual(["meta_ads", "whatsapp_organic", "__outros"])
     expect(r.series[0]!.label).toBe("Meta Ads")
     expect(r.series[0]!.data).toEqual([2, 0])
-    expect(r.series[2]!.data).toEqual([0, 2]) // telegram + null dobram em Outros
+    expect(r.series[2]!.label).toBe("Demais origens")
+    expect(r.series[2]!.data).toEqual([0, 2]) // telegram + null dobram em Demais origens
     expect(r.total).toBe(5)
+    // Legenda auxiliar concilia com o Aproveitamento: lista o que está dobrado.
+    expect(r.foldedLabels).toEqual(["Telegram", "other"])
   })
 
-  it("sem cauda não cria série Outros", () => {
+  it("sem cauda não cria série Demais origens", () => {
     const rows = [{ created_at: "2026-07-21T12:00:00Z", source: "meta_ads" }]
     const r = buildSourceTrend(rows, "2026-07-21T03:00:00Z", "2026-07-21T03:00:00Z", "day", {}, 4)
     expect(r.series.map((s) => s.key)).toEqual(["meta_ads"])
+    expect(r.foldedLabels).toEqual([])
   })
 })
 

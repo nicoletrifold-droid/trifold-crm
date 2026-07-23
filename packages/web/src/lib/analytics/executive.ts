@@ -148,12 +148,17 @@ export interface SourceTrendData {
   periods: string[]
   series: SourceTrendSeries[]
   total: number
+  /** Rótulos das origens dobradas em "Demais origens", por volume desc —
+   *  exibidos como legenda auxiliar pra conciliar com o Aproveitamento. */
+  foldedLabels: string[]
 }
 
 /**
- * Top N origens viram séries próprias; o resto dobra em "Outros" (nunca gerar
- * mais matizes — regra do guia de dataviz). A ordem das séries é fixa por
- * volume TOTAL da janela, então a cor segue a origem enquanto o usuário navega.
+ * Top N origens viram séries próprias; o resto dobra em "Demais origens"
+ * (nunca gerar mais matizes — regra do guia de dataviz; e "Outros" colidia
+ * com a origem real "Outro"/other, que confundia a leitura). A ordem das
+ * séries é fixa por volume TOTAL da janela, então a cor segue a origem
+ * enquanto o usuário navega.
  */
 export function buildSourceTrend(
   rows: { created_at: string; source: string | null }[],
@@ -193,9 +198,14 @@ export function buildSourceTrend(
   }
 
   const series: SourceTrendSeries[] = top.map((k) => ({ key: k, label: labels[k] ?? k, data: seriesMap.get(k)! }))
-  if (hasOutros) series.push({ key: "__outros", label: "Outros", data: outros })
+  if (hasOutros) series.push({ key: "__outros", label: "Demais origens", data: outros })
 
-  return { granularity, periods, series, total: rows.length }
+  const foldedLabels = [...totals.entries()]
+    .filter(([k]) => !topSet.has(k))
+    .sort((a, b) => b[1] - a[1])
+    .map(([k]) => labels[k] ?? k)
+
+  return { granularity, periods, series, total: rows.length, foldedLabels }
 }
 
 // ── Mapa de calor dia da semana × hora (BRT) ─────────────────────────────────

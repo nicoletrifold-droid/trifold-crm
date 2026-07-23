@@ -31,11 +31,13 @@ interface Property {
   name: string
 }
 
+// Rótulos batem com SOURCE_LABELS_SHORT (Visão Executiva/badges/PDF) —
+// decisão 2026-07-23: WhatsApp Orgânico × WhatsApp Patrocinado explícitos.
 const SOURCE_OPTIONS = [
   { value: "", label: "Todos" },
-  { value: "whatsapp_organic", label: "WhatsApp" },
+  { value: "whatsapp_organic", label: "WhatsApp Orgânico" },
   { value: "meta_ads", label: "Meta Ads" },
-  { value: "whatsapp_click_to_ad", label: "CTWA" },
+  { value: "whatsapp_click_to_ad", label: "WhatsApp Patrocinado" },
   { value: "walk_in", label: "Manual" },
 ]
 

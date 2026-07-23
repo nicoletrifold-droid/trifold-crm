@@ -612,7 +612,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                     {
                       meta_ads: "Meta Ads",
                       whatsapp_organic: "WhatsApp Orgânico",
-                      whatsapp_click_to_ad: "WhatsApp Click-to-Ad",
+                      whatsapp_click_to_ad: "WhatsApp Patrocinado (Click-to-Ad)",
                       website: "Website",
                       referral: "Indicação",
                       walk_in: "Walk-in",
