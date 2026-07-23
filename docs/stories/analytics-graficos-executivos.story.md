@@ -1,6 +1,6 @@
 # Story — Analytics: Gráficos Executivos (visão do diretor)
 
-**Status:** InReview (aguardando @devops para push/deploy)
+**Status:** Done (PR #273 squash-merged em d8aaf339; deploy prod Vercel OK 2026-07-23; rota nova responde 401 anônimo em prod ✓)
 **Tipo:** Feature
 **Epic:** Analytics / Relatórios
 **Relacionado:** Story 75-31 (período global), 75-178/75-179 (métricas unificadas tela=PDF), 75-184 (Perfil dos Leads), [[project-analytics-metrica-unificada]]
