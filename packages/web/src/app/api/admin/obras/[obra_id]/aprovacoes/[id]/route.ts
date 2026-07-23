@@ -3,9 +3,101 @@ import { requireAuth } from "@web/lib/api-auth"
 import { logAudit } from "@web/lib/audit"
 import { sendEmail } from "@web/lib/email"
 import { notifyClientes } from "@web/lib/notificacoes"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 const ALLOWED_ROLES = ["admin", "supervisor"]
+
+// DELETE — o AUTOR desfaz o próprio envio enquanto pendente (ou dispensa um
+// rejeitado da tela antes do purge de 7 dias). Admin/supervisor também podem.
+// A RLS da tabela não dá DELETE ao autor (policy é admin/supervisor) — a
+// fronteira de segurança é esta rota, que valida autor+status e usa o admin
+// client, mesmo padrão do lancamentosGuard.
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ obra_id: string; id: string }> }
+) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  const { obra_id, id } = await params
+
+  const { data: aprovacao } = await supabase
+    .from("obra_upload_aprovacoes")
+    .select("id, tipo, storage_path, storage_bucket, enviado_por, status")
+    .eq("id", id)
+    .eq("obra_id", obra_id)
+    .eq("org_id", appUser.org_id)
+    .maybeSingle()
+
+  if (!aprovacao) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
+  const isGestor = ALLOWED_ROLES.includes(appUser.role)
+  const isAutor = aprovacao.enviado_por === appUser.id
+  if (!isGestor && !isAutor) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  if (aprovacao.status === "aprovado") {
+    return NextResponse.json(
+      { error: "Upload já aprovado e publicado — exclua o item publicado" },
+      { status: 409 }
+    )
+  }
+
+  // Delete atômico com guard de status: se um gestor aprovar em paralelo, o
+  // status muda para 'aprovado' e este DELETE não casa nada (espelho do claim
+  // atômico do PATCH, que por sua vez não casa se esta linha já sumiu).
+  const admin = createAdminClient()
+  const { data: deleted, error: delErr } = await admin
+    .from("obra_upload_aprovacoes")
+    .delete()
+    .eq("id", id)
+    .eq("org_id", appUser.org_id)
+    .in("status", ["pendente", "rejeitado"])
+    .select("id")
+    .maybeSingle()
+
+  if (delErr) {
+    return NextResponse.json({ error: delErr.message }, { status: 500 })
+  }
+  if (!deleted) {
+    return NextResponse.json(
+      { error: "Upload já foi revisado por outro usuário" },
+      { status: 409 }
+    )
+  }
+
+  // 'exclusao_foto' é um PEDIDO de exclusão: o storage_path aponta para a foto
+  // VIVA publicada — cancelar o pedido não pode apagar o arquivo dela.
+  if (aprovacao.tipo !== "exclusao_foto") {
+    const { error: rmErr } = await admin.storage
+      .from(aprovacao.storage_bucket)
+      .remove([aprovacao.storage_path])
+    if (rmErr) {
+      // Linha já foi excluída — o purge de rejeitados não vai varrer este path.
+      console.error(
+        `[aprovacoes] arquivo órfão em ${aprovacao.storage_bucket}/${aprovacao.storage_path}: ${rmErr.message}`
+      )
+    }
+  }
+
+  void logAudit({
+    org_id: appUser.org_id,
+    user_id: appUser.id,
+    user_name: appUser.name,
+    action: "aprovacao.excluir",
+    entity_type: "obra_upload_aprovacao",
+    entity_id: id,
+    obra_id,
+    metadata: { tipo: aprovacao.tipo, status_anterior: aprovacao.status },
+  })
+
+  return NextResponse.json({ ok: true })
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -54,7 +146,12 @@ export async function PATCH(
     .single()
 
   if (fetchError || !aprovacao) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
+    // O autor pode ter excluído o próprio envio enquanto a aba do gestor
+    // estava aberta — mensagem clara em vez de um "Not found" seco.
+    return NextResponse.json(
+      { error: "Item não está mais na fila (removido pelo autor ou já processado)" },
+      { status: 409 }
+    )
   }
 
   if (aprovacao.status !== "pendente") {

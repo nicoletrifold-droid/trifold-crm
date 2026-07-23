@@ -452,6 +452,36 @@ export function ObraDetailTabs({
     }
   }
 
+  // Autor desfaz o próprio envio pendente (ou dispensa um rejeitado da tela).
+  const [deletingAprovacaoId, setDeletingAprovacaoId] = useState<string | null>(null)
+
+  async function handleDeleteAprovacao(item: AprovacaoItem) {
+    const msg =
+      item.tipo === "exclusao_foto"
+        ? item.status === "pendente"
+          ? "Cancelar o pedido de exclusão desta foto? A foto continua publicada."
+          : "Remover este aviso da lista?"
+        : item.status === "pendente"
+          ? "Excluir este envio? Ele sai da fila de aprovação e o arquivo é descartado."
+          : "Remover este item rejeitado da lista?"
+    if (!window.confirm(msg)) return
+    setDeletingAprovacaoId(item.id)
+    try {
+      const res = await fetch(`/api/admin/obras/${obraId}/aprovacoes/${item.id}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? "Erro ao excluir envio")
+      }
+      setAprovacoes((prev) => prev.filter((i) => i.id !== item.id))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao excluir envio")
+    } finally {
+      setDeletingAprovacaoId(null)
+    }
+  }
+
   // Fotos — lightbox
   const [lightboxFoto, setLightboxFoto] = useState<Foto | null>(null)
   const [editingFoto, setEditingFoto] = useState<Foto | null>(null)
@@ -466,9 +496,11 @@ export function ObraDetailTabs({
     return () => window.removeEventListener("keydown", onKey)
   }, [lightboxFoto])
 
-  // Uploads pendentes/rejeitados do role obras nas abas fotos/documentos
+  // Uploads pendentes/rejeitados do role obras nas abas fotos/documentos.
+  // 'exclusao_foto' (pedido de exclusão) entra no bloco de fotos para o autor
+  // poder acompanhar/cancelar o pedido e ver o motivo se for recusado.
   const pendenteFotos = mostraPendentes
-    ? aprovacoes.filter((a) => a.tipo === "foto")
+    ? aprovacoes.filter((a) => a.tipo === "foto" || a.tipo === "exclusao_foto")
     : []
   const pendenteDocumentos = mostraPendentes
     ? aprovacoes.filter((a) => a.tipo === "documento")
@@ -673,6 +705,7 @@ export function ObraDetailTabs({
                 {pendenteFotos.map((item) => {
                   const isPendente = item.status === "pendente"
                   const isRejeitado = item.status === "rejeitado"
+                  const isExclusao = item.tipo === "exclusao_foto"
                   const meta = item.metadata as { caption?: string }
                   return (
                     <div
@@ -704,7 +737,13 @@ export function ObraDetailTabs({
                               : "bg-red-500/90 text-white"
                           }`}
                         >
-                          {isPendente ? "Aguardando aprovação" : "Rejeitado"}
+                          {isExclusao
+                            ? isPendente
+                              ? "Exclusão solicitada"
+                              : "Exclusão recusada"
+                            : isPendente
+                              ? "Aguardando aprovação"
+                              : "Rejeitado"}
                         </span>
                       </div>
                       {meta.caption && (
@@ -717,6 +756,33 @@ export function ObraDetailTabs({
                           Motivo: {item.motivo_rejeicao}
                         </p>
                       )}
+                      <div className="flex items-center justify-end gap-1 border-t border-gray-100 px-1 py-1 dark:border-stone-800">
+                        {item.signed_url && (
+                          <button
+                            onClick={() => window.open(item.signed_url!, "_blank")}
+                            className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
+                            title="Visualizar foto"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteAprovacao(item)}
+                          disabled={deletingAprovacaoId === item.id}
+                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                          title={
+                            isExclusao
+                              ? isPendente
+                                ? "Cancelar pedido de exclusão"
+                                : "Remover aviso"
+                              : isPendente
+                                ? "Excluir envio"
+                                : "Remover da lista"
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   )
                 })}
@@ -803,14 +869,16 @@ export function ObraDetailTabs({
                 {mostraPendentes && pendenteDocumentos.map((item) => {
                   const isPendente = item.status === "pendente"
                   const isRejeitado = item.status === "rejeitado"
-                  const meta = item.metadata as { name?: string; category?: string; file_size_bytes?: number }
+                  const meta = item.metadata as {
+                    name?: string
+                    category?: string
+                    file_size_bytes?: number
+                    cliente_obra_id?: string | null
+                  }
                   return (
-                    <div
-                      key={item.id}
-                      className={`py-3 ${isPendente ? "opacity-50" : "opacity-40"}`}
-                    >
+                    <div key={item.id} className="py-3">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
+                        <div className={`min-w-0 flex-1 ${isPendente ? "opacity-60" : "opacity-50"}`}>
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 flex-shrink-0 text-gray-400 dark:text-stone-500" />
                             <p className={`truncate text-sm font-medium ${isRejeitado ? "line-through text-gray-500 dark:text-stone-500" : "text-gray-900 dark:text-stone-100"}`}>
@@ -831,11 +899,40 @@ export function ObraDetailTabs({
                               {meta.category} · {formatBytes(meta.file_size_bytes ?? null)}
                             </p>
                           )}
+                          {/* Destinatário (geral x exclusivo) — mesmo selo dos publicados */}
+                          {meta.cliente_obra_id ? (
+                            <span className="mt-1 inline-block rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+                              Exclusivo: {destinatarioLabel.get(meta.cliente_obra_id) ?? "cliente/unidade"}
+                            </span>
+                          ) : (
+                            <span className="mt-1 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-stone-700/50 dark:text-stone-400">
+                              Geral
+                            </span>
+                          )}
                           {isRejeitado && item.motivo_rejeicao && (
                             <p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">
                               Motivo: {item.motivo_rejeicao}
                             </p>
                           )}
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          {item.signed_url && (
+                            <button
+                              onClick={() => window.open(item.signed_url!, "_blank")}
+                              className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
+                              title="Visualizar documento"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteAprovacao(item)}
+                            disabled={deletingAprovacaoId === item.id}
+                            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                            title={isPendente ? "Excluir envio" : "Remover da lista"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
