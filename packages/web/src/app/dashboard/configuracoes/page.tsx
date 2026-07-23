@@ -1,6 +1,8 @@
 import { getServerUser } from "@web/lib/auth"
+import { createClient } from "@web/lib/supabase/server"
 import Link from "next/link"
 import { NotificationToggle } from "@web/components/notification-toggle"
+import { AprovacaoEmailToggle } from "./_components/aprovacao-email-toggle"
 
 const CONFIG_CARDS = [
   {
@@ -85,6 +87,19 @@ export default async function ConfiguracoesPage() {
     ? CONFIG_CARDS.filter((c) => GERENTE_ALLOWED.includes(c.href))
     : CONFIG_CARDS
 
+  // Story 75-210: preferência de e-mail de aprovação — só quem recebe (admin/supervisor).
+  const isAprovador = user.role === "admin" || user.role === "supervisor"
+  let aprovacaoEmailEnabled = true
+  if (isAprovador) {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from("users")
+      .select("notif_obra_aprovacao_email")
+      .eq("id", user.id)
+      .single()
+    aprovacaoEmailEnabled = data?.notif_obra_aprovacao_email ?? true
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -96,6 +111,9 @@ export default async function ConfiguracoesPage() {
 
       {/* Notificações push do usuário logado (Story 75-35) */}
       <NotificationToggle />
+
+      {/* E-mails de aprovação de obras — preferência do aprovador (Story 75-210) */}
+      {isAprovador && <AprovacaoEmailToggle initialEnabled={aprovacaoEmailEnabled} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visibleCards.map((card) => (

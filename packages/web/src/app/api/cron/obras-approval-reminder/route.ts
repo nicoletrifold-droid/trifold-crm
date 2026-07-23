@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
+import { getAprovadoresParaEmail } from "@web/lib/obras/aprovacao-notifications"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const REMINDER_INTERVAL_MS = 48 * 60 * 60 * 1000 // 48 horas
@@ -49,15 +50,10 @@ export async function GET(request: NextRequest) {
   let notifiedOrgs = 0
 
   for (const [orgId, { count, ids }] of byOrg.entries()) {
-    // Busca admins e supervisors da org
-    const { data: admins } = await admin
-      .from("users")
-      .select("name, email")
-      .eq("org_id", orgId)
-      .in("role", ["admin", "supervisor"])
-      .not("email", "is", null)
+    // Story 75-210: respeita a preferência por usuário (opt-out em Configurações).
+    const admins = await getAprovadoresParaEmail(admin, orgId)
 
-    if (!admins?.length) continue
+    if (!admins.length) continue
 
     const link = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/obras`
     const plural = count > 1 ? `${count} itens aguardam` : `1 item aguarda`

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import {
+  getAprovadoresParaEmail,
   groupPendencias,
   renderDigestHtml,
   type PendenciaRow,
@@ -50,15 +51,10 @@ export async function GET(request: NextRequest) {
 
   for (const [orgId, obras] of byOrg) {
     if (obras.length === 0) continue
-    const { data: admins } = await supabase
-      .from("users")
-      .select("name, email")
-      .eq("org_id", orgId)
-      .in("role", ["admin", "supervisor"])
-      .eq("is_active", true)
-      .not("email", "is", null)
+    // Story 75-210: respeita a preferência por usuário (opt-out em Configurações).
+    const admins = await getAprovadoresParaEmail(supabase, orgId)
 
-    for (const u of admins ?? []) {
+    for (const u of admins) {
       const total = obras.reduce((s, o) => s + o.documentos + o.fotos, 0)
       await sendEmail({
         to: u.email as string,

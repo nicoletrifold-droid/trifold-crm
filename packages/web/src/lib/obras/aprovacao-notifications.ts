@@ -14,6 +14,33 @@ import { sendEmail } from "@web/lib/email"
 
 export const SILENCE_WINDOW_HOURS = 4
 
+/**
+ * Story 75-210 — aprovadores que devem receber e-mail de aprovação: admin e
+ * supervisor ATIVOS que não desligaram a preferência em Configurações
+ * (users.notif_obra_aprovacao_email). Fonte única para os três disparos
+ * (imediato, digest diário e lembrete 48h) — o e-mail é opt-out por usuário;
+ * a aba Aprovações continua visível para todos os gestores.
+ */
+export async function getAprovadoresParaEmail(
+  supabase: SupabaseClient,
+  orgId: string
+): Promise<{ name: string; email: string }[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("name, email")
+    .eq("org_id", orgId)
+    .in("role", ["admin", "supervisor"])
+    .eq("is_active", true)
+    .eq("notif_obra_aprovacao_email", true)
+    .not("email", "is", null)
+  if (error) {
+    // Falha de query ≠ "todos optaram por sair" — sem este log, os 3 disparos
+    // silenciam sem rastro (ex.: migration 191 ausente no banco).
+    console.error("[aprovadores-email] query falhou:", error.message)
+  }
+  return (data as { name: string; email: string }[] | null) ?? []
+}
+
 export async function notificarAdminsNovoUpload(params: {
   supabase: SupabaseClient
   orgId: string
@@ -39,14 +66,9 @@ export async function notificarAdminsNovoUpload(params: {
 
   if ((count ?? 0) > 0) return { suppressed: true }
 
-  const { data: admins } = await params.supabase
-    .from("users")
-    .select("name, email")
-    .eq("org_id", params.orgId)
-    .in("role", ["admin", "supervisor"])
-    .not("email", "is", null)
+  const admins = await getAprovadoresParaEmail(params.supabase, params.orgId)
 
-  if (!admins?.length) return { suppressed: false }
+  if (!admins.length) return { suppressed: false }
 
   const link = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/obras/${params.obraId}?tab=aprovacoes`
 
