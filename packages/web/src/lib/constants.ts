@@ -32,6 +32,7 @@ export const SOURCE_LABELS_SHORT: Record<string, string> = {
   website: 'Website',
   referral: 'Indicação',
   broker_sponsored: 'Patrocinado Corretor',
+  walk_in: 'Manual',
   telegram: 'Telegram',
   lp_yarden: 'Landing Page Yarden',
   lp_vind: 'Landing Page Vind',

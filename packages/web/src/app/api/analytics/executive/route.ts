@@ -1,0 +1,149 @@
+import { NextRequest, NextResponse } from "next/server"
+import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
+import {
+  buildComparison,
+  buildHeatmap,
+  buildOutcomeRows,
+  buildSourceTrend,
+  buildVisits,
+  pickGranularity,
+  type ExecutiveData,
+} from "@web/lib/analytics/executive"
+
+// Mesmos nomes ocultos da tela de Analytics (contas de demonstração).
+const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
+
+interface LeadRow {
+  created_at: string
+  source: string | null
+  stage_id: string | null
+  lost_reason: string | null
+  is_active: boolean | null
+  assigned_broker_id: string | null
+}
+
+/**
+ * Dados da seção "Visão Executiva" do Analytics, em uma chamada só.
+ * PostgREST corta em 1000 linhas → paginamos com .range() (janelas de 90d
+ * passam de 1000 leads com folga).
+ */
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth()
+  if (auth.error) return auth.error
+  const { supabase, appUser } = auth
+
+  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial", "sdr"])
+  if (roleError) return roleError
+
+  const sp = request.nextUrl.searchParams
+  const from = sp.get("from")
+  const to = sp.get("to")
+  const propertyId = sp.get("property") ?? ""
+  if (!from || !to) {
+    return NextResponse.json({ error: "from and to are required" }, { status: 400 })
+  }
+
+  const fromMs = new Date(from).getTime()
+  const toMs = new Date(to).getTime()
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+    return NextResponse.json({ error: "Invalid period" }, { status: 400 })
+  }
+  // Janela anterior de MESMA duração, imediatamente antes (base do comparativo).
+  const prevFrom = new Date(fromMs - (toMs - fromMs)).toISOString()
+  const prevTo = from
+
+  const PAGE = 1000
+  async function fetchLeads(sinceISO: string, untilISO: string, columns: string): Promise<LeadRow[]> {
+    const out: LeadRow[] = []
+    for (let offset = 0; ; offset += PAGE) {
+      let q = supabase
+        .from("leads")
+        .select(columns)
+        .eq("org_id", appUser.org_id)
+        .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB
+        .gte("created_at", sinceISO)
+        .lt("created_at", untilISO)
+        .order("created_at", { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (propertyId) q = q.eq("property_interest_id", propertyId)
+      const { data, error } = await q
+      if (error) throw error
+      const rows = (data ?? []) as unknown as LeadRow[]
+      out.push(...rows)
+      if (rows.length < PAGE) break
+    }
+    return out
+  }
+
+  try {
+    let apptsQuery = supabase
+      .from("appointments")
+      .select("scheduled_at, status")
+      .eq("org_id", appUser.org_id)
+      .eq("team", "house") // agenda IMOB fora do analytics principal (Epic 81)
+      .gte("scheduled_at", from)
+      .lt("scheduled_at", to)
+      .limit(PAGE)
+    if (propertyId) apptsQuery = apptsQuery.eq("property_id", propertyId)
+
+    const [leads, prevLeads, { data: stagesData }, { data: activeBrokersData }, apptsRes] = await Promise.all([
+      fetchLeads(from, to, "created_at, source, stage_id, lost_reason, is_active, assigned_broker_id"),
+      fetchLeads(prevFrom, prevTo, "created_at, source, stage_id, lost_reason, is_active, assigned_broker_id"),
+      supabase.from("kanban_stages").select("id, name, slug"),
+      supabase.from("brokers").select("user_id").eq("org_id", appUser.org_id).eq("is_available", true),
+      apptsQuery,
+    ])
+    if (apptsRes.error) throw apptsRes.error
+
+    // Etapas de fechamento — mesma regra da tela (regex no nome) + slug canônico.
+    const fechadoStageIds = new Set(
+      (stagesData ?? [])
+        .filter((s) => s.slug === "fechou" || /fechamento|ganho|fechado/i.test(s.name ?? ""))
+        .map((s) => s.id as string)
+    )
+
+    // Nomes dos corretores com lead na janela (uma query, sem embed por linha).
+    const brokerIds = [...new Set(leads.map((l) => l.assigned_broker_id).filter((id): id is string => !!id))]
+    const { data: brokerUsers } = brokerIds.length
+      ? await supabase.from("users").select("id, name").in("id", brokerIds)
+      : { data: [] as { id: string; name: string }[] }
+    const brokerNames = new Map((brokerUsers ?? []).map((u) => [u.id as string, (u.name as string) ?? "Sem nome"]))
+    const activeBrokerIds = new Set((activeBrokersData ?? []).map((b) => b.user_id as string))
+
+    const granularity = pickGranularity(Math.max(1, Math.round((toMs - fromMs) / 86400000)))
+
+    const data: ExecutiveData = {
+      comparison: buildComparison(
+        leads.map((l) => l.created_at),
+        prevLeads.map((l) => l.created_at),
+        from, to, prevFrom, prevTo
+      ),
+      sourceTrend: buildSourceTrend(leads, from, to, granularity, SOURCE_LABELS_SHORT),
+      heatmap: buildHeatmap(leads),
+      outcomeBySource: buildOutcomeRows(
+        leads,
+        fechadoStageIds,
+        (l) => l.source ?? "other",
+        (k) => SOURCE_LABELS_SHORT[k] ?? k
+      ),
+      outcomeByBroker: buildOutcomeRows(
+        leads,
+        fechadoStageIds,
+        (l) => {
+          const id = l.assigned_broker_id
+          if (!id || !activeBrokerIds.has(id)) return null
+          const name = brokerNames.get(id) ?? ""
+          return HIDDEN_BROKER_NAMES.has(name.toLowerCase().trim()) ? null : id
+        },
+        (k) => brokerNames.get(k) ?? "Sem nome"
+      ),
+      visits: buildVisits((apptsRes.data ?? []) as { scheduled_at: string; status: string }[], from, to, granularity),
+    }
+
+    return NextResponse.json(data)
+  } catch (error) {
+    console.error("[ANALYTICS/executive]", error)
+    return NextResponse.json({ error: "Database error" }, { status: 500 })
+  }
+}

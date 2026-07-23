@@ -3,6 +3,7 @@ import { getServerUser } from "@web/lib/auth"
 import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
+import { ExecutiveCharts } from "@web/components/analytics/executive-charts"
 import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { resolvePeriod } from "@web/lib/analytics/period"
@@ -224,6 +225,64 @@ export default async function AnalyticsPage({
   const conversao = entradas > 0 ? Math.round((fechamento / entradas) * 100) : 0
   const mediaDiaria = period.days > 0 ? (entradas / period.days) : 0
 
+  // ── Deltas vs período anterior de mesma duração (Visão Executiva) ──────────
+  // Mesmo padrão dual da página: RPC sem filtro de empreendimento, head-counts com.
+  const durationMs = new Date(untilISO).getTime() - new Date(sinceISO).getTime()
+  const prevSinceISO = new Date(new Date(sinceISO).getTime() - durationMs).toISOString()
+  let prevEntradas = 0
+  let prevPerdidos = 0
+  let prevFechamento = 0
+
+  if (!propertyId) {
+    const { data: prevAnalytics } = await supabase.rpc("get_analytics_summary_ranged", {
+      p_org_id: appUser.orgId,
+      p_since: prevSinceISO,
+      p_until: sinceISO,
+    })
+    const prevSummary = (prevAnalytics as AnalyticsSummary | null) ?? null
+    const pm = deriveAnalyticsMetrics(prevSummary)
+    prevEntradas = pm.entradas
+    prevPerdidos = pm.perdidos
+    prevFechamento = toCount(
+      (prevSummary?.funnel ?? []).find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count
+    )
+  } else {
+    const fechadoStageIds = stages.filter((s) => /fechamento|ganho|fechado/i.test(s.name)).map((s) => s.id)
+    const prevBase = () =>
+      supabase
+        .from("leads").select("id", { count: "exact", head: true })
+        .eq("org_id", appUser.orgId).eq("segmento", "principal")
+        .eq("property_interest_id", propertyId)
+        .gte("created_at", prevSinceISO).lt("created_at", sinceISO)
+    const [{ count: pe }, { count: pp }, fechadoRes] = await Promise.all([
+      prevBase(),
+      prevBase().not("lost_reason", "is", null),
+      fechadoStageIds.length > 0 ? prevBase().in("stage_id", fechadoStageIds) : Promise.resolve({ count: 0 }),
+    ])
+    prevEntradas = pe ?? 0
+    prevPerdidos = pp ?? 0
+    prevFechamento = fechadoRes.count ?? 0
+  }
+
+  const prevConversao = prevEntradas > 0 ? Math.round((prevFechamento / prevEntradas) * 100) : 0
+  const deltaPct = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null)
+
+  /** Badge ▲/▼ vs período anterior. `invert` = subir é ruim (perdidos). */
+  const deltaBadge = (delta: number | null, opts?: { invert?: boolean; suffix?: string }) => {
+    if (delta == null) return null
+    const good = opts?.invert ? delta < 0 : delta > 0
+    const cls = delta === 0
+      ? "text-stone-400 dark:text-stone-500"
+      : good
+        ? "text-green-600 dark:text-green-300"
+        : "text-red-600 dark:text-red-300"
+    return (
+      <span className={`text-xs font-semibold ${cls}`}>
+        {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} {delta > 0 ? "+" : ""}{delta}{opts?.suffix ?? "%"} vs anterior
+      </span>
+    )
+  }
+
   // ── Tempo médio de atendimento por corretor (Story 75-47) ──────────────────
   // DISTRIBUIÇÃO (corretor recebeu, lead_distribution_log) → ATENDIMENTO (saiu de
   // "Aguardando atendimento" = primeiro_atendimento_em, carimbado pelo trigger 75-45).
@@ -344,6 +403,7 @@ export default async function AnalyticsPage({
           <p className="text-sm text-gray-500 dark:text-stone-400">Entradas</p>
           <p className="mt-1 text-3xl font-bold dark:text-stone-100">{entradas}</p>
           <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{mediaDiaria.toFixed(1)}/dia · {rangeLabel}</p>
+          {deltaBadge(deltaPct(entradas, prevEntradas))}
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Ativos</p>
@@ -354,10 +414,12 @@ export default async function AnalyticsPage({
           <p className="text-sm text-gray-500 dark:text-stone-400">Conversão</p>
           <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-300">{conversao}%</p>
           <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{fechamento} de {entradas}</p>
+          {deltaBadge(prevEntradas > 0 ? conversao - prevConversao : null, { suffix: " pp" })}
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Perdidos</p>
           <p className="mt-1 text-3xl font-bold text-red-600 dark:text-red-300">{perdidos}</p>
+          {deltaBadge(deltaPct(perdidos, prevPerdidos), { invert: true })}
         </div>
       </div>
 
@@ -368,6 +430,20 @@ export default async function AnalyticsPage({
         from={sinceISO}
         to={untilISO}
       />
+
+      {/* Visão Executiva — 6 gráficos de leitura rápida (cruzamentos) */}
+      <div>
+        <div className="mb-3 flex items-baseline gap-3">
+          <h2 className="text-lg font-semibold dark:text-stone-100">Visão Executiva</h2>
+          <span className="text-sm text-stone-400 dark:text-stone-500">{rangeLabel}</span>
+        </div>
+        <ExecutiveCharts
+          from={sinceISO}
+          to={untilISO}
+          propertyId={propertyId ?? undefined}
+          rangeLabel={rangeLabel}
+        />
+      </div>
 
       {/* Funnel */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
