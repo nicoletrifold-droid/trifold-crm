@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { generateEmbeddingStrict } from "@trifold/ai"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -68,17 +69,35 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const title = (body.title as string).trim()
+  const content = (body.content as string).trim()
+
+  // Entrada sem embedding é INVISÍVEL para a Nicole (match_knowledge exige
+  // NOT NULL — gotcha 75-173). Gera na gravação; se a OpenAI falhar, melhor
+  // recusar com erro claro do que salvar conhecimento que nunca será usado.
+  let embedding: number[]
+  try {
+    embedding = await generateEmbeddingStrict(`${title}\n\n${content}`)
+  } catch (err) {
+    console.error("[KNOWLEDGE_BASE] embedding failed on create:", err)
+    return NextResponse.json(
+      { error: "Não foi possível indexar o conteúdo agora (embedding). Tente novamente em instantes." },
+      { status: 502 }
+    )
+  }
+
   const { data: entry, error } = await supabase
     .from("knowledge_base")
     .insert({
       org_id: appUser.org_id,
-      title: (body.title as string).trim(),
-      content: (body.content as string).trim(),
+      title,
+      content,
+      embedding: JSON.stringify(embedding),
       source: (body.source as string | undefined)?.trim() || null,
       source_id: (body.source_id as string | undefined) || null,
       metadata: body.metadata || null,
     })
-    .select()
+    .select("id, org_id, title, content, source, source_id, metadata, is_active, created_at, updated_at")
     .single()
 
   if (error) {

@@ -25,6 +25,36 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return generateHashEmbedding(text)
 }
 
+/**
+ * Variante ESTRITA para GRAVAÇÃO (knowledge_base.embedding): lança erro em vez
+ * de cair no fallback-hash. Um vetor-hash armazenado envenena o índice — a
+ * entrada nunca daria match real (RAG usa text-embedding-3-small de verdade).
+ * Para BUSCA o fallback é tolerável (degrada 1 consulta); para GRAVAR, nunca.
+ */
+export async function generateEmbeddingStrict(text: string): Promise<number[]> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error("OPENAI_API_KEY ausente — embedding de gravação exige a API real")
+
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input: text,
+      model: "text-embedding-3-small",
+      dimensions: EMBEDDING_DIMENSION,
+    }),
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!response.ok) {
+    throw new Error(`OpenAI embeddings ${response.status}: ${(await response.text()).slice(0, 200)}`)
+  }
+  const data = (await response.json()) as { data: Array<{ embedding: number[] }> }
+  return data.data[0]!.embedding
+}
+
 async function generateOpenAIEmbedding(
   text: string,
   apiKey: string
