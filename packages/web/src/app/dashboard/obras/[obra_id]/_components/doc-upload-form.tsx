@@ -2,8 +2,10 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@web/lib/supabase/client"
 
 const CATEGORIES = ["ART/RRT", "Contratos", "Memoriais", "Outros"] as const
+const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB — mesmo limite da API
 
 interface Destinatario {
   id: string
@@ -38,23 +40,58 @@ export function DocUploadForm({ obraId, destinatarios = [] }: DocUploadFormProps
       setError("Nome do documento é obrigatório")
       return
     }
+    if (file.size > MAX_SIZE_BYTES) {
+      const mb = (file.size / (1024 * 1024)).toFixed(1)
+      setError(`Arquivo de ${mb} MB excede o limite de 50 MB.`)
+      return
+    }
 
     setLoading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("name", name.trim())
-      formData.append("category", category)
-      if (clienteObraId) formData.append("cliente_obra_id", clienteObraId)
+      // Fluxo em 3 passos para contornar o teto de payload (~4.5 MB) das Serverless
+      // Functions da Vercel (PDFs assinados via Clicksign passam fácil disso):
+      // 1) /documentos/sign gera uma signed upload URL; 2) o browser envia o arquivo
+      // DIRETO ao Supabase Storage via uploadToSignedUrl (o binário nunca passa pela
+      // função); 3) /documentos registra só os metadados em JSON.
+      const signRes = await fetch(`/api/admin/obras/${obraId}/documentos/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_name: file.name, file_size_bytes: file.size }),
+      })
+      const signJson = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) {
+        throw new Error(
+          (signJson as { error?: string }).error ?? "Erro ao preparar o envio"
+        )
+      }
+      const { token, storagePath } = signJson as { token: string; storagePath: string }
+
+      const supabase = createClient()
+      const { error: upErr } = await supabase.storage
+        .from("obra-docs")
+        .uploadToSignedUrl(storagePath, token, file, {
+          contentType: file.type || "application/octet-stream",
+        })
+      if (upErr) {
+        throw new Error("Falha ao enviar o arquivo. Verifique a conexão e tente novamente.")
+      }
 
       const res = await fetch(`/api/admin/obras/${obraId}/documentos`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storage_path: storagePath,
+          name: name.trim(),
+          category,
+          cliente_obra_id: clienteObraId || null,
+          filename: file.name,
+          file_size_bytes: file.size,
+        }),
       })
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? "Erro ao enviar documento")
+        throw new Error(data.error ?? "Erro ao registrar o documento")
       }
 
       setName("")
