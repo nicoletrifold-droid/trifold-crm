@@ -3,6 +3,7 @@ import { requireAuth } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
 import { notificarAdminsNovoUpload } from "@web/lib/obras/aprovacao-notifications"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -61,30 +62,129 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  let formData: FormData
-  try {
-    formData = await req.formData()
-  } catch {
-    return NextResponse.json({ error: "Invalid form data" }, { status: 400 })
-  }
+  // Dois formatos de entrada:
+  // - JSON: fluxo signed-upload — o arquivo JÁ está no Storage (enviado direto pelo
+  //   browser via ../documentos/sign + uploadToSignedUrl, contornando o teto de
+  //   ~4.5 MB de payload das Serverless Functions da Vercel); aqui só registramos.
+  // - FormData: fluxo legado com o binário no corpo (segue funcionando p/ arquivos pequenos).
+  const isJson = (req.headers.get("content-type") ?? "").includes("application/json")
 
-  const file = formData.get("file")
-  const name = formData.get("name")
-  const categoryRaw = formData.get("category")
+  let name: string
+  let categoryRaw: unknown
+  let clienteObraIdRaw: unknown
+  let filename: string
+  let fileSizeBytes: number
+  let storagePath: string
+  let pendingFile: File | null = null
 
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Campo 'file' é obrigatório" }, { status: 400 })
-  }
+  if (isJson) {
+    const body = (await req.json().catch(() => null)) as {
+      storage_path?: string
+      name?: string
+      category?: string
+      cliente_obra_id?: string
+      filename?: string
+      file_size_bytes?: number
+    } | null
 
-  if (typeof name !== "string" || !name.trim()) {
-    return NextResponse.json({ error: "Campo 'name' é obrigatório" }, { status: 400 })
-  }
+    storagePath = typeof body?.storage_path === "string" ? body.storage_path : ""
+    // O storage_path é gerado pela rota /sign no formato exato
+    // `obra-docs/${obra_id}/${uuid}[.ext]`. Regex estrita (não startsWith) para
+    // impedir "../" e amarrar o registro a objetos desta obra.
+    const pathOk = new RegExp(
+      `^obra-docs/${obra_id}/[0-9a-f-]{36}(\\.[a-z0-9]{1,10})?$`
+    ).test(storagePath)
+    if (!pathOk) {
+      return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
+    }
 
-  if (file.size > MAX_SIZE_BYTES) {
-    return NextResponse.json(
-      { error: "Arquivo muito grande (máx. 50 MB)" },
-      { status: 400 }
-    )
+    const nameRaw = body?.name
+    if (typeof nameRaw !== "string" || !nameRaw.trim()) {
+      return NextResponse.json({ error: "Campo 'name' é obrigatório" }, { status: 400 })
+    }
+    name = nameRaw
+
+    fileSizeBytes = Number(body?.file_size_bytes)
+    if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
+      return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
+    }
+
+    // Antes de qualquer remove()/insert: o path não pode pertencer a um registro
+    // existente (impede re-registrar ou apagar objeto de documento já publicado)
+    // e o objeto precisa existir no Storage (upload do passo 2 concluído).
+    const admin = createAdminClient()
+    const [{ data: docDup }, { data: aprDup }] = await Promise.all([
+      admin
+        .from("obra_documentos")
+        .select("id")
+        .eq("storage_path", storagePath)
+        .maybeSingle(),
+      admin
+        .from("obra_upload_aprovacoes")
+        .select("id")
+        .eq("storage_path", storagePath)
+        .maybeSingle(),
+    ])
+    if (docDup || aprDup) {
+      return NextResponse.json({ error: "Arquivo já registrado" }, { status: 409 })
+    }
+    const { data: objectExists } = await admin.storage
+      .from("obra-docs")
+      .exists(storagePath)
+    if (!objectExists) {
+      return NextResponse.json(
+        { error: "Arquivo não encontrado. Envie novamente." },
+        { status: 400 }
+      )
+    }
+
+    if (fileSizeBytes > MAX_SIZE_BYTES) {
+      await supabase.storage.from("obra-docs").remove([storagePath])
+      return NextResponse.json(
+        { error: "Arquivo muito grande (máx. 50 MB)" },
+        { status: 413 }
+      )
+    }
+
+    filename =
+      typeof body?.filename === "string" && body.filename ? body.filename : "arquivo"
+    categoryRaw = body?.category
+    clienteObraIdRaw = body?.cliente_obra_id
+  } else {
+    let formData: FormData
+    try {
+      formData = await req.formData()
+    } catch {
+      return NextResponse.json({ error: "Invalid form data" }, { status: 400 })
+    }
+
+    const file = formData.get("file")
+    const nameRaw = formData.get("name")
+    categoryRaw = formData.get("category")
+    clienteObraIdRaw = formData.get("cliente_obra_id")
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "Campo 'file' é obrigatório" }, { status: 400 })
+    }
+
+    if (typeof nameRaw !== "string" || !nameRaw.trim()) {
+      return NextResponse.json({ error: "Campo 'name' é obrigatório" }, { status: 400 })
+    }
+    name = nameRaw
+
+    if (file.size > MAX_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "Arquivo muito grande (máx. 50 MB)" },
+        { status: 400 }
+      )
+    }
+
+    // Extensão sanitizada (só alfanumérico curto) — path nunca contém "/" ou "..".
+    const ext = file.name.match(/\.([A-Za-z0-9]{1,10})$/)?.[1]?.toLowerCase() ?? ""
+    filename = file.name
+    fileSizeBytes = file.size
+    storagePath = `obra-docs/${obra_id}/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`
+    pendingFile = file
   }
 
   const category =
@@ -93,7 +193,6 @@ export async function POST(
       : "Outros"
 
   // Story 75-6: destinatário opcional (documento exclusivo de um cliente/unidade).
-  const clienteObraIdRaw = formData.get("cliente_obra_id")
   let clienteObraId: string | null = null
   if (typeof clienteObraIdRaw === "string" && clienteObraIdRaw.trim()) {
     const { data: vinculo } = await supabase
@@ -103,6 +202,10 @@ export async function POST(
       .eq("obra_id", obra_id)
       .maybeSingle()
     if (!vinculo) {
+      // No fluxo JSON o objeto já está no Storage — limpa para não deixar órfão.
+      if (isJson) {
+        await supabase.storage.from("obra-docs").remove([storagePath])
+      }
       return NextResponse.json(
         { error: "Destinatário inválido para esta obra" },
         { status: 400 }
@@ -111,20 +214,18 @@ export async function POST(
     clienteObraId = vinculo.id
   }
 
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : ""
-  const filename = file.name
-  const storagePath = `obra-docs/${obra_id}/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`
+  if (pendingFile) {
+    const bytes = await pendingFile.arrayBuffer()
+    const { error: uploadError } = await supabase.storage
+      .from("obra-docs")
+      .upload(storagePath, Buffer.from(bytes), {
+        contentType: pendingFile.type || "application/octet-stream",
+        upsert: false,
+      })
 
-  const bytes = await file.arrayBuffer()
-  const { error: uploadError } = await supabase.storage
-    .from("obra-docs")
-    .upload(storagePath, Buffer.from(bytes), {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    })
-
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 })
+    if (uploadError) {
+      return NextResponse.json({ error: uploadError.message }, { status: 500 })
+    }
   }
 
   // Role obras: entra em fila de aprovação
@@ -141,7 +242,7 @@ export async function POST(
           name: name.trim(),
           filename,
           category,
-          file_size_bytes: file.size,
+          file_size_bytes: fileSizeBytes,
           cliente_obra_id: clienteObraId,
         },
         enviado_por: appUser.id,
@@ -178,7 +279,7 @@ export async function POST(
       filename,
       storage_path: storagePath,
       category,
-      file_size_bytes: file.size,
+      file_size_bytes: fileSizeBytes,
       cliente_obra_id: clienteObraId,
     })
     .select("id, name, category, filename, file_size_bytes, created_at, cliente_obra_id")
