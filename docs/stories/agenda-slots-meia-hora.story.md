@@ -1,6 +1,6 @@
 # Story — Agenda: início de compromisso a cada 30min (duração segue 1h)
 
-**Status:** InProgress
+**Status:** Done (PR #276 merged em ea8354ef; deploy prod Vercel OK 2026-07-23)
 **Tipo:** Feature (ajuste de UX/regra de agenda)
 **Epic:** Agenda / Epic 81 (HOUSE × IMOB)
 **Relacionado:** Stories 81-4/81-8/81-9 (grade de slots compartilhada), 75-103 (revalida conflito ao remarcar), [[project-agenda-house-imob]]
@@ -46,5 +46,5 @@
 - [x] Guards de servidor (3 rotas)
 - [x] Grid do modal
 - [x] Testes atualizados (sobreposição parcial 13:30/14:30 coberta)
-- [ ] QA gate: vitest + lint + type-check + build
-- [ ] @devops: push/deploy
+- [x] QA gate: vitest (1161 ✅) + lint + type-check + build
+- [x] @devops: push/deploy (PR #276, prod success)
