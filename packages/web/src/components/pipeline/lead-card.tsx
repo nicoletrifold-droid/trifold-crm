@@ -171,8 +171,9 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
           </div>
         )}
 
-        {/* Property Badge + Source/Creative + Progress */}
-        <div className="mt-2 flex items-center gap-2">
+        {/* Property Badge + Source/Creative + Progress — flex-wrap: o rótulo
+            "WhatsApp Patrocinado" é mais largo que o antigo "Click-to-Ad" */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${badge.bg} ${badge.text}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
             {badge.label}

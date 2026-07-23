@@ -12,7 +12,7 @@ export const INTEREST_LEVEL_COLORS: Record<string, string> = {
 
 export const SOURCE_LABELS: Record<string, string> = {
   whatsapp_organic: 'WhatsApp Orgânico',
-  whatsapp_click_to_ad: 'WhatsApp Click-to-Ad',
+  whatsapp_click_to_ad: 'WhatsApp Patrocinado (Click-to-Ad)',
   meta_ads: 'Meta Ads',
   google_ads: 'Google Ads',
   website: 'Website',
@@ -24,9 +24,14 @@ export const SOURCE_LABELS: Record<string, string> = {
   other: 'Outro',
 };
 
+// "WhatsApp Patrocinado" = conversa de WhatsApp vinda de anúncio Meta CTWA
+// (click-to-WhatsApp); "WhatsApp Orgânico" = chamou o número sem anúncio.
+// Decisão Marcos 2026-07-23: o conceito precisa ficar explícito nos gráficos
+// pra orientar decisão de campanha — e o rótulo bate em TODAS as telas
+// (analytics, badges de lead, PDF) porque todas leem este mapa.
 export const SOURCE_LABELS_SHORT: Record<string, string> = {
-  whatsapp_organic: 'WhatsApp',
-  whatsapp_click_to_ad: 'Click-to-Ad',
+  whatsapp_organic: 'WhatsApp Orgânico',
+  whatsapp_click_to_ad: 'WhatsApp Patrocinado',
   meta_ads: 'Meta Ads',
   google_ads: 'Google Ads',
   website: 'Website',

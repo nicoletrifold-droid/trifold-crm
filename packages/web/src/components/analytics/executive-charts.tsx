@@ -201,6 +201,12 @@ function SourceTrendChart({ data, p, rangeLabel }: { data: ExecutiveData["source
       </p>
       <div className="mb-3">
         <Legend items={data.series.map((s, i) => ({ label: s.label, color: colorOf(s.key, i) }))} />
+        {/* Concilia com o "Aproveitamento por Origem": diz o que está dobrado no cinza. */}
+        {data.foldedLabels.length > 0 && (
+          <p className="mt-1.5 text-[11px] text-gray-400 dark:text-stone-500">
+            Demais origens = {data.foldedLabels.join(" · ")}
+          </p>
+        )}
       </div>
       <ResponsiveContainer width="100%" height={260}>
         <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>

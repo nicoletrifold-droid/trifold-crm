@@ -7,8 +7,8 @@ interface Property { id: string; name: string }
 
 const SOURCE_OPTIONS = [
   { value: "meta_ads", label: "Meta Ads" },
-  { value: "whatsapp_organic", label: "WhatsApp orgânico" },
-  { value: "whatsapp_click_to_ad", label: "WhatsApp Click-to-Ad" },
+  { value: "whatsapp_organic", label: "WhatsApp Orgânico" },
+  { value: "whatsapp_click_to_ad", label: "WhatsApp Patrocinado (Click-to-Ad)" },
   { value: "manual", label: "Cadastro manual" },
 ]
 
