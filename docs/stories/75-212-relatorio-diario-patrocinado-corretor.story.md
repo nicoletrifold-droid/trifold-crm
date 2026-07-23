@@ -1,7 +1,7 @@
 # Story 75-212 — Relatório diário: linha "Patrocinado Corretor" (ajuda de custo)
 
 ## Metadata
-- **Status:** InReview
+- **Status:** Done
 - **Epic:** 75 — Relatório diário do diretor / métricas de leads
 - **Branch:** feat/75-212-relatorio-patrocinado-corretor
 - **Relacionado:** 75-45 (relatório original), 75-154 (v2: entrada × manual — precedente de troca de template)
@@ -79,3 +79,5 @@ Bom dia! Relatório gerado automaticamente.
   envio das 07:59 falha) — mesma condição da 75-154.
 - @devops (Gage) 2026-07-23: template `relatorio_diario_leads_v3` submetido
   via Graph API (id 1396497332349932) — aguardando APPROVED para merge+deploy.
+- @devops (Gage) 2026-07-23 16:31: template v3 APPROVED na Meta → merge +
+  deploy liberados. Primeiro envio no novo formato: próximo cron 07:59 BRT.
