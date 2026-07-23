@@ -17,11 +17,12 @@ const TZ = "America/Sao_Paulo"
 const NOW = new Date("2026-07-19T22:00:00Z")
 const DAY = { y: 2026, mo: 7, d: 20 }
 
-describe("imobSlotsForDay (Story 81-4 → 81-9)", () => {
-  it("dia útil sem ocupação → grade completa 08..17, todos livres", () => {
+describe("imobSlotsForDay (Story 81-4 → 81-9; passo de 30min desde 2026-07-23)", () => {
+  it("dia útil sem ocupação → grade 08:00..17:00 de 30 em 30, todos livres", () => {
     const slots = imobSlotsForDay({ ...DAY, week: WEEK, timezone: TZ, busy: [], now: NOW })
-    expect(slots).toHaveLength(10) // 08:00..17:00
+    expect(slots).toHaveLength(19) // 08:00, 08:30, …, 17:00 (17:30 não cabe: 18:30 > 18:00)
     expect(slots[0]?.labelLocal).toBe("08:00")
+    expect(slots[1]?.labelLocal).toBe("08:30")
     expect(slots.at(-1)?.labelLocal).toBe("17:00")
     expect(slots.every((s) => s.free)).toBe(true)
   })
@@ -31,13 +32,26 @@ describe("imobSlotsForDay (Story 81-4 → 81-9)", () => {
     expect(slots).toHaveLength(0)
   })
 
-  it("compromisso ativo da equipe ocupa o slot em QUALQUER local (Story 81-9)", () => {
-    // 14:00 BRT = 17:00Z — compromisso num decorado bloqueia o horário da equipe toda
+  it("compromisso ativo da equipe ocupa TODO slot que sobrepõe, em QUALQUER local (81-9)", () => {
+    // 14:00 BRT = 17:00Z — visita de 1h bloqueia 13:30, 14:00 e 14:30 (sobreposição parcial)
     const busy = [{ scheduled_at: "2026-07-20T17:00:00.000Z", duration_minutes: 60 }]
     const slots = imobSlotsForDay({ ...DAY, week: WEEK, timezone: TZ, busy, now: NOW })
-    expect(slots.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
     expect(slots.find((s) => s.labelLocal === "13:00")?.free).toBe(true)
+    expect(slots.find((s) => s.labelLocal === "13:30")?.free).toBe(false) // 13:30-14:30 × 14:00-15:00
+    expect(slots.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
+    expect(slots.find((s) => s.labelLocal === "14:30")?.free).toBe(false) // 14:30-15:30 × 14:00-15:00
     expect(slots.find((s) => s.labelLocal === "15:00")?.free).toBe(true)
+  })
+
+  it("visita começando em meia hora bloqueia as vizinhas por sobreposição", () => {
+    // 14:30 BRT = 17:30Z
+    const busy = [{ scheduled_at: "2026-07-20T17:30:00.000Z", duration_minutes: 60 }]
+    const slots = imobSlotsForDay({ ...DAY, week: WEEK, timezone: TZ, busy, now: NOW })
+    expect(slots.find((s) => s.labelLocal === "14:00")?.free).toBe(false)
+    expect(slots.find((s) => s.labelLocal === "14:30")?.free).toBe(false)
+    expect(slots.find((s) => s.labelLocal === "15:00")?.free).toBe(false)
+    expect(slots.find((s) => s.labelLocal === "13:30")?.free).toBe(true)
+    expect(slots.find((s) => s.labelLocal === "15:30")?.free).toBe(true)
   })
 
   it("slots já passados não são oferecidos", () => {
@@ -46,10 +60,10 @@ describe("imobSlotsForDay (Story 81-4 → 81-9)", () => {
     expect(slots[0]?.labelLocal).toBe("13:00")
   })
 
-  it("sábado usa a janela do sábado (08..11)", () => {
+  it("sábado usa a janela do sábado (último início 11:00 — a visita cabe até 12:00)", () => {
     const slots = imobSlotsForDay({ y: 2026, mo: 7, d: 25, week: WEEK, timezone: TZ, busy: [], now: NOW })
     expect(slots[0]?.labelLocal).toBe("08:00")
-    expect(slots.at(-1)?.labelLocal).toBe("11:00")
+    expect(slots.at(-1)?.labelLocal).toBe("11:00") // 11:30 não cabe (terminaria 12:30)
   })
 })
 
@@ -66,19 +80,23 @@ describe("buildDayOptions (Story 81-8)", () => {
   })
 })
 
-describe("isValidImobSlot (Story 81-4)", () => {
+describe("isValidImobSlot (Story 81-4; passo de 30min)", () => {
   it("hora cheia dentro do expediente = válido", () => {
     expect(isValidImobSlot(new Date("2026-07-20T17:00:00Z"), WEEK, TZ)).toBe(true) // seg 14:00 BRT
   })
-  it("meia hora = inválido (hora cheia obrigatória)", () => {
-    expect(isValidImobSlot(new Date("2026-07-20T17:30:00Z"), WEEK, TZ)).toBe(false)
+  it("meia hora = válido (passo de 30min)", () => {
+    expect(isValidImobSlot(new Date("2026-07-20T17:30:00Z"), WEEK, TZ)).toBe(true) // seg 14:30 BRT
+  })
+  it("minuto quebrado (não alinhado a :00/:30) = inválido", () => {
+    expect(isValidImobSlot(new Date("2026-07-20T17:15:00Z"), WEEK, TZ)).toBe(false) // seg 14:15 BRT
   })
   it("fora do expediente / dia fechado = inválido", () => {
     expect(isValidImobSlot(new Date("2026-07-20T23:00:00Z"), WEEK, TZ)).toBe(false) // seg 20:00 BRT
     expect(isValidImobSlot(new Date("2026-07-19T17:00:00Z"), WEEK, TZ)).toBe(false) // domingo
   })
-  it("último slot antes do fechamento é válido; o do fechamento não", () => {
+  it("último início válido é 1h antes do fechamento; depois disso não", () => {
     expect(isValidImobSlot(new Date("2026-07-20T20:00:00Z"), WEEK, TZ)).toBe(true) // 17:00 BRT
+    expect(isValidImobSlot(new Date("2026-07-20T20:30:00Z"), WEEK, TZ)).toBe(false) // 17:30 BRT (terminaria 18:30)
     expect(isValidImobSlot(new Date("2026-07-20T21:00:00Z"), WEEK, TZ)).toBe(false) // 18:00 BRT
   })
 })

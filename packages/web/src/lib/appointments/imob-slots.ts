@@ -2,7 +2,9 @@
 // link público de imobiliárias (/agendar/[token]) e pelo modal interno da agenda.
 //
 // Regras:
-//  - Slots de 1h em hora cheia (mesma convenção da agenda interna).
+//  - Slots de 1h com início a cada 30min (8:00, 8:30, 9:00…) — a visita continua
+//    durando 1h; só o passo do INÍCIO é de meia hora (pedido do Marcos 2026-07-23).
+//    O compromisso inteiro precisa caber no expediente (início + 60min ≤ fechamento).
 //  - Grade segue o horário comercial da org (roleta_schedule/WeekSchedule) no
 //    fuso da org — dia fechado = sem slots.
 //  - Um slot está OCUPADO se QUALQUER compromisso ATIVO **da mesma equipe**
@@ -14,6 +16,10 @@
 
 import type { WeekSchedule } from "@web/lib/roleta/business-time"
 import { overlaps } from "./governance"
+
+/** Passo do INÍCIO dos slots (min). A duração da visita segue sendo 60min. */
+export const SLOT_STEP_MIN = 30
+const SLOT_DURATION_MIN = 60
 
 export interface ImobBusySlot {
   scheduled_at: string // ISO
@@ -77,11 +83,14 @@ export function imobSlotsForDay(params: {
   const closeMin = parseHM(day.close)
   const slots: SlotOption[] = []
 
-  // hora cheia: primeiro slot >= abertura; último slot inicia antes do fechamento
-  const firstHour = Math.ceil(openMin / 60)
-  for (let h = firstHour; h * 60 < closeMin; h++) {
-    const startMs = wallToUtcMs(y, mo, d, h * 60, timezone)
-    const endMs = startMs + 60 * 60_000
+  // Início a cada SLOT_STEP_MIN a partir da abertura; a visita de 60min precisa
+  // caber inteira no expediente (início + duração ≤ fechamento) — com fechamento
+  // em hora cheia o último slot é o mesmo de antes (ex.: 17:00 p/ fechar às 18:00,
+  // agora também 17:00... com 17:30 só se fechar às 18:30+).
+  const firstSlot = Math.ceil(openMin / SLOT_STEP_MIN) * SLOT_STEP_MIN
+  for (let m = firstSlot; m + SLOT_DURATION_MIN <= closeMin; m += SLOT_STEP_MIN) {
+    const startMs = wallToUtcMs(y, mo, d, m, timezone)
+    const endMs = startMs + SLOT_DURATION_MIN * 60_000
     if (startMs <= now.getTime()) continue // passado não se oferece
 
     const taken = busy.some((b) => {
@@ -92,7 +101,7 @@ export function imobSlotsForDay(params: {
 
     slots.push({
       startIso: new Date(startMs).toISOString(),
-      labelLocal: `${String(h).padStart(2, "0")}:00`,
+      labelLocal: `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`,
       free: !taken,
     })
   }
@@ -134,7 +143,7 @@ export function buildDayOptions(timezone: string, week: WeekSchedule, now: Date 
   return out
 }
 
-/** O instante está dentro do expediente do dia (no fuso) e em hora cheia? */
+/** O instante está dentro do expediente do dia (no fuso) e alinhado ao passo de 30min? */
 export function isValidImobSlot(startUtc: Date, week: WeekSchedule, timezone: string): boolean {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -151,12 +160,12 @@ export function isValidImobSlot(startUtc: Date, week: WeekSchedule, timezone: st
   const d = get("day")
   const hour = get("hour") % 24
   const minute = get("minute")
-  if (minute !== 0) return false // hora cheia obrigatória
+  if (minute % SLOT_STEP_MIN !== 0) return false // início alinhado a :00/:30
 
   const day = week[dowOf(y, mo, d, timezone)]
   if (!day?.isOpen) return false
-  // Mesma semântica da grade (imobSlotsForDay): slot é válido se começa dentro
-  // do expediente ([abertura, fechamento)) — em hora cheia.
-  const startMin = hour * 60
-  return startMin >= parseHM(day.open) && startMin < parseHM(day.close)
+  // Mesma semântica da grade (imobSlotsForDay): início >= abertura e a visita
+  // de 60min cabendo inteira no expediente.
+  const startMin = hour * 60 + minute
+  return startMin >= parseHM(day.open) && startMin + SLOT_DURATION_MIN <= parseHM(day.close)
 }

@@ -487,7 +487,7 @@ export function NewAppointmentModal({
                   Sem horários livres neste dia — escolha outro dia.
                 </p>
               ) : (
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                   {slots.map((s) => (
                     <button
                       key={s.startIso}

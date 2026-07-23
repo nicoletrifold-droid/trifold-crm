@@ -154,11 +154,11 @@ export async function POST(request: Request) {
   // Story 81-1: HOUSE × IMOB não se bloqueiam.
   const team = resolveTeam(appUser.role, body.team)
   const location = body.location?.trim() || "Stand Trifold"
-  // Compromissos de 1 em 1 hora: duração fixa de 60min e início em hora cheia
-  // (guard de servidor, independente do que o cliente enviar).
+  // Compromissos de 1h com início alinhado a :00/:30 (guard de servidor,
+  // independente do que o cliente enviar — passo de 30min desde 2026-07-23).
   const duration = 60
   const newStart = new Date(body.scheduled_at)
-  newStart.setMinutes(0, 0, 0)
+  newStart.setMinutes(newStart.getMinutes() < 30 ? 0 : 30, 0, 0)
   const newEnd = new Date(newStart.getTime() + duration * 60000)
 
   {

@@ -125,7 +125,7 @@ export async function POST(
   if (!scheduledAt || isNaN(scheduledAt.getTime())) {
     return NextResponse.json({ error: "Data/hora inválida." }, { status: 400 })
   }
-  scheduledAt.setMinutes(0, 0, 0) // hora cheia (guard de servidor, como no fluxo interno)
+  scheduledAt.setMinutes(scheduledAt.getMinutes() < 30 ? 0 : 30, 0, 0) // alinha a :00/:30 (guard de servidor, como no fluxo interno)
   if (scheduledAt.getTime() <= Date.now()) {
     return NextResponse.json({ error: "Escolha um horário no futuro." }, { status: 400 })
   }
