@@ -10,6 +10,7 @@ import {
   formatDistribuidos,
   formatDateBR,
   isLeadFunil,
+  formatPatrocinados,
 } from "./daily-leads-report"
 
 describe("channelLabel", () => {
@@ -55,6 +56,37 @@ describe("formatBrokers", () => {
   })
   it("nenhum distribuído", () => {
     expect(formatBrokers([])).toBe("Nenhum lead distribuído")
+  })
+})
+
+// Story 75-212 — linha "Patrocinado Corretor" (ajuda de custo)
+describe("formatPatrocinados", () => {
+  it("total + por corretor (primeiro nome), ordenado desc", () => {
+    expect(
+      formatPatrocinados([
+        { name: "Robson Silva", count: 1 },
+        { name: "Valeria Costa", count: 2 },
+      ])
+    ).toBe("3 — Valeria 2 · Robson 1")
+  })
+  it("empate desalinha por nome (estável)", () => {
+    expect(
+      formatPatrocinados([
+        { name: "Valeria Costa", count: 1 },
+        { name: "Robson Silva", count: 1 },
+      ])
+    ).toBe("2 — Robson 1 · Valeria 1")
+  })
+  it("lead sem corretor atribuído agrupa como 'Sem corretor' (não vira 'Sem')", () => {
+    expect(
+      formatPatrocinados([
+        { name: "Sem corretor", count: 1 },
+        { name: "Valeria Costa", count: 2 },
+      ])
+    ).toBe("3 — Valeria 2 · Sem corretor 1")
+  })
+  it("sem leads patrocinados → '0'", () => {
+    expect(formatPatrocinados([])).toBe("0")
   })
 })
 

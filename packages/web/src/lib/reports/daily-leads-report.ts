@@ -14,14 +14,17 @@ import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/
 // Story 75-154 — template Meta `relatorio_diario_leads_v2` (7 params). O número do
 // topo agora é só o funil (entrada real); cadastros manuais do corretor saem numa
 // linha própria e não inflam o "recebidos".
+// Story 75-212 — template v3 (8 params): entra {{5}} Patrocinado Corretor
+// (ajuda de custo do Alexandre); corretores/distribuídos/tempo viram 6/7/8.
 export interface DailyReportVars {
   data: string // {{1}} ex.: "24/06/2026"
   entrada: string // {{2}} leads de entrada (funil) ex.: "15"
   canais: string // {{3}} canais SÓ do funil ex.: "Meta Ads 9 · WhatsApp 6"
   manuais: string // {{4}} cadastros manuais de corretor ex.: "23"
-  corretores: string // {{5}} ex.: "Robson 8→8 · Odair 3→2"
-  distribuidos: string // {{6}} ex.: "14 de 15 do funil · 18 envios no total (4 redistribuições: bolsão 4 · roleta 0)"
-  tempo: string // {{7}} ex.: "14 min (mín 3 · máx 1h12)"
+  patrocinados: string // {{5}} leads source=broker_sponsored ex.: "3 — Valeria 2 · Robson 1"
+  corretores: string // {{6}} ex.: "Robson 8→8 · Odair 3→2"
+  distribuidos: string // {{7}} ex.: "14 de 15 do funil · 18 envios no total (4 redistribuições: bolsão 4 · roleta 0)"
+  tempo: string // {{8}} ex.: "14 min (mín 3 · máx 1h12)"
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -106,6 +109,24 @@ export function aggregateBrokerRows(
     if (stage && stage !== novoId) agg.atenderam++
   }
   return Object.entries(byBroker).map(([id, v]) => ({ name: brokerName[id] ?? "?", ...v }))
+}
+
+/**
+ * Story 75-212 — linha "Patrocinado Corretor" ({{5}}): total + por corretor
+ * (primeiro nome, desc). É por esses leads que o diretor paga a ajuda de custo.
+ * Sem leads → "0". Uma linha só (regra de parâmetro Meta). Puro/exportado p/ teste.
+ */
+export function formatPatrocinados(
+  rows: Array<{ name: string; count: number }>
+): string {
+  const total = rows.reduce((a, r) => a + r.count, 0)
+  if (total === 0) return "0"
+  const porCorretor = rows
+    .slice()
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"))
+    .map((r) => `${r.name === "Sem corretor" ? r.name : firstName(r.name)} ${r.count}`)
+    .join(" · ")
+  return `${total} — ${porCorretor}`
 }
 
 export function formatDuration(minutes: number): string {
@@ -201,7 +222,7 @@ export async function buildDailyLeadsReport(
   // (1) Leads criados na janela (bruto) + sinais para classificar entrada × manual
   const { data: leads } = await admin
     .from("leads")
-    .select("id, channel, source, metadata, ai_summary")
+    .select("id, channel, source, metadata, ai_summary, assigned_broker_id")
     .eq("org_id", orgId)
     .eq("segmento", "principal") // Story 75-98: relatório do mundo principal, sem IMOB
     .eq("is_active", true)
@@ -213,6 +234,7 @@ export async function buildDailyLeadsReport(
     source: string | null
     metadata: unknown
     ai_summary: string | null
+    assigned_broker_id: string | null
   }>
   const total = leadRows.length
   const recebidosIds = new Set(leadRows.map((l) => l.id))
@@ -251,6 +273,31 @@ export async function buildDailyLeadsReport(
     const canal = l.channel ?? l.source ?? "desconhecido"
     canalCounts[canal] = (canalCounts[canal] ?? 0) + 1
   }
+
+  // Story 75-212 — Patrocinado Corretor ({{5}}): leads da janela com
+  // source='broker_sponsored', agrupados pelo corretor (assigned_broker_id →
+  // users.id; é ele quem recebe a ajuda de custo).
+  const sponsoredCounts: Record<string, number> = {}
+  for (const l of leadRows) {
+    if (l.source !== "broker_sponsored") continue
+    const key = l.assigned_broker_id ?? "__sem__"
+    sponsoredCounts[key] = (sponsoredCounts[key] ?? 0) + 1
+  }
+  const sponsoredUserIds = Object.keys(sponsoredCounts).filter((k) => k !== "__sem__")
+  const sponsoredName: Record<string, string> = {}
+  if (sponsoredUserIds.length > 0) {
+    const { data: sponsoredUsers } = await admin
+      .from("users")
+      .select("id, name")
+      .in("id", sponsoredUserIds)
+    for (const u of (sponsoredUsers ?? []) as Array<{ id: string; name: string | null }>) {
+      sponsoredName[u.id] = u.name ?? "?"
+    }
+  }
+  const patrocinadoRows = Object.entries(sponsoredCounts).map(([id, count]) => ({
+    name: id === "__sem__" ? "Sem corretor" : (sponsoredName[id] ?? "?"),
+    count,
+  }))
 
   // Cobertura (dos leads de entrada, quantos distribuídos) + únicos (inclui carryover).
   const coberturaUnica = [...recebidosIds].filter((id) => distinctDistributedIds.has(id)).length
@@ -338,6 +385,7 @@ export async function buildDailyLeadsReport(
     entrada: String(entrada),
     canais: formatChannels(canalCounts),
     manuais: String(manuais),
+    patrocinados: formatPatrocinados(patrocinadoRows),
     corretores: formatBrokers(brokerRows),
     distribuidos: formatDistribuidos({
       funil: entrada,
