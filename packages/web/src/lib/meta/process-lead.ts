@@ -136,14 +136,21 @@ export async function processMetaLead(
     const email = getField("email")
     const rawPhone = getField("phone_number") ?? getField("phone")
 
-    // Story 75-215: telefone-lixo (texto/dígitos demais no campo do form) estourava
-    // varchar(50)/varchar(20 no phone_normalized do trigger) e o insert falhava.
-    // Inválido → phone null; o valor cru sobrevive em metadata.field_data.
+    // Story 75-215/216: telefone-lixo (texto/dígitos demais no campo do form)
+    // estourava varchar(50)/varchar(20 no phone_normalized do trigger). A coluna
+    // phone é NOT NULL, então lixo é preservado clampado (o cru completo vive em
+    // metadata.field_data); só se garante que o trigger nunca gere >20 chars.
     const phoneNormalized = normalizePhoneBR(rawPhone)
-    const phone =
-      rawPhone && phoneNormalized && phoneNormalized.length <= 20
-        ? rawPhone.slice(0, 50)
-        : null
+    const hasUsablePhone = !!phoneNormalized && phoneNormalized.length <= 20
+    const phone = (() => {
+      if (!rawPhone) return ""
+      if (hasUsablePhone) return rawPhone.slice(0, 50)
+      const digits = rawPhone.replace(/\D/g, "")
+      // 20+ dígitos: mantém só dígitos (normalizado = eles mesmos, cabe no varchar)
+      if (digits.length > 20) return digits.slice(0, 20)
+      // texto com poucos dígitos: normalizado sai NULL, o texto clampado é seguro
+      return rawPhone.slice(0, 50)
+    })()
 
     // Usar campaign_id do payload ou do que veio da Graph API
     const campaignId =
@@ -171,7 +178,7 @@ export async function processMetaLead(
       finalidade: string | null
     }
     const findByPhone = async (): Promise<ExistingLead | null> => {
-      if (!phoneNormalized) return null
+      if (!hasUsablePhone || !phoneNormalized) return null
       const { data } = await supabase
         .from("leads")
         .select("id, utm_campaign, property_interest_id, finalidade")
@@ -213,7 +220,8 @@ export async function processMetaLead(
       page_id: entry?.id ?? null,
       field_data: fieldData,
       // AC7: flag de dados parciais
-      incomplete: !phone && !email,
+      // incompleto = sem contato utilizável (telefone-lixo não conta como contato)
+      incomplete: !hasUsablePhone && !email,
       ...(backdateTo ? { recovered_at: new Date().toISOString() } : {}),
     }
 

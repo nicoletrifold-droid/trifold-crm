@@ -189,8 +189,28 @@ describe("processMetaLead", () => {
 
     expect(result.ok).toBe(true)
     const inserted = calls.find((c) => c.table === "leads" && c.insert)?.insert as Record<string, unknown>
-    expect(inserted.phone).toBe(null)
+    // 75-216: phone é NOT NULL — lixo textual é preservado clampado (≤50)
+    expect(inserted.phone).toBe("quero apartamento de 3 quartos na zona 7")
+    expect((inserted.phone as string).length).toBeLessThanOrEqual(50)
     expect((inserted.metadata as Record<string, unknown>).incomplete).toBe(true)
+  })
+
+  it("75-216: 20+ dígitos no campo → guarda só 20 dígitos (trigger nunca estoura varchar(20))", async () => {
+    const junkValue = {
+      ...value,
+      field_data: [{ name: "phone_number", values: ["5544999990000 ou 5544888880000 (qualquer um)"] }],
+    }
+    queues.leads = [
+      { data: null, error: null },
+      { data: { id: "lead-digits" }, error: null },
+    ]
+
+    const result = await processMetaLead("111", junkValue, entry, "log-1")
+
+    expect(result.ok).toBe(true)
+    const inserted = calls.find((c) => c.table === "leads" && c.insert)?.insert as Record<string, unknown>
+    expect(inserted.phone).toBe("55449999900005544888")
+    expect((inserted.phone as string).replace(/\D/g, "").length).toBeLessThanOrEqual(20)
   })
 
   it("75-215: insert colide no unique (23505) → cai no caminho de update do lead dono do telefone", async () => {
