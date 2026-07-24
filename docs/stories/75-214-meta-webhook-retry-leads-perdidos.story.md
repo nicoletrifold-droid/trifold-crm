@@ -1,6 +1,6 @@
 # Story 75-214 — Webhook Meta Ads: falhas silenciosas + retry automático de leads perdidos
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug fix / resiliência
 **Epic:** Integrações — Meta Ads
 **Complexidade:** M (refactor de rota p/ lib compartilhada + cron novo; sem migration)
@@ -88,3 +88,4 @@ Gate: PASS
 |------|---------|-------------|--------|
 | 2026-07-24 | 0.1 | Story criada a partir do incidente dos leads perdidos. | @sm (River) |
 | 2026-07-24 | 1.0 | Implementação completa: lib compartilhada + cron de retry + testes. QA PASS. | @dev (Dex) + @qa (Quinn) |
+| 2026-07-24 | 1.1 | PR #285 squash-merged em `main` (`9649742f`). Deploy Vercel de produção disparado; recuperação dos 12 monitorada em prod. Done. | @devops (Gage) |
