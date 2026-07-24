@@ -65,6 +65,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/meta-leads-retry",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/meta-sync-health",
       "schedule": "0 */4 * * *"
     },
