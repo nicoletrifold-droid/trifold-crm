@@ -70,27 +70,64 @@ export function BrokerMessageInput({
   const [notifyLoading, setNotifyLoading] = useState(false)
   const [notifyError, setNotifyError] = useState<string | null>(null)
   // Story 75-142 — "Iniciar atendimento" via template (janela fechada / lead frio).
-  const [startLoading, setStartLoading] = useState(false)
+  // Story 75-217 — o botão abre um menu com os templates de abertura aprovados
+  // na Meta (um por contexto), com preview já renderizado para este lead.
   const [startDone, setStartDone] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [templates, setTemplates] = useState<Array<{ name: string; preview: string }> | null>(null)
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [sendingTemplate, setSendingTemplate] = useState<string | null>(null)
 
-  async function handleStartWhatsapp() {
-    if (startLoading || startDone) return
-    setStartLoading(true)
+  async function handleToggleTemplates() {
+    if (startDone || sendingTemplate) return
+    setStartError(null)
+    if (templatesOpen) {
+      setTemplatesOpen(false)
+      return
+    }
+    setTemplatesOpen(true)
+    if (templates !== null || templatesLoading) return
+    setTemplatesLoading(true)
+    try {
+      const res = await fetch(`/api/leads/${leadId}/opening-templates`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.success) {
+        setStartError(data?.message ?? "Não foi possível carregar as mensagens. Tente novamente.")
+        setTemplatesOpen(false)
+        return
+      }
+      setTemplates(data.templates as Array<{ name: string; preview: string }>)
+    } catch {
+      setStartError("Erro de conexão. Tente novamente.")
+      setTemplatesOpen(false)
+    } finally {
+      setTemplatesLoading(false)
+    }
+  }
+
+  async function handleStartWhatsapp(templateName: string) {
+    if (sendingTemplate || startDone) return
+    setSendingTemplate(templateName)
     setStartError(null)
     try {
-      const res = await fetch(`/api/leads/${leadId}/start-whatsapp`, { method: "POST" })
+      const res = await fetch(`/api/leads/${leadId}/start-whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template: templateName }),
+      })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.success) {
         setStartError(data?.message ?? "Não foi possível iniciar o atendimento. Tente novamente.")
         return
       }
       setStartDone(true)
+      setTemplatesOpen(false)
       router.refresh()
     } catch {
       setStartError("Erro de conexão. Tente novamente.")
     } finally {
-      setStartLoading(false)
+      setSendingTemplate(null)
     }
   }
 
@@ -243,15 +280,43 @@ export function BrokerMessageInput({
               <>
                 <button
                   type="button"
-                  onClick={() => void handleStartWhatsapp()}
-                  disabled={startLoading}
+                  onClick={() => void handleToggleTemplates()}
+                  disabled={templatesLoading || sendingTemplate !== null}
+                  aria-expanded={templatesOpen}
                   className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
                 >
-                  {startLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
+                  {templatesLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
                   Iniciar atendimento (mensagem de abertura)
                 </button>
+                {templatesOpen && templates !== null && (
+                  <div className="space-y-2" role="listbox" aria-label="Escolha a mensagem de abertura">
+                    {templates.length === 0 && (
+                      <p className="rounded-md bg-stone-100 px-3 py-2 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                        Nenhuma mensagem de abertura aprovada disponível no momento.
+                      </p>
+                    )}
+                    {templates.map((t) => (
+                      <button
+                        key={t.name}
+                        type="button"
+                        onClick={() => void handleStartWhatsapp(t.name)}
+                        disabled={sendingTemplate !== null}
+                        className="flex w-full items-start gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-left text-sm text-stone-700 hover:border-emerald-400 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-500/10"
+                      >
+                        {sendingTemplate === t.name ? (
+                          <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                        ) : (
+                          <MessageSquarePlus className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                        )}
+                        <span className="whitespace-pre-line">{t.preview}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <p className="px-1 text-xs text-stone-500 dark:text-stone-500">
-                  Envia uma mensagem de abertura aprovada pelo WhatsApp para reabrir a conversa com o cliente.
+                  {templatesOpen
+                    ? "Toque na mensagem que combina com o contexto do lead — ela será enviada como está."
+                    : "Abre as mensagens de abertura aprovadas pelo WhatsApp para reabrir a conversa com o cliente."}
                 </p>
               </>
             )}
