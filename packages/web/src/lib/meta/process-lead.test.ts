@@ -100,15 +100,16 @@ describe("processMetaLead", () => {
     expect(inserted.created_at).toBeUndefined() // sem backdate no fluxo normal
   })
 
-  it("AC4 recuperação tardia: sem side effects, created_at retrodatado, activity marcada", async () => {
+  it("AC4 recuperação tardia (75-215): distribui via roleta, mas sem automations; created_at retrodatado", async () => {
     const result = await processMetaLead("111", value, entry, "log-1", {
-      sideEffects: false,
+      automations: false,
+      distribute: true,
       backdateTo: "2026-07-01T12:00:00Z",
     })
 
     expect(result.ok).toBe(true)
     expect(triggerAutomations).not.toHaveBeenCalled()
-    expect(distributeLeadToNextBroker).not.toHaveBeenCalled()
+    expect(distributeLeadToNextBroker).toHaveBeenCalledWith("lead-new", "org-1")
 
     const inserted = calls.find((c) => c.table === "leads" && c.insert)?.insert as Record<string, unknown>
     expect(inserted.created_at).toBe("2026-07-01T12:00:00Z")
@@ -157,7 +158,7 @@ describe("processMetaLead", () => {
     expect(triggerAutomations).not.toHaveBeenCalled()
   })
 
-  it("dedup por telefone: atualiza lead existente sem criar novo nem redistribuir", async () => {
+  it("dedup por telefone (75-215: via phone_normalized): atualiza lead existente sem criar novo nem redistribuir", async () => {
     queues.leads = [
       { data: null, error: null },
       { data: { id: "lead-55", utm_campaign: "camp", property_interest_id: null, finalidade: null }, error: null },
@@ -168,6 +169,44 @@ describe("processMetaLead", () => {
     expect(result).toMatchObject({ ok: true, leadId: "lead-55" })
     expect(calls.filter((c) => c.table === "leads" && c.insert)).toHaveLength(0)
     expect(distributeLeadToNextBroker).not.toHaveBeenCalled()
+  })
+
+  it("75-215: telefone-lixo no form → phone null no insert (não estoura varchar)", async () => {
+    const junkValue = {
+      ...value,
+      field_data: [
+        { name: "full_name", values: ["Maria Teste"] },
+        { name: "phone_number", values: ["quero apartamento de 3 quartos na zona 7"] },
+      ],
+    }
+    // sem phoneNormalized não há lookup por telefone: idem → insert direto
+    queues.leads = [
+      { data: null, error: null },
+      { data: { id: "lead-junk" }, error: null },
+    ]
+
+    const result = await processMetaLead("111", junkValue, entry, "log-1")
+
+    expect(result.ok).toBe(true)
+    const inserted = calls.find((c) => c.table === "leads" && c.insert)?.insert as Record<string, unknown>
+    expect(inserted.phone).toBe(null)
+    expect((inserted.metadata as Record<string, unknown>).incomplete).toBe(true)
+  })
+
+  it("75-215: insert colide no unique (23505) → cai no caminho de update do lead dono do telefone", async () => {
+    queues.leads = [
+      { data: null, error: null }, // idempotência
+      { data: null, error: null }, // findByPhone: não achou (formato antigo/corrida)
+      { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } }, // insert
+      { data: { id: "lead-dono", utm_campaign: null, property_interest_id: null, finalidade: null }, error: null }, // findByPhone pós-colisão
+      { data: null, error: null }, // update
+    ]
+
+    const result = await processMetaLead("111", value, entry, "log-1")
+
+    expect(result).toMatchObject({ ok: true, leadId: "lead-dono" })
+    expect(distributeLeadToNextBroker).not.toHaveBeenCalled()
+    expect(updatesTo("webhook_logs")).toContainEqual(expect.objectContaining({ processed: true }))
   })
 })
 
