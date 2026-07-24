@@ -6,10 +6,12 @@ const CRON_SECRET = process.env.CRON_SECRET
 
 // Story 75-214 — reprocessa eventos leadgen do Meta que ficaram processed=false
 // (o after() do webhook pode morrer sem rastro; o Meta recebe 200 e não reenvia).
-// Política de idade:
+// Política de idade (ajustada na 75-215 — decisão Marcos 24/07):
 //   < 6h  → fluxo normal completo (automations + roleta)
-//   ≥ 6h  → recuperação tardia: cria o lead SEM side effects e retrodata o
-//           created_at ao momento real do lead (não distorce métricas diárias)
+//   ≥ 6h  → recuperação tardia: distribui via roleta normalmente (justa por
+//           construção), mas SEM automations (mensagem automática semanas
+//           depois não faz sentido) e com created_at retrodatado ao momento
+//           real do lead (não distorce métricas diárias)
 const MIN_AGE_MINUTES = 10 // deixa o after() do webhook terminar em paz
 const MAX_AGE_DAYS = 60 // Graph API retém dados de leadgen por ~90 dias
 const LATE_RECOVERY_HOURS = 6
@@ -86,7 +88,8 @@ export async function GET(request: NextRequest) {
     const isLateRecovery = ageMs >= LATE_RECOVERY_HOURS * 60 * 60 * 1000
 
     const result = await processMetaLead(event.leadgen_id, value, entry ?? {}, event.id, {
-      sideEffects: !isLateRecovery,
+      automations: !isLateRecovery,
+      distribute: true,
       backdateTo: isLateRecovery ? event.created_at : undefined,
     })
 

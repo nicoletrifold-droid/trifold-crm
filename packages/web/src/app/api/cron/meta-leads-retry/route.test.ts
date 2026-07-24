@@ -91,11 +91,11 @@ describe("GET /api/cron/meta-leads-retry", () => {
       expect.objectContaining({ leadgen_id: "12345" }),
       expect.objectContaining({ id: "page-1" }),
       "log-1",
-      { sideEffects: true, backdateTo: undefined },
+      { automations: true, distribute: true, backdateTo: undefined },
     )
   })
 
-  it("evento antigo (≥ 6h) → recuperação tardia sem side effects e com backdate", async () => {
+  it("evento antigo (≥ 6h) → recuperação tardia: roleta sim, automations não, com backdate", async () => {
     const oldCreatedAt = new Date(Date.now() - 48 * HOUR).toISOString()
     selectResult = { data: [event({ created_at: oldCreatedAt })], error: null }
 
@@ -106,7 +106,7 @@ describe("GET /api/cron/meta-leads-retry", () => {
       expect.anything(),
       expect.anything(),
       "log-1",
-      { sideEffects: false, backdateTo: oldCreatedAt },
+      { automations: false, distribute: true, backdateTo: oldCreatedAt },
     )
   })
 

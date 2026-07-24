@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js"
+import { normalizePhoneBR } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
@@ -8,11 +9,17 @@ const META_API_BASE = "https://graph.facebook.com/v21.0"
 
 export interface ProcessMetaLeadOptions {
   /**
-   * Dispara automations + roleta ao criar lead novo (default true).
-   * Recuperação tardia (retry de evento antigo) passa false para não
-   * mandar mensagem automática / distribuir lead frio sem contexto.
+   * Dispara automations (e-mails/mensagens) ao criar lead novo (default true).
+   * Recuperação tardia passa false — mensagem automática semanas depois do
+   * form não faz sentido pro lead.
    */
-  sideEffects?: boolean
+  automations?: boolean
+  /**
+   * Distribui o lead novo via roleta (default true). Story 75-215: a
+   * recuperação tardia TAMBÉM distribui (decisão Marcos 24/07 — roleta é
+   * justa por construção; ninguém escolhe a dedo quem recebe).
+   */
+  distribute?: boolean
   /**
    * Story 75-214: timestamp ISO para retrodatar o created_at do lead
    * (recuperação tardia). Prioridade: created_time do Meta > este valor.
@@ -67,7 +74,7 @@ export async function processMetaLead(
   logId?: string,
   options: ProcessMetaLeadOptions = {},
 ): Promise<ProcessMetaLeadResult> {
-  const { sideEffects = true, backdateTo } = options
+  const { automations = true, distribute = true, backdateTo } = options
   const supabase = createAdminClient()
   const adminSupabase = createAdminClient()
 
@@ -127,7 +134,16 @@ export async function processMetaLead(
 
     const name = getField("full_name") ?? getField("name")
     const email = getField("email")
-    const phone = getField("phone_number") ?? getField("phone")
+    const rawPhone = getField("phone_number") ?? getField("phone")
+
+    // Story 75-215: telefone-lixo (texto/dígitos demais no campo do form) estourava
+    // varchar(50)/varchar(20 no phone_normalized do trigger) e o insert falhava.
+    // Inválido → phone null; o valor cru sobrevive em metadata.field_data.
+    const phoneNormalized = normalizePhoneBR(rawPhone)
+    const phone =
+      rawPhone && phoneNormalized && phoneNormalized.length <= 20
+        ? rawPhone.slice(0, 50)
+        : null
 
     // Usar campaign_id do payload ou do que veio da Graph API
     const campaignId =
@@ -144,26 +160,29 @@ export async function processMetaLead(
 
     const defaultStageId = await getDefaultStageId(supabase, orgId)
 
-    // AC8: Verificar lead existente pelo phone
-    let leadId: string | null = null
-    let existingUtmCampaign: string | null = null
-    let existingPropertyId: string | null = null
-    let existingFinalidade: string | null = null
-    if (phone) {
-      const { data: existing } = await supabase
+    // AC8: Verificar lead existente pelo telefone.
+    // Story 75-215: busca por phone_normalized (é nele que vive o unique
+    // idx_leads_org_phone_normalized_unique) — o phone cru do Meta quase nunca
+    // bate com o formato armazenado, e o insert colidia no índice.
+    type ExistingLead = {
+      id: string
+      utm_campaign: string | null
+      property_interest_id: string | null
+      finalidade: string | null
+    }
+    const findByPhone = async (): Promise<ExistingLead | null> => {
+      if (!phoneNormalized) return null
+      const { data } = await supabase
         .from("leads")
         .select("id, utm_campaign, property_interest_id, finalidade")
-        .eq("phone", phone)
+        .eq("phone_normalized", phoneNormalized)
         .eq("org_id", orgId)
-        .single()
-
-      if (existing) {
-        leadId = existing.id
-        existingUtmCampaign = existing.utm_campaign ?? null
-        existingPropertyId = existing.property_interest_id ?? null
-        existingFinalidade = existing.finalidade ?? null
-      }
+        .maybeSingle()
+      return (data as ExistingLead | null) ?? null
     }
+
+    const existing = await findByPhone()
+    let leadId: string | null = existing?.id ?? null
 
     // Story 75-44: detectar empreendimento no texto resolvido (campanha/anúncio/
     // formulário) para preencher property_interest_id → a roleta passa a filtrar
@@ -201,27 +220,32 @@ export async function processMetaLead(
     // Story 75-114: Finalidade derivada do objetivo do form do Meta.
     const derivedFinalidade = deriveFinalidade(fieldData)
 
-    if (leadId) {
-      // AC8: metadata sempre atualizado; utm_* só atualizado se ainda não preenchido
+    // AC8: metadata sempre atualizado; utm_* só atualizado se ainda não preenchido
+    const applyUpdate = async (target: ExistingLead): Promise<string | null> => {
       const { error: updateError } = await supabase
         .from("leads")
         .update({
           metadata: metaMetadata,
-          ...(existingUtmCampaign === null ? utmData : {}),
+          ...(target.utm_campaign === null ? utmData : {}),
           // Story 75-44: só preenche se ainda não houver empreendimento definido
           // (não sobrescreve seleção manual/anterior).
-          ...(existingPropertyId === null && detectedPropertyId
+          ...(target.property_interest_id === null && detectedPropertyId
             ? { property_interest_id: detectedPropertyId }
             : {}),
           // Story 75-114: só preenche a finalidade se ainda não houver (não sobrescreve manual).
-          ...(existingFinalidade === null && derivedFinalidade
+          ...(target.finalidade === null && derivedFinalidade
             ? { finalidade: derivedFinalidade }
             : {}),
         })
-        .eq("id", leadId)
+        .eq("id", target.id)
 
-      if (updateError) {
-        return await fail(`lead_update_failed: ${updateError.message}`)
+      return updateError ? updateError.message : null
+    }
+
+    if (leadId && existing) {
+      const updateErrorMessage = await applyUpdate(existing)
+      if (updateErrorMessage) {
+        return await fail(`lead_update_failed: ${updateErrorMessage}`)
       }
     } else {
       // Criar novo lead — mesmo sem phone/email (AC7)
@@ -249,22 +273,40 @@ export async function processMetaLead(
         .single()
 
       if (insertError || !newLead?.id) {
-        return await fail(
-          `lead_insert_failed: ${insertError?.message ?? "insert retornou vazio"}`,
-        )
+        // Story 75-215: corrida (dois eventos simultâneos) ou telefone que só
+        // colide depois de normalizado pelo trigger → resolve pelo dono do
+        // índice único e cai no caminho de update em vez de perder o evento.
+        if (insertError?.code === "23505") {
+          const winner = await findByPhone()
+          if (winner) {
+            const updateErrorMessage = await applyUpdate(winner)
+            if (updateErrorMessage) {
+              return await fail(`lead_update_failed: ${updateErrorMessage}`)
+            }
+            leadId = winner.id
+          } else {
+            return await fail(`lead_insert_failed: ${insertError.message}`)
+          }
+        } else {
+          return await fail(
+            `lead_insert_failed: ${insertError?.message ?? "insert retornou vazio"}`,
+          )
+        }
+      } else {
+        if (automations) {
+          void triggerAutomations("lead.created", {
+            id: newLead.id,
+            email: email ?? null,
+            name: name ?? null,
+            phone: phone ?? null,
+            org_id: orgId,
+          })
+        }
+        if (distribute) {
+          void distributeLeadToNextBroker(newLead.id, orgId)
+        }
+        leadId = newLead.id
       }
-
-      if (sideEffects) {
-        void triggerAutomations("lead.created", {
-          id: newLead.id,
-          email: email ?? null,
-          name: name ?? null,
-          phone: phone ?? null,
-          org_id: orgId,
-        })
-        void distributeLeadToNextBroker(newLead.id, orgId)
-      }
-      leadId = newLead.id
     }
 
     // Sync on-demand: garante que o anúncio exista em meta_ads imediatamente,
