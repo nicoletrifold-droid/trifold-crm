@@ -4,6 +4,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { detectPropertyInterestId } from "@web/lib/roleta/detect-property"
+import { getDefaultStageId } from "@web/lib/leads/default-stage"
 
 const META_API_BASE = "https://graph.facebook.com/v21.0"
 
@@ -618,27 +619,4 @@ async function resolveOrgId(supabase: SupabaseClient): Promise<string | null> {
     .single()
 
   return data?.org_id ?? null
-}
-
-// AC9: Stage ID dinâmico via kanban_stages (substitui DEFAULT_STAGE_ID hardcoded)
-async function getDefaultStageId(supabase: SupabaseClient, orgId: string): Promise<string> {
-  const { data } = await supabase
-    .from("kanban_stages")
-    .select("id")
-    .eq("org_id", orgId)
-    .eq("is_default", true)
-    .single()
-
-  if (data?.id) return data.id
-
-  // Fallback: primeiro estágio por posição
-  const { data: firstStage } = await supabase
-    .from("kanban_stages")
-    .select("id")
-    .eq("org_id", orgId)
-    .order("position", { ascending: true })
-    .limit(1)
-    .single()
-
-  return firstStage?.id ?? "00000000-0000-0000-0001-000000000001"
 }

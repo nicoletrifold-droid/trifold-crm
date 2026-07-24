@@ -6,6 +6,7 @@ import { logAudit, getRequestIp } from "@web/lib/audit"
 import { canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { normalizePhoneBR } from "@trifold/shared"
+import { getDefaultStageId } from "@web/lib/leads/default-stage"
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
@@ -145,6 +146,12 @@ export async function POST(request: Request) {
   // Brokers can only create leads assigned to themselves
   const assignedBrokerId = isBroker ? appUser.id : (body.assigned_broker_id || null)
 
+  // Story 75-218 — lead NUNCA nasce sem etapa: sem stage no payload (modal do
+  // corretor deixava vazio), cai na etapa default do Kanban. Lead com stage
+  // null é invisível no Pipeline, nos filtros da listagem e no dia seguinte
+  // some até do "criados hoje" (caso Diellys/Valeria, 24/07).
+  const stageId = body.stage_id || (await getDefaultStageId(supabase, appUser.org_id))
+
   const { data: lead, error } = await supabase
     .from("leads")
     .insert({
@@ -152,7 +159,7 @@ export async function POST(request: Request) {
       phone: body.phone.trim(),
       email: body.email?.trim() || null,
       channel: body.channel || "whatsapp",
-      stage_id: body.stage_id || null,
+      stage_id: stageId,
       property_interest_id: body.property_interest_id || null,
       has_down_payment: body.has_down_payment ?? null,
       preferred_bedrooms: body.preferred_bedrooms ?? null,
