@@ -1,0 +1,69 @@
+storyId: "75-219"
+title: "Módulo Campanhas: aba Agente (fundação do agente de marketing IA + geração de sugestões)"
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-27
+
+checks:
+  code_review: PASS          # manual (CodeRabbit disabled): 16 arquivos revisados linha a linha; separação limpa (regras puras em lib/marketing/posts.ts, guard único em guard.ts, flow puro em packages/ai); nenhum achado high
+  unit_tests: PASS           # vitest 1242/1242 (114 files); +25 novos (12 flow: parser válido/markdown/prosa/truncado/canal inválido/limite 5/blocos thinking; 13 lib: matriz de transição completa incl. terminais, roles, validação de input)
+  acceptance_criteria: PASS  # AC1-AC7 implementados (ver trace); AC4 entregue com fusão Sugestões+Fila — validada como equivalente ao espírito do AC (ver observations)
+  regressions: PASS          # tabs das 2 telas existentes ganham prop obrigatória com ambos call sites atualizados; type-check 0 erros; build verde; suíte completa verde; nada fora do escopo tocado
+  performance: CONCERNS      # maxDuration 90 + timeout SDK 75s ok; índice (org_id,status) ok; PERF-001: meta_insights_daily no generate sem paginação (corte silencioso do PostgREST em 1000 linhas se >33 campanhas ativas × 30d) — mesmo desenho da rota /api/meta-ads/campanhas existente, tolerável p/ contexto de IA, registrar como debt
+  security: PASS             # requireRole(admin/supervisor) nas 4 rotas via marketingGuard + redirect server-side na page (role de public.users, não JWT — gotcha 75-205); org_id explícito em todo acesso via admin client; input whitelisted (UUID/date/canal enum/url≤2000); transição de status validada server-side contra o estado do BANCO (422); rejeitar nunca é DELETE (não existe rota DELETE); empreendimento_id alucinado pelo modelo → null (protege FK); zero caminho de publicação externa (grep: nenhuma chamada HTTP além do SDK Anthropic)
+  documentation: PASS        # migration 193 com COMMENTs completos; Dev Agent Record + File List fiéis ao diff; AUTO-DECISIONs documentadas
+
+acceptance_criteria_trace:
+  AC1: "3ª aba nas 3 telas (page.tsx, campaigns-meta-client.tsx, agente-client.tsx CampaignsTabs inline — padrão duplicado mantido conforme facultado); ativo com borda laranja; tema light/dark com dark: em toda a UI nova."
+  AC2: "page.tsx: getServerUser().role ∉ {admin,supervisor} → redirect; 4 rotas API via marketingGuard (requireAuth + requireRole); link da aba só renderiza p/ admin/supervisor nas 3 telas (showAgente/showAgenteTab)."
+  AC3: "193_marketing_posts.sql: todas as colunas mínimas + CHECKs canal/status/origem + FK org/properties(SET NULL)/users(SET NULL) + índice (org_id,status) + RLS habilitada SEM policies (padrão mig 145, comentário explícito) + COMMENTs. Numeração 193 correta contra a pasta local (última = 192). NÃO aplicada (correto — passo do deploy)."
+  AC4: "Sugestões—fila de aprovação (status=sugerido, justificativa em card destacado, ações aprovar/editar/rejeitar) + Publicados (aprovados com 'Marcar como publicado' + histórico) + Rejeitados (consultáveis, opacity, nunca DELETE). Fusão Sugestões+Fila validada — ver observations."
+  AC5: "+ Novo post → POST /api/marketing-posts com origem='humano', status='sugerido', created_by=usuário; entra na mesma fila."
+  AC6: "generate: creative_performance via client do USUÁRIO (RPC SECURITY INVOKER, mig 101:126-127 confirmado) + meta_campaigns/meta_insights_daily/properties via client do usuário + INSERT via admin client; prompt exige justificativa citando dados concretos e contraste cadastros Meta × funil CRM; parser exige justificativa não-vazia; 3–5 posts (slice MAX_SUGGESTIONS=5)."
+  AC7: "fail-open: parse inválido → 502 sem persistir; exceção → 500 sem persistir; sem dados Meta → 422 com mensagem acionável; UI com retry em todos os erros; status='sugerido'/origem='agente' hardcoded no insert; nenhum código de publicação externa existe."
+
+verificacoes_adversariais:
+  - "RPC creative_performance: confirmado na mig 101 (SECURITY INVOKER + WHERE user_org_id() AND is_admin_or_supervisor()) que service-role devolveria 0 linhas SILENCIOSAMENTE; generate/route.ts usa supabase (client do usuário) + sanity log de rows.length. Gate requireRole ⊂ is_admin_or_supervisor (mig 189) — quem passa no gate passa na RPC."
+  - "Claude API (skill claude-api carregada): ANTHROPIC_MODELS.sonnet='claude-sonnet-5' (ID válido); NUNCA lê content[0] — filter(type==='text')+join, com teste cobrindo bloco thinking antes do text e só-thinking→null; Sonnet 5 roda adaptive thinking POR PADRÃO ao omitir thinking (comportamento correto p/ o gotcha); max_tokens 8000 folgado (igual ao flow de referência); timeout 75000 em MS (correto p/ SDK TS) < maxDuration 90."
+  - "Transições: PATCH lê status VIGENTE no banco antes de validar (não confia no client); matriz sugerido→{aprovado,rejeitado}, aprovado→publicado, terminais vazios; 13 testes cobrem regressões e estados desconhecidos; edição de conteúdo só em sugerido/aprovado (422 senão)."
+  - "Mass assignment: update do PATCH construído exclusivamente de validateMarketingPostInput (whitelist) + status validado; campos desconhecidos (org_id, origem, justificativa, created_by no body) são ignorados; org_id sempre de appUser.org_id."
+  - "Publicação externa: grep no diff inteiro — nenhuma referência a graph.facebook, fetch/axios externo ou URL http fora do SDK Anthropic. Único caminho p/ status='publicado' é PATCH humano gateado."
+  - "Tema: toda a UI nova usa pares light/dark (dark:bg-stone-900, dark:text-stone-*, dark:ring-stone-800, accent orange-600/dark:orange-300) — convenção /dashboard respeitada."
+  - "Lint: 12 erros do pnpm lint em packages/web confirmados PRÉ-EXISTENTES nos mesmos 4 arquivos citados pelo dev (encoderWorker.min.js, informe/*, weather-widget, informe-pdf); 0 erros/0 warnings nos arquivos da story (web e ai)."
+  - "Comandos executados: npm run test (1242/1242 ✅), npm run type-check (8/8 ✅), npm run build (5/5 ✅), eslint dirigido nos arquivos da story (limpo)."
+
+issues:
+  - id: TEST-001
+    severity: medium
+    finding: "Verificação manual em dev não executada: o fluxo real gerar→aprovar→publicar→rejeitar nunca rodou contra app+banco+Claude API (sessão sem ambiente dev disponível). Migration 193 tampouco aplicada (correto para o estágio, mas significa que NENHUM caminho da feature foi exercitado em runtime)."
+    suggested_action: "Pós-deploy (mesmo dia): aplicar mig 193 (conferir numeração contra o schema remoto de prod — lição 75-188), abrir a aba como admin, gerar sugestões com Meta sincronizada (conferir no log 'creative_performance rows: N' > 0 — 0 = client errado), aprovar→publicar 1 post, rejeitar 1, criar 1 manual."
+  - id: TEST-002
+    severity: low
+    finding: "Gate 403 das rotas coberto por teste de constante (MARKETING_POST_ROLES), não integração — o repo não tem infra de teste de route handlers; requireRole é helper pré-existente e battle-tested nas demais rotas."
+    suggested_action: "Pós-deploy: curl nas 4 rotas com sessão broker/gerente (esperar 403) e anônima (401) — mesma disciplina da convenção de rotas públicas."
+  - id: MNT-001
+    severity: low
+    finding: "PATCH aceita editar também canal e empreendimento_id (a story lista copy/arte_url/scheduled_for). Superset benigno e coerente — o modal de edição expõe esses campos."
+    suggested_action: "Nenhuma — registrado como desvio consciente; manter."
+  - id: PERF-001
+    severity: low
+    finding: "generate lê meta_insights_daily (30d, level=campaign) sem paginação — PostgREST corta em 1000 linhas silenciosamente com >33 campanhas ativas; agregado ficaria subestimado no contexto do modelo."
+    suggested_action: "Debt: quando o módulo crescer, mover agregação p/ RPC (convenção teto-leads-regua-unica). Hoje o volume real está muito abaixo do corte e o desenho espelha a rota /api/meta-ads/campaigns."
+  - id: MNT-002
+    severity: low
+    finding: "PATCH com id malformado (não-UUID) devolve 500 (erro do Postgres) em vez de 400/404. Cosmético — rota interna gateada, UI só envia ids reais."
+    suggested_action: "Opcional em story futura: validar UUID_RE no id antes da query."
+
+observations:
+  - "AC4 / [AUTO-DECISION] da fusão Sugestões+Fila: VALIDADA. O AC pedia 3 áreas onde 'Fila de aprovação' = ações sobre os mesmos posts status=sugerido de 'Sugestões' — interpretação literal duplicaria a mesma lista na tela. A entrega preserva 100% das funções pedidas (justificativa visível por card, aprovar/editar/rejeitar, Publicados com ação manual, rejeitado consultável e nunca DELETE) e ainda separa Rejeitados em área própria. Atende o espírito do AC com UX melhor."
+  - "Fail-open não distingue truncamento por max_tokens (stop_reason não checado) — truncamento viraria 502 'formato inválido' com retry, que é o comportamento seguro; com ≤5 posts a saída fica muito abaixo de 8000 tokens. Cosmético, sem ação."
+  - "Sem trigger de updated_at no banco: PATCH seta updated_at manualmente e INSERTs usam DEFAULT now() — consistente, sem gap."
+  - "CodeRabbit disabled — revisão 100% manual conforme story."
+
+deploy_checklist:
+  - "1. @devops: conferir numeração 193 contra schema remoto de prod ANTES de aplicar (gotcha 074/075 + lição 75-188 dev DB ≠ prod)."
+  - "2. Aplicar 193_marketing_posts.sql e confirmar: RLS habilitada, ZERO policies na tabela."
+  - "3. Confirmar ANTHROPIC_API_KEY presente no ambiente Vercel (flow usa createAnthropicClient())."
+  - "4. Smoke TEST-001: gerar sugestões como admin com Meta sincronizada; validar log 'creative_performance rows: N' > 0; aprovar→publicar; rejeitar; + Novo post."
+  - "5. Smoke TEST-002: 403 nas 4 rotas com conta broker; aba invisível p/ broker/gerente/sdr; /dashboard/campaigns/agente com gerente → redirect."

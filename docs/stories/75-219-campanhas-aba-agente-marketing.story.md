@@ -336,7 +336,31 @@ Claude Fable 5 (claude-fable-5) — @dev (Dex), modo YOLO.
 - Sanity check da RPC no `generate`: `console.log("[marketing-posts/generate] creative_performance rows: N")` — 0 linhas com Meta sincronizada = client errado (falha silenciosa documentada na story).
 
 ## QA Results
-_(preencher no gate)_
+
+### Review Date: 2026-07-27
+
+### Reviewed By: Quinn (Test Architect) — @qa
+
+**Veredito: CONCERNS (aprovado com ressalvas — pode seguir para @devops com o checklist de deploy do gate).**
+
+**7 checks:** code_review PASS · unit_tests PASS (1242/1242, +25 novos) · acceptance_criteria PASS (AC1–AC7) · regressions PASS · performance CONCERNS (PERF-001, debt) · security PASS · documentation PASS.
+
+**Validações executadas:** `npm run test` (1242/1242 ✅) · `npm run type-check` (8/8 ✅) · `npm run build` (✅) · eslint dirigido nos arquivos da story (0 erros/0 warnings; os 12 erros do `pnpm lint` em packages/web confirmados pré-existentes nos mesmos 4 arquivos da main) · revisão manual completa do diff (16 arquivos, CodeRabbit disabled) · validação estática da migration 193 (CHECKs, FKs, índice, RLS sem policies = padrão mig 145, numeração correta vs pasta local) · verificação cruzada da mig 101 (SECURITY INVOKER + guard no WHERE → RPC via client do usuário confirmada no código) · skill claude-api carregada para validar o uso do SDK (modelo `claude-sonnet-5` válido; filter de thinking blocks correto; timeout 75s em ms; max_tokens folgado).
+
+**Pontos de atenção do @dev — resolução:**
+1. Verificação manual em dev pendente → **TEST-001 (medium)**: review estático rigoroso feito; risco residual = runtime nunca exercitado. Smoke obrigatório pós-deploy (checklist no gate).
+2. Gate 403 por teste de constante → **TEST-002 (low)**: aceito (repo sem infra de teste de route handlers; `requireRole` battle-tested); curl de verificação pós-deploy.
+3. [AUTO-DECISION] fusão Sugestões+Fila → **VALIDADA contra o AC4**: interpretação literal duplicaria a mesma lista; todas as funções pedidas presentes (justificativa por card, aprovar/editar/rejeitar, Publicados com ação manual, rejeitado consultável ≠ DELETE) + área Rejeitados extra. Atende o espírito do AC.
+4. Migration 193 não aplicada → correto; validada estaticamente; aplicar no deploy conferindo numeração contra prod (lição 75-188).
+5. CodeRabbit disabled → revisão 100% manual concluída.
+
+**Achados:** TEST-001 (medium) verificação manual pendente · TEST-002 (low) 403 sem teste de integração · MNT-001 (low) PATCH edita também canal/empreendimento_id (superset benigno, manter) · PERF-001 (low, debt) meta_insights_daily sem paginação no generate (corte PostgREST 1000 linhas com >33 campanhas; mesmo desenho da rota existente) · MNT-002 (low) PATCH com id não-UUID → 500 em vez de 400.
+
+**Destaques positivos:** client correto por acesso no generate (RPC via usuário + sanity log; marketing_posts via admin) · transições validadas contra o estado do banco, não do client · whitelist de input impede mass assignment · `empreendimento_id` alucinado → null protege a FK · zero caminho de publicação externa (grep confirmou) · tema dark: consistente em toda a UI nova.
+
+### Gate Status
+
+Gate: CONCERNS → docs/qa/gates/75.219-campanhas-aba-agente-marketing.yml
 
 ## Change Log
 | Date | Version | Description | Author |
