@@ -12,6 +12,8 @@ export const OPENING_TEMPLATE_PARAMS: Record<string, OpeningParamSource[]> = {
   // Story 75-217 — abordagens por contexto (submetidos 24/07, só {{1}} = nome do lead)
   abertura_interesse_prioridades: ["nome_lead"],
   abertura_interesse_status: ["nome_lead"],
+  // Reabertura neutra/sem contexto (Oi {{1}}, tudo bem? — submetido 27/07, só {{1}} = nome do lead)
+  abertura_basica: ["nome_lead"],
 }
 
 export const DEFAULT_OPENING_TEMPLATE = "abertura_atendimento_corretor"
