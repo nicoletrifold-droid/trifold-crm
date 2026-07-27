@@ -4,6 +4,7 @@ import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broker-message-input"
+import { MessageMedia } from "@web/components/conversas/message-media"
 
 /**
  * Story 76-4 — Detalhe do Chat (Relacionamento). Thread da conversa + composer
@@ -61,7 +62,7 @@ export default async function ChatDetailPage({
 
   const { data: rawMessages } = await admin
     .from("messages")
-    .select("id, role, content, created_at, metadata")
+    .select("id, role, content, media_url, media_type, created_at, metadata")
     .eq("conversation_id", id)
     .order("created_at", { ascending: true })
 
@@ -69,6 +70,8 @@ export default async function ChatDetailPage({
     id: string
     role: string
     content: string
+    media_url: string | null
+    media_type: string | null
     created_at: string
     metadata: Record<string, unknown> | null
   }>
@@ -138,6 +141,13 @@ export default async function ChatDetailPage({
                   <div className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${config.bubble}`}>
                     <div className="mb-1 text-[10px] font-medium uppercase opacity-60">{label}</div>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {/* Story 75-222: renderiza mídia (imagem/áudio/documento). Colunas
+                        top-level primeiro; fallback ao metadata cobre o histórico gravado
+                        antes do fix (inbound antigo só tinha metadata.media_*). */}
+                    <MessageMedia
+                      mediaType={msg.media_type ?? (msg.metadata?.media_type as string | undefined)}
+                      mediaUrl={msg.media_url ?? (msg.metadata?.media_url as string | undefined)}
+                    />
                     <div className="mt-1 text-[10px] opacity-50">
                       {new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                     </div>

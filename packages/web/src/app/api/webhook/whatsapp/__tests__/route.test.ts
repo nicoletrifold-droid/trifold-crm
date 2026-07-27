@@ -61,6 +61,8 @@ interface MessageRow {
   conversation_id: string
   role: string
   content: string
+  media_url: string | null
+  media_type: string | null
   metadata: Record<string, unknown>
 }
 
@@ -343,6 +345,8 @@ function buildSupabaseMock() {
               conversation_id: raw.conversation_id as string,
               role: raw.role as string,
               content: raw.content as string,
+              media_url: (raw.media_url as string | null) ?? null,
+              media_type: (raw.media_type as string | null) ?? null,
               metadata: (raw.metadata as Record<string, unknown>) ?? {},
             }
             db.messages.push(newRow)
@@ -383,8 +387,22 @@ function buildSupabaseMock() {
     return builder
   }
 
+  // Storage mock (Story 75-222): persistInboundMedia sobe a mídia ao bucket e grava
+  // media_url na mensagem — o mock devolve uma URL pública determinística.
+  const storage = {
+    from(bucket: string) {
+      return {
+        upload: async () => ({ error: null }),
+        getPublicUrl: (path: string) => ({
+          data: { publicUrl: `https://storage.test/${bucket}/${path}` },
+        }),
+      }
+    },
+  }
+
   return {
     from,
+    storage,
   }
 }
 
@@ -619,5 +637,135 @@ describe("WhatsApp webhook — Story 21.1", () => {
     )
     expect(res.status).toBe(403)
     expect(db.messages.length).toBe(0)
+  })
+
+  // ---- Story 75-222 — mídia inbound nas COLUNAS top-level -----------------
+  // Bug: imagem enviada pelo cliente aparecia como bolha vazia no Chat porque
+  // media_url/media_type só iam pro metadata; as colunas ficavam NULL.
+
+  function buildImagePayload(opts: {
+    from: string
+    wamid: string
+    imageId: string
+    caption?: string
+  }) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: opts.from,
+                    id: opts.wamid,
+                    type: "image",
+                    image: { id: opts.imageId, caption: opts.caption },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  // fetch mock que resolve o download da mídia da Graph API (metadados + arquivo).
+  function mockMediaFetch(imageId: string) {
+    const impl = async (...args: unknown[]) => {
+      const url = String(args[0])
+      if (url.includes(`graph.facebook.com/v21.0/${imageId}`)) {
+        return {
+          ok: true,
+          json: async () => ({
+            url: "https://media.meta.test/file-1",
+            mime_type: "image/jpeg",
+          }),
+        }
+      }
+      if (url.startsWith("https://media.meta.test/")) {
+        return {
+          ok: true,
+          arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+          headers: { get: () => "image/jpeg" },
+          json: async () => ({}),
+        }
+      }
+      return { ok: true, json: async () => ({}) }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchMock.mockImplementation(impl as any)
+  }
+
+  it("75-222 — imagem inbound: media_type na coluna já no sync (bolha nunca nasce vazia)", async () => {
+    const { POST } = await import("../route")
+    mockMediaFetch("IMG-1")
+
+    const res = await POST(
+      signedRequest(
+        buildImagePayload({
+          from: "+5544999689446",
+          wamid: "wamid.IMG-SYNC",
+          imageId: "IMG-1",
+          caption: "olha essa planta",
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    // Coluna top-level preenchida no INSERT síncrono (antes do download da mídia).
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.media_type).toBe("image")
+    // metadata segue preenchido (compat com telas que leem metadata.media_*)
+    expect(userMsg!.metadata.media_type).toBe("image")
+  })
+
+  it("75-222 — imagem inbound: async grava media_url na COLUNA (e no metadata)", async () => {
+    const { POST } = await import("../route")
+    mockMediaFetch("IMG-2")
+
+    const res = await POST(
+      signedRequest(
+        buildImagePayload({
+          from: "+5544999689446",
+          wamid: "wamid.IMG-ASYNC",
+          imageId: "IMG-2",
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await flushAsync()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    // persistInboundMedia: mídia no bucket → URL pública nas colunas top-level.
+    expect(userMsg!.media_url).toMatch(
+      /^https:\/\/storage\.test\/nicole-media\/whatsapp-inbound\//
+    )
+    expect(userMsg!.media_type).toBe("image")
+    // metadata mantido em sincronia (compat).
+    expect(userMsg!.metadata.media_url).toBe(userMsg!.media_url)
+    expect(userMsg!.metadata.media_type).toBe("image")
+    expect(userMsg!.metadata.whatsapp_message_id).toBe("wamid.IMG-ASYNC")
+  })
+
+  it("75-222 — texto puro: colunas de mídia ficam NULL (não polui mensagens sem mídia)", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.TXT", text: "oi" }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg!.media_url).toBeNull()
+    expect(userMsg!.media_type).toBeNull()
   })
 })

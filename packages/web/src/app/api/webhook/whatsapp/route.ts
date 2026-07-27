@@ -52,9 +52,15 @@ async function persistInboundMedia(
       return
     }
     const { data: pub } = admin.storage.from("nicole-media").getPublicUrl(path)
+    // Story 75-222: grava TAMBÉM nas colunas top-level (media_url/media_type) — a UI
+    // renderiza a partir delas. metadata continua preenchido por compat (telas antigas).
     await admin
       .from("messages")
-      .update({ metadata: { whatsapp_message_id: wamid, media_type: mediaType, media_url: pub.publicUrl } })
+      .update({
+        media_url: pub.publicUrl,
+        media_type: mediaType,
+        metadata: { whatsapp_message_id: wamid, media_type: mediaType, media_url: pub.publicUrl },
+      })
       .eq("metadata->>whatsapp_message_id", wamid)
   } catch (e) {
     console.error("[75-85] persistInboundMedia erro (ignorado):", e)
@@ -473,6 +479,10 @@ export async function POST(request: NextRequest) {
       conversation_id: conversation.id,
       role: "user",
       content: text || "",
+      // Story 75-222: colunas top-level já no sync (a URL chega no async, após o
+      // download; o tipo garante a bolha de mídia mesmo antes do upload terminar).
+      media_type: mediaMetadata.media_type ?? null,
+      media_url: mediaMetadata.media_url ?? null,
       metadata: {
         whatsapp_message_id: messageId,
         ...mediaMetadata,
@@ -634,6 +644,9 @@ export async function POST(request: NextRequest) {
                 .from("messages")
                 .update({
                   content: transcription || "[Mensagem de voz recebida]",
+                  // Story 75-222: colunas top-level = fonte canônica p/ a UI.
+                  media_url: mediaUrl,
+                  media_type: "voice",
                   metadata: {
                     whatsapp_message_id: messageId,
                     media_type: "voice",

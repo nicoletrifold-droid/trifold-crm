@@ -414,10 +414,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Save incoming message
+    // Story 75-222: mídia TAMBÉM nas colunas top-level (fonte canônica p/ a UI);
+    // metadata continua preenchido por compat.
     await supabase.from("messages").insert({
       conversation_id: conversation.id,
       role: "user",
       content: text,
+      media_url: mediaMetadata.media_url ?? null,
+      media_type: mediaMetadata.media_type ?? null,
       metadata: {
         telegram_message_id: message.message_id,
         ...mediaMetadata,
