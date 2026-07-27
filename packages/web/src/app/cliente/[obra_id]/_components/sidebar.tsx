@@ -76,7 +76,7 @@ export function Sidebar({ obraId, userName, userEmail, obraName, numeroUnidade, 
     .toUpperCase() || "U"
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col border-r border-stone-800/30 bg-black lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 max-lg:hidden w-[260px] flex-col border-r border-stone-800/30 bg-black lg:flex">
       {/* Logo */}
       <div className="flex items-center border-b border-stone-800/30 px-6 py-7">
         <Image

@@ -164,7 +164,7 @@ function CreativeCard({ ad }: { ad: AdCreativeMetrics }) {
       }`}
     >
       {/* Thumbnail — hidden on mobile (< lg) to preserve metric legibility */}
-      <div className="hidden lg:block shrink-0">
+      <div className="max-lg:hidden lg:block shrink-0">
         {showThumb ? (
           // eslint-disable-next-line @next/next/no-img-element -- meta CDN thumbnails have TTL; using <img> avoids Next/image optimizer 404 cascades
           <img

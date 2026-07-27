@@ -161,7 +161,7 @@ export function LeadsListWithDrawer({ leads }: Props) {
       </div>
 
       {/* Desktop */}
-      <div className="hidden overflow-x-auto rounded-xl bg-white ring-1 ring-gray-200 dark:bg-stone-900 dark:ring-stone-800 lg:block">
+      <div className="max-lg:hidden overflow-x-auto rounded-xl bg-white ring-1 ring-gray-200 dark:bg-stone-900 dark:ring-stone-800 lg:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-stone-800 dark:text-stone-500">

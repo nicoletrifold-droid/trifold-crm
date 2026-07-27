@@ -142,7 +142,7 @@ export function EmailEditorModal({ isOpen, campaignId, campaignName, initialDesi
         <div className="flex items-center gap-2">
           {/* Status do preview */}
           {showPreview && (
-            <span className="hidden items-center gap-1.5 text-xs text-gray-400 dark:text-stone-500 sm:flex">
+            <span className="max-sm:hidden items-center gap-1.5 text-xs text-gray-400 dark:text-stone-500 sm:flex">
               {syncing ? (
                 <>
                   <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">

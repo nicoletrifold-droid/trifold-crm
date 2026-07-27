@@ -143,7 +143,7 @@ export default function CampaignFunnel({ campaignId, period }: Props) {
                 <span className="shrink-0 ml-2 text-xs text-gray-700 dark:text-stone-300">
                   {fmt(pctOfTop)}% do topo
                   {pctOfPrev !== null && (
-                    <span className="hidden sm:inline">
+                    <span className="max-sm:hidden sm:inline">
                       {" · "}
                       {fmt(pctOfPrev)}% do ant.
                     </span>

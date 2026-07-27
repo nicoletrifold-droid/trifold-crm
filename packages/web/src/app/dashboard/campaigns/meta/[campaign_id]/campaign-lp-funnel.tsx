@@ -66,7 +66,7 @@ export default function CampaignLpFunnel({ timeseries }: Props) {
                 </p>
               )}
               {i < stages.length - 1 && (
-                <div className="hidden sm:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 text-gray-300 dark:text-stone-600 text-xl">
+                <div className="max-sm:hidden sm:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 text-gray-300 dark:text-stone-600 text-xl">
                   ›
                 </div>
               )}

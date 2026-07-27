@@ -395,7 +395,7 @@ export function BrokerMessageInput({
           </button>
         </div>
         <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-gray-400 lg:justify-between dark:text-stone-500">
-          <span className="hidden lg:inline">Ctrl/Cmd + Enter para enviar</span>
+          <span className="max-lg:hidden lg:inline">Ctrl/Cmd + Enter para enviar</span>
           <span>
             {trimmed.length}/{MAX_MESSAGE_LENGTH}
           </span>
