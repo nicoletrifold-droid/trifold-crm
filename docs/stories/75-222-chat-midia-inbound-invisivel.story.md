@@ -87,7 +87,27 @@ WHERE (media_url  IS NULL AND NULLIF(metadata->>'media_url',  '') IS NOT NULL)
 - Suíte completa: ver Change Log
 
 ## QA Results
-_(pendente @qa *qa-gate)_
+
+### Review Date: 2026-07-27
+
+### Reviewed By: Quinn (Guardian)
+
+**Diff completo revisado vs origin/main (1 commit, 6 arquivos).**
+
+- **AC1 (WhatsApp)** ✅ — 3 pontos: INSERT síncrono grava `media_type` (e `media_url` quando houver) já na criação da bolha; `persistInboundMedia` (imagem/documento) e o UPDATE de voz pós-transcrição gravam `media_url`/`media_type` nas colunas top-level, mantendo `metadata.media_*` em sincronia.
+- **AC2 (Telegram)** ✅ — INSERT inbound grava colunas + metadata (Telegram resolve a URL sincronamente antes do insert).
+- **AC3 (Chat)** ✅ — `/dashboard/chat/[id]` seleciona `media_url, media_type`, renderiza via `<MessageMedia>` com colunas-primeiro e fallback `metadata.media_*`; componente retorna `null` sem mídia → texto puro intacto.
+- **AC4 (Backfill)** ✅ — SQL idempotente: `COALESCE` preserva valores existentes, `WHERE` só toca linhas com coluna NULL e metadata não-vazio; NÃO altera `metadata`; fora de `migrations/`.
+- **AC5 (org_id)** ✅ — nenhum insert/update em `messages` recebe `org_id` (hits de org_id no diff são em leads/conversations, pré-existentes).
+- **AC6 (Testes)** ✅ — 3 testes novos cobrem sync (media_type), async (coluna+metadata em sincronia via mock de storage) e texto puro (colunas NULL).
+- **Regressão** ✅ — Conversas e telas do broker NÃO tocadas (leem `metadata.media_*`, que continua gravado); caminhos outbound intactos.
+- **Verificações**: `vitest run` 114 files / **1245 pass**; `tsc --noEmit` limpo; `next build` limpo.
+
+Achados (low, não bloqueantes): REL-001 voz com upload falho → `media_type=voice` sem URL (UI mostra rótulo, fail-open pré-existente); MNT-001 `persistInboundMedia` substitui metadata inteiro (comportamento pré-existente, sem regressão).
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/75.222-chat-midia-inbound-invisivel.yml
 
 ## Change Log
 | Date | Version | Description | Author |

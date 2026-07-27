@@ -1,0 +1,16 @@
+schema: 1
+story: '75.222'
+gate: PASS
+status_reason: 'Todos os ACs atendidos: 4 pontos de escrita gravam colunas media_* sem org_id e sem regredir metadata; Chat renderiza via MessageMedia (colunas-primeiro + fallback metadata); backfill idempotente; suíte completa (1245), tsc e build limpos.'
+reviewer: 'Quinn'
+updated: '2026-07-27T16:20:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: low
+    finding: 'No caminho de voz, se uploadInboundMedia falhar, media_url fica NULL com media_type=voice — a UI mostra rótulo "🎤 Mensagem de voz" sem player (fail-open já existente; transcrição segue no content).'
+    suggested_action: 'Nenhuma ação necessária; comportamento aceitável e pré-existente.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'persistInboundMedia substitui o objeto metadata inteiro (não faz merge) — comportamento pré-existente à story, sem regressão introduzida.'
+    suggested_action: 'Considerar merge de metadata em refactor futuro se novos campos forem adicionados ao insert síncrono.'
+waiver: { active: false }
