@@ -163,7 +163,7 @@ const OBJECTIVE_LABELS: Record<string, string> = {
 
 // ─── Tabs ──────────────────────────────────────────────────────────────────
 
-function CampaignsTabs({ active }: { active: "crm" | "meta" }) {
+function CampaignsTabs({ active, showAgente }: { active: "crm" | "meta"; showAgente: boolean }) {
   return (
     <div className="flex border-b border-gray-200 mb-4 dark:border-stone-800">
       <Link
@@ -186,6 +186,15 @@ function CampaignsTabs({ active }: { active: "crm" | "meta" }) {
       >
         Meta Ads
       </Link>
+      {/* Story 75-219 — aba do agente de marketing IA, só admin/supervisor (AC2) */}
+      {showAgente && (
+        <Link
+          href="/dashboard/campaigns/agente"
+          className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors dark:text-stone-400 dark:hover:text-stone-200 dark:hover:border-stone-700"
+        >
+          Agente
+        </Link>
+      )}
     </div>
   )
 }
@@ -194,7 +203,13 @@ function CampaignsTabs({ active }: { active: "crm" | "meta" }) {
 
 type HealthFilter = "ALL" | "alerts" | "risk" | "scale"
 
-export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
+export default function CampaignsMetaClient({
+  isAdmin,
+  showAgenteTab,
+}: {
+  isAdmin: boolean
+  showAgenteTab: boolean
+}) {
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -299,7 +314,7 @@ export default function CampaignsMetaClient({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {/* Tabs */}
-      <CampaignsTabs active="meta" />
+      <CampaignsTabs active="meta" showAgente={showAgenteTab} />
 
       {/* Filtros de saúde — B-5: só exibe quando análise de inteligência já rodou */}
       {data?.alerts_initialized ? (
