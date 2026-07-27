@@ -172,7 +172,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                 <span className="text-xs font-bold text-stone-400 dark:text-stone-500 w-5 text-center shrink-0">{idx + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{entry.brokerName}</p>
-                  <p className="text-xs text-stone-400 dark:text-stone-500 truncate hidden sm:block">{entry.brokerEmail}</p>
+                  <p className="text-xs text-stone-400 dark:text-stone-500 truncate max-sm:hidden sm:block">{entry.brokerEmail}</p>
                 </div>
                 {idx === 0 && entry.is_active && (
                   <span className="flex-shrink-0 rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:border-emerald-700 dark:text-emerald-400">

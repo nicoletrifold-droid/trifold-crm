@@ -1047,7 +1047,7 @@ function ConversionFunnelView({ funnel }: { funnel: ConversionFunnel }) {
             </div>
             {i < stages.length - 1 && (
               <div
-                className="hidden md:flex absolute top-1/2 -right-3 -translate-y-1/2 z-10 text-gray-400 dark:text-stone-500"
+                className="max-md:hidden md:flex absolute top-1/2 -right-3 -translate-y-1/2 z-10 text-gray-400 dark:text-stone-500"
                 aria-hidden="true"
               >
                 <span className="text-xl">›</span>

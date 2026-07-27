@@ -133,7 +133,7 @@ export default async function BrokerChatPage({
 
   return (
     <div className="space-y-4">
-      <div className="hidden items-center justify-between lg:flex">
+      <div className="max-lg:hidden items-center justify-between lg:flex">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Chat</h1>
         <p className="text-sm text-gray-500 dark:text-stone-400">
           {filtered.length} {filtered.length === 1 ? "conversa" : "conversas"}

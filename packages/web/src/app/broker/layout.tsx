@@ -138,7 +138,7 @@ export default async function BrokerLayout({
           ? `${chatUnread} conversa${chatUnread === 1 ? "" : "s"} não lida${chatUnread === 1 ? "" : "s"}`
           : ""}
       </span>
-      <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 hidden lg:flex" />
+      <WeatherWidget variant="dark" className="fixed top-4 right-4 z-40 max-lg:hidden lg:flex" />
       <SidebarNav
         items={navItems}
         userName={user.name}

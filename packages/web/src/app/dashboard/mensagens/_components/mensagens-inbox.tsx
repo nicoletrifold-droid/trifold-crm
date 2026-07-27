@@ -100,7 +100,7 @@ export function MensagensInbox({
       {/* Sidebar */}
       <div
         className={`w-80 flex-shrink-0 border-r border-gray-200 dark:border-stone-800 ${
-          selectedConversa ? "hidden lg:flex" : "flex"
+          selectedConversa ? "max-lg:hidden lg:flex" : "flex"
         } flex-col`}
       >
         <InboxSidebar
@@ -120,7 +120,7 @@ export function MensagensInbox({
       {/* Painel de conversa */}
       <div
         className={`flex-1 flex-col ${
-          !selectedConversa ? "hidden lg:flex" : "flex"
+          !selectedConversa ? "max-lg:hidden lg:flex" : "flex"
         }`}
       >
         <ConversationPanel
