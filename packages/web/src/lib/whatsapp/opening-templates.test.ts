@@ -24,6 +24,7 @@ describe("resolveOpeningParams", () => {
   it("templates novos: só o nome do lead", () => {
     expect(resolveOpeningParams("abertura_interesse_prioridades", ctx)).toEqual(["Carina"])
     expect(resolveOpeningParams("abertura_interesse_status", ctx)).toEqual(["Carina"])
+    expect(resolveOpeningParams("abertura_basica", ctx)).toEqual(["Carina"])
   })
 
   it("template desconhecido → null", () => {
