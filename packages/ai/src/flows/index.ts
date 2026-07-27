@@ -18,3 +18,11 @@ export { analyzeLeadBehavior, parseBehaviorAnalysis } from "./behavior-analysis"
 export type { BehaviorAnalysisResult, BehaviorAnalysisInput, BehaviorChronologyEvent } from "./behavior-analysis"
 export { reviewOutgoingMessage, parseMessageReview, isReviewEligible } from "./message-review"
 export type { MessageReviewResult } from "./message-review"
+export { generateMarketingSuggestions, parseMarketingSuggestions } from "./marketing-suggestions"
+export type {
+  MarketingSuggestionsInput,
+  MarketingPostSuggestion,
+  CreativePerformanceRow,
+  CampaignSummary,
+  PropertyOption,
+} from "./marketing-suggestions"
