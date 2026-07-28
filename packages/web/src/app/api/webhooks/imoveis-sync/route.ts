@@ -52,26 +52,66 @@ function verifySignature(rawBody: string, signatureHeader: string): boolean {
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
   const signature = req.headers.get("x-signature-256") ?? ""
+  const signatureValid = verifySignature(rawBody, signature)
 
-  if (!verifySignature(rawBody, signature)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  let payload: WebhookPayload
+  let payload: WebhookPayload | null = null
   try {
     payload = JSON.parse(rawBody)
   } catch {
+    // logged below as invalid_json
+  }
+
+  const supabase = createAdminClient()
+
+  // Persistir todo request em webhook_logs antes de qualquer early return;
+  // falha no log nunca quebra o processamento do webhook
+  let logId: string | null = null
+  try {
+    const { data: logEntry } = await supabase
+      .from("webhook_logs")
+      .insert({
+        source: "imoveis_sync",
+        event_type: typeof payload?.event === "string" ? payload.event : null,
+        payload: payload ?? { raw: rawBody.slice(0, 10_000) },
+        signature_valid: signatureValid,
+        processed: false,
+      })
+      .select("id")
+      .single()
+    logId = logEntry?.id ?? null
+  } catch {
+    // fail-safe
+  }
+
+  const updateLog = async (fields: Record<string, unknown>) => {
+    if (!logId) return
+    try {
+      await supabase.from("webhook_logs").update(fields).eq("id", logId)
+    } catch {
+      // fail-safe
+    }
+  }
+
+  if (!signatureValid) {
+    await updateLog({ processing_error: "invalid_signature" })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (!payload) {
+    await updateLog({ processing_error: "invalid_json" })
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
   // Acknowledge non-status events gracefully (future-proof)
   if (payload.event !== "unit.status_changed") {
+    await updateLog({ processed: true })
     return NextResponse.json({ received: true, event: payload.event })
   }
 
   const { unit_code, property_slug, status } = payload.data ?? {}
 
   if (!unit_code || !property_slug || !status) {
+    await updateLog({ processing_error: "missing_fields" })
     return NextResponse.json(
       { error: "Missing required fields: unit_code, property_slug, status" },
       { status: 422 }
@@ -80,13 +120,12 @@ export async function POST(req: NextRequest) {
 
   const mappedStatus = STATUS_MAP[status.toLowerCase().trim()]
   if (!mappedStatus) {
+    await updateLog({ processing_error: `unrecognized_status: ${status}` })
     return NextResponse.json(
       { error: `Unrecognized status value: "${status}". Accepted: disponivel, reservado, vendido, indisponivel` },
       { status: 422 }
     )
   }
-
-  const supabase = createAdminClient()
 
   // Find property by slug
   const { data: property, error: propError } = await supabase
@@ -97,6 +136,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (propError || !property) {
+    await updateLog({ processing_error: `property_not_found: ${property_slug}` })
     return NextResponse.json(
       { error: `Property not found with slug: "${property_slug}"` },
       { status: 404 }
@@ -117,6 +157,10 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (unitError || !updatedUnit) {
+    await updateLog({
+      org_id: property.org_id,
+      processing_error: `unit_not_found: ${unit_code}`,
+    })
     return NextResponse.json(
       { error: `Unit not found: "${unit_code}" in property "${property_slug}"` },
       { status: 404 }
@@ -137,6 +181,8 @@ export async function POST(req: NextRequest) {
       .update({ available_units: count })
       .eq("id", property.id)
   }
+
+  await updateLog({ org_id: property.org_id, processed: true })
 
   return NextResponse.json({
     received: true,

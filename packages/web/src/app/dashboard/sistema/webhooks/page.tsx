@@ -17,6 +17,8 @@ const SOURCE_LABELS: Record<string, string> = {
   meta_ads: "Meta Ads",
   whatsapp: "WhatsApp",
   google_forms: "Google Forms",
+  landing_page: "Landing Page",
+  imoveis_sync: "Sync Imóveis (REM)",
   other: "Outro",
 }
 
@@ -128,6 +130,8 @@ export default function WebhookLogsPage() {
             <option value="meta_ads">Meta Ads</option>
             <option value="whatsapp">WhatsApp</option>
             <option value="google_forms">Google Forms</option>
+            <option value="landing_page">Landing Page</option>
+            <option value="imoveis_sync">Sync Imóveis (REM)</option>
           </select>
         </div>
 
