@@ -25,6 +25,13 @@ interface SidebarNavProps {
   userRole: string
   basePath: string
   alertCount?: number
+  /**
+   * Story 75-223 — badge "vivo": o layout (server) congela em navegação
+   * interna do App Router; este prop faz o item de `href` re-buscar a
+   * contagem em `endpoint` (JSON `{ count }`) a cada 60s, ao focar a aba e a
+   * cada mudança de rota. Falha de fetch mantém o último valor (fail-open).
+   */
+  liveBadge?: { href: string; endpoint: string }
 }
 
 /** Classe de background do badge numérico conforme `badgeTone`. */
@@ -32,12 +39,49 @@ function badgeBg(item: NavItem): string {
   return item.badgeTone === "green" ? "bg-green-700" : "bg-orange-500"
 }
 
-export function SidebarNav({ items, userName, userRole, basePath, alertCount }: SidebarNavProps) {
+export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadge }: SidebarNavProps) {
   const pathname = usePathname()
   // Story 63-18 — bottom sheet "Mais" (mobile).
   const [moreOpen, setMoreOpen] = useState(false)
   const sheetRef = useRef<HTMLDivElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Story 75-223 — contagem viva do item apontado por `liveBadge`. Enquanto
+  // null, vale o valor server-side do item (sem flash). O efeito depende do
+  // pathname de propósito: cada navegação refaz o fetch na hora (é o gatilho
+  // que zera o badge logo após abrir uma conversa) e reinicia o intervalo.
+  const [liveCount, setLiveCount] = useState<number | null>(null)
+  const liveEndpoint = liveBadge?.endpoint
+  useEffect(() => {
+    if (!liveEndpoint) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(liveEndpoint, { cache: "no-store" })
+        if (!res.ok) return
+        const json = (await res.json()) as { count?: unknown }
+        if (!cancelled && typeof json.count === "number") setLiveCount(json.count)
+      } catch {
+        // fail-open: mantém o último valor conhecido
+      }
+    }
+    void load()
+    const interval = setInterval(() => void load(), 60_000)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onVisible)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onVisible)
+    }
+  }, [liveEndpoint, pathname])
+
+  const badgeCount = (item: NavItem): number | undefined =>
+    liveBadge && item.href === liveBadge.href && liveCount != null ? liveCount : item.badge
 
   const isActive = (href: string) => {
     if (href === basePath) return pathname === basePath
@@ -54,7 +98,10 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
   // Story 63-18 — itens visíveis no bottom bar mobile (4 tabs) vs. ocultos no "Mais".
   const tabItems = items.slice(0, 4)
   const moreItems = items.slice(4)
-  const moreHasBadge = moreItems.some((i) => i.badge != null && i.badge > 0)
+  const moreHasBadge = moreItems.some((i) => {
+    const b = badgeCount(i)
+    return b != null && b > 0
+  })
 
   const closeMore = useCallback(() => {
     setMoreOpen(false)
@@ -117,6 +164,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
             <ul className="flex flex-col gap-0.5">
               {items.map((item) => {
                 const active = isActive(item.href)
+                const badge = badgeCount(item)
                 return (
                   <li key={item.href}>
                     {item.separator && (
@@ -143,9 +191,9 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                       >
                         <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                         <span className="flex-1">{item.label}</span>
-                        {item.badge != null && item.badge > 0 && !active && (
+                        {badge != null && badge > 0 && !active && (
                           <span aria-hidden="true" className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
-                            {item.badge > 99 ? "99+" : item.badge}
+                            {badge > 99 ? "99+" : badge}
                           </span>
                         )}
                         {item.label === "Alertas" && alertCount != null && alertCount > 0 && !active && (
@@ -204,6 +252,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
         <div className="flex items-center justify-around px-1 py-1">
           {tabItems.map((item) => {
             const active = isActive(item.href)
+            const badge = badgeCount(item)
             const mobileClass = `flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors ${
               active ? "text-orange-600 dark:text-orange-300" : "text-stone-400 dark:text-stone-500"
             }`
@@ -222,9 +271,9 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
               <Link key={item.href} href={item.href} className={mobileClass}>
                 <span className="relative flex h-5 w-5 items-center justify-center">
                   {item.icon}
-                  {item.badge != null && item.badge > 0 && !active && (
+                  {badge != null && badge > 0 && !active && (
                     <span aria-hidden="true" className={`absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full ${badgeBg(item)} px-1 text-[9px] font-bold text-white`}>
-                      {item.badge > 99 ? "99+" : item.badge}
+                      {badge > 99 ? "99+" : badge}
                     </span>
                   )}
                 </span>
@@ -274,6 +323,7 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
             <ul className="flex flex-col gap-0.5 p-3">
               {moreItems.map((item) => {
                 const active = isActive(item.href)
+                const badge = badgeCount(item)
                 const rowClass = `flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   active
                     ? "bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
@@ -299,9 +349,9 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount }: 
                       <Link href={item.href} onClick={() => setMoreOpen(false)} className={rowClass}>
                         <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                         <span className="flex-1">{item.label}</span>
-                        {item.badge != null && item.badge > 0 && !active && (
+                        {badge != null && badge > 0 && !active && (
                           <span aria-hidden="true" className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full ${badgeBg(item)} px-1.5 text-[10px] font-bold text-white`}>
-                            {item.badge > 99 ? "99+" : item.badge}
+                            {badge > 99 ? "99+" : badge}
                           </span>
                         )}
                       </Link>

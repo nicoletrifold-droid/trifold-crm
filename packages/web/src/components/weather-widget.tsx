@@ -56,6 +56,10 @@ export function WeatherWidget({ variant = "system", className = "" }: Props) {
 
   useEffect(() => {
     const cached = loadCache()
+    // setState síncrono intencional: o cache (localStorage) só pode entrar
+    // DEPOIS da hidratação — como estado inicial causaria mismatch de SSR.
+    // Efeito roda uma vez; sem cascata.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (cached) { setWeather(cached); return }
 
     if (!navigator.geolocation) return

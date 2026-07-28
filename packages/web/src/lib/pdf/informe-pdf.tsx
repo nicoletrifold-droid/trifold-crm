@@ -290,7 +290,7 @@ export function InformePDF({ obraName, clienteName, clienteCpf, informe, geradoE
           <Text style={s.noteText}>
             Este informe é gerado com base nos dados registrados no sistema financeiro do empreendimento e
             destina-se à comprovação de pagamentos para fins de Declaração de Imposto de Renda Pessoa Física (IRPF).
-            {"\n"}Os valores de "Bens e Direitos" a serem declarados correspondem ao saldo devedor atual (
+            {"\n"}Os valores de &quot;Bens e Direitos&quot; a serem declarados correspondem ao saldo devedor atual (
             {fmtCurrency(informe.remainingBalance)}) ao final do exercício. O valor pago no ano (
             {fmtCurrency(informe.totalPaidInYear)}) deve ser declarado na ficha de Bens e Direitos como
             acréscimo patrimonial. Em caso de dúvidas, consulte seu contador.

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Assets estáticos servidos como estão (ex.: opus/encoderWorker.min.js,
+    // worker vendored do gravador de áudio) — não são código nosso p/ lintar.
+    "public/**",
   ]),
 ]);
 
