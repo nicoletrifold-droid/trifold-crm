@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Paperclip,
   Send,
@@ -78,6 +78,15 @@ export function BrokerMessageInput({
   const [templates, setTemplates] = useState<Array<{ name: string; preview: string }> | null>(null)
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [sendingTemplate, setSendingTemplate] = useState<string | null>(null)
+  // Story 75-225 — o menu expande dentro da área rolável da conversa e o fim da
+  // lista fica abaixo da dobra ("só aparecem 3 de 4"). Ao abrir (inclusive quando
+  // os templates chegam depois do loading), garante o fim do menu visível.
+  // `nearest` não mexe no scroll quando já está tudo à vista.
+  const templatesEndRef = useRef<HTMLParagraphElement | null>(null)
+  useEffect(() => {
+    if (!templatesOpen || templates === null) return
+    templatesEndRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" })
+  }, [templatesOpen, templates])
 
   async function handleToggleTemplates() {
     if (startDone || sendingTemplate) return
@@ -313,7 +322,7 @@ export function BrokerMessageInput({
                     ))}
                   </div>
                 )}
-                <p className="px-1 text-xs text-stone-500 dark:text-stone-500">
+                <p ref={templatesEndRef} className="px-1 text-xs text-stone-500 dark:text-stone-500">
                   {templatesOpen
                     ? "Toque na mensagem que combina com o contexto do lead — ela será enviada como está."
                     : "Abre as mensagens de abertura aprovadas pelo WhatsApp para reabrir a conversa com o cliente."}
