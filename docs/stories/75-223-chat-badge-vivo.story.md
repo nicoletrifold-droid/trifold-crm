@@ -130,7 +130,29 @@ mismatch de SSR). Nenhuma mudança de comportamento.
 
 ## QA Results
 
-_(preenchido pelo @qa)_
+**Veredito: PASS** — @qa Quinn, 2026-07-28.
+
+1. Code review ✅ — padrões do repo (helper puro REUSE, requireAuth/canAccess,
+   fail-open, prop opcional retrocompatível); efeito com cleanup correto
+   (cancelled + clearInterval + removeEventListener).
+2. Testes ✅ — 7 novos (helper), suíte completa 1252/1252.
+3. ACs ✅ — AC1/2/3/4 atendidos. Desvio documentado: T3 previa componente
+   `ChatUnreadBadge` separado; implementado como prop `liveBadge` no
+   `SidebarNav` (client) — atende AC2 e fica reutilizável p/ /broker.
+4. Regressões ✅ — sem o prop nada muda; broker layout intocado; badges de
+   Agenda/Alertas/Bolsão preservados; higiene de lint sem mudança de
+   comportamento (verificado: só escapes de aspas, ignore de public/ e
+   disable justificado).
+5. Performance ✅ — 1 fetch/60s por sessão com permissão de chat (hoje: 2-3
+   usuários); rota = 2 queries indexadas por org.
+6. Segurança ✅ — rota autenticada + canAccess("chat"); admin client só após
+   gate; resposta expõe apenas a contagem.
+7. Docs ✅ — story completa.
+
+Observação (LOW, sem ação): teste do gate da rota não adicionado — o gate é
+módulo via canAccess (sem constante de roles) e o repo não tem testes de
+integração de route handlers (mesmo desenho 75-219/75-220). Smoke pós-deploy
+obrigatório: curl anônimo na rota (esperar 401, nunca 500).
 
 ## Change Log
 
