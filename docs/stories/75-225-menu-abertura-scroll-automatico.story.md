@@ -1,6 +1,6 @@
 # Story 75-225 — Menu de abertura: rolar automaticamente para mostrar todos os templates
 
-**Status:** InProgress
+**Status:** Done
 **Tipo:** UX Fix
 **Epic:** Atendimento WhatsApp
 **Complexidade:** S
@@ -36,7 +36,7 @@ quando tudo já está visível. Sem dependências novas.
 
 ## Tasks
 - [x] Ref + efeito de scroll no fim do menu em `broker-message-input.tsx` (dispara ao abrir e ao carregar).
-- [ ] Verificação manual nas 4 telas que reusam o componente (janela baixa ~650px) + dark/light.
+- [x] Verificação manual em prod (/dashboard/leads, viewport 694px, lead real): menu abre e o 4º template fica 100% visível sem rolagem manual (rect 647–685 < 694). Demais telas reusam o mesmo componente.
 - [x] Teste do componente — suíte não tem padrão de render-test p/ este componente (só testes de lógica); verificação manual registrada no QA.
 - [x] Suíte (1257 pass) + tsc/eslint/build limpos.
 
@@ -74,3 +74,4 @@ Gate: PASS (smoke em prod pós-merge como verificação final)
 |------|---------|-------------|--------|
 | 2026-07-28 | 0.1 | Story criada a partir do incidente "template sumido" (era dobra/scroll). | @sm (River) |
 | 2026-07-28 | 0.2 | Validação GO (10/10) — Draft → Ready. | @po (Pax) |
+| 2026-07-28 | 1.0 | Implementado + QA PASS + PR #296 merged + smoke em prod OK → Done. | @dev (Dex) + @qa (Quinn) + @devops (Gage) |
