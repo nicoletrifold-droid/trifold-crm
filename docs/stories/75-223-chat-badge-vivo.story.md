@@ -1,6 +1,6 @@
 # Story 75-223 — Badge do Chat vivo: contador de não lidas atualiza sem F5
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug fix (UX)
 **Complexidade:** S
 
@@ -161,3 +161,4 @@ obrigatório: curl anônimo na rota (esperar 401, nunca 500).
 | 2026-07-28 | 0.1 | Draft — bug do badge congelado diagnosticado em prod (caso Rangel 28/07); desenho: rota de contagem + badge client com polling/focus/rota. | @sm (River) |
 | 2026-07-28 | 0.2 | Validação @po: GO — escopo fechado, reusa padrões (helper puro, requireAuth, canAccess), sem invenção. Draft→Ready. | @po (Pax) |
 | 2026-07-28 | 0.3 | Implementado (T1–T4) + higiene de lint pré-existente documentada; suíte/lint/type-check/build verdes. Ready→InReview. | @dev (Dex) |
+| 2026-07-28 | 1.0 | QA PASS → PR #294 squash-merged (c7122924), deploy prod Ready, smoke ok (curl anônimo 401). InReview→Done. | @devops (Gage) |
