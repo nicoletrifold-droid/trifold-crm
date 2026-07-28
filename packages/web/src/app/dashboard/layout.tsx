@@ -2,6 +2,7 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getUserPermissions } from "@web/lib/permissions"
+import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { WeatherWidget } from "@web/components/weather-widget"
@@ -186,32 +187,11 @@ export default async function DashboardLayout({
 
   // Story 75-86 — badge do menu "Chat": nº de conversas de relacionamento com
   // mensagens não-lidas (role='user' após broker_last_read_at). Admin client porque
-  // a RLS de conversations não libera a gerente-relacionamento.
-  let chatUnread = 0
-  if (permissions["chat"]) {
-    const admin = createAdminClient()
-    const { data: rConvs } = await admin
-      .from("conversations")
-      .select("id, broker_last_read_at")
-      .eq("org_id", user.orgId)
-      .eq("is_relationship", true)
-      .limit(300)
-    const rIds = (rConvs ?? []).map((c) => c.id as string)
-    if (rIds.length > 0) {
-      const readAt = new Map((rConvs ?? []).map((c) => [c.id as string, c.broker_last_read_at as string | null]))
-      const { data: msgs } = await admin
-        .from("messages")
-        .select("conversation_id, created_at")
-        .in("conversation_id", rIds)
-        .eq("role", "user")
-      const unreadConvs = new Set<string>()
-      for (const m of (msgs ?? []) as Array<{ conversation_id: string; created_at: string }>) {
-        const r = readAt.get(m.conversation_id)
-        if (!r || new Date(m.created_at) > new Date(r)) unreadConvs.add(m.conversation_id)
-      }
-      chatUnread = unreadConvs.size
-    }
-  }
+  // a RLS de conversations não libera a gerente-relacionamento. Story 75-223:
+  // lógica extraída p/ lib/chat/unread-count (compartilhada com a rota do badge vivo).
+  const chatUnread = permissions["chat"]
+    ? await getChatUnreadCount(createAdminClient(), user.orgId)
+    : 0
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
@@ -330,6 +310,11 @@ export default async function DashboardLayout({
         userRole={user.role}
         basePath="/dashboard"
         alertCount={alertCount ?? 0}
+        liveBadge={
+          permissions["chat"]
+            ? { href: "/dashboard/chat", endpoint: "/api/chat/unread-count" }
+            : undefined
+        }
       />
 
       {/* Main content area */}

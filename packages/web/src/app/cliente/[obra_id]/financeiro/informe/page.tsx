@@ -307,7 +307,7 @@ export default async function InformePage({ params, searchParams }: PageProps) {
               <p className="text-xs leading-relaxed text-stone-500">
                 <span className="font-semibold text-stone-400">Como declarar no IRPF:</span> Na ficha{" "}
                 <em>Bens e Direitos</em>, informe o saldo devedor atual ({formatCurrency(informe.remainingBalance)}) no
-                campo "Situação em 31/12/{safeYear}". O valor pago no ano ({formatCurrency(informe.totalPaidInYear)})
+                campo &quot;Situação em 31/12/{safeYear}&quot;. O valor pago no ano ({formatCurrency(informe.totalPaidInYear)})
                 representa o acréscimo patrimonial do exercício. Em caso de dúvidas, consulte seu contador.
               </p>
             </div>
