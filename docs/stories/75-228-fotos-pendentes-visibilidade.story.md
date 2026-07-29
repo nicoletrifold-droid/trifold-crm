@@ -1,6 +1,6 @@
 # Story 75-228 — Fotos pendentes: aparecem sem F5 e acima da dobra
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug fix + UX
 **Epic:** Aprovações de obra
 **Complexidade:** S
@@ -53,3 +53,6 @@ terminam em router.refresh()). Suíte 1260/1260; tsc/eslint/build limpos.
 Observação não-bloqueante registrada: race estreito refresh-em-voo × delete pode
 ressuscitar item na tela até o próximo refresh (janela minúscula, banco correto) —
 não vale complexidade numa story S.
+
+### Deploy (@devops, 29/07)
+- PR #300 squash-merged; deploy Vercel success. Sem migração.
