@@ -4,6 +4,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
+import { leadDeepLink } from "@web/lib/leads/lead-url"
 
 interface NotifyBrokerParams {
   orgId: string
@@ -44,7 +45,15 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const result: NotifyResult = { push: false, email: false, whatsapp: false }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-  const leadUrl = `${appUrl}/broker/leads/${lead.id}`
+  // Story 75-226: deep link segue o app do dono (SDR → /dashboard).
+  // Limitação conhecida: o template HSM `novo_lead_corretor` tem botão com base
+  // FIXA /broker/leads aprovada na Meta — p/ SDR o botão cai no /dashboard raiz.
+  const { data: recipientUser } = await admin
+    .from("users")
+    .select("role")
+    .eq("id", broker.userId)
+    .maybeSingle()
+  const leadUrl = leadDeepLink(appUrl, recipientUser?.role as string | undefined, lead.id)
   const leadName = lead.name ?? "Novo Lead"
 
   // Custom context (Story 51-3) overrides the default roulette copy when present.

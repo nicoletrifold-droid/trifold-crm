@@ -12,6 +12,7 @@ export interface TargetUser {
 
 const ROLE_LABEL: Record<string, string> = {
   broker: "Corretor",
+  sdr: "SDR",
   admin: "Admin",
   supervisor: "Supervisor",
   "gerente-relacionamento": "Relacionamento",

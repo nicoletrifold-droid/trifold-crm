@@ -3,6 +3,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { brokerSentRecently } from "@web/lib/broker/broker-takeover-status"
+import { leadDeepLink } from "@web/lib/leads/lead-url"
 
 /**
  * Story 63-12 (Epic 63) — Push ao corretor quando o lead responde + deep-link.
@@ -54,12 +55,14 @@ export function buildReplyPushPayload(args: {
   messageExcerpt: string
   appUrl: string
   leadId: string
+  /** Role do dono do lead — Story 75-226: SDR recebe deep link do /dashboard. */
+  ownerRole?: string | null
 }): { title: string; body: string; url: string } {
-  const { leadName, messageExcerpt, appUrl, leadId } = args
+  const { leadName, messageExcerpt, appUrl, leadId, ownerRole } = args
   return {
     title: `${leadName ?? "Lead"} respondeu`,
     body: messageExcerpt.slice(0, 100) || "Nova mensagem recebida.",
-    url: `${appUrl}/broker/leads/${leadId}`,
+    url: leadDeepLink(appUrl, ownerRole, leadId),
   }
 }
 
@@ -72,7 +75,7 @@ export async function notifyBrokerOnReply(
     // 1. Dados do lead — assigned_broker_id (gate Q3) + nome (copy do push).
     const { data: lead } = await supabase
       .from("leads")
-      .select("id, name, assigned_broker_id")
+      .select("id, name, assigned_broker_id, owner:users!assigned_broker_id(role)")
       .eq("id", leadId)
       .eq("org_id", orgId)
       .maybeSingle()
@@ -98,11 +101,13 @@ export async function notifyBrokerOnReply(
     // 3. Enviar push (Q2 — sem debounce: 1 push por inbound; sem mutar metadata).
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+    const owner = Array.isArray(lead.owner) ? lead.owner[0] : lead.owner
     const payload = buildReplyPushPayload({
       leadName: (lead.name as string | null) ?? null,
       messageExcerpt,
       appUrl,
       leadId,
+      ownerRole: (owner as { role?: string } | null)?.role ?? null,
     })
     await sendPushToUser(supabase, lead.assigned_broker_id as string, payload)
   } catch (err) {

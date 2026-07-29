@@ -14,10 +14,15 @@ export async function toggleBrokerAvailability(brokerId: string, currentValue: b
     .from("brokers")
     .update({ is_available: newAvailable })
     .eq("id", brokerId)
-    .select("user_id")
+    .select("user_id, users!user_id(role)")
     .maybeSingle()
 
-  if (broker?.user_id) {
+  // Story 75-226 — EXCEÇÃO p/ SDR: indisponível na roleta NÃO desativa a conta
+  // (o SDR trabalha no /dashboard; bloquear o login tiraria dela o resto do sistema).
+  const brokerUser = Array.isArray(broker?.users) ? broker?.users[0] : broker?.users
+  const isSdr = (brokerUser as { role?: string } | null)?.role === "sdr"
+
+  if (broker?.user_id && !isSdr) {
     await supabase
       .from("users")
       .update({ is_active: newAvailable })

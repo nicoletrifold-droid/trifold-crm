@@ -33,12 +33,12 @@ export default async function RoletaPage() {
       .order("weekday"),
     supabase
       .from("roleta_fila")
-      .select("id, position, is_active, broker_id, brokers!inner(id, user_id, users!inner(name, email, phone))")
+      .select("id, position, is_active, broker_id, brokers!inner(id, user_id, users!inner(name, email, phone, role))")
       .eq("org_id", user.orgId)
       .order("position", { ascending: true }),
     supabase
       .from("brokers")
-      .select("id, user_id, is_available, users!inner(name, email)")
+      .select("id, user_id, is_available, users!inner(name, email, role)")
       .eq("org_id", user.orgId)
       .eq("is_available", true),
     // Usuários gestores (não corretores, não clientes) para notificações
@@ -59,6 +59,7 @@ export default async function RoletaPage() {
     brokerName: string
     brokerEmail: string
     brokerPhone: string | null
+    role: string
   }
 
   const fila: FilaEntry[] = (filaRaw ?? []).map((e) => {
@@ -72,12 +73,13 @@ export default async function RoletaPage() {
       brokerName: (user?.name as string) ?? "",
       brokerEmail: (user?.email as string) ?? "",
       brokerPhone: (user?.phone as string | null) ?? null,
+      role: (user?.role as string) ?? "broker",
     }
   })
 
   // Brokers not yet in fila
   const inFilaIds = new Set(fila.map((f) => f.broker_id))
-  type BrokerOption = { brokerId: string; name: string; email: string }
+  type BrokerOption = { brokerId: string; name: string; email: string; role: string }
   const availableBrokers: BrokerOption[] = (brokers ?? [])
     .filter((b) => !inFilaIds.has(b.id as string))
     .map((b) => {
@@ -86,6 +88,7 @@ export default async function RoletaPage() {
         brokerId: b.id as string,
         name: (u?.name as string) ?? "",
         email: (u?.email as string) ?? "",
+        role: (u?.role as string) ?? "broker",
       }
     })
 

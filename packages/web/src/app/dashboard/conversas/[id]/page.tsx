@@ -121,7 +121,7 @@ export default async function ConversationDetailPage({
       .select("id, name, role")
       .eq("org_id", user.orgId)
       .eq("is_active", true)
-      .in("role", [...chatRoleNames, "broker"])
+      .in("role", [...new Set([...chatRoleNames, "broker", "sdr"])]) // Story 75-226: sdr recebe lead
       .order("name")
     transferTargets = ((us ?? []) as TargetUser[]).filter((u) => u.id !== user.id)
   }

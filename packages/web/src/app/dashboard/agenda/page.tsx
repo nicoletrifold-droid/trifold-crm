@@ -187,11 +187,11 @@ export default async function AgendaPage({
   const maskHouse = ["imob", "consultoria"].includes(appUser.role)
   const isMaskedApt = (apt: { team: string | null }) => maskHouse && apt.team !== "imob"
 
-  // Fetch brokers for filter
+  // Fetch brokers for filter — Story 75-226: sdr também recebe leads/agenda visitas
   const { data: brokers } = await supabase
     .from("users")
     .select("id, name")
-    .eq("role", "broker")
+    .in("role", ["broker", "sdr"])
     .order("name")
 
   // Fetch appointments for the week

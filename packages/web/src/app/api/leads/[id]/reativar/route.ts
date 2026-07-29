@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { leadDeepLink } from "@web/lib/leads/lead-url"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
@@ -256,7 +257,7 @@ export async function POST(
   void sendPushToUser(admin, brokerUserId, {
     title: "Lead reativado para você",
     body: `${lead.name ?? "Um lead"} voltou para atendimento. Motivo: ${motivo}`,
-    url: `${APP_URL}/broker/leads/${id}`,
+    url: leadDeepLink(APP_URL, target.role as string, id), // Story 75-226: sdr → /dashboard
   }).catch((e: unknown) => console.error("[reativar] push:", e))
 
   return NextResponse.json({ ok: true })

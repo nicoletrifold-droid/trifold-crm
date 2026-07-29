@@ -82,28 +82,38 @@ export async function POST(request: NextRequest) {
   }
 
   // Create user in users table
-  const { error: userError } = await adminSupabase.from("users").insert({
-    org_id: appUser.org_id,
-    auth_id: authData.user.id,
-    name: name.trim(),
-    email: email.trim(),
-    role,
-    ...(phone ? { phone } : {}),
-  })
+  const { data: newUser, error: userError } = await adminSupabase
+    .from("users")
+    .insert({
+      org_id: appUser.org_id,
+      auth_id: authData.user.id,
+      name: name.trim(),
+      email: email.trim(),
+      role,
+      ...(phone ? { phone } : {}),
+    })
+    .select("id")
+    .single()
 
-  if (userError) {
+  if (userError || !newUser) {
     // Rollback auth user
     await adminSupabase.auth.admin.deleteUser(authData.user.id)
-    return NextResponse.json({ error: userError.message }, { status: 500 })
+    return NextResponse.json({ error: userError?.message ?? "Falha ao criar usuário" }, { status: 500 })
   }
 
-  // If role is broker, also create broker record
-  if (role === "broker") {
-    await adminSupabase.from("brokers").insert({
+  // Broker e SDR recebem leads da roleta → precisam de linha em brokers (Story 75-226).
+  // Bug fix: antes gravava auth_id em brokers.user_id (FK p/ users.id) e falhava calado.
+  if (role === "broker" || role === "sdr") {
+    const { error: brokerError } = await adminSupabase.from("brokers").insert({
       org_id: appUser.org_id,
-      user_id: authData.user.id,
+      user_id: newUser.id as string,
       type: "internal",
-    }).then(() => {}) // non-blocking, broker record is optional
+      ...(role === "sdr" ? { max_leads: 500 } : {}),
+    })
+    if (brokerError) {
+      // non-blocking: usuário existe; sem a linha ele só não entra na roleta
+      console.error("[users] insert em brokers falhou:", brokerError.message)
+    }
   }
 
   return NextResponse.json({ data: { id: authData.user.id, email, role } })
