@@ -383,7 +383,17 @@ export async function POST(request: NextRequest) {
       // Story 50-3: CTWA referral persisted in leads.metadata (Epic 50).
       // ad_id (= referral.source_id) é a chave consumida pelo CreativeChip
       // (Story 50-2). Em re-engajamento, preservamos o ad_id original (AC3).
+      //
+      // Story 75-208 Item 3 (AC3.1/AC3.3): o payload da Meta NÃO traz
+      // campaign_id — a campanha é resolvida via lookup local
+      // (meta_ads → meta_adsets → meta_campaigns). Além do `name` (usado em
+      // utm_campaign), capturamos `meta_campaign_id` (o ID da Meta) para
+      // persistir em metadata.campaign_id. É contra `meta_campaign_id`, e não
+      // contra o UUID interno `meta_campaigns.id`, que os dual-joins de
+      // `campaigns/route.ts` e `campaigns/[campaign_id]/funnel/route.ts`
+      // comparam `metadata->>campaign_id`.
       let campaignName: string | null = referral.headline ?? null
+      let resolvedCampaignId: string | null = null
       if (referral.source_id) {
         const { data: ad } = await supabase
           .from("meta_ads")
@@ -402,11 +412,14 @@ export async function POST(request: NextRequest) {
           if (adset?.campaign_id) {
             const { data: campaign } = await supabase
               .from("meta_campaigns")
-              .select("name")
+              .select("name, meta_campaign_id")
               .eq("id", adset.campaign_id)
               .maybeSingle()
 
             if (campaign?.name) campaignName = campaign.name
+            if (campaign?.meta_campaign_id) {
+              resolvedCampaignId = campaign.meta_campaign_id as string
+            }
           }
         }
       }
@@ -432,6 +445,7 @@ export async function POST(request: NextRequest) {
           | undefined,
         referral,
         baseTimestampMs,
+        resolvedCampaignId,
       })
 
       await supabase

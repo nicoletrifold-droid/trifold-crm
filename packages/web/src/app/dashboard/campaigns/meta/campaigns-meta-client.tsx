@@ -432,8 +432,11 @@ export default function CampaignsMetaClient({
                 <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   CTR
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
-                  CPL
+                <th
+                  title="Custo por resultado da Meta (spend ÷ leads de formulário + conversas por mensagem iniciadas)"
+                  className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 cursor-help dark:text-stone-400"
+                >
+                  Custo/Resultado
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                   Leads Meta

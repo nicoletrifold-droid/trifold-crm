@@ -6,7 +6,22 @@ interface CampaignMetrics {
   impressions: number
   clicks: number
   ctr: number
+  /**
+   * Custo por resultado da Meta = spend ÷ `leads_meta` (nível campanha).
+   * NÃO é o custo por lead de formulário puro: o denominador `leads_meta` soma
+   * também as conversas por mensagem iniciadas (ver campo `leads_meta` abaixo).
+   * Difere de `cpl_real`, que usa `leads_responderam` (leads que efetivamente
+   * responderam) como denominador. Rotulado como "Custo/Resultado" na UI
+   * (Story 75-208 Item 1).
+   */
   cpl: number | null
+  /**
+   * Total de "Resultados" na nomenclatura da própria Meta =
+   * leads de formulário (insight `leads`, action_type "lead") +
+   * conversas por mensagem iniciadas (insight `messaging_conversations_started`).
+   * Corrigido no commit `97bc71d0` (antes contava só `leads`). É a fonte de
+   * dado por trás do label "Custo/Resultado" (Story 75-208 Item 1 / AC1.2).
+   */
   leads_meta: number
   leads_responderam: number
   leads_qualificados: number

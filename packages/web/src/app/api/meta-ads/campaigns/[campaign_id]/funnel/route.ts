@@ -3,6 +3,14 @@ import { requireAuth } from "@web/lib/api-auth"
 
 interface CampaignFunnelResponse {
   stages: {
+    /**
+     * Total de "Resultados" na nomenclatura da própria Meta =
+     * leads de formulário (insight `leads`, action_type "lead") +
+     * conversas por mensagem iniciadas (insight
+     * `messaging_conversations_started`). Corrigido no commit `97bc71d0`
+     * (antes contava só `leads`). Alinhado ao label "Custo/Resultado" da UI
+     * (Story 75-208 Item 1 / AC1.2).
+     */
     leads_meta: number
     leads_crm: number
     responderam: number

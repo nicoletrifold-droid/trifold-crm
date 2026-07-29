@@ -45,6 +45,7 @@ describe("buildCtwaMetadata (Story 50-3)", () => {
 
     expect(result).toEqual({
       ad_id: "test_ad_123",
+      campaign_id: null,
       source_url: "https://fb.me/test_ad_url",
       ctwa_clid: "test_ctwa_clid_abcdef",
       headline: "Apartamento 2 quartos em SP",
@@ -134,6 +135,7 @@ describe("buildCtwaMetadata (Story 50-3)", () => {
     })
 
     expect(result.ad_id).toBeNull()
+    expect(result.campaign_id).toBeNull()
     expect(result.source_url).toBeNull()
     expect(result.ctwa_clid).toBeNull()
     expect(result.headline).toBeNull()
@@ -179,5 +181,119 @@ describe("buildCtwaMetadata (Story 50-3)", () => {
     expect(second.ctwa_window_expires_at).toBe(
       new Date(baseTimestampMs + 1000 + 72 * 60 * 60 * 1000).toISOString(),
     )
+  })
+
+  // ── Story 75-208 Item 3 (AC3.2): persistência de campaign_id ─────────────
+  describe("campaign_id (Story 75-208 Item 3 / AC3.2)", () => {
+    it("AC3.2: lead novo com resolvedCampaignId grava metadata.campaign_id (meta_campaign_id)", () => {
+      const referral = getFixtureReferral()
+
+      const result = buildCtwaMetadata({
+        currentMetadata: null,
+        referral,
+        baseTimestampMs,
+        resolvedCampaignId: "120212345678901234",
+      })
+
+      // Persiste o meta_campaign_id (ID da Meta), chave do dual-join
+      expect(result.campaign_id).toBe("120212345678901234")
+      // ad_id segue a lógica normal
+      expect(result.ad_id).toBe("test_ad_123")
+    })
+
+    it("AC3.2: lookup falho (resolvedCampaignId ausente) em lead novo → campaign_id null", () => {
+      const referral = getFixtureReferral()
+
+      const result = buildCtwaMetadata({
+        currentMetadata: null,
+        referral,
+        baseTimestampMs,
+        // resolvedCampaignId omitido → lookup falhou
+      })
+
+      expect(result.campaign_id).toBeNull()
+    })
+
+    it("AC3.2: lookup falho em re-engajamento NÃO sobrescreve campaign_id prévio válido", () => {
+      const referral = getFixtureReferral()
+      const currentMetadata: Record<string, unknown> = {
+        ad_id: "original_ad_456",
+        campaign_id: "120299999999999999", // atribuição prévia válida
+      }
+
+      const result = buildCtwaMetadata({
+        currentMetadata,
+        referral,
+        baseTimestampMs,
+        resolvedCampaignId: null, // lookup falhou nesta mensagem
+      })
+
+      // atribuição prévia preservada (mesma regra do ad_id)
+      expect(result.campaign_id).toBe("120299999999999999")
+    })
+
+    it("AC3.2: campaign_id prévio válido NÃO é sobrescrito por novo lookup (última atribuição perde)", () => {
+      const referral = getFixtureReferral()
+      const currentMetadata: Record<string, unknown> = {
+        campaign_id: "120200000000000001",
+      }
+
+      const result = buildCtwaMetadata({
+        currentMetadata,
+        referral,
+        baseTimestampMs,
+        resolvedCampaignId: "120299999999999999", // campanha diferente
+      })
+
+      // preserva a atribuição original (consistente com regra do ad_id)
+      expect(result.campaign_id).toBe("120200000000000001")
+    })
+
+    it("AC3.2: campaign_id prévio string vazia é tratado como ausente e recebe o novo lookup", () => {
+      const referral = getFixtureReferral()
+      const currentMetadata: Record<string, unknown> = { campaign_id: "" }
+
+      const result = buildCtwaMetadata({
+        currentMetadata,
+        referral,
+        baseTimestampMs,
+        resolvedCampaignId: "120212345678901234",
+      })
+
+      expect(result.campaign_id).toBe("120212345678901234")
+    })
+
+    it("AC3.2: resolvedCampaignId string vazia é tratado como ausente (null)", () => {
+      const referral = getFixtureReferral()
+
+      const result = buildCtwaMetadata({
+        currentMetadata: null,
+        referral,
+        baseTimestampMs,
+        resolvedCampaignId: "",
+      })
+
+      expect(result.campaign_id).toBeNull()
+    })
+
+    it("idempotência: re-aplicar com mesmo resolvedCampaignId preserva a atribuição", () => {
+      const referral = getFixtureReferral()
+
+      const first = buildCtwaMetadata({
+        currentMetadata: null,
+        referral,
+        baseTimestampMs,
+        resolvedCampaignId: "120212345678901234",
+      })
+      expect(first.campaign_id).toBe("120212345678901234")
+
+      const second = buildCtwaMetadata({
+        currentMetadata: first,
+        referral,
+        baseTimestampMs: baseTimestampMs + 1000,
+        resolvedCampaignId: "120212345678901234",
+      })
+      expect(second.campaign_id).toBe("120212345678901234")
+    })
   })
 })
