@@ -23,7 +23,7 @@ export default async function CorretoresPage() {
     .select(
       `
       id, creci, type, is_available, max_leads, created_at,
-      user:users!user_id(id, name, email, avatar_url, is_active)
+      user:users!user_id(id, name, email, avatar_url, is_active, role)
     `
     )
     .eq("org_id", user.orgId)
@@ -104,11 +104,16 @@ export default async function CorretoresPage() {
                 email: string
                 avatar_url: string | null
                 is_active: boolean
+                role: string
               } | null
 
               const activeLeads = brokerUser
                 ? leadCounts[brokerUser.id] || 0
                 : 0
+
+              // Story 75-226: SDR aparece na mesma lista; Tipo deriva de users.role
+              // (sem mexer no enum broker_type) e ele atende TODOS os empreendimentos.
+              const isSdr = brokerUser?.role === "sdr"
 
               const typeLabels: Record<string, string> = {
                 internal: "Interno",
@@ -133,9 +138,15 @@ export default async function CorretoresPage() {
                     {broker.creci || "-"}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-stone-700/50 dark:text-stone-200">
-                      {typeLabels[broker.type] ?? broker.type}
-                    </span>
+                    {isSdr ? (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                        SDR
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-stone-700/50 dark:text-stone-200">
+                        {typeLabels[broker.type] ?? broker.type}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     {broker.is_available ? (
@@ -149,7 +160,11 @@ export default async function CorretoresPage() {
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    {isAdmin ? (
+                    {isSdr ? (
+                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                        Todos
+                      </span>
+                    ) : isAdmin ? (
                       <BrokerPropertyAssign
                         brokerId={broker.id}
                         properties={(properties ?? []).map(p => ({ id: p.id, name: p.name }))}

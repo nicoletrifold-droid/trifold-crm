@@ -196,10 +196,12 @@ export async function GET(request: NextRequest) {
     }
 
     const brokerIds = [...new Set(leadRows.map((l) => l.assigned_broker_id).filter((x): x is string => !!x))]
-    const { data: brokerUsers } = await admin.from("users").select("id, name").in("id", brokerIds)
+    const { data: brokerUsers } = await admin.from("users").select("id, name, role").in("id", brokerIds)
     const brokerName = new Map<string, string>()
-    for (const u of (brokerUsers ?? []) as Array<{ id: string; name: string }>) {
+    const brokerRole = new Map<string, string>()
+    for (const u of (brokerUsers ?? []) as Array<{ id: string; name: string; role: string }>) {
       brokerName.set(u.id, u.name)
+      brokerRole.set(u.id, u.role)
     }
 
     let alertasCorretor = 0
@@ -209,6 +211,10 @@ export async function GET(request: NextRequest) {
     const markGestor: string[] = []
 
     for (const lead of leadRows) {
+      // Story 75-226: lead cujo dono é SDR fica FORA do SLA (decisão Marcos 29/07) —
+      // nem alerta de 10min, nem escalonamento de 60min. A rede de segurança do lead
+      // não atendido pelo SDR é o bolsão (bolsao-rebalance), que segue valendo.
+      if (lead.assigned_broker_id && brokerRole.get(lead.assigned_broker_id) === "sdr") continue
       const dists = (distByLead.get(lead.id) ?? []).filter((t) => t <= now.getTime())
       if (dists.length === 0) continue
       // Corretor: relógio da ÚLTIMA distribuição (clock do dono atual). Gestor: relógio

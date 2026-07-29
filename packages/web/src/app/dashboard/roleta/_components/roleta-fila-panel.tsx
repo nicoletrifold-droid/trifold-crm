@@ -12,12 +12,23 @@ interface FilaEntry {
   brokerName: string
   brokerEmail: string
   brokerPhone: string | null
+  role: string
 }
 
 interface BrokerOption {
   brokerId: string
   name: string
   email: string
+  role: string
+}
+
+// Story 75-226: SDR pode entrar na fila; badge distingue do corretor.
+function SdrBadge() {
+  return (
+    <span className="flex-shrink-0 rounded-full bg-sky-100 border border-sky-300 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950 dark:border-sky-700 dark:text-sky-400">
+      SDR
+    </span>
+  )
 }
 
 interface Props {
@@ -80,6 +91,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
               brokerName: broker.name,
               brokerEmail: broker.email,
               brokerPhone: null,
+              role: broker.role,
             })),
           ]
         })
@@ -116,7 +128,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
       setFila((f) => f.filter((e) => e.id !== entry.id))
       setAvailable((a) => [
         ...a,
-        { brokerId: entry.broker_id, name: entry.brokerName, email: entry.brokerEmail },
+        { brokerId: entry.broker_id, name: entry.brokerName, email: entry.brokerEmail, role: entry.role },
       ])
     } else {
       setError("Erro ao remover. Tente novamente.")
@@ -174,6 +186,7 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                   <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{entry.brokerName}</p>
                   <p className="text-xs text-stone-400 dark:text-stone-500 truncate max-sm:hidden sm:block">{entry.brokerEmail}</p>
                 </div>
+                {entry.role === "sdr" && <SdrBadge />}
                 {idx === 0 && entry.is_active && (
                   <span className="flex-shrink-0 rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:border-emerald-700 dark:text-emerald-400">
                     Próximo
@@ -269,10 +282,11 @@ export function RoletaFilaPanel({ fila: initialFila, availableBrokers: initialAv
                   onChange={() => toggleSelectBroker(b.brokerId)}
                   className="h-4 w-4 rounded border-stone-300 accent-[#E8856A] dark:border-stone-700 shrink-0"
                 />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900 dark:text-stone-100 truncate">{b.name}</p>
                   <p className="text-xs text-stone-400 dark:text-stone-500 truncate">{b.email}</p>
                 </div>
+                {b.role === "sdr" && <SdrBadge />}
               </label>
             ))}
           </div>

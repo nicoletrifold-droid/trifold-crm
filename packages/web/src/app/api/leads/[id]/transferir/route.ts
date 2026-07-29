@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { leadDeepLink } from "@web/lib/leads/lead-url"
 
 // Story 75-84 (Epic 75) — admin/supervisor transfere a conversa de um lead para outro
 // usuário (corretor OU atendente de chat). Reatribui o dono (assigned_broker_id), roteia
@@ -61,9 +62,11 @@ export async function POST(
       .filter((n): n is string => !!n)
   )
 
-  const isBroker = target.role === "broker"
+  // Story 75-226: sdr recebe lead da roleta → também é destino válido de
+  // transferência e roteia como corretor (fluxo normal do lead, não relacionamento).
+  const isLeadRecipient = target.role === "broker" || target.role === "sdr"
   const hasChat = chatRoles.has(target.role as string)
-  if (!isBroker && !hasChat) {
+  if (!isLeadRecipient && !hasChat) {
     return NextResponse.json(
       { error: "Esse usuário não atende conversas (não é corretor nem tem o módulo Chat)." },
       { status: 422 }
@@ -74,7 +77,7 @@ export async function POST(
   }
 
   // destino com módulo chat (não-corretor) → caixa de relacionamento; corretor → /broker.
-  const isRelationship = hasChat && !isBroker
+  const isRelationship = hasChat && !isLeadRecipient
 
   await admin.from("leads").update({ assigned_broker_id: targetUserId }).eq("id", id)
   // Roteia a(s) conversa(s) do lead + tira a IA (não reassume após transferência manual).
@@ -89,7 +92,7 @@ export async function POST(
     metadata: { from_user_id: lead.assigned_broker_id, to_user_id: targetUserId, motivo },
   })
 
-  const url = isRelationship ? `${APP_URL}/dashboard/chat` : `${APP_URL}/broker/leads/${id}`
+  const url = isRelationship ? `${APP_URL}/dashboard/chat` : leadDeepLink(APP_URL, target.role as string, id)
   void sendPushToUser(admin, targetUserId, {
     title: "Conversa transferida para você",
     body: `${lead.name ?? "Um lead"} foi transferido para você. Motivo: ${motivo}`,
