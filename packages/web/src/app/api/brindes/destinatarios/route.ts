@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
       obra_nome,
       tipo,
       nome,
+      cargo: str(body.cargo),
       observacao: str(body.observacao),
       endereco_logradouro: str(body.endereco_logradouro),
       endereco_numero: str(body.endereco_numero),
