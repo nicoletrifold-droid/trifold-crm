@@ -15,7 +15,7 @@ interface DestinatarioModalProps {
 }
 
 const EMPTY = {
-  obra_nome: "", tipo: "mae" as "mae" | "pai" | "outro", nome: "", observacao: "",
+  obra_nome: "", tipo: "mae" as "mae" | "pai" | "outro", nome: "", cargo: "", observacao: "",
   endereco_logradouro: "", endereco_numero: "", endereco_complemento: "",
   endereco_bairro: "", endereco_cidade: "", endereco_estado: "", endereco_cep: "",
   endereco_referencia: "",
@@ -57,6 +57,7 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
         obra_nome: destinatario.obra_nome,
         tipo: destinatario.tipo,
         nome: destinatario.nome,
+        cargo: destinatario.cargo ?? "",
         observacao: destinatario.observacao ?? "",
         endereco_logradouro: destinatario.endereco_logradouro ?? "",
         endereco_numero: destinatario.endereco_numero ?? "",
@@ -155,6 +156,7 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
       obra_nome: fields.obra_nome.trim(),
       tipo: fields.tipo,
       nome: fields.nome.trim(),
+      cargo: fields.cargo.trim() || null,
       observacao: fields.observacao.trim() || null,
       endereco_logradouro: fields.endereco_logradouro.trim() || null,
       endereco_numero: fields.endereco_numero.trim() || null,
@@ -238,6 +240,13 @@ export function DestinatarioModal({ mode, destinatario, obraOptions, onClose }: 
               <label className={lbl}>Nome <span className="text-red-500">*</span></label>
               <input type="text" value={fields.nome} onChange={(e) => set("nome", e.target.value)}
                 required className={inp} placeholder="Nome completo" />
+            </div>
+
+            {/* Story 75-227: cargo do colaborador (ticket da Samara) — livre e opcional */}
+            <div>
+              <label className={lbl}>Cargo</label>
+              <input type="text" value={fields.cargo} onChange={(e) => set("cargo", e.target.value)}
+                className={inp} placeholder="Ex.: mestre de obras" />
             </div>
 
             <div className="col-span-2">

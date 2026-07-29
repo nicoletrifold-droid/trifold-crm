@@ -11,6 +11,7 @@ export interface Destinatario {
   obra_nome: string
   tipo: "mae" | "pai" | "outro"
   nome: string
+  cargo: string | null
   observacao: string | null
   endereco_logradouro: string | null
   endereco_numero: string | null

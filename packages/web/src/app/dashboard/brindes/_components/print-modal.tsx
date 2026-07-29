@@ -47,13 +47,15 @@ function buildPrintHtml(
       : `<td class="status assinatura"><div class="linha-assinatura"></div></td>`
 
     const observacao = d.observacao ? `<br><span class="obs">${d.observacao}</span>` : ""
+    // Story 75-227: cargo do colaborador inline sob o nome, como a observação
+    const cargo = d.cargo ? `<br><span class="cargo">${d.cargo}</span>` : ""
 
     return `
       <tr class="${i % 2 === 0 ? "par" : "impar"}">
         <td class="num">${i + 1}</td>
         <td class="obra">${d.obra_nome}</td>
         <td class="tipo">${TIPO_LABEL[d.tipo] ?? d.tipo}</td>
-        <td class="nome">${d.nome}${observacao}</td>
+        <td class="nome">${d.nome}${cargo}${observacao}</td>
         <td class="endereco">${buildEndereco(d)}</td>
         ${statusCell}
       </tr>`
@@ -87,6 +89,7 @@ function buildPrintHtml(
     .tipo { width: 36px; }
     .nome { min-width: 140px; }
     .obs { color: #e06b00; font-size: 8pt; }
+    .cargo { color: #555; font-size: 8pt; font-style: italic; }
     .endereco { color: #444; font-size: 8.5pt; }
     .status { width: 80px; text-align: center; }
     .assinatura { width: 110px; }

@@ -183,6 +183,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
                 <th className="px-4 py-3">Obra</th>
                 <th className="px-4 py-3">Tipo</th>
                 <th className="px-4 py-3">Nome</th>
+                <th className="px-4 py-3">Cargo</th>
                 <th className="px-4 py-3">Cidade/UF</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3"></th>
@@ -191,12 +192,12 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
             <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
               {loadingTable && destinatarios.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400 dark:text-stone-500">Carregando...</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400 dark:text-stone-500">Carregando...</td>
                 </tr>
               )}
               {!loadingTable && destinatarios.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-stone-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-stone-400">
                     Nenhum destinatário encontrado.
                   </td>
                 </tr>
@@ -212,6 +213,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-32 truncate dark:text-stone-100">{d.obra_nome}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-stone-300">{TIPO_LABEL[d.tipo] ?? d.tipo}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-stone-100">{d.nome}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-stone-400">{d.cargo || "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500 dark:text-stone-400">{cidade}</td>
                     <td className="px-4 py-3">
                       <StatusBadge
