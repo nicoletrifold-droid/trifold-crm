@@ -8,7 +8,7 @@ import AgenteClient from "./agente-client"
 // API repetem o gate via marketingGuard, este redirect é a camada da página.
 export default async function CampaignsAgentePage() {
   const user = await getServerUser()
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (user.role !== "admin" && user.role !== "supervisor" && user.role !== "social-media") {
     redirect("/dashboard/campaigns")
   }
 

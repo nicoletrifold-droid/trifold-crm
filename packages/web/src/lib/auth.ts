@@ -17,6 +17,7 @@ export interface AppUser {
     | "imob"
     | "consultoria"
     | "sdr"
+    | "social-media"
   avatarUrl: string | null
   theme: "light" | "dark" | "system"
 }
