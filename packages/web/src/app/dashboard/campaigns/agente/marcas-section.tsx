@@ -85,6 +85,8 @@ function BrandModal({
   }
   const [assetTipo, setAssetTipo] = useState<"logo" | "foto" | "elemento">("logo")
   const [assetLabel, setAssetLabel] = useState("")
+  // Story 75-232 — fila de arquivos escolhidos ANTES de criar a marca
+  const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; tipo: string; label: string }>>([])
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
@@ -121,7 +123,25 @@ function BrandModal({
       })
       const data = (await res.json().catch(() => ({}))) as { brand?: MarketingBrand; error?: string }
       if (!res.ok || !data.brand) throw new Error(data.error ?? "Erro ao salvar marca")
-      onSaved({ ...data.brand, assets: data.brand.assets ?? assets })
+      // Story 75-232 — marca recém-criada: sobe a fila escolhida durante a criação.
+      let createdAssets: BrandAsset[] = data.brand.assets ?? []
+      const failed: string[] = []
+      if (!brand && pendingFiles.length > 0) {
+        setUploading(true)
+        for (const p of pendingFiles) {
+          try {
+            createdAssets = [...createdAssets, await uploadOne(data.brand.id, p.file, p.tipo, p.label)]
+          } catch (e) {
+            failed.push(`${p.file.name} (${e instanceof Error ? e.message : "erro"})`)
+          }
+        }
+        setUploading(false)
+        setPendingFiles([])
+        if (failed.length > 0) {
+          window.alert(`A marca foi criada, mas ${failed.length} arquivo(s) falharam no envio: ${failed.join(", ")}. Reenvie pela própria marca.`)
+        }
+      }
+      onSaved({ ...data.brand, assets: brand ? (data.brand.assets ?? assets) : createdAssets })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar marca")
     } finally {
@@ -129,55 +149,74 @@ function BrandModal({
     }
   }
 
+  // Sobe UM arquivo (sign → uploadToSignedUrl → registro) p/ a marca informada.
+  async function uploadOne(brandId: string, file: File, tipo: string, label: string): Promise<BrandAsset> {
+    if (file.size > 10 * 1024 * 1024) throw new Error(`"${file.name}" passa de 10 MB`)
+    const supabase = createClient()
+    const signRes = await fetch(`/api/marketing-brands/${brandId}/assets/sign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_name: file.name, file_size_bytes: file.size }),
+    })
+    const signData = (await signRes.json().catch(() => ({}))) as {
+      token?: string
+      storagePath?: string
+      error?: string
+    }
+    if (!signRes.ok || !signData.token || !signData.storagePath) {
+      throw new Error(signData.error ?? `Erro ao preparar envio de "${file.name}"`)
+    }
+    const { error: upErr } = await supabase.storage
+      .from("marketing-brands")
+      .uploadToSignedUrl(signData.storagePath, signData.token, file, {
+        contentType: file.type || "application/octet-stream",
+      })
+    if (upErr) throw new Error(`Falha no envio de "${file.name}": ${upErr.message}`)
+    const regRes = await fetch(`/api/marketing-brands/${brandId}/assets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo,
+        label: label || null,
+        storage_path: signData.storagePath,
+        file_name: file.name,
+        file_size: file.size,
+      }),
+    })
+    const regData = (await regRes.json().catch(() => ({}))) as { asset?: BrandAsset; error?: string }
+    if (!regRes.ok || !regData.asset) throw new Error(regData.error ?? `Erro ao registrar "${file.name}"`)
+    return regData.asset
+  }
+
   async function handleUpload(files: FileList | null) {
-    if (!brand || !files || files.length === 0 || uploading) return
+    if (!files || files.length === 0 || uploading) return
+    // Story 75-232 — no modo CRIAÇÃO os arquivos entram numa fila local e sobem
+    // automaticamente logo após o "Criar marca" (o upload precisa do id da marca).
+    if (!brand) {
+      const tooBig = Array.from(files).filter((f) => f.size > 10 * 1024 * 1024)
+      if (tooBig.length > 0) {
+        setError(`${tooBig.map((f) => `"${f.name}"`).join(", ")} passa de 10 MB`)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
+      }
+      setError(null)
+      setPendingFiles((prev) => [
+        ...prev,
+        ...Array.from(files).map((file) => ({ file, tipo: assetTipo, label: assetLabel })),
+      ])
+      setAssetLabel("")
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
     setUploadMsg(null)
     setError(null)
     setUploading(true)
-    const supabase = createClient()
     let okCount = 0
     let current = assets
     try {
       for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) {
-          throw new Error(`"${file.name}" passa de 10 MB`)
-        }
-        // 1) sign
-        const signRes = await fetch(`/api/marketing-brands/${brand.id}/assets/sign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ file_name: file.name, file_size_bytes: file.size }),
-        })
-        const signData = (await signRes.json().catch(() => ({}))) as {
-          token?: string
-          storagePath?: string
-          error?: string
-        }
-        if (!signRes.ok || !signData.token || !signData.storagePath) {
-          throw new Error(signData.error ?? `Erro ao preparar envio de "${file.name}"`)
-        }
-        // 2) upload direto ao Storage
-        const { error: upErr } = await supabase.storage
-          .from("marketing-brands")
-          .uploadToSignedUrl(signData.storagePath, signData.token, file, {
-            contentType: file.type || "application/octet-stream",
-          })
-        if (upErr) throw new Error(`Falha no envio de "${file.name}": ${upErr.message}`)
-        // 3) registro
-        const regRes = await fetch(`/api/marketing-brands/${brand.id}/assets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tipo: assetTipo,
-            label: assetLabel || null,
-            storage_path: signData.storagePath,
-            file_name: file.name,
-            file_size: file.size,
-          }),
-        })
-        const regData = (await regRes.json().catch(() => ({}))) as { asset?: BrandAsset; error?: string }
-        if (!regRes.ok || !regData.asset) throw new Error(regData.error ?? `Erro ao registrar "${file.name}"`)
-        current = [...current, regData.asset]
+        const asset = await uploadOne(brand.id, file, assetTipo, assetLabel)
+        current = [...current, asset]
         applyAssets(current)
         okCount++
       }
@@ -236,7 +275,7 @@ function BrandModal({
           <h3 className="text-lg font-semibold text-gray-900 dark:text-stone-100">
             {brand ? `Editar marca — ${brand.nome}` : "Nova marca"}
           </h3>
-          <button onClick={onClose} aria-label="Fechar" className="text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300">✕</button>
+          <button onClick={onClose} disabled={saving} aria-label="Fechar" className="text-gray-400 hover:text-gray-600 disabled:opacity-40 dark:text-stone-500 dark:hover:text-stone-300">✕</button>
         </div>
 
         {error && (
@@ -366,7 +405,7 @@ function BrandModal({
               )
             ) : <span />}
             <div className="flex gap-2">
-              <button type="button" onClick={onClose} className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
+              <button type="button" onClick={onClose} disabled={saving} className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">
                 Cancelar
               </button>
               <button type="submit" disabled={saving} className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60">
@@ -376,13 +415,15 @@ function BrandModal({
           </div>
         </form>
 
-        {/* Arquivos — só no modo edição (asset precisa de brand_id) */}
+        {/* Arquivos — upload imediato no edit; no create entram na fila (75-232) */}
         <div className="mt-6 border-t border-gray-200 pt-4 dark:border-stone-800">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-stone-100">Arquivos da marca</h4>
-          {!brand ? (
-            <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">Salve a marca para enviar logos, fotos e elementos.</p>
-          ) : (
-            <>
+          {!brand && (
+            <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
+              Pode escolher os arquivos agora — eles sobem automaticamente quando você clicar em &quot;Criar marca&quot;.
+            </p>
+          )}
+          <>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <select value={assetTipo} onChange={(e) => setAssetTipo(e.target.value as "logo" | "foto" | "elemento")} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100">
                   <option value="logo">Logo</option>
@@ -464,8 +505,31 @@ function BrandModal({
                   </div>
                 )
               })}
+
+              {/* Story 75-232 — fila de arquivos aguardando o "Criar marca" */}
+              {!brand && pendingFiles.length > 0 && (
+                <div className="mt-3">
+                  <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
+                    Aguardando criação da marca ({pendingFiles.length})
+                  </h5>
+                  <ul className="space-y-1">
+                    {pendingFiles.map((pf, i) => (
+                      <li key={i} className="flex items-center justify-between gap-2 rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-xs text-gray-600 dark:border-stone-700 dark:text-stone-300">
+                        <span className="truncate">
+                          {pf.file.name}
+                          <span className="ml-1 text-gray-400 dark:text-stone-500">
+                            ({pf.tipo}{pf.label ? ` · ${pf.label}` : ""})
+                          </span>
+                        </span>
+                        <button type="button" onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                          aria-label={`Remover ${pf.file.name} da fila`}
+                          className="shrink-0 text-gray-400 hover:text-red-500 dark:text-stone-500">✕</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
-          )}
         </div>
       </div>
     </div>
