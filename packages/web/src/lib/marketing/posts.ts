@@ -1,7 +1,8 @@
 // Story 75-219 — Aba "Agente" (marketing): regras puras dos posts da fila de
 // aprovação. Sem imports server-side de propósito — testável em unidade.
 
-export const MARKETING_POST_ROLES = ["admin", "supervisor"] as const
+// Story 75-233: social-media = operadora do marketing — mesmo poder dentro da aba Lídia.
+export const MARKETING_POST_ROLES = ["admin", "supervisor", "social-media"] as const
 
 export const MARKETING_POST_STATUSES = ["sugerido", "aprovado", "rejeitado", "publicado"] as const
 export type MarketingPostStatus = (typeof MARKETING_POST_STATUSES)[number]

@@ -8,6 +8,6 @@ export default async function CampaignsMetaPage() {
   // ao módulo "sistema" (somente admin tem por padrão).
   const isAdmin = await canAccess(user.id, user.orgId, "sistema")
   // Story 75-219 — aba "Agente" só aparece para admin/supervisor (AC2).
-  const showAgenteTab = user.role === "admin" || user.role === "supervisor"
+  const showAgenteTab = user.role === "admin" || user.role === "supervisor" || user.role === "social-media"
   return <CampaignsMetaClient isAdmin={isAdmin} showAgenteTab={showAgenteTab} />
 }

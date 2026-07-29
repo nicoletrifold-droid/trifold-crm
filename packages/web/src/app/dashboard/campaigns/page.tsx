@@ -97,7 +97,7 @@ export default async function CampaignsPage() {
         </Link>
       </div>
 
-      <CampaignsTabs showAgente={user.role === "admin" || user.role === "supervisor"} />
+      <CampaignsTabs showAgente={user.role === "admin" || user.role === "supervisor" || user.role === "social-media"} />
 
       {(!campaigns || campaigns.length === 0) ? (
         <div className="flex flex-col items-center justify-center rounded-lg bg-white p-12 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">

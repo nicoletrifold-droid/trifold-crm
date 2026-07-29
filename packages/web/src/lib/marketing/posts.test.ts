@@ -44,9 +44,9 @@ describe("isMarketingPostEditable", () => {
   })
 })
 
-describe("MARKETING_POST_ROLES — gate da aba (AC2)", () => {
-  it("só admin e supervisor têm acesso", () => {
-    expect([...MARKETING_POST_ROLES]).toEqual(["admin", "supervisor"])
+describe("MARKETING_POST_ROLES — gate da aba (AC2 + 75-233)", () => {
+  it("admin, supervisor e social-media têm acesso; demais não", () => {
+    expect([...MARKETING_POST_ROLES]).toEqual(["admin", "supervisor", "social-media"])
     for (const role of ["broker", "gerente-comercial", "sdr", "obras", "imob"]) {
       expect((MARKETING_POST_ROLES as readonly string[]).includes(role)).toBe(false)
     }
