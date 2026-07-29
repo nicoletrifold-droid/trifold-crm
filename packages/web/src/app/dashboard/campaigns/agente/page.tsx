@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import AgenteClient from "./agente-client"
 
 // Story 75-219 — aba "Agente" do módulo Campanhas (fundação do agente de
-// marketing IA). Gate server-side: SOMENTE admin/supervisor (AC2) — as rotas
-// API repetem o gate via marketingGuard, este redirect é a camada da página.
+// marketing IA). Story 75-229 — gate migrado do role hardcoded para o
+// sub-módulo "campanhas.agente" na matriz de permissões; as rotas API repetem
+// o gate via marketingGuard, este redirect é a camada da página.
 export default async function CampaignsAgentePage() {
   const user = await getServerUser()
-  if (user.role !== "admin" && user.role !== "supervisor") {
+  if (!(await canAccess(user.id, user.orgId, "campanhas.agente"))) {
     redirect("/dashboard/campaigns")
   }
 

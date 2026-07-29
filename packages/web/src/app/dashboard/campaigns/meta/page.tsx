@@ -7,7 +7,8 @@ export default async function CampaignsMetaPage() {
   // Ações administrativas sobre campanhas Meta — modeladas como acesso
   // ao módulo "sistema" (somente admin tem por padrão).
   const isAdmin = await canAccess(user.id, user.orgId, "sistema")
-  // Story 75-219 — aba "Agente" só aparece para admin/supervisor (AC2).
-  const showAgenteTab = user.role === "admin" || user.role === "supervisor"
+  // Story 75-219 — aba "Agente". Story 75-229 — gate migrado para a matriz de
+  // permissões (sub-módulo "campanhas.agente").
+  const showAgenteTab = await canAccess(user.id, user.orgId, "campanhas.agente")
   return <CampaignsMetaClient isAdmin={isAdmin} showAgenteTab={showAgenteTab} />
 }
