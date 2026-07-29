@@ -1,6 +1,6 @@
 # Story 75-226 — SDR na fila da roleta: recebe leads e atende qualquer empreendimento
 
-**Status:** Draft
+**Status:** Done
 **Tipo:** Feature
 **Epic:** Roleta de Leads
 **Complexidade:** M
@@ -122,4 +122,20 @@ para `users.id`) — o insert falha silenciosamente desde sempre.
 - `docs/stories/75-226-sdr-na-roleta.story.md` (novo)
 
 ## QA Results
-_(preencher no QA)_
+### Review Date: 2026-07-29 — Reviewed By: Quinn (2 rodadas)
+1ª rodada: **FAIL** — 4 apontamentos: (1) seletor de transferência não listava sdr
+(AC8 inoperante na UI), (2) deep link /broker fixo no push de "lead respondeu"
+(notify-on-reply — a notificação de maior volume do SDR), (3) botão do template HSM
+novo_lead_corretor com base fixa /broker (limitação Meta), (4) idem no reativar.
+2ª rodada (pós-fix): **PASS** — 1/2/4 resolvidos com o helper `leadDeepLink`
+(+3 testes); 3 aceito como limitação documentada. Suíte 1260/1260; tsc/eslint/build ok.
+
+### Deploy (@devops, 29/07)
+- Migração 195 aplicada em PROD via SQL Editor (MCP Supabase quebrado — ver memória
+  project-migrations): "Success. No rows returned".
+- Verificação pós-migração em prod: Thielly sdr/internal/500/disponível, fora da
+  fila (na_fila=0); RPC com bypass sdr ✅ e carimbo distribuido_em ✅.
+- PR #297 squash-merged; deploy Vercel success; /broker (sessão corretor real)
+  renderizando sem regressão.
+- Pendente operacional: Marcos adicionar a Thielly à fila em /dashboard/roleta
+  quando quiser ativar. Replicar a 195 no projeto dev (xnxvygyfyyyzwhiuoehz).
