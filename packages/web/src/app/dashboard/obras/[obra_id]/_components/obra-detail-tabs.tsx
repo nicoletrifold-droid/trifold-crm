@@ -443,6 +443,16 @@ export function ObraDetailTabs({
 
   const [tab, setTab] = useState<Tab>(resolvedInitialTab)
   const [aprovacoes, setAprovacoes] = useState<AprovacaoItem[]>(initialAprovacoes)
+
+  // Story 75-228: o upload termina com router.refresh(), que re-renderiza o server
+  // component e manda initialAprovacoes novo — mas este componente client continua
+  // montado e o useState congela o array antigo (foto recém-enviada "sumia" até F5;
+  // com zero fotos publicadas caía no empty state "Nenhuma foto ainda").
+  // Sincroniza o estado sempre que a prop mudar; exclusões locais também chegam
+  // frescas do servidor no refresh seguinte.
+  useEffect(() => {
+    setAprovacoes(initialAprovacoes)
+  }, [initialAprovacoes])
   const [addingEtapaToGroup, setAddingEtapaToGroup] = useState<string | null>(null)
 
   // Documentos — visualização com signed URL
@@ -686,72 +696,7 @@ export function ObraDetailTabs({
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Fotos publicadas, agrupadas por fase na sequência das fases (Story 75-3) */}
-                {fotoGroups.map((group) => (
-                  <div key={group.faseId ?? "sem-fase"}>
-                    <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
-                      {group.faseName}
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium normal-case text-gray-600 dark:bg-stone-800 dark:text-stone-300">
-                        {group.fotos.length}
-                      </span>
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {group.fotos.map((foto) => {
-                  const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
-                  return (
-                    <div
-                      key={foto.id}
-                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800"
-                      onClick={() => setLightboxFoto(foto)}
-                    >
-                      <div className="relative aspect-square w-full bg-gray-100 dark:bg-stone-800">
-                        <Image
-                          src={url}
-                          alt={foto.caption ?? "Foto da obra"}
-                          fill
-                          unoptimized
-                          className="object-cover"
-                        />
-                        {/* Story 75-13 — editar legenda/fase (livre p/ todos os perfis) */}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setEditingFoto(foto) }}
-                          title="Editar foto"
-                          aria-label="Editar foto"
-                          className="absolute left-1.5 top-1.5 z-10 rounded-full bg-black/55 p-1.5 text-white hover:bg-black/75"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        {/* Botão de exclusão apenas para admin/supervisor (direto) */}
-                        {isAdminOrSupervisor && (
-                          <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
-                        )}
-                        {/* Story 75-14 — obras solicita exclusão (com motivo → aprovação) */}
-                        {mostraPendentes && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setExcluindoFotoId(foto.id) }}
-                            title="Solicitar exclusão"
-                            aria-label="Solicitar exclusão"
-                            className="absolute right-1.5 top-1.5 z-10 rounded-full bg-black/55 p-1.5 text-white hover:bg-red-600"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      {foto.caption && (
-                        <p className="truncate px-2 py-1.5 text-xs text-gray-700 dark:text-stone-300">
-                          {foto.caption}
-                        </p>
-                      )}
-                    </div>
-                  )
-                })}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Fotos pendentes/rejeitadas do próprio usuário obras */}
+                {/* Fotos pendentes/rejeitadas do autor PRIMEIRO (Story 75-228: acima da dobra) */}
                 {mostraPendentes && pendenteFotos.length > 0 && (
                   <div>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
@@ -845,6 +790,71 @@ export function ObraDetailTabs({
                     </div>
                   </div>
                 )}
+                {/* Fotos publicadas, agrupadas por fase na sequência das fases (Story 75-3) */}
+                {fotoGroups.map((group) => (
+                  <div key={group.faseId ?? "sem-fase"}>
+                    <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
+                      {group.faseName}
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium normal-case text-gray-600 dark:bg-stone-800 dark:text-stone-300">
+                        {group.fotos.length}
+                      </span>
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {group.fotos.map((foto) => {
+                  const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
+                  return (
+                    <div
+                      key={foto.id}
+                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800"
+                      onClick={() => setLightboxFoto(foto)}
+                    >
+                      <div className="relative aspect-square w-full bg-gray-100 dark:bg-stone-800">
+                        <Image
+                          src={url}
+                          alt={foto.caption ?? "Foto da obra"}
+                          fill
+                          unoptimized
+                          className="object-cover"
+                        />
+                        {/* Story 75-13 — editar legenda/fase (livre p/ todos os perfis) */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setEditingFoto(foto) }}
+                          title="Editar foto"
+                          aria-label="Editar foto"
+                          className="absolute left-1.5 top-1.5 z-10 rounded-full bg-black/55 p-1.5 text-white hover:bg-black/75"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        {/* Botão de exclusão apenas para admin/supervisor (direto) */}
+                        {isAdminOrSupervisor && (
+                          <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
+                        )}
+                        {/* Story 75-14 — obras solicita exclusão (com motivo → aprovação) */}
+                        {mostraPendentes && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setExcluindoFotoId(foto.id) }}
+                            title="Solicitar exclusão"
+                            aria-label="Solicitar exclusão"
+                            className="absolute right-1.5 top-1.5 z-10 rounded-full bg-black/55 p-1.5 text-white hover:bg-red-600"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {foto.caption && (
+                        <p className="truncate px-2 py-1.5 text-xs text-gray-700 dark:text-stone-300">
+                          {foto.caption}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+                    </div>
+                  </div>
+                ))}
+
               </div>
             )}
           </section>
