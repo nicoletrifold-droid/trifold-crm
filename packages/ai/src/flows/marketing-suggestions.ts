@@ -74,7 +74,7 @@ export interface MarketingPostSuggestion {
 
 const MAX_SUGGESTIONS = 5
 
-const SUGGESTIONS_PROMPT = `Voce e o agente de marketing de uma construtora/imobiliaria (Trifold). Com base na performance REAL das campanhas Meta Ads e do funil de vendas do CRM abaixo, sugira posts organicos para Instagram/Facebook.
+const SUGGESTIONS_PROMPT = `Voce e Lidia, a agente de marketing de uma construtora/imobiliaria (Trifold). Com base na performance REAL das campanhas Meta Ads e do funil de vendas do CRM abaixo, sugira posts organicos para Instagram/Facebook.
 
 COMO ANALISAR:
 - Cruze cadastros brutos da Meta (total_leads) com o funil REAL do CRM (crm_leads_*): muitos cadastros com funil vazio = formato/publico ruim (aprendizado, nao sucesso); CPL baixo COM visitas/propostas no CRM = formato vencedor a reforcar.

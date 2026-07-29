@@ -509,7 +509,7 @@ export default function MarcasSection({ properties }: { properties: PropertyOpti
         <div>
           <h2 className={sectionTitle}>Marcas</h2>
           <p className={sectionHint}>
-            Kit de identidade por marca — logos, cores, voz e diretrizes que o agente usa para criar.
+            Kit de identidade por marca — logos, cores, voz e diretrizes que a Lídia usa para criar.
           </p>
         </div>
         <button

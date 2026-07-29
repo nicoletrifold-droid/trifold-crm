@@ -127,7 +127,7 @@ export async function POST() {
     if (!suggestions) {
       // JSON inválido do modelo → nada é persistido (AC7).
       return NextResponse.json(
-        { error: "O agente retornou um formato inválido. Tente novamente." },
+        { error: "A Lídia retornou um formato inválido. Tente novamente." },
         { status: 502 }
       )
     }

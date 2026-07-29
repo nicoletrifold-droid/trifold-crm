@@ -24,7 +24,7 @@ function CampaignsTabs({ showAgente }: { showAgente: boolean }) {
           href="/dashboard/campaigns/agente"
           className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors dark:text-stone-400 dark:hover:text-stone-200 dark:hover:border-stone-700"
         >
-          Agente
+          Lídia
         </Link>
       )}
     </div>

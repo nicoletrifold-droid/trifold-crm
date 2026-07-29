@@ -45,7 +45,7 @@ function CampaignsTabs() {
         href="/dashboard/campaigns/agente"
         className="px-4 py-2 text-sm font-medium border-b-2 border-orange-600 text-orange-600 dark:text-orange-300"
       >
-        Agente
+        Lídia
       </Link>
     </div>
   )
@@ -60,7 +60,7 @@ const CANAL_LABELS: Record<string, string> = {
 
 const ORIGEM_BADGES: Record<string, { label: string; className: string }> = {
   agente: {
-    label: "Agente IA",
+    label: "Lídia",
     className: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
   },
   humano: {
@@ -256,7 +256,7 @@ function PostCard({
 
       {post.justificativa && (
         <div className="mt-3 rounded-md bg-orange-50 p-3 text-xs text-orange-900 dark:bg-orange-500/10 dark:text-orange-200">
-          <span className="font-semibold">Por que o agente sugeriu: </span>
+          <span className="font-semibold">Por que a Lídia sugeriu: </span>
           {post.justificativa}
         </div>
       )}
@@ -405,7 +405,7 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Campanhas</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
-            Agente de marketing: sugestões de posts com base na performance real
+            Lídia — agente de marketing: sugestões de posts com base na performance real
           </p>
         </div>
         <div className="flex gap-2">
@@ -490,7 +490,7 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
             </div>
             {sugeridos.length === 0 ? (
               <div className={emptyBox}>
-                Nenhuma sugestão pendente. Clique em &quot;Gerar sugestões&quot; para o agente analisar a
+                Nenhuma sugestão pendente. Clique em &quot;Gerar sugestões&quot; para a Lídia analisar a
                 performance das campanhas.
               </div>
             ) : (
@@ -597,7 +597,7 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
               <div>
                 <h2 className={sectionTitle}>Rejeitados</h2>
                 <p className={sectionHint}>
-                  Fora da fila, mas preservados como aprendizado do agente.
+                  Fora da fila, mas preservados como aprendizado da Lídia.
                 </p>
               </div>
               <div className="grid gap-3 opacity-70 lg:grid-cols-2">
