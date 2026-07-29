@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
+import type { BrandCor, BrandFonte } from "@web/lib/marketing/brands"
 
 // Story 75-229 — Kit de Marcas da aba Agente: identidade por marca (institucional
 // + empreendimentos) que alimentará o "Gerar arte". Upload via signed URL
@@ -23,8 +24,8 @@ export interface MarketingBrand {
   nome: string
   tipo: "institucional" | "empreendimento"
   property_id: string | null
-  cores: string[]
-  fontes: string | null
+  cores: BrandCor[]
+  fontes: BrandFonte[]
   voz_da_marca: string | null
   diretrizes: string | null
   created_at: string
@@ -35,12 +36,6 @@ export interface MarketingBrand {
 interface PropertyOption {
   id: string
   name: string
-}
-
-const ASSET_TIPO_LABELS: Record<string, string> = {
-  logo: "Logo",
-  foto: "Foto",
-  elemento: "Elemento",
 }
 
 function brandPropertyName(brand: MarketingBrand): string | null {
@@ -75,8 +70,8 @@ function BrandModal({
   const [nome, setNome] = useState(brand?.nome ?? "")
   const [tipo, setTipo] = useState<"institucional" | "empreendimento">(brand?.tipo ?? "empreendimento")
   const [propertyId, setPropertyId] = useState(brand?.property_id ?? "")
-  const [cores, setCores] = useState((brand?.cores ?? []).join(", "))
-  const [fontes, setFontes] = useState(brand?.fontes ?? "")
+  const [cores, setCores] = useState<BrandCor[]>(brand?.cores ?? [])
+  const [fontes, setFontes] = useState<BrandFonte[]>(brand?.fontes ?? [])
   const [voz, setVoz] = useState(brand?.voz_da_marca ?? "")
   const [diretrizes, setDiretrizes] = useState(brand?.diretrizes ?? "")
   const [saving, setSaving] = useState(false)
@@ -89,6 +84,7 @@ function BrandModal({
     if (brand) onAssetsChanged(brand.id, next)
   }
   const [assetTipo, setAssetTipo] = useState<"logo" | "foto" | "elemento">("logo")
+  const [assetLabel, setAssetLabel] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
@@ -96,11 +92,6 @@ function BrandModal({
   const [confirmDeleteBrand, setConfirmDeleteBrand] = useState(false)
   const [deletingBrand, setDeletingBrand] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  const coresPreview = cores
-    .split(",")
-    .map((c) => c.trim())
-    .filter((c) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c))
 
   const inp =
     "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
@@ -116,8 +107,10 @@ function BrandModal({
         nome,
         tipo,
         property_id: tipo === "empreendimento" ? propertyId || null : null,
-        cores: cores.split(",").map((c) => c.trim()).filter(Boolean),
-        fontes: fontes || null,
+        // "#" solto = linha recém-adicionada não preenchida — descarta; hex
+        // inválido DIGITADO segue ao server p/ devolver o erro (não some calado).
+        cores: cores.filter((c) => c.hex.trim().length > 1),
+        fontes: fontes.filter((f) => f.papel.trim() || f.nome.trim()),
         voz_da_marca: voz || null,
         diretrizes: diretrizes || null,
       }
@@ -176,6 +169,7 @@ function BrandModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             tipo: assetTipo,
+            label: assetLabel || null,
             storage_path: signData.storagePath,
             file_name: file.name,
             file_size: file.size,
@@ -188,6 +182,7 @@ function BrandModal({
         okCount++
       }
       setUploadMsg(`${okCount} arquivo(s) enviado(s).`)
+      setAssetLabel("") // variação não pode "grudar" na próxima leva (QA 75-230)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro no envio")
       if (okCount > 0) setUploadMsg(`${okCount} arquivo(s) enviado(s) antes do erro.`)
@@ -271,23 +266,79 @@ function BrandModal({
               </select>
             </div>
           )}
+          {/* Story 75-230 — cores com papel (Primária/Secundária…), estilo Brand Hub */}
           <div className="col-span-2">
-            <label className={lbl}>Cores (hex separadas por vírgula)</label>
-            <input value={cores} onChange={(e) => setCores(e.target.value)} className={inp} placeholder="#E8856A, #1C1917, #FFFFFF" />
-            {coresPreview.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {coresPreview.map((c, i) => (
-                  <span key={`${c}-${i}`} className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 dark:border-stone-700 dark:text-stone-300">
-                    <span className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: c }} />
-                    {c.toUpperCase()}
-                  </span>
-                ))}
-              </div>
-            )}
+            <label className={lbl}>Cores</label>
+            <div className="space-y-2">
+              {cores.map((c, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-f]{6}$/i.test(c.hex) ? c.hex : "#E8856A"}
+                    onChange={(e) => setCores((prev) => prev.map((x, j) => (j === i ? { ...x, hex: e.target.value.toUpperCase() } : x)))}
+                    className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-gray-300 bg-transparent p-0.5 dark:border-stone-700"
+                    aria-label={`Cor ${i + 1}`}
+                  />
+                  <input
+                    value={c.hex}
+                    onChange={(e) => setCores((prev) => prev.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))}
+                    className={`${inp} w-28 flex-none font-mono text-xs uppercase`}
+                    placeholder="#E8856A"
+                  />
+                  <input
+                    value={c.nome ?? ""}
+                    onChange={(e) => setCores((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
+                    className={inp}
+                    placeholder="Papel (ex.: Primária)"
+                    list="cores-papeis"
+                  />
+                  <button type="button" onClick={() => setCores((prev) => prev.filter((_, j) => j !== i))}
+                    aria-label="Remover cor"
+                    className="shrink-0 text-sm text-gray-400 hover:text-red-500 dark:text-stone-500">✕</button>
+                </div>
+              ))}
+              <datalist id="cores-papeis">
+                <option value="Primária" /><option value="Secundária" /><option value="Fundo" /><option value="Texto" /><option value="Destaque" />
+              </datalist>
+              <button type="button" onClick={() => setCores((prev) => [...prev, { hex: "#", nome: null }])}
+                className="text-xs font-medium text-orange-600 hover:underline dark:text-orange-300">
+                + Adicionar cor
+              </button>
+            </div>
           </div>
+
+          {/* Story 75-230 — fontes por papel tipográfico */}
           <div className="col-span-2">
-            <label className={lbl}>Fontes (referência)</label>
-            <input value={fontes} onChange={(e) => setFontes(e.target.value)} className={inp} placeholder="Ex.: Montserrat (títulos), Inter (texto)" />
+            <label className={lbl}>Fontes</label>
+            <div className="space-y-2">
+              {fontes.map((f, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={f.papel}
+                    onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, papel: e.target.value } : x)))}
+                    className={`${inp} w-40 flex-none`}
+                    placeholder="Papel (ex.: Título)"
+                    list="fontes-papeis"
+                  />
+                  <input
+                    value={f.nome}
+                    onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
+                    className={inp}
+                    placeholder="Nome da fonte (ex.: Montserrat)"
+                  />
+                  <button type="button" onClick={() => setFontes((prev) => prev.filter((_, j) => j !== i))}
+                    aria-label="Remover fonte"
+                    className="shrink-0 text-sm text-gray-400 hover:text-red-500 dark:text-stone-500">✕</button>
+                </div>
+              ))}
+              <datalist id="fontes-papeis">
+                <option value="Título" /><option value="Subtítulo" /><option value="Cabeçalho" /><option value="Corpo" /><option value="Legenda" />
+              </datalist>
+              <button type="button" onClick={() => setFontes((prev) => [...prev, { papel: "", nome: "" }])}
+                className="text-xs font-medium text-orange-600 hover:underline dark:text-orange-300">
+                + Adicionar fonte
+              </button>
+            </div>
           </div>
           <div className="col-span-2">
             <label className={lbl}>Voz da marca</label>
@@ -339,6 +390,12 @@ function BrandModal({
                   <option value="elemento">Elemento gráfico</option>
                 </select>
                 <input
+                  value={assetLabel}
+                  onChange={(e) => setAssetLabel(e.target.value)}
+                  className="w-44 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+                  placeholder="Variação (ex.: azul escuro)"
+                />
+                <input
                   ref={fileInputRef}
                   type="file"
                   multiple
@@ -352,9 +409,17 @@ function BrandModal({
               </div>
               <p className="mt-1 text-[11px] text-gray-400 dark:text-stone-500">PNG, JPG, WEBP ou SVG · máx. 10 MB por arquivo</p>
 
-              {assets.length > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
-                  {assets.map((a) => (
+              {/* Story 75-230 — agrupado por categoria, como o Brand Hub */}
+              {(["logo", "foto", "elemento"] as const).map((grupo) => {
+                const doGrupo = assets.filter((a) => a.tipo === grupo)
+                if (doGrupo.length === 0) return null
+                return (
+                  <div key={grupo} className="mt-3">
+                    <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
+                      {grupo === "logo" ? "Logotipos" : grupo === "foto" ? "Fotos" : "Elementos gráficos"} ({doGrupo.length})
+                    </h5>
+                    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                  {doGrupo.map((a) => (
                     <div key={a.id} className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-stone-800">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={a.file_url} alt={a.label ?? a.file_name} className="h-20 w-full bg-gray-50 object-contain dark:bg-stone-800" />
@@ -379,8 +444,8 @@ function BrandModal({
                           </span>
                         ) : (
                           <>
-                            <span className="truncate text-[10px] text-gray-500 dark:text-stone-400" title={a.file_name}>
-                              {ASSET_TIPO_LABELS[a.tipo]} · {a.file_name}
+                            <span className="truncate text-[10px] text-gray-500 dark:text-stone-400" title={a.label ? `${a.label} — ${a.file_name}` : a.file_name}>
+                              {a.label || a.file_name}
                             </span>
                             <button
                               type="button"
@@ -395,8 +460,10 @@ function BrandModal({
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
+                    </div>
+                  </div>
+                )
+              })}
             </>
           )}
         </div>
@@ -500,7 +567,7 @@ export default function MarcasSection({ properties }: { properties: PropertyOpti
                   {brand.cores.length > 0 && (
                     <div className="mt-1.5 flex gap-1">
                       {brand.cores.slice(0, 6).map((c, i) => (
-                        <span key={`${c}-${i}`} className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: c }} />
+                        <span key={`${c.hex}-${i}`} title={c.nome ?? c.hex} className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: c.hex }} />
                       ))}
                     </div>
                   )}
