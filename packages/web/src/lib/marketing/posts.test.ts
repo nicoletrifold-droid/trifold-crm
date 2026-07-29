@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
 import {
-  MARKETING_POST_ROLES,
   canTransitionMarketingPost,
   isMarketingPostEditable,
   validateMarketingPostInput,
@@ -41,15 +40,6 @@ describe("isMarketingPostEditable", () => {
     expect(isMarketingPostEditable("aprovado")).toBe(true)
     expect(isMarketingPostEditable("rejeitado")).toBe(false)
     expect(isMarketingPostEditable("publicado")).toBe(false)
-  })
-})
-
-describe("MARKETING_POST_ROLES — gate da aba (AC2)", () => {
-  it("só admin e supervisor têm acesso", () => {
-    expect([...MARKETING_POST_ROLES]).toEqual(["admin", "supervisor"])
-    for (const role of ["broker", "gerente-comercial", "sdr", "obras", "imob"]) {
-      expect((MARKETING_POST_ROLES as readonly string[]).includes(role)).toBe(false)
-    }
   })
 })
 

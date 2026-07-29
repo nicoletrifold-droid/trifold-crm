@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
@@ -18,7 +19,8 @@ function CampaignsTabs({ showAgente }: { showAgente: boolean }) {
       >
         Meta Ads
       </Link>
-      {/* Story 75-219 — aba do agente de marketing IA, só admin/supervisor (AC2) */}
+      {/* Story 75-219 — aba do agente de marketing IA. Story 75-229 — gate agora
+          vem da matriz de permissões (sub-módulo "campanhas.agente"). */}
       {showAgente && (
         <Link
           href="/dashboard/campaigns/agente"
@@ -97,7 +99,7 @@ export default async function CampaignsPage() {
         </Link>
       </div>
 
-      <CampaignsTabs showAgente={user.role === "admin" || user.role === "supervisor"} />
+      <CampaignsTabs showAgente={await canAccess(user.id, user.orgId, "campanhas.agente")} />
 
       {(!campaigns || campaigns.length === 0) ? (
         <div className="flex flex-col items-center justify-center rounded-lg bg-white p-12 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">

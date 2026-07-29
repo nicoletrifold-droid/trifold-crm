@@ -1,0 +1,62 @@
+storyId: "75-229"
+title: "Aba Agente (Campanhas) migra do gate hardcoded (admin/supervisor) para a matriz de permissões"
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-07-29
+
+checks:
+  code_review: PASS          # manual (CodeRabbit disabled — sem entrada coderabbit_integration em core-config.yaml, e ambiente Darwin sem WSL): 9 arquivos revisados linha a linha; troca mecânica e localizada dos 4 gates, reuso do mecanismo SUBMODULE_MAP já existente (nenhuma abstração nova)
+  unit_tests: PASS           # vitest 1267/1267 (117/118 arquivos); novo guard.test.ts (3 casos: 403 sem acesso, sucesso com acesso, propagação de erro de auth); posts.test.ts perdeu 1 describe (constante removida) sem perda de cobertura real (a fonte de verdade migrou pro DB)
+  acceptance_criteria: PASS  # AC1-AC6 implementados e traceados (ver trace); AC5/AC6 verificados estaticamente via leitura de getUserPermissions/canAccess (ver verificacoes_adversariais) — execução real depende do deploy (TEST-001)
+  regressions: PASS          # grep confirma zero check hardcoded remanescente (role === "admin" || "supervisor") relacionado ao Agente; type-check limpo (1 erro pré-existente pdf-lib confirmado via git stash); nenhum teste pré-existente quebrado
+  performance: PASS          # canAccess já é padrão consolidado em todo o dashboard; nenhuma query nova além da que já existia (troca de requireRole por canAccess, mesma ordem de grandeza de custo)
+  security: PASS             # gate migrado preserva o modelo restritivo (default-deny): sem linha explícita, canAccess herda do pai — por isso a migration semeia FALSE explícito pra todo role não-admin/supervisor ANTES do código de gate trocar (ordem de deploy documentada nos Dev Notes); 403 correto via NextResponse no guard; nenhuma superfície nova exposta (mesmas 4 rotas, mesmo shape de retorno)
+  documentation: PASS        # migration com header + rollback documentados; Dev Agent Record e File List fiéis ao diff; AUTO-DECISION do T5 (remover MARKETING_POST_ROLES em vez de adaptar) justificada
+
+acceptance_criteria_trace:
+  AC1: "SUBMODULE_MAP.campanhas = { 'campanhas.agente': 'Agente' } em permissions-modules.ts. permissions-matrix.tsx já itera SUBMODULE_MAP[module] genericamente (linha 658) — confirmado que nenhuma mudança de UI foi necessária nem feita."
+  AC2: "199_seed_campanhas_agente_submodule.sql: INSERT ... SELECT r.org_id, r.id, 'campanhas.agente', (r.name IN ('admin','supervisor')) FROM roles r ON CONFLICT (role_id, module) DO NOTHING — cobre toda org, não só uma. Colunas conferidas contra a migration 047 (org_id, id, name em roles; role_id, module, can_access com UNIQUE(role_id, module) em role_permissions) — batem exatamente."
+  AC3: "3 pontos trocados: campaigns/page.tsx:102 (showAgente), campaigns/agente/page.tsx:11 (redirect), campaigns/meta/page.tsx:11 (showAgenteTab) — todos usando canAccess(user.id, user.orgId, 'campanhas.agente'). Grep confirma zero check hardcoded remanescente."
+  AC4: "marketingGuard() troca requireRole(MARKETING_POST_ROLES) por canAccess(auth.appUser.id, auth.appUser.org_id, 'campanhas.agente'); 403 explícito via NextResponse.json quando false. As 4 rotas de marketing-posts continuam consumindo marketingGuard() sem mudança de assinatura (confirmado: nenhum route.ts alterado)."
+  AC5: "Verificado via leitura de getUserPermissions (permissions.ts:233-292): para role != admin, quando role_permissions tem >0 linhas (sempre verdadeiro na prática — createRole semeia 26 módulos), retorna {...perms} incluindo a chave dotted da migration; canAccess só cai no fallback de herança do pai quando NÃO há linha explícita — a migration garante que sempre há. Regressão só ocorreria se o código trocasse o gate ANTES da migration rodar (ordem documentada nos Dev Notes)."
+  AC6: "Cenário do relato original (perfil novo → toggle Agente → usuário vê a aba) segue diretamente de AC1+AC3+AC4: com a migration aplicada e o toggle ligado (grava linha dotted true via updatePermission, mesmo upsert genérico já usado por qualquer módulo), canAccess retorna true e os 3 gates + guard liberam. Não executado em runtime nesta sessão (TEST-001)."
+
+verificacoes_adversariais:
+  - "getUserPermissions/fullMatrix (permissions.ts:48-52, 268-271): para role='admin', finalPerms = fullMatrix() SEMPRE, ignorando o DB — fullMatrix() só itera ALL_MODULES (top-level, 26 módulos), não inclui chaves dotted. Ou seja, admin nunca teria 'campanhas.agente' como chave explícita, mas canAccess cai no fallback de herança do módulo pai 'campanhas' (true em fullMatrix) → admin mantém acesso. Comportamento correto por efeito colateral, não por design explícito para sub-módulos — é PRÉ-EXISTENTE (mesmo mecanismo já vale pra sistema.notificacoes-financeiras) e não é regressão desta story, mas registrado como ADM-001 (ver issues) porque significa que revogar 'campanhas.agente' do role admin pela matriz não teria efeito prático."
+  - "Ordem de deploy: código só é seguro DEPOIS da migration 199 rodar. Se o deploy publicar o código dos gates antes de aplicar a migration, toda role com campanhas=true (maioria dos roles operacionais) herdaria acesso ao Agente por alguns minutos/horas — janela de exposição real, não teórica. Documentado nos Dev Notes e no deploy_checklist abaixo; @devops precisa respeitar a ordem."
+  - "Guard: caminho de erro de requireAuth (401/403 de conta desativada) não chama canAccess (early return no `if (auth.error)`) — confirmado no código e coberto pelo 3º teste de guard.test.ts ('propaga o erro de requireAuth sem chamar canAccess')."
+  - "Migration: ON CONFLICT (role_id, module) DO NOTHING é defensivo — nenhuma linha 'campanhas.agente' deveria pré-existir; reaplicação da migration é idempotente (não sobrescreve toggles manuais feitos entre uma aplicação e outra, o que é o comportamento correto)."
+  - "Grep no diff inteiro: zero ocorrência remanescente de 'role === \"admin\"' combinada com 'supervisor' nos arquivos de campanhas/marketing — migração completa, sem gate esquecido (ex.: campaigns-meta-client.tsx não tem check próprio, só recebe a prop já calculada pelo Server Component)."
+  - "Testes: type-check, eslint (8 arquivos tocados) e suíte completa (1267/1267) rodados de forma independente pelo QA (não apenas confiando no relato do @dev) — mesmos resultados: 1 falha/1 erro pré-existente de pdf-lib, confirmado idêntico via git stash com e sem o diff da story."
+
+issues:
+  - id: TEST-001
+    severity: medium
+    finding: "Migration 199 não aplicada em nenhum banco (dev ou prod) — nenhum caminho desta story foi exercitado em runtime real. O cenário exato relatado pelo usuário (criar perfil → marcar toggle Agente → logar como esse perfil → ver a aba) não foi verificado manualmente."
+    suggested_action: "Pós-deploy (mesmo dia): aplicar 199 (conferir numeração contra o schema remoto de prod antes — lição 75-188), criar/usar um perfil de teste sem 'campanhas.agente' explícito, confirmar aba ausente; marcar o toggle na matriz; confirmar aba aparece e POST /api/marketing-posts não retorna 403; desmarcar e confirmar que volta a bloquear (403 + redirect)."
+  - id: ADM-001
+    severity: low
+    finding: "getUserPermissions atribui fullMatrix() incondicionalmente para role='admin', que não contém chaves dotted (ex.: 'campanhas.agente', 'sistema.notificacoes-financeiras'). Revogar um sub-módulo especificamente do role admin pela matriz não tem efeito — o admin sempre herda do módulo pai (sempre true em fullMatrix). Comportamento pré-existente do sistema de permissões, não introduzido por esta story, e fora do escopo do AC (que fala em CONCEDER acesso a outros perfis, não em restringir o admin)."
+    suggested_action: "Nenhuma ação nesta story. Registrar como observação para o eventual 'épico de capabilities' — se algum dia for desejável restringir sub-módulos específicos até para admin, fullMatrix() precisaria incluir as chaves dotted conhecidas."
+  - id: MNT-001
+    severity: low
+    finding: "campaigns/page.tsx:102 inlina `await canAccess(...)` diretamente na prop JSX (`showAgente={await canAccess(...)}`), enquanto os outros 2 arquivos tocados (agente/page.tsx, meta/page.tsx) extraem para uma const nomeada antes do return. Sintaticamente válido (confirmado por tsc/build/lint limpos) — inconsistência de estilo entre os 3 pontos, não bug."
+    suggested_action: "Opcional: extrair para `const showAgente = await canAccess(...)` antes do return, por consistência com os outros 2 arquivos. Não bloqueia o gate."
+  - id: DEPLOY-001
+    severity: medium
+    finding: "A migration 199 PRECISA rodar antes do código dos gates entrar em produção (ver verificacoes_adversariais) — se a ordem for invertida, há uma janela real de acesso indevido ao Agente para roles operacionais com 'campanhas' já liberado."
+    suggested_action: "@devops: aplicar 199 primeiro, confirmar as linhas seedadas (SELECT count(*) FROM role_permissions WHERE module='campanhas.agente' deve bater com o total de roles da org), só depois fazer deploy do código."
+
+observations:
+  - "Reuso exemplar do mecanismo SUBMODULE_MAP (Story 35-7) em vez de criar módulo top-level novo — exatamente o que a IDS Decision Hierarchy (REUSE > ADAPT > CREATE) pede, e evita repetir a superfície que a própria 75-219 rejeitou (módulo novo apareceria em createRole() para todo perfil)."
+  - "T5 (remoção de MARKETING_POST_ROLES): decisão correta — a constante não tinha mais consumidor real após a migração do gate (grep confirmado pelo QA de forma independente); manter uma constante desconectada da fonte de verdade real seria pior que removê-la."
+  - "CodeRabbit disabled — revisão 100% manual conforme story e core-config.yaml (sem seção coderabbit_integration); ambiente de execução é Darwin, sem WSL disponível de qualquer forma."
+
+deploy_checklist:
+  - "1. @devops: conferir numeração 199 contra a pasta local (última hoje: 196) e contra o schema remoto de prod ANTES de aplicar (lição 75-188)."
+  - "2. Aplicar 199_seed_campanhas_agente_submodule.sql PRIMEIRO — antes de publicar o código desta story (DEPLOY-001)."
+  - "3. Confirmar: SELECT count(*) FROM role_permissions WHERE module = 'campanhas.agente' — deve ser igual ao total de linhas em roles (uma por role)."
+  - "4. Só então fazer deploy do código (3 gates + guard)."
+  - "5. Smoke TEST-001: criar perfil de teste, confirmar aba ausente por padrão, marcar toggle 'Agente' sob Campanhas na matriz, confirmar aba aparece + rota não retorna 403; desmarcar e confirmar bloqueio novamente."
+  - "6. Confirmar que admin e supervisor não perceberam nenhuma mudança (aba e rotas continuam funcionando exatamente como antes)."
