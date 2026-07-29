@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import MarcasSection from "./marcas-section"
 
 // Story 75-219 — aba "Agente": sugestões do agente de marketing IA + fila de
 // aprovação + publicados. Nada é publicado automaticamente — toda transição é
@@ -466,6 +467,9 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
           </button>
         </div>
       )}
+
+      {/* Story 75-229 — Kit de Marcas (base do futuro "Gerar arte") */}
+      <MarcasSection properties={properties} />
 
       {loading ? (
         <div className="flex items-center justify-center rounded-lg bg-white p-12 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
