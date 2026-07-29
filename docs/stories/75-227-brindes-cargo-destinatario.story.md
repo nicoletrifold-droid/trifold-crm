@@ -1,6 +1,6 @@
 # Story 75-227 — Brindes: campo "Cargo" no destinatário
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Melhoria (ticket de Suporte)
 **Epic:** Controle de Brindes (29)
 **Complexidade:** S
@@ -61,3 +61,9 @@ vertical na célula nome, A4 ok; suíte 1260/1260). CONCERNS eram só de process
 (commit pendente + story hygiene) — resolvidos neste commit.
 Débito pré-existente anotado: print-modal interpola campos sem escape HTML
 (padrão antigo do módulo, não piorado pela story) — candidato a escapeHtml futuro.
+
+### Deploy (@devops, 29/07)
+- Mig 196 aplicada em PROD e DEV via Supabase Management API (PAT em
+  ~/.config/supabase/pat — novo caminho padrão, 100% terminal); coluna verificada
+  nos dois bancos.
+- PR #298 squash-merged; deploy Vercel success.
