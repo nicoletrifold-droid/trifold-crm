@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
   const [insightsRes, insightsYesterdayRes, alertsTodayRes, alertsInitRes] = await Promise.all([
     supabase
       .from("meta_insights_daily")
-      .select("entity_id, spend, impressions, clicks, leads")
+      .select("entity_id, spend, impressions, clicks, leads, messaging_conversations_started")
       .eq("org_id", appUser.org_id)
       .eq("level", "campaign")
       .gte("date", from)
@@ -152,7 +152,8 @@ export async function GET(request: NextRequest) {
     agg.spend += Number(insight.spend ?? 0)
     agg.impressions += Number(insight.impressions ?? 0)
     agg.clicks += Number(insight.clicks ?? 0)
-    agg.leads_meta += Number(insight.leads ?? 0)
+    // leads_meta = total de resultados da Meta = leads de formulário + conversas por mensagem iniciadas
+    agg.leads_meta += Number(insight.leads ?? 0) + Number(insight.messaging_conversations_started ?? 0)
   }
 
   // 5. Índices de leads por campanha (dedup por id)

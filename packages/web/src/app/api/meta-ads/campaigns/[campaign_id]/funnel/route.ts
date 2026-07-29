@@ -62,14 +62,18 @@ export async function GET(
   const { from, to } = getPeriodDates(period)
   const { data: insights } = await supabase
     .from("meta_insights_daily")
-    .select("leads, spend")
+    .select("leads, spend, messaging_conversations_started")
     .eq("org_id", appUser.org_id)
     .eq("level", "campaign")
     .eq("entity_id", metaCampaignId)
     .gte("date", from)
     .lte("date", to)
 
-  const leads_meta = (insights ?? []).reduce((sum, i) => sum + (i.leads ?? 0), 0)
+  // leads_meta = total de resultados da Meta = leads de formulário + conversas por mensagem iniciadas
+  const leads_meta = (insights ?? []).reduce(
+    (sum, i) => sum + Number(i.leads ?? 0) + Number(i.messaging_conversations_started ?? 0),
+    0,
+  )
   const totalSpend = (insights ?? []).reduce((sum, i) => sum + Number(i.spend ?? 0), 0)
 
   // 3. Leads from CRM — dual join (utm_campaign + metadata.campaign_id), dedup by id
