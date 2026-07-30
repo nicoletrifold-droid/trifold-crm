@@ -1,6 +1,6 @@
 # Story 75-237 — Calor do Lead: o corretor manda (IA não desfaz) + selinho na lista
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug + Feature (pequena)
 **Epic:** Leads / gestão comercial
 **Complexidade:** M
@@ -89,5 +89,6 @@ perdida. Mesmo formato do guard da 75-183.
 ## Validação
 - Suíte 1285/1285 (5 testes novos do guard) · `tsc --noEmit` limpo nos dois
   pacotes · eslint sem novos avisos · `next build` OK.
+- ✅ LIVE: PR #312 squash-merged (`436676c1`), deploy de produção concluído.
 - Mig 201 aplicada em prod (dsopqkqjkmhytudaaolv) e dev (xnxvygyfyyyzwhiuoehz);
   distribuição da flag conferida nos dois.
