@@ -9,8 +9,28 @@ export const MARKETING_BRAND_TIPOS = ["institucional", "empreendimento"] as cons
 export type MarketingBrandTipo = (typeof MARKETING_BRAND_TIPOS)[number]
 
 // Story 75-234 — 'fonte' entrou junto do upload de .ttf/.otf (mig 199).
-export const MARKETING_BRAND_ASSET_TIPOS = ["logo", "foto", "elemento", "fonte"] as const
+// Story 75-235 — 'icone' virou categoria própria (mig 200): cada marca tem o seu.
+export const MARKETING_BRAND_ASSET_TIPOS = ["logo", "icone", "foto", "elemento", "fonte"] as const
 export type MarketingBrandAssetTipo = (typeof MARKETING_BRAND_ASSET_TIPOS)[number]
+
+/**
+ * Tipos que são IMAGEM — únicos no seletor de upload e na grade de arquivos
+ * ('fonte' aparece na própria linha de fonte). QA 75-235: derivar daqui em vez
+ * de repetir a união na UI; tipo novo aparece na tela sem edição manual.
+ */
+export type BrandAssetImageTipo = Exclude<MarketingBrandAssetTipo, "fonte">
+export const BRAND_ASSET_IMAGE_TIPOS = MARKETING_BRAND_ASSET_TIPOS.filter(
+  (t): t is BrandAssetImageTipo => t !== "fonte"
+)
+
+/** Rótulos em PT de cada tipo (singular = seletor, plural = título do grupo). */
+export const BRAND_ASSET_LABELS: Record<MarketingBrandAssetTipo, { singular: string; plural: string }> = {
+  logo: { singular: "Logo", plural: "Logotipos" },
+  icone: { singular: "Ícone", plural: "Ícones" },
+  foto: { singular: "Foto", plural: "Fotos" },
+  elemento: { singular: "Elemento gráfico", plural: "Elementos gráficos" },
+  fonte: { singular: "Fonte", plural: "Fontes" },
+}
 
 // jfif/jpe entram porque o Windows/Edge salva JPEG assim — antes da barreira de
 // extensão eles passavam pelo mime do bucket (QA 75-234, item 5).
@@ -19,6 +39,7 @@ const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "jfif", "jpe", "webp", "svg"]
 /** Extensões aceitas por tipo de arquivo (validadas na rota /assets/sign). */
 export const BRAND_ASSET_EXTENSIONS: Record<MarketingBrandAssetTipo, string[]> = {
   logo: IMAGE_EXTENSIONS,
+  icone: IMAGE_EXTENSIONS,
   foto: IMAGE_EXTENSIONS,
   elemento: IMAGE_EXTENSIONS,
   fonte: ["ttf", "otf", "woff", "woff2"],

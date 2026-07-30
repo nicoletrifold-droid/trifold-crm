@@ -111,8 +111,9 @@ describe("validateBrandConsistency", () => {
 })
 
 describe("isValidBrandAssetTipo", () => {
-  it("whitelist logo/foto/elemento/fonte", () => {
+  it("whitelist logo/icone/foto/elemento/fonte", () => {
     expect(isValidBrandAssetTipo("logo")).toBe(true)
+    expect(isValidBrandAssetTipo("icone")).toBe(true)
     expect(isValidBrandAssetTipo("foto")).toBe(true)
     expect(isValidBrandAssetTipo("elemento")).toBe(true)
     expect(isValidBrandAssetTipo("fonte")).toBe(true)
@@ -129,6 +130,12 @@ describe("isAllowedBrandAssetFile", () => {
     expect(isAllowedBrandAssetFile("fonte", "Inter.woff2")).toBe(true)
     expect(isAllowedBrandAssetFile("fonte", "arte.png")).toBe(false)
     expect(isAllowedBrandAssetFile("fonte", "fonte")).toBe(false)
+  })
+
+  it("ícone aceita imagem, não aceita fonte (75-235)", () => {
+    expect(isAllowedBrandAssetFile("icone", "simbolo.svg")).toBe(true)
+    expect(isAllowedBrandAssetFile("icone", "simbolo.png")).toBe(true)
+    expect(isAllowedBrandAssetFile("icone", "Montserrat.ttf")).toBe(false)
   })
 
   it("jfif/jpe seguem aceitos como imagem (QA 75-234)", () => {
