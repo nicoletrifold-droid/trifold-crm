@@ -1,6 +1,6 @@
 # Story 75-238 — Briefing Mestre no Kit de Marcas + Lídia lê o Kit no Gerar sugestões
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** M
@@ -92,5 +92,6 @@ NULL` pode deixar marca de empreendimento sem property e travar o PATCH
 ## Validação
 - Suíte 1291/1291 (6 testes novos) · tsc limpo nos 2 pacotes · build OK
   (rodados antes e depois das correções do QA).
+- ✅ LIVE: PR #314 squash-merged (`f8dd2a04`), deploy de produção concluído.
 - Mig 202 aplicada em prod e dev; conteúdo carregado em prod (Trifold 3103
   chars de briefing, Vind 1765, Yarden 1660).
