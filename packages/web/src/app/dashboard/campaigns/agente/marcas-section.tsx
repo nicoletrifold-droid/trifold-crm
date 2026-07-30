@@ -5,7 +5,7 @@ import { createClient } from "@web/lib/supabase/client"
 import {
   BRAND_ASSET_IMAGE_TIPOS,
   BRAND_ASSET_LABELS,
-  mimeForBrandAssetFile,
+  brandAssetUploadBody,
 } from "@web/lib/marketing/brands"
 import type { BrandAssetImageTipo, BrandCor, BrandFonte, MarketingBrandAssetTipo } from "@web/lib/marketing/brands"
 
@@ -276,12 +276,14 @@ function BrandModal({
     if (!signRes.ok || !signData.token || !signData.storagePath) {
       throw new Error(signData.error ?? `Erro ao preparar envio de "${file.name}"`)
     }
+    // Mime pela EXTENSÃO (o navegador erra o de fonte) — assim o bucket não
+    // precisa aceitar octet-stream (QA 75-234, item 6). O REEMBALO é o que faz
+    // valer: com Blob/File o SDK ignora `contentType` (ver brandAssetUploadBody).
+    const upload = brandAssetUploadBody(file)
     const { error: upErr } = await supabase.storage
       .from("marketing-brands")
-      .uploadToSignedUrl(signData.storagePath, signData.token, file, {
-        // Mime pela EXTENSÃO (o navegador erra o de fonte) — assim o bucket não
-        // precisa aceitar octet-stream (QA 75-234, item 6).
-        contentType: mimeForBrandAssetFile(file.name) ?? file.type ?? "application/octet-stream",
+      .uploadToSignedUrl(signData.storagePath, signData.token, upload, {
+        contentType: upload.type || "application/octet-stream",
       })
     if (upErr) throw new Error(`Falha no envio de "${file.name}": ${upErr.message}`)
     const regRes = await fetch(`/api/marketing-brands/${brandId}/assets`, {

@@ -248,8 +248,8 @@ export function fileExtension(fileName: string): string {
 }
 
 /**
- * Story 75-234 — o bucket passou a aceitar application/octet-stream (fontes
- * chegam sem mime confiável), então a extensão vira a barreira de verdade:
+ * Story 75-234 — o mime que o navegador reporta não é confiável (fonte chega
+ * como octet-stream ou vazio), então a extensão é a barreira de verdade:
  * imagem só aceita extensão de imagem; fonte só .ttf/.otf/.woff/.woff2.
  */
 export function isAllowedBrandAssetFile(
@@ -262,4 +262,22 @@ export function isAllowedBrandAssetFile(
 /** Content-Type a mandar ao Storage — derivado da extensão, não do navegador. */
 export function mimeForBrandAssetFile(fileName: string): string | null {
   return BRAND_ASSET_MIME[fileExtension(fileName)] ?? null
+}
+
+/**
+ * 🔥 GOTCHA (bug do Kit de Marcas, 30/07): `uploadToSignedUrl` IGNORA
+ * `options.contentType` quando o corpo é Blob/File — nesse caminho o SDK monta
+ * um FormData e o Storage lê o mime da PARTE do form, que vem do `File.type` do
+ * navegador. Chrome reporta .ttf como "application/octet-stream" → o bucket
+ * (mig 199, sem octet-stream de propósito) recusava com
+ * "mime type application/octet-stream is not supported".
+ *
+ * O único jeito de o mime canônico valer é REEMBALAR o arquivo com o `type`
+ * certo — é isso que esta função faz (mantém nome e bytes; devolve o próprio
+ * arquivo quando o navegador já acertou ou quando a extensão é desconhecida).
+ */
+export function brandAssetUploadBody(file: File): File {
+  const mime = mimeForBrandAssetFile(file.name)
+  if (!mime || file.type === mime) return file
+  return new File([file], file.name, { type: mime })
 }

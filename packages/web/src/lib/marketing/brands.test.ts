@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   BRAND_ASSET_EXTENSIONS,
   MARKETING_BRAND_ASSET_TIPOS,
+  brandAssetUploadBody,
   fonteAssetIds,
   isAllowedBrandAssetFile,
   mimeForBrandAssetFile,
@@ -159,6 +160,35 @@ describe("mimeForBrandAssetFile", () => {
         expect(mimeForBrandAssetFile(`arquivo.${ext}`)).toBeTruthy()
       }
     }
+  })
+})
+
+// Regressão do bug de 30/07: o Chrome manda .ttf como application/octet-stream e
+// o SDK ignora `contentType` quando o corpo é File → o bucket recusava. O corpo
+// enviado ao Storage precisa CARREGAR o mime canônico no próprio arquivo.
+describe("brandAssetUploadBody", () => {
+  it("fonte com mime do navegador errado é reembalada com o mime canônico", () => {
+    const f = new File([new Uint8Array([1, 2, 3])], "Montserrat-Italic-VariableFont_wght.ttf", {
+      type: "application/octet-stream",
+    })
+    const out = brandAssetUploadBody(f)
+    expect(out.type).toBe("font/ttf")
+    expect(out.name).toBe(f.name)
+    expect(out.size).toBe(f.size)
+  })
+
+  it("fonte sem mime nenhum também sai com o canônico", () => {
+    expect(brandAssetUploadBody(new File(["x"], "Inter.otf", { type: "" })).type).toBe("font/otf")
+  })
+
+  it("navegador já certo → devolve o MESMO arquivo (sem cópia)", () => {
+    const f = new File(["x"], "logo.png", { type: "image/png" })
+    expect(brandAssetUploadBody(f)).toBe(f)
+  })
+
+  it("extensão desconhecida → devolve o mesmo arquivo (a rota /sign recusa antes)", () => {
+    const f = new File(["x"], "planilha.xlsx", { type: "application/octet-stream" })
+    expect(brandAssetUploadBody(f)).toBe(f)
   })
 })
 
