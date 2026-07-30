@@ -1,6 +1,6 @@
 # Story 75-234 — Kit de Marcas: conserto do layout de Cores/Fontes + upload do arquivo da fonte
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug + Feature
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** M
@@ -109,5 +109,7 @@ Storage (a prévia `@font-face` funciona), zero regressão no fluxo de imagens
 - Migração 199 aplicada em **prod** (dsopqkqjkmhytudaaolv) e **dev**
   (xnxvygyfyyyzwhiuoehz) via Management API; CHECK e `allowed_mime_types` (13
   tipos, sem octet-stream) conferidos nos dois.
+- ✅ LIVE: PR #309 squash-merged (`4507d279`), deploy de produção concluído;
+  smoke anônimo OK (`/dashboard/campaigns/agente` 307, `/api/marketing-brands` 401).
 - Pendente: teste real da Laura (subir a Montserrat na marca Vind Residence e
   preencher o papel das 3 cores, que ficaram `null` por causa do bug).
