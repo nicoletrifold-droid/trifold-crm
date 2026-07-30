@@ -118,6 +118,18 @@ describe("generateMarketingPostFromRequest — prompt", () => {
     expect(prompt).toContain("ESCOPO POR MARCA")
   })
 
+  it("direção visual do humano entra no prompt com instrução de incorporar (75-241)", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingPostFromRequest(client, { ...input, direcaoArte: "pôr do sol atrás do prédio" })
+    const prompt = getPrompt()
+    expect(prompt).toContain("DIRECAO VISUAL DO HUMANO")
+    expect(prompt).toContain("pôr do sol atrás do prédio")
+    // sem direção (ou vazia), a seção não aparece
+    const { client: c2, getPrompt: g2 } = spyClient()
+    await generateMarketingPostFromRequest(c2, { ...input, direcaoArte: "   " })
+    expect(g2()).not.toContain("DIRECAO VISUAL DO HUMANO")
+  })
+
   it("sem Kit e sem arquivos o prompt avisa em vez de inventar", async () => {
     const { client, getPrompt } = spyClient()
     await generateMarketingPostFromRequest(client, { ...input, brands: [], assets: [] })
