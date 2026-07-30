@@ -109,15 +109,39 @@ export async function PATCH(
   // (STAGE_IDS.novo), independente do estágio anterior. Só aplica se o corretor
   // REALMENTE mudou e o stage não foi definido explicitamente nesta requisição
   // (ex.: arrastar no kanban envia stage_id e não deve ser sobrescrito).
-  if (fields.assigned_broker_id !== undefined && body.stage_id === undefined) {
+  // Estado atual do lead — precisa dele para DUAS decisões: transferência de
+  // corretor (abaixo) e carimbo do calor (Story 75-237). Uma leitura só.
+  const precisaEstadoAtual =
+    (fields.assigned_broker_id !== undefined && body.stage_id === undefined) ||
+    fields.interest_level !== undefined
+  type LeadEstadoAtual = { assigned_broker_id: string | null; interest_level: string | null }
+  let atual: LeadEstadoAtual | null = null
+  if (precisaEstadoAtual) {
     const { data: cur } = await supabase
       .from("leads")
-      .select("assigned_broker_id")
+      .select("assigned_broker_id, interest_level")
       .eq("id", id)
       .eq("org_id", appUser.org_id)
       .single()
-    if (cur && cur.assigned_broker_id !== fields.assigned_broker_id) {
+    atual = (cur as LeadEstadoAtual | null) ?? null
+  }
+
+  if (fields.assigned_broker_id !== undefined && body.stage_id === undefined) {
+    if (atual && atual.assigned_broker_id !== fields.assigned_broker_id) {
       fields.stage_id = STAGE_IDS.novo
+    }
+  }
+
+  // Story 75-237 — quem passa por AQUI é humano (corretor/gestor pelas telas; a
+  // Nicole e o cron escrevem direto no banco). Carimba a escolha como manual e a
+  // IA para de recalcular. Limpar p/ "Não definido" devolve o controle à IA.
+  // 🔥 QA: só quando o valor MUDA. Os forms reenviam o calor atual em TODO save
+  // (mexendo só no telefone, por exemplo) — carimbar aí congelaria a IA num
+  // valor que ela mesma calculou, e o lead nunca mais esquentaria sozinho.
+  if (fields.interest_level !== undefined && atual) {
+    const novo = (fields.interest_level as string | null) ?? null
+    if (novo !== (atual.interest_level ?? null)) {
+      fields.interest_level_manual = novo !== null
     }
   }
 

@@ -167,6 +167,8 @@ export async function POST(request: Request) {
       preferred_view: body.preferred_view?.trim() || null,
       preferred_garage_count: body.preferred_garage_count ?? null,
       interest_level: body.interest_level || null,
+      // Story 75-237 — cadastro manual: se veio calor, é escolha humana.
+      interest_level_manual: Boolean(body.interest_level),
       source: body.source || "other",
       utm_campaign: body.utm_campaign?.trim() || null,
       observacao: body.observacao?.trim() || null,

@@ -27,6 +27,7 @@ import {
   generateHandoffSummary,
   updateLeadMemory,
   guardStageForAssignedLead,
+  stripManualInterestLevel,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, VISIT_DURATION_MIN } from "../flows/visit-slot"
@@ -828,7 +829,7 @@ export async function processMessageWithMetadata(
     // Fetch current lead state for conditional logic
     const { data: currentLead } = await supabase
       .from("leads")
-      .select("stage_id, property_interest_id, assigned_broker_id")
+      .select("stage_id, property_interest_id, assigned_broker_id, interest_level_manual")
       .eq("id", leadId)
       .single()
 
@@ -892,6 +893,8 @@ export async function processMessageWithMetadata(
     leadPatch.qualification_score = updatedScore
     leadPatch.qualification_status = updatedScore >= 70 ? "qualified" : updatedScore > 0 ? "in_progress" : "not_started"
     leadPatch.interest_level = updatedScore >= 70 ? "hot" : updatedScore >= 40 ? "warm" : "cold"
+    // Story 75-237 — temperatura escolhida por humano manda: a IA não desfaz.
+    stripManualInterestLevel(leadPatch, currentLead as Record<string, unknown> | null)
 
     // Kanban stage — a Nicole (IA) NUNCA move o lead de etapa (Story 75-56,
     // generaliza a 65-1), com UMA exceção (Story 75-196, decisão do Marcos

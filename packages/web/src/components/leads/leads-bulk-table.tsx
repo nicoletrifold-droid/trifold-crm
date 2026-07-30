@@ -7,7 +7,16 @@ import { useRouter } from "next/navigation"
 import { MessageCircle } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
+import { CALOR_LABELS, type CalorValue } from "@web/lib/leads/calor"
 import { ReativarLeadButton } from "@web/components/leads/reativar-lead-button"
+
+// Story 75-237 — cores do selinho de Calor (mesma família dos outros badges da
+// tabela; "Não definido" não vira badge, pra não poluir a coluna).
+const CALOR_BADGE: Record<string, string> = {
+  hot: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+  warm: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  cold: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+}
 
 const LOST_REASONS = [
   "Cliente Não Atende/Responde Mais",
@@ -28,6 +37,8 @@ type Lead = {
   name: string | null
   phone: string
   qualification_score: number | null
+  /** Story 75-237 — Calor do Lead (percepção do corretor): cold|warm|hot|null. */
+  interest_level?: string | null
   updated_at: string | null
   source: string | null
   /** Story 75-160 — comprovado por conversa/canal de WhatsApp (vence o formato do número). */
@@ -123,6 +134,7 @@ export function LeadsBulkTable({
             <th className="px-6 py-3">Corretor</th>
             {/* Story 75-206: Último contato antes do Score (mais relevante à análise) */}
             <th className="px-6 py-3">Último contato</th>
+            <th className="px-6 py-3">Calor</th>
             <th className="px-6 py-3">Score</th>
             {view === "perdidos" && canReactivate && <th className="px-6 py-3"></th>}
           </tr>
@@ -225,6 +237,17 @@ export function LeadsBulkTable({
                     : "-"}
                 </td>
                 <td className="px-6 py-4">
+                  {/* Story 75-237 — o filtro de Calor precisa ser legível na lista:
+                      sem isso dá pra filtrar "Quente" mas não ver a temperatura. */}
+                  {lead.interest_level && CALOR_BADGE[lead.interest_level] ? (
+                    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${CALOR_BADGE[lead.interest_level]}`}>
+                      {CALOR_LABELS[lead.interest_level as CalorValue] ?? lead.interest_level}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
+                  )}
+                </td>
+                <td className="px-6 py-4">
                   {lead.qualification_score != null ? (
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -257,7 +280,7 @@ export function LeadsBulkTable({
           {leads.length === 0 && (
             <tr>
               <td
-                colSpan={view === "perdidos" && canReactivate ? 10 : 9}
+                colSpan={view === "perdidos" && canReactivate ? 11 : 10}
                 className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
               >
                 Nenhum lead encontrado.

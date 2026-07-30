@@ -206,3 +206,22 @@ export function mapExtractedDataToLeadFields(
 
   return patch
 }
+
+/**
+ * Story 75-237 — "o corretor é superior ao sistema" (Marcos, 30/07).
+ * A IA PODE definir a temperatura (o lead entra frio pelo sistema), mas quando um
+ * humano muda, a escolha dele manda: `leads.interest_level_manual = true` impede
+ * qualquer recálculo automático. Guard no mesmo espírito do
+ * stripAlreadyFilledPerfil (75-183) — o score/summary seguem dinâmicos, só o
+ * calor é protegido. Se o humano limpar p/ "Não definido", a flag volta a false
+ * na rota e a IA reassume.
+ */
+export function stripManualInterestLevel(
+  patch: Record<string, unknown>,
+  lead: Record<string, unknown> | null | undefined
+): void {
+  // FAIL-SAFE (QA 75-237): lead que não pôde ser lido (erro/timeout no SELECT)
+  // conta como manual. Sobrescrever o corretor por causa de uma falha
+  // transitória seria justamente o bug que esta story conserta.
+  if (!lead || lead.interest_level_manual === true) delete patch.interest_level
+}

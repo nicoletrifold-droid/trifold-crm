@@ -367,6 +367,8 @@ export default async function LeadsPage({
                 name: lead.name ?? null,
                 phone: lead.phone,
                 qualification_score: lead.qualification_score ?? null,
+                // Story 75-237 — calor na lista (o campo já vinha no SELECT).
+                interest_level: (lead as unknown as Record<string, unknown>).interest_level as string | null,
                 updated_at: lead.updated_at ?? null,
                 source: (lead as unknown as Record<string, unknown>).source as string | null,
                 // Story 75-160 — WhatsApp comprovado por conversa OU canal de aquisição.
