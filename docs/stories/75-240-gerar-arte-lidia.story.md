@@ -1,6 +1,6 @@
 # Story 75-240 — Gerar ARTE no Pedir à Lídia (motor de imagem + Kit de Marcas)
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** M
@@ -91,6 +91,10 @@ do Sonnet retrocompatível; modal Editar preserva arte_url.
   tsc limpo nos 2 pacotes · build OK.
 - Motor validado end-to-end fora do app (arte real do Vind com logo do Kit).
 - Mig 204 aplicada em prod e dev.
+- ✅ LIVE: PR #316 squash-merged, deploy de produção concluído.
+- ⚠️ VERTEX_API_KEY no Vercel PENDENTE (vercel login) — até lá posts nascem sem
+  arte (fail-open); ligar = scripts/vercel-env-set.sh VERTEX_API_KEY <chave> +
+  redeploy.
 
 ## Fora de escopo (registrado)
 - Artes dos demais cards do carrossel (gera só a capa; equipe segue o estilo).
