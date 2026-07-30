@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
+import { parseCalor } from "@web/lib/leads/calor"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
@@ -28,38 +29,45 @@ const SOURCE_FILTER_KEYS = [
 
 const PAGE_SIZE = 50
 
-function buildPageHref(
-  targetPage: number,
-  search?: string,
-  stageId?: string,
-  view?: string,
-  propertyId?: string,
-  days?: string,
-  dateFrom?: string,
-  dateTo?: string,
-  criados?: string,
-  brokerId?: string,
+type LeadsSearchParams = {
+  search?: string
+  stage_id?: string
+  property_id?: string
+  days?: string
+  page?: string
+  view?: string
+  broker_id?: string
   source?: string
-): string {
+  calor?: string
+  criados?: string
+  date_from?: string
+  date_to?: string
+}
+
+// Paginação preserva TODOS os filtros. Recebe o objeto de params (não uma fila de
+// posicionais): filtro novo entra aqui sem risco de trocar a ordem dos argumentos.
+function buildPageHref(targetPage: number, params: LeadsSearchParams, view: string): string {
   const p = new URLSearchParams()
   p.set("page", String(targetPage))
-  if (search) p.set("search", search)
-  if (stageId) p.set("stage_id", stageId)
-  if (view) p.set("view", view)
-  if (propertyId) p.set("property_id", propertyId)
-  if (days) p.set("days", days)
-  if (dateFrom) p.set("date_from", dateFrom)
-  if (dateTo) p.set("date_to", dateTo)
-  if (criados) p.set("criados", criados)
-  if (brokerId) p.set("broker_id", brokerId)
-  if (source) p.set("source", source)
+  if (params.search) p.set("search", params.search)
+  if (params.stage_id) p.set("stage_id", params.stage_id)
+  if (view === "perdidos") p.set("view", "perdidos")
+  if (params.property_id) p.set("property_id", params.property_id)
+  if (params.days) p.set("days", params.days)
+  if (params.date_from) p.set("date_from", params.date_from)
+  if (params.date_to) p.set("date_to", params.date_to)
+  if (params.criados === "hoje") p.set("criados", "hoje")
+  if (params.broker_id) p.set("broker_id", params.broker_id)
+  if (params.source) p.set("source", params.source)
+  const calorParam = parseCalor(params.calor)
+  if (calorParam) p.set("calor", calorParam)
   return `?${p.toString()}`
 }
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; stage_id?: string; property_id?: string; days?: string; page?: string; view?: string; broker_id?: string; source?: string; criados?: string; date_from?: string; date_to?: string }>
+  searchParams: Promise<LeadsSearchParams>
 }) {
   const user = await getServerUser()
   const supabase = await createClient()
@@ -135,6 +143,17 @@ export default async function LeadsPage({
   if (params.source) {
     query = query.eq("source", params.source)
     countQuery = countQuery.eq("source", params.source)
+  }
+
+  // Story 75-236 — Calor do Lead (leads.interest_level). Valor fora da whitelist
+  // é ignorado (nunca vai cru ao filtro); "none" = ainda não definido (NULL).
+  const calor = parseCalor(params.calor)
+  if (calor === "none") {
+    query = query.is("interest_level", null)
+    countQuery = countQuery.is("interest_level", null)
+  } else if (calor) {
+    query = query.eq("interest_level", calor)
+    countQuery = countQuery.eq("interest_level", calor)
   }
 
   if (params.days) {
@@ -270,6 +289,21 @@ export default async function LeadsPage({
       <div className="space-y-3">
         <form method="get" className="flex gap-2">
           {view === "perdidos" && <input type="hidden" name="view" value="perdidos" />}
+          {/* QA 75-236: o form reescreve a query string inteira — sem estes hidden,
+              buscar por nome DEPOIS de escolher um filtro apagava o filtro calado. */}
+          {Object.entries({
+            stage_id: params.stage_id,
+            property_id: params.property_id,
+            broker_id: params.broker_id,
+            source: params.source,
+            calor: parseCalor(params.calor) ?? undefined,
+            days: params.days,
+            date_from: params.date_from,
+            date_to: params.date_to,
+            criados: isCriadosHoje ? "hoje" : undefined,
+          }).map(([name, value]) =>
+            value ? <input key={name} type="hidden" name={name} value={value} /> : null
+          )}
           <input
             type="text"
             name="search"
@@ -296,6 +330,8 @@ export default async function LeadsPage({
           daysParam="days"
           brokerParam="broker_id"
           sourceParam="source"
+          showCalor
+          calorParam="calor"
           showDateRange
           dateFromParam="date_from"
           dateToParam="date_to"
@@ -351,7 +387,7 @@ export default async function LeadsPage({
           <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-stone-800">
             {page > 1 ? (
               <Link
-                href={buildPageHref(page - 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined, params.broker_id, params.source)}
+                href={buildPageHref(page - 1, params, view)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -370,7 +406,7 @@ export default async function LeadsPage({
             </span>
             {page < totalPages ? (
               <Link
-                href={buildPageHref(page + 1, params.search, params.stage_id, view === "perdidos" ? "perdidos" : undefined, params.property_id, params.days, params.date_from, params.date_to, isCriadosHoje ? "hoje" : undefined, params.broker_id, params.source)}
+                href={buildPageHref(page + 1, params, view)}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
               >
                 Próxima <ChevronRight className="h-4 w-4" />
