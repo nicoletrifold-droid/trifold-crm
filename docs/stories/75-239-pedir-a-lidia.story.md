@@ -1,6 +1,6 @@
 # Story 75-239 — "Pedir à Lídia": diretriz livre → post pronto na fila (+ formato)
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** M
@@ -88,6 +88,7 @@ estados dos modais sem vazamento.
 ## Validação
 - Suíte 1308/1308 (13 testes novos: 7 do flow, 2 do validador, 4 do escopo do Kit) · tsc limpo nos 2 pacotes · build OK.
 - Migs 193 (dev) e 203 (prod+dev) aplicadas e conferidas.
+- ✅ LIVE: PR #315 squash-merged, deploy de produção concluído.
 
 ## Fora de escopo (registrado)
 - Gerar a ARTE (motor Vertex + referências do Kit) — próxima story.
