@@ -3,7 +3,7 @@
 
 // SELECT compartilhado das rotas (route files não podem exportar consts extras).
 export const BRAND_SELECT =
-  "id, org_id, nome, tipo, property_id, cores, fontes, voz_da_marca, diretrizes, is_active, created_at, updated_at, properties:property_id(name), assets:marketing_brand_assets(id, tipo, label, file_path, file_url, file_name, file_size, created_at)"
+  "id, org_id, nome, tipo, property_id, cores, fontes, voz_da_marca, diretrizes, briefing, is_active, created_at, updated_at, properties:property_id(name), assets:marketing_brand_assets(id, tipo, label, file_path, file_url, file_name, file_size, created_at)"
 
 export const MARKETING_BRAND_TIPOS = ["institucional", "empreendimento"] as const
 export type MarketingBrandTipo = (typeof MARKETING_BRAND_TIPOS)[number]
@@ -85,6 +85,8 @@ export interface MarketingBrandInput {
   fontes: BrandFonte[]
   voz_da_marca: string | null
   diretrizes: string | null
+  /** Story 75-238 — Briefing Mestre por marca (produto, público, argumentos…). */
+  briefing: string | null
 }
 
 type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string }
@@ -155,9 +157,17 @@ export function fonteAssetIds(fontes: BrandFonte[]): string[] {
   return [...new Set(fontes.map((f) => f.asset_id).filter((id): id is string => !!id))]
 }
 
+// Teto de segurança (QA 75-238): briefing gigante estoura o contexto/timeout do
+// Gerar sugestões e o erro chega genérico ("Falha ao gerar"). 20k chars é ~4x o
+// maior briefing real carregado.
+const MAX_TEXT_FIELD_CHARS = 20_000
+
 function optionalText(raw: unknown, field: string): { ok: true; value: string | null } | { ok: false; error: string } {
   if (raw === undefined || raw === null) return { ok: true, value: null }
   if (typeof raw !== "string") return { ok: false, error: `${field} deve ser texto` }
+  if (raw.length > MAX_TEXT_FIELD_CHARS) {
+    return { ok: false, error: `${field} muito longo (máx. ${MAX_TEXT_FIELD_CHARS.toLocaleString("pt-BR")} caracteres)` }
+  }
   return { ok: true, value: raw.trim() || null }
 }
 
@@ -216,7 +226,7 @@ export function validateMarketingBrandInput(
     out.fontes = fontes.value
   }
 
-  for (const field of ["voz_da_marca", "diretrizes"] as const) {
+  for (const field of ["voz_da_marca", "diretrizes", "briefing"] as const) {
     if (!partial || b[field] !== undefined) {
       const r = optionalText(b[field], field)
       if (!r.ok) return r

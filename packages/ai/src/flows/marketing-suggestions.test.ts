@@ -150,3 +150,76 @@ describe("generateMarketingSuggestions — blocos de resposta do Sonnet", () => 
     expect(result).toBeNull()
   })
 })
+
+// Story 75-238 — Kit de Marcas no prompt (voz/diretrizes/briefing por marca)
+describe("generateMarketingSuggestions — Kit de Marcas no prompt", () => {
+  const baseInput: MarketingSuggestionsInput = {
+    periodDays: 30,
+    creatives: [],
+    campaigns: [
+      { name: "X", status: "ACTIVE", spend: 1, impressions: 1, clicks: 1, leads_meta: 1 },
+    ],
+    properties: [],
+    now: "2026-07-30T12:00:00Z",
+  }
+
+  // Tipado com o tipo REAL do SDK: se o prompt migrar de messages[] p/ system,
+  // este teste quebra em compile-time, não com undefined em runtime (QA 75-238).
+  function spyClient(): { client: Anthropic; getPrompt: () => string } {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: JSON.stringify({ posts: [VALID_POST] }) }],
+    })
+    const client = { messages: { create } } as unknown as Anthropic
+    return {
+      client,
+      getPrompt: () => {
+        const params = create.mock.calls[0]![0] as Anthropic.MessageCreateParams
+        const first = params.messages[0]!
+        if (typeof first.content !== "string") throw new Error("prompt não é string simples")
+        return first.content
+      },
+    }
+  }
+
+  it("inclui voz, diretrizes e briefing de cada marca no prompt", async () => {
+    const { client, getPrompt } = spyClient()
+    const result = await generateMarketingSuggestions(client, {
+      ...baseInput,
+      brands: [
+        { nome: "Trifold", tipo: "institucional", property_id: null, voz_da_marca: "sóbria e próxima", diretrizes: "nunca prometer valorização", briefing: "time desde 1997" },
+        { nome: "Vind", tipo: "empreendimento", property_id: "prop-1", voz_da_marca: null, diretrizes: "não falar do entorno", briefing: "entrega abril/2027" },
+      ],
+    })
+    const prompt = getPrompt()
+    expect(prompt).toContain("KIT DE MARCAS")
+    expect(prompt).toContain("ESCOPO POR MARCA")
+    expect(prompt).toContain("MARCA INSTITUCIONAL — Trifold")
+    expect(prompt).toContain("sóbria e próxima")
+    expect(prompt).toContain("nunca prometer valorização")
+    expect(prompt).toContain("EMPREENDIMENTO — Vind (id=prop-1)")
+    expect(prompt).toContain("não falar do entorno")
+    expect(prompt).toContain("entrega abril/2027")
+    expect(result).not.toBeNull()
+  })
+
+  it("sem marcas (ou lista vazia) o prompt não ganha bloco de Kit", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingSuggestions(client, baseInput)
+    expect(getPrompt()).not.toContain("KIT DE MARCAS")
+    const { client: c2, getPrompt: g2 } = spyClient()
+    await generateMarketingSuggestions(c2, { ...baseInput, brands: [] })
+    expect(g2()).not.toContain("KIT DE MARCAS")
+  })
+
+  it("campos nulos da marca não viram 'null' no prompt", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingSuggestions(client, {
+      ...baseInput,
+      brands: [{ nome: "Yarden", tipo: "empreendimento", property_id: null, voz_da_marca: null, diretrizes: null, briefing: null }],
+    })
+    const prompt = getPrompt()
+    expect(prompt).toContain("EMPREENDIMENTO — Yarden")
+    expect(prompt).not.toContain("Voz da marca: null")
+    expect(prompt).not.toContain("Briefing: null")
+  })
+})

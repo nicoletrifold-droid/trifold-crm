@@ -25,4 +25,5 @@ export type {
   CreativePerformanceRow,
   CampaignSummary,
   PropertyOption,
+  BrandKnowledge,
 } from "./marketing-suggestions"
