@@ -2,8 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
-import { mimeForBrandAssetFile } from "@web/lib/marketing/brands"
-import type { BrandCor, BrandFonte } from "@web/lib/marketing/brands"
+import {
+  BRAND_ASSET_IMAGE_TIPOS,
+  BRAND_ASSET_LABELS,
+  mimeForBrandAssetFile,
+} from "@web/lib/marketing/brands"
+import type { BrandAssetImageTipo, BrandCor, BrandFonte, MarketingBrandAssetTipo } from "@web/lib/marketing/brands"
 
 // Story 75-229 — Kit de Marcas da aba Agente: identidade por marca (institucional
 // + empreendimentos) que alimentará o "Gerar arte". Upload via signed URL
@@ -11,7 +15,7 @@ import type { BrandCor, BrandFonte } from "@web/lib/marketing/brands"
 
 export interface BrandAsset {
   id: string
-  tipo: "logo" | "foto" | "elemento" | "fonte"
+  tipo: MarketingBrandAssetTipo
   label: string | null
   file_path: string
   file_url: string
@@ -44,8 +48,13 @@ function brandPropertyName(brand: MarketingBrand): string | null {
   return p?.name ?? null
 }
 
-function firstLogo(brand: MarketingBrand): BrandAsset | null {
-  return brand.assets.find((a) => a.tipo === "logo") ?? null
+/** Miniatura do card: logo e, na falta dele, o ícone da marca (75-235). */
+function brandThumb(brand: MarketingBrand): BrandAsset | null {
+  return (
+    brand.assets.find((a) => a.tipo === "logo") ??
+    brand.assets.find((a) => a.tipo === "icone") ??
+    null
+  )
 }
 
 // ─── Fontes (Story 75-234) ─────────────────────────────────────────────────
@@ -137,7 +146,7 @@ function BrandModal({
     if (brand) onAssetsChanged(brand.id, value)
     return value
   }
-  const [assetTipo, setAssetTipo] = useState<"logo" | "foto" | "elemento">("logo")
+  const [assetTipo, setAssetTipo] = useState<BrandAssetImageTipo>("logo")
   const [assetLabel, setAssetLabel] = useState("")
   // Story 75-232 — fila de arquivos escolhidos ANTES de criar a marca
   // Story 75-234 — fonteIndex amarra o arquivo à linha de fonte que o escolheu.
@@ -700,10 +709,12 @@ function BrandModal({
           )}
           <>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <select value={assetTipo} onChange={(e) => setAssetTipo(e.target.value as "logo" | "foto" | "elemento")} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100">
-                  <option value="logo">Logo</option>
-                  <option value="foto">Foto</option>
-                  <option value="elemento">Elemento gráfico</option>
+                {/* Opções e grupos derivam de BRAND_ASSET_IMAGE_TIPOS: tipo novo
+                    aparece na tela sem edição manual (QA 75-235). */}
+                <select value={assetTipo} onChange={(e) => setAssetTipo(e.target.value as BrandAssetImageTipo)} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100">
+                  {BRAND_ASSET_IMAGE_TIPOS.map((t) => (
+                    <option key={t} value={t}>{BRAND_ASSET_LABELS[t].singular}</option>
+                  ))}
                 </select>
                 <input
                   value={assetLabel}
@@ -726,13 +737,13 @@ function BrandModal({
               <p className="mt-1 text-[11px] text-gray-400 dark:text-stone-500">PNG, JPG, WEBP ou SVG · máx. 10 MB por arquivo</p>
 
               {/* Story 75-230 — agrupado por categoria, como o Brand Hub */}
-              {(["logo", "foto", "elemento"] as const).map((grupo) => {
+              {BRAND_ASSET_IMAGE_TIPOS.map((grupo) => {
                 const doGrupo = assets.filter((a) => a.tipo === grupo)
                 if (doGrupo.length === 0) return null
                 return (
                   <div key={grupo} className="mt-3">
                     <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
-                      {grupo === "logo" ? "Logotipos" : grupo === "foto" ? "Fotos" : "Elementos gráficos"} ({doGrupo.length})
+                      {BRAND_ASSET_LABELS[grupo].plural} ({doGrupo.length})
                     </h5>
                     <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
                   {doGrupo.map((a) => (
@@ -883,7 +894,7 @@ export default function MarcasSection({ properties }: { properties: PropertyOpti
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {brands.map((brand) => {
-            const logo = firstLogo(brand)
+            const logo = brandThumb(brand)
             const propName = brandPropertyName(brand)
             return (
               <button
