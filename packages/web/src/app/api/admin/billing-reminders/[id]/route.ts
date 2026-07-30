@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { validateUpdate } from "@web/lib/billing/reminder-validation"
 import { avancarCiclo } from "@web/lib/billing/reminder-schedule"
 
 // Story 78-8 — edição/remoção de um vencimento (service_billing_reminders). Admin-only.
 // Story 78-11 — recorrência-ao-pagar: ao marcar 'paid', avança due_date para o próximo ciclo.
+//
+// Hotfix de segurança (migration 193 / auditoria P4): a 193 revoga `authenticated` das tabelas
+// de custo interno da plataforma (a policy `admin_only` não tinha noção de org). Acesso só por
+// service-role em rota gated por admin — daí o createAdminClient() em vez do client de usuário
+// do requireAuth(). O gate de autorização segue sendo o requireRole(["admin"]).
 
 /**
  * PATCH /api/admin/billing-reminders/[id]
@@ -30,10 +36,12 @@ export async function PATCH(
 ) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { supabase, appUser } = auth
+  const { appUser } = auth
 
   const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
+
+  const supabase = createAdminClient()
 
   const { id } = await params
 
@@ -139,10 +147,12 @@ export async function DELETE(
 ) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { supabase, appUser } = auth
+  const { appUser } = auth
 
   const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
+
+  const supabase = createAdminClient()
 
   const { id } = await params
 

@@ -1,0 +1,221 @@
+schema: 1
+storyId: "hotfix-rls-lote0"
+story: "Lote 0 — Hotfix de segurança RLS/org-scope (P1, P2, P3, P6, P4)"
+title: "Quality Gate — migration 193_hotfix_rls_org_scope + 5 rotas"
+epic: null
+gate: PASS
+verdict: PASS
+review_round: 2
+status_reason: >
+  Re-gate após correção dos 7 itens do FAIL anterior. Os 3 bloqueantes estão fechados e
+  verificados por leitura do diff + consulta read-only a produção, não por relato: sobrou UM
+  único ALTER VIEW e ele é sobre `v_mensagens_admin` (relkind='v'); a matview passou a ser
+  tratada só por grant, com `REVOKE ALL ON TABLE public.meta_campaign_roas FROM anon,
+  authenticated` (linha 718 — cobre `authenticated`, que era o furo remanescente); e o
+  comentário da rota foi reescrito sem a premissa falsa de security_invoker/leads_select.
+  Confirmei independentemente as 35 instruções ativas (contagem exata) e que todas são DDL/DCL
+  transacional — nenhum CONCURRENTLY, VACUUM, REINDEX ou ALTER SYSTEM — logo a instrução de
+  aplicar em BEGIN/COMMIT único é cumprível. Rodei o bloco de verificação read-only contra
+  produção: 25 linhas, com discriminação correta (a matview é acusada por P2b, NÃO por P2a),
+  P2c com zero linhas; e provei por mutação própria que P2c não é código morto (operador
+  invertido → 2 linhas) e que os filtros de relkind de P2a/P2b são load-bearing (removê-los faz
+  cada asserção acusar o objeto do outro tipo). Comparei os 4 corpos `LANGUAGE sql` do bloco
+  ROLLBACK contra `pg_get_functiondef` de produção: os 4 idênticos, e os grants de reversão
+  reproduzem exatamente a ACL original (PUBLIC+anon nas 5 que têm `=X/postgres`, anon nas
+  outras 3). A decisão de fail-open na guarda é aceita — ver `judgment_call` abaixo.
+  Checks sem regressão: tsc com exatamente os 4 erros pré-existentes, eslint limpo nos 5
+  arquivos, vitest 1215/1215 (única suíte falhando é a de pdf-lib, pré-existente).
+
+resolved_from_round_1:
+  - id: B1
+    status: FIXED
+    evidence: >
+      `grep -nE '^[[:space:]]*ALTER[[:space:]]+(VIEW|MATERIALIZED)'` retorna exatamente 1 linha:
+      715, sobre `v_mensagens_admin`. Nenhum ALTER (VIEW ou MATERIALIZED VIEW) sobre
+      `meta_campaign_roas` em nenhum lugar do arquivo. Foi além do pedido: header documenta a
+      obrigação de transação única e eu confirmei que ela é cumprível (ver transactionality).
+  - id: B2
+    status: FIXED
+    evidence: >
+      Linha 718 `REVOKE ALL ON TABLE public.meta_campaign_roas FROM anon, authenticated;` —
+      cobre `authenticated`, que era o gap. Comentário 683-696 descreve corretamente o motivo
+      (matview: conteúdo materializado no REFRESH sob `postgres` com rolbypassrls, RLS
+      inaplicável, GRANT é o único controle). Asserção P2b do bloco de verificação exige
+      ausência de SELECT para anon E authenticated.
+  - id: B3
+    status: FIXED
+    evidence: >
+      `api/meta-ads/campaigns/[campaign_id]/route.ts:374-391` — comentário reescrito. Toda
+      afirmação técnica dele foi conferida contra o banco: relkind='m', migration 035, pg_cron
+      jobid=5 (`0 */3 * * *`, REFRESH CONCURRENTLY, `postgres`), rolbypassrls=true,
+      relrowsecurity=false, 0 policies, ACL prévia arwdDxtm para anon e authenticated. Sem
+      menção a security_invoker/leads_select/social-media. `.eq("org_id", appUser.org_id)`
+      preservado.
+  - id: "4 (bloco de verificacao)"
+    status: FIXED
+    evidence: >
+      Extraí e rodei o bloco read-only contra produção: 25 linhas (8 P1-anon + 8 P1-guarda +
+      1 P2a + 1 P2b + 1 P3 + 1 P6 + 5 P4), zero de P2c. `meta_campaign_roas` aparece só em P2b.
+      Mutação própria: P2c com `=` em vez de `<>` → 2 linhas (não é código morto); P2a sem o
+      filtro relkind acusaria a matview; P2b sem o filtro acusaria a view. Os filtros são
+      load-bearing e a discriminação é intencional, não acidental.
+  - id: "5 (comentario da guarda)"
+    status: FIXED
+    evidence: >
+      Header 57-90 e corpo 111-131 explicitam que `auth.uid() IS NULL` NÃO implica service-role,
+      que uma requisição anônima cai no mesmo ramo, que o REVOKE é o controle primário, e
+      instruem quem criar a 9ª RPC a fazer as duas coisas (guarda + revoke de PUBLIC,anon).
+      Era exatamente o M1 do round 1. A implementação divergiu da minha sugestão — aceita, ver
+      judgment_call.
+  - id: "6 (rollback)"
+    status: FIXED
+    evidence: >
+      Bloco 882-1029. Comparação normalizada (comentários e whitespace) dos 4 corpos `LANGUAGE
+      sql` contra `pg_get_functiondef` de produção: IDÊNTICOS nos 4, incluindo STABLE, SECURITY
+      DEFINER e `SET search_path TO 'public'`. Grants de reversão batem com a ACL medida:
+      `TO PUBLIC, anon` nas 5 que têm `=X/postgres` (get_broker_dashboard_counts,
+      get_broker_funnel_stats, get_whatsapp_cost_summary, get_whatsapp_volume_summary,
+      seed_system_roles) e `TO anon` nas outras 3. Policy P6 original reproduzida exatamente
+      (SELECT, TO authenticated, `is_admin_or_supervisor()`). P3 marcado como NÃO reverter.
+  - id: "7 (numeros)"
+    status: FIXED
+    evidence: >
+      Proporção (63,6%) com absoluto datado. Remedi agora: 10.157 total / 6.463 org_id NULL /
+      63,6% — bate exatamente com o que ele reportou. A minha medição anterior (10.149/6.455)
+      era de minutos antes; a tabela é log e cresce, o que valida a escolha de citar proporção.
+
+judgment_call:
+  question: "A guarda implementa fail-open (nega só quando claims->>'role' = 'anon'). Aceitavel?"
+  decision: ACEITO
+  rationale: >
+    1. Confirmei que a pergunta empírica é irrespondível read-only, e de forma mais ampla do que
+    o @dev checou: varri `pg_proc.prosrc` E `pg_get_viewdef` de todo o schema `public` por
+    `request.jwt`, `auth.role()`, `auth.jwt()` e `current_setting` — ZERO objetos. Não há
+    nenhum caminho anon-observável para medir o que o PostgREST põe em `request.jwt.claims`
+    com as chaves de formato novo sem criar função de sonda (DDL) em produção. A restrição
+    que ele invocou é real.
+    2. O vetor que o fail-closed cobriria já está fechado por um controle que eu verifiquei: o
+    REVOKE de PUBLIC+anon nas 8, com re-GRANT explícito, e a asserção P1 do bloco de
+    verificação (`has_function_privilege('anon', …)`). Valor de segurança adicionado pelo
+    fail-closed hoje: zero.
+    3. Assimetria de custo do erro. Fail-closed errado → `roleta_pick_and_advance` levanta 42501
+    em toda rodada do cron → distribuição de leads para, no caminho de receita do produto,
+    sem staging para pegar. Fail-open errado → uma camada redundante fica inerte. Sob
+    incerteza irredutível, escolher a falha barata é a decisão correta.
+    4. O trabalho real da guarda está intacto e é fail-closed: para usuário logado `auth.uid()`
+    é non-NULL, o ramo do fail-open é inalcançável (o `RETURN` da linha 144 está DENTRO do
+    `IF auth.uid() IS NULL`), e a comparação `p_org_id IS DISTINCT FROM user_org_id()` da
+    linha 147 sempre executa. Cross-tenant de usuário autenticado — o vetor que a auditoria
+    queria matar no 2º tenant — está coberto. Borda: autenticado sem linha em `public.users`
+    → `user_org_id()` NULL → `IS DISTINCT FROM` TRUE → NEGA. Correto.
+  note_on_alternatives: >
+    Considerei recomendar `v_role IS NOT NULL AND v_role <> 'service_role'` (mais estrito,
+    mantendo o release quando claims são ausentes/sem `role`) e DESCARTEI: se o formato novo da
+    service key trouxer um `role` diferente do esperado, essa versão nega e quebra a roleta —
+    reintroduz exatamente o risco que o fail-open evita. O `= 'anon'` é a condição de menor
+    risco. Não mexer.
+
+top_issues:
+  - id: C1
+    severity: low
+    category: maintainability
+    finding: >
+      O `BEGIN … EXCEPTION WHEN others` abre uma subtransação interna a cada entrada, e o ramo
+      é entrado sempre que `auth.uid() IS NULL` — inclusive nas chamadas per-row de
+      `broker_active_leads_count` dentro do WHERE de `roleta_pick_and_advance`. Medi a escala:
+      `roleta_fila` ativa = 6, `brokers` disponíveis = 9 → irrelevante em performance. O ganho
+      real de trocar é remover o swallow. `WHEN others` não captura QUERY_CANCELED nem
+      ASSERT_FAILURE, então statement_timeout não é mascarado — o swallow é estreito na
+      prática, mas é mais largo do que precisa.
+    file: "supabase/migrations/193_hotfix_rls_org_scope.sql:132-136"
+    fix: >
+      Prod é PG 17.6, então `pg_input_is_valid(text,'jsonb')` está disponível e elimina o
+      bloco de exceção e a subtransação. Opcional — não bloqueia.
+  - id: C2
+    severity: low
+    category: security
+    finding: >
+      O fail-open é uma hipótese não medida, não um fato: não sabemos se o formato novo de
+      chave popula `request.jwt.claims` com `role='anon'`. Enquanto não medido, a guarda pode
+      ser no-op para o vetor anônimo (que segue coberto pelo REVOKE).
+    fix: >
+      Follow-up em migration PRÓPRIA (não neste hotfix): criar
+      `public.__probe_jwt_claims() RETURNS text LANGUAGE sql SECURITY INVOKER AS $$ SELECT
+      current_setting('request.jwt.claims', true) $$` com GRANT só para anon, medir com um curl
+      usando a anon key e outro usando a service key, `DROP FUNCTION` — 3 statements,
+      reversível, não toca dado. Com a medição em mão, apertar `assert_org_scope` para
+      fail-closed.
+  - id: C3
+    severity: low
+    category: operability
+    finding: >
+      Footgun no bloco de ROLLBACK: `DROP FUNCTION IF EXISTS public.assert_org_scope(uuid);`
+      aparece junto dos grants de reversão, mas as 4 funções que permanecem plpgsql só param de
+      chamar o helper depois da edição MANUAL descrita em 996-999. Postgres não rastreia
+      dependência função→função, então o DROP passa e as 4 quebram em runtime com "function
+      public.assert_org_scope(uuid) does not exist" — pior que o estado que se tentava reverter,
+      e sob pressão de incidente.
+    file: "supabase/migrations/193_hotfix_rls_org_scope.sql:1011"
+    fix: "Remover a linha (helper órfão é inócuo) ou movê-la para o fim com aviso explícito."
+  - id: C4
+    severity: low
+    category: correctness
+    finding: >
+      O rollback de P2 usa `ALTER VIEW … SET (security_invoker = off)`, mas o estado original
+      era a reloption AUSENTE (`(unset)`), não `off`. Semanticamente equivalente; deixa uma
+      reloption residual.
+    file: "supabase/migrations/193_hotfix_rls_org_scope.sql:1014"
+    fix: "`ALTER VIEW public.v_mensagens_admin RESET (security_invoker);` restaura exato."
+
+transactionality:
+  statements_ativos: 35
+  breakdown: >
+    9 CREATE OR REPLACE FUNCTION + 3 REVOKE/GRANT do helper + 8 REVOKE EXECUTE +
+    8 GRANT EXECUTE + 1 ALTER VIEW + 2 REVOKE ALL ON TABLE (views) + 1 DROP POLICY
+    (system_events) + 1 DROP POLICY + 1 CREATE POLICY (P6) + 1 REVOKE ALL ON TABLE (5 tabelas)
+  verdict: >
+    Claim do @dev confirmado. Contagem própria fecha em 35 exatos. Zero CONCURRENTLY, zero
+    VACUUM/REINDEX/CLUSTER/ALTER SYSTEM/CREATE DATABASE/CREATE TABLESPACE. Todas as 35 são
+    DDL/DCL transacional em Postgres → a exigência de BEGIN/COMMIT único é cumprível, e é o
+    que `supabase db push` já faz por migration.
+
+verified_against_prod_round_2:
+  - "Um único ALTER VIEW ativo (linha 715, v_mensagens_admin, relkind='v'); nenhum ALTER sobre a matview."
+  - "REVOKE da matview cobre anon E authenticated (linha 718)."
+  - "35 instruções ativas, todas transacionais (contagem e varredura próprias)."
+  - "Bloco de verificação rodado read-only: 25 linhas, matview acusada só por P2b, P2c zero."
+  - "Mutação de P2c (operador invertido) → 2 linhas: asserção viva, não código morto."
+  - "Mutação de P2a/P2b sem filtro de relkind → cada uma acusa o objeto do tipo errado: filtros load-bearing."
+  - "4 corpos LANGUAGE sql do ROLLBACK idênticos a pg_get_functiondef de produção (normalizado)."
+  - "Grants de reversão do ROLLBACK reproduzem a ACL medida: PUBLIC+anon nas 5, anon nas outras 3."
+  - "Policy P6 original do rollback bate com pg_policies (SELECT, TO authenticated, is_admin_or_supervisor())."
+  - "system_events agora 10.157 / 6.463 NULL / 63,6% — bate com o número do @dev."
+  - "roleta_fila ativa=6, brokers disponíveis=9 → custo de subtransação per-row irrelevante."
+  - "Zero objetos em public (funções ou views) que exponham request.jwt/auth.role()/auth.jwt()/current_setting → o fail-open realmente não é verificável read-only."
+  - "Controle de fluxo da guarda: o RETURN do fail-open (144) está dentro do IF auth.uid() IS NULL; usuário autenticado sempre atinge a comparação de org (147)."
+
+checks:
+  typecheck: "npx tsc --noEmit → 4 erros, todos pré-existentes conhecidos (react-email-editor ×3, pdf-lib ×1)"
+  lint: "npx eslint nos 5 arquivos tocados → limpo"
+  tests: "npx vitest run → 111/112 suítes, 1215/1215 testes; única falha = pastas/termo/fill.test.ts por pdf-lib ausente (pré-existente)"
+
+not_verified:
+  - "Sintaxe plpgsql dos 4 corpos convertidos não foi executada (sem postgres/docker local; criar em prod seria DDL). Mitigado pela aplicação em transação única: erro de parse aborta tudo, sem estado parcial."
+  - "As 2 RPCs de escrita (roleta_pick_and_advance, seed_system_roles) não foram exercitadas — mutariam produção. Cobertas pelo smoke obrigatório da roleta pós-deploy."
+  - "Formato de request.jwt.claims com as chaves sb_publishable_/sb_secret_ — irrespondível read-only (ver C2)."
+
+deploy_order: "Código ANTES do banco. Código novo × banco antigo funciona (service-role sempre teve acesso); banco novo × código antigo quebra o Painel Saúde & Billing (revoke de authenticated nas 5 tabelas de custo)."
+
+devops_runbook:
+  - "1. Deploy do código na Vercel PRIMEIRO. Confirmar que /dashboard/sistema/billing e o detalhe de campanha respondem ANTES de tocar o banco."
+  - "2. Aplicar a migration em UMA transação. `supabase db push` já envolve. Se for pela Management API, mandar o arquivo INTEIRO em um único POST /database/query — nunca fatiar por statement."
+  - "3. NUNCA BEGIN; … ROLLBACK; na Management API para 'testar'. Autocommit por statement grava em prod sem volta."
+  - "4. Rodar o bloco de verificação (linhas 807-879, descomentado) DEPOIS de aplicar. Esperado: ZERO linhas. Antes de aplicar ele retorna 25 — usar isso como controle positivo."
+  - "5. Smoke com sessão real: /broker como corretor; /dashboard como gerente-comercial; /dashboard/configuracoes/corretores (coluna de leads ativos não pode zerar); /dashboard/sistema como admin (lista + semáforos de saúde); /dashboard/sistema/billing como admin (painel + lista + 1 editar + 1 excluir); detalhe de campanha incluindo com o usuário de perfil social-media (bloco ROAS preenchido)."
+  - "6. Smoke OBRIGATÓRIO da roleta: distribuir 1 lead ponta a ponta. É a única função de ESCRITA com guarda nova e não foi exercitada em nenhum dos dois rounds."
+  - "7. Re-rodar os probes anônimos: as 8 RPCs com a anon key devem virar 404/403; system_events, v_mensagens_admin e meta_campaign_roas devem virar 401/403 com a anon key; e meta_campaign_roas TAMBÉM com um JWT de usuário comum (é o teste específico do B2)."
+  - "8. Se aplicar fora do CLI, registrar a versão em supabase_migrations.schema_migrations (prod usa timestamp, repo usa numérico — drift conhecido), senão um db push futuro reaplica."
+  - "9. Se precisar reverter P1: NÃO executar o DROP FUNCTION da linha 1011 antes de remover as 8 chamadas PERFORM (ver C3). Reverter P3 NUNCA."
+
+date: 2026-07-29
+reviewer: "@qa Quinn"

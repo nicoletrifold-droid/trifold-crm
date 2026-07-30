@@ -50,6 +50,15 @@ vi.mock("@web/lib/api-auth", () => ({
   requireRole: () => null,
 }))
 
+// Hotfix de segurança (migration 193 / auditoria P4): a rota passou a ler/escrever
+// service_billing_reminders via createAdminClient() (service-role), porque a 193 revoga
+// `authenticated` das tabelas de custo interno da plataforma. O gate de autorização segue
+// sendo requireRole(["admin"]). O mock espelha essa troca de client — a lógica de
+// recorrência-ao-pagar sob teste é a mesma.
+vi.mock("@web/lib/supabase/admin", () => ({
+  createAdminClient: () => makeSupabase(),
+}))
+
 import { NextRequest } from "next/server"
 import { PATCH } from "./route"
 
