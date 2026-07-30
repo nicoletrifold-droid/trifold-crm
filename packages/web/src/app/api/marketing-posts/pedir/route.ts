@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
 import { scopeBrandsForPost } from "@web/lib/marketing/brands"
+import { gerarArteParaPost } from "@web/lib/marketing/arte-service"
 import { MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
 import {
   createAnthropicClient,
@@ -11,7 +12,10 @@ import {
 // Story 75-239 — "Pedir à Lídia": diretriz livre → UM post pronto na fila.
 // Mesmo padrão fail-open do /generate: erro da Claude API ou JSON inválido →
 // NENHUMA linha inserida; publicação continua 100% humana.
-export const maxDuration = 90
+// Story 75-240: Sonnet (~30s) + motor de imagem (~15-25s) na MESMA request —
+// 300s (padrão do repo p/ rotas longas). O post é inserido ANTES da arte, então
+// nem um estouro aqui perde a copy (fail-open estrutural).
+export const maxDuration = 300
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_PEDIDO_CHARS = 2000
@@ -120,7 +124,12 @@ export async function POST(req: NextRequest) {
         ? body.scheduled_for
         : null
 
-    const { data, error } = await admin
+    // QA 75-240 #1 — o post é INSERIDO ANTES da arte: se a função estourar o
+    // tempo durante a geração da imagem, a copy (que custou uma chamada de
+    // Sonnet) já está salva na fila — fail-open estrutural, não best-effort.
+    const POST_SELECT =
+      "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+    const { data: inserted, error } = await admin
       .from("marketing_posts")
       .insert({
         org_id: appUser.org_id,
@@ -130,19 +139,43 @@ export async function POST(req: NextRequest) {
         pedido,
         copy: result.copy,
         roteiro: result.roteiro,
+        arte_url: null,
+        arte_descricao: result.arte?.descricao ?? null,
+        arte_arquivos: result.arte?.arquivos_kit ?? null,
         scheduled_for: humanDate ?? result.scheduled_for,
         justificativa: result.justificativa,
         status: "sugerido",
         origem: "agente",
         created_by: appUser.id,
       })
-      .select(
-        "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
-      )
+      .select(POST_SELECT)
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ post: data }, { status: 201 })
+    if (error || !inserted) return NextResponse.json({ error: error?.message ?? "Erro ao salvar" }, { status: 500 })
+
+    // Story 75-240 — arte com as referências do Kit (fail-open: null = sem arte).
+    let post = inserted
+    if (result.arte) {
+      const arte = await gerarArteParaPost(admin, {
+        orgId: appUser.org_id,
+        empreendimentoId,
+        formato,
+        descricao: result.arte.descricao,
+        arquivosKit: result.arte.arquivos_kit,
+      })
+      if (arte) {
+        const { data: updated } = await admin
+          .from("marketing_posts")
+          .update({ arte_url: arte.arteUrl, arte_arquivos: arte.arquivosUsados, updated_at: new Date().toISOString() })
+          .eq("id", inserted.id as string)
+          .eq("org_id", appUser.org_id)
+          .select(POST_SELECT)
+          .single()
+        if (updated) post = updated
+      }
+    }
+
+    return NextResponse.json({ post }, { status: 201 })
   } catch (err) {
     console.error("[marketing-posts/pedir] erro:", err)
     return NextResponse.json({ error: "Falha ao gerar o post. Tente novamente." }, { status: 500 })

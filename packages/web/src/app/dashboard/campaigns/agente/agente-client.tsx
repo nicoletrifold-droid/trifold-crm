@@ -73,6 +73,41 @@ const ORIGEM_BADGES: Record<string, { label: string; className: string }> = {
   },
 }
 
+// Story 75-240 — arte gerada (bucket marketing-artes) aparece inline; link
+// externo continua como link.
+function isImageUrl(url: string): boolean {
+  return url.includes("/marketing-artes/") || /\.(png|jpe?g|webp)(\?|$)/i.test(url)
+}
+
+// onError cai pro link (QA #14: URL externa terminando em .png pode não ser
+// imagem servível — sem fallback ficava um ícone quebrado no card).
+function ArtePreview({ url }: { url: string }) {
+  const [broken, setBroken] = useState(false)
+  if (!isImageUrl(url) || broken) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+      >
+        Ver arte ↗
+      </a>
+    )
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt="Arte do post"
+        onError={() => setBroken(true)}
+        className="max-h-72 rounded-md border border-gray-200 object-contain dark:border-stone-800"
+      />
+    </a>
+  )
+}
+
 function propertyName(post: MarketingPost): string | null {
   const prop = Array.isArray(post.properties) ? post.properties[0] : post.properties
   return prop?.name ?? null
@@ -408,6 +443,60 @@ function PostFormModal({
   )
 }
 
+// ─── Refazer arte (Story 75-240) ───────────────────────────────────────────
+// Regenera a imagem com um ajuste opcional ("menos texto", "usa a piscina").
+// Não mexe na copy — só a arte.
+
+function RefazerArteButton({
+  busy,
+  onRefazer,
+}: {
+  busy: boolean
+  onRefazer: (ajuste: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [ajuste, setAjuste] = useState("")
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        disabled={busy}
+        className="rounded-md px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+      >
+        🎨 Refazer arte
+      </button>
+    )
+  }
+  return (
+    <span className="flex w-full flex-wrap items-center gap-2">
+      <input
+        value={ajuste}
+        onChange={(e) => setAjuste(e.target.value)}
+        maxLength={500}
+        disabled={busy}
+        placeholder="Ajuste (opcional): menos texto, usa a foto da piscina…"
+        className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+        autoFocus
+      />
+      <button
+        onClick={() => onRefazer(ajuste)}
+        disabled={busy}
+        className="rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-60"
+      >
+        {busy ? "Gerando…" : "Gerar"}
+      </button>
+      <button
+        onClick={() => { setOpen(false); setAjuste("") }}
+        disabled={busy}
+        className="text-xs text-gray-400 hover:text-gray-600 dark:text-stone-500"
+      >
+        Cancelar
+      </button>
+    </span>
+  )
+}
+
 // ─── Card de post ──────────────────────────────────────────────────────────
 
 function PostCard({
@@ -468,16 +557,7 @@ function PostCard({
         </div>
       )}
 
-      {post.arte_url && (
-        <a
-          href={post.arte_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-        >
-          Ver arte ↗
-        </a>
-      )}
+      {post.arte_url && <ArtePreview key={post.arte_url} url={post.arte_url} />}
 
       {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
     </div>
@@ -586,6 +666,26 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
       setPedidoError(e instanceof Error ? e.message : "Falha ao gerar o post")
     } finally {
       setPedidoSaving(false)
+    }
+  }
+
+  // Story 75-240 — refaz só a ARTE do post (a copy fica).
+  const handleRefazerArte = async (id: string, ajuste: string) => {
+    setPendingId(id)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/marketing-posts/${id}/arte`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ajuste: ajuste || undefined }),
+      })
+      const json = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) throw new Error(json?.error ?? `Erro ${res.status}`)
+      await fetchPosts()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Falha ao refazer a arte")
+    } finally {
+      setPendingId(null)
     }
   }
 
@@ -764,6 +864,13 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
                         >
                           Rejeitar
                         </button>
+                        {post.formato && post.formato !== "reel" && (
+                          <RefazerArteButton
+                            key={post.arte_url ?? "sem-arte"}
+                            busy={pendingId === post.id}
+                            onRefazer={(ajuste) => void handleRefazerArte(post.id, ajuste)}
+                          />
+                        )}
                       </>
                     }
                   />
@@ -811,6 +918,13 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
                         >
                           Marcar como publicado
                         </button>
+                        {post.formato && post.formato !== "reel" && (
+                          <RefazerArteButton
+                            key={post.arte_url ?? "sem-arte"}
+                            busy={pendingId === post.id}
+                            onRefazer={(ajuste) => void handleRefazerArte(post.id, ajuste)}
+                          />
+                        )}
                       </>
                     }
                   />

@@ -34,7 +34,7 @@ export interface MarketingPostRequestInput {
   empreendimentoNome: string | null
   /** Kit de Marcas — MESMO shape do Gerar sugestões (75-238) */
   brands: BrandKnowledge[]
-  /** Arquivos do Kit da(s) marca(s) relevante(s): a Lídia pode citar qual usar na arte */
+  /** Arquivos do Kit da(s) marca(s) relevante(s): a Lídia escolhe quais entram na arte */
   assets: Array<{ marca: string; tipo: string; label: string | null; file_name: string }>
   /** Referência de "hoje" (ISO) */
   now: string
@@ -44,21 +44,28 @@ export interface MarketingPostRequestResult {
   copy: string
   /** Só quando formato=reel: roteiro de gravação (cenas, falas, texto de tela) */
   roteiro: string | null
-  /** Por que a copy é assim + qual arquivo do Kit usar na arte (se citado) */
+  /** Por que a copy é assim + ajustes feitos por diretriz */
   justificativa: string
   /** Data futura sugerida YYYY-MM-DD ou null */
   scheduled_for: string | null
+  /** Story 75-240 — direção de arte para o motor de imagem (null quando reel) */
+  arte: {
+    /** Descrição visual completa (composição, clima, texto NA arte) */
+    descricao: string
+    /** file_name EXATOS dos arquivos do Kit a usar como referência (pode ser vazio) */
+    arquivos_kit: string[]
+  } | null
 }
 
 const FORMATO_INSTRUCTIONS: Record<MarketingPostFormato, string> = {
   estatico:
-    "FORMATO: post estatico de feed. Copy = legenda completa pronta para publicar (gancho forte na primeira linha, corpo, CTA, hashtags no final). No campo justificativa, alem do racional, descreva em 1 frase a ARTE ideal (imagem unica) e cite qual arquivo do Kit usar como base, se houver um adequado.",
+    "FORMATO: post estatico de feed (imagem unica 4:5). Copy = legenda completa pronta para publicar (gancho forte na primeira linha, corpo, CTA, hashtags no final). Preencha o bloco arte.",
   reel:
-    "FORMATO: reel (video curto vertical). Copy = legenda do reel (curta, gancho + CTA + hashtags). Campo roteiro OBRIGATORIO = roteiro de gravacao pronto para a equipe executar: duracao alvo (15-30s), cena a cena (o que filmar/mostrar), texto de tela de cada cena, fala/narracao se houver, e sugestao de audio/clima. O video e produzido por humanos — seja especifico e executavel.",
+    "FORMATO: reel (video curto vertical). Copy = legenda do reel (curta, gancho + CTA + hashtags). Campo roteiro OBRIGATORIO = roteiro de gravacao pronto para a equipe executar: duracao alvo (15-30s), cena a cena (o que filmar/mostrar), texto de tela de cada cena, fala/narracao se houver, e sugestao de audio/clima. O video e produzido por humanos — seja especifico e executavel. Bloco arte = null (reel nao gera imagem).",
   story:
-    "FORMATO: story (tela vertical 9:16, some em 24h). Copy = texto DA TELA do story: curto, direto, com CTA de arrastar/link ('Saiba mais', 'Agende sua visita'). Maximo ~40 palavras. Se a narrativa pedir 2-3 telas, separe com 'TELA 1:', 'TELA 2:'. Na justificativa, descreva a imagem/fundo ideal e cite arquivo do Kit se houver.",
+    "FORMATO: story (tela vertical 9:16, some em 24h). Copy = texto DA TELA do story: curto, direto, com CTA de arrastar/link ('Saiba mais', 'Agende sua visita'). Maximo ~40 palavras. Se a narrativa pedir 2-3 telas, separe com 'TELA 1:', 'TELA 2:'. Preencha o bloco arte (a arte gerada e a TELA 1).",
   carrossel:
-    "FORMATO: carrossel de feed. Copy = legenda completa + o conteudo de CADA CARD separado por 'CARD 1:', 'CARD 2:'… (4 a 7 cards; card 1 = capa com gancho, ultimo card = CTA). Na justificativa, descreva o estilo visual dos cards.",
+    "FORMATO: carrossel de feed. Copy = legenda completa + o conteudo de CADA CARD separado por 'CARD 1:', 'CARD 2:'… (4 a 7 cards; card 1 = capa com gancho, ultimo card = CTA). Preencha o bloco arte com a CAPA (card 1); os demais cards a equipe monta seguindo o mesmo estilo.",
 }
 
 const REQUEST_PROMPT_HEADER = `Voce e Lidia, a agente de marketing da Trifold (construtora/incorporadora de Maringa-PR). Um humano do time de marketing te fez um PEDIDO de post. Sua tarefa: entregar UM post pronto para a fila de aprovacao, seguindo o pedido, o formato e o conhecimento do Kit de Marcas abaixo.
@@ -68,14 +75,15 @@ REGRAS INEGOCIAVEIS:
 - ESCOPO POR MARCA: use o bloco do empreendimento do post + o institucional. NUNCA aplique numero, diretriz ou caracteristica de um empreendimento a outro.
 - So afirme numeros (preco, metragem, % vendido, prazo) que estejam no Kit. Prazo de entrega: SOMENTE o contratual.
 - Portugues do Brasil. Emojis com moderacao (a voz da marca manda).
-- Se o pedido citar uma imagem/arquivo ("usa a foto da fachada"), procure na lista de ARQUIVOS DO KIT e cite o file_name exato na justificativa. Se nao existir arquivo compativel, diga isso na justificativa e descreva a imagem ideal.
+- BLOCO ARTE (formatos com imagem): "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, paleta com os HEX da marca, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
 
 RETORNE APENAS JSON valido, sem markdown:
 {
   "copy": "texto conforme o formato",
   "roteiro": "roteiro de gravacao (SOMENTE formato reel; senao null)",
-  "justificativa": "racional + arte sugerida + ajustes feitos por diretriz",
-  "scheduled_for": "YYYY-MM-DD ou null"
+  "justificativa": "racional + ajustes feitos por diretriz",
+  "scheduled_for": "YYYY-MM-DD ou null",
+  "arte": { "descricao": "direcao de arte + texto da arte", "arquivos_kit": ["file_name"] }
 }`
 
 function formatBrandBlocks(brands: BrandKnowledge[]): string {
@@ -167,11 +175,25 @@ export function parseMarketingPostRequest(
         ? p.scheduled_for.trim()
         : null
 
+    // Bloco arte (75-240): opcional e tolerante — arte ruim não derruba a copy.
+    // Reel nunca tem arte; nos demais, sem descrição = sem arte (a rota pula a geração).
+    let arte: MarketingPostRequestResult["arte"] = null
+    if (formato !== "reel" && typeof p.arte === "object" && p.arte !== null) {
+      const a = p.arte as Record<string, unknown>
+      if (str(a.descricao)) {
+        const arquivos = Array.isArray(a.arquivos_kit)
+          ? (a.arquivos_kit as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).map((f) => f.trim())
+          : []
+        arte = { descricao: a.descricao.trim(), arquivos_kit: arquivos }
+      }
+    }
+
     return {
       copy: p.copy.trim(),
       roteiro: formato === "reel" ? roteiro : null,
       justificativa: p.justificativa.trim(),
       scheduled_for: scheduledFor,
+      arte,
     }
   } catch {
     return null

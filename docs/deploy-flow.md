@@ -14,6 +14,8 @@
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
+- `VERTEX_API_KEY` — motor de imagem da Lídia (gemini-3.1-flash-image via
+  Vertex Express; Story 75-240). Sem ela os posts nascem SEM arte (fail-open).
 
 ### Staging only
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`
