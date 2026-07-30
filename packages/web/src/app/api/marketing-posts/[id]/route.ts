@@ -7,7 +7,7 @@ import {
 } from "@web/lib/marketing/posts"
 
 const POST_SELECT =
-  "id, org_id, empreendimento_id, canal, copy, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+  "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
 
 // PATCH /api/marketing-posts/[id] — edição de conteúdo (copy/arte_url/
 // scheduled_for em sugerido/aprovado) e/ou transição de status validada

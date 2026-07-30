@@ -10,7 +10,7 @@ import {
 // multi-org sem trigger que preencha).
 
 const POST_SELECT =
-  "id, org_id, empreendimento_id, canal, copy, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+  "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
 
 // GET /api/marketing-posts?status= — listagem por área da aba Agente.
 export async function GET(req: NextRequest) {

@@ -108,3 +108,28 @@ describe("validateMarketingPostInput", () => {
     expect(validateMarketingPostInput("x", { partial: true }).ok).toBe(false)
   })
 })
+
+// Story 75-239 — formato e roteiro no post
+describe("formato/roteiro (Story 75-239)", () => {
+  const base = { canal: "instagram", copy: "texto" }
+
+  it("formato válido passa; inválido falha; vazio vira null", () => {
+    const ok = validateMarketingPostInput({ ...base, formato: "reel" }, { partial: false })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) expect(ok.value.formato).toBe("reel")
+    const bad = validateMarketingPostInput({ ...base, formato: "tiktok" }, { partial: false })
+    expect(bad.ok).toBe(false)
+    const vazio = validateMarketingPostInput({ ...base, formato: "" }, { partial: false })
+    expect(vazio.ok).toBe(true)
+    if (vazio.ok) expect(vazio.value.formato).toBeNull()
+  })
+
+  it("roteiro é opcional, trim, e PATCH parcial sem ele não devolve a chave", () => {
+    const ok = validateMarketingPostInput({ ...base, roteiro: "  CENA 1  " }, { partial: false })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) expect(ok.value.roteiro).toBe("CENA 1")
+    const patch = validateMarketingPostInput({ copy: "novo" }, { partial: true })
+    expect(patch.ok).toBe(true)
+    if (patch.ok) expect("roteiro" in patch.value).toBe(false)
+  })
+})
