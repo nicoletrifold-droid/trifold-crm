@@ -14,6 +14,7 @@ const VALID = {
   roteiro: null,
   justificativa: "Racional",
   scheduled_for: "2026-08-05",
+  arte: null,
 }
 
 describe("parseMarketingPostRequest", () => {
@@ -39,6 +40,25 @@ describe("parseMarketingPostRequest", () => {
     expect(parseMarketingPostRequest(JSON.stringify({ ...VALID, justificativa: "" }), "estatico")).toBeNull()
     const r = parseMarketingPostRequest(JSON.stringify({ ...VALID, scheduled_for: "amanhã" }), "estatico")
     expect(r?.scheduled_for).toBeNull()
+  })
+
+  // Story 75-240 — bloco de direção de arte
+  it("bloco arte é parseado (descrição + arquivos), tolerante a lixo, e nunca em reel", () => {
+    const comArte = {
+      ...VALID,
+      arte: { descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png", "  ", 42] },
+    }
+    const r = parseMarketingPostRequest(JSON.stringify(comArte), "story")
+    expect(r?.arte).toEqual({ descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png"] })
+    // sem descrição = sem arte (a rota pula a geração, copy sobrevive)
+    const semDesc = parseMarketingPostRequest(JSON.stringify({ ...VALID, arte: { arquivos_kit: ["x"] } }), "estatico")
+    expect(semDesc?.arte).toBeNull()
+    // reel nunca tem arte, mesmo que o modelo mande
+    const reel = parseMarketingPostRequest(
+      JSON.stringify({ ...VALID, roteiro: "CENA 1", arte: { descricao: "x", arquivos_kit: [] } }),
+      "reel"
+    )
+    expect(reel?.arte).toBeNull()
   })
 
   it("JSON cercado de prosa/code block é recortado; lixo → null", () => {
