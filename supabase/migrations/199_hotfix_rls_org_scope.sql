@@ -1,5 +1,5 @@
 -- =============================================================================
--- 193_hotfix_rls_org_scope.sql — Hotfix de segurança (Lote 0)
+-- 199_hotfix_rls_org_scope.sql — Hotfix de segurança (Lote 0)
 -- =============================================================================
 -- Origem: docs/audits/rls-multi-tenant-audit.md — itens P1, P2, P3, P6 e a
 -- mitigação de P4. Quatro dos achados são vazamento CONFIRMADO em produção
@@ -882,7 +882,7 @@ FROM authenticated, anon;
 -- =============================================================================
 -- ROLLBACK (comentado — para uso em incidente)
 -- =============================================================================
--- Não há migration `down` no projeto e não existe story para a 193. Este bloco
+-- Não há migration `down` no projeto e não existe story para a 199. Este bloco
 -- existe para que ninguém precise extrair definição de `pg_get_functiondef()`ish
 -- no meio de um incidente. Aplicar EM TRANSAÇÃO ÚNICA, igual ao caminho de ida.
 --

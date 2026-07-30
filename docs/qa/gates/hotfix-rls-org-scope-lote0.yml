@@ -1,7 +1,7 @@
 schema: 1
 storyId: "hotfix-rls-lote0"
 story: "Lote 0 — Hotfix de segurança RLS/org-scope (P1, P2, P3, P6, P4)"
-title: "Quality Gate — migration 193_hotfix_rls_org_scope + 5 rotas"
+title: "Quality Gate — migration 199_hotfix_rls_org_scope + 5 rotas"
 epic: null
 gate: PASS
 verdict: PASS
@@ -127,7 +127,7 @@ top_issues:
       real de trocar é remover o swallow. `WHEN others` não captura QUERY_CANCELED nem
       ASSERT_FAILURE, então statement_timeout não é mascarado — o swallow é estreito na
       prática, mas é mais largo do que precisa.
-    file: "supabase/migrations/193_hotfix_rls_org_scope.sql:132-136"
+    file: "supabase/migrations/199_hotfix_rls_org_scope.sql:132-136"
     fix: >
       Prod é PG 17.6, então `pg_input_is_valid(text,'jsonb')` está disponível e elimina o
       bloco de exceção e a subtransação. Opcional — não bloqueia.
@@ -155,7 +155,7 @@ top_issues:
       dependência função→função, então o DROP passa e as 4 quebram em runtime com "function
       public.assert_org_scope(uuid) does not exist" — pior que o estado que se tentava reverter,
       e sob pressão de incidente.
-    file: "supabase/migrations/193_hotfix_rls_org_scope.sql:1011"
+    file: "supabase/migrations/199_hotfix_rls_org_scope.sql:1011"
     fix: "Remover a linha (helper órfão é inócuo) ou movê-la para o fim com aviso explícito."
   - id: C4
     severity: low
@@ -164,7 +164,7 @@ top_issues:
       O rollback de P2 usa `ALTER VIEW … SET (security_invoker = off)`, mas o estado original
       era a reloption AUSENTE (`(unset)`), não `off`. Semanticamente equivalente; deixa uma
       reloption residual.
-    file: "supabase/migrations/193_hotfix_rls_org_scope.sql:1014"
+    file: "supabase/migrations/199_hotfix_rls_org_scope.sql:1014"
     fix: "`ALTER VIEW public.v_mensagens_admin RESET (security_invoker);` restaura exato."
 
 transactionality:
