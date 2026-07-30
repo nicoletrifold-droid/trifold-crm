@@ -1,6 +1,6 @@
 # Story 75-236 — Leads: filtro por Calor do Lead (temperatura)
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature (pequena)
 **Epic:** Leads / gestão comercial
 **Complexidade:** S
@@ -74,6 +74,7 @@ Ficou de fora (registrado como follow-up):
   `is.null` → 281. Confere com o `GROUP BY` no banco.
 - Suíte 1281/1281 (3 testes novos do `parseCalor`) · `tsc --noEmit` limpo · eslint sem novos avisos · `next build` OK.
 - Sem migração: usa coluna e enum existentes.
+- ✅ LIVE: PR #311 squash-merged (`1288d0e9`), deploy de produção concluído.
 
 ## Fora de escopo (registrado)
 - Coluna/badge de calor na tabela de Leads — o filtro funciona, mas a
