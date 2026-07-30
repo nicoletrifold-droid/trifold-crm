@@ -1,6 +1,6 @@
 # Story 75-241 — Direção visual da arte no "Pedir à Lídia"
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature (pequena)
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** S
@@ -51,3 +51,4 @@ direção (correto — post manual usa o Refazer).
 ## Validação
 - Suíte 1318/1318 (1 teste novo) · tsc limpo nos 2 pacotes · build OK.
 - Sem migração.
+- ✅ LIVE: PR #317 squash-merged, deploy de produção concluído.
