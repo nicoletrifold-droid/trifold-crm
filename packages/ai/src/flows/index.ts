@@ -19,6 +19,8 @@ export type { BehaviorAnalysisResult, BehaviorAnalysisInput, BehaviorChronologyE
 export { reviewOutgoingMessage, parseMessageReview, isReviewEligible } from "./message-review"
 export type { MessageReviewResult } from "./message-review"
 export { generateMarketingSuggestions, parseMarketingSuggestions } from "./marketing-suggestions"
+export { generateMarketingPostFromRequest, parseMarketingPostRequest } from "./marketing-post-request"
+export type { MarketingPostRequestInput, MarketingPostRequestResult, MarketingPostFormato } from "./marketing-post-request"
 export type {
   MarketingSuggestionsInput,
   MarketingPostSuggestion,

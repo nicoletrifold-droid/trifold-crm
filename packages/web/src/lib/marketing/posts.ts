@@ -10,6 +10,20 @@ export type MarketingPostStatus = (typeof MARKETING_POST_STATUSES)[number]
 export const MARKETING_POST_CANAIS = ["instagram", "facebook"] as const
 export type MarketingPostCanal = (typeof MARKETING_POST_CANAIS)[number]
 
+// Story 75-239 — formato do post (espelha o CHECK da mig 203). Fonte única
+// CLIENT-SAFE: a UI e as rotas leem daqui (o flow em @trifold/ai tem cópia
+// própria de propósito — importar de lá arrastaria o SDK do Anthropic pro
+// bundle client). Formato novo = mig + aqui + marketing-post-request.ts.
+export const MARKETING_POST_FORMATOS = ["estatico", "reel", "story", "carrossel"] as const
+export type MarketingPostFormato = (typeof MARKETING_POST_FORMATOS)[number]
+
+export const FORMATO_LABELS: Record<MarketingPostFormato, string> = {
+  estatico: "Post estático",
+  reel: "Reel",
+  story: "Story",
+  carrossel: "Carrossel",
+}
+
 /**
  * Transições válidas de status (AC4/AC7):
  *   sugerido → aprovado | rejeitado
@@ -29,7 +43,7 @@ export function canTransitionMarketingPost(from: string, to: string): boolean {
   return allowed.includes(to as MarketingPostStatus)
 }
 
-/** Editar copy/arte_url/scheduled_for é permitido em sugerido e aprovado. */
+/** Editar copy/roteiro/formato/arte_url/scheduled_for é permitido em sugerido e aprovado. */
 export function isMarketingPostEditable(status: string): boolean {
   return status === "sugerido" || status === "aprovado"
 }
@@ -37,7 +51,9 @@ export function isMarketingPostEditable(status: string): boolean {
 export interface MarketingPostInput {
   empreendimento_id: string | null
   canal: MarketingPostCanal
+  formato: MarketingPostFormato | null
   copy: string
+  roteiro: string | null
   arte_url: string | null
   scheduled_for: string | null
 }
@@ -73,6 +89,27 @@ export function validateMarketingPostInput(
       return { ok: false, error: "copy é obrigatória" }
     }
     out.copy = b.copy.trim()
+  }
+
+  // Story 75-239 — formato/roteiro editáveis (o Editar da fila corrige roteiro de reel).
+  if (b.formato !== undefined) {
+    if (b.formato === null || b.formato === "") {
+      out.formato = null
+    } else if (MARKETING_POST_FORMATOS.includes(b.formato as MarketingPostFormato)) {
+      out.formato = b.formato as MarketingPostFormato
+    } else {
+      return { ok: false, error: "formato deve ser estatico, reel, story ou carrossel" }
+    }
+  }
+
+  if (b.roteiro !== undefined) {
+    if (b.roteiro === null || b.roteiro === "") {
+      out.roteiro = null
+    } else if (typeof b.roteiro === "string" && b.roteiro.length <= 20_000) {
+      out.roteiro = b.roteiro.trim()
+    } else {
+      return { ok: false, error: "roteiro inválido" }
+    }
   }
 
   if (b.empreendimento_id !== undefined) {

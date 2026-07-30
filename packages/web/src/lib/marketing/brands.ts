@@ -291,3 +291,22 @@ export function brandAssetUploadBody(file: File): File {
   if (!mime || file.type === mime) return file
   return new File([file], file.name, { type: mime })
 }
+
+/**
+ * Story 75-239 — escopo do Kit num post: a institucional SEMPRE entra; marca de
+ * empreendimento só entra quando é O empreendimento do post. Post institucional
+ * leva só a institucional. QA 75-239: os ASSETS derivam DESTE conjunto (por
+ * brand_id), nunca de um segundo critério próprio — marca de empreendimento com
+ * property_id nulo (cadastro incompleto/property deletada) fica fora com os
+ * arquivos junto, em vez de vazar arquivo para post de outro produto.
+ */
+export function scopeBrandsForPost<T extends { tipo: string; property_id: string | null }>(
+  brands: T[],
+  empreendimentoId: string | null
+): T[] {
+  return brands.filter(
+    (b) =>
+      b.tipo === "institucional" ||
+      (empreendimentoId !== null && b.property_id === empreendimentoId)
+  )
+}

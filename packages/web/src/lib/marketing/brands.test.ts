@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   BRAND_ASSET_EXTENSIONS,
   BRAND_SELECT,
+  scopeBrandsForPost,
   MARKETING_BRAND_ASSET_TIPOS,
   brandAssetUploadBody,
   fonteAssetIds,
@@ -227,5 +228,31 @@ describe("briefing (Story 75-238)", () => {
     if (vazio.ok) expect(vazio.value.briefing).toBeNull()
     const gigante = validateMarketingBrandInput({ briefing: "x".repeat(20_001) }, { partial: true })
     expect(gigante.ok).toBe(false)
+  })
+})
+
+// Story 75-239 — escopo do Kit num post
+describe("scopeBrandsForPost", () => {
+  const inst = { tipo: "institucional", property_id: null, nome: "Trifold" }
+  const vind = { tipo: "empreendimento", property_id: "prop-vind", nome: "Vind" }
+  const yarden = { tipo: "empreendimento", property_id: "prop-yarden", nome: "Yarden" }
+  const orfa = { tipo: "empreendimento", property_id: null, nome: "Órfã" }
+  const all = [inst, vind, yarden, orfa]
+
+  it("post de empreendimento = institucional + A marca dele (nunca as outras)", () => {
+    expect(scopeBrandsForPost(all, "prop-vind").map((b) => b.nome)).toEqual(["Trifold", "Vind"])
+  })
+
+  it("post institucional = só a institucional", () => {
+    expect(scopeBrandsForPost(all, null).map((b) => b.nome)).toEqual(["Trifold"])
+  })
+
+  it("marca de empreendimento SEM property (órfã) nunca entra — nem em post institucional", () => {
+    expect(scopeBrandsForPost(all, "prop-yarden").some((b) => b.nome === "Órfã")).toBe(false)
+    expect(scopeBrandsForPost(all, null).some((b) => b.nome === "Órfã")).toBe(false)
+  })
+
+  it("empreendimento sem marca própria = só a institucional", () => {
+    expect(scopeBrandsForPost(all, "prop-sem-marca").map((b) => b.nome)).toEqual(["Trifold"])
   })
 })
