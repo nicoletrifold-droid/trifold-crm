@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseEnrichmentResponse, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil } from "./haiku-enrichment"
+import { parseEnrichmentResponse, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel } from "./haiku-enrichment"
 
 describe("parseEnrichmentResponse", () => {
   it("parses valid JSON response", () => {
@@ -192,5 +192,43 @@ describe("stripAlreadyFilledPerfil (Story 75-183 — guard não-sobrescrever)", 
     const patch: Record<string, unknown> = { filhos: "2" }
     stripAlreadyFilledPerfil(patch, {})
     expect(patch.filhos).toBe("2")
+  })
+})
+
+// Story 75-237 — "o corretor é superior ao sistema": temperatura escolhida por
+// humano não é mais recalculada pela IA (nem no cron, nem no pipeline da Nicole).
+describe("stripManualInterestLevel", () => {
+  it("remove interest_level do patch quando o humano já escolheu", () => {
+    const patch: Record<string, unknown> = { interest_level: "cold", qualification_score: 10, ai_summary: "x" }
+    stripManualInterestLevel(patch, { interest_level_manual: true })
+    expect(patch.interest_level).toBeUndefined()
+    // score e summary seguem dinâmicos — o guard é SÓ do calor
+    expect(patch.qualification_score).toBe(10)
+    expect(patch.ai_summary).toBe("x")
+  })
+
+  it("mantém interest_level quando ninguém mexeu (IA define o inicial)", () => {
+    const patch: Record<string, unknown> = { interest_level: "cold" }
+    stripManualInterestLevel(patch, { interest_level_manual: false })
+    expect(patch.interest_level).toBe("cold")
+  })
+
+  it("lead que não pôde ser lido (null/undefined) = fail-safe, não sobrescreve", () => {
+    const patch: Record<string, unknown> = { interest_level: "cold", qualification_score: 5 }
+    stripManualInterestLevel(patch, null)
+    expect(patch.interest_level).toBeUndefined()
+    expect(patch.qualification_score).toBe(5)
+    const patch2: Record<string, unknown> = { interest_level: "cold" }
+    stripManualInterestLevel(patch2, undefined)
+    expect(patch2.interest_level).toBeUndefined()
+  })
+
+  it("lead sem a coluna carregada não vira manual por acidente", () => {
+    const patch: Record<string, unknown> = { interest_level: "warm" }
+    stripManualInterestLevel(patch, {})
+    expect(patch.interest_level).toBe("warm")
+    const patch2: Record<string, unknown> = { interest_level: "warm" }
+    stripManualInterestLevel(patch2, { interest_level_manual: null })
+    expect(patch2.interest_level).toBe("warm")
   })
 })
