@@ -12,12 +12,35 @@ export type MarketingBrandTipo = (typeof MARKETING_BRAND_TIPOS)[number]
 export const MARKETING_BRAND_ASSET_TIPOS = ["logo", "foto", "elemento", "fonte"] as const
 export type MarketingBrandAssetTipo = (typeof MARKETING_BRAND_ASSET_TIPOS)[number]
 
+// jfif/jpe entram porque o Windows/Edge salva JPEG assim — antes da barreira de
+// extensão eles passavam pelo mime do bucket (QA 75-234, item 5).
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "jfif", "jpe", "webp", "svg"]
+
 /** Extensões aceitas por tipo de arquivo (validadas na rota /assets/sign). */
 export const BRAND_ASSET_EXTENSIONS: Record<MarketingBrandAssetTipo, string[]> = {
-  logo: ["png", "jpg", "jpeg", "webp", "svg"],
-  foto: ["png", "jpg", "jpeg", "webp", "svg"],
-  elemento: ["png", "jpg", "jpeg", "webp", "svg"],
+  logo: IMAGE_EXTENSIONS,
+  foto: IMAGE_EXTENSIONS,
+  elemento: IMAGE_EXTENSIONS,
   fonte: ["ttf", "otf", "woff", "woff2"],
+}
+
+/**
+ * Mime canônico por extensão. O navegador reporta fonte de forma inconsistente
+ * (font/ttf, application/x-font-ttf ou vazio) — o cliente manda ESTE valor no
+ * uploadToSignedUrl, o que permite ao bucket recusar octet-stream (QA 75-234, 6).
+ */
+const BRAND_ASSET_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  jfif: "image/jpeg",
+  jpe: "image/jpeg",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  woff: "font/woff",
+  woff2: "font/woff2",
 }
 
 // Story 75-230 — estrutura do Brand Hub: cor com papel, fonte por papel.
@@ -213,4 +236,9 @@ export function isAllowedBrandAssetFile(
   fileName: string
 ): boolean {
   return BRAND_ASSET_EXTENSIONS[tipo].includes(fileExtension(fileName))
+}
+
+/** Content-Type a mandar ao Storage — derivado da extensão, não do navegador. */
+export function mimeForBrandAssetFile(fileName: string): string | null {
+  return BRAND_ASSET_MIME[fileExtension(fileName)] ?? null
 }

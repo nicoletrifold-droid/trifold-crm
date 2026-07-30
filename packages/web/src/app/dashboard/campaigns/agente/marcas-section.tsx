@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
+import { mimeForBrandAssetFile } from "@web/lib/marketing/brands"
 import type { BrandCor, BrandFonte } from "@web/lib/marketing/brands"
 
 // Story 75-229 — Kit de Marcas da aba Agente: identidade por marca (institucional
@@ -67,11 +68,6 @@ function cleanFontes(list: BrandFonte[]): BrandFonte[] {
   return list.filter((f) => f.papel.trim() || f.nome.trim() || f.asset_id)
 }
 
-/** Linhas já salváveis (o servidor exige nome OU arquivo) — usado no autosave. */
-function persistableFontes(list: BrandFonte[]): BrandFonte[] {
-  return list.filter((f) => f.nome.trim() || f.asset_id)
-}
-
 /**
  * Solta vínculo com arquivo que não existe mais (excluído por outra via) — sem
  * isso o PATCH devolveria "Arquivo de fonte não encontrado nesta marca" e o
@@ -111,16 +107,35 @@ function BrandModal({
   const [propertyId, setPropertyId] = useState(brand?.property_id ?? "")
   const [cores, setCores] = useState<BrandCor[]>(brand?.cores ?? [])
   const [fontes, setFontes] = useState<BrandFonte[]>(brand?.fontes ?? [])
+  // QA 75-234 (medium 1/3): upload é assíncrono e a usuária continua digitando
+  // no meio. `fontes`/`assets` de closure ficam um render atrás e sobrescreviam
+  // o que foi digitado (e iam parar no PATCH). Os refs são a fonte da verdade
+  // de TODA mutação e de TODO payload de rede — nunca leia o state direto aqui.
+  const fontesRef = useRef<BrandFonte[]>(fontes)
+  const applyFontes = (
+    next: BrandFonte[] | ((prev: BrandFonte[]) => BrandFonte[])
+  ): BrandFonte[] => {
+    const value = typeof next === "function" ? next(fontesRef.current) : next
+    fontesRef.current = value
+    setFontes(value)
+    return value
+  }
   const [voz, setVoz] = useState(brand?.voz_da_marca ?? "")
   const [diretrizes, setDiretrizes] = useState(brand?.diretrizes ?? "")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [assets, setAssetsRaw] = useState<BrandAsset[]>(brand?.assets ?? [])
+  const assetsRef = useRef<BrandAsset[]>(assets)
   // Toda mutação de asset persiste no servidor na hora — propaga ao pai junto.
-  const applyAssets = (next: BrandAsset[]) => {
-    setAssetsRaw(next)
-    if (brand) onAssetsChanged(brand.id, next)
+  // Aceita função pra somar em cima do valor CORRENTE (uploads concorrentes de
+  // imagem e de fonte não se atropelam mais — QA 75-234, medium 3).
+  const applyAssets = (next: BrandAsset[] | ((prev: BrandAsset[]) => BrandAsset[])): BrandAsset[] => {
+    const value = typeof next === "function" ? next(assetsRef.current) : next
+    assetsRef.current = value
+    setAssetsRaw(value)
+    if (brand) onAssetsChanged(brand.id, value)
+    return value
   }
   const [assetTipo, setAssetTipo] = useState<"logo" | "foto" | "elemento">("logo")
   const [assetLabel, setAssetLabel] = useState("")
@@ -163,7 +178,7 @@ function BrandModal({
         // "#" solto = linha recém-adicionada não preenchida — descarta; hex
         // inválido DIGITADO segue ao server p/ devolver o erro (não some calado).
         cores: cores.filter((c) => c.hex.trim().length > 1),
-        fontes: cleanFontes(sanitizeFontes(fontes, assets)),
+        fontes: cleanFontes(sanitizeFontes(fontesRef.current, assetsRef.current)),
         voz_da_marca: voz || null,
         diretrizes: diretrizes || null,
       }
@@ -196,7 +211,7 @@ function BrandModal({
         setPendingFiles([])
         if (fonteAssetByIndex.size > 0) {
           const linked = cleanFontes(
-            fontes.map((f, idx) => {
+            fontesRef.current.map((f, idx) => {
               const assetId = fonteAssetByIndex.get(idx)
               return assetId ? { ...f, asset_id: assetId } : f
             })
@@ -211,14 +226,22 @@ function BrandModal({
             if (!patchRes.ok || !patchData.brand) throw new Error(patchData.error ?? "erro ao vincular")
             brandFinal = patchData.brand
           } catch (e) {
-            failed.push(`vínculo das fontes (${e instanceof Error ? e.message : "erro"})`)
+            // Rollback: asset de fonte sem vínculo não aparece em NENHUMA tela
+            // (a grade só mostra imagens) — ficaria preso no bucket. Solta os
+            // arquivos e a usuária reanexa pela marca já criada (QA 75-234, 4).
+            const orfaos = [...fonteAssetByIndex.values()]
+            for (const assetId of orfaos) {
+              await deleteAssetRequest(data.brand.id, assetId).catch(() => {})
+            }
+            createdAssets = createdAssets.filter((a) => !orfaos.includes(a.id))
+            failed.push(`vínculo das fontes (${e instanceof Error ? e.message : "erro"}) — reanexe o arquivo da fonte`)
           }
         }
         if (failed.length > 0) {
           window.alert(`A marca foi criada, mas ${failed.length} item(ns) falharam: ${failed.join(", ")}. Reenvie pela própria marca.`)
         }
       }
-      onSaved({ ...brandFinal, assets: brand ? (data.brand.assets ?? assets) : createdAssets })
+      onSaved({ ...brandFinal, assets: brand ? (data.brand.assets ?? assetsRef.current) : createdAssets })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar marca")
     } finally {
@@ -247,7 +270,9 @@ function BrandModal({
     const { error: upErr } = await supabase.storage
       .from("marketing-brands")
       .uploadToSignedUrl(signData.storagePath, signData.token, file, {
-        contentType: file.type || "application/octet-stream",
+        // Mime pela EXTENSÃO (o navegador erra o de fonte) — assim o bucket não
+        // precisa aceitar octet-stream (QA 75-234, item 6).
+        contentType: mimeForBrandAssetFile(file.name) ?? file.type ?? "application/octet-stream",
       })
     if (upErr) throw new Error(`Falha no envio de "${file.name}": ${upErr.message}`)
     const regRes = await fetch(`/api/marketing-brands/${brandId}/assets`, {
@@ -290,12 +315,10 @@ function BrandModal({
     setError(null)
     setUploading(true)
     let okCount = 0
-    let current = assets
     try {
       for (const file of Array.from(files)) {
         const asset = await uploadOne(brand.id, file, assetTipo, assetLabel)
-        current = [...current, asset]
-        applyAssets(current)
+        applyAssets((prev) => [...prev, asset])
         okCount++
       }
       setUploadMsg(`${okCount} arquivo(s) enviado(s).`)
@@ -319,14 +342,17 @@ function BrandModal({
   }
 
   // Story 75-234 — grava SÓ as fontes (autosave do vínculo com o arquivo, que
-  // sobe/é excluído na hora). Linhas ainda incompletas ficam de fora — o erro
-  // delas cabe ao Salvar explícito, não a um autosave silencioso.
+  // sobe/é excluído na hora); PATCH parcial, não toca cores/voz/diretrizes.
   async function persistFontes(brandId: string, next: BrandFonte[], known: BrandAsset[]) {
     const safe = sanitizeFontes(next, known)
+    // QA 75-234 (medium 2): manda o MESMO payload do Salvar. Filtrar "linha
+    // incompleta" aqui apagaria do banco uma fonte já salva que a usuária
+    // estava no meio de reescrever — autosave nunca deleta calado. Se alguma
+    // linha estiver incompleta o servidor recusa e quem chamou mostra o erro.
     const res = await fetch(`/api/marketing-brands/${brandId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fontes: persistableFontes(safe) }),
+      body: JSON.stringify({ fontes: cleanFontes(safe) }),
     })
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string }
@@ -351,21 +377,29 @@ function BrandModal({
     if (!brand) {
       setPendingFiles((prev) => [
         ...prev.filter((p) => p.fonteIndex !== index),
-        { file, tipo: "fonte", label: fontes[index]?.papel ?? "", fonteIndex: index },
+        { file, tipo: "fonte", label: fontesRef.current[index]?.papel ?? "", fonteIndex: index },
       ])
-      setFontes((prev) => prev.map((x, j) => (j === index ? { ...x, nome: x.nome.trim() || nomeAuto } : x)))
+      applyFontes((prev) => prev.map((x, j) => (j === index ? { ...x, nome: x.nome.trim() || nomeAuto } : x)))
       return
     }
     setFonteBusyIdx(index)
     try {
-      const asset = await uploadOne(brand.id, file, "fonte", fontes[index]?.papel ?? "")
-      const next = fontes.map((x, j) =>
-        j === index ? { ...x, nome: x.nome.trim() || nomeAuto, asset_id: asset.id } : x
+      const asset = await uploadOne(brand.id, file, "fonte", fontesRef.current[index]?.papel ?? "")
+      const nextAssets = applyAssets((prev) => [...prev, asset])
+      // Aplica sobre o valor CORRENTE — o que a usuária digitou durante o upload
+      // continua valendo.
+      const next = applyFontes((prev) =>
+        prev.map((x, j) => (j === index ? { ...x, nome: x.nome.trim() || nomeAuto, asset_id: asset.id } : x))
       )
-      const nextAssets = [...assets, asset]
-      setFontes(next)
-      applyAssets(nextAssets)
-      await persistFontes(brand.id, next, nextAssets)
+      try {
+        await persistFontes(brand.id, next, nextAssets)
+      } catch (err) {
+        // Arquivo subiu, vínculo não: o state local já tem o asset_id, então o
+        // "Salvar alterações" fecha a conta depois de corrigir a linha.
+        setError(
+          `Arquivo enviado, mas as fontes não foram salvas: ${err instanceof Error ? err.message : "erro"}. Ajuste a linha e clique em Salvar alterações.`
+        )
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao enviar a fonte")
     } finally {
@@ -374,20 +408,19 @@ function BrandModal({
   }
 
   async function handleRemoveFonteFile(index: number) {
-    const f = fontes[index]
+    const f = fontesRef.current[index]
     if (!f || fonteBusyIdx !== null) return
-    const next = fontes.map((x, j) => (j === index ? { ...x, asset_id: null } : x))
-    if (!brand || !f.asset_id) {
-      setFontes(next)
+    const assetId = f.asset_id
+    if (!brand || !assetId) {
+      applyFontes((prev) => prev.map((x, j) => (j === index ? { ...x, asset_id: null } : x)))
       return
     }
     setFonteBusyIdx(index)
     setError(null)
     try {
-      const nextAssets = assets.filter((a) => a.id !== f.asset_id)
-      await deleteAssetRequest(brand.id, f.asset_id)
-      applyAssets(nextAssets)
-      setFontes(next)
+      await deleteAssetRequest(brand.id, assetId)
+      const nextAssets = applyAssets((prev) => prev.filter((a) => a.id !== assetId))
+      const next = applyFontes((prev) => prev.map((x, j) => (j === index ? { ...x, asset_id: null } : x)))
       await persistFontes(brand.id, next, nextAssets)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao remover o arquivo da fonte")
@@ -398,8 +431,7 @@ function BrandModal({
 
   async function handleRemoveFonte(index: number) {
     if (fonteBusyIdx !== null) return
-    const f = fontes[index]
-    const next = fontes.filter((_, j) => j !== index)
+    const assetId = fontesRef.current[index]?.asset_id
     // A fila é indexada por linha: solta a desta e reindexa as de baixo.
     const shiftPending = () =>
       setPendingFiles((prev) =>
@@ -407,18 +439,17 @@ function BrandModal({
           .filter((p) => p.fonteIndex !== index)
           .map((p) => (p.fonteIndex !== undefined && p.fonteIndex > index ? { ...p, fonteIndex: p.fonteIndex - 1 } : p))
       )
-    if (!brand || !f?.asset_id) {
-      setFontes(next)
+    if (!brand || !assetId) {
+      applyFontes((prev) => prev.filter((_, j) => j !== index))
       shiftPending()
       return
     }
     setFonteBusyIdx(index)
     setError(null)
     try {
-      const nextAssets = assets.filter((a) => a.id !== f.asset_id)
-      await deleteAssetRequest(brand.id, f.asset_id)
-      applyAssets(nextAssets)
-      setFontes(next)
+      await deleteAssetRequest(brand.id, assetId)
+      const nextAssets = applyAssets((prev) => prev.filter((a) => a.id !== assetId))
+      const next = applyFontes((prev) => prev.filter((_, j) => j !== index))
       shiftPending()
       await persistFontes(brand.id, next, nextAssets)
     } catch (err) {
@@ -553,14 +584,14 @@ function BrandModal({
                   <div key={i} className="flex flex-wrap items-center gap-2">
                     <input
                       value={f.nome}
-                      onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
+                      onChange={(e) => applyFontes((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
                       className={`${inpBase} min-w-0 flex-1`}
                       placeholder="Nome da fonte (ex.: Montserrat)"
                       style={asset ? { fontFamily: `"${fonteFamily(asset.id)}"` } : undefined}
                     />
                     <input
                       value={f.papel}
-                      onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, papel: e.target.value } : x)))}
+                      onChange={(e) => applyFontes((prev) => prev.map((x, j) => (j === i ? { ...x, papel: e.target.value } : x)))}
                       className={`${inpBase} w-36 flex-none`}
                       placeholder="Papel (ex.: Título)"
                       list="fontes-papeis"
@@ -614,7 +645,7 @@ function BrandModal({
               <datalist id="fontes-papeis">
                 <option value="Título" /><option value="Subtítulo" /><option value="Cabeçalho" /><option value="Corpo" /><option value="Legenda" />
               </datalist>
-              <button type="button" onClick={() => setFontes((prev) => [...prev, { papel: "", nome: "", asset_id: null }])}
+              <button type="button" onClick={() => applyFontes((prev) => [...prev, { papel: "", nome: "", asset_id: null }])}
                 className="text-xs font-medium text-orange-600 hover:underline dark:text-orange-300">
                 + Adicionar fonte
               </button>

@@ -13,18 +13,19 @@ ALTER TABLE public.marketing_brand_assets
   ADD CONSTRAINT marketing_brand_assets_tipo_check
   CHECK (tipo IN ('logo', 'foto', 'elemento', 'fonte'));
 
--- 2) bucket aceita os mime types de fonte. GOTCHA: navegador reporta o tipo de
--- .ttf/.otf de forma inconsistente (font/ttf, application/x-font-ttf ou vazio →
--- o cliente manda application/octet-stream). A extensão é validada na rota
--- /assets/sign por tipo (imagem × fonte) — o bucket é a 2ª barreira.
+-- 2) bucket aceita os mime types de fonte. GOTCHA: o navegador reporta o tipo de
+-- .ttf/.otf de forma inconsistente (font/ttf, application/x-font-ttf ou vazio) —
+-- por isso o cliente manda o mime CANÔNICO derivado da extensão
+-- (mimeForBrandAssetFile) e a extensão é validada em /assets/sign e /assets.
+-- Nada de 'application/octet-stream' aqui: bucket público não deve aceitar
+-- bytes arbitrários (QA 75-234, item 6).
 UPDATE storage.buckets
    SET allowed_mime_types = ARRAY[
          'image/png', 'image/jpeg', 'image/webp', 'image/svg+xml',
          'font/ttf', 'font/otf', 'font/woff', 'font/woff2',
          'application/font-woff', 'application/font-sfnt',
          'application/x-font-ttf', 'application/x-font-otf',
-         'application/vnd.ms-opentype',
-         'application/octet-stream'
+         'application/vnd.ms-opentype'
        ]
  WHERE id = 'marketing-brands';
 

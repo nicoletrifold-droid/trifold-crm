@@ -1,6 +1,6 @@
 # Story 75-234 — Kit de Marcas: conserto do layout de Cores/Fontes + upload do arquivo da fonte
 
-**Status:** InProgress
+**Status:** InReview
 **Tipo:** Bug + Feature
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** M
@@ -70,10 +70,43 @@ fonte**, como já existe nos outros campos do kit.
 - `packages/web/src/app/api/marketing-brands/[id]/assets/route.ts`
 - `packages/web/src/app/api/marketing-brands/[id]/assets/sign/route.ts`
 
+## QA Results
+Quinn: **CONCERNS** (3 medium + 4 low) — **todos corrigidos no mesmo ciclo**:
+1. *(medium)* `setFontes(next)` com array de closure velha revertia o que a
+   usuária digitava durante o upload → `fontesRef`/`assetsRef` viraram a fonte
+   da verdade de toda mutação e de todo payload de rede (`applyFontes`,
+   `applyAssets` aceitam updater funcional).
+2. *(medium)* o autosave mandava só as linhas "salváveis" e o PATCH substitui o
+   array inteiro → uma fonte já salva que estivesse sendo reescrita sumia do
+   banco calada. Agora o autosave manda o MESMO payload do Salvar; se alguma
+   linha estiver incompleta o servidor recusa e a mensagem aparece na hora
+   ("Arquivo enviado, mas as fontes não foram salvas… clique em Salvar").
+3. *(medium)* upload de imagem e de fonte tinham guards independentes e um
+   sobrescrevia o `assets` do outro (chegando a zerar um vínculo válido no
+   `sanitizeFontes`) → laço de imagens passou a somar via updater sobre o ref.
+4. *(low)* falha no PATCH de vínculo pós-criação deixava asset de fonte órfão e
+   invisível → rollback (exclui os arquivos) + `DELETE /assets/[assetId]` agora
+   limpa `fontes[].asset_id` no servidor.
+5. *(low)* a barreira de extensão tinha estreitado imagens → `jfif`/`jpe` de
+   volta na whitelist.
+6. *(low)* `application/octet-stream` **removido** do bucket: o cliente passou a
+   mandar o mime canônico derivado da extensão (`mimeForBrandAssetFile`), então
+   o bucket público não aceita mais bytes arbitrários. Migração re-aplicada em
+   prod e dev (13 mime types, sem octet-stream).
+7. *(low, aceito como debt)* a checagem de posse do asset no PATCH e o gate de
+   extensão no registro `/assets` não têm teste automatizado — o repo não tem
+   infra de teste de rota (só `lib/*.test.ts`). Helpers puros cobertos.
+
+Verificado por ele também: idempotência da 199 contra os dados reais, CORS do
+Storage (a prévia `@font-face` funciona), zero regressão no fluxo de imagens
+(75-229/230/232), e varredura do gotcha Tailwind no repo — nenhum outro
+`${base} w-N` com `w-full` na base.
+
 ## Validação
-- Suíte: 1274/1274 · `tsc --noEmit` limpo · eslint limpo · `next build` OK.
+- Suíte: 1277/1277 · `tsc --noEmit` limpo · eslint limpo · `next build` OK
+  (rodados antes e DEPOIS das correções de QA).
 - Migração 199 aplicada em **prod** (dsopqkqjkmhytudaaolv) e **dev**
-  (xnxvygyfyyyzwhiuoehz) via Management API; CHECK e `allowed_mime_types` (14
-  tipos) conferidos nos dois.
+  (xnxvygyfyyyzwhiuoehz) via Management API; CHECK e `allowed_mime_types` (13
+  tipos, sem octet-stream) conferidos nos dois.
 - Pendente: teste real da Laura (subir a Montserrat na marca Vind Residence e
   preencher o papel das 3 cores, que ficaram `null` por causa do bug).

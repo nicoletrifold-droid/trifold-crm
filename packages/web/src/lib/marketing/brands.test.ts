@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  BRAND_ASSET_EXTENSIONS,
+  MARKETING_BRAND_ASSET_TIPOS,
   fonteAssetIds,
   isAllowedBrandAssetFile,
+  mimeForBrandAssetFile,
   isValidBrandAssetTipo,
   validateBrandConsistency,
   validateMarketingBrandInput,
@@ -117,7 +120,7 @@ describe("isValidBrandAssetTipo", () => {
   })
 })
 
-// Story 75-234 — a extensão é a barreira real (bucket aceita octet-stream)
+// Story 75-234 — a extensão é a barreira real (o mime vai canônico ao bucket)
 describe("isAllowedBrandAssetFile", () => {
   it("imagem não aceita fonte e fonte não aceita imagem", () => {
     expect(isAllowedBrandAssetFile("logo", "marca.png")).toBe(true)
@@ -126,6 +129,29 @@ describe("isAllowedBrandAssetFile", () => {
     expect(isAllowedBrandAssetFile("fonte", "Inter.woff2")).toBe(true)
     expect(isAllowedBrandAssetFile("fonte", "arte.png")).toBe(false)
     expect(isAllowedBrandAssetFile("fonte", "fonte")).toBe(false)
+  })
+
+  it("jfif/jpe seguem aceitos como imagem (QA 75-234)", () => {
+    expect(isAllowedBrandAssetFile("foto", "fachada.jfif")).toBe(true)
+    expect(isAllowedBrandAssetFile("foto", "fachada.jpe")).toBe(true)
+  })
+})
+
+describe("mimeForBrandAssetFile", () => {
+  it("mime vem da extensão, não do navegador", () => {
+    expect(mimeForBrandAssetFile("Montserrat.ttf")).toBe("font/ttf")
+    expect(mimeForBrandAssetFile("Inter.WOFF2")).toBe("font/woff2")
+    expect(mimeForBrandAssetFile("fachada.jfif")).toBe("image/jpeg")
+    expect(mimeForBrandAssetFile("marca.svg")).toBe("image/svg+xml")
+    expect(mimeForBrandAssetFile("planilha.xlsx")).toBeNull()
+  })
+
+  it("todo formato aceito tem mime canônico (nada cai em octet-stream)", () => {
+    for (const tipo of MARKETING_BRAND_ASSET_TIPOS) {
+      for (const ext of BRAND_ASSET_EXTENSIONS[tipo]) {
+        expect(mimeForBrandAssetFile(`arquivo.${ext}`)).toBeTruthy()
+      }
+    }
   })
 })
 
