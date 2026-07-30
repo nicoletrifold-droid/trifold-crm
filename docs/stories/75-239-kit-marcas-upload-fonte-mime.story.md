@@ -1,6 +1,6 @@
 # Story 75-239 — Kit de Marcas: upload da fonte falhava com "mime type application/octet-stream is not supported"
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** S
@@ -94,5 +94,7 @@ O objeto gravado é servido com `content-type: font/ttf` — ou seja, a prévia
   preservados.
 - Suíte completa: **1289/1289** · `tsc --noEmit` limpo · eslint sem erros (18
   warnings pré-existentes, nenhum nos arquivos tocados) · `next build` OK.
+- ✅ LIVE: PR #313 squash-merged (`0382b209`), deploy de produção concluído;
+  smoke anônimo OK (`/dashboard/campaigns/agente` 307, `/api/marketing-brands` 401).
 - Pendente: teste real da equipe subindo a Montserrat na marca Vind Residence
-  após o deploy.
+  (o caminho do navegador só fecha com o arquivo de verdade no Chrome dela).
