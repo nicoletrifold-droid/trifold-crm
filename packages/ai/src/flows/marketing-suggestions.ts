@@ -48,6 +48,17 @@ export interface PropertyOption {
   differentials: unknown
 }
 
+/** Story 75-238 — conhecimento do Kit de Marcas que a Lídia usa pra criar. */
+export interface BrandKnowledge {
+  nome: string
+  tipo: "institucional" | "empreendimento"
+  /** id de properties quando tipo='empreendimento' (casa com empreendimento_id) */
+  property_id: string | null
+  voz_da_marca: string | null
+  diretrizes: string | null
+  briefing: string | null
+}
+
 export interface MarketingSuggestionsInput {
   /** Janela analisada, em dias (contexto para o modelo) */
   periodDays: number
@@ -57,6 +68,8 @@ export interface MarketingSuggestionsInput {
   campaigns: CampaignSummary[]
   /** Empreendimentos ativos disponíveis para divulgar */
   properties: PropertyOption[]
+  /** Kit de Marcas (Story 75-238): voz, diretrizes e briefing por marca */
+  brands?: BrandKnowledge[]
   /** Referência de "hoje" (ISO) para datas sugeridas */
   now: string
 }
@@ -75,6 +88,9 @@ export interface MarketingPostSuggestion {
 const MAX_SUGGESTIONS = 5
 
 const SUGGESTIONS_PROMPT = `Voce e Lidia, a agente de marketing de uma construtora/imobiliaria (Trifold). Com base na performance REAL das campanhas Meta Ads e do funil de vendas do CRM abaixo, sugira posts organicos para Instagram/Facebook.
+
+CONHECIMENTO DAS MARCAS (Kit de Marcas): quando houver um bloco de marcas abaixo, ele e a SUA FONTE DE VERDADE sobre a empresa e cada empreendimento — voz, diretrizes (proibicoes) e briefing (produto, publico, argumentos de venda, provas sociais, concorrencia, status de vendas). Siga a voz da marca em toda copy; NUNCA viole uma diretriz; use os argumentos e dados do briefing. Se o briefing conflitar com uma diretriz (ex.: argumento de prazo x proibicao de cravar prazo), a DIRETRIZ vence: reformule o argumento sem violar a regra. So afirme numeros (preco, metragem, % vendido, prazo) que estejam no briefing ou nos dados de performance.
+ESCOPO POR MARCA: cada bloco vale SOMENTE para a propria marca. Em post de um empreendimento, use o bloco DAQUELE empreendimento + o institucional; NUNCA aplique diretriz, numero ou caracteristica (preco, % vendido, prazo, short-stay, condicao de pagamento) de um empreendimento a outro.
 
 COMO ANALISAR:
 - Cruze cadastros brutos da Meta (total_leads) com o funil REAL do CRM (crm_leads_*): muitos cadastros com funil vazio = formato/publico ruim (aprendizado, nao sucesso); CPL baixo COM visitas/propostas no CRM = formato vencedor a reforcar.
@@ -152,6 +168,21 @@ function formatProperties(rows: PropertyOption[]): string {
     .join("\n")
 }
 
+function formatBrands(rows: BrandKnowledge[] | undefined): string {
+  if (!rows || rows.length === 0) return ""
+  const blocks = rows.map((b) => {
+    const head = b.tipo === "institucional"
+      ? `MARCA INSTITUCIONAL — ${b.nome}`
+      : `EMPREENDIMENTO — ${b.nome}${b.property_id ? ` (id=${b.property_id})` : ""}`
+    const parts = [head]
+    if (b.voz_da_marca) parts.push(`Voz da marca: ${b.voz_da_marca}`)
+    if (b.diretrizes) parts.push(`Diretrizes/proibicoes (NUNCA violar): ${b.diretrizes}`)
+    if (b.briefing) parts.push(`Briefing: ${b.briefing}`)
+    return parts.join("\n")
+  })
+  return `\n\nKIT DE MARCAS (fonte de verdade sobre a empresa e os produtos):\n${blocks.join("\n\n---\n\n")}`
+}
+
 export async function generateMarketingSuggestions(
   anthropic: Anthropic,
   input: MarketingSuggestionsInput
@@ -163,7 +194,7 @@ export async function generateMarketingSuggestions(
   const prompt = `${SUGGESTIONS_PROMPT}
 
 DATA ATUAL: ${nowStamp}
-JANELA ANALISADA: ultimos ${input.periodDays} dias
+JANELA ANALISADA: ultimos ${input.periodDays} dias${formatBrands(input.brands)}
 
 EMPREENDIMENTOS ATIVOS (use o id EXATO ou null):
 ${formatProperties(input.properties)}

@@ -3,6 +3,7 @@ import { marketingGuard } from "@web/lib/marketing/guard"
 import {
   createAnthropicClient,
   generateMarketingSuggestions,
+  type BrandKnowledge,
   type CampaignSummary,
   type CreativePerformanceRow,
   type PropertyOption,
@@ -32,7 +33,7 @@ export async function POST() {
   // - meta_campaigns/meta_insights_daily/properties: client do usuário
   //   (policies org_isolation / leitura staff).
   // - marketing_posts: admin client (RLS habilitada SEM policies).
-  const [creativesRes, campaignsRes, insightsRes, propertiesRes] = await Promise.all([
+  const [creativesRes, campaignsRes, insightsRes, propertiesRes, brandsRes] = await Promise.all([
     supabase.rpc("creative_performance", { p_days: PERIOD_DAYS }),
     supabase
       .from("meta_campaigns")
@@ -56,10 +57,18 @@ export async function POST() {
       .select("id, name, status, city, delivery_date, differentials")
       .eq("org_id", appUser.org_id)
       .eq("is_active", true),
+    // Story 75-238 — Kit de Marcas: voz/diretrizes/briefing viram contexto da
+    // Lídia. Admin client (marketing_brands tem RLS SEM policies).
+    admin
+      .from("marketing_brands")
+      .select("nome, tipo, property_id, voz_da_marca, diretrizes, briefing")
+      .eq("org_id", appUser.org_id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true }),
   ])
 
   const queryError =
-    creativesRes.error ?? campaignsRes.error ?? insightsRes.error ?? propertiesRes.error
+    creativesRes.error ?? campaignsRes.error ?? insightsRes.error ?? propertiesRes.error ?? brandsRes.error
   if (queryError) {
     return NextResponse.json({ error: queryError.message }, { status: 500 })
   }
@@ -106,6 +115,16 @@ export async function POST() {
   })
 
   const properties = (propertiesRes.data ?? []) as PropertyOption[]
+  // Marca de empreendimento INATIVO fica fora do Kit (QA 75-238): o id dela não
+  // está na lista válida, então a sugestão viraria post "institucional" com
+  // copy de produto arquivado.
+  const activePropertyIds = new Set(properties.map((p) => p.id))
+  const brands = ((brandsRes.data ?? []) as BrandKnowledge[]).filter(
+    (b) => !b.property_id || activePropertyIds.has(b.property_id)
+  )
+  // Sanity: Kit vazio = sugestões sem guardrail de marca (voz/diretrizes) —
+  // funciona (campo opcional, comportamento pré-238), mas merece rastro no log.
+  if (brands.length === 0) console.warn("[marketing-posts/generate] Kit de Marcas vazio — gerando sem contexto de marca")
 
   if (creatives.length === 0 && campaigns.length === 0) {
     return NextResponse.json(
@@ -121,6 +140,7 @@ export async function POST() {
       creatives,
       campaigns,
       properties,
+      brands,
       now: new Date().toISOString(),
     })
 
@@ -134,7 +154,7 @@ export async function POST() {
 
     // empreendimento_id precisa existir na org — id alucinado vira null
     // (post institucional) em vez de quebrar o INSERT na FK.
-    const validPropertyIds = new Set(properties.map((p) => p.id))
+    const validPropertyIds = activePropertyIds
     const rows = suggestions.map((s) => ({
       org_id: appUser.org_id,
       empreendimento_id:

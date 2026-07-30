@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   BRAND_ASSET_EXTENSIONS,
+  BRAND_SELECT,
   MARKETING_BRAND_ASSET_TIPOS,
   fonteAssetIds,
   isAllowedBrandAssetFile,
@@ -172,5 +173,29 @@ describe("fonteAssetIds", () => {
         { papel: "X", nome: "D" },
       ])
     ).toEqual(["id-1"])
+  })
+})
+
+// Story 75-238 — briefing por marca
+describe("briefing (Story 75-238)", () => {
+  it("BRAND_SELECT devolve o briefing — sem isso o modal abre vazio e o próximo Salvar APAGA o conteúdo em prod", () => {
+    expect(BRAND_SELECT).toContain("briefing")
+  })
+
+  it("PATCH parcial sem briefing não devolve a chave (autosave de fontes não pode tocar no briefing)", () => {
+    const r = validateMarketingBrandInput({ fontes: [{ papel: "T", nome: "Inter" }] }, { partial: true })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect("briefing" in r.value).toBe(false)
+  })
+
+  it("briefing é validado como texto opcional e tem teto de tamanho", () => {
+    const ok = validateMarketingBrandInput({ briefing: "  time desde 1997  " }, { partial: true })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) expect(ok.value.briefing).toBe("time desde 1997")
+    const vazio = validateMarketingBrandInput({ briefing: "   " }, { partial: true })
+    expect(vazio.ok).toBe(true)
+    if (vazio.ok) expect(vazio.value.briefing).toBeNull()
+    const gigante = validateMarketingBrandInput({ briefing: "x".repeat(20_001) }, { partial: true })
+    expect(gigante.ok).toBe(false)
   })
 })

@@ -33,6 +33,7 @@ export interface MarketingBrand {
   fontes: BrandFonte[]
   voz_da_marca: string | null
   diretrizes: string | null
+  briefing: string | null
   created_at: string
   properties: { name: string } | { name: string }[] | null
   assets: BrandAsset[]
@@ -131,6 +132,7 @@ function BrandModal({
   }
   const [voz, setVoz] = useState(brand?.voz_da_marca ?? "")
   const [diretrizes, setDiretrizes] = useState(brand?.diretrizes ?? "")
+  const [briefing, setBriefing] = useState(brand?.briefing ?? "")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -190,6 +192,7 @@ function BrandModal({
         fontes: cleanFontes(sanitizeFontes(fontesRef.current, assetsRef.current)),
         voz_da_marca: voz || null,
         diretrizes: diretrizes || null,
+        briefing: briefing || null,
       }
       const res = await fetch(brand ? `/api/marketing-brands/${brand.id}` : "/api/marketing-brands", {
         method: brand ? "PATCH" : "POST",
@@ -670,6 +673,17 @@ function BrandModal({
           <div className="col-span-2">
             <label className={lbl}>Diretrizes / proibições</label>
             <textarea value={diretrizes} onChange={(e) => setDiretrizes(e.target.value)} rows={3} className={inp} placeholder="O que nunca falar, regras jurídicas, restrições comerciais…" />
+          </div>
+          {/* Story 75-238 — Briefing Mestre por marca: conhecimento que a Lídia
+              usa pra criar (produto, público, argumentos, concorrência, provas
+              sociais). Atualizar aqui quando os números mudarem (% vendido,
+              fase da obra) — o Gerar sugestões lê na hora. */}
+          <div className="col-span-2">
+            <label className={lbl}>Briefing (conhecimento da Lídia)</label>
+            <textarea value={briefing} onChange={(e) => setBriefing(e.target.value)} rows={8} className={inp} placeholder="Produto, público-alvo, argumentos de venda, concorrência, provas sociais, status de vendas…" />
+            <p className="mt-1 text-[11px] text-gray-400 dark:text-stone-500">
+              A Lídia lê este texto (junto da voz e das diretrizes) ao gerar sugestões e artes. Mantenha números atualizados — % vendido, fase da obra, prazos.
+            </p>
           </div>
 
           <div className="col-span-2 flex items-center justify-between gap-2">
