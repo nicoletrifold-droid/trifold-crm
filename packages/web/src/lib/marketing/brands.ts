@@ -8,8 +8,40 @@ export const BRAND_SELECT =
 export const MARKETING_BRAND_TIPOS = ["institucional", "empreendimento"] as const
 export type MarketingBrandTipo = (typeof MARKETING_BRAND_TIPOS)[number]
 
-export const MARKETING_BRAND_ASSET_TIPOS = ["logo", "foto", "elemento"] as const
+// Story 75-234 — 'fonte' entrou junto do upload de .ttf/.otf (mig 199).
+export const MARKETING_BRAND_ASSET_TIPOS = ["logo", "foto", "elemento", "fonte"] as const
 export type MarketingBrandAssetTipo = (typeof MARKETING_BRAND_ASSET_TIPOS)[number]
+
+// jfif/jpe entram porque o Windows/Edge salva JPEG assim — antes da barreira de
+// extensão eles passavam pelo mime do bucket (QA 75-234, item 5).
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "jfif", "jpe", "webp", "svg"]
+
+/** Extensões aceitas por tipo de arquivo (validadas na rota /assets/sign). */
+export const BRAND_ASSET_EXTENSIONS: Record<MarketingBrandAssetTipo, string[]> = {
+  logo: IMAGE_EXTENSIONS,
+  foto: IMAGE_EXTENSIONS,
+  elemento: IMAGE_EXTENSIONS,
+  fonte: ["ttf", "otf", "woff", "woff2"],
+}
+
+/**
+ * Mime canônico por extensão. O navegador reporta fonte de forma inconsistente
+ * (font/ttf, application/x-font-ttf ou vazio) — o cliente manda ESTE valor no
+ * uploadToSignedUrl, o que permite ao bucket recusar octet-stream (QA 75-234, 6).
+ */
+const BRAND_ASSET_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  jfif: "image/jpeg",
+  jpe: "image/jpeg",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  woff: "font/woff",
+  woff2: "font/woff2",
+}
 
 // Story 75-230 — estrutura do Brand Hub: cor com papel, fonte por papel.
 export interface BrandCor {
@@ -20,6 +52,8 @@ export interface BrandCor {
 export interface BrandFonte {
   papel: string
   nome: string
+  /** Story 75-234 — arquivo da fonte em marketing_brand_assets (tipo='fonte'). */
+  asset_id?: string | null
 }
 
 export interface MarketingBrandInput {
@@ -66,20 +100,38 @@ function parseCores(raw: unknown): { ok: true; value: BrandCor[] } | { ok: false
   return { ok: true, value: out }
 }
 
-/** Normaliza "fontes": array de {papel, nome}; descarta linhas totalmente vazias. */
+/**
+ * Normaliza "fontes": array de {papel, nome, asset_id}; descarta linhas
+ * totalmente vazias. Story 75-234: a linha vale com SÓ o arquivo (asset_id) —
+ * nome só é exigido quando não há arquivo anexado.
+ */
 function parseFontes(raw: unknown): { ok: true; value: BrandFonte[] } | { ok: false; error: string } {
   if (raw === undefined || raw === null) return { ok: true, value: [] }
   if (!Array.isArray(raw)) return { ok: false, error: "fontes deve ser uma lista de {papel, nome}" }
   const out: BrandFonte[] = []
   for (const f of raw) {
     if (typeof f !== "object" || f === null) return { ok: false, error: "fontes deve conter objetos {papel, nome}" }
-    const papel = typeof (f as Record<string, unknown>).papel === "string" ? ((f as Record<string, unknown>).papel as string).trim() : ""
-    const nome = typeof (f as Record<string, unknown>).nome === "string" ? ((f as Record<string, unknown>).nome as string).trim() : ""
-    if (!papel && !nome) continue
-    if (!nome) return { ok: false, error: `fonte do papel "${papel}" sem nome` }
-    out.push({ papel: papel || "Geral", nome })
+    const rec = f as Record<string, unknown>
+    const papel = typeof rec.papel === "string" ? rec.papel.trim() : ""
+    const nome = typeof rec.nome === "string" ? rec.nome.trim() : ""
+    let assetId: string | null = null
+    if (typeof rec.asset_id === "string" && rec.asset_id.trim()) {
+      const v = rec.asset_id.trim()
+      if (!UUID_RE.test(v)) return { ok: false, error: "asset_id da fonte inválido" }
+      assetId = v
+    }
+    if (!papel && !nome && !assetId) continue
+    if (!nome && !assetId) {
+      return { ok: false, error: `preencha o nome da fonte "${papel}" ou anexe o arquivo (.ttf/.otf)` }
+    }
+    out.push({ papel: papel || "Geral", nome, asset_id: assetId })
   }
   return { ok: true, value: out }
+}
+
+/** ids de arquivo referenciados pelas fontes (para checagem de posse na rota). */
+export function fonteAssetIds(fontes: BrandFonte[]): string[] {
+  return [...new Set(fontes.map((f) => f.asset_id).filter((id): id is string => !!id))]
 }
 
 function optionalText(raw: unknown, field: string): { ok: true; value: string | null } | { ok: false; error: string } {
@@ -167,4 +219,26 @@ export function validateBrandConsistency(tipo: string, propertyId: string | null
 
 export function isValidBrandAssetTipo(tipo: unknown): tipo is MarketingBrandAssetTipo {
   return MARKETING_BRAND_ASSET_TIPOS.includes(tipo as MarketingBrandAssetTipo)
+}
+
+/** Extensão do arquivo em minúsculas, sem ponto ("" se não houver). */
+export function fileExtension(fileName: string): string {
+  return fileName.match(/\.([A-Za-z0-9]{1,10})$/)?.[1]?.toLowerCase() ?? ""
+}
+
+/**
+ * Story 75-234 — o bucket passou a aceitar application/octet-stream (fontes
+ * chegam sem mime confiável), então a extensão vira a barreira de verdade:
+ * imagem só aceita extensão de imagem; fonte só .ttf/.otf/.woff/.woff2.
+ */
+export function isAllowedBrandAssetFile(
+  tipo: MarketingBrandAssetTipo,
+  fileName: string
+): boolean {
+  return BRAND_ASSET_EXTENSIONS[tipo].includes(fileExtension(fileName))
+}
+
+/** Content-Type a mandar ao Storage — derivado da extensão, não do navegador. */
+export function mimeForBrandAssetFile(fileName: string): string | null {
+  return BRAND_ASSET_MIME[fileExtension(fileName)] ?? null
 }

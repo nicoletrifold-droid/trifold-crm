@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
-import { isValidBrandAssetTipo } from "@web/lib/marketing/brands"
+import {
+  MARKETING_BRAND_ASSET_TIPOS,
+  isAllowedBrandAssetFile,
+  isValidBrandAssetTipo,
+} from "@web/lib/marketing/brands"
 
 // Story 75-229 — registro do arquivo do Kit de Marcas (passo 3 do fluxo signed:
 // sign → uploadToSignedUrl → ESTE registro em JSON).
@@ -30,7 +34,10 @@ export async function POST(
   } | null
 
   if (!body || !isValidBrandAssetTipo(body.tipo)) {
-    return NextResponse.json({ error: "tipo deve ser logo, foto ou elemento" }, { status: 400 })
+    return NextResponse.json(
+      { error: `tipo deve ser ${MARKETING_BRAND_ASSET_TIPOS.join(", ")}` },
+      { status: 400 }
+    )
   }
   const storagePath = typeof body.storage_path === "string" ? body.storage_path : ""
   // O path assinado nasce na rota /sign com prefixo {org_id}/{brand_id}/ — recusar
@@ -39,6 +46,10 @@ export async function POST(
     return NextResponse.json({ error: "storage_path inválido" }, { status: 400 })
   }
   const fileName = typeof body.file_name === "string" && body.file_name.trim() ? body.file_name.trim() : "arquivo"
+  // Story 75-234 — mesma barreira da rota /sign (extensão por tipo).
+  if (!isAllowedBrandAssetFile(body.tipo, fileName)) {
+    return NextResponse.json({ error: `Extensão não aceita para ${body.tipo}` }, { status: 400 })
+  }
 
   const { data: pub } = admin.storage.from("marketing-brands").getPublicUrl(storagePath)
 

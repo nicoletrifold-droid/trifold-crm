@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
-import { BRAND_SELECT, validateBrandConsistency, validateMarketingBrandInput } from "@web/lib/marketing/brands"
+import {
+  BRAND_SELECT,
+  fonteAssetIds,
+  validateBrandConsistency,
+  validateMarketingBrandInput,
+} from "@web/lib/marketing/brands"
 
 // Story 75-229 — edição/remoção de marca (RLS sem policies → admin client + org_id).
 
@@ -38,6 +43,23 @@ export async function PATCH(
       : (current.property_id as string | null)
   const consistency = validateBrandConsistency(finalTipo, finalProperty)
   if (consistency) return NextResponse.json({ error: consistency }, { status: 400 })
+
+  // Story 75-234 — arquivo de fonte referenciado tem de ser DESTA marca (nada de
+  // apontar para o asset de outra marca/org).
+  const referenced = fonteAssetIds(parsed.value.fontes ?? [])
+  if (referenced.length > 0) {
+    const { data: owned } = await admin
+      .from("marketing_brand_assets")
+      .select("id")
+      .eq("brand_id", id)
+      .eq("org_id", appUser.org_id)
+      .eq("tipo", "fonte")
+      .in("id", referenced)
+    const ownedIds = new Set((owned ?? []).map((a) => a.id as string))
+    if (referenced.some((assetId) => !ownedIds.has(assetId))) {
+      return NextResponse.json({ error: "Arquivo de fonte não encontrado nesta marca" }, { status: 400 })
+    }
+  }
 
   const { data, error } = await admin
     .from("marketing_brands")
