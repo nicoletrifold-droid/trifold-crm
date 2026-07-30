@@ -473,7 +473,7 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
 // Templates HSM `boleto_vence_hoje` / `boleto_em_atraso` (pt_BR): body {{1}}=nome,
 // {{2}}=obra, {{3}}=vencimento; botão URL dinâmica base
 // https://crm.trifold.eng.br/cliente/boleto/{{1}} (param = obra_id). Mesma estrutura de
-// `novo_boleto_cliente`. Ambos APROVADOS na Meta (2026-07-09) — envio ainda defensivo
+// `novo_boleto_cliente_v2`. Ambos APROVADOS na Meta (2026-07-09) — envio ainda defensivo
 // (falha graciosa via .catch no chamador caso um template seja pausado no futuro).
 async function sendBoletoLembreteWhatsApp(
   admin: ReturnType<typeof createAdminClient>,
@@ -579,7 +579,8 @@ function buildBoletoLembreteEmailHtml(params: {
 </html>`
 }
 
-// Template HSM aprovado `novo_boleto_cliente` (pt_BR): body {{1}}=nome, {{2}}=obra,
+// Template HSM aprovado `novo_boleto_cliente_v2` (pt_BR — v2 corrige espaçamento:
+// linha em branco antes da assinatura *Trifold*; aprovado 30/07/2026): body {{1}}=nome, {{2}}=obra,
 // {{3}}=vencimento; botão URL dinâmica base https://crm.trifold.eng.br/cliente/boleto/{{1}}
 // (param = obra_id). Verificado APPROVED via Graph API (Story 75-76).
 async function sendBoletoWhatsApp(
@@ -613,7 +614,7 @@ async function sendBoletoWhatsApp(
       to: phone,
       type: "template",
       template: {
-        name: "novo_boleto_cliente",
+        name: "novo_boleto_cliente_v2",
         language: { code: "pt_BR" },
         components: [
           {
@@ -637,11 +638,11 @@ async function sendBoletoWhatsApp(
 
   if (!res.ok) {
     const errText = await res.text()
-    void logWhatsappSend(admin, { orgId, template: "novo_boleto_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
+    void logWhatsappSend(admin, { orgId, template: "novo_boleto_cliente_v2", category: "utility", recipientType: "cliente", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
     throw new Error(`WhatsApp API error: ${res.status} ${errText}`)
   }
   const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
-  void logWhatsappSend(admin, { orgId, template: "novo_boleto_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+  void logWhatsappSend(admin, { orgId, template: "novo_boleto_cliente_v2", category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
 function buildBoletoEmailHtml(params: {
@@ -701,7 +702,8 @@ async function sendWhatsApp(
   const url = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
 
   // Notificação proativa (fora da janela de 24h) → exige template HSM aprovado.
-  // Template `atualizacao_obra_cliente` (pt_BR): body {{1}}=nome, {{2}}=obra, {{3}}=descrição.
+  // Template `atualizacao_obra_cliente_v2` (pt_BR — v2 corrige espaçamento: linha
+  // em branco antes de *Trifold*; aprovado 30/07/2026): body {{1}}=nome, {{2}}=obra, {{3}}=descrição.
   // Story 75-67: botão de URL dinâmica — param substitui {{1}} na URL (base
   // https://crm.trifold.eng.br/cliente/{{1}}). Só com template APROVADO como dinâmico
   // (param em template estático = erro 132018).
@@ -716,7 +718,7 @@ async function sendWhatsApp(
       to: phone,
       type: "template",
       template: {
-        name: "atualizacao_obra_cliente",
+        name: "atualizacao_obra_cliente_v2",
         language: { code: "pt_BR" },
         components: [
           {
@@ -740,11 +742,11 @@ async function sendWhatsApp(
 
   if (!res.ok) {
     const errText = await res.text()
-    void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
+    void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente_v2", category: "utility", recipientType: "cliente", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
     throw new Error(`WhatsApp API error: ${res.status} ${errText}`)
   }
   const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
-  void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente", category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+  void logWhatsappSend(admin, { orgId, template: "atualizacao_obra_cliente_v2", category: "utility", recipientType: "cliente", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
 // ── Nova pasta via auto-cadastro (Story 75-146) ─────────────────────────
