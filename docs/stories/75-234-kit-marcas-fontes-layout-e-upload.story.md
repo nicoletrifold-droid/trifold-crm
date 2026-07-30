@@ -44,18 +44,19 @@ fonte**, como já existe nos outros campos do kit.
 - `nome` deixa de ser obrigatório quando há arquivo anexado.
 - Modo edição: arquivo E vínculo persistem NA HORA (autosave de `fontes` via
   PATCH + `onFontesChanged` no pai) — fechar no ✕ não perde o arquivo, mesmo
-  padrão do `onAssetsChanged` (QA 75-229). Linhas incompletas ficam fora do
-  autosave: o erro delas cabe ao Salvar explícito.
+  padrão do `onAssetsChanged` (QA 75-229). O autosave manda o mesmo payload do
+  Salvar — nunca descarta linha já salva (ver QA Results, item 2).
 - Modo criação: arquivo entra na fila indexada pela linha (`fonteIndex`), sobe
   após o "Criar marca" e o vínculo entra num PATCH (o POST não pode referenciar
   asset inexistente). Fontes não aparecem na lista genérica "Aguardando criação".
 
 ### 3. Segurança
-- Bucket passou a aceitar mime de fonte — inclusive `application/octet-stream`,
-  porque navegador reporta .ttf/.otf de forma inconsistente. Logo a **extensão**
-  virou a barreira real: `isAllowedBrandAssetFile(tipo, fileName)` valida em
-  `/assets/sign` E no registro `/assets` (imagem só extensão de imagem, fonte só
-  ttf/otf/woff/woff2).
+- Bucket passou a aceitar mime de fonte. Como o navegador reporta .ttf/.otf de
+  forma inconsistente, o cliente manda o mime **canônico derivado da extensão**
+  (`mimeForBrandAssetFile`) — assim `application/octet-stream` NÃO entra no
+  bucket. A extensão é a barreira: `isAllowedBrandAssetFile(tipo, fileName)`
+  valida em `/assets/sign` E no registro `/assets` (imagem só extensão de
+  imagem, fonte só ttf/otf/woff/woff2).
 - PATCH confere que todo `asset_id` referenciado é asset `tipo='fonte'` **desta**
   marca/org; POST zera `asset_id` (marca ainda não tem assets).
 - `sanitizeFontes` solta vínculo com arquivo já excluído — sem isso o Salvar
