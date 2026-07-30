@@ -10,7 +10,7 @@ import type { BrandCor, BrandFonte } from "@web/lib/marketing/brands"
 
 export interface BrandAsset {
   id: string
-  tipo: "logo" | "foto" | "elemento"
+  tipo: "logo" | "foto" | "elemento" | "fonte"
   label: string | null
   file_path: string
   file_url: string
@@ -47,6 +47,41 @@ function firstLogo(brand: MarketingBrand): BrandAsset | null {
   return brand.assets.find((a) => a.tipo === "logo") ?? null
 }
 
+// ─── Fontes (Story 75-234) ─────────────────────────────────────────────────
+
+const FONTE_EXT_RE = /\.(ttf|otf|woff2?)$/i
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+
+/** family do @font-face da prévia — nunca colide com fonte do sistema. */
+function fonteFamily(assetId: string): string {
+  return `brand-fonte-${assetId}`
+}
+
+/** "Montserrat-SemiBold.ttf" → "Montserrat SemiBold" (sugestão de nome). */
+function nomeFromFileName(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim()
+}
+
+/** Linhas com algum conteúdo — o que vai ao servidor no Salvar. */
+function cleanFontes(list: BrandFonte[]): BrandFonte[] {
+  return list.filter((f) => f.papel.trim() || f.nome.trim() || f.asset_id)
+}
+
+/** Linhas já salváveis (o servidor exige nome OU arquivo) — usado no autosave. */
+function persistableFontes(list: BrandFonte[]): BrandFonte[] {
+  return list.filter((f) => f.nome.trim() || f.asset_id)
+}
+
+/**
+ * Solta vínculo com arquivo que não existe mais (excluído por outra via) — sem
+ * isso o PATCH devolveria "Arquivo de fonte não encontrado nesta marca" e o
+ * Salvar travaria. `known` é a lista EFETIVA de assets (o state pode estar um
+ * render atrás quando o upload/exclusão acabou de acontecer).
+ */
+function sanitizeFontes(list: BrandFonte[], known: BrandAsset[]): BrandFonte[] {
+  return list.map((f) => (f.asset_id && !known.some((a) => a.id === f.asset_id) ? { ...f, asset_id: null } : f))
+}
+
 // ─── Modal criar/editar marca ──────────────────────────────────────────────
 
 function BrandModal({
@@ -56,6 +91,7 @@ function BrandModal({
   onSaved,
   onDeleted,
   onAssetsChanged,
+  onFontesChanged,
 }: {
   brand: MarketingBrand | null
   properties: PropertyOption[]
@@ -66,6 +102,9 @@ function BrandModal({
    *  precisa refletir imediatamente, senão fechar no ✕ deixa o card stale e
    *  reabrir "some" com os arquivos (QA 75-229, item 1). */
   onAssetsChanged: (brandId: string, assets: BrandAsset[]) => void
+  /** Story 75-234 — o VÍNCULO fonte↔arquivo também persiste na hora (mesmo
+   *  motivo do onAssetsChanged: reabrir o modal não pode perder o arquivo). */
+  onFontesChanged: (brandId: string, fontes: BrandFonte[]) => void
 }) {
   const [nome, setNome] = useState(brand?.nome ?? "")
   const [tipo, setTipo] = useState<"institucional" | "empreendimento">(brand?.tipo ?? "empreendimento")
@@ -86,7 +125,9 @@ function BrandModal({
   const [assetTipo, setAssetTipo] = useState<"logo" | "foto" | "elemento">("logo")
   const [assetLabel, setAssetLabel] = useState("")
   // Story 75-232 — fila de arquivos escolhidos ANTES de criar a marca
-  const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; tipo: string; label: string }>>([])
+  // Story 75-234 — fonteIndex amarra o arquivo à linha de fonte que o escolheu.
+  const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; tipo: string; label: string; fonteIndex?: number }>>([])
+  const [fonteBusyIdx, setFonteBusyIdx] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
@@ -95,9 +136,19 @@ function BrandModal({
   const [deletingBrand, setDeletingBrand] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const inp =
-    "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+  // 🔥 GOTCHA (bug 75-234): NÃO coloque `w-full` na base. No Tailwind v4 a regra
+  // `.w-full` é emitida DEPOIS de `.w-28`/`.w-40`, então `${inp} w-40` continuava
+  // 100% (a ordem das classes no atributo não importa) — a linha estourava o
+  // modal e o campo seguinte saía da tela. Largura vem sempre do uso.
+  const inpBase =
+    "rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+  const inp = `${inpBase} w-full`
   const lbl = "mb-1 block text-xs font-medium text-gray-600 dark:text-stone-400"
+
+  const fonteFaceCss = assets
+    .filter((a) => a.tipo === "fonte" && !a.file_url.includes('"'))
+    .map((a) => `@font-face{font-family:"${fonteFamily(a.id)}";src:url("${a.file_url}");font-display:swap;}`)
+    .join("")
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -112,7 +163,7 @@ function BrandModal({
         // "#" solto = linha recém-adicionada não preenchida — descarta; hex
         // inválido DIGITADO segue ao server p/ devolver o erro (não some calado).
         cores: cores.filter((c) => c.hex.trim().length > 1),
-        fontes: fontes.filter((f) => f.papel.trim() || f.nome.trim()),
+        fontes: cleanFontes(sanitizeFontes(fontes, assets)),
         voz_da_marca: voz || null,
         diretrizes: diretrizes || null,
       }
@@ -125,23 +176,49 @@ function BrandModal({
       if (!res.ok || !data.brand) throw new Error(data.error ?? "Erro ao salvar marca")
       // Story 75-232 — marca recém-criada: sobe a fila escolhida durante a criação.
       let createdAssets: BrandAsset[] = data.brand.assets ?? []
+      let brandFinal = data.brand
       const failed: string[] = []
       if (!brand && pendingFiles.length > 0) {
         setUploading(true)
+        // Story 75-234 — arquivo de fonte só ganha id agora; o vínculo vai num
+        // PATCH depois (o POST não podia referenciar asset inexistente).
+        const fonteAssetByIndex = new Map<number, string>()
         for (const p of pendingFiles) {
           try {
-            createdAssets = [...createdAssets, await uploadOne(data.brand.id, p.file, p.tipo, p.label)]
+            const asset = await uploadOne(data.brand.id, p.file, p.tipo, p.label)
+            createdAssets = [...createdAssets, asset]
+            if (p.fonteIndex !== undefined) fonteAssetByIndex.set(p.fonteIndex, asset.id)
           } catch (e) {
             failed.push(`${p.file.name} (${e instanceof Error ? e.message : "erro"})`)
           }
         }
         setUploading(false)
         setPendingFiles([])
+        if (fonteAssetByIndex.size > 0) {
+          const linked = cleanFontes(
+            fontes.map((f, idx) => {
+              const assetId = fonteAssetByIndex.get(idx)
+              return assetId ? { ...f, asset_id: assetId } : f
+            })
+          )
+          try {
+            const patchRes = await fetch(`/api/marketing-brands/${data.brand.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fontes: linked }),
+            })
+            const patchData = (await patchRes.json().catch(() => ({}))) as { brand?: MarketingBrand; error?: string }
+            if (!patchRes.ok || !patchData.brand) throw new Error(patchData.error ?? "erro ao vincular")
+            brandFinal = patchData.brand
+          } catch (e) {
+            failed.push(`vínculo das fontes (${e instanceof Error ? e.message : "erro"})`)
+          }
+        }
         if (failed.length > 0) {
-          window.alert(`A marca foi criada, mas ${failed.length} arquivo(s) falharam no envio: ${failed.join(", ")}. Reenvie pela própria marca.`)
+          window.alert(`A marca foi criada, mas ${failed.length} item(ns) falharam: ${failed.join(", ")}. Reenvie pela própria marca.`)
         }
       }
-      onSaved({ ...data.brand, assets: brand ? (data.brand.assets ?? assets) : createdAssets })
+      onSaved({ ...brandFinal, assets: brand ? (data.brand.assets ?? assets) : createdAssets })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar marca")
     } finally {
@@ -151,12 +228,13 @@ function BrandModal({
 
   // Sobe UM arquivo (sign → uploadToSignedUrl → registro) p/ a marca informada.
   async function uploadOne(brandId: string, file: File, tipo: string, label: string): Promise<BrandAsset> {
-    if (file.size > 10 * 1024 * 1024) throw new Error(`"${file.name}" passa de 10 MB`)
+    if (file.size > MAX_FILE_BYTES) throw new Error(`"${file.name}" passa de 10 MB`)
     const supabase = createClient()
     const signRes = await fetch(`/api/marketing-brands/${brandId}/assets/sign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ file_name: file.name, file_size_bytes: file.size }),
+      // tipo vai ao sign p/ validar a extensão (imagem × fonte) — Story 75-234.
+      body: JSON.stringify({ file_name: file.name, file_size_bytes: file.size, tipo }),
     })
     const signData = (await signRes.json().catch(() => ({}))) as {
       token?: string
@@ -231,16 +309,131 @@ function BrandModal({
     }
   }
 
+  // Exclusão do arquivo no servidor (linha + objeto do Storage).
+  async function deleteAssetRequest(brandId: string, assetId: string) {
+    const res = await fetch(`/api/marketing-brands/${brandId}/assets/${assetId}`, { method: "DELETE" })
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(data.error ?? "Erro ao excluir arquivo")
+    }
+  }
+
+  // Story 75-234 — grava SÓ as fontes (autosave do vínculo com o arquivo, que
+  // sobe/é excluído na hora). Linhas ainda incompletas ficam de fora — o erro
+  // delas cabe ao Salvar explícito, não a um autosave silencioso.
+  async function persistFontes(brandId: string, next: BrandFonte[], known: BrandAsset[]) {
+    const safe = sanitizeFontes(next, known)
+    const res = await fetch(`/api/marketing-brands/${brandId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fontes: persistableFontes(safe) }),
+    })
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(data.error ?? "Erro ao salvar as fontes")
+    }
+    onFontesChanged(brandId, safe)
+  }
+
+  async function handleFonteFile(index: number, file: File | null) {
+    if (!file || fonteBusyIdx !== null) return
+    if (!FONTE_EXT_RE.test(file.name)) {
+      setError(`"${file.name}" não é arquivo de fonte (use .ttf, .otf, .woff ou .woff2)`)
+      return
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setError(`"${file.name}" passa de 10 MB`)
+      return
+    }
+    setError(null)
+    const nomeAuto = nomeFromFileName(file.name)
+    // Modo criação: entra na fila (upload precisa do id da marca) — 75-232.
+    if (!brand) {
+      setPendingFiles((prev) => [
+        ...prev.filter((p) => p.fonteIndex !== index),
+        { file, tipo: "fonte", label: fontes[index]?.papel ?? "", fonteIndex: index },
+      ])
+      setFontes((prev) => prev.map((x, j) => (j === index ? { ...x, nome: x.nome.trim() || nomeAuto } : x)))
+      return
+    }
+    setFonteBusyIdx(index)
+    try {
+      const asset = await uploadOne(brand.id, file, "fonte", fontes[index]?.papel ?? "")
+      const next = fontes.map((x, j) =>
+        j === index ? { ...x, nome: x.nome.trim() || nomeAuto, asset_id: asset.id } : x
+      )
+      const nextAssets = [...assets, asset]
+      setFontes(next)
+      applyAssets(nextAssets)
+      await persistFontes(brand.id, next, nextAssets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao enviar a fonte")
+    } finally {
+      setFonteBusyIdx(null)
+    }
+  }
+
+  async function handleRemoveFonteFile(index: number) {
+    const f = fontes[index]
+    if (!f || fonteBusyIdx !== null) return
+    const next = fontes.map((x, j) => (j === index ? { ...x, asset_id: null } : x))
+    if (!brand || !f.asset_id) {
+      setFontes(next)
+      return
+    }
+    setFonteBusyIdx(index)
+    setError(null)
+    try {
+      const nextAssets = assets.filter((a) => a.id !== f.asset_id)
+      await deleteAssetRequest(brand.id, f.asset_id)
+      applyAssets(nextAssets)
+      setFontes(next)
+      await persistFontes(brand.id, next, nextAssets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao remover o arquivo da fonte")
+    } finally {
+      setFonteBusyIdx(null)
+    }
+  }
+
+  async function handleRemoveFonte(index: number) {
+    if (fonteBusyIdx !== null) return
+    const f = fontes[index]
+    const next = fontes.filter((_, j) => j !== index)
+    // A fila é indexada por linha: solta a desta e reindexa as de baixo.
+    const shiftPending = () =>
+      setPendingFiles((prev) =>
+        prev
+          .filter((p) => p.fonteIndex !== index)
+          .map((p) => (p.fonteIndex !== undefined && p.fonteIndex > index ? { ...p, fonteIndex: p.fonteIndex - 1 } : p))
+      )
+    if (!brand || !f?.asset_id) {
+      setFontes(next)
+      shiftPending()
+      return
+    }
+    setFonteBusyIdx(index)
+    setError(null)
+    try {
+      const nextAssets = assets.filter((a) => a.id !== f.asset_id)
+      await deleteAssetRequest(brand.id, f.asset_id)
+      applyAssets(nextAssets)
+      setFontes(next)
+      shiftPending()
+      await persistFontes(brand.id, next, nextAssets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao remover a fonte")
+    } finally {
+      setFonteBusyIdx(null)
+    }
+  }
+
   async function handleDeleteAsset(asset: BrandAsset) {
     if (!brand || deletingAssetId) return
     setDeletingAssetId(asset.id)
     setError(null)
     try {
-      const res = await fetch(`/api/marketing-brands/${brand.id}/assets/${asset.id}`, { method: "DELETE" })
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(data.error ?? "Erro ao excluir arquivo")
-      }
+      await deleteAssetRequest(brand.id, asset.id)
       applyAssets(assets.filter((a) => a.id !== asset.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao excluir arquivo")
@@ -321,13 +514,13 @@ function BrandModal({
                   <input
                     value={c.hex}
                     onChange={(e) => setCores((prev) => prev.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))}
-                    className={`${inp} w-28 flex-none font-mono text-xs uppercase`}
+                    className={`${inpBase} w-28 flex-none font-mono text-xs uppercase`}
                     placeholder="#E8856A"
                   />
                   <input
                     value={c.nome ?? ""}
                     onChange={(e) => setCores((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
-                    className={inp}
+                    className={`${inpBase} min-w-0 flex-1`}
                     placeholder="Papel (ex.: Primária)"
                     list="cores-papeis"
                   />
@@ -346,37 +539,88 @@ function BrandModal({
             </div>
           </div>
 
-          {/* Story 75-230 — fontes por papel tipográfico */}
+          {/* Story 75-230 — fontes por papel tipográfico
+              Story 75-234 — cada fonte aceita o ARQUIVO (.ttf/.otf/.woff/.woff2) */}
           <div className="col-span-2">
             <label className={lbl}>Fontes</label>
+            {/* Prévia com a fonte real — confirma na hora que o arquivo subiu certo. */}
+            {fonteFaceCss && <style>{fonteFaceCss}</style>}
             <div className="space-y-2">
-              {fontes.map((f, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    value={f.papel}
-                    onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, papel: e.target.value } : x)))}
-                    className={`${inp} w-40 flex-none`}
-                    placeholder="Papel (ex.: Título)"
-                    list="fontes-papeis"
-                  />
-                  <input
-                    value={f.nome}
-                    onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
-                    className={inp}
-                    placeholder="Nome da fonte (ex.: Montserrat)"
-                  />
-                  <button type="button" onClick={() => setFontes((prev) => prev.filter((_, j) => j !== i))}
-                    aria-label="Remover fonte"
-                    className="shrink-0 text-sm text-gray-400 hover:text-red-500 dark:text-stone-500">✕</button>
-                </div>
-              ))}
+              {fontes.map((f, i) => {
+                const asset = f.asset_id ? assets.find((a) => a.id === f.asset_id) ?? null : null
+                const pending = pendingFiles.find((p) => p.fonteIndex === i) ?? null
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={f.nome}
+                      onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
+                      className={`${inpBase} min-w-0 flex-1`}
+                      placeholder="Nome da fonte (ex.: Montserrat)"
+                      style={asset ? { fontFamily: `"${fonteFamily(asset.id)}"` } : undefined}
+                    />
+                    <input
+                      value={f.papel}
+                      onChange={(e) => setFontes((prev) => prev.map((x, j) => (j === i ? { ...x, papel: e.target.value } : x)))}
+                      className={`${inpBase} w-36 flex-none`}
+                      placeholder="Papel (ex.: Título)"
+                      list="fontes-papeis"
+                    />
+                    {asset ? (
+                      <span className="flex min-w-0 items-center gap-1 rounded-md bg-gray-100 px-2 py-1.5 text-[11px] text-gray-600 dark:bg-stone-800 dark:text-stone-300">
+                        <a href={asset.file_url} target="_blank" rel="noreferrer" className="max-w-[9rem] truncate hover:underline" title={asset.file_name}>
+                          {asset.file_name}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFonteFile(i)}
+                          disabled={fonteBusyIdx === i}
+                          aria-label={`Remover arquivo da fonte ${f.nome || i + 1}`}
+                          className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40 dark:text-stone-500"
+                        >✕</button>
+                      </span>
+                    ) : pending ? (
+                      <span className="flex min-w-0 items-center gap-1 rounded-md border border-dashed border-gray-300 px-2 py-1.5 text-[11px] text-gray-500 dark:border-stone-700 dark:text-stone-400">
+                        <span className="max-w-[9rem] truncate" title={pending.file.name}>{pending.file.name}</span>
+                        <span className="shrink-0 text-gray-400 dark:text-stone-500">(sobe ao criar)</span>
+                        <button
+                          type="button"
+                          onClick={() => setPendingFiles((prev) => prev.filter((p) => p.fonteIndex !== i))}
+                          aria-label="Remover arquivo escolhido"
+                          className="shrink-0 text-gray-400 hover:text-red-500 dark:text-stone-500"
+                        >✕</button>
+                      </span>
+                    ) : (
+                      <label className={`shrink-0 cursor-pointer rounded-md border border-gray-300 px-2 py-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800 ${fonteBusyIdx === i ? "pointer-events-none opacity-50" : ""}`}>
+                        {fonteBusyIdx === i ? "Enviando…" : "Anexar arquivo"}
+                        <input
+                          type="file"
+                          accept=".ttf,.otf,.woff,.woff2"
+                          className="sr-only"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null
+                            e.target.value = ""
+                            void handleFonteFile(i, file)
+                          }}
+                        />
+                      </label>
+                    )}
+                    <button type="button" onClick={() => void handleRemoveFonte(i)}
+                      disabled={fonteBusyIdx === i}
+                      aria-label="Remover fonte"
+                      className="shrink-0 text-sm text-gray-400 hover:text-red-500 disabled:opacity-40 dark:text-stone-500">✕</button>
+                  </div>
+                )
+              })}
               <datalist id="fontes-papeis">
                 <option value="Título" /><option value="Subtítulo" /><option value="Cabeçalho" /><option value="Corpo" /><option value="Legenda" />
               </datalist>
-              <button type="button" onClick={() => setFontes((prev) => [...prev, { papel: "", nome: "" }])}
+              <button type="button" onClick={() => setFontes((prev) => [...prev, { papel: "", nome: "", asset_id: null }])}
                 className="text-xs font-medium text-orange-600 hover:underline dark:text-orange-300">
                 + Adicionar fonte
               </button>
+              <p className="text-[11px] text-gray-400 dark:text-stone-500">
+                Só o nome já ajuda a Lídia; o arquivo (.ttf, .otf, .woff, .woff2) garante a tipografia exata na arte.
+              </p>
             </div>
           </div>
           <div className="col-span-2">
@@ -506,14 +750,16 @@ function BrandModal({
                 )
               })}
 
-              {/* Story 75-232 — fila de arquivos aguardando o "Criar marca" */}
-              {!brand && pendingFiles.length > 0 && (
+              {/* Story 75-232 — fila de arquivos aguardando o "Criar marca".
+                  Fontes ficam de fora: aparecem na própria linha (75-234). */}
+              {!brand && pendingFiles.some((p) => p.fonteIndex === undefined) && (
                 <div className="mt-3">
                   <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500">
-                    Aguardando criação da marca ({pendingFiles.length})
+                    Aguardando criação da marca ({pendingFiles.filter((p) => p.fonteIndex === undefined).length})
                   </h5>
                   <ul className="space-y-1">
-                    {pendingFiles.map((pf, i) => (
+                    {pendingFiles.map((pf, i) =>
+                      pf.fonteIndex !== undefined ? null : (
                       <li key={i} className="flex items-center justify-between gap-2 rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-xs text-gray-600 dark:border-stone-700 dark:text-stone-300">
                         <span className="truncate">
                           {pf.file.name}
@@ -525,7 +771,8 @@ function BrandModal({
                           aria-label={`Remover ${pf.file.name} da fila`}
                           className="shrink-0 text-gray-400 hover:text-red-500 dark:text-stone-500">✕</button>
                       </li>
-                    ))}
+                      )
+                    )}
                   </ul>
                 </div>
               )}
@@ -664,6 +911,10 @@ export default function MarcasSection({ properties }: { properties: PropertyOpti
             setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, assets } : b)))
             // mantém o modal coerente se remontar (ex.: brand recém-criada)
             setModal((m) => (m.brand && m.brand.id === brandId ? { ...m, brand: { ...m.brand, assets } } : m))
+          }}
+          onFontesChanged={(brandId, fontes) => {
+            setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, fontes } : b)))
+            setModal((m) => (m.brand && m.brand.id === brandId ? { ...m, brand: { ...m.brand, fontes } } : m))
           }}
         />
       )}

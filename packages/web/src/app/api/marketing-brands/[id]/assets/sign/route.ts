@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
+import {
+  BRAND_ASSET_EXTENSIONS,
+  fileExtension,
+  isAllowedBrandAssetFile,
+  isValidBrandAssetTipo,
+} from "@web/lib/marketing/brands"
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB — espelha o file_size_limit do bucket (mig 197)
 
@@ -27,8 +33,17 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     file_name?: string
     file_size_bytes?: number
+    tipo?: string
   } | null
   const fileName = typeof body?.file_name === "string" ? body.file_name : "arquivo"
+  // Story 75-234: tipo é opcional por compatibilidade — ausente = imagem.
+  const tipo = isValidBrandAssetTipo(body?.tipo) ? body.tipo : "logo"
+  if (!isAllowedBrandAssetFile(tipo, fileName)) {
+    return NextResponse.json(
+      { error: `Extensão não aceita para ${tipo} (use ${BRAND_ASSET_EXTENSIONS[tipo].join(", ")})` },
+      { status: 400 }
+    )
+  }
   const size = Number(body?.file_size_bytes)
   if (!Number.isFinite(size) || size <= 0) {
     return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 })
@@ -38,7 +53,7 @@ export async function POST(
   }
 
   // Extensão sanitizada: só alfanumérico curto — o path assinado nunca contém "/" ou "..".
-  const ext = fileName.match(/\.([A-Za-z0-9]{1,10})$/)?.[1]?.toLowerCase() ?? ""
+  const ext = fileExtension(fileName)
   const storagePath = `${appUser.org_id}/${id}/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`
 
   const { data: signed, error } = await admin.storage

@@ -36,10 +36,15 @@ export async function POST(req: NextRequest) {
   const consistency = validateBrandConsistency(parsed.value.tipo!, parsed.value.property_id ?? null)
   if (consistency) return NextResponse.json({ error: consistency }, { status: 400 })
 
+  // Story 75-234 — na criação não existe asset ainda: o arquivo da fonte sobe
+  // depois do POST e o vínculo entra via PATCH (que valida a posse).
+  const fontes = (parsed.value.fontes ?? []).map((f) => ({ ...f, asset_id: null }))
+
   const { data, error } = await admin
     .from("marketing_brands")
     .insert({
       ...parsed.value,
+      ...(parsed.value.fontes ? { fontes } : {}),
       org_id: appUser.org_id,
       created_by: appUser.id,
     })
