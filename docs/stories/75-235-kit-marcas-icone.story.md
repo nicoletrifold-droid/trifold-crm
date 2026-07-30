@@ -1,6 +1,6 @@
 # Story 75-235 — Kit de Marcas: Ícone como categoria própria de arquivo
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature (pequena)
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** S
@@ -48,6 +48,7 @@ segue nesse grupo até ser reenviado como Ícone.
 
 ## Validação
 - Suíte 1278/1278 · `tsc --noEmit` limpo · eslint limpo · `next build` OK.
+- ✅ LIVE: PR #310 squash-merged (`f1e658e2`), deploy de produção concluído.
 - Mig 200 aplicada em **prod** (dsopqkqjkmhytudaaolv) e **dev**
   (xnxvygyfyyyzwhiuoehz); CHECK conferido nos dois:
   `logo, icone, foto, elemento, fonte`.
