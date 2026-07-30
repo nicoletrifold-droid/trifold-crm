@@ -40,9 +40,9 @@ Vind (logo do Kit aplicado, paleta #11220F/#8FE6A7, texto PT perfeito,
 7. **UI**: arte aparece INLINE no card (clicável, abre em tamanho real; link
    externo continua link); botão **🎨 Refazer arte** em sugeridos e aprovados
    com campo de ajuste inline.
-8. **Chave**: `VERTEX_API_KEY` no runtime; adicionada ao `.env.local` local.
-   ⚠️ PENDENTE: gravar no Vercel (token expirado — aguardando `vercel login`
-   do Marcos) e redeploy. Sem a chave o post nasce sem arte (fail-open + warn).
+8. **Chave**: `VERTEX_API_KEY` no runtime — `.env.local` local + Vercel
+   (production e preview) + redeploy feito. Sem a chave o post nasce sem arte
+   (fail-open + warn).
 
 ## Arquivos
 - `supabase/migrations/204_marketing_artes_bucket.sql`
@@ -92,9 +92,9 @@ do Sonnet retrocompatível; modal Editar preserva arte_url.
 - Motor validado end-to-end fora do app (arte real do Vind com logo do Kit).
 - Mig 204 aplicada em prod e dev.
 - ✅ LIVE: PR #316 squash-merged, deploy de produção concluído.
-- ⚠️ VERTEX_API_KEY no Vercel PENDENTE (vercel login) — até lá posts nascem sem
-  arte (fail-open); ligar = scripts/vercel-env-set.sh VERTEX_API_KEY <chave> +
-  redeploy.
+- ✅ VERTEX_API_KEY gravada no Vercel (production + preview, via
+  scripts/vercel-env-set.sh, valor confirmado no pull) e produção redeployada
+  (aliased crm.trifold.eng.br) — geração de arte LIGADA em prod em 30/07.
 
 ## Fora de escopo (registrado)
 - Artes dos demais cards do carrossel (gera só a capa; equipe segue o estilo).
