@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { useCallback } from "react"
 
+import { CALOR_LABELS, CALOR_VALUES, parseCalor } from "@web/lib/leads/calor"
+
 interface Stage { id: string; name: string; color: string | null }
 interface Property { id: string; name: string }
 interface Broker { id: string; name: string }
@@ -18,12 +20,15 @@ interface LeadFiltersProps {
   includeUnassigned?: boolean
   /** Mostra o filtro "Atendimento" (Nicole IA / Humano) — usado nas Conversas. */
   showAtendimento?: boolean
+  /** Story 75-236 — filtro de temperatura (Calor do Lead), opt-in: só a tela de Leads. */
+  showCalor?: boolean
   stageParam?: string
   propertyParam?: string
   daysParam?: string
   brokerParam?: string
   sourceParam?: string
   iaParam?: string
+  calorParam?: string
   /** Mostra os campos de período de captura (De/Até) — usado na tela de Leads (Story 75-94). */
   showDateRange?: boolean
   dateFromParam?: string
@@ -37,12 +42,14 @@ export function LeadFilters({
   sources,
   includeUnassigned = false,
   showAtendimento = false,
+  showCalor = false,
   stageParam = "stage",
   propertyParam = "property",
   daysParam = "days",
   brokerParam = "broker_id",
   sourceParam = "source",
   iaParam = "ia",
+  calorParam = "calor",
   showDateRange = false,
   dateFromParam = "date_from",
   dateToParam = "date_to",
@@ -57,6 +64,9 @@ export function LeadFilters({
   const activeBroker = searchParams.get(brokerParam) ?? ""
   const activeSource = searchParams.get(sourceParam) ?? ""
   const activeIa = searchParams.get(iaParam) ?? ""
+  // Valor fora da whitelist (URL forjada) cai em "Todos" — o select nunca fica
+  // em branco mostrando um filtro que o servidor ignorou (QA 75-236).
+  const activeCalor = parseCalor(searchParams.get(calorParam)) ?? ""
   const activeDateFrom = searchParams.get(dateFromParam) ?? ""
   const activeDateTo = searchParams.get(dateToParam) ?? ""
 
@@ -74,7 +84,7 @@ export function LeadFilters({
   const selectClass =
     "h-8 rounded-lg border border-gray-300 bg-white px-2.5 py-0 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:focus:border-orange-500 dark:focus:ring-orange-500"
 
-  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeSource || activeIa || activeDateFrom || activeDateTo
+  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeSource || activeIa || activeCalor || activeDateFrom || activeDateTo
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -106,6 +116,15 @@ export function LeadFilters({
         <select value={activeSource} onChange={(e) => setParam(sourceParam, e.target.value)} className={selectClass}>
           <option value="">Origem: Todas</option>
           {sources.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+      )}
+
+      {/* Calor do Lead (percepção do corretor) — Story 75-236, opt-in.
+          Valores espelham o enum interest_level; "none" = ainda não definido. */}
+      {showCalor && (
+        <select value={activeCalor} onChange={(e) => setParam(calorParam, e.target.value)} className={selectClass}>
+          <option value="">Calor: Todos</option>
+          {CALOR_VALUES.map((v) => <option key={v} value={v}>{CALOR_LABELS[v]}</option>)}
         </select>
       )}
 
@@ -164,6 +183,7 @@ export function LeadFilters({
             params.delete(brokerParam)
             params.delete(sourceParam)
             params.delete(iaParam)
+            params.delete(calorParam)
             params.delete(dateFromParam)
             params.delete(dateToParam)
             params.delete("page")
