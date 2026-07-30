@@ -19,6 +19,7 @@ export const maxDuration = 300
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_PEDIDO_CHARS = 2000
+const MAX_DIRECAO_CHARS = 500
 
 export async function POST(req: NextRequest) {
   const g = await marketingGuard()
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as {
     pedido?: string
+    direcao_arte?: string
     formato?: string
     canal?: string
     empreendimento_id?: string | null
@@ -38,10 +40,17 @@ export async function POST(req: NextRequest) {
   if (pedido.length > MAX_PEDIDO_CHARS) {
     return NextResponse.json({ error: `Pedido muito longo (máx. ${MAX_PEDIDO_CHARS} caracteres)` }, { status: 400 })
   }
+  const direcaoArte = typeof body?.direcao_arte === "string" ? body.direcao_arte.trim() : ""
+  if (direcaoArte.length > MAX_DIRECAO_CHARS) {
+    return NextResponse.json({ error: `Direção da arte muito longa (máx. ${MAX_DIRECAO_CHARS} caracteres)` }, { status: 400 })
+  }
   if (!MARKETING_POST_FORMATOS.includes(body?.formato as MarketingPostFormato)) {
     return NextResponse.json({ error: "formato deve ser estatico, reel, story ou carrossel" }, { status: 400 })
   }
   const formato = body!.formato as MarketingPostFormato
+  // QA 75-241 #3 — reel não gera arte: direção digitada antes de trocar o
+  // formato (campo some da tela, state fica) não pode virar instrução fantasma.
+  const direcaoEfetiva = formato === "reel" ? "" : direcaoArte
   if (body?.canal !== "instagram" && body?.canal !== "facebook") {
     return NextResponse.json({ error: "canal deve ser 'instagram' ou 'facebook'" }, { status: 400 })
   }
@@ -105,6 +114,7 @@ export async function POST(req: NextRequest) {
     const anthropic = createAnthropicClient()
     const result = await generateMarketingPostFromRequest(anthropic, {
       pedido,
+      direcaoArte: direcaoEfetiva || null,
       formato,
       canal,
       empreendimentoId,
@@ -140,7 +150,13 @@ export async function POST(req: NextRequest) {
         copy: result.copy,
         roteiro: result.roteiro,
         arte_url: null,
-        arte_descricao: result.arte?.descricao ?? null,
+        // QA 75-241 #1 — o norte do humano é ANCORADO na descrição persistida
+        // (não dependemos de o Sonnet incorporar): todo Refazer o preserva.
+        arte_descricao: result.arte
+          ? direcaoEfetiva
+            ? `${result.arte.descricao}\n\nDIREÇÃO DO HUMANO (prioridade): ${direcaoEfetiva}`
+            : result.arte.descricao
+          : null,
         arte_arquivos: result.arte?.arquivos_kit ?? null,
         scheduled_for: humanDate ?? result.scheduled_for,
         justificativa: result.justificativa,
@@ -162,6 +178,12 @@ export async function POST(req: NextRequest) {
         formato,
         descricao: result.arte.descricao,
         arquivosKit: result.arte.arquivos_kit,
+        // Story 75-241 — a direção do humano chega ao motor VERBATIM, com
+        // prioridade. DECISÃO DE PRODUTO (Marcos, "o humano é superior ao
+        // sistema"): este canal é um override consciente — NÃO passa pelo
+        // filtro de diretrizes do Sonnet, igual ao ajuste do Refazer (75-240).
+        // A publicação continua 100% humana (fila de aprovação).
+        ajuste: direcaoEfetiva || null,
       })
       if (arte) {
         const { data: updated } = await admin

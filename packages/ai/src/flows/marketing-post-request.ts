@@ -25,6 +25,9 @@ export type MarketingPostFormato = (typeof MARKETING_POST_FORMATOS)[number]
 export interface MarketingPostRequestInput {
   /** Diretriz livre de quem pediu ("story do Vind pra investidor…") */
   pedido: string
+  /** Story 75-241 — direção VISUAL do humano ("pôr do sol atrás do prédio").
+   *  Vai ao Sonnet (incorporar na arte.descricao) E verbatim ao motor de imagem. */
+  direcaoArte?: string | null
   /** Formato desejado */
   formato: MarketingPostFormato
   canal: "instagram" | "facebook"
@@ -123,7 +126,7 @@ POST PARA: ${input.empreendimentoNome ? `empreendimento ${input.empreendimentoNo
 
 PEDIDO DO HUMANO:
 ${input.pedido}
-
+${input.direcaoArte?.trim() ? `\nDIRECAO VISUAL DO HUMANO (obrigatorio incorporar na arte.descricao, com prioridade sobre suas escolhas esteticas): ${input.direcaoArte.trim()}\n` : ""}
 KIT DE MARCAS:
 ${formatBrandBlocks(input.brands)}
 

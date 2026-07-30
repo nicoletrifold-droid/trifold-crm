@@ -127,6 +127,7 @@ function formatDay(d: string | null): string | null {
 
 interface PedidoFormValues {
   pedido: string
+  direcao_arte: string
   empreendimento_id: string
   formato: MarketingPostFormato
   canal: "instagram" | "facebook"
@@ -135,6 +136,7 @@ interface PedidoFormValues {
 
 const EMPTY_PEDIDO: PedidoFormValues = {
   pedido: "",
+  direcao_arte: "",
   empreendimento_id: "",
   formato: "estatico",
   canal: "instagram",
@@ -185,6 +187,21 @@ function PedirLidiaModal({
               autoFocus
             />
           </div>
+
+          {/* Story 75-241 — direção VISUAL vai verbatim ao motor de imagem
+              (reel não gera arte, então o campo some) */}
+          {values.formato !== "reel" && (
+            <div>
+              <label className={labelClass}>Direção da arte (opcional)</label>
+              <input
+                value={values.direcao_arte}
+                onChange={(e) => setValues((v) => ({ ...v, direcao_arte: e.target.value }))}
+                maxLength={500}
+                className={inputClass}
+                placeholder={'Ex.: "pôr do sol atrás do prédio", "luz de manhã, tons quentes", "fundo minimalista"'}
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -652,6 +669,7 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pedido: values.pedido,
+          direcao_arte: values.direcao_arte.trim() || null,
           empreendimento_id: values.empreendimento_id || null,
           formato: values.formato,
           canal: values.canal,
