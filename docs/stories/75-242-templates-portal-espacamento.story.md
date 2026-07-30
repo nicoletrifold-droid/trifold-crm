@@ -1,6 +1,6 @@
 # Story 75-242 — Templates do Portal do Cliente: espaçamento da assinatura (v2)
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Fix (conteúdo de template Meta)
 **Epic:** Portal do Cliente / Notificações
 **Complexidade:** XS
@@ -30,3 +30,4 @@ cadastrado na Meta.
 ## Validação
 - Suíte 1318/1318 · tsc/eslint/build limpos.
 - Status APPROVED dos v2 confirmado via Graph API antes do swap.
+- ✅ LIVE: PR #318 squash-merged, deploy de produção concluído.
