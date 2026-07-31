@@ -77,13 +77,13 @@ export function BrokerPushPrompt() {
 
   return (
     <div className="fixed bottom-20 left-3 right-3 z-40 lg:bottom-6 lg:left-auto lg:right-6 lg:w-80">
-      <div className="flex items-start gap-3 rounded-2xl border border-stone-700 bg-stone-900 p-4 shadow-2xl">
+      <div className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-2xl dark:border-stone-700 dark:bg-stone-900">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500/15">
-          <BellRing className="h-4 w-4 text-orange-400" />
+          <BellRing className="h-4 w-4 text-orange-500 dark:text-orange-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-stone-100">Ativar notificações</p>
-          <p className="mt-0.5 text-xs text-stone-400">
+          <p className="text-sm font-semibold text-gray-900 dark:text-stone-100">Ativar notificações</p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">
             Receba alertas de novos leads direto no celular, mesmo com o app fechado.
           </p>
           <div className="mt-3 flex gap-2">
@@ -95,7 +95,7 @@ export function BrokerPushPrompt() {
             </button>
             <button
               onClick={handleDecline}
-              className="rounded-lg px-3 py-1.5 text-xs font-medium text-stone-400 hover:text-stone-200"
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
             >
               Agora não
             </button>
@@ -103,7 +103,7 @@ export function BrokerPushPrompt() {
         </div>
         <button
           onClick={handleDecline}
-          className="shrink-0 rounded-lg p-1 text-stone-500 hover:text-stone-300"
+          className="shrink-0 rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
         >
           <X className="h-3.5 w-3.5" />
         </button>

@@ -18,8 +18,6 @@ interface Props {
   orgId: string
   /** Corretor pode puxar; gestor vê read-only. */
   canPull: boolean
-  /** true = área do corretor (sempre dark); false = dashboard (light/dark). */
-  dark?: boolean
 }
 
 function waitingLabel(sinceISO: string, nowMs: number): string {
@@ -30,7 +28,7 @@ function waitingLabel(sinceISO: string, nowMs: number): string {
   return m ? `há ${h}h ${m}min` : `há ${h}h`
 }
 
-export function BolsaoList({ initialLeads, orgId, canPull, dark = false }: Props) {
+export function BolsaoList({ initialLeads, orgId, canPull }: Props) {
   const router = useRouter()
   const [leads, setLeads] = useState(initialLeads)
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -90,16 +88,15 @@ export function BolsaoList({ initialLeads, orgId, canPull, dark = false }: Props
     }
   }, [router])
 
-  const cardCls = dark
-    ? "rounded-xl border border-stone-800 bg-stone-900 p-4"
-    : "rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"
-  const nameCls = dark ? "text-white" : "text-gray-900 dark:text-white"
-  const subCls = dark ? "text-stone-400" : "text-stone-500 dark:text-stone-400"
+  // /broker também tem toggle de tema — nada aqui pode ser dark hardcodado (bug do título invisível no claro).
+  const cardCls = "rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"
+  const nameCls = "text-gray-900 dark:text-white"
+  const subCls = "text-stone-500 dark:text-stone-400"
 
   if (leads.length === 0) {
     return (
-      <div className={`mt-8 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed py-20 text-center ${dark ? "border-stone-700" : "border-stone-300 dark:border-stone-700"}`}>
-        <Container className={`h-10 w-10 ${dark ? "text-stone-500" : "text-stone-400 dark:text-stone-500"}`} />
+      <div className="mt-8 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-stone-300 py-20 text-center dark:border-stone-700">
+        <Container className="h-10 w-10 text-stone-400 dark:text-stone-500" />
         <p className={`text-sm ${subCls}`}>Nenhum lead no bolsão agora.</p>
       </div>
     )

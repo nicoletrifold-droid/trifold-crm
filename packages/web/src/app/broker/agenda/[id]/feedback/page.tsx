@@ -66,7 +66,7 @@ export default function FeedbackPage({
   if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
-        <p className="text-sm text-stone-400">Carregando...</p>
+        <p className="text-sm text-stone-500 dark:text-stone-400">Carregando...</p>
       </div>
     )
   }
