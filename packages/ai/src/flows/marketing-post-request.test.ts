@@ -150,6 +150,29 @@ describe("generateMarketingPostFromRequest — prompt", () => {
     expect(prompt).toContain("Nao peca forma geometrica solta, moldura ou linha decorativa")
   })
 
+  // 75-250: o Sonnet escrevia hex inventado porque nunca recebia a paleta — e o
+  // único hex do contexto era o #F27A5E solto no briefing da Trifold, que virou
+  // céu laranja numa marca verde, contradizendo a PALETA OBRIGATÓRIA do motor.
+  it("prompt entrega a PALETA e proíbe hex de fora dela (75-250)", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingPostFromRequest(client, {
+      ...input,
+      paleta: [{ hex: "#FFFFFF", nome: null }, { hex: "#8FE6A7", nome: "Menta" }],
+    })
+    const prompt = getPrompt()
+    expect(prompt).toContain("PALETA DA MARCA")
+    expect(prompt).toContain("#8FE6A7 (Menta)")
+    expect(prompt).toContain("E PROIBIDO escrever qualquer outro codigo hex")
+    // a regra antiga mandava ele inventar "os HEX da marca" sem receber nenhum
+    expect(prompt).not.toContain("paleta com os HEX da marca")
+  })
+
+  it("sem paleta cadastrada, o prompt manda descrever cor por NOME e não usar hex", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingPostFromRequest(client, { ...input, paleta: [] })
+    expect(getPrompt()).toContain("descreva as cores por NOME e NAO escreva hex algum")
+  })
+
   it("prompt manda o CTA vir no campo cta e NÃO ser desenhado (75-248)", async () => {
     const { client, getPrompt } = spyClient()
     await generateMarketingPostFromRequest(client, input)

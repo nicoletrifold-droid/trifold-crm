@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
-import { scopeBrandsForPost } from "@web/lib/marketing/brands"
+import { arquivosCitadosNoTexto, resolvePaletaDoPost, scopeBrandsForPost } from "@web/lib/marketing/brands"
 import { gerarArteParaPost } from "@web/lib/marketing/arte-service"
 import { MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
 import {
@@ -77,7 +77,9 @@ export async function POST(req: NextRequest) {
       : Promise.resolve({ data: null, error: null }),
     admin
       .from("marketing_brands")
-      .select("id, nome, tipo, property_id, voz_da_marca, diretrizes, briefing")
+      // 75-250: `cores` é obrigatório aqui — sem ele resolvePaletaDoPost devolve
+      // vazio e o Sonnet volta a não receber paleta nenhuma.
+      .select("id, nome, tipo, property_id, cores, voz_da_marca, diretrizes, briefing")
       .eq("org_id", appUser.org_id)
       .eq("is_active", true)
       .order("created_at", { ascending: true }),
@@ -97,7 +99,7 @@ export async function POST(req: NextRequest) {
   // Escopo do Kit no pedido: institucional + a marca DO empreendimento do post.
   // Os ASSETS derivam do MESMO conjunto, por brand_id (QA 75-239: um segundo
   // critério próprio deixava arquivo de marca órfã vazar p/ post de outra marca).
-  type BrandRow = BrandKnowledge & { id: string }
+  type BrandRow = BrandKnowledge & { id: string; cores: Array<{ hex: string; nome: string | null }> | null }
   const allBrands = (brandsRes.data ?? []) as BrandRow[]
   const brands = scopeBrandsForPost(allBrands, empreendimentoId)
   if (brands.length === 0) {
@@ -120,12 +122,34 @@ export async function POST(req: NextRequest) {
       empreendimentoId,
       empreendimentoNome,
       brands,
+      // Story 75-250 — paleta escopada pela regra única (AC6). Sem ela o Sonnet
+      // escrevia hex inventado, contradizendo a PALETA OBRIGATÓRIA que o motor
+      // recebe depois: prompt em conflito consigo mesmo.
+      paleta: resolvePaletaDoPost(brands),
       assets,
       now: new Date().toISOString(),
     })
 
     if (!result) {
       return NextResponse.json({ error: "A Lídia retornou um formato inválido. Tente novamente." }, { status: 502 })
+    }
+
+    // Story 75-250 (AC1/AC2) — o que o HUMANO citou pelo nome entra por decisão
+    // do código. O Sonnet viu os 6 renders do Vind, o Marcos citou dois, e ele
+    // devolveu lista vazia: a fachada virou invenção do modelo. Os forçados vêm
+    // PRIMEIRO (risco 1 da story: o teto de bytes descarta o excedente).
+    const citadosPeloHumano = arquivosCitadosNoTexto(
+      `${pedido}\n${direcaoEfetiva ?? ""}`,
+      assets.map((a) => a.file_name)
+    )
+    const arquivosArte = result.arte
+      ? [...citadosPeloHumano, ...result.arte.arquivos_kit.filter((f) => !citadosPeloHumano.includes(f))]
+      : []
+    if (citadosPeloHumano.length > 0 && result.arte) {
+      const ignorados = citadosPeloHumano.filter((f) => !result.arte!.arquivos_kit.includes(f))
+      if (ignorados.length > 0) {
+        console.warn(`[marketing-posts/pedir] Sonnet não citou arquivos que o humano pediu — forçados: ${ignorados.join(", ")}`)
+      }
     }
 
     // scheduled_for: o do humano (se veio) vence a sugestão do modelo.
@@ -157,7 +181,7 @@ export async function POST(req: NextRequest) {
             ? `${result.arte.descricao}\n\nDIREÇÃO DO HUMANO (prioridade): ${direcaoEfetiva}`
             : result.arte.descricao
           : null,
-        arte_arquivos: result.arte?.arquivos_kit ?? null,
+        arte_arquivos: result.arte ? arquivosArte : null,
         // Story 75-248 — CTA em coluna PRÓPRIA, nunca dentro da arte_descricao:
         // aquela string vai no prompt e o modelo é proibido de desenhar CTA.
         arte_cta: result.arte?.cta ?? null,
@@ -180,7 +204,7 @@ export async function POST(req: NextRequest) {
         empreendimentoId,
         formato,
         descricao: result.arte.descricao,
-        arquivosKit: result.arte.arquivos_kit,
+        arquivosKit: arquivosArte,
         // Story 75-241 — a direção do humano chega ao motor VERBATIM, com
         // prioridade. DECISÃO DE PRODUTO (Marcos, "o humano é superior ao
         // sistema"): este canal é um override consciente — NÃO passa pelo

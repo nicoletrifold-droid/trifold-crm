@@ -37,6 +37,13 @@ export interface MarketingPostRequestInput {
   empreendimentoNome: string | null
   /** Kit de Marcas — MESMO shape do Gerar sugestões (75-238) */
   brands: BrandKnowledge[]
+  /**
+   * Story 75-250 — paleta JÁ ESCOPADA (empreendimento ganha da institucional).
+   * Sem isso o Sonnet era mandado escrever "os HEX da marca" sem nunca receber
+   * hex algum, e usava o único disponível no contexto: o #F27A5E que está solto
+   * no briefing da Trifold — laranja institucional numa arte de marca verde.
+   */
+  paleta?: Array<{ hex: string; nome: string | null }>
   /** Arquivos do Kit da(s) marca(s) relevante(s): a Lídia escolhe quais entram na arte */
   assets: Array<{ marca: string; tipo: string; label: string | null; file_name: string }>
   /** Referência de "hoje" (ISO) */
@@ -84,8 +91,9 @@ REGRAS INEGOCIAVEIS:
 - ESCOPO POR MARCA: use o bloco do empreendimento do post + o institucional. NUNCA aplique numero, diretriz ou caracteristica de um empreendimento a outro.
 - So afirme numeros (preco, metragem, % vendido, prazo) que estejam no Kit. Prazo de entrega: SOMENTE o contratual.
 - Portugues do Brasil. Emojis com moderacao (a voz da marca manda).
-- BLOCO ARTE (formatos com imagem): "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, paleta com os HEX da marca, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
+- BLOCO ARTE (formatos com imagem): "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
 - LEGIBILIDADE DA ARTE (a descricao PRECISA cuidar disso; peca vista no celular, no meio do scroll): exija contraste alto entre texto e fundo — texto claro so sobre area escura, texto escuro so sobre area clara, nunca cinza sobre fundo escuro. NAO descreva a arte inteira como escura/preta/monocromatica: sempre reserve uma area luminosa (ceu, luz, reflexo, superficie clara) e diga onde o titulo entra. Nao peca forma geometrica solta, moldura ou linha decorativa para preencher espaco — isso e erro.
+- COR (Story 75-250): use SOMENTE os hex listados em PALETA DA MARCA. E PROIBIDO escrever qualquer outro codigo hex na descricao — inclusive hex que apareca no briefing ou nas diretrizes de OUTRA marca. Se a secao PALETA DA MARCA estiver vazia, descreva a cor por NOME (ex.: "verde escuro", "areia") e nao escreva hex nenhum.
 - CTA (Story 75-248): o campo "cta" recebe o texto EXATO do call-to-action, curto (ate ~30 caracteres, ex.: "Arraste e agende sua visita"). O CTA **NAO** e desenhado pelo gerador de imagem — o codigo compoe a pilula com a cor do Kit. Portanto: NAO descreva o CTA na "descricao", NAO peca botao/pilula/texto de CTA na arte, e reserve a zona inferior. Se o post nao pedir CTA, "cta": null.
 
 RETORNE APENAS JSON valido, sem markdown:
@@ -96,6 +104,18 @@ RETORNE APENAS JSON valido, sem markdown:
   "scheduled_for": "YYYY-MM-DD ou null",
   "arte": { "descricao": "direcao de arte + texto da arte (SEM o CTA)", "arquivos_kit": ["file_name"], "cta": "texto curto do CTA ou null" }
 }`
+
+/**
+ * Story 75-250 — a paleta chega ao Sonnet JÁ escopada. Antes ele era mandado
+ * escrever "os HEX da marca" sem receber hex nenhum, e pegava o único do
+ * contexto: o que está solto no briefing da Trifold.
+ */
+function formatPaleta(paleta: Array<{ hex: string; nome: string | null }>): string {
+  if (paleta.length === 0) {
+    return "Nenhuma cor cadastrada para esta marca — descreva as cores por NOME e NAO escreva hex algum."
+  }
+  return paleta.map((c) => `${c.hex}${c.nome ? ` (${c.nome})` : ""}`).join(", ")
+}
 
 function formatBrandBlocks(brands: BrandKnowledge[]): string {
   if (brands.length === 0) return "Nenhuma marca cadastrada no Kit — siga apenas o pedido, com tom profissional-proximo, e NAO invente numeros."
@@ -137,6 +157,9 @@ ${input.pedido}
 ${input.direcaoArte?.trim() ? `\nDIRECAO VISUAL DO HUMANO (obrigatorio incorporar na arte.descricao, com prioridade sobre suas escolhas esteticas): ${input.direcaoArte.trim()}\n` : ""}
 KIT DE MARCAS:
 ${formatBrandBlocks(input.brands)}
+
+PALETA DA MARCA (os UNICOS hex permitidos na descricao da arte):
+${formatPaleta(input.paleta ?? [])}
 
 ARQUIVOS DO KIT (para citar na arte):
 ${formatAssets(input.assets)}`

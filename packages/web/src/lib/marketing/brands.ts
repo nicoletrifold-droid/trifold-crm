@@ -310,3 +310,55 @@ export function scopeBrandsForPost<T extends { tipo: string; property_id: string
       (empreendimentoId !== null && b.property_id === empreendimentoId)
   )
 }
+
+/**
+ * Story 75-250 (AC6) — regra ÚNICA de escopo da paleta: a marca do
+ * empreendimento manda, mas campo vazio dela cai para a institucional (o Yarden
+ * sem paleta cadastrada não pode sair sem cor nenhuma enquanto a Trifold tem 4).
+ *
+ * Estava DUPLICADA inline no `arte-service`; agora a rota `/pedir` também precisa
+ * dela para dizer ao Sonnet quais hex existem, e duas cópias divergem com o tempo.
+ */
+export function resolvePaletaDoPost<
+  T extends { tipo: string; cores?: Array<{ hex: string; nome: string | null }> | null },
+>(brands: T[]): Array<{ hex: string; nome: string | null }> {
+  const validas = (b: T | undefined) => (b?.cores ?? []).filter((c) => typeof c?.hex === "string")
+  const empr = validas(brands.find((b) => b.tipo === "empreendimento"))
+  return empr.length > 0 ? empr : validas(brands.find((b) => b.tipo === "institucional"))
+}
+
+/**
+ * Story 75-250 (AC1/AC3) — arquivos do Kit CITADOS pelo humano no pedido ou na
+ * direção de arte. O código força esses arquivos nas referências: o Sonnet viu os
+ * 6 renders do Vind, o Marcos citou dois pelo nome, e ele devolveu lista vazia —
+ * o prédio virou invenção. O que o humano pediu explicitamente não passa por
+ * decisão de modelo.
+ *
+ * PURA. Casa o `file_name` COMPLETO, case-insensitive, com borda de palavra
+ * (pontuação/espaço em volta é ok) — nunca por fragmento, senão `VIND.png`
+ * casaria `VIND_RENDER_PISCINA.png`.
+ */
+export function arquivosCitadosNoTexto(
+  texto: string | null | undefined,
+  fileNames: string[]
+): string[] {
+  if (!texto?.trim()) return []
+  const alvo = texto.toLowerCase()
+  const out: string[] = []
+  for (const nome of fileNames) {
+    const n = nome.toLowerCase()
+    let de = alvo.indexOf(n)
+    while (de !== -1) {
+      const antes = de === 0 ? "" : alvo[de - 1]!
+      const depois = alvo[de + n.length] ?? ""
+      // borda: início/fim, espaço ou pontuação — não letra/dígito/underscore
+      const ehBorda = (c: string) => c === "" || !/[a-z0-9_]/.test(c)
+      if (ehBorda(antes) && ehBorda(depois)) {
+        if (!out.includes(nome)) out.push(nome)
+        break
+      }
+      de = alvo.indexOf(n, de + 1)
+    }
+  }
+  return out
+}
