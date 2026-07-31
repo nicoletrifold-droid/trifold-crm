@@ -14,6 +14,13 @@ export type MarketingPostCanal = (typeof MARKETING_POST_CANAIS)[number]
 // CLIENT-SAFE: a UI e as rotas leem daqui (o flow em @trifold/ai tem cópia
 // própria de propósito — importar de lá arrastaria o SDK do Anthropic pro
 // bundle client). Formato novo = mig + aqui + marketing-post-request.ts.
+/**
+ * Story 75-255 — SELECT único do post. Estava DUPLICADO em 5 arquivos, e é assim
+ * que uma coluna nova (aqui `artes`) fica esquecida em um deles.
+ */
+export const MARKETING_POST_SELECT =
+  "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, artes, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+
 export const MARKETING_POST_FORMATOS = ["estatico", "reel", "story", "carrossel"] as const
 export type MarketingPostFormato = (typeof MARKETING_POST_FORMATOS)[number]
 
@@ -55,6 +62,8 @@ export interface MarketingPostInput {
   copy: string
   roteiro: string | null
   arte_url: string | null
+  /** Story 75-255 — artes do post, uma por tela. arte_url espelha a de ordem 1. */
+  artes: Array<{ ordem: number; url: string; descricao?: string | null; cta?: string | null }> | null
   scheduled_for: string | null
 }
 
@@ -123,10 +132,16 @@ export function validateMarketingPostInput(
   }
 
   if (b.arte_url !== undefined) {
+    // 🔴 Story 75-255 — edição MANUAL da arte (colar link do Canva) tem de mexer
+    // em `artes` também, senão os dois divergem: o preview leria 2 telas antigas
+    // e ignoraria o link que o humano acabou de colar. Override humano zera a
+    // lista e passa a valer como a peça única — coerente com "o humano manda".
     if (b.arte_url === null || b.arte_url === "") {
       out.arte_url = null
+      out.artes = []
     } else if (typeof b.arte_url === "string" && b.arte_url.trim().length <= 2000) {
       out.arte_url = b.arte_url.trim()
+      out.artes = [{ ordem: 1, url: b.arte_url.trim() }]
     } else {
       return { ok: false, error: "arte_url inválida" }
     }

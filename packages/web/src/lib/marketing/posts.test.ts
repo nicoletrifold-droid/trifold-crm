@@ -133,3 +133,33 @@ describe("formato/roteiro (Story 75-239)", () => {
     if (patch.ok) expect("roteiro" in patch.value).toBe(false)
   })
 })
+
+// Story 75-255 — edição MANUAL da arte precisa mexer em `artes` também, senão o
+// preview leria telas antigas e ignoraria o link que o humano colou.
+describe("validateMarketingPostInput — arte_url manual sincroniza artes (75-255)", () => {
+  it("colar link vira artes = [{ordem:1,url}]", () => {
+    const r = validateMarketingPostInput({ arte_url: "https://www.canva.com/design/abc" }, { partial: true })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.arte_url).toBe("https://www.canva.com/design/abc")
+      expect(r.value.artes).toEqual([{ ordem: 1, url: "https://www.canva.com/design/abc" }])
+    }
+  })
+
+  it("limpar a arte zera as duas pontas", () => {
+    for (const v of [null, ""]) {
+      const r = validateMarketingPostInput({ arte_url: v }, { partial: true })
+      expect(r.ok).toBe(true)
+      if (r.ok) {
+        expect(r.value.arte_url).toBeNull()
+        expect(r.value.artes).toEqual([])
+      }
+    }
+  })
+
+  it("não mexe em artes quando arte_url não vem no corpo", () => {
+    const r = validateMarketingPostInput({ copy: "só a copy" }, { partial: true })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect("artes" in r.value).toBe(false)
+  })
+})

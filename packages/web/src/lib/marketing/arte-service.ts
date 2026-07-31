@@ -279,3 +279,86 @@ export async function removerArteAntiga(admin: SupabaseClient, arteUrl: string |
   const { error } = await admin.storage.from("marketing-artes").remove([path])
   if (error) console.warn("[arte-service] não removeu arte antiga:", error.message)
 }
+
+// ─── Story 75-255 — N artes por post (uma por tela do story) ────────────────
+
+export interface ArteSpec {
+  /** 1-based, casa com a TELA da copy */
+  ordem: number
+  descricao: string
+  arquivosKit: string[]
+  cta: string | null
+}
+
+export interface ArteGerada {
+  ordem: number
+  url: string
+  descricao: string
+  cta: string | null
+  arquivosUsados: string[]
+}
+
+/**
+ * Gera N artes, uma por spec. SEQUENCIAL de propósito: cada geração leva ~15s e
+ * paralelizar brigaria com limite de taxa do provedor sem ganho real (o teto de
+ * 3 mantém o pior caso em ~45s, folgado nos 300s da rota).
+ *
+ * FAIL-OPEN POR TELA (AC7): a arte que falha é pulada e as outras seguem. Story
+ * de 2 telas em que a tela 2 falha entrega a tela 1 — nunca perde tudo.
+ */
+export async function gerarArtesParaPost(
+  admin: SupabaseClient,
+  base: Omit<GerarArteParaPostInput, "descricao" | "arquivosKit" | "cta">,
+  specs: ArteSpec[]
+): Promise<ArteGerada[]> {
+  const out: ArteGerada[] = []
+  for (const spec of specs) {
+    try {
+      const r = await gerarArteParaPost(admin, {
+        ...base,
+        descricao: spec.descricao,
+        arquivosKit: spec.arquivosKit,
+        cta: spec.cta,
+      })
+      if (!r) {
+        console.warn(`[arte-service] tela ${spec.ordem}: motor não devolveu imagem — segue sem ela`)
+        continue
+      }
+      out.push({
+        ordem: spec.ordem,
+        url: r.arteUrl,
+        descricao: spec.descricao,
+        cta: spec.cta,
+        arquivosUsados: r.arquivosUsados,
+      })
+    } catch (err) {
+      console.error(`[arte-service] tela ${spec.ordem} falhou — as outras seguem:`, err)
+    }
+  }
+  return out
+}
+
+/**
+ * 🔴 A ÚNICA função que grava artes no post (ressalva do @po: `arte_url` e
+ * `artes[0]` precisam concordar SEMPRE, e dois lugares escrevendo divergem).
+ *
+ * `arte_url` espelha a arte de MENOR ordem — é o que a miniatura do card, o
+ * `removerArteAntiga` e o preview legado já leem.
+ */
+export function montarPatchDeArtes(artes: ArteGerada[]): {
+  artes: ArteGerada[]
+  arte_url: string | null
+  arte_arquivos: string[] | null
+  arte_descricao: string | null
+  arte_cta: string | null
+} {
+  const ordenadas = [...artes].sort((a, b) => a.ordem - b.ordem)
+  const primeira = ordenadas[0] ?? null
+  return {
+    artes: ordenadas,
+    arte_url: primeira?.url ?? null,
+    arte_arquivos: primeira?.arquivosUsados ?? null,
+    arte_descricao: primeira?.descricao ?? null,
+    arte_cta: primeira?.cta ?? null,
+  }
+}

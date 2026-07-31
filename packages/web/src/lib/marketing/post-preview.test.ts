@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildPostPreview, tipoDePreview } from "./post-preview"
+import { buildPostPreview, quantasArtes, tipoDePreview, MAX_ARTES_POR_POST } from "./post-preview"
 
 // Story 75-254 — parsing do preview. PURA (AC8). Copys reais de produção.
 const b = (copy: string | null, formato: Parameters<typeof tipoDePreview>[0], temArte = true, roteiro?: string) =>
@@ -154,5 +154,36 @@ describe("entradas degeneradas", () => {
       expect(p.telas).toEqual([])
       expect(p.legenda).toBeNull()
     }
+  })
+})
+
+// Story 75-255 — decisão por formato (AC8).
+describe("quantasArtes", () => {
+  it("story: UMA POR TELA — o conserto da 75-255", () => {
+    expect(quantasArtes("story", 1)).toBe(1)
+    expect(quantasArtes("story", 2)).toBe(2)
+    expect(quantasArtes("story", 3)).toBe(3)
+  })
+
+  it("story respeita o TETO — sem ele a rota estoura no meio e deixa arte órfã", () => {
+    expect(quantasArtes("story", 8)).toBe(MAX_ARTES_POR_POST)
+    expect(MAX_ARTES_POR_POST).toBe(3)
+  })
+
+  it("AC2 — carrossel gera SÓ A CAPA, mesmo com 7 cards", () => {
+    expect(quantasArtes("carrossel", 7)).toBe(1)
+  })
+
+  it("AC2 — estatico 1, reel 0 (vídeo é humano)", () => {
+    expect(quantasArtes("estatico", 1)).toBe(1)
+    expect(quantasArtes("reel", 3)).toBe(0)
+  })
+
+  it("legado sem formato vira peça única (11 posts em produção)", () => {
+    expect(quantasArtes(null, 5)).toBe(1)
+  })
+
+  it("story sem tela detectada ainda gera 1 — nunca zero por acidente", () => {
+    expect(quantasArtes("story", 0)).toBe(1)
   })
 })

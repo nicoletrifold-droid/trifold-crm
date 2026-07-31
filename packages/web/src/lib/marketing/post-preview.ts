@@ -140,3 +140,29 @@ export function buildPostPreview(input: {
     legenda: tipo === "story" ? null : copy || null,
   }
 }
+
+// ─── Story 75-255 — quantas artes o post pede ───────────────────────────────
+
+/** Teto de artes por post. Cada geração leva ~15s e a rota tem maxDuration=300. */
+export const MAX_ARTES_POR_POST = 3
+
+/**
+ * PURA (AC8): quantas artes gerar, por formato.
+ *
+ * Não é "N para tudo" — cada formato tem intenção própria, e três delas já estavam
+ * certas antes desta story:
+ *   story     → UMA POR TELA (teto MAX_ARTES_POR_POST) ← o que a 75-255 conserta
+ *   carrossel → só a CAPA. O prompt já diz "os demais cards a equipe monta
+ *               seguindo o mesmo estilo" — intenção existente, não mexer.
+ *   estatico  → 1 (peça única)
+ *   reel      → 0 (o vídeo é produção humana)
+ *   NULL      → 1 (legado pré-75-239; 11 posts em produção)
+ */
+export function quantasArtes(
+  formato: MarketingPostFormato | null,
+  totalTelas: number
+): number {
+  if (formato === "reel") return 0
+  if (formato === "story") return Math.min(Math.max(totalTelas, 1), MAX_ARTES_POR_POST)
+  return 1 // carrossel (capa), estatico, e legado sem formato
+}

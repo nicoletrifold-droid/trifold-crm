@@ -8,6 +8,7 @@ import {
   type CreativePerformanceRow,
   type PropertyOption,
 } from "@trifold/ai"
+import { MARKETING_POST_SELECT } from "@web/lib/marketing/posts"
 
 // Story 75-219 (AC6/AC7) — monta o contexto real de performance e chama o
 // Sonnet no padrão do pipeline da Nicole/behavior-analysis. Fail-open: erro da
@@ -174,7 +175,7 @@ export async function POST() {
       .from("marketing_posts")
       .insert(rows)
       .select(
-        "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+        MARKETING_POST_SELECT
       )
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
