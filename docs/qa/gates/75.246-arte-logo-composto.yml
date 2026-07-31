@@ -1,7 +1,7 @@
 schema: 1
 story: '75-246'
-gate: CONCERNS
-status_reason: 'Implementação sólida e AC1–AC6 atendidos: layout puro/testado nos 3 formatos, caminho real do sharp coberto por teste (PNG e SVG compõem igual, formato de entrada preservado, topo da arte intacto), e o fail-open do AC4 garantido por try/catch PRÓPRIO — o catch externo devolveria null e perderia a arte inteira. CONCERNS, não PASS, por UM motivo de método: a suíte e o build foram executados com código NÃO relacionado de uma sessão paralela presente no working tree, então a verificação do conjunto não é isolada. A prova limpa é o build de preview do PR, que compila só este commit — o gate NÃO fecha sem ele verde.'
+gate: PASS
+status_reason: 'Implementação sólida e AC1–AC6 atendidos: layout puro/testado nos 3 formatos, caminho real do sharp coberto por teste (PNG e SVG compõem igual, formato de entrada preservado, topo da arte intacto), e o fail-open do AC4 garantido por try/catch PRÓPRIO — o catch externo devolveria null e perderia a arte inteira. RESOLVIDO — o preview isolado do PR #322 compilou verde, então a ressalva de método abaixo está atendida. Era: a suíte e o build foram executados com código NÃO relacionado de uma sessão paralela presente no working tree, então a verificação do conjunto não é isolada. A prova limpa é o build de preview do PR, que compila só este commit — o gate NÃO fecha sem ele verde.'
 reviewer: 'Quinn'
 updated: '2026-07-31T12:25:00Z'
 evidence:
@@ -9,6 +9,7 @@ evidence:
   tests_suite_total: '1358 — ⚠️ CONTAMINADO: inclui ~19 testes da sessão paralela'
   tsc: 'clean (pega o bump de @unlayer/types que veio de carona)'
   eslint: 'clean em src/lib/marketing/'
+  build_preview_isolado: '✓ SUCCESS no PR #322 — compila só este commit, no linux da Vercel: prova definitiva do sharp no lockfile'
   build: '✓ Compiled 17.0s — ⚠️ mesma contaminação; validar pelo preview do PR'
   smoke_sharp: 'faixa 16.0 → 37.7 idêntico via PNG e via SVG; topo 16.0 intacto; jpeg in → jpeg out'
 po_ressalva_atendida: 'Sim — @po exigiu build verificado antes do merge por causa do sharp no lockfile. Build local passou; a confirmação isolada vem do preview.'
@@ -16,7 +17,7 @@ top_issues:
   - id: 'PROC-001'
     severity: medium
     finding: '⚠️ Verificação não isolada: uma sessão paralela editava 7 arquivos (pipeline/qualification/visit-slot da Nicole) no MESMO working tree durante a suíte e o build. O commit contém só os 8 arquivos desta story (adicionados um por um, nunca `git add -A`), mas os números de suíte/build refletem a mistura.'
-    suggested_action: 'Merge SOMENTE com o preview do PR verde — ele compila apenas este commit. Não fechar o gate por conta do resultado local.'
+    suggested_action: 'RESOLVIDO: preview do PR #322 verde. A sessão paralela commitou os 8 arquivos dela em feat/75-245-nicole-agendamento-fantasma (d0c4ac93) e migrou para o worktree .claude/worktrees/story-75-245 — nada foi perdido de lado nenhum.'
   - id: 'DEP-001'
     severity: low
     finding: '`pnpm add sharp@0.34.5` re-resolveu e subiu `@unlayer/types` de 1.448.0 para 1.462.0 de carona — drift não pedido, em pacote só de tipos usado nos dois editores de e-mail. `tsc` limpo, então não quebrou nada.'

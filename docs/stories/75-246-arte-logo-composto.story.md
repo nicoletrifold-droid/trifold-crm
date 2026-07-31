@@ -1,6 +1,6 @@
 # Story 75-246 — Logo da marca composto por cima da arte
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Feature
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** M
@@ -107,3 +107,18 @@ Kit, sem segundo logo desenhado pelo modelo.
 - 31/07/2026 — @qa: gate **CONCERNS** — implementação aprovada, mas a suíte e o
   build locais rodaram com código da sessão paralela no working tree. O gate só
   fecha com o preview do PR verde (compila apenas este commit).
+- 31/07/2026 — @qa: **CONCERNS → PASS.** Preview do PR #322 compilou verde com
+  APENAS este commit — a ressalva do @po (sharp no lockfile) está atendida no
+  ambiente linux da Vercel, e a contaminação local deixa de importar.
+- 31/07/2026 — @devops: PR #322 squash-merged (`9cf08e9d`), deploy de produção
+  READY. Status InReview → **Done**.
+
+## Validação
+- 16 testes novos (layout puro nos 3 formatos + caminho real do `sharp`) ·
+  `tsc` limpo · `eslint` limpo · **preview isolado do PR verde** (a prova que
+  vale, dada a sessão paralela) · sem migração.
+- Nenhum arquivo da sessão paralela entrou neste commit: os 9 arquivos foram
+  adicionados um por um, nunca `git add -A`.
+- ✅ LIVE: PR #322 squash-merged, deploy de produção concluído (`9cf08e9d`).
+- ⏳ **Aceitação visual pendente:** gerar arte do Vind e conferir (a) o logo é o
+  arquivo do Kit, sem desvio, e (b) o modelo NÃO desenhou um segundo logo.
