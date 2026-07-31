@@ -1,7 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { getUserPermissions } from "@web/lib/permissions"
+import { getUserPermissions, podeVerMenuConfig } from "@web/lib/permissions"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
@@ -287,7 +287,7 @@ export default async function DashboardLayout({
     ...(() => {
       const bottomGroup = [
         ...(permissions["chamados"] ? [{ ...NAV_ITEM_CHAMADOS, badge: chamadosPendentesCount ?? 0 }] : []),
-        ...(permissions["configuracoes"] ? [NAV_ITEM_CONFIG] : []),
+        ...(podeVerMenuConfig(permissions) ? [NAV_ITEM_CONFIG] : []),
         // Email Marketing: só acesso total ao Sistema. Sistema: acesso total OU
         // sub-módulo (ex.: supervisor com `sistema.notificacoes-financeiras`).
         ...(permissions["sistema"] ? [NAV_ITEM_EMAIL] : []),

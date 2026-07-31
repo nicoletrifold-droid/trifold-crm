@@ -1,0 +1,32 @@
+schema: 1
+story: '75-251'
+gate: PASS
+status_reason: 'AC1–AC5 atendidos. O valor real desta story está no que ela NÃO fez: o pedido parecia um toggle de um clique no Perfil de Acesso, e aquele clique seria escalada de privilégio — `canAccess` herda do módulo pai e existe UMA única linha `configuracoes.*` em produção, então ligar `configuracoes` daria ao gerente-comercial a própria matriz de permissões. A solução inverte o sentido: o pai fica false, nada herda, e o menu aparece pelo sub-módulo que a pessoa já tem. Suíte 1426, tsc e eslint limpos, build 21s.'
+reviewer: 'Quinn'
+updated: '2026-07-31T16:35:00Z'
+evidence:
+  tests: '1426/1426; +6 na função pura, incluindo o caso exato do gerente-comercial'
+  tsc: 'limpo'
+  eslint: 'limpo'
+  build: '✓ Compiled 21.0s'
+  ac3_matriz_intacta: 'PROVADO por query em prod APÓS a implementação — gerente-comercial segue com configuracoes=NÃO, configuracoes.pipeline=SIM, corretores=SIM. O diff não toca supabase/migrations nem role_permissions.'
+  escopo_reduzido: 'O pedido era "dar acesso"; a investigação mostrou que o acesso JÁ EXISTIA (corretores=true, card em GERENTE_ALLOWED, e o layout não bloqueia rota — só esconde menu). Virou "mostrar o menu".'
+po_ressalva_atendida: 'Sim — o @po exigiu PROVAR que nenhuma linha da matriz mudou, não só que o menu apareceu. Provado por query pós-implementação, registrado em evidence.'
+top_issues:
+  - id: 'SEC-001'
+    severity: high
+    finding: '🔴 ARMADILHA EVITADA, não introduzida: `canAccess` (permissions.ts:344) HERDA do módulo pai quando não existe linha explícita do sub-módulo. Em produção existe UMA linha `configuracoes.*` (pipeline do gerente-comercial). Ligar o pai `configuracoes` — que era a leitura óbvia do pedido — concederia por herança `configuracoes.perfil-acesso` (a matriz de permissões: ele se promoveria), `configuracoes.integracoes` (credenciais Meta/WhatsApp/Telegram), clientes, empresa, horario e usuarios.'
+    suggested_action: 'Nenhuma ação nesta story — a solução não abre o pai. Mas a herança é uma armadilha ARMADA para o próximo perfil e para todo sub-módulo novo. Candidato a story: exigir linha explícita para sub-módulo sensível, ou inverter o default de herança.'
+  - id: 'OBS-001'
+    severity: medium
+    finding: '`configuracoes/corretores/page.tsx` não tem redirect próprio — renderiza para qualquer usuário do dashboard, e o `isAdmin` interno gateia só as AÇÕES. A lista (nome, e-mail, CRECI, teto de leads) passa pelo RLS do client de usuário, mas a tela abre. Pré-existente, não muda com esta story.'
+    suggested_action: 'Decidir se é intencional. O layout do dashboard NÃO tem guard de rota por módulo — só esconde menu — então isso vale para toda tela sem guard próprio.'
+  - id: 'ARCH-001'
+    severity: low
+    finding: 'A causa de fundo: o layout esconde menu mas não bloqueia rota. Segurança de tela depende de cada página ter seu próprio guard. Hoje as subpáginas de Configurações têm (auditadas uma a uma nesta story); `nicole` não tem redirect mas filtra os cards por role.'
+    suggested_action: 'Story própria, grande: guard de rota por módulo no layout, com varredura de todas as telas do dashboard. Não cabia aqui.'
+  - id: 'PROC-001'
+    severity: low
+    finding: 'Durante a investigação eu afirmei ao Marcos que `configuracoes/empresa` estava sem guard. ERRADO — o guard existe (`configuracoes.empresa`); o padrão de busca não pegou a linha. Corrigido em voz alta antes de virar escopo, e registrado no risco 3 da story.'
+    suggested_action: 'Nenhuma. Auditar guard por grep exige o padrão certo; conferir lendo o arquivo quando a conclusão for "não tem".'
+waiver: { active: false }
