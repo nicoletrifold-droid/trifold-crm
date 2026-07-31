@@ -1,6 +1,6 @@
 # Story 75-244 — Arte da Lídia legível: contraste e CTA com peso
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Fix de comportamento (prompt)
 **Epic:** Agente de Marketing (Lídia)
 **Complexidade:** S
@@ -120,3 +120,15 @@ sem quebrar a suíte.
 - 31/07/2026 — @po: validação 10 pontos = **10/10, GO**. Status Draft → Ready.
 - 31/07/2026 — @dev: implementação concluída (4 arquivos, +4 testes).
   Status Ready → InProgress → InReview.
+- 31/07/2026 — @qa: gate **PASS** (4 observações, 0 bloqueante).
+- 31/07/2026 — @devops: PR #320 squash-merged (`c0d14b41`), deploy de produção
+  READY. Status InReview → **Done**.
+
+## Validação
+- Suíte **1322/1322** (+4 testes) · `tsc` limpo nos 2 pacotes · build 22s ·
+  eslint sem erro. Diff 100% aditivo (48 inserções, 0 remoções).
+- Sem migração.
+- ✅ LIVE: PR #320 squash-merged, deploy de produção concluído (`c0d14b41`).
+- ⏳ **Aceitação visual pendente (é o teste que importa):** clicar "Refazer arte"
+  no story do Vind e comparar com a peça de 31/07 — a peça deve ter área
+  luminosa, CTA com peso e nenhuma forma solta.
