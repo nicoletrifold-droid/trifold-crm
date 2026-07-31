@@ -30,7 +30,8 @@ import {
   stripManualInterestLevel,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
-import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, isAmbiguousSlotText, slotToUtc, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -59,6 +60,29 @@ export function hasConfirmedDay(availability: unknown): boolean {
     /\bvou\s+(?:passar|a[ií])/,
   ]
   return patterns.some((p) => p.test(lower))
+}
+
+/**
+ * Story 75-245 — a Nicole afirmou um dia+horário diferente do que o sistema
+ * autorizou neste turno? Devolve o horário que ela afirmou (para logar), ou null.
+ *
+ * Puro e conservador: só olha AFIRMAÇÃO de dia+hora único. Quando o texto é
+ * ambíguo (ela oferecendo "8h ou 11h", ou citando o expediente) devolve null —
+ * a guarda existe para pegar invenção, não para brigar com oferta de opções.
+ */
+export function detectSlotMismatch(input: {
+  assistantMessage: string
+  authorizedSlotUtc: Date | null
+  now: Date
+}): Date | null {
+  const { assistantMessage, authorizedSlotUtc, now } = input
+  if (!authorizedSlotUtc || !assistantMessage) return null
+  if (isAmbiguousSlotText(assistantMessage)) return null
+  const said = resolveVisitSlotParts({ message: assistantMessage, now, visitAvailability: null })
+  if (!said.day || !said.time) return null
+  const saidUtc = slotToUtc(said.day, said.time)
+  const differs = Math.abs(saidUtc.getTime() - authorizedSlotUtc.getTime()) > 30 * 60_000
+  return differs ? saidUtc : null
 }
 
 /**
@@ -548,9 +572,32 @@ export async function processMessageWithMetadata(
   let rescheduleSlotUtc: Date | null = null
   let apptToReschedule: { id: string; googleEventId: string | null; fromWhen: string; brokerId: string | null } | null = null
   let apptToCancel: { id: string; googleEventId: string | null; when: string; brokerId: string | null } | null = null
+  // Story 75-245 — slot que o SISTEMA autorizou neste turno (agendado, remarcado
+  // ou o da visita já existente). Serve de verdade única para a guarda
+  // anti-alucinação depois da resposta.
+  let authorizedSlotUtc: Date | null = null
   // Story 75-162 — modo agendamento: visit_proposed OU visit_availability capturado.
   const hasVisitAvailability =
     typeof (collectedData as Record<string, unknown>).visit_availability === "string"
+  // Story 75-245 — regra de verdade colada em TODO bloco [SISTEMA] de visita.
+  // No incidente do lead Ailton o bloco dizia "visita JÁ confirmada para segunda
+  // 3/08 às 12:00 — apenas confirme" e a Nicole anunciou "sábado às 9h" e depois
+  // "às 10h". Nada proibia isso, nem aqui nem no prompt do banco.
+  const sistema = (body: string) =>
+    `[SISTEMA: ${body} REGRA ABSOLUTA: só afirme dia/horário de visita que esteja NESTE bloco. Nunca invente, arredonde nem complete um horário — se o que o cliente pediu não está aqui, PERGUNTE em vez de confirmar.]\n\n${message}`
+
+  /** Story 75-245 — lista "8h ou 9h ou 11h" a partir dos slots livres. */
+  const listSlots = (slots: Date[]) => slots.map(formatBrtDateTime).join(" ou ")
+
+  /** Story 75-245 — dia legível ("sábado, 1 de agosto") para os blocos [SISTEMA]. */
+  const formatBrtDay = (d: DayParts) =>
+    slotToUtc(d, { hour: 12, minute: 0 }).toLocaleDateString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+
   // Story 75-163 — roda SEMPRE que há lead: se existe visita ativa, permite
   // remarcar/cancelar em qualquer etapa/dia (não depende de "modo agendamento").
   if (conversation?.lead_id) {
@@ -585,10 +632,18 @@ export async function processMessageWithMetadata(
       if (nTime && !nDay) nDay = dayPartsFromUtc(apptWhen)
       const cancelIntent = detectCancelIntent(message)
       const rescheduleIntent = detectRescheduleIntent(message)
+      // Story 75-245 — período sem número ("de manhã"): antes não resolvia nada e
+      // a Nicole inventava o horário. Agora vira oferta de slots livres reais.
+      const nPeriod = parsePeriodParts(message)
       const ev = nDay && nTime ? evaluateSlot(nDay, nTime, nowA) : { startUtc: null as Date | null, outsideHours: false }
       const newStartUtc = ev.startUtc
       const differs = newStartUtc ? Math.abs(newStartUtc.getTime() - apptWhen.getTime()) > 30 * 60_000 : false
       const clearPending = () => { delete cdA.visit_pending_date; delete cdA.visit_pending_hour; delete cdA.visit_pending_minute }
+      // Story 75-245 — dia diferente do agendado JÁ É pedido de mudança, mesmo sem
+      // palavra-chave ("tem como ver no sábado"). Antes caía no "apenas reconfirme"
+      // e o pedido real do cliente morria ali.
+      const apptDay = dayPartsFromUtc(apptWhen)
+      const dayDiffers = !!resolved.day && dayPartsToIso(resolved.day) !== dayPartsToIso(apptDay)
 
       if (newStartUtc && differs) {
         // REMARCAR — novo dia+hora concreto e diferente do atual.
@@ -597,26 +652,38 @@ export async function processMessageWithMetadata(
         const whenStr = formatBrtDateTime(newStartUtc)
         if (free) {
           rescheduleSlotUtc = newStartUtc
+          authorizedSlotUtc = newStartUtc
           apptToReschedule = { id: apptId, googleEventId: (activeAppointment.google_event_id as string | null) ?? null, fromWhen: existingWhenStr, brokerId: (activeAppointment.broker_id as string | null) ?? null }
-          messageWithContext = `[SISTEMA: O cliente quer REMARCAR a visita de ${existingWhenStr} para ${whenStr}. O novo horário está LIVRE. Confirme a remarcação reafirmando o NOVO dia e horário (${whenStr}).]\n\n${message}`
+          messageWithContext = sistema(`O cliente quer REMARCAR a visita de ${existingWhenStr} para ${whenStr}. O novo horário está LIVRE. Confirme a remarcação reafirmando o NOVO dia e horário (${whenStr}).`)
         } else {
-          const alts = alternatives.map(formatBrtDateTime).join(" ou ")
-          messageWithContext = `[SISTEMA: O cliente quer remarcar para ${whenStr}, mas esse horário está ocupado. NÃO confirme. Ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"} e mantenha a visita atual (${existingWhenStr}) até ele escolher.]\n\n${message}`
+          const alts = listSlots(alternatives)
+          messageWithContext = sistema(`O cliente quer remarcar para ${whenStr}, mas esse horário está ocupado. NÃO confirme. Ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"} e mantenha a visita atual (${existingWhenStr}) até ele escolher.`)
         }
       } else if ((rescheduleIntent || cancelIntent) && nDay && nTime && !newStartUtc) {
         // Novo horário fora do atendimento (evaluateSlot devolveu null).
-        messageWithContext = `[SISTEMA: O novo horário pedido não serve (já passou ou fora do atendimento: seg–sex 8h–18h, sáb 8h–12h). Peça um horário válido. A visita atual (${existingWhenStr}) segue mantida.]\n\n${message}`
-      } else if (cancelIntent && !nTime && !nDay) {
+        messageWithContext = sistema(`O novo horário pedido não serve (já passou ou fora do atendimento: seg–sex 8h–18h, sáb 8h–12h). Peça um horário válido. A visita atual (${existingWhenStr}) segue mantida.`)
+      } else if (cancelIntent && !nTime && !nDay && !nPeriod) {
         // CANCELAR — intenção clara, sem nova data.
         clearPending()
         apptToCancel = { id: apptId, googleEventId: (activeAppointment.google_event_id as string | null) ?? null, when: existingWhenStr, brokerId: (activeAppointment.broker_id as string | null) ?? null }
-        messageWithContext = `[SISTEMA: O cliente quer CANCELAR a visita de ${existingWhenStr}. Confirme com gentileza que a visita foi cancelada e ofereça remarcar quando ele quiser. NÃO insista.]\n\n${message}`
-      } else if (rescheduleIntent && nDay && !nTime) {
+        messageWithContext = sistema(`O cliente quer CANCELAR a visita de ${existingWhenStr}. Confirme com gentileza que a visita foi cancelada e ofereça remarcar quando ele quiser. NÃO insista.`)
+      } else if (nPeriod && (nDay || pDay)) {
+        // Story 75-245 — PERÍODO com dia conhecido: oferece horários livres de verdade.
+        const targetDay = nDay ?? pDay!
+        cdA.visit_pending_date = dayPartsToIso(targetDay)
+        const slots = await freeSlotsInPeriod(supabase, orgId, targetDay, nPeriod, nowA, apptId)
+        const periodo = nPeriod === "manha" ? "manhã" : "tarde"
+        messageWithContext = slots.length
+          ? sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(targetDay)}. Horários LIVRES nesse período: ${listSlots(slots)}. NÃO confirme nenhum ainda: ofereça exatamente esses e pergunte qual ele prefere. A visita atual (${existingWhenStr}) segue mantida até ele escolher.`)
+          : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(targetDay)}, mas não há horário livre nesse período. NÃO confirme. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h). A visita atual (${existingWhenStr}) segue mantida.`)
+      } else if (nDay && !nTime && (rescheduleIntent || dayDiffers)) {
+        // Story 75-245 — dia novo sem horário (com ou sem palavra-chave de remarcar).
         cdA.visit_pending_date = dayPartsToIso(nDay)
-        messageWithContext = `[SISTEMA: O cliente quer remarcar e indicou o novo dia mas não o horário. Pergunte qual horário prefere (seg–sex 8h–18h, sáb 8h–12h).]\n\n${message}`
+        messageWithContext = sistema(`O cliente indicou um novo dia (${formatBrtDay(nDay)}) para a visita, mas não o horário. Pergunte qual horário prefere (seg–sex 8h–18h, sáb 8h–12h). NÃO afirme nenhum horário. A visita atual (${existingWhenStr}) segue mantida até ele escolher.`)
       } else {
         // Sem pedido de mudança → reconfirma o existente.
-        messageWithContext = `[SISTEMA: Visita JÁ confirmada para ${formatted} às ${hora}. Se o cliente NÃO pediu para mudar nem cancelar, apenas confirme com simpatia: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"]\n\n${message}`
+        authorizedSlotUtc = apptWhen
+        messageWithContext = sistema(`Visita JÁ confirmada para ${formatted} às ${hora}. Se o cliente NÃO pediu para mudar nem cancelar, apenas confirme com simpatia: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"`)
       }
     } else if (state?.visit_proposed || hasVisitAvailability) {
       // 2) Sem visita ainda → entende o dia/horário pedido (combinando com o que
@@ -639,6 +706,10 @@ export async function processMessageWithMetadata(
         visitAvailability: typeof cd.visit_availability === "string" ? cd.visit_availability : null,
       })
 
+      // Story 75-245 — período sem número ("de manhã") vira oferta de horários
+      // livres; antes o parser devolvia nada e a Nicole inventava o horário.
+      const period: DayPeriod | null = parsePeriodParts(message)
+
       if (day && time) {
         // Dia + hora completos (no turno ou combinando com o pendente) → resolve e limpa pendência.
         delete cd.visit_pending_date
@@ -650,24 +721,37 @@ export async function processMessageWithMetadata(
           const whenStr = formatBrtDateTime(startUtc)
           if (free) {
             bookableSlotUtc = startUtc
-            messageWithContext = `[SISTEMA: O cliente quer a visita em ${whenStr}. Esse horário está LIVRE. Confirme a visita reafirmando o dia e o horário (${whenStr}) e diga que vai deixar o café preparado.]\n\n${message}`
+            authorizedSlotUtc = startUtc
+            messageWithContext = sistema(`O cliente quer a visita em ${whenStr}. Esse horário está LIVRE. Confirme a visita reafirmando o dia e o horário (${whenStr}) e diga que vai deixar o café preparado.`)
           } else {
-            const alts = alternatives.map(formatBrtDateTime).join(" ou ")
-            messageWithContext = `[SISTEMA: O cliente pediu ${whenStr}, mas JÁ existe uma visita nesse horário. NÃO confirme esse horário. Com simpatia, avise que esse horário já está reservado e ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"}. Pergunte qual prefere.]\n\n${message}`
+            const alts = listSlots(alternatives)
+            messageWithContext = sistema(`O cliente pediu ${whenStr}, mas JÁ existe uma visita nesse horário. NÃO confirme esse horário. Com simpatia, avise que esse horário já está reservado e ofereça ${alts ? `estes horários livres: ${alts}` : "outro horário"}. Pergunte qual prefere.`)
           }
         } else {
-          messageWithContext = `[SISTEMA: O horário pedido não serve (já passou ou está fora do atendimento). Informe com gentileza que atendemos de segunda a sexta das 8h às 18h e sábado das 8h às 12h, e peça um horário válido.]\n\n${message}`
+          messageWithContext = sistema(`O horário pedido não serve (já passou ou está fora do atendimento). Informe com gentileza que atendemos de segunda a sexta das 8h às 18h e sábado das 8h às 12h, e peça um horário válido.`)
         }
+      } else if (day && period) {
+        // Story 75-245 — dia + período: oferece os horários LIVRES daquele período.
+        cd.visit_pending_date = dayPartsToIso(day)
+        const slots = await freeSlotsInPeriod(supabase, orgId, day, period, now)
+        const periodo = period === "manha" ? "manhã" : "tarde"
+        messageWithContext = slots.length
+          ? sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(day)}. Horários LIVRES nesse período: ${listSlots(slots)}. Ofereça exatamente esses e pergunte qual ele prefere — NÃO confirme nenhum antes de ele escolher.`)
+          : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(day)}, mas não há horário livre nesse período. NÃO confirme nada. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h).`)
       } else if (day && !time) {
         // Só o dia → guarda o dia e pergunta o horário.
         cd.visit_pending_date = dayPartsToIso(day)
-        messageWithContext = `[SISTEMA: O cliente indicou o dia mas não o horário. Pergunte qual horário prefere (atendemos seg–sex 8h–18h, sáb 8h–12h).]\n\n${message}`
+        messageWithContext = sistema(`O cliente indicou o dia (${formatBrtDay(day)}) mas não o horário. Pergunte qual horário prefere (atendemos seg–sex 8h–18h, sáb 8h–12h). NÃO afirme nenhum horário.`)
       } else if (time && !day) {
         // Só a hora → guarda a hora e pergunta a data (depois confirme "tal dia às tal hora").
         cd.visit_pending_hour = time.hour
         cd.visit_pending_minute = time.minute
         const horaStr = `${time.hour}h${time.minute ? String(time.minute).padStart(2, "0") : ""}`
-        messageWithContext = `[SISTEMA: O cliente indicou o horário (${horaStr}) mas não o dia. Guarde esse horário, pergunte qual dia prefere e, quando ele disser, confirme reafirmando o dia e o horário. Atendemos seg–sex 8h–18h, sáb 8h–12h.]\n\n${message}`
+        messageWithContext = sistema(`O cliente indicou o horário (${horaStr}) mas não o dia. Guarde esse horário, pergunte qual dia prefere e, quando ele disser, confirme reafirmando o dia e o horário. Atendemos seg–sex 8h–18h, sáb 8h–12h.`)
+      } else if (period) {
+        // Story 75-245 — só o período, sem dia: pergunta o dia sem inventar hora.
+        const periodo = period === "manha" ? "manhã" : "tarde"
+        messageWithContext = sistema(`O cliente indicou o período (de ${periodo}) mas não o dia. Pergunte qual dia prefere. NÃO afirme nenhum horário — quando ele disser o dia, você receberá os horários livres.`)
       }
     }
   }
@@ -746,6 +830,30 @@ export async function processMessageWithMetadata(
   const firstBlock = response.content[0]
   const assistantMessage =
     firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+
+  // Story 75-245 — guarda anti-alucinação de horário. FAIL-OPEN: só observa e
+  // loga, nunca bloqueia o envio. No incidente do lead Ailton a Nicole afirmou
+  // "sábado às 9h" e "às 10h" com o bloco [SISTEMA] dizendo "segunda 3/08 às
+  // 12:00" — e ninguém soube até o Marcos abrir a conversa no dia seguinte.
+  // Só roda em AFIRMAÇÃO de dia+hora único: quando ela oferece opções ("8h ou
+  // 11h") o texto é ambíguo e a guarda se cala (evita falso positivo).
+  if (!apptToCancel) {
+    const saidUtc = detectSlotMismatch({ assistantMessage, authorizedSlotUtc, now: new Date() })
+    if (saidUtc && authorizedSlotUtc) {
+      emit({
+        level: "error",
+        category: "ai",
+        event_type: "NICOLE_SLOT_MISMATCH",
+        message: `Nicole afirmou ${formatBrtDateTime(saidUtc)} mas o sistema autorizou ${formatBrtDateTime(authorizedSlotUtc)}`,
+        metadata: {
+          lead_id: conversation?.lead_id ?? null,
+          said_at: saidUtc.toISOString(),
+          authorized_at: authorizedSlotUtc.toISOString(),
+          assistant_message: assistantMessage.slice(0, 500),
+        },
+      })
+    }
+  }
 
   // Detect if Nicole invited the client to pick a visit date in this response.
   // Used to set visit_proposed = true so the next message can capture the confirmation.

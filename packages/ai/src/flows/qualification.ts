@@ -3,6 +3,7 @@
  * Calculates qualification scores, determines next steps,
  * and extracts collected data from AI responses.
  */
+import { isAmbiguousSlotText } from "./visit-slot"
 
 const SCORE_WEIGHTS: Record<string, number> = {
   name: 10,
@@ -288,7 +289,12 @@ export function extractCollectedData(
       (kw) => lower.includes(kw.toLowerCase())
     )
 
-    if (hasDayOrIntent) {
+    // Story 75-245 — frase de HORÁRIO DE ATENDIMENTO ou lista de opções não é
+    // disponibilidade do cliente. Esta função também roda sobre a resposta da
+    // Nicole (pipeline.ts), e o "sábado" do "atendemos … sábado das 8h ao
+    // meio-dia" gravava a frase inteira aqui — que virava agendamento fantasma
+    // no turno seguinte (incidente do lead Ailton, 30/07/2026).
+    if (hasDayOrIntent && !isAmbiguousSlotText(aiResponse)) {
       updated.visit_availability = aiResponse.trim()
     }
     // Time-only keywords (10h, de manhã, à tarde) intentionally excluded —

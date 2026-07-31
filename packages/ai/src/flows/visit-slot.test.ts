@@ -11,6 +11,9 @@ import {
   detectCancelIntent,
   detectRescheduleIntent,
   checkSlotAvailability,
+  isAmbiguousSlotText,
+  parsePeriodParts,
+  freeSlotsInPeriod,
 } from "./visit-slot"
 
 // Âncora: 2026-06-18T17:00:00Z = quinta-feira 14:00 em BRT (UTC-3).
@@ -308,5 +311,177 @@ describe("evaluateSlot — visita precisa caber no expediente (2026-07-23)", () 
     const { startUtc, outsideHours } = evaluateSlot(isoToDayParts("2026-07-20")!, { hour: 14, minute: 30 }, NOW)
     expect(outsideHours).toBe(false)
     expect(startUtc?.toISOString()).toBe("2026-07-20T17:30:00.000Z")
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story 75-245 — incidente do lead Ailton (30/07/2026): a frase de horário de
+// atendimento da PRÓPRIA Nicole foi gravada em visit_availability e o parser
+// tirou dela "segunda" + "meio-dia" → agendou segunda 03/08 12h sem o cliente
+// ter dito dia nem hora (a mensagem dele era o CPF).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Âncora do incidente: 2026-07-31T01:05:00Z = quinta 30/07 22:05 BRT.
+const NOW_INCIDENTE = new Date("2026-07-31T01:05:00Z")
+const FRASE_EXPEDIENTE =
+  "Atendemos de segunda a sexta das 8h às 18h e sábado das 8h ao meio-dia"
+
+describe("isAmbiguousSlotText (Story 75-245)", () => {
+  it("frase de horário de atendimento é ambígua (o texto que causou o incidente)", () => {
+    expect(isAmbiguousSlotText(FRASE_EXPEDIENTE)).toBe(true)
+  })
+  it("faixa de horário, 'atendemos' e 2+ dias da semana são ambíguos", () => {
+    expect(isAmbiguousSlotText("das 8h às 18h")).toBe(true)
+    expect(isAmbiguousSlotText("atendemos no sábado")).toBe(true)
+    expect(isAmbiguousSlotText("pode ser sábado ou domingo")).toBe(true)
+    expect(isAmbiguousSlotText("nosso horário de atendimento é esse")).toBe(true)
+  })
+  it("2+ horários (oferta de opções) é ambíguo", () => {
+    expect(isAmbiguousSlotText("tenho 9h ou 10h livres, qual prefere?")).toBe(true)
+    expect(isAmbiguousSlotText("sábado às 8h, 8h30 ou 9h")).toBe(true)
+  })
+  it("slot ÚNICO não é ambíguo — a 75-162 continua funcionando", () => {
+    expect(isAmbiguousSlotText("Sábado, 18 de julho, às 9h")).toBe(false)
+    expect(isAmbiguousSlotText("sábado, 1º de agosto às 10h")).toBe(false)
+    expect(isAmbiguousSlotText("amanhã às 15h")).toBe(false)
+    expect(isAmbiguousSlotText(null)).toBe(false)
+  })
+})
+
+describe("resolveVisitSlotParts blinda o visit_availability (Story 75-245)", () => {
+  it("AC1: frase de expediente NÃO vira slot (antes: segunda 03/08 12:00)", () => {
+    const { day, time } = resolveVisitSlotParts({
+      message: "CPF 174.677.569.68",
+      now: NOW_INCIDENTE,
+      visitAvailability: FRASE_EXPEDIENTE,
+    })
+    expect(day).toBeNull()
+    expect(time).toBeNull()
+  })
+  it("prova do bug: o texto ainda resolve para segunda 12h quando parseado direto", () => {
+    // Documenta a causa raiz — o parser não mudou, quem mudou foi quem confia nele.
+    expect(parseDayParts(FRASE_EXPEDIENTE, NOW_INCIDENTE)).toEqual({ y: 2026, m: 7, d: 3 })
+    expect(parseTimeParts(FRASE_EXPEDIENTE)).toEqual({ hour: 12, minute: 0 })
+  })
+  it("AC3: slot único no visit_availability continua agendável (75-162)", () => {
+    const { day, time } = resolveVisitSlotParts({
+      message: "confirmo",
+      now: new Date("2026-07-15T17:00:00Z"),
+      visitAvailability: "Sábado, 18 de julho, às 9h",
+    })
+    expect(day).toEqual({ y: 2026, m: 6, d: 18 })
+    expect(time).toEqual({ hour: 9, minute: 0 })
+  })
+})
+
+describe("parseTimeParts — separador de minutos (Story 75-245 AC4)", () => {
+  it("'10,00 hora' é 10:00 (antes virava 00:00 e era descartado)", () => {
+    expect(parseTimeParts("10,00 hora")).toEqual({ hour: 10, minute: 0 })
+  })
+  it("aceita ponto, vírgula e minutos diferentes de zero", () => {
+    expect(parseTimeParts("10.00 hora")).toEqual({ hour: 10, minute: 0 })
+    expect(parseTimeParts("as 10,30 horas")).toEqual({ hour: 10, minute: 30 })
+    expect(parseTimeParts("10h00")).toEqual({ hour: 10, minute: 0 })
+    expect(parseTimeParts("10,00 da manhã")).toEqual({ hour: 10, minute: 0 })
+  })
+  it("CPF e dinheiro NÃO viram horário", () => {
+    expect(parseTimeParts("CPF 174.677.569.68")).toBeNull()
+    expect(parseTimeParts("quero dar de entrada uns 25.000,00")).toBeNull()
+    expect(parseTimeParts("R$ 250.000,00")).toBeNull()
+  })
+  it("'dia 5 de manhã' é dia 5 + período, não 5h", () => {
+    expect(parseTimeParts("pode ser dia 5 de manhã")).toBeNull()
+    expect(parseDayParts("pode ser dia 5 de manhã", NOW_INCIDENTE)).toEqual({ y: 2026, m: 7, d: 5 })
+  })
+})
+
+describe("parsePeriodParts (Story 75-245 AC5)", () => {
+  it("entende manhã e tarde sem número", () => {
+    expect(parsePeriodParts("Pode ser de manhã...")).toBe("manha")
+    expect(parsePeriodParts("prefiro à tarde")).toBe("tarde")
+    expect(parsePeriodParts("de manhazinha")).toBe("manha")
+  })
+  it("não confunde 'amanhã' com 'manhã' nem 'mais tarde' com o período", () => {
+    expect(parsePeriodParts("amanhã eu vejo")).toBeNull()
+    expect(parsePeriodParts("me chama mais tarde")).toBeNull()
+  })
+  it("horário explícito manda — período não se aplica", () => {
+    expect(parsePeriodParts("10h da manhã")).toBeNull()
+    expect(parsePeriodParts("às 15h")).toBeNull()
+  })
+  it("dia + período: o período é lido mesmo com o dia na frase", () => {
+    expect(parsePeriodParts("tem como ser sábado de manhã?")).toBe("manha")
+  })
+})
+
+describe("freeSlotsInPeriod (Story 75-245 AC5)", () => {
+  // Sábado 2026-08-01 (fecha ao meio-dia). Visita house às 10h BRT = 13:00Z —
+  // exatamente o compromisso que já existia quando a Nicole prometeu 10h.
+  const SABADO = isoToDayParts("2026-08-01")!
+  const ocupado10h: FakeApptRow = {
+    id: "appt-house-10h",
+    org_id: "org1",
+    team: "house",
+    status: "scheduled",
+    scheduled_at: "2026-08-01T13:00:00.000Z",
+  }
+
+  it("manhã de sábado com 10h ocupado → oferece 8h, 8h30 e 9h", async () => {
+    const slots = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", NOW_INCIDENTE)
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-01T11:00:00.000Z", // 8:00 BRT
+      "2026-08-01T11:30:00.000Z", // 8:30 BRT
+      "2026-08-01T12:00:00.000Z", // 9:00 BRT
+    ])
+  })
+
+  it("tarde de sábado é vazio — o expediente fecha ao meio-dia", async () => {
+    const slots = await freeSlotsInPeriod(fakeSupabase([]), "org1", SABADO, "tarde", NOW_INCIDENTE)
+    expect(slots).toEqual([])
+  })
+
+  it("ignora horário que já passou e sobreposição com a visita ocupada", async () => {
+    // Agora = sábado 09:45 BRT: 8h/8h30/9h passaram; 10h e 10h30 sobrepõem a das 10h.
+    const agora = new Date("2026-08-01T12:45:00Z")
+    const slots = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", agora)
+    expect(slots.map((s) => s.toISOString())).toEqual(["2026-08-01T14:00:00.000Z"]) // 11:00 BRT
+  })
+
+  it("compromisso IMOB no mesmo horário não tira o slot da Nicole (Epic 81)", async () => {
+    const imob: FakeApptRow = { ...ocupado10h, id: "appt-imob", team: "imob" }
+    const slots = await freeSlotsInPeriod(fakeSupabase([imob]), "org1", SABADO, "manha", new Date("2026-08-01T12:45:00Z"))
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-01T13:00:00.000Z", // 10:00 BRT
+      "2026-08-01T13:30:00.000Z",
+      "2026-08-01T14:00:00.000Z",
+    ])
+  })
+})
+
+describe("parseDayParts — data com mês escrito (Story 75-245)", () => {
+  it("'1º de agosto' é a data explícita, não 'o próximo sábado'", () => {
+    expect(parseDayParts("Sábado, 1º de agosto às 10h", NOW_INCIDENTE)).toEqual({ y: 2026, m: 7, d: 1 })
+  })
+  it("data distante não é mais colapsada no próximo dia da semana", () => {
+    // Antes: "segunda-feira, 10 de agosto" caía na próxima segunda (03/08).
+    expect(parseDayParts("segunda-feira, 10 de agosto às 14h", NOW_INCIDENTE)).toEqual({ y: 2026, m: 7, d: 10 })
+  })
+  it("mês já passado no ano corrente rola para o ano seguinte", () => {
+    expect(parseDayParts("pode ser 5 de março", NOW_INCIDENTE)).toEqual({ y: 2027, m: 2, d: 5 })
+  })
+  it("dia da semana sem mês continua funcionando (próxima ocorrência)", () => {
+    expect(parseDayParts("tem como ver no sábado", NOW_INCIDENTE)).toEqual({ y: 2026, m: 7, d: 1 })
+  })
+})
+
+describe("parsePeriodParts — saudação não é período (Story 75-245)", () => {
+  it("'boa tarde' e 'bom dia' não viram pedido de período", () => {
+    expect(parsePeriodParts("Boa tarde!")).toBeNull()
+    expect(parsePeriodParts("bom dia, tudo bem?")).toBeNull()
+    expect(parsePeriodParts("boa noite")).toBeNull()
+  })
+  it("saudação + pedido real: o pedido vence", () => {
+    expect(parsePeriodParts("Boa tarde! pode ser de manhã?")).toBe("manha")
+    expect(parsePeriodParts("bom dia! prefiro à tarde")).toBe("tarde")
   })
 })

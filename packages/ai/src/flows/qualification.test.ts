@@ -379,6 +379,28 @@ describe("extractCollectedData", () => {
     expect(result.visit_availability).toBeUndefined()
   })
 
+  // Story 75-245 AC2 — esta função também roda sobre a resposta da NICOLE
+  // (pipeline.ts). A frase de horário de atendimento dela citava "sábado" e era
+  // gravada inteira como "disponibilidade do cliente" — no turno seguinte o
+  // parser tirava dali "segunda" + "meio-dia" e agendava sozinho.
+  it("NÃO grava frase de horário de atendimento como disponibilidade", () => {
+    const result = extractCollectedData(
+      "Qual o melhor dia pra você vir? Atendemos de segunda a sexta das 8h às 18h e sábado das 8h ao meio-dia.",
+      {}
+    )
+    expect(result.visit_availability).toBeUndefined()
+  })
+
+  it("NÃO grava oferta de opções da Nicole como disponibilidade", () => {
+    const result = extractCollectedData("Prefere sábado ou segunda?", {})
+    expect(result.visit_availability).toBeUndefined()
+  })
+
+  it("continua gravando disponibilidade real do cliente (slot único)", () => {
+    const result = extractCollectedData("Pode ser sábado às 10h", {})
+    expect(result.visit_availability).toContain("sábado")
+  })
+
   it("extracts visit from day keyword 'amanhã'", () => {
     const result = extractCollectedData("Posso amanhã de manhã", {})
     expect(result.visit_availability).toBeTruthy()
