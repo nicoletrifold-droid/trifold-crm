@@ -1,6 +1,6 @@
 # Story 75-247 — A visita acompanha o dono do lead
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Fix de comportamento (distribuição + notificação)
 **Epic:** Agendamento da Nicole
 **Complexidade:** S
@@ -112,12 +112,14 @@ Achado ao investigar a decisão de transferência; corrigido com `.eq("team",
   que não conhece `appointments`, o helper cai no `catch` e devolve 0 sem
   derrubar a distribuição, exatamente o comportamento best-effort do AC6.
 
-## Pendências antes de Done
+## Deploy — 31/07/2026 ✅
 
-- Deploy (@devops).
-- Validar no próximo lead que a Nicole agendar fora do horário comercial: o
-  corretor da roleta deve receber **dois** avisos (novo lead + visita marcada) e
-  a visita deve aparecer na agenda **com o nome dele**.
-- Validar uma transferência real de lead com visita marcada: a visita troca de
-  nome na Agenda, o novo corretor é avisado e o antigo recebe "Visita saiu da sua
-  agenda".
+Merge PR #325 → commit `f3f0d17d` → produção `READY` (Vercel, 10:19). Zero
+evento `error`/`warn` nos 20 min seguintes. Estado conferido em prod:
+`0` visitas futuras `team='house'` sem corretor, e a visita do Ailton segue
+sáb 01/08 10:00 com **Thielly** na agenda.
+
+Fica em observação (não é pendência de código): a primeira transferência real de
+lead com visita marcada — a visita deve trocar de nome na Agenda, o novo corretor
+recebe "Lead novo COM visita marcada" e o antigo recebe "Visita saiu da sua
+agenda".
