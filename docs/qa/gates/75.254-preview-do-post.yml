@@ -1,0 +1,34 @@
+schema: 1
+story: '75-254'
+gate: PASS
+status_reason: 'AC1–AC9 atendidos, com as três ressalvas do @po cumpridas. O valor da feature não é só ergonomia: ela EXPÕE que o sistema gera uma arte por post enquanto a Lídia propõe 2 telas de story — a tela 2 aparece com aviso de que não tem arte, em vez de repetir a arte da tela 1. Suíte 1471 (+19 no parser), tsc/eslint limpos, build 17.9s.'
+reviewer: 'Quinn'
+updated: '2026-07-31T18:20:00Z'
+evidence:
+  tests: '1471/1471; +19 no parser, com as copys REAIS de produção'
+  tsc: 'limpo'
+  eslint: 'limpo'
+  build: '✓ Compiled 17.9s'
+  gotcha_dados: 'Coberto o caso real de produção em que "TELA 1: … TELA 2: …" vem TODO NA MESMA LINHA. Quebra por marcador (regex), não por linha — era o primeiro erro que o @dev ia cometer.'
+ressalvas_po:
+  a_nao_mentir: 'CUMPRIDA — a imagem só renderiza sob `mostraArte`, que exige `tela.temArte`, e `temArte` é true SÓ na primeira tela. 4 testes explícitos: story de 2 telas, story de 3 telas, post sem arte alguma, e carrossel (arte = capa). Repetir a arte seria mentir, e mentir é pior que não ter preview.'
+  b_botao_em_todas_as_listas: 'CUMPRIDA E VERIFICADA POR CONTAGEM — 1 única ocorrência do botão, dentro do PostCard (linha 593, antes do componente principal na 611), e **4 listas** usam PostCard. Aparece nas quatro de uma vez, sem replicação por call-site.'
+  c_perda_silenciosa: 'CUMPRIDA — o texto ANTES do primeiro marcador é preservado como tela própria, e há teste que percorre cada palavra significativa do original conferindo que aparece em alguma tela.'
+top_issues:
+  - id: 'REVELA-001'
+    severity: medium
+    finding: '🔴 O QUE O PREVIEW REVELA, e é o achado que importa: o motor gera **uma arte por post**, mas a Lídia propõe 2 telas de story — a própria justificativa dela em produção diz isso. Hoje a lacuna passa batida e o marketing recebe post incompleto sem perceber. Depois desta story ela fica visível no momento de aprovar.'
+    suggested_action: 'DECISÃO DO MARCOS: quer N artes por post? É story própria e mexe no motor (o aspectRatio e o prompt são por post hoje). O preview foi feito justamente para essa decisão ser informada.'
+  - id: 'UX-001'
+    severity: low
+    finding: 'O mockup é de leitura e deliberadamente NÃO é pixel-perfect ao app do Instagram: não tem barra de perfil, avatar, contador de curtidas. Serve para decidir aprovar, não para simular.'
+    suggested_action: 'Nenhuma. Se pedirem mais fidelidade, é escopo novo e vale perguntar o que exatamente falta para a decisão.'
+  - id: 'DEBT-001'
+    severity: low
+    finding: 'Não há teste de RENDERIZAÇÃO do modal (o repo não tem setup de testing-library). O parser está coberto por 19 testes; o componente foi verificado por tsc, eslint, build e leitura.'
+    suggested_action: 'Consistente com o resto do repo, que testa lógica pura e valida UI por build + verificação humana. Se um dia entrar testing-library, este modal é bom candidato.'
+  - id: 'OBS-001'
+    severity: low
+    finding: '11 posts em produção têm `formato` NULL (legado pré-75-239). O preview trata como peça única 4:5 e sinaliza "Formato não definido" — não quebra.'
+    suggested_action: 'Nenhuma. Se incomodar na tela, o caminho é uma migration de backfill de formato, não código de exceção.'
+waiver: { active: false }

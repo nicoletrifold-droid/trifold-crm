@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import MarcasSection from "./marcas-section"
 import { FORMATO_LABELS, MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
+import { PostPreviewModal } from "./_components/post-preview-modal"
 
 // Story 75-219 — aba "Agente": sugestões do agente de marketing IA + fila de
 // aprovação + publicados. Nada é publicado automaticamente — toda transição é
@@ -56,6 +57,10 @@ function CampaignsTabs() {
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+
+// Story 75-254 — elevado a constante de módulo: o PostCard também usa (botão
+// Visualizar), e duplicar a string faria os botões divergirem com o tempo.
+const actionBtn = "rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-60 transition-colors"
 
 const CANAL_LABELS: Record<string, string> = {
   instagram: "Instagram",
@@ -523,6 +528,10 @@ function PostCard({
   post: MarketingPost
   actions: React.ReactNode
 }) {
+  // Story 75-254 — o botão Visualizar vive AQUI, não em cada lista: assim nasce
+  // em sugeridos, aprovados e publicados de uma vez (ressalva do @po: botão
+  // replicado por call-site nasce faltando em alguma).
+  const [preview, setPreview] = useState(false)
   const origem = ORIGEM_BADGES[post.origem] ?? ORIGEM_BADGES.humano!
   const prop = propertyName(post)
   const day = formatDay(post.scheduled_for)
@@ -576,7 +585,25 @@ function PostCard({
 
       {post.arte_url && <ArtePreview key={post.arte_url} url={post.arte_url} />}
 
-      {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={() => setPreview(true)}
+          className={`${actionBtn} border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800`}
+        >
+          👁 Visualizar
+        </button>
+        {actions}
+      </div>
+
+      {preview && (
+        <PostPreviewModal
+          copy={post.copy}
+          formato={post.formato}
+          roteiro={post.roteiro}
+          arteUrl={post.arte_url}
+          onClose={() => setPreview(false)}
+        />
+      )}
     </div>
   )
 }
@@ -748,8 +775,6 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
   const publicados = posts.filter((p) => p.status === "publicado")
   const rejeitados = posts.filter((p) => p.status === "rejeitado")
 
-  const actionBtn =
-    "rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-60 transition-colors"
   const sectionTitle = "text-lg font-semibold text-gray-900 dark:text-stone-100"
   const sectionHint = "text-sm text-gray-500 dark:text-stone-400"
   const emptyBox =
