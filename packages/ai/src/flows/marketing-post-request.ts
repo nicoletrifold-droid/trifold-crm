@@ -57,6 +57,12 @@ export interface MarketingPostRequestResult {
     descricao: string
     /** file_name EXATOS dos arquivos do Kit a usar como referência (pode ser vazio) */
     arquivos_kit: string[]
+    /**
+     * Story 75-248 — texto EXATO do CTA. Ele NÃO é desenhado pelo modelo de
+     * imagem: o código compõe a pílula com a cor do Kit. null = sem CTA
+     * composto (nunca inventar um).
+     */
+    cta: string | null
   } | null
 }
 
@@ -79,7 +85,8 @@ REGRAS INEGOCIAVEIS:
 - So afirme numeros (preco, metragem, % vendido, prazo) que estejam no Kit. Prazo de entrega: SOMENTE o contratual.
 - Portugues do Brasil. Emojis com moderacao (a voz da marca manda).
 - BLOCO ARTE (formatos com imagem): "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, paleta com os HEX da marca, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
-- LEGIBILIDADE DA ARTE (a descricao PRECISA cuidar disso; peca vista no celular, no meio do scroll): exija contraste alto entre texto e fundo — texto claro so sobre area escura, texto escuro so sobre area clara, nunca cinza sobre fundo escuro. NAO descreva a arte inteira como escura/preta/monocromatica: sempre reserve uma area luminosa (ceu, luz, reflexo, superficie clara) e diga onde o titulo entra. Descreva o CTA com peso visual proprio (corpo maior, cor de destaque da marca ou pilula/faixa de fundo solido) — CTA discreto ou pequeno e erro. Nao peca forma geometrica solta para preencher espaco.
+- LEGIBILIDADE DA ARTE (a descricao PRECISA cuidar disso; peca vista no celular, no meio do scroll): exija contraste alto entre texto e fundo — texto claro so sobre area escura, texto escuro so sobre area clara, nunca cinza sobre fundo escuro. NAO descreva a arte inteira como escura/preta/monocromatica: sempre reserve uma area luminosa (ceu, luz, reflexo, superficie clara) e diga onde o titulo entra. Nao peca forma geometrica solta, moldura ou linha decorativa para preencher espaco — isso e erro.
+- CTA (Story 75-248): o campo "cta" recebe o texto EXATO do call-to-action, curto (ate ~30 caracteres, ex.: "Arraste e agende sua visita"). O CTA **NAO** e desenhado pelo gerador de imagem — o codigo compoe a pilula com a cor do Kit. Portanto: NAO descreva o CTA na "descricao", NAO peca botao/pilula/texto de CTA na arte, e reserve a zona inferior. Se o post nao pedir CTA, "cta": null.
 
 RETORNE APENAS JSON valido, sem markdown:
 {
@@ -87,7 +94,7 @@ RETORNE APENAS JSON valido, sem markdown:
   "roteiro": "roteiro de gravacao (SOMENTE formato reel; senao null)",
   "justificativa": "racional + ajustes feitos por diretriz",
   "scheduled_for": "YYYY-MM-DD ou null",
-  "arte": { "descricao": "direcao de arte + texto da arte", "arquivos_kit": ["file_name"] }
+  "arte": { "descricao": "direcao de arte + texto da arte (SEM o CTA)", "arquivos_kit": ["file_name"], "cta": "texto curto do CTA ou null" }
 }`
 
 function formatBrandBlocks(brands: BrandKnowledge[]): string {
@@ -188,7 +195,10 @@ export function parseMarketingPostRequest(
         const arquivos = Array.isArray(a.arquivos_kit)
           ? (a.arquivos_kit as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).map((f) => f.trim())
           : []
-        arte = { descricao: a.descricao.trim(), arquivos_kit: arquivos }
+        // 75-248: cta é opcional e tolerante — post antigo sem o campo segue
+        // funcionando, e CTA vazio/lixo significa "sem CTA composto", não erro.
+        const cta = str(a.cta) ? (a.cta as string).trim().slice(0, 60) : null
+        arte = { descricao: a.descricao.trim(), arquivos_kit: arquivos, cta }
       }
     }
 

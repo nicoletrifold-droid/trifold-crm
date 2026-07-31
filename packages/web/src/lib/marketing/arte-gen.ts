@@ -81,10 +81,10 @@ export function buildArtePrompt(input: ArtePromptInput): string {
   // desenha mais logo nenhum — desvio de forma/kerning era inevitável — e tem
   // de deixar a faixa inferior limpa para a aplicação.
   lines.push(
-    "LOGO — NÃO DESENHE: as imagens de referência da marca servem apenas como guia de estilo, cor e clima. É PROIBIDO desenhar o logo, o nome da marca, assinatura, selo ou marca d'água na arte. O logo oficial é aplicado depois, por cima da imagem."
+    "LOGO E CTA — NÃO DESENHE: as imagens de referência da marca servem apenas como guia de estilo, cor e clima. É PROIBIDO desenhar o logo, o nome da marca, assinatura, selo, marca d'água, botão, pílula ou qualquer texto de call-to-action. O logo oficial e o CTA são aplicados depois, por cima da imagem, com os arquivos e as cores exatas da marca."
   )
   lines.push(
-    "ÁREA RESERVADA (obrigatório): a faixa inferior da arte — os últimos 15% da altura — fica completamente limpa: só fundo, sem texto, sem logo, sem elemento gráfico. Todo texto, INCLUSIVE o CTA, fica acima dessa faixa."
+    "ÁREA RESERVADA (obrigatório): o QUARTO INFERIOR da arte — os últimos 25% da altura — fica completamente limpo: só fundo, sem texto, sem logo, sem botão, sem elemento gráfico. É onde o CTA e o logo são compostos depois. Todo texto da arte fica ACIMA desses 25%."
   )
   lines.push("")
   // 75-244: a arte é vista no scroll do Instagram, no celular. Peça escura demais
@@ -92,11 +92,11 @@ export function buildArtePrompt(input: ArtePromptInput): string {
   lines.push(
     "CONTRASTE (obrigatório): a arte é vista no celular, no meio do scroll — todo texto tem que ser lido de relance. Texto claro SOMENTE sobre área escura, texto escuro SOMENTE sobre área clara; nunca cinza sobre fundo escuro. A arte NÃO pode ser quase toda preta ou monocromática escura: garanta uma área luminosa de verdade (céu, luz, reflexo, superfície clara) e posicione o título sobre ela ou sobre a região de maior contraste."
   )
+  // 75-248: a regra de "CTA com peso visual" da 75-244 saiu pela culatra — o
+  // modelo entregou um botão desproporcional. O CTA saiu do modelo (arte-cta.ts),
+  // então aqui só resta proibir. A moldura foi ignorada uma vez: endurecida.
   lines.push(
-    "CTA (obrigatório): é o elemento mais importante depois do título — precisa de peso visual próprio, em corpo maior, com a cor de destaque da marca ou sobre pílula/faixa de fundo sólido. Nunca em cinza, nunca miúdo, nunca no limite da borda."
-  )
-  lines.push(
-    "PROIBIDO: preencher espaço vazio com forma geométrica sem função, moldura ou bloco solto que não faça parte da composição."
+    "PROIBIDO — sem exceção: moldura, borda decorativa, linha fina solta, cantoneira, retângulo ou qualquer forma geométrica que não faça parte da fotografia/cena. Espaço vazio permanece vazio: respiro é composição, não defeito a preencher."
   )
   if (input.ajuste?.trim()) {
     lines.push("")

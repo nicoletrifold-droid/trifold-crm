@@ -32,31 +32,41 @@ describe("buildArtePrompt", () => {
   })
 
   // 75-244: 1ª leva de artes saiu quase toda preta com CTA em cinza miúdo.
-  it("exige contraste, CTA com peso visual e proíbe forma solta de preenchimento", () => {
+  // 75-248 SUPERSEDE a regra de CTA: pedir "peso visual" gerou botão
+  // desproporcional, então o CTA saiu do modelo e virou composição
+  // (arte-cta.ts). Contraste segue; a proibição de moldura foi ENDURECIDA
+  // porque o modelo a ignorou uma vez.
+  it("exige contraste e proíbe moldura/forma solta — sem mais instruir CTA", () => {
     const p = buildArtePrompt(base)
     expect(p).toContain("CONTRASTE (obrigatório)")
     expect(p).toContain("nunca cinza sobre fundo escuro")
     expect(p).toContain("NÃO pode ser quase toda preta")
-    expect(p).toContain("CTA (obrigatório)")
-    expect(p).toContain("PROIBIDO")
+    expect(p).toContain("PROIBIDO — sem exceção")
+    expect(p).toContain("Espaço vazio permanece vazio")
+    // não instruímos mais o modelo a desenhar CTA
+    expect(p).not.toContain("CTA (obrigatório)")
   })
 
-  // 75-246: o logo passou a ser composto — o modelo não desenha mais nenhum.
-  it("proíbe desenhar logo e exige a faixa inferior limpa", () => {
+  // 75-246 (logo) + 75-248 (CTA): os dois são compostos, o modelo não desenha
+  // nenhum, e a zona reservada cresceu de 15% para 25% para caber os dois.
+  it("proíbe desenhar logo E CTA e exige o quarto inferior limpo", () => {
     const p = buildArtePrompt(base)
-    expect(p).toContain("LOGO — NÃO DESENHE")
+    expect(p).toContain("LOGO E CTA — NÃO DESENHE")
     expect(p).toContain("É PROIBIDO desenhar o logo")
+    expect(p).toContain("botão, pílula ou qualquer texto de call-to-action")
     expect(p).toContain("ÁREA RESERVADA (obrigatório)")
-    expect(p).toContain("últimos 15% da altura")
-    // a instrução antiga (aplicar o logo) não pode ter sobrado em lugar nenhum
+    expect(p).toContain("últimos 25% da altura")
+    // instruções antigas não podem ter sobrado
     expect(p).not.toContain("aplicá-lo discreto e nítido")
+    expect(p).not.toContain("últimos 15% da altura")
   })
 
-  it("as regras de legibilidade valem em todos os formatos com imagem", () => {
+  it("as regras valem em todos os formatos com imagem", () => {
     for (const formato of ["story", "estatico", "carrossel"] as const) {
       const p = buildArtePrompt({ ...base, formato })
       expect(p).toContain("CONTRASTE (obrigatório)")
-      expect(p).toContain("CTA (obrigatório)")
+      expect(p).toContain("LOGO E CTA — NÃO DESENHE")
+      expect(p).toContain("ÁREA RESERVADA (obrigatório)")
     }
   })
 

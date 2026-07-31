@@ -1,0 +1,43 @@
+schema: 1
+story: '75-248'
+gate: PASS
+status_reason: 'AC1–AC8 atendidos, com as duas ressalvas do @po cumpridas: o caminho de FALHA tem teste explícito (buffer inválido e arte pequena demais), e o Marcos confirmou a mudança visível para a cor do Kit. Fecha o padrão de 3 rodadas em que instrução de prompt não segurou o que precisa ser exato — logo (75-246) e agora cor e CTA saem do modelo. O @dev não se limitou aos AC: verificou no .nft.json que a fonte É rastreada para dentro das duas rotas serverless (não presumiu), e adicionou piso de legibilidade que os AC não pediam. PASS CONDICIONADO à ordem de deploy — ver GATE-001.'
+reviewer: 'Quinn'
+updated: '2026-07-31T13:40:00Z'
+evidence:
+  tests: '1366/1366 (123 arquivos); +25 no arte-cta, +1 no flow do Sonnet'
+  tsc: 'limpo nos 2 pacotes'
+  eslint: 'limpo em src/lib/marketing e src/app/api/marketing-posts'
+  build: '✓ Compiled 17.8s'
+  font_tracing: '✓ Montserrat-SemiBold.ttf presente no .nft.json de api/marketing-posts/pedir E de api/marketing-posts/[id]/arte — conferido, não presumido'
+  sharp_em_prod: 'já provado empiricamente: o logo da 75-246 foi composto na arte real de produção (diff medido 1,24/255). O trace local mostrar só o binário darwin é esperado — a Vercel builda em linux.'
+  medicoes_que_originaram_a_story: 'faixa invadida: RGB 161,90,72 a 58px dentro dela; paleta do Vind no Kit = #FFFFFF/#11220F/#8FE6A7, sem laranja algum'
+ressalvas_po:
+  a_caminho_de_falha: 'CUMPRIDA — 2 testes de rejeição explícitos, porque falha agora significa arte SEM CTA, não CTA feio.'
+  b_cor_visivel: 'CUMPRIDA — Marcos escolheu "obedece o Kit"; a pílula do Vind sairá verde menta.'
+top_issues:
+  - id: 'GATE-001'
+    severity: high
+    finding: '⚠️ ORDEM DE DEPLOY É PRÉ-CONDIÇÃO, NÃO RECOMENDAÇÃO. O insert da rota /pedir passa a gravar `arte_cta`. Se o código subir antes da migração 205, o insert falha e a Lídia PARA de criar posts.'
+    suggested_action: '@devops: aplicar a 205 em prod E dev ANTES do merge. A migração é aditiva e idempotente, então aplicar adiantado é seguro; o inverso não é.'
+  - id: 'RISK-001'
+    severity: medium
+    finding: 'Degradação nova do modo de falha: como o modelo foi proibido de desenhar CTA, falha do satori/paleta produz arte SEM call-to-action (antes: CTA feio). Coberto por fail-open em camadas e log alto, mas é piora de cenário-ruim.'
+    suggested_action: 'Se aparecer arte sem CTA em produção, o log `FALHA AO COMPOR CTA` identifica na hora. A fila de aprovação humana é a rede.'
+  - id: 'RISK-002'
+    severity: medium
+    finding: 'O modelo pode desenhar um CTA mesmo proibido → CTA duplo (composto + inventado). Mesmo risco que o logo na 75-246 corria e não se materializou.'
+    suggested_action: 'Conferir as 3 primeiras artes. Se insistir, remover o logo das referências enviadas (custo: perde influência de estilo).'
+  - id: 'PROC-001'
+    severity: low
+    finding: 'A story nasceu afirmando "nenhuma migração" e precisou da 205. Correção assumida no Change Log com a ordem de deploy explícita, em vez de escondida.'
+    suggested_action: 'Nenhuma. Comportamento correto: escopo corrigido em voz alta.'
+  - id: 'DEBT-001'
+    severity: low
+    finding: 'A arte sai 768×1376; o Instagram quer 1080×1920. Investigar se o imageConfig do Vertex aceita parâmetro de tamanho seria ganho de nitidez sem custo de design.'
+    suggested_action: 'Próxima story candidata — é a de melhor retorno por esforço no motor de arte agora.'
+  - id: 'DEBT-002'
+    severity: low
+    finding: 'Headline segue desenhada pelo modelo, por decisão de produto. A infraestrutura do satori agora existe, então a story da headline ficou pequena — mas o argumento contra ela (headline determinística sobre foto fica rígida) continua válido.'
+    suggested_action: 'Só puxar se a headline apresentar defeito real. Até agora nunca apresentou.'
+waiver: { active: false }
