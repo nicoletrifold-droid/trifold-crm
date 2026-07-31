@@ -1,0 +1,36 @@
+schema: 1
+story: '75-250'
+gate: PASS
+status_reason: 'AC1–AC7 atendidos. Os dois defeitos foram rastreados até a raiz por QUERY em produção, não por dedução: o Sonnet nunca recebia a paleta (BrandKnowledge sem campo de cores) e o único hex do contexto era o #F27A5E solto no briefing da Trifold — o prompt do motor chegava se contradizendo. Agora a cor tem fonte única e o que o humano cita pelo nome entra por decisão do código. Suíte 1376/1376, tsc e eslint limpos, build 16s.'
+reviewer: 'Quinn'
+updated: '2026-07-31T14:10:00Z'
+evidence:
+  tests: '1376/1376 (+10: 8 nas funções puras de brands, 2 no prompt do Sonnet)'
+  tsc: 'limpo'
+  eslint: 'limpo'
+  build: '✓ Compiled 16.0s'
+  raiz_verificada: "briefing ilike '%F27A5E%' = true na Trifold institucional; BrandKnowledge sem campo cores; assets ERAM passados corretamente (a rota filtra por brandById) — o Sonnet viu os 6 renders e devolveu arquivos_kit vazio"
+  ac3_falso_positivo: "coberto: 'VIND_RENDER_FACHADA' (prefixo de 2 arquivos) não casa nenhum; 'vind_logo_branco' sem o ' 7.png' não casa"
+po_ressalva_atendida: 'AC6 (deduplicar a regra de paleta) — o @po exigiu prova de que o arte-service continua resolvendo igual. resolvePaletaDoPost tem 3 testes cobrindo os mesmos casos da lógica inline removida: empreendimento ganha, empreendimento vazio cai para institucional (caso Yarden), hex inválido descartado.'
+top_issues:
+  - id: 'CATCH-001'
+    severity: high
+    finding: '🔥 PEGO NO @dev, teria matado a story em silêncio: o `select` de marketing_brands na rota /pedir NÃO trazia a coluna `cores`. resolvePaletaDoPost devolveria [] sempre, o prompt diria "Nenhuma cor cadastrada", e a paleta continuaria ausente — com todos os testes passando, porque eles testam a função pura, não a query.'
+    suggested_action: 'Corrigido no mesmo commit (coluna adicionada ao select, com comentário explicando por quê). LIÇÃO: função pura testada não prova que o chamador a alimenta.'
+  - id: 'RISK-001'
+    severity: medium
+    finding: 'Forçar referências pode estourar o teto agregado de 7MB: os renders do Vind têm 2–3MB cada, então citar 3 arquivos faz o 3º ser descartado em silêncio. Os forçados entram primeiro (o humano pediu), mas o descarte segue silencioso para o resto.'
+    suggested_action: 'Converter os renders para JPEG corta ~80% e resolve. Dívida já registrada na 75-248. Enquanto isso, citar no máximo 2 arquivos por pedido.'
+  - id: 'RISK-002'
+    severity: medium
+    finding: 'O modelo pode continuar não usando a referência mesmo recebendo-a — a imagem entra como inlineData, mas o quanto ele obedece é heurística. Esta story garante que a referência CHEGA; não garante que a fachada sai idêntica.'
+    suggested_action: 'É o teste do Marcos pós-deploy. Se a fachada ainda não for a dele, o próximo passo sai do domínio do prompt: condicionamento por profundidade (o depth/ControlNet que discutimos no bate-papo do render), que o Vertex Express não expõe — implicaria outro provedor.'
+  - id: 'DATA-001'
+    severity: low
+    finding: 'O briefing da Trifold contém o hex #F27A5E escrito no texto. Depois do AC5 ele não contamina mais a direção de arte, mas continua sendo dado no lugar errado — cor pertence à paleta, não ao briefing.'
+    suggested_action: 'Humano: limpar o hex do briefing em Config › Kit de Marcas. Não é código.'
+  - id: 'UX-001'
+    severity: low
+    finding: 'O seletor de empreendimento no modal nasce em "Institucional (sem empreendimento)" (agente-client.tsx:353). O Marcos caiu nisso: escreveu "Vind" no pedido, citou arquivos do Vind, e o post saiu institucional gastando uma geração.'
+    suggested_action: 'Story própria: avisar antes de enviar quando o pedido cita um empreendimento conhecido e o seletor está institucional. A função arquivosCitadosNoTexto desta story já é metade do mecanismo.'
+waiver: { active: false }

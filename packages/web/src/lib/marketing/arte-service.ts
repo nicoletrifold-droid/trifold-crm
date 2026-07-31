@@ -28,7 +28,7 @@ import {
   selectLogoAsset,
   LOGO_MIME_ALLOWLIST,
 } from "@web/lib/marketing/arte-logo"
-import { scopeBrandsForPost } from "@web/lib/marketing/brands"
+import { resolvePaletaDoPost, scopeBrandsForPost } from "@web/lib/marketing/brands"
 import type { MarketingPostFormato } from "@web/lib/marketing/posts"
 
 const MAX_REF_BYTES = 8 * 1024 * 1024 // teto POR referência
@@ -136,9 +136,9 @@ export async function gerarArteParaPost(
     const empr = brands.find((b) => b.tipo === "empreendimento") ?? null
     const inst = brands.find((b) => b.tipo === "institucional") ?? null
     const marcaNome = empr?.nome ?? inst?.nome ?? null
-    const coresEmpr = (empr?.cores ?? []).filter((c) => typeof c?.hex === "string")
-    const coresInst = (inst?.cores ?? []).filter((c) => typeof c?.hex === "string")
-    const cores = coresEmpr.length > 0 ? coresEmpr : coresInst
+    // 75-250 (AC6): regra ÚNICA de paleta — estava duplicada aqui e a rota /pedir
+    // passou a precisar da mesma para dizer ao Sonnet quais hex existem.
+    const cores = resolvePaletaDoPost(brands)
     const fontesEmpr = (empr?.fontes ?? []).map((f) => f?.nome).filter((n): n is string => !!n)
     const fontesInst = (inst?.fontes ?? []).map((f) => f?.nome).filter((n): n is string => !!n)
     const fontes = fontesEmpr.length > 0 ? fontesEmpr : fontesInst

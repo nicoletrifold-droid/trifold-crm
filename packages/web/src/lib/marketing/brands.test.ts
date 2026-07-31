@@ -4,6 +4,8 @@ import {
   BRAND_ASSET_EXTENSIONS,
   BRAND_SELECT,
   scopeBrandsForPost,
+  arquivosCitadosNoTexto,
+  resolvePaletaDoPost,
   MARKETING_BRAND_ASSET_TIPOS,
   brandAssetUploadBody,
   fonteAssetIds,
@@ -254,5 +256,68 @@ describe("scopeBrandsForPost", () => {
 
   it("empreendimento sem marca própria = só a institucional", () => {
     expect(scopeBrandsForPost(all, "prop-sem-marca").map((b) => b.nome)).toEqual(["Trifold"])
+  })
+})
+
+// Story 75-250 — regra única de paleta + referências que o humano citou.
+describe("resolvePaletaDoPost (AC6)", () => {
+  const VIND = { tipo: "empreendimento", cores: [{ hex: "#FFFFFF", nome: null }, { hex: "#8FE6A7", nome: null }] }
+  const INST = { tipo: "institucional", cores: [{ hex: "#000000", nome: "Preto" }, { hex: "#F27A5E", nome: "Laranja" }] }
+
+  it("paleta do empreendimento ganha da institucional", () => {
+    expect(resolvePaletaDoPost([INST, VIND]).map((c) => c.hex)).toEqual(["#FFFFFF", "#8FE6A7"])
+  })
+
+  it("empreendimento SEM paleta cai para a institucional (o caso do Yarden)", () => {
+    expect(resolvePaletaDoPost([INST, { tipo: "empreendimento", cores: [] }]).map((c) => c.hex)).toEqual(["#000000", "#F27A5E"])
+    expect(resolvePaletaDoPost([INST, { tipo: "empreendimento", cores: null }]).map((c) => c.hex)).toHaveLength(2)
+  })
+
+  it("hex inválido é descartado; nada cadastrado → vazio (sem inventar)", () => {
+    expect(resolvePaletaDoPost([{ tipo: "empreendimento", cores: [{ hex: 42 as unknown as string, nome: null }, { hex: "#8FE6A7", nome: null }] }])).toHaveLength(1)
+    expect(resolvePaletaDoPost([])).toEqual([])
+  })
+})
+
+describe("arquivosCitadosNoTexto (AC1/AC3)", () => {
+  const KIT = [
+    "VIND_RENDER_FACHADA_NOITE.png",
+    "VIND_RENDER_FACHADA_DIA.png",
+    "VIND_RENDER_PISCINA.png",
+    "vind_logo_branco 7.png",
+  ]
+
+  it("acha os arquivos citados no pedido real do Marcos (o caso que falhou)", () => {
+    const pedido =
+      "Usa o render da fachada à noite e a piscina como apoio.\n" +
+      "Arquivos: VIND_RENDER_FACHADA_NOITE.png, VIND_RENDER_PISCINA.png"
+    expect(arquivosCitadosNoTexto(pedido, KIT)).toEqual([
+      "VIND_RENDER_FACHADA_NOITE.png",
+      "VIND_RENDER_PISCINA.png",
+    ])
+  })
+
+  it("é case-insensitive e tolera pontuação em volta", () => {
+    expect(arquivosCitadosNoTexto("usa (vind_render_piscina.PNG).", KIT)).toEqual(["VIND_RENDER_PISCINA.png"])
+  })
+
+  it("NÃO casa por fragmento — o falso positivo que o AC3 proíbe", () => {
+    // 'VIND_RENDER_FACHADA' é prefixo de dois arquivos: não pode casar nenhum
+    expect(arquivosCitadosNoTexto("quero VIND_RENDER_FACHADA", KIT)).toEqual([])
+    // nome com espaço no meio só casa inteiro
+    expect(arquivosCitadosNoTexto("usa vind_logo_branco 7.png", KIT)).toEqual(["vind_logo_branco 7.png"])
+    expect(arquivosCitadosNoTexto("usa vind_logo_branco", KIT)).toEqual([])
+  })
+
+  it("texto vazio, nulo ou sem citação → lista vazia", () => {
+    expect(arquivosCitadosNoTexto("", KIT)).toEqual([])
+    expect(arquivosCitadosNoTexto(null, KIT)).toEqual([])
+    expect(arquivosCitadosNoTexto("story bonito pro Vind", KIT)).toEqual([])
+  })
+
+  it("não duplica quando o mesmo arquivo aparece duas vezes", () => {
+    expect(arquivosCitadosNoTexto("VIND_RENDER_PISCINA.png e de novo VIND_RENDER_PISCINA.png", KIT)).toEqual([
+      "VIND_RENDER_PISCINA.png",
+    ])
   })
 })
