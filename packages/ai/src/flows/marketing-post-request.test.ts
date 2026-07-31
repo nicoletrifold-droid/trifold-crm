@@ -49,7 +49,7 @@ describe("parseMarketingPostRequest", () => {
       arte: { descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png", "  ", 42] },
     }
     const r = parseMarketingPostRequest(JSON.stringify(comArte), "story")
-    expect(r?.arte).toEqual({ descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png"] })
+    expect(r?.arte).toEqual({ descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png"], cta: null })
     // sem descrição = sem arte (a rota pula a geração, copy sobrevive)
     const semDesc = parseMarketingPostRequest(JSON.stringify({ ...VALID, arte: { arquivos_kit: ["x"] } }), "estatico")
     expect(semDesc?.arte).toBeNull()
@@ -59,6 +59,22 @@ describe("parseMarketingPostRequest", () => {
       "reel"
     )
     expect(reel?.arte).toBeNull()
+  })
+
+  // 75-248: o CTA é COMPOSTO pelo código, então vem como dado, não como desenho.
+  it("arte.cta é parseado, tolerante e limitado; ausente = null (post antigo segue funcionando)", () => {
+    const comCta = { ...VALID, arte: { descricao: "Fachada ao anoitecer", arquivos_kit: [], cta: "  Arraste e agende sua visita  " } }
+    expect(parseMarketingPostRequest(JSON.stringify(comCta), "story")?.arte?.cta).toBe("Arraste e agende sua visita")
+
+    // ausente, vazio ou de tipo errado ⇒ null: NUNCA inventar CTA
+    for (const cta of [undefined, "", "   ", 42, null, {}]) {
+      const j = JSON.stringify({ ...VALID, arte: { descricao: "x", arquivos_kit: [], cta } })
+      expect(parseMarketingPostRequest(j, "story")?.arte?.cta).toBeNull()
+    }
+
+    // CTA absurdamente longo é truncado (a pílula tem largura finita)
+    const longo = { ...VALID, arte: { descricao: "x", arquivos_kit: [], cta: "a".repeat(200) } }
+    expect(parseMarketingPostRequest(JSON.stringify(longo), "story")?.arte?.cta?.length).toBe(60)
   })
 
   it("JSON cercado de prosa/code block é recortado; lixo → null", () => {
@@ -118,16 +134,31 @@ describe("generateMarketingPostFromRequest — prompt", () => {
     expect(prompt).toContain("ESCOPO POR MARCA")
   })
 
-  // 75-244: a direção de arte do Sonnet era a origem das peças quase pretas
-  // com CTA em cinza miúdo — a regra de legibilidade nasce aqui, não no motor.
-  it("prompt exige legibilidade na direção de arte: contraste, CTA com peso e área luminosa", async () => {
+  // 75-244: a direção de arte do Sonnet era a origem das peças quase pretas —
+  // a regra de legibilidade nasce aqui, não no motor.
+  // 75-248 SUPERSEDE a parte do CTA desta regra: pedir "CTA com peso visual"
+  // produziu um botão desproporcional, então o CTA saiu do modelo e virou
+  // composição. O que resta aqui é contraste e área luminosa, que seguem valendo.
+  it("prompt exige legibilidade na direção de arte: contraste e área luminosa", async () => {
     const { client, getPrompt } = spyClient()
     await generateMarketingPostFromRequest(client, input)
     const prompt = getPrompt()
     expect(prompt).toContain("LEGIBILIDADE DA ARTE")
     expect(prompt).toContain("nunca cinza sobre fundo escuro")
     expect(prompt).toContain("area luminosa")
-    expect(prompt).toContain("CTA discreto ou pequeno e erro")
+    // proibição de moldura seguiu, e endurecida
+    expect(prompt).toContain("Nao peca forma geometrica solta, moldura ou linha decorativa")
+  })
+
+  it("prompt manda o CTA vir no campo cta e NÃO ser desenhado (75-248)", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingPostFromRequest(client, input)
+    const prompt = getPrompt()
+    expect(prompt).toContain("CTA (Story 75-248)")
+    expect(prompt).toContain("NAO** e desenhado pelo gerador de imagem")
+    expect(prompt).toContain('"cta": "texto curto do CTA ou null"')
+    // a regra antiga, que mandava descrever o CTA com peso visual, saiu
+    expect(prompt).not.toContain("Descreva o CTA com peso visual proprio")
   })
 
   it("direção visual do humano entra no prompt com instrução de incorporar (75-241)", async () => {

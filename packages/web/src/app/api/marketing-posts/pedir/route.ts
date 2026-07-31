@@ -158,6 +158,9 @@ export async function POST(req: NextRequest) {
             : result.arte.descricao
           : null,
         arte_arquivos: result.arte?.arquivos_kit ?? null,
+        // Story 75-248 — CTA em coluna PRÓPRIA, nunca dentro da arte_descricao:
+        // aquela string vai no prompt e o modelo é proibido de desenhar CTA.
+        arte_cta: result.arte?.cta ?? null,
         scheduled_for: humanDate ?? result.scheduled_for,
         justificativa: result.justificativa,
         status: "sugerido",
@@ -184,6 +187,8 @@ export async function POST(req: NextRequest) {
         // filtro de diretrizes do Sonnet, igual ao ajuste do Refazer (75-240).
         // A publicação continua 100% humana (fila de aprovação).
         ajuste: direcaoEfetiva || null,
+        // Story 75-248 — o CTA é COMPOSTO (pílula na cor do Kit), não desenhado.
+        cta: result.arte.cta,
       })
       if (arte) {
         const { data: updated } = await admin

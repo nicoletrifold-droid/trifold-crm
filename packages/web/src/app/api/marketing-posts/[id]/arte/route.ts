@@ -29,7 +29,7 @@ export async function POST(
 
   const { data: post } = await admin
     .from("marketing_posts")
-    .select("id, status, formato, empreendimento_id, arte_descricao, arte_arquivos, arte_url, copy")
+    .select("id, status, formato, empreendimento_id, arte_descricao, arte_arquivos, arte_cta, arte_url, copy")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
@@ -43,9 +43,10 @@ export async function POST(
   }
 
   // Sem direção de arte persistida (post antigo/manual): a copy vira a base.
+  // 75-248: não pedir mais o CTA ao modelo — ele é composto pelo código.
   const descricao =
     (post.arte_descricao as string | null) ??
-    `Arte para o post abaixo. Extraia o título/CTA da copy e componha a arte:\n${(post.copy as string).slice(0, 1200)}`
+    `Arte para o post abaixo. Extraia o TÍTULO da copy e componha a arte (NÃO desenhe CTA):\n${(post.copy as string).slice(0, 1200)}`
 
   const arquivosKit = Array.isArray(post.arte_arquivos)
     ? (post.arte_arquivos as unknown[]).filter((f): f is string => typeof f === "string")
@@ -58,6 +59,9 @@ export async function POST(
     descricao,
     arquivosKit,
     ajuste: ajuste || null,
+    // 75-248 — CTA persistido em coluna própria; o Refazer não chama o Sonnet,
+    // então sem isso o CTA se perderia a cada refazer.
+    cta: (post.arte_cta as string | null) ?? null,
   })
   if (!arte) {
     return NextResponse.json({ error: "Não consegui gerar a arte agora. Tente novamente." }, { status: 502 })

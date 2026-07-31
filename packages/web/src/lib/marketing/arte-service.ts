@@ -17,6 +17,13 @@ import {
   type ArteReferencia,
 } from "@web/lib/marketing/arte-gen"
 import {
+  composeCta,
+  fontePadrao,
+  pickAccentColor,
+  selectFonteAsset,
+  FONTE_MIME_ALLOWLIST,
+} from "@web/lib/marketing/arte-cta"
+import {
   composeLogo,
   selectLogoAsset,
   LOGO_MIME_ALLOWLIST,
@@ -48,6 +55,11 @@ export interface GerarArteParaPostInput {
   arquivosKit: string[]
   /** Ajuste do humano no Refazer (opcional) */
   ajuste?: string | null
+  /**
+   * Story 75-248 — texto do CTA a COMPOR (não é desenhado pelo modelo).
+   * Ausente/vazio = arte sem CTA composto.
+   */
+  cta?: string | null
 }
 
 export interface GerarArteParaPostResult {
@@ -70,6 +82,23 @@ async function baixarLogo(fileUrl: string): Promise<{ mime: string; buf: Buffer 
     const buf = Buffer.from(await res.arrayBuffer())
     if (buf.byteLength > MAX_REF_BYTES) return null
     return { mime, buf }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Story 75-248 — baixa o arquivo de fonte do Kit para o `satori`. null cai para
+ * a Montserrat empacotada. woff2 NÃO entra na allowlist: o satori não lê.
+ */
+async function baixarFonte(fileUrl: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(fileUrl, { signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) return null
+    const mime = res.headers.get("content-type")?.split(";")[0] ?? ""
+    if (!(FONTE_MIME_ALLOWLIST as readonly string[]).includes(mime)) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    return buf.byteLength > MAX_REF_BYTES ? null : buf
   } catch {
     return null
   }
@@ -177,10 +206,30 @@ export async function gerarArteParaPost(
       return null
     }
 
+    // 4.4. Story 75-248 — CTA COMPOSTO como pílula, com a cor de destaque do
+    // Kit. try/catch PRÓPRIO e SEPARADO do logo (AC7, fail-open em camadas):
+    // falha de CTA não pode custar o logo, nem vice-versa.
+    // 🔥 Atenção: como o modelo foi PROIBIDO de desenhar CTA, falha aqui
+    // significa arte SEM CTA — não "CTA feio". Por isso o log é alto.
+    let arteBuffer = arte.buffer
+    if (input.cta?.trim()) {
+      try {
+        const accent = pickAccentColor(cores)
+        if (!accent) {
+          console.warn("[arte-service] paleta do Kit sem cor de destaque — CTA não composto (não inventamos cor)")
+        } else {
+          const fonteAsset = selectFonteAsset(candidatos, brandPriority)
+          const fonte = (fonteAsset && (await baixarFonte(fonteAsset.file_url))) || fontePadrao()
+          arteBuffer = await composeCta(arteBuffer, input.cta.trim(), aspectRatio, accent, fonte)
+        }
+      } catch (ctaErr) {
+        console.error("[arte-service] FALHA AO COMPOR CTA — a arte sai SEM call-to-action:", ctaErr)
+      }
+    }
+
     // 4.5. Story 75-246 — logo do Kit COMPOSTO por cima (o modelo não desenha
     // mais). try/catch PRÓPRIO: o catch externo devolveria null e perderia a
     // arte inteira; aqui falha de logo só custa o logo (AC4).
-    let arteBuffer = arte.buffer
     try {
       const logoAsset = selectLogoAsset(candidatos, brandPriority)
       if (!logoAsset) {
