@@ -1,6 +1,6 @@
 # Story 75-249 — A visita segue o dono do lead em QUALQUER troca
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Fix de comportamento (completa a 75-247)
 **Epic:** Agendamento da Nicole
 **Complexidade:** S
@@ -98,8 +98,20 @@ Completa a 75-247 (já em prod, commit `f3f0d17d`). Nenhuma migração.
 - Busca por `claimOrphanVisitsForBroker` / `transferHouseVisitsToBroker` /
   `claim-orphan` no código de produção: **zero** ocorrências.
 
-## Pendências antes de Done
+## Deploy — 31/07/2026 ✅
 
-- Deploy.
-- Validar na próxima reatribuição real: o nome na Agenda troca, o novo corretor
-  recebe o aviso e o antigo recebe "Visita saiu da sua agenda".
+Merge PR #328 → commit `861bd2f3` → produção `READY` (Vercel, ~10:52).
+`crm.trifold.eng.br` respondendo 200; zero evento `error`/`warn` nos 10 min
+seguintes.
+
+Estado conferido em prod depois do deploy:
+
+| checagem | resultado |
+|---|---|
+| visitas futuras `house` fora de sincronia com o dono do lead | **0** |
+| corretor na visita do Ailton (sáb 01/08 10h) | **Matheus Barbosa Rodrigues** |
+| `NICOLE_SLOT_MISMATCH` acumulado (75-245) | **0** |
+
+Fica em observação de campo (não é pendência de código): a próxima reatribuição
+real de lead com visita marcada — o nome troca na Agenda, o novo corretor recebe
+"Lead novo COM visita marcada" e o antigo recebe "Visita saiu da sua agenda".
