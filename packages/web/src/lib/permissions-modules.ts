@@ -113,3 +113,28 @@ export const SUBMODULE_MAP: Record<string, Record<string, string>> = {
     "sistema.notificacoes-financeiras": "Notificações Financeiras",
   },
 }
+
+/**
+ * Story 75-251 — o item "Config" da sidebar deve aparecer para quem tem o módulo
+ * `configuracoes` OU qualquer sub-módulo `configuracoes.*` concedido.
+ *
+ * 🔴 POR QUE NÃO BASTA LIGAR O PAI: `canAccess` HERDA do módulo pai quando não
+ * existe linha explícita do sub-módulo (permissions.ts). Em produção existe UMA
+ * linha `configuracoes.*` (a do pipeline do gerente-comercial), então conceder o
+ * pai daria, por herança, `configuracoes.perfil-acesso` — a própria matriz de
+ * permissões — além de integrações, clientes e usuários. Escalada de privilégio.
+ *
+ * Esta função resolve pelo outro lado: o pai fica `false`, nada herda, e o menu
+ * aparece por causa do sub-módulo que a pessoa realmente tem. Vale por construção
+ * para qualquer perfil futuro que receba um sub-módulo de Configurações.
+ *
+ * PURA (AC2): só olha o mapa de permissões, sem I/O.
+ */
+export function podeVerMenuConfig(permissions: Record<string, boolean>): boolean {
+  if (permissions["configuracoes"]) return true
+  for (const [modulo, concedido] of Object.entries(permissions)) {
+    // sub-módulo CONCEDIDO (AC4: linha explícita `false` não vale)
+    if (concedido && modulo.startsWith("configuracoes.")) return true
+  }
+  return false
+}
