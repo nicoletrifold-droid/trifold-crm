@@ -5,6 +5,7 @@ import {
   buildNoReintroContext,
   mediaContextLine,
   resolvePropertyInterestWrite,
+  detectSlotMismatch,
 } from "./pipeline"
 import { OFF_HOURS_PROMPT } from "../prompts"
 
@@ -210,5 +211,76 @@ describe("resolvePropertyInterestWrite (Story 75-158 — política confirmada Ma
 
   it("VAZIO e nada identificado → null", () => {
     expect(resolvePropertyInterestWrite(base)).toBeNull()
+  })
+})
+
+describe("detectSlotMismatch (Story 75-245 AC8 — guarda anti-alucinação)", () => {
+  // Âncora: 2026-07-31T01:18:00Z = quinta 30/07 22:18 BRT (o turno do incidente).
+  const NOW = new Date("2026-07-31T01:18:00Z")
+  // O que o sistema tinha autorizado: segunda 03/08 12:00 BRT.
+  const AUTORIZADO = new Date("2026-08-03T15:00:00Z")
+
+  it("pega a alucinação real do incidente: ela afirmou sábado 10h, sistema tinha segunda 12h", () => {
+    const said = detectSlotMismatch({
+      assistantMessage:
+        "Anotado! Sábado, 1º de agosto às 10h.\n\nTe espero na Av. Nildo Ribeiro da Rocha, 1337, Vila Marumby. Até lá, Ailton!",
+      authorizedSlotUtc: AUTORIZADO,
+      now: NOW,
+    })
+    expect(said?.toISOString()).toBe("2026-08-01T13:00:00.000Z") // sáb 10h BRT
+  })
+
+  it("pega o 'às 9h' inventado quando o cliente só disse 'de manhã'", () => {
+    const said = detectSlotMismatch({
+      assistantMessage: "Perfeito, Ailton! Agendado para sábado, 1º de agosto, às 9h.",
+      authorizedSlotUtc: AUTORIZADO,
+      now: NOW,
+    })
+    expect(said?.toISOString()).toBe("2026-08-01T12:00:00.000Z") // sáb 9h BRT
+  })
+
+  it("cala quando a Nicole confirma exatamente o slot autorizado", () => {
+    const said = detectSlotMismatch({
+      assistantMessage: "Sua visita tá marcada pra segunda-feira, 3 de agosto às 12h, te espero lá!",
+      authorizedSlotUtc: AUTORIZADO,
+      now: NOW,
+    })
+    expect(said).toBeNull()
+  })
+
+  it("cala quando ela OFERECE opções (texto ambíguo) — sem falso positivo", () => {
+    const said = detectSlotMismatch({
+      assistantMessage: "Tenho 8h ou 9h livres no sábado, qual prefere?",
+      authorizedSlotUtc: AUTORIZADO,
+      now: NOW,
+    })
+    expect(said).toBeNull()
+  })
+
+  it("cala quando ela cita o expediente ou não afirma horário nenhum", () => {
+    expect(
+      detectSlotMismatch({
+        assistantMessage: "Atendemos de segunda a sexta das 8h às 18h e sábado das 8h ao meio-dia.",
+        authorizedSlotUtc: AUTORIZADO,
+        now: NOW,
+      })
+    ).toBeNull()
+    expect(
+      detectSlotMismatch({
+        assistantMessage: "Claro! Qual horário fica melhor pra você?",
+        authorizedSlotUtc: AUTORIZADO,
+        now: NOW,
+      })
+    ).toBeNull()
+  })
+
+  it("sem slot autorizado no turno, a guarda não opina", () => {
+    expect(
+      detectSlotMismatch({
+        assistantMessage: "Agendado para sábado às 9h.",
+        authorizedSlotUtc: null,
+        now: NOW,
+      })
+    ).toBeNull()
   })
 })

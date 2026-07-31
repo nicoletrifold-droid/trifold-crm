@@ -36,6 +36,11 @@ function stripAccents(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 }
 
+/** Story 75-245 \u2014 "10,00"/"10.00"/"10,30" \u2192 "10:00"/"10:30" (separador de minutos). */
+function normalizeMinuteSeparator(s: string): string {
+  return s.replace(/(?<![\d.,:])(\d{1,2})[.,](\d{2})(?!\d)/g, "$1:$2")
+}
+
 function brtToUtc(y: number, m: number, d: number, hour: number, minute = 0): Date {
   return new Date(Date.UTC(y, m, d, hour + BRT_OFFSET_HOURS, minute, 0, 0))
 }
@@ -49,6 +54,12 @@ function brtParts(now: Date) {
     weekday: brt.getUTCDay(),
   }
 }
+
+/** Meses em pt-BR sem acento (índice = mês 0-based). Story 75-245. */
+const MONTHS = [
+  "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
 
 const WEEKDAYS: Array<{ re: RegExp; dow: number }> = [
   { re: /\bdomingo\b/, dow: 0 },
@@ -78,6 +89,23 @@ function parseDay(text: string, now: Date): { y: number; m: number; d: number } 
   if (/\bamanha\b/.test(t)) return addDays(1)
   if (/\bhoje\b/.test(t)) return { y: today.y, m: today.m, d: today.d }
 
+  // Story 75-245 — data com mês escrito ("1º de agosto", "10 de agosto"). Vem
+  // ANTES do dia da semana: sem isso "segunda-feira, 10 de agosto" era lido como
+  // a PRÓXIMA segunda (regra de dia da semana), errando a data por semanas — e
+  // fazendo a guarda anti-alucinação acusar falso positivo.
+  const monthMatch = t.match(
+    /\b(\d{1,2})\s*(?:o|a|º|ª)?\s*de\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/
+  )
+  if (monthMatch) {
+    const dd = parseInt(monthMatch[1]!, 10)
+    const mIdx = MONTHS.indexOf(monthMatch[2]!)
+    if (dd >= 1 && dd <= 31 && mIdx >= 0) {
+      // Data já passada neste ano → ano seguinte (o cliente fala do futuro).
+      const y = mIdx < today.m || (mIdx === today.m && dd < today.d) ? today.y + 1 : today.y
+      return { y, m: mIdx, d: dd }
+    }
+  }
+
   // "dia 20"
   const diaMatch = t.match(/\bdia\s+(\d{1,2})\b/)
   if (diaMatch) {
@@ -106,12 +134,19 @@ function parseDay(text: string, now: Date): { y: number; m: number; d: number } 
 
 /** Resolve a hora pedida (BRT, 0-23) a partir do texto, ou null. */
 function parseHour(text: string): { hour: number; minute: number } | null {
-  const t = stripAccents(text).toLowerCase() // Story 75-162 — robusto a "9H"/capitalização
+  // Story 75-245 — "10,00 hora" (o lead escreve assim) precisa virar 10:00 ANTES
+  // de qualquer regex: o padrão genérico casava o "00 hora" e devolvia 00:00,
+  // que cai fora do expediente e o horário pedido era silenciosamente descartado.
+  // O lookbehind e o (?!\d) protegem CPF ("174.677.569.68") e dinheiro
+  // ("25.000,00"), que não podem virar horário.
+  const t = normalizeMinuteSeparator(stripAccents(text).toLowerCase()) // Story 75-162 — robusto a "9H"/capitalização
 
   if (/\bmeio[\s-]?dia\b/.test(t)) return { hour: 12, minute: 0 }
 
   // período (tarde/noite) com número: "3 da tarde", "8 da noite"
-  const periodMatch = t.match(/\b(\d{1,2})(?:[:h](\d{2}))?\s*(?:da|de|à|a)\s*(tarde|noite|manha)\b/)
+  // Story 75-245 — "dia 5 de manhã" é DIA 5 + período, não 5h: o lookbehind
+  // evita ler o número do dia como hora (quem resolve é parsePeriodParts).
+  const periodMatch = t.match(/(?<!\bdia\s)\b(\d{1,2})(?:[:h](\d{2}))?\s*(?:da|de|à|a)\s*(tarde|noite|manha)\b/)
   if (periodMatch) {
     let hour = parseInt(periodMatch[1]!, 10)
     const minute = periodMatch[2] ? parseInt(periodMatch[2]!, 10) : 0
@@ -128,6 +163,76 @@ function parseHour(text: string): { hour: number; minute: number } | null {
     if (hour >= 0 && hour <= 23 && minute >= 0 && minute < 60) return { hour, minute }
   }
 
+  return null
+}
+
+/**
+ * Story 75-245 — texto que NÃO pode virar um slot concreto: frase de horário de
+ * atendimento ou lista de opções. Nasceu do incidente do lead Ailton: a própria
+ * frase da Nicole ("Atendemos de segunda a sexta das 8h às 18h e sábado das 8h
+ * ao meio-dia") foi gravada em `visit_availability` e o parser tirou dela
+ * "segunda" + "meio-dia" → agendou segunda 12h sem o cliente ter dito nada.
+ *
+ * Ambíguo = 2+ dias da semana, 2+ horários, faixa ("das 8h às 18h") ou fórmula
+ * de expediente ("atendemos", "horário de atendimento", "de segunda a sexta").
+ * Slot único ("Sábado, 18 de julho, às 9h" — caso da 75-162) NÃO é ambíguo.
+ */
+export function isAmbiguousSlotText(text: string | null | undefined): boolean {
+  if (!text) return false
+  const t = normalizeMinuteSeparator(stripAccents(text).toLowerCase())
+
+  // Fórmulas de expediente / faixa de horário.
+  if (/\batendemos\b/.test(t)) return true
+  if (/\bhorario[s]?\s+de\s+(?:atendimento|funcionamento)\b/.test(t)) return true
+  if (/\bde\s+segunda\s+a\s+(?:sexta|sabado)\b/.test(t)) return true
+  if (/\bd[ae]s?\s+\d{1,2}\s*(?:h|horas)?\s*(?::\d{2}\s*)?(?:as|ate|a)\s+(?:\d{1,2}|o\s+meio[\s-]?dia|meio[\s-]?dia)\b/.test(t)) return true
+
+  // 2+ dias da semana distintos ("segunda a sexta … e sábado").
+  const days = new Set<number>()
+  for (const { re, dow } of WEEKDAYS) if (re.test(t)) days.add(dow)
+  if (days.size >= 2) return true
+
+  // 2+ horários distintos ("8h às 18h", "9h ou 10h").
+  if (countTimeMentions(t) >= 2) return true
+
+  return false
+}
+
+/** Quantos horários o texto menciona (já normalizado/sem acento). */
+function countTimeMentions(t: string): number {
+  const mentions = new Set<string>()
+  if (/\bmeio[\s-]?dia\b/.test(t)) mentions.add("12:00")
+  for (const m of t.matchAll(/(?<![\d.,:])(\d{1,2})\s*(?::(\d{2})|h(\d{2})?\b|\s*horas?\b)/g)) {
+    mentions.add(`${m[1]}:${m[2] ?? m[3] ?? "00"}`)
+  }
+  return mentions.size
+}
+
+/** Período do dia entendido sem número ("de manhã", "à tarde"). Story 75-245. */
+export type DayPeriod = "manha" | "tarde"
+
+/** Faixa (min desde 00:00 BRT) de cada período. */
+const PERIOD_BOUNDS: Record<DayPeriod, { fromMin: number; toMin: number }> = {
+  manha: { fromMin: OPEN_HOUR * 60, toMin: 12 * 60 },
+  tarde: { fromMin: 12 * 60, toMin: 18 * 60 },
+}
+
+/**
+ * Story 75-245 — período do dia SEM horário explícito ("pode ser de manhã").
+ * Antes o parser não entendia e a Nicole preenchia a lacuna inventando um
+ * horário ("9h"). Devolve null quando há hora explícita (parseHour resolve) ou
+ * quando é "mais tarde" (= depois, não é o período da tarde).
+ */
+export function parsePeriodParts(text: string | null | undefined): DayPeriod | null {
+  if (!text) return null
+  // Saudação NÃO é período: "boa tarde" é "olá", não "quero à tarde".
+  const t = normalizeMinuteSeparator(stripAccents(text).toLowerCase())
+    .replace(/\bbo[am]\s+(?:tarde|dia|noite|manha)\b/g, " ")
+  if (parseHour(t)) return null
+  // "manha" não casa dentro de "amanha" (sem fronteira de palavra antes do m).
+  if (/\bmanha\b|\bmanhazinha\b/.test(t)) return "manha"
+  if (/\bmais\s+tarde\b/.test(t)) return null
+  if (/\btarde\b|\btardinha\b/.test(t)) return "tarde"
   return null
 }
 
@@ -179,11 +284,19 @@ export function resolveVisitSlotParts(input: {
   const { message, now, pendingDay = null, pendingTime = null, visitAvailability } = input
   let day = parseDayParts(message, now) ?? pendingDay
   let time = parseTimeParts(message) ?? pendingTime
-  if ((!day || !time) && visitAvailability) {
+  // Story 75-245 — o `visit_availability` só vale como fonte de slot quando é um
+  // slot ÚNICO. Frase de expediente ou lista de opções (ambígua) não agenda
+  // nada: era daí que saía o agendamento fantasma (ver isAmbiguousSlotText).
+  if ((!day || !time) && visitAvailability && !isAmbiguousSlotText(visitAvailability)) {
     if (!day) day = parseDayParts(visitAvailability, now)
     if (!time) time = parseTimeParts(visitAvailability)
   }
   return { day, time }
+}
+
+/** Story 75-245 — Date UTC de um dia+hora BRT, sem as regras de expediente. */
+export function slotToUtc(day: DayParts, time: TimeParts): Date {
+  return brtToUtc(day.y, day.m, day.d, time.hour, time.minute)
 }
 
 /** Story 75-163 — DayParts (BRT) de uma data UTC (ex.: dia da visita atual, p/ troca só-de-horário). */
@@ -335,4 +448,35 @@ export async function checkSlotAvailability(
   }
 
   return { free: false, alternatives }
+}
+
+/**
+ * Story 75-245 — horários LIVRES de um período ("de manhã") num dia, para a
+ * Nicole oferecer em vez de inventar. Respeita o expediente do dia (sábado
+ * fecha ao meio-dia → período "tarde" devolve vazio), exige a visita de 60min
+ * cabendo inteira e ignora horário que já passou.
+ */
+export async function freeSlotsInPeriod(
+  supabase: SupabaseClient,
+  orgId: string,
+  day: DayParts,
+  period: DayPeriod,
+  now: Date,
+  excludeAppointmentId?: string | null,
+  limit = 3
+): Promise<Date[]> {
+  const weekday = brtParts(brtToUtc(day.y, day.m, day.d, 12)).weekday
+  const close = closeHourFor(weekday)
+  if (close === null) return []
+
+  const { fromMin, toMin } = PERIOD_BOUNDS[period]
+  const lastStart = Math.min(toMin, close * 60) - VISIT_DURATION_MIN
+  const free: Date[] = []
+  for (let m = Math.max(fromMin, OPEN_HOUR * 60); m <= lastStart; m += SLOT_STEP_MIN) {
+    if (free.length >= limit) break
+    const candidate = brtToUtc(day.y, day.m, day.d, Math.floor(m / 60), m % 60)
+    if (candidate.getTime() <= now.getTime()) continue
+    if (await isSlotFree(supabase, orgId, candidate, excludeAppointmentId)) free.push(candidate)
+  }
+  return free
 }
