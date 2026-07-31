@@ -1,0 +1,45 @@
+schema: 1
+story: '75-243'
+gate: PASS
+status_reason: 'Causa raiz correta e confirmada: o /broker foi escrito como "sempre dark" e o layout já é temático (bg-stone-50 dark:bg-stone-950), então estilos dark hardcodados ficam ilegíveis no claro — o título "Bolsão" era text-white puro. Correção segue a convenção já usada por 10 telas do broker; prop `dark` do BolsaoList removida sem regressão (único consumidor era o /broker; o /dashboard nunca a passava). Suíte completa (1318), tsc, eslint e build limpos.'
+reviewer: 'Quinn'
+updated: '2026-07-31T10:30:00Z'
+evidence:
+  tests_run: 1318
+  test_files: 121
+  tsc: clean
+  eslint: clean
+  build: 'compiled successfully (26.4s)'
+  coderabbit: 'não executado — CLI configurada para WSL/Windows, ambiente é macOS'
+  visual_verification: 'não executado em navegador (preferência do usuário: sem pilotar o Chrome). Mitigação: contraste conferido por cálculo + convenção idêntica a 10 telas do broker já validadas em prod.'
+contrast_check:
+  - pair: 'text-gray-900 sobre bg-stone-50 (título Bolsão)'
+    ratio: '~17:1'
+    verdict: 'AAA'
+  - pair: 'text-gray-500 sobre bg-white (subtítulo/prompts)'
+    ratio: '~4.8:1'
+    verdict: 'AA'
+  - pair: 'text-stone-500 sobre bg-white (textos secundários, badge Equipe)'
+    ratio: '~4.9:1'
+    verdict: 'AA'
+  - pair: 'dark:text-stone-100 sobre dark:bg-stone-900'
+    ratio: '~14:1'
+    verdict: 'AAA (escuro inalterado)'
+top_issues:
+  - id: 'UX-001'
+    severity: medium
+    finding: 'Mesma causa raiz sobrevive fora do escopo: /broker/page.tsx (Início) tem os cards "Tarefas Atrasadas" e "Tarefas para Hoje" com bg-stone-900 hardcodado — viram blocos preto sobre a página clara. O texto interno (text-stone-200) segue legível, portanto NÃO é o bug reportado, só inconsistência visual.'
+    suggested_action: 'Story de follow-up para o Início do broker; não bloqueia este PR.'
+  - id: 'UX-002'
+    severity: low
+    finding: 'broker/layout.tsx:141 renderiza WeatherWidget com variant="dark" fixo — a pílula do clima fica escura no tema claro (visível no print do usuário). Legível, é escolha de variante do componente.'
+    suggested_action: 'Decidir se a pílula deve acompanhar o tema; fora do escopo.'
+  - id: 'A11Y-001'
+    severity: low
+    finding: 'Botão X de dispensar dos prompts (install/push) usa text-gray-400 sobre branco (~2.5:1). É ícone decorativo com aria-label e hover text-gray-600, não texto de conteúdo.'
+    suggested_action: 'Nenhuma ação obrigatória; subir para gray-500 se quiser folga de contraste.'
+  - id: 'MNT-001'
+    severity: low
+    finding: '/broker/offline/page.tsx permanece sempre dark (bg-stone-950 fixo) — correto e intencional: é o fallback do service worker, renderiza sem contexto de tema.'
+    suggested_action: 'Nenhuma ação; documentado para não ser "corrigido" por engano depois.'
+waiver: { active: false }
