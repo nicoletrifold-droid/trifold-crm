@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { transferHouseVisitsToBroker } from "@web/lib/appointments/claim-orphan-visits"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
 
@@ -80,6 +81,13 @@ export async function POST(
   const isRelationship = hasChat && !isLeadRecipient
 
   await admin.from("leads").update({ assigned_broker_id: targetUserId }).eq("id", id)
+
+  // Story 75-247 — decisão do Marcos: a visita vai COM o lead. Move as visitas
+  // futuras (team house) para o novo dono, tenham corretor ou não, e avisa os
+  // dois lados — quem recebe e quem perdeu o compromisso da agenda.
+  await transferHouseVisitsToBroker({
+    admin, orgId: lead.org_id as string, leadId: id, toBrokerUserId: targetUserId, origem: "transferência",
+  })
   // Roteia a(s) conversa(s) do lead + tira a IA (não reassume após transferência manual).
   await admin.from("conversations").update({ is_relationship: isRelationship, is_ai_active: false }).eq("lead_id", id)
 

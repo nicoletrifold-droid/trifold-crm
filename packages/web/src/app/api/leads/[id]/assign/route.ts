@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
+import { claimOrphanVisitsForBroker } from "@web/lib/appointments/claim-orphan-visits"
 
 export async function POST(
   request: NextRequest,
@@ -51,6 +53,16 @@ export async function POST(
   if (error || !lead) {
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
+
+  // Story 75-247 — se a Nicole já tinha agendado visita para este lead sem
+  // corretor, ela passa a ser do corretor atribuído (e ele é avisado).
+  await claimOrphanVisitsForBroker({
+    admin: createAdminClient(),
+    orgId: appUser.org_id,
+    leadId: id,
+    brokerUserId: body.broker_id,
+    origem: "atribuição manual",
+  })
 
   // Create activity log
   await supabase.from("activities").insert({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { claimOrphanVisitsForBroker } from "@web/lib/appointments/claim-orphan-visits"
 
 // Story 75-81 (Epic 64) — corretor puxa um lead do bolsão. A atomicidade e as
 // regras (teto + empreendimento) ficam na RPC pegar_lead_bolsao (SECURITY DEFINER).
@@ -36,6 +37,19 @@ export async function POST(
   }
 
   const status = String(data)
+
+  // Story 75-247 — lead puxado do bolsão pode ter visita marcada pela Nicole sem
+  // corretor (ela agenda 24h, antes de o lead ter dono). A visita vai com o lead.
+  if (status === "ok") {
+    await claimOrphanVisitsForBroker({
+      admin,
+      orgId: appUser.org_id,
+      leadId: id,
+      brokerUserId: appUser.id,
+      origem: "bolsão",
+    })
+  }
+
   const mapped = STATUS_MAP[status] ?? { http: 500, message: "Erro inesperado." }
   return NextResponse.json({ status, message: mapped.message }, { status: mapped.http })
 }
