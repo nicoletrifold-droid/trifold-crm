@@ -1,4 +1,4 @@
-# Story 75-247 — Visita órfã ganha dono junto com o lead
+# Story 75-247 — A visita acompanha o dono do lead
 
 **Status:** InReview
 **Tipo:** Fix de comportamento (distribuição + notificação)
@@ -40,25 +40,33 @@ depois e a visita fica atrás. Nenhuma delas é futura (todas `no_show`/
   manual (`assign`), edição do lead (`PATCH`) e transferência.
 - **AC6** — Falha de banco ou de notificação **não derruba** a distribuição
   (best-effort, mesma política de `notify-appointment.ts`).
-- **AC7** — Zero regressão: suíte completa verde, `tsc` limpo, lint 0 erros,
+- **AC7** — **Transferência de lead move a visita** (decisão do Marcos,
+  31/07/2026): dado um lead com visita futura, quando o lead é transferido para
+  outro corretor, então a visita passa a ser do novo dono **mesmo já tendo
+  corretor** — "as notificações e todo histórico vai para o novo". O corretor
+  ANTIGO é avisado que a visita saiu da agenda dele.
+- **AC8** — Nenhuma das duas funções toca visita `team='imob'`: visita de
+  imobiliária nasce com `broker_id` nulo **de propósito** (dono = `imobiliaria_id`
+  + `metadata.corretor_parceiro`). Carimbar corretor da casa nela invadiria o
+  mundo IMOB (Epic 81).
+- **AC9** — Zero regressão: suíte completa verde, `tsc` limpo, lint 0 erros,
   build OK.
 
 ## Escopo
 
 **IN:**
 - `packages/web/src/lib/appointments/claim-orphan-visits.ts` (novo) —
-  `claimOrphanVisitsForBroker` + `formatVisitWhen`.
-- `packages/web/src/lib/broker/notify-appointment.ts` — variante `inherited`.
+  `claimOrphanVisitsForBroker` (adota órfã), `transferHouseVisitsToBroker`
+  (move com o lead) + `formatVisitWhen`.
+- `packages/web/src/lib/broker/notify-appointment.ts` — variantes `inherited` e
+  `moved_out`.
 - Chamadas em `roleta/distributor.ts` (2 caminhos),
   `api/bolsao/[id]/pegar`, `api/leads/[id]/assign`, `api/leads/[id]` (PATCH),
   `api/leads/[id]/transferir`.
-- `claim-orphan-visits.test.ts` (7 testes).
+- `claim-orphan-visits.test.ts` (12 testes).
 
 **OUT (decidido, não é esquecimento):**
-- **Mover visita que JÁ tem corretor quando o lead é transferido.** O filtro
-  `broker_id IS NULL` deliberadamente não faz isso: mudar a agenda de outra
-  pessoa por causa de uma transferência é decisão de produto (o corretor antigo
-  perde um compromisso já reservado). Precisa da palavra do Marcos.
+- Visita `team='imob'`: fica como está (dono é a imobiliária). Ver AC8.
 - Backfill retroativo — as 9 órfãs são todas passadas; não há o que corrigir.
 - Os 5 casos `created_by=admin`: `/api/appointments` já faz
   `broker_id: body.broker_id || appUser.id`, ou seja, o caminho atual não produz
@@ -69,6 +77,14 @@ depois e a visita fica atrás. Nenhuma delas é futura (todas `no_show`/
 
 Nenhuma migração. Independente da 75-245 (arquivos diferentes: `web` × `ai`),
 pode ir para prod antes ou depois.
+
+## Bug encontrado na própria story (antes do merge)
+
+A primeira versão do claim **não filtrava por `team`**. Como visita IMOB é criada
+com `broker_id: null` por design (`api/agendar/[token]`), qualquer lead IMOB que
+ganhasse dono teria a visita da imobiliária carimbada com um corretor da casa.
+Achado ao investigar a decisão de transferência; corrigido com `.eq("team",
+"house")` nas duas funções + teste dedicado (AC8).
 
 ## Riscos
 
@@ -82,10 +98,15 @@ pode ir para prod antes ou depois.
 
 ## QA Gate — PASS
 
-- 7 testes novos no helper, cobrindo AC1–AC4 e AC6 com o query-builder fake
-  aplicando os filtros de verdade (prova que passada/cancelada/de-outro-lead e
-  visita-com-dono não são tocadas).
-- Suíte completa: **1346 testes, 123 arquivos, verde**. `tsc` limpo em `web`.
+- 12 testes novos, cobrindo AC1–AC4, AC6, AC7 e AC8 com um query-builder fake
+  **thenable** que aplica os filtros de verdade (o claim faz
+  `update().eq()…select()` e a transferência faz `select().eq()…` — ordem
+  inversa; o efeito só vale quando a promise resolve). Prova que passada,
+  cancelada, de-outro-lead e **IMOB** não são tocadas; que o claim não rouba
+  visita com dono; e que a transferência move mesmo com dono, avisando os dois
+  lados na ordem certa (`inherited` para quem recebe, `moved_out` para quem
+  perde).
+- Suíte completa: **1351 testes, 123 arquivos, verde**. `tsc` limpo em `web`.
   `npm run lint` 0 erros (18 warnings pré-existentes). `npm run build` OK.
 - Efeito colateral verificado: `distributor.test.ts` continua verde — com mock
   que não conhece `appointments`, o helper cai no `catch` e devolve 0 sem
@@ -97,3 +118,6 @@ pode ir para prod antes ou depois.
 - Validar no próximo lead que a Nicole agendar fora do horário comercial: o
   corretor da roleta deve receber **dois** avisos (novo lead + visita marcada) e
   a visita deve aparecer na agenda **com o nome dele**.
+- Validar uma transferência real de lead com visita marcada: a visita troca de
+  nome na Agenda, o novo corretor é avisado e o antigo recebe "Visita saiu da sua
+  agenda".
