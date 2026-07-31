@@ -19,6 +19,7 @@ import { getWindowStatus } from "@web/lib/broker/window-status"
 import { deriveBrokerActive } from "@web/lib/broker/broker-takeover-status"
 import { createClient } from "@web/lib/supabase/client"
 import type { RealtimeChannel } from "@supabase/supabase-js"
+import { MessageText } from "@web/components/ui/message-text"
 
 /** Story 63-11 — máximo de canais Realtime simultâneos (R3). Leads com mais de
  *  3 conversas recebem realtime apenas das 3 mais recentes. */
@@ -240,9 +241,10 @@ export function ConversationThread({
               if (style.side === "center") {
                 return (
                   <div key={msg.id} className="flex justify-center">
-                    <p className={`max-w-[85%] text-center ${style.bubbleClass}`}>
-                      {msg.content}
-                    </p>
+                    <MessageText
+                      content={msg.content}
+                      className={`max-w-[85%] text-center ${style.bubbleClass}`}
+                    />
                   </div>
                 )
               }
@@ -262,7 +264,7 @@ export function ConversationThread({
                   <div
                     className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${style.bubbleClass}`}
                   >
-                    {msg.content && <p className="whitespace-pre-line">{msg.content}</p>}
+                    <MessageText content={msg.content} className="whitespace-pre-line" />
                     <MessageMedia
                       mediaType={msg.metadata?.media_type as string | undefined}
                       mediaUrl={msg.metadata?.media_url as string | undefined}

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { createClient } from "@web/lib/supabase/client"
 import { Loader2, Paperclip, Send } from "lucide-react"
 import { useUnreadBadge } from "../../_components/unread-badge-provider"
+import { MessageText } from "@web/components/ui/message-text"
 
 interface Mensagem {
   id: string
@@ -140,9 +141,10 @@ function MensagemBubble({ mensagem }: { mensagem: Mensagem }) {
   const content = () => {
     if (mensagem.message_type === "text") {
       return (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {mensagem.content}
-        </p>
+        <MessageText
+          content={mensagem.content}
+          className="whitespace-pre-wrap text-sm leading-relaxed"
+        />
       )
     }
     if (mensagem.message_type === "image" && mensagem.storage_path) {
