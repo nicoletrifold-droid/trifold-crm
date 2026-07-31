@@ -1,0 +1,32 @@
+schema: 1
+story: '75-244'
+gate: PASS
+status_reason: 'Causa raiz isolada corretamente (a direção de arte do Sonnet, não o motor de imagem) e corrigida nos DOIS níveis — regra na origem + rede de segurança no motor. Diff 100% aditivo (48 inserções, 0 remoções, só strings de prompt e testes) = superfície de regressão nula. AC1–AC3 cobertos por teste, AC3 fixado por ORDEM e não só por presença, o que é o certo. Suíte 1322/1322, tsc limpo nos 2 pacotes, build 22s.'
+reviewer: 'Quinn'
+updated: '2026-07-31T11:35:00Z'
+sete_checks:
+  code_review: 'OK — convenção de acento respeitada por arquivo (flow sem acento, arte-gen com). Comentários citam a story e o sintoma real, não o óbvio.'
+  unit_tests: 'OK — +4 testes. Cobrem AC1 (prompt do Sonnet), AC2 (3 formatos com imagem), AC3 (ordem ajuste > regras).'
+  acceptance_criteria: 'AC1 ✅ AC2 ✅ AC3 ✅ AC4 ✅ (reel inalterado, nenhuma linha tocada no caminho de reel) AC5 ✅'
+  no_regressions: 'OK — diff sem uma única remoção; nenhum teste existente alterado; 1318 testes anteriores seguem verdes.'
+  performance: 'OK — prompt cresce ~700 caracteres por chamada. Irrelevante no volume de posts.'
+  security: 'N/A — nenhuma entrada de usuário nova, nenhuma superfície de rede, nenhum dado sensível. String estática.'
+  documentation: 'OK — story 75-244 com AC/escopo/riscos, Dev Notes registram o gotcha do agent_prompts e a convenção de acento.'
+top_issues:
+  - id: 'VER-001'
+    severity: low
+    finding: '🔍 LIMITE HONESTO DO GATE: os testes provam que a INSTRUÇÃO está no prompt, não que a ARTE melhorou. Regra em prompt é heurística — o modelo pode desobedecer. A aceitação real é visual e só existe pós-deploy.'
+    suggested_action: 'Clicar "Refazer arte" no mesmo post do Vind e comparar com a peça de 31/07. Se ainda sair escura, o próximo passo é subir a exigência OU aceitar que prompt não basta e ir para composição vetorial.'
+  - id: 'DEBT-001'
+    severity: medium
+    finding: 'Logo e headline continuam sendo DESENHADOS pelo modelo, não compostos. Nenhum modelo de difusão reproduz um logo com exatidão — sempre há desvio de forma/kerning, e não há como validar automaticamente contra o asset do Kit. Fora de escopo por decisão, não por esquecimento.'
+    suggested_action: 'Story própria: gerar só o fundo com IA e compor logo + headline vetorialmente por cima. Mata desvio de logo e erro de grafia de vez, em qualquer motor.'
+  - id: 'UX-001'
+    severity: low
+    finding: 'Tensão intencional entre uma direção "fachada noturna" e a regra "não pode ser quase toda preta" — o modelo precisa conciliar. Documentado como risco 1 da story; o resultado esperado (noturna com área luminosa) é o alvo, não um defeito.'
+    suggested_action: 'Nenhuma ação. Observar nas próximas 3-5 artes se o modelo concilia ou se briga.'
+  - id: 'PROC-001'
+    severity: low
+    finding: 'Código foi escrito ANTES da story existir (fluxo mínimo), e a story foi retroajustada no ciclo a pedido do Marcos. Mesmo precedente da 75-241 (achado #4 de lá). Registrado no Change Log em vez de escondido.'
+    suggested_action: 'Daqui pra frente: @sm antes do @dev quando a mudança altera comportamento de produto.'
+waiver: { active: false }

@@ -31,6 +31,29 @@ describe("buildArtePrompt", () => {
     expect(p).toContain("português do Brasil PERFEITO")
   })
 
+  // 75-244: 1ª leva de artes saiu quase toda preta com CTA em cinza miúdo.
+  it("exige contraste, CTA com peso visual e proíbe forma solta de preenchimento", () => {
+    const p = buildArtePrompt(base)
+    expect(p).toContain("CONTRASTE (obrigatório)")
+    expect(p).toContain("nunca cinza sobre fundo escuro")
+    expect(p).toContain("NÃO pode ser quase toda preta")
+    expect(p).toContain("CTA (obrigatório)")
+    expect(p).toContain("PROIBIDO")
+  })
+
+  it("as regras de legibilidade valem em todos os formatos com imagem", () => {
+    for (const formato of ["story", "estatico", "carrossel"] as const) {
+      const p = buildArtePrompt({ ...base, formato })
+      expect(p).toContain("CONTRASTE (obrigatório)")
+      expect(p).toContain("CTA (obrigatório)")
+    }
+  })
+
+  it("ajuste do humano vem DEPOIS das regras — prioridade máxima de verdade", () => {
+    const p = buildArtePrompt({ ...base, ajuste: "deixa bem escuro, quero clima noturno" })
+    expect(p.indexOf("AJUSTE PEDIDO PELO HUMANO")).toBeGreaterThan(p.indexOf("CONTRASTE (obrigatório)"))
+  })
+
   it("ajuste do humano entra com prioridade máxima; sem cores/fontes não imprime seções vazias", () => {
     const p = buildArtePrompt({ ...base, cores: [], fontes: [], ajuste: "menos texto" })
     expect(p).toContain("AJUSTE PEDIDO PELO HUMANO (prioridade máxima): menos texto")
