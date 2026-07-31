@@ -1,0 +1,36 @@
+schema: 1
+story: '75-246'
+gate: CONCERNS
+status_reason: 'Implementação sólida e AC1–AC6 atendidos: layout puro/testado nos 3 formatos, caminho real do sharp coberto por teste (PNG e SVG compõem igual, formato de entrada preservado, topo da arte intacto), e o fail-open do AC4 garantido por try/catch PRÓPRIO — o catch externo devolveria null e perderia a arte inteira. CONCERNS, não PASS, por UM motivo de método: a suíte e o build foram executados com código NÃO relacionado de uma sessão paralela presente no working tree, então a verificação do conjunto não é isolada. A prova limpa é o build de preview do PR, que compila só este commit — o gate NÃO fecha sem ele verde.'
+reviewer: 'Quinn'
+updated: '2026-07-31T12:25:00Z'
+evidence:
+  tests_arte_logo: '16 testes (layout puro + caminho real do sharp) — verdes'
+  tests_suite_total: '1358 — ⚠️ CONTAMINADO: inclui ~19 testes da sessão paralela'
+  tsc: 'clean (pega o bump de @unlayer/types que veio de carona)'
+  eslint: 'clean em src/lib/marketing/'
+  build: '✓ Compiled 17.0s — ⚠️ mesma contaminação; validar pelo preview do PR'
+  smoke_sharp: 'faixa 16.0 → 37.7 idêntico via PNG e via SVG; topo 16.0 intacto; jpeg in → jpeg out'
+po_ressalva_atendida: 'Sim — @po exigiu build verificado antes do merge por causa do sharp no lockfile. Build local passou; a confirmação isolada vem do preview.'
+top_issues:
+  - id: 'PROC-001'
+    severity: medium
+    finding: '⚠️ Verificação não isolada: uma sessão paralela editava 7 arquivos (pipeline/qualification/visit-slot da Nicole) no MESMO working tree durante a suíte e o build. O commit contém só os 8 arquivos desta story (adicionados um por um, nunca `git add -A`), mas os números de suíte/build refletem a mistura.'
+    suggested_action: 'Merge SOMENTE com o preview do PR verde — ele compila apenas este commit. Não fechar o gate por conta do resultado local.'
+  - id: 'DEP-001'
+    severity: low
+    finding: '`pnpm add sharp@0.34.5` re-resolveu e subiu `@unlayer/types` de 1.448.0 para 1.462.0 de carona — drift não pedido, em pacote só de tipos usado nos dois editores de e-mail. `tsc` limpo, então não quebrou nada.'
+    suggested_action: 'Nenhuma ação; registrado para quem investigar algum comportamento estranho no editor visual de e-mail.'
+  - id: 'RISK-001'
+    severity: medium
+    finding: 'O modelo pode DESENHAR um logo mesmo proibido → arte com logo duplo (o composto + o inventado). Risco 1 da story, inerente a instrução em prompt.'
+    suggested_action: 'Olhar as 3 primeiras artes pós-deploy. Se insistir, parar de mandar o logo como referência — custo: perde influência de paleta/estilo.'
+  - id: 'UX-001'
+    severity: low
+    finding: 'Logo é aplicado em posição fixa, sem considerar a luminância da região: logo claro sobre fundo claro fica invisível. Mitigado pela regra da 75-244 (faixa inferior limpa e com contraste), não resolvido.'
+    suggested_action: 'Se aparecer, escolher a variante do logo (claro/escuro) pela luminância da faixa — evolução natural, exige 2 variantes no Kit.'
+  - id: 'DEBT-001'
+    severity: low
+    finding: 'Headline e CTA continuam desenhados pelo modelo — metade da dívida da 75-244 segue aberta, por decisão de escopo (exige motor de layout de texto e outra biblioteca).'
+    suggested_action: 'Story própria, agora habilitada: o Kit já guarda .ttf/.otf (mig 199), que é o insumo que faltava.'
+waiver: { active: false }

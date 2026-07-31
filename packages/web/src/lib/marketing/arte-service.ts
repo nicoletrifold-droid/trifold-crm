@@ -16,6 +16,11 @@ import {
   type ArteAssetCandidate,
   type ArteReferencia,
 } from "@web/lib/marketing/arte-gen"
+import {
+  composeLogo,
+  selectLogoAsset,
+  LOGO_MIME_ALLOWLIST,
+} from "@web/lib/marketing/arte-logo"
 import { scopeBrandsForPost } from "@web/lib/marketing/brands"
 import type { MarketingPostFormato } from "@web/lib/marketing/posts"
 
@@ -49,6 +54,25 @@ export interface GerarArteParaPostResult {
   arteUrl: string
   /** file_names efetivamente usados como referência */
   arquivosUsados: string[]
+}
+
+/**
+ * Story 75-246 — baixa o arquivo do logo para a COMPOSIÇÃO. Separado do
+ * download de referências de propósito: aqui SVG é aceito (e preferido), e o
+ * teto de bytes é o mesmo por arquivo.
+ */
+async function baixarLogo(fileUrl: string): Promise<{ mime: string; buf: Buffer } | null> {
+  try {
+    const res = await fetch(fileUrl, { signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) return null
+    const mime = res.headers.get("content-type")?.split(";")[0] ?? ""
+    if (!(LOGO_MIME_ALLOWLIST as readonly string[]).includes(mime)) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.byteLength > MAX_REF_BYTES) return null
+    return { mime, buf }
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -153,6 +177,26 @@ export async function gerarArteParaPost(
       return null
     }
 
+    // 4.5. Story 75-246 — logo do Kit COMPOSTO por cima (o modelo não desenha
+    // mais). try/catch PRÓPRIO: o catch externo devolveria null e perderia a
+    // arte inteira; aqui falha de logo só custa o logo (AC4).
+    let arteBuffer = arte.buffer
+    try {
+      const logoAsset = selectLogoAsset(candidatos, brandPriority)
+      if (!logoAsset) {
+        console.warn("[arte-service] Kit sem logo/ícone — arte sai sem logo composto")
+      } else {
+        const logo = await baixarLogo(logoAsset.file_url)
+        if (!logo) {
+          console.warn(`[arte-service] logo ${logoAsset.file_name} não baixou/mime recusado — arte sem logo`)
+        } else {
+          arteBuffer = await composeLogo(arteBuffer, logo.buf, logo.mime, aspectRatio)
+        }
+      }
+    } catch (logoErr) {
+      console.error("[arte-service] falha ao compor logo — arte segue sem ele:", logoErr)
+    }
+
     // contentType normalizado pela extensão mapeada (QA #9): mime exótico do
     // motor (heic?) sairia .png com contentType recusado pelo bucket.
     const ext = arteFileExtension(arte.mimeType)
@@ -160,7 +204,7 @@ export async function gerarArteParaPost(
     const path = `${input.orgId}/${crypto.randomUUID()}.${ext}`
     const { error: uploadError } = await admin.storage
       .from("marketing-artes")
-      .upload(path, arte.buffer, { contentType })
+      .upload(path, arteBuffer, { contentType })
     if (uploadError) throw uploadError
 
     const { data: pub } = admin.storage.from("marketing-artes").getPublicUrl(path)

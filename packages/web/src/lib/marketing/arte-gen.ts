@@ -74,7 +74,17 @@ export function buildArtePrompt(input: ArtePromptInput): string {
   }
   lines.push("")
   lines.push(
-    "REGRAS: todo texto na arte em português do Brasil PERFEITO, sem erros de grafia; composição limpa com hierarquia clara e respiro; se houver logo entre as imagens de referência, aplicá-lo discreto e nítido; fotos de referência (quando houver) são a base visual — não distorcer arquitetura nem inventar fachadas diferentes das fotos."
+    "REGRAS: todo texto na arte em português do Brasil PERFEITO, sem erros de grafia; composição limpa com hierarquia clara e respiro; fotos de referência (quando houver) são a base visual — não distorcer arquitetura nem inventar fachadas diferentes das fotos."
+  )
+  lines.push("")
+  // 75-246: o logo passou a ser COMPOSTO por cima (arte-logo.ts). O modelo não
+  // desenha mais logo nenhum — desvio de forma/kerning era inevitável — e tem
+  // de deixar a faixa inferior limpa para a aplicação.
+  lines.push(
+    "LOGO — NÃO DESENHE: as imagens de referência da marca servem apenas como guia de estilo, cor e clima. É PROIBIDO desenhar o logo, o nome da marca, assinatura, selo ou marca d'água na arte. O logo oficial é aplicado depois, por cima da imagem."
+  )
+  lines.push(
+    "ÁREA RESERVADA (obrigatório): a faixa inferior da arte — os últimos 15% da altura — fica completamente limpa: só fundo, sem texto, sem logo, sem elemento gráfico. Todo texto, INCLUSIVE o CTA, fica acima dessa faixa."
   )
   lines.push("")
   // 75-244: a arte é vista no scroll do Instagram, no celular. Peça escura demais

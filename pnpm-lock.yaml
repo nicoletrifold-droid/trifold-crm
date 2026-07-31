@@ -174,6 +174,9 @@ importers:
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
@@ -1619,8 +1622,8 @@ packages:
     resolution: {integrity: sha512-XJ9UD9+bbDo4a4epraTwG3TsNPeiB9aShrUneAVXy8q4LuwowN+qu89/6ByLMINqvIMeI9H9hOHQtg/ijrYXzQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@unlayer/types@1.448.0':
-    resolution: {integrity: sha512-k7NhJEdp5d40pWRAp9hSpTsyjD/vCrWrinNJaZkkXRU4YK7nsa9EYvnXHmVa/TcuevmPz0JRxzi8rJ1qSfvFDw==}
+  '@unlayer/types@1.462.0':
+    resolution: {integrity: sha512-x+Bohq7ccxuagiatrUw7qE7pdZstw4adDWpH+OxxKh+d5ZHetlXIsaUPe566HdLA4PJJ9+q1efBIGECR03bvHQ==}
 
   '@unrs/resolver-binding-android-arm-eabi@1.11.1':
     resolution: {integrity: sha512-ppLRUgHVaGRWUx0R0Ut06Mjo9gBaBkg3v/8AxusGLhsIotbBLuRk51rAzqLC8gq6NyyAojEXglNjzf6R948DNw==}
@@ -4389,8 +4392,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@img/colour@1.1.0':
-    optional: true
+  '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.34.5':
     optionalDependencies:
@@ -5396,7 +5398,7 @@ snapshots:
       '@typescript-eslint/types': 8.58.0
       eslint-visitor-keys: 5.0.1
 
-  '@unlayer/types@1.448.0': {}
+  '@unlayer/types@1.462.0': {}
 
   '@unrs/resolver-binding-android-arm-eabi@1.11.1':
     optional: true
@@ -7259,7 +7261,7 @@ snapshots:
 
   react-email-editor@1.8.0(react@19.2.4):
     dependencies:
-      '@unlayer/types': 1.448.0
+      '@unlayer/types': 1.462.0
       react: 19.2.4
 
   react-is@16.13.1: {}
@@ -7492,7 +7494,6 @@ snapshots:
       '@img/sharp-win32-arm64': 0.34.5
       '@img/sharp-win32-ia32': 0.34.5
       '@img/sharp-win32-x64': 0.34.5
-    optional: true
 
   shebang-command@2.0.0:
     dependencies:
