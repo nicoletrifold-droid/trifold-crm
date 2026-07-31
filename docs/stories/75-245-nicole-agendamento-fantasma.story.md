@@ -1,6 +1,6 @@
 # Story 75-245 — Nicole: fim do agendamento fantasma e do horário inventado
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Fix de comportamento (parser + fluxo + prompt)
 **Epic:** Agendamento da Nicole
 **Complexidade:** M
@@ -202,10 +202,15 @@ recebeu a mesma regra (`packages/ai/src/prompts/visit-scheduling.ts`).
 - Resultado final da reencenação: **nenhum** appointment criado sem o cliente
   confirmar um horário livre.
 
-## Pendências antes de Done
+## Deploy — 31/07/2026 ✅
 
-- Deploy em prod (@devops) e observar `NICOLE_SLOT_MISMATCH` nos primeiros dias:
-  o esperado é **zero** evento. Se aparecer, é a Nicole ainda inventando horário
-  apesar do prompt — aí o próximo passo é endurecer no modelo, não no parser.
-- Validar com um agendamento real de cliente (a Nicole atende 24h; o próximo
-  lead que pedir "de manhã" é o teste).
+Merge PR #323 → commit `8f4b91c0` → produção `READY` (Vercel, 10:19). Domínio
+`crm.trifold.eng.br` respondendo 200. Prompt `visit-scheduling` do banco já
+carregava a REGRA DE VERDADE desde 09:35 (aplicado antes do merge, é dado e não
+código). Zero `NICOLE_SLOT_MISMATCH` e zero evento `error`/`warn` nos 20 min
+seguintes ao deploy.
+
+Fica em observação (não é pendência de código): o **primeiro** lead que pedir
+"de manhã" ou um horário ocupado é o teste de campo. `NICOLE_SLOT_MISMATCH` deve
+continuar em zero — se aparecer, a Nicole está inventando horário apesar do
+prompt, e o aperto é no modelo, não no parser.
