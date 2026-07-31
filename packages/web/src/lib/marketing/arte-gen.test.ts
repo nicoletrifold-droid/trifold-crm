@@ -41,6 +41,17 @@ describe("buildArtePrompt", () => {
     expect(p).toContain("PROIBIDO")
   })
 
+  // 75-246: o logo passou a ser composto — o modelo não desenha mais nenhum.
+  it("proíbe desenhar logo e exige a faixa inferior limpa", () => {
+    const p = buildArtePrompt(base)
+    expect(p).toContain("LOGO — NÃO DESENHE")
+    expect(p).toContain("É PROIBIDO desenhar o logo")
+    expect(p).toContain("ÁREA RESERVADA (obrigatório)")
+    expect(p).toContain("últimos 15% da altura")
+    // a instrução antiga (aplicar o logo) não pode ter sobrado em lugar nenhum
+    expect(p).not.toContain("aplicá-lo discreto e nítido")
+  })
+
   it("as regras de legibilidade valem em todos os formatos com imagem", () => {
     for (const formato of ["story", "estatico", "carrossel"] as const) {
       const p = buildArtePrompt({ ...base, formato })
