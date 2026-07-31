@@ -1,0 +1,34 @@
+schema: 1
+story: '75-253'
+gate: PASS
+status_reason: 'AC1–AC7 atendidos. A desconfiança do Marcos estava certa e a causa era mais grave que "a rolagem não funciona": a faixa desenhava uma pílula por fase CADASTRADA (38 no Vind, 9 com foto), ~6.000px num container de ~864px, e as primeiras da ordem eram justamente as vazias — o portal aparentava não ter fotos, tendo 74. A ideia dele (só liberar pílula com foto vinculada) reduz 38→9 e 42→3; somei contagem no rótulo (os nomes do cronograma repetem) e flex-wrap em vez de rolagem, que mata a classe do bug. Suíte 1452, tsc/eslint limpos, build 15s.'
+reviewer: 'Quinn'
+updated: '2026-07-31T17:50:00Z'
+evidence:
+  tests: '1452/1452; +7 na função pura, com os dados reais de produção'
+  tsc: 'limpo'
+  eslint: 'limpo'
+  build: '✓ Compiled 15.0s'
+  ac1_medido: 'Reconferido por query INDEPENDENTE da usada na story (ressalva b do @po): Vind 38 cadastradas → 9 pílulas · Yarden 42 → 3 · Solum 0 → 0 com 3 fotos sem fase · Teste 1 → 0. Confere.'
+  ac3_wrap: 'flex-wrap substituiu overflow-x-auto + scrollbar-none. Nenhuma pílula fica fora da área visível em nenhuma largura.'
+ressalvas_po:
+  a_caso_solum: 'CUMPRIDA — o Solum existe em produção com 3 fotos, todas sem fase. Teste explícito: nenhuma pílula é gerada e as fotos seguem no grupo "Sem fase" (groupFotosByFaseOrder já trata). Também coberto: fase ÓRFÃ (fase_id apagada) não inventa pílula.'
+  b_reconferir_numeros: 'CUMPRIDA — ver ac1_medido. A ressalva existia porque a story corrige DOIS números errados do próprio autor; reconferi por query de forma independente em vez de confiar.'
+top_issues:
+  - id: 'DECISAO-001'
+    severity: medium
+    finding: '🔴 PRECISA DE DECISÃO DO MARCOS: o `/portal-viewer` (visão mestre) NÃO tem fase nenhuma. Ele delega a `FotosGrid` e mostra grade plana com todas as fotos — sem faixa, sem agrupamento. O Marcos supôs que o mesmo bug estava nos dois portais; na verdade o segundo tem problema DIFERENTE: admin/supervisor não vê o portal como o cliente vê, que é o propósito da visão mestre.'
+    suggested_action: 'Story própria: extrair agrupamento + faixa para componente compartilhado e usar nos dois. Resolve a divergência de vez, em vez de manter duas renderizações que vão divergir de novo.'
+  - id: 'DATA-001'
+    severity: low
+    finding: 'Os nomes de fase REPETEM no cronograma: no Vind "INFRAESTRUTURA" aparece 4× e "REVESTIMENTOS E PAVIMENTOS" 3×, porque as fases vêm por bloco/torre. Entre as 9 com foto, duas são "REVESTIMENTOS E PAVIMENTOS". A contagem no rótulo (AC2) mitiga — 1 vs 2 — mas não identifica QUAL bloco.'
+    suggested_action: 'É dado, não código. Distinguir de verdade exige rótulo de bloco/torre no cadastro da fase.'
+  - id: 'UX-001'
+    severity: low
+    finding: 'Com flex-wrap a faixa fica mais alta e empurra a grade para baixo no celular (9 pílulas ≈ 3-4 linhas). É o preço de tudo ficar alcançável.'
+    suggested_action: 'Observar. Se incomodar, o próximo passo é agrupar pílulas por etapa macra, não voltar a cortar conteúdo.'
+  - id: 'PROC-001'
+    severity: low
+    finding: 'Dois números meus estavam errados no diagnóstico inicial e foram corrigidos em voz alta antes de virar decisão: reportei 2.812 fotos no Vind (era produto cartesiano da minha query — o real é 74) e, por consequência, uma suspeita de estouro do teto de 1000 do PostgREST que NÃO existe.'
+    suggested_action: 'Ao medir com JOIN de duas tabelas filhas na mesma query, usar subconsultas — o cartesiano infla silenciosamente e a conclusão parece plausível.'
+waiver: { active: false }

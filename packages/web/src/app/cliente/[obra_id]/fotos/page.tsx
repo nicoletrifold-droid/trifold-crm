@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { createClient } from "@web/lib/supabase/server"
-import { groupFotosByFaseOrder } from "@web/lib/obra-fotos-grouping"
+import { fasesComFotos, groupFotosByFaseOrder } from "@web/lib/obra-fotos-grouping"
 
 function formatPhaseDate(dateStr: string | null): string {
   if (!dateStr) return ""
@@ -51,8 +51,16 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
   const allFotos = fotosRes.data ?? []
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
-  const fotosFiltradas = faseFilter
-    ? allFotos.filter((f) => f.fase_id === faseFilter)
+  // Story 75-253 — só fase COM foto vira pílula. Antes desenhava uma por fase
+  // cadastrada (38 no Vind, 9 com foto), estourando a largura da faixa.
+  const fasesFiltro = fasesComFotos(allFotos, fases)
+
+  // AC5 — link salvo apontando p/ fase que não tem (ou não tem mais) foto não pode
+  // deixar o cliente numa tela vazia sem saída: cai em "Todas as fases".
+  const faseAtiva = fasesFiltro.some((f) => f.id === faseFilter) ? faseFilter : undefined
+
+  const fotosFiltradas = faseAtiva
+    ? allFotos.filter((f) => f.fase_id === faseAtiva)
     : allFotos
 
   // Story 75-3: grupos ordenados pela sequência das fases (order_index), "Sem fase" no fim.
@@ -77,29 +85,34 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
 
       <main className="mx-auto max-w-4xl px-4 py-6 lg:py-8">
         {/* Phase filter pills */}
-        {fases.length > 0 && (
-          <div className="mb-5 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {/* Story 75-253 — só fases COM foto, e a faixa QUEBRA LINHA em vez de
+            rolar: com overflow-x-auto + scrollbar-none, no desktop com mouse não
+            havia pista nem como alcançar as pílulas de fora da área visível. */}
+        {fasesFiltro.length > 0 && (
+          <div className="mb-5 flex flex-wrap gap-2">
             <Link
               href={`/cliente/${obra_id}/fotos`}
-              className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                !faseFilter
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                !faseAtiva
                   ? "bg-[#F27A5E] text-white"
                   : "bg-stone-800 text-white/70 hover:text-white"
               }`}
             >
               Todas as fases
             </Link>
-            {fases.map((fase) => (
+            {fasesFiltro.map((fase) => (
               <Link
                 key={fase.id}
                 href={`/cliente/${obra_id}/fotos?fase=${fase.id}`}
-                className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  faseFilter === fase.id
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  faseAtiva === fase.id
                     ? "bg-[#F27A5E] text-white"
                     : "bg-stone-800 text-white/70 hover:text-white"
                 }`}
               >
                 {fase.name}
+                {/* contagem desambigua nomes repetidos do cronograma (AC2) */}
+                <span className="ml-1.5 opacity-60">{fase.totalFotos}</span>
               </Link>
             ))}
           </div>
