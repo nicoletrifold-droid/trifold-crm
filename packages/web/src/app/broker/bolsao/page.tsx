@@ -36,11 +36,11 @@ export default async function BrokerBolsaoPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight text-white">Bolsão</h1>
-      <p className="mt-1 text-sm text-stone-400">
+      <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-stone-100">Bolsão</h1>
+      <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">
         Leads disponíveis para atendimento — pegue um para começar.
       </p>
-      <BolsaoList initialLeads={leads} orgId={user.orgId} canPull dark />
+      <BolsaoList initialLeads={leads} orgId={user.orgId} canPull />
     </div>
   )
 }
