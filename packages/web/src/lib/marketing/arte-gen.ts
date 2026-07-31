@@ -76,6 +76,18 @@ export function buildArtePrompt(input: ArtePromptInput): string {
   lines.push(
     "REGRAS: todo texto na arte em português do Brasil PERFEITO, sem erros de grafia; composição limpa com hierarquia clara e respiro; se houver logo entre as imagens de referência, aplicá-lo discreto e nítido; fotos de referência (quando houver) são a base visual — não distorcer arquitetura nem inventar fachadas diferentes das fotos."
   )
+  lines.push("")
+  // 75-244: a arte é vista no scroll do Instagram, no celular. Peça escura demais
+  // e CTA em cinza discreto foram o que reprovou a 1ª leva de artes (31/07).
+  lines.push(
+    "CONTRASTE (obrigatório): a arte é vista no celular, no meio do scroll — todo texto tem que ser lido de relance. Texto claro SOMENTE sobre área escura, texto escuro SOMENTE sobre área clara; nunca cinza sobre fundo escuro. A arte NÃO pode ser quase toda preta ou monocromática escura: garanta uma área luminosa de verdade (céu, luz, reflexo, superfície clara) e posicione o título sobre ela ou sobre a região de maior contraste."
+  )
+  lines.push(
+    "CTA (obrigatório): é o elemento mais importante depois do título — precisa de peso visual próprio, em corpo maior, com a cor de destaque da marca ou sobre pílula/faixa de fundo sólido. Nunca em cinza, nunca miúdo, nunca no limite da borda."
+  )
+  lines.push(
+    "PROIBIDO: preencher espaço vazio com forma geométrica sem função, moldura ou bloco solto que não faça parte da composição."
+  )
   if (input.ajuste?.trim()) {
     lines.push("")
     lines.push(`AJUSTE PEDIDO PELO HUMANO (prioridade máxima): ${input.ajuste.trim()}`)

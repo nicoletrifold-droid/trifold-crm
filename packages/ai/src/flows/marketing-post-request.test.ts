@@ -118,6 +118,18 @@ describe("generateMarketingPostFromRequest — prompt", () => {
     expect(prompt).toContain("ESCOPO POR MARCA")
   })
 
+  // 75-244: a direção de arte do Sonnet era a origem das peças quase pretas
+  // com CTA em cinza miúdo — a regra de legibilidade nasce aqui, não no motor.
+  it("prompt exige legibilidade na direção de arte: contraste, CTA com peso e área luminosa", async () => {
+    const { client, getPrompt } = spyClient()
+    await generateMarketingPostFromRequest(client, input)
+    const prompt = getPrompt()
+    expect(prompt).toContain("LEGIBILIDADE DA ARTE")
+    expect(prompt).toContain("nunca cinza sobre fundo escuro")
+    expect(prompt).toContain("area luminosa")
+    expect(prompt).toContain("CTA discreto ou pequeno e erro")
+  })
+
   it("direção visual do humano entra no prompt com instrução de incorporar (75-241)", async () => {
     const { client, getPrompt } = spyClient()
     await generateMarketingPostFromRequest(client, { ...input, direcaoArte: "pôr do sol atrás do prédio" })
