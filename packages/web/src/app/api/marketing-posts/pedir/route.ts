@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
 import { arquivosCitadosNoTexto, resolvePaletaDoPost, scopeBrandsForPost } from "@web/lib/marketing/brands"
-import { gerarArteParaPost } from "@web/lib/marketing/arte-service"
-import { MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
+import { gerarArtesParaPost, montarPatchDeArtes, type ArteSpec } from "@web/lib/marketing/arte-service"
+import { buildPostPreview, quantasArtes } from "@web/lib/marketing/post-preview"
+import { MARKETING_POST_FORMATOS, type MarketingPostFormato, MARKETING_POST_SELECT } from "@web/lib/marketing/posts"
 import {
   createAnthropicClient,
   generateMarketingPostFromRequest,
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
     // tempo durante a geração da imagem, a copy (que custou uma chamada de
     // Sonnet) já está salva na fila — fail-open estrutural, não best-effort.
     const POST_SELECT =
-      "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+      MARKETING_POST_SELECT
     const { data: inserted, error } = await admin
       .from("marketing_posts")
       .insert({
@@ -184,7 +185,7 @@ export async function POST(req: NextRequest) {
         arte_arquivos: result.arte ? arquivosArte : null,
         // Story 75-248 — CTA em coluna PRÓPRIA, nunca dentro da arte_descricao:
         // aquela string vai no prompt e o modelo é proibido de desenhar CTA.
-        arte_cta: result.arte?.cta ?? null,
+        arte_cta: result.artes?.[0]?.cta ?? null,
         scheduled_for: humanDate ?? result.scheduled_for,
         justificativa: result.justificativa,
         status: "sugerido",
@@ -197,27 +198,44 @@ export async function POST(req: NextRequest) {
     if (error || !inserted) return NextResponse.json({ error: error?.message ?? "Erro ao salvar" }, { status: 500 })
 
     // Story 75-240 — arte com as referências do Kit (fail-open: null = sem arte).
+    // Story 75-255 — N artes: UMA POR TELA do story. O quanto é decidido por
+    // `quantasArtes` (pura), a partir do formato e do nº de telas da copy.
     let post = inserted
-    if (result.arte) {
-      const arte = await gerarArteParaPost(admin, {
-        orgId: appUser.org_id,
-        empreendimentoId,
-        formato,
-        descricao: result.arte.descricao,
-        arquivosKit: arquivosArte,
-        // Story 75-241 — a direção do humano chega ao motor VERBATIM, com
-        // prioridade. DECISÃO DE PRODUTO (Marcos, "o humano é superior ao
-        // sistema"): este canal é um override consciente — NÃO passa pelo
-        // filtro de diretrizes do Sonnet, igual ao ajuste do Refazer (75-240).
-        // A publicação continua 100% humana (fila de aprovação).
-        ajuste: direcaoEfetiva || null,
-        // Story 75-248 — o CTA é COMPOSTO (pílula na cor do Kit), não desenhado.
-        cta: result.arte.cta,
-      })
-      if (arte) {
+    if (result.artes && result.artes.length > 0) {
+      const totalTelas = buildPostPreview({ copy: result.copy, formato, temArteGerada: false }).telas.length
+      const quantas = quantasArtes(formato, totalTelas)
+
+      const specs: ArteSpec[] = result.artes.slice(0, quantas).map((a, i) => ({
+        ordem: i + 1,
+        descricao: a.descricao,
+        // A tela 1 usa a união com os arquivos que o HUMANO citou (75-250); as
+        // demais usam o que o Sonnet citou para aquela tela — cada geração tem
+        // seu próprio teto de 7MB de referência.
+        arquivosKit: i === 0 ? arquivosArte : a.arquivos_kit,
+        cta: a.cta,
+      }))
+
+      const geradas = await gerarArtesParaPost(
+        admin,
+        {
+          orgId: appUser.org_id,
+          empreendimentoId,
+          formato,
+          // Story 75-241 — a direção do humano chega ao motor VERBATIM, com
+          // prioridade. DECISÃO DE PRODUTO (Marcos, "o humano é superior ao
+          // sistema"): override consciente, NÃO passa pelo filtro de diretrizes.
+          // A publicação continua 100% humana (fila de aprovação).
+          ajuste: direcaoEfetiva || null,
+        },
+        specs
+      )
+
+      if (geradas.length > 0) {
         const { data: updated } = await admin
           .from("marketing_posts")
-          .update({ arte_url: arte.arteUrl, arte_arquivos: arte.arquivosUsados, updated_at: new Date().toISOString() })
+          // montarPatchDeArtes é a ÚNICA a gravar artes + arte_url juntos, para
+          // os dois nunca divergirem (ressalva do @po).
+          .update({ ...montarPatchDeArtes(geradas), updated_at: new Date().toISOString() })
           .eq("id", inserted.id as string)
           .eq("org_id", appUser.org_id)
           .select(POST_SELECT)

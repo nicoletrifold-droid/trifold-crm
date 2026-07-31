@@ -5,6 +5,7 @@ import Link from "next/link"
 import MarcasSection from "./marcas-section"
 import { FORMATO_LABELS, MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
 import { PostPreviewModal } from "./_components/post-preview-modal"
+import { buildPostPreview, quantasArtes } from "@web/lib/marketing/post-preview"
 
 // Story 75-219 — aba "Agente": sugestões do agente de marketing IA + fila de
 // aprovação + publicados. Nada é publicado automaticamente — toda transição é
@@ -19,6 +20,8 @@ interface MarketingPost {
   copy: string
   roteiro: string | null
   arte_url: string | null
+  /** Story 75-255 — uma arte por tela; arte_url espelha a de ordem 1. */
+  artes: Array<{ ordem: number; url: string; descricao?: string | null; cta?: string | null }> | null
   scheduled_for: string | null
   status: "sugerido" | "aprovado" | "rejeitado" | "publicado"
   justificativa: string | null
@@ -472,9 +475,15 @@ function PostFormModal({
 function RefazerArteButton({
   busy,
   onRefazer,
+  ordem,
+  totalTelas,
 }: {
   busy: boolean
   onRefazer: (ajuste: string) => void
+  /** Story 75-255 — qual tela refazer (1-based) */
+  ordem?: number
+  /** Só rotula quando o post tem mais de uma tela */
+  totalTelas?: number
 }) {
   const [open, setOpen] = useState(false)
   const [ajuste, setAjuste] = useState("")
@@ -486,7 +495,7 @@ function RefazerArteButton({
         disabled={busy}
         className="rounded-md px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
       >
-        🎨 Refazer arte
+        🎨 Refazer arte{(totalTelas ?? 1) > 1 && ordem ? ` (tela ${ordem})` : ""}
       </button>
     )
   }
@@ -520,6 +529,21 @@ function RefazerArteButton({
 }
 
 // ─── Card de post ──────────────────────────────────────────────────────────
+
+/**
+ * Story 75-255 — quantas telas o post tem, para render de um botão de refazer por
+ * tela. Usa as MESMAS funções puras do servidor (buildPostPreview + quantasArtes),
+ * senão a interface e o motor discordam sobre quantas artes existem.
+ */
+function telasDoPost(post: MarketingPost): number[] {
+  const totalTelas = buildPostPreview({
+    copy: post.copy,
+    formato: post.formato,
+    temArteGerada: false,
+  }).telas.length
+  const quantas = quantasArtes(post.formato, totalTelas)
+  return Array.from({ length: quantas }, (_, i) => i + 1)
+}
 
 function PostCard({
   post,
@@ -601,6 +625,7 @@ function PostCard({
           formato={post.formato}
           roteiro={post.roteiro}
           arteUrl={post.arte_url}
+          artes={post.artes}
           onClose={() => setPreview(false)}
         />
       )}
@@ -715,14 +740,16 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
   }
 
   // Story 75-240 — refaz só a ARTE do post (a copy fica).
-  const handleRefazerArte = async (id: string, ajuste: string) => {
+  // Story 75-255 — refazer é POR TELA: `ordem` diz qual. Sem ordem, o servidor
+  // assume a tela 1 (comportamento de antes).
+  const handleRefazerArte = async (id: string, ajuste: string, ordem?: number) => {
     setPendingId(id)
     setActionError(null)
     try {
       const res = await fetch(`/api/marketing-posts/${id}/arte`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ajuste: ajuste || undefined }),
+        body: JSON.stringify({ ajuste: ajuste || undefined, ordem }),
       })
       const json = (await res.json().catch(() => null)) as { error?: string } | null
       if (!res.ok) throw new Error(json?.error ?? `Erro ${res.status}`)
@@ -907,13 +934,18 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
                         >
                           Rejeitar
                         </button>
-                        {post.formato && post.formato !== "reel" && (
-                          <RefazerArteButton
-                            key={post.arte_url ?? "sem-arte"}
-                            busy={pendingId === post.id}
-                            onRefazer={(ajuste) => void handleRefazerArte(post.id, ajuste)}
-                          />
-                        )}
+                        {/* Story 75-255 — um botão POR TELA: refazer a tela 2 não
+                            pode destruir a tela 1 já aprovada. */}
+                        {post.formato && post.formato !== "reel" &&
+                          telasDoPost(post).map((ordem, _i, arr) => (
+                            <RefazerArteButton
+                              key={`${ordem}-${post.artes?.find((a) => a.ordem === ordem)?.url ?? "sem"}`}
+                              busy={pendingId === post.id}
+                              ordem={ordem}
+                              totalTelas={arr.length}
+                              onRefazer={(ajuste) => void handleRefazerArte(post.id, ajuste, ordem)}
+                            />
+                          ))}
                       </>
                     }
                   />
@@ -961,13 +993,18 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
                         >
                           Marcar como publicado
                         </button>
-                        {post.formato && post.formato !== "reel" && (
-                          <RefazerArteButton
-                            key={post.arte_url ?? "sem-arte"}
-                            busy={pendingId === post.id}
-                            onRefazer={(ajuste) => void handleRefazerArte(post.id, ajuste)}
-                          />
-                        )}
+                        {/* Story 75-255 — um botão POR TELA: refazer a tela 2 não
+                            pode destruir a tela 1 já aprovada. */}
+                        {post.formato && post.formato !== "reel" &&
+                          telasDoPost(post).map((ordem, _i, arr) => (
+                            <RefazerArteButton
+                              key={`${ordem}-${post.artes?.find((a) => a.ordem === ordem)?.url ?? "sem"}`}
+                              busy={pendingId === post.id}
+                              ordem={ordem}
+                              totalTelas={arr.length}
+                              onRefazer={(ajuste) => void handleRefazerArte(post.id, ajuste, ordem)}
+                            />
+                          ))}
                       </>
                     }
                   />

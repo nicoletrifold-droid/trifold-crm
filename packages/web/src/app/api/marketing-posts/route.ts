@@ -3,6 +3,7 @@ import { marketingGuard } from "@web/lib/marketing/guard"
 import {
   MARKETING_POST_STATUSES,
   validateMarketingPostInput,
+  MARKETING_POST_SELECT,
 } from "@web/lib/marketing/posts"
 
 // Story 75-219 — marketing_posts tem RLS SEM policies: TODAS as operações na
@@ -10,7 +11,7 @@ import {
 // multi-org sem trigger que preencha).
 
 const POST_SELECT =
-  "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+  MARKETING_POST_SELECT
 
 // GET /api/marketing-posts?status= — listagem por área da aba Agente.
 export async function GET(req: NextRequest) {

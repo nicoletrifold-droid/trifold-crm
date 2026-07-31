@@ -18,6 +18,8 @@ interface Props {
   formato: MarketingPostFormato | null
   roteiro: string | null
   arteUrl: string | null
+  /** Story 75-255 — artes por tela; arteUrl fica como fallback da tela 1. */
+  artes?: Array<{ ordem: number; url: string }> | null
   onClose: () => void
 }
 
@@ -35,8 +37,13 @@ const TIPO_LABEL: Record<PostPreview["tipo"], string> = {
   indefinido: "Formato não definido",
 }
 
-export function PostPreviewModal({ copy, formato, roteiro, arteUrl, onClose }: Props) {
-  const preview = buildPostPreview({ copy, formato, roteiro, temArteGerada: !!arteUrl })
+export function PostPreviewModal({ copy, formato, roteiro, arteUrl, artes, onClose }: Props) {
+  // Story 75-255 — cada tela tem a SUA arte. O mapa por ordem é a fonte; arteUrl
+  // continua servindo a tela 1 para post legado (antes da migração 208).
+  const porOrdem = new Map<number, string>((artes ?? []).map((a) => [a.ordem, a.url]))
+  if (arteUrl && !porOrdem.has(1)) porOrdem.set(1, arteUrl)
+
+  const preview = buildPostPreview({ copy, formato, roteiro, temArteGerada: porOrdem.size > 0 })
   const [i, setI] = useState(0)
   const total = preview.telas.length
   const tela = preview.telas[i]
@@ -53,7 +60,11 @@ export function PostPreviewModal({ copy, formato, roteiro, arteUrl, onClose }: P
   }, [onClose, total])
 
   const aspecto = ASPECT_CLASS[preview.aspecto ?? "4:5"] ?? "aspect-[4/5]"
-  const mostraArte = !!arteUrl && !!tela?.temArte
+  // A arte da tela é a de ordem i+1 — não a do post. Tela sem arte cai no aviso
+  // honesto da 75-254, que continua sendo a verdade quando o teto de 3 corta ou
+  // uma geração falha.
+  const urlDaTela = porOrdem.get(i + 1) ?? null
+  const mostraArte = !!urlDaTela && preview.tipo !== "reel"
 
   return (
     <div
@@ -112,7 +123,7 @@ export function PostPreviewModal({ copy, formato, roteiro, arteUrl, onClose }: P
             <div className={`relative w-full overflow-hidden rounded-xl bg-stone-950 ${aspecto}`}>
               {mostraArte ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={arteUrl!} alt="Arte do post" className="h-full w-full object-cover" />
+                <img src={urlDaTela!} alt={`Arte da ${tela?.rotulo ?? "peça"}`} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-white">{tela?.texto}</p>

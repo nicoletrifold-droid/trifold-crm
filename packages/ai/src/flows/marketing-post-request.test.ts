@@ -15,6 +15,8 @@ const VALID = {
   justificativa: "Racional",
   scheduled_for: "2026-08-05",
   arte: null,
+  // Story 75-255 — o resultado ganhou a lista `artes`; `arte` segue como artes[0].
+  artes: null,
 }
 
 describe("parseMarketingPostRequest", () => {
@@ -202,5 +204,52 @@ describe("generateMarketingPostFromRequest — prompt", () => {
     const prompt = getPrompt()
     expect(prompt).toContain("Nenhuma marca cadastrada no Kit")
     expect(prompt).toContain("Nenhum arquivo no Kit ainda.")
+  })
+})
+
+// Story 75-255 — o contrato virou LISTA: uma direção de arte POR TELA.
+describe("parse de artes (75-255)", () => {
+  const base = { copy: "c", roteiro: null, justificativa: "j", scheduled_for: null }
+
+  it("story de 2 telas devolve 2 artes, na ordem", () => {
+    const j = JSON.stringify({
+      ...base,
+      artes: [
+        { descricao: "tela 1", arquivos_kit: ["a.jpg"], cta: "Agende" },
+        { descricao: "tela 2", arquivos_kit: ["b.jpg"], cta: null },
+      ],
+    })
+    const r = parseMarketingPostRequest(j, "story")
+    expect(r?.artes).toHaveLength(2)
+    expect(r?.artes?.[0]!.descricao).toBe("tela 1")
+    expect(r?.artes?.[1]!.arquivos_kit).toEqual(["b.jpg"])
+  })
+
+  it("`arte` singular ANTIGO vira lista de 1 — retrocompatibilidade", () => {
+    const j = JSON.stringify({ ...base, arte: { descricao: "única", arquivos_kit: [], cta: "X" } })
+    const r = parseMarketingPostRequest(j, "story")
+    expect(r?.artes).toHaveLength(1)
+    expect(r?.arte?.descricao).toBe("única") // o campo antigo segue populado
+  })
+
+  it("`arte` espelha `artes[0]`", () => {
+    const j = JSON.stringify({ ...base, artes: [{ descricao: "primeira", arquivos_kit: [], cta: null }, { descricao: "segunda", arquivos_kit: [], cta: null }] })
+    const r = parseMarketingPostRequest(j, "story")
+    expect(r?.arte?.descricao).toBe("primeira")
+  })
+
+  it("teto de 3 no parse — lista de 8 não passa de 3", () => {
+    const artes = Array.from({ length: 8 }, (_, i) => ({ descricao: `t${i}`, arquivos_kit: [], cta: null }))
+    expect(parseMarketingPostRequest(JSON.stringify({ ...base, artes }), "story")?.artes).toHaveLength(3)
+  })
+
+  it("entrada sem descrição é descartada, as boas ficam", () => {
+    const j = JSON.stringify({ ...base, artes: [{ descricao: "ok", arquivos_kit: [], cta: null }, { arquivos_kit: [] }, { descricao: "  " }] })
+    expect(parseMarketingPostRequest(j, "story")?.artes).toHaveLength(1)
+  })
+
+  it("reel nunca tem arte, mesmo que o modelo mande lista", () => {
+    const j = JSON.stringify({ ...base, roteiro: "CENA 1", artes: [{ descricao: "x", arquivos_kit: [], cta: null }] })
+    expect(parseMarketingPostRequest(j, "reel")?.artes).toBeNull()
   })
 })

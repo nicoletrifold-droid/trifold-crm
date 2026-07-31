@@ -58,7 +58,14 @@ export interface MarketingPostRequestResult {
   justificativa: string
   /** Data futura sugerida YYYY-MM-DD ou null */
   scheduled_for: string | null
-  /** Story 75-240 — direção de arte para o motor de imagem (null quando reel) */
+  /**
+   * Story 75-255 — UMA direção de arte POR TELA. `artes[0]` é a tela 1.
+   * Story de 2 telas devolve 2 itens; carrossel devolve 1 (a capa); reel, null.
+   * O campo `arte` singular continua exposto como `artes[0]` para não quebrar
+   * quem já lê (retrocompatibilidade dos dois lados).
+   */
+  artes: Array<{ descricao: string; arquivos_kit: string[]; cta: string | null }> | null
+  /** @deprecated use `artes[0]` — mantido para não quebrar chamadas existentes */
   arte: {
     /** Descrição visual completa (composição, clima, texto NA arte) */
     descricao: string
@@ -91,7 +98,8 @@ REGRAS INEGOCIAVEIS:
 - ESCOPO POR MARCA: use o bloco do empreendimento do post + o institucional. NUNCA aplique numero, diretriz ou caracteristica de um empreendimento a outro.
 - So afirme numeros (preco, metragem, % vendido, prazo) que estejam no Kit. Prazo de entrega: SOMENTE o contratual.
 - Portugues do Brasil. Emojis com moderacao (a voz da marca manda).
-- BLOCO ARTE (formatos com imagem): "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
+- BLOCO ARTES (Story 75-255) — **UMA ENTRADA POR TELA/CARD**: o campo "artes" e uma LISTA. Para formato 'story', devolva **uma entrada para CADA TELA** da copy (2 telas = 2 entradas), na mesma ordem — cada tela e uma imagem publicada, e sem isso a tela 2 sai sem arte. Para 'carrossel', devolva **apenas 1** entrada (a CAPA; os demais cards a equipe monta). Para 'estatico', 1. Para 'reel', "artes": null. Maximo 3 entradas.
+- CADA ENTRADA de "artes": "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
 - LEGIBILIDADE DA ARTE (a descricao PRECISA cuidar disso; peca vista no celular, no meio do scroll): exija contraste alto entre texto e fundo — texto claro so sobre area escura, texto escuro so sobre area clara, nunca cinza sobre fundo escuro. NAO descreva a arte inteira como escura/preta/monocromatica: sempre reserve uma area luminosa (ceu, luz, reflexo, superficie clara) e diga onde o titulo entra. Nao peca forma geometrica solta, moldura ou linha decorativa para preencher espaco — isso e erro.
 - COR (Story 75-250): use SOMENTE os hex listados em PALETA DA MARCA. E PROIBIDO escrever qualquer outro codigo hex na descricao — inclusive hex que apareca no briefing ou nas diretrizes de OUTRA marca. Se a secao PALETA DA MARCA estiver vazia, descreva a cor por NOME (ex.: "verde escuro", "areia") e nao escreva hex nenhum.
 - CTA (Story 75-248): o campo "cta" recebe o texto EXATO do call-to-action, curto (ate ~30 caracteres, ex.: "Arraste e agende sua visita"). O CTA **NAO** e desenhado pelo gerador de imagem — o codigo compoe a pilula com a cor do Kit. Portanto: NAO descreva o CTA na "descricao", NAO peca botao/pilula/texto de CTA na arte, e reserve a zona inferior. Se o post nao pedir CTA, "cta": null.
@@ -102,7 +110,7 @@ RETORNE APENAS JSON valido, sem markdown:
   "roteiro": "roteiro de gravacao (SOMENTE formato reel; senao null)",
   "justificativa": "racional + ajustes feitos por diretriz",
   "scheduled_for": "YYYY-MM-DD ou null",
-  "arte": { "descricao": "direcao de arte + texto da arte (SEM o CTA)", "arquivos_kit": ["file_name"], "cta": "texto curto do CTA ou null" }
+  "artes": [{ "descricao": "direcao de arte da TELA 1 (SEM o CTA)", "arquivos_kit": ["file_name"], "cta": "texto curto do CTA ou null" }]
 }`
 
 /**
@@ -210,22 +218,35 @@ export function parseMarketingPostRequest(
         : null
 
     // Bloco arte (75-240): opcional e tolerante — arte ruim não derruba a copy.
-    // Reel nunca tem arte; nos demais, sem descrição = sem arte (a rota pula a geração).
-    let arte: MarketingPostRequestResult["arte"] = null
-    if (formato !== "reel" && typeof p.arte === "object" && p.arte !== null) {
-      const a = p.arte as Record<string, unknown>
-      if (str(a.descricao)) {
-        const arquivos = Array.isArray(a.arquivos_kit)
-          ? (a.arquivos_kit as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).map((f) => f.trim())
-          : []
-        // 75-248: cta é opcional e tolerante — post antigo sem o campo segue
-        // funcionando, e CTA vazio/lixo significa "sem CTA composto", não erro.
-        const cta = str(a.cta) ? (a.cta as string).trim().slice(0, 60) : null
-        arte = { descricao: a.descricao.trim(), arquivos_kit: arquivos, cta }
-      }
+    // Story 75-255 — o contrato virou LISTA (`artes`), mas o parser aceita o
+    // objeto `arte` antigo como lista de 1: nem resposta em cache do modelo nem
+    // post existente quebram. Reel nunca tem arte.
+    const brutas: unknown[] =
+      formato === "reel"
+        ? []
+        : Array.isArray(p.artes)
+          ? (p.artes as unknown[])
+          : typeof p.arte === "object" && p.arte !== null
+            ? [p.arte]
+            : []
+
+    const artes: NonNullable<MarketingPostRequestResult["artes"]> = []
+    for (const bruta of brutas.slice(0, 3)) {
+      if (typeof bruta !== "object" || bruta === null) continue
+      const a = bruta as Record<string, unknown>
+      if (!str(a.descricao)) continue
+      const arquivos = Array.isArray(a.arquivos_kit)
+        ? (a.arquivos_kit as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).map((f) => f.trim())
+        : []
+      const cta = str(a.cta) ? (a.cta as string).trim().slice(0, 60) : null
+      artes.push({ descricao: (a.descricao as string).trim(), arquivos_kit: arquivos, cta })
     }
 
+    // `arte` singular = artes[0], só para retrocompatibilidade de quem já lê.
+    const arte: MarketingPostRequestResult["arte"] = artes[0] ?? null
+
     return {
+      artes: artes.length > 0 ? artes : null,
       copy: p.copy.trim(),
       roteiro: formato === "reel" ? roteiro : null,
       justificativa: p.justificativa.trim(),

@@ -1,0 +1,35 @@
+schema: 1
+story: '75-255'
+gate: PASS
+status_reason: 'AC1–AC9 atendidos. As quatro ressalvas do @po foram cumpridas, e a (b) PEGOU UMA BRECHA REAL que teria virado bug em produção: a edição MANUAL da arte (colar link do Canva) escrevia `arte_url` sem tocar em `artes`, então o preview leria as telas antigas e ignoraria o link recém-colado. Fechado no mesmo ciclo. Suíte 1486, tsc limpo nos 2 pacotes, eslint limpo, build sem erro.'
+reviewer: 'Quinn'
+updated: '2026-07-31T18:45:00Z'
+evidence:
+  tests: '1486/1486; +6 no parser de artes, +6 em quantasArtes, +3 na sincronia do edit manual'
+  tsc: 'limpo em web e ai'
+  eslint: 'limpo'
+  build: 'compilou, 0 erros'
+  migracao_208: 'aplicada em PROD e DEV; backfill verificado ANTES (3 posts com arte_url) e DEPOIS (3 com artes[], 0 inconsistentes)'
+ressalvas_po:
+  a_backfill_dado_de_producao: 'CUMPRIDA — medido ANTES (15 posts, 3 com arte_url) e DEPOIS (3 com arte_url, 3 com artes[], **0 inconsistentes**). Nenhum post existente ficou sem arte. O UPDATE só age em quem tem a lista vazia, então reaplicar é no-op.'
+  b_arte_url_e_artes_concordam: '🔥 CUMPRIDA E ACHOU BUG — `montarPatchDeArtes` é a única a gravar os dois no caminho de geração (arte-service.ts:358-359), MAS a ressalva expôs um segundo caminho que eu não tinha visto: o PATCH manual permite editar `arte_url` (link do Canva) e não mexia em `artes`. Agora o override humano zera a lista e passa a valer como peça única — coerente com "o humano manda". 3 testes.'
+  c_refazer_nao_destroi_as_outras: 'CUMPRIDA — a rota de refazer recebe `ordem`, lê a descrição/CTA DAQUELA tela, remove do bucket só a arte daquela tela, e reconstrói a lista preservando as demais (`filter(a => a.ordem !== ordem)`). Sem `ordem` no corpo, assume tela 1 — chamada antiga não muda de significado.'
+  d_tempo_real_da_rota: '⏳ NÃO MEDIDO AINDA — exige um story de 2 telas gerado em produção. É a verificação pendente com o Marcos. Estimativa: ~30s de Sonnet + ~30s de arte. O teto de 3 mantém o pior caso em ~75s, folgado nos 300s, e o post é inserido ANTES das artes (padrão 75-240), então estouro não perde a copy.'
+top_issues:
+  - id: 'PEND-001'
+    severity: medium
+    finding: '⏳ Ressalva (d) do @po em aberto: o tempo REAL da rota com 2 telas não foi medido — só estimado. É a única ressalva não fechada, e depende de gerar um post em produção.'
+    suggested_action: 'Marcos: pedir um story de 2 telas do Vind e cronometrar. Se passar de ~120s, baixar o teto de 3 para 2.'
+  - id: 'ARCH-001'
+    severity: low
+    finding: 'O SELECT do post estava DUPLICADO em 5 arquivos — foi assim que a coluna `artes` quase ficou de fora de um deles. Extraído para `MARKETING_POST_SELECT` em posts.ts e usado nos 5.'
+    suggested_action: 'Nenhuma. Foi a correção certa: 5 cópias de uma string de select é como uma coluna nova fica esquecida.'
+  - id: 'DEBT-001'
+    severity: low
+    finding: 'Carrossel segue gerando SÓ a capa, por decisão de escopo (o prompt já diz "os demais cards a equipe monta"). Se o marketing pedir arte em todos os cards, é decisão de produto e mexe no teto (7 cards × 15s = 105s).'
+    suggested_action: 'Story própria, com o tempo da rota medido primeiro.'
+  - id: 'PROC-001'
+    severity: low
+    finding: 'Durante a implementação eu quebrei o build três vezes por edição programática desleixada: backticks inseridos dentro de um template literal, import colocado no meio de um bloco multilinha, e vírgula dupla em import (a segunda vez no dia). Todas pegas por tsc antes de qualquer commit.'
+    suggested_action: 'Edição por script em arquivo grande pede conferência do trecho editado, não só do tsc no fim. O tsc pegou tudo aqui, mas por sorte de o erro ser sintático.'
+waiver: { active: false }
