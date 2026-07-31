@@ -26,8 +26,8 @@ export interface NotifyAppointmentParams {
   leadId: string
   leadName: string | null
   leadPhone: string | null
-  /** Story 75-163 — tipo do evento (default "created"). */
-  variant?: "created" | "rescheduled" | "cancelled"
+  /** Story 75-163 — tipo do evento (default "created"). Story 75-247 add "inherited". */
+  variant?: "created" | "rescheduled" | "cancelled" | "inherited"
   /** Story 75-163 — data/hora relevante (novo horário na remarcação; horário cancelado). */
   whenStr?: string | null
 }
@@ -87,7 +87,14 @@ export async function notifyBrokerOfAppointment(
         notify_whatsapp: cfg?.notify_whatsapp ?? true,
       },
       context:
-        variant === "cancelled"
+        variant === "inherited"
+          ? {
+              // Story 75-247 — a Nicole agendou antes de o lead ter dono; o
+              // corretor precisa saber que já herdou visita marcada.
+              title: "Lead novo COM visita marcada",
+              body: `${leadDisplayName} já tem visita agendada${whenStr ? ` para ${whenStr}` : ""} (agendada pela Nicole).`,
+            }
+          : variant === "cancelled"
           ? {
               title: "Visita cancelada",
               body: `${leadDisplayName} cancelou a visita${whenStr ? ` de ${whenStr}` : ""} (via Nicole).`,
