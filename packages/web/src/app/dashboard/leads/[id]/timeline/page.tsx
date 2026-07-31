@@ -3,6 +3,7 @@ import { getServerUser } from "@web/lib/auth"
 import { SOURCE_LABELS } from "@web/lib/constants"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { MessageText } from "@web/components/ui/message-text"
 
 interface Chip {
   from: string | null
@@ -365,9 +366,10 @@ function renderEvent(event: TimelineEvent) {
         </div>
         {event.chips && <ChipPair chip={event.chips} />}
         {event.description && (
-          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-stone-300">
-            {event.description}
-          </p>
+          <MessageText
+            content={event.description}
+            className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-stone-300"
+          />
         )}
       </div>
     </div>
@@ -413,9 +415,10 @@ function renderMessageGroup(events: TimelineEvent[], index: number) {
                     {formatTime(e.timestamp)}
                   </span>
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap text-gray-700 dark:text-stone-300">
-                  {e.description}
-                </p>
+                <MessageText
+                  content={e.description}
+                  className="mt-0.5 whitespace-pre-wrap text-gray-700 dark:text-stone-300"
+                />
               </div>
             )
           })}

@@ -1,0 +1,35 @@
+schema: 1
+story: '75-252'
+gate: PASS
+status_reason: 'AC1–AC9 atendidos, com as duas ressalvas do @po cumpridas e uma delas tendo pego um erro real: a story dizia "6 pontos em 5 arquivos" e são **8 pontos em 6 arquivos** — dois arquivos têm dois pontos de renderização cada. Contados um a um após a implementação: 1+1+2+2+1+1 = 8. Segurança verificada por payload explícito, não por leitura: javascript:, data:, vbscript:, file: e <script> atravessam como TEXTO. Suíte 1445, tsc limpo, eslint limpo, build 20.7s.'
+reviewer: 'Quinn'
+updated: '2026-07-31T17:05:00Z'
+evidence:
+  tests: '1445/1445; +19 na tokenização, dos quais 5 são de segurança'
+  tsc: 'limpo'
+  eslint: 'limpo (uma diretiva eslint-disable inútil foi removida no ciclo)'
+  build: '✓ Compiled 20.7s'
+  ac1_pontos: '8/8 convertidos — chat 1, conversas 1, conversation-thread 2, timeline 2, chat-feed 1, admin-chat-feed 1. Os `<p>` que restaram nesses arquivos são estado vazio e timestamp, conferidos linha a linha.'
+  ac2_sem_html: 'Nenhum uso real de dangerouslySetInnerHTML no caminho novo — só menção em comentário explicando que não é usado. O componente monta nós React a partir de segmentos.'
+  ac5: 'target="_blank" e rel="noopener noreferrer" presentes no componente.'
+ressalvas_po:
+  a_xss_explicito: 'CUMPRIDA — 5 testes de segurança com payload real: javascript:alert(document.cookie), data:text/html;base64,…, vbscript:, file:///etc/passwd, <script>alert(1)</script> e <img src=x onerror=…>. Todos permanecem TEXTO. Mais um caso que eu não tinha previsto: javascript: DISFARÇADO dentro de query string http (`https://x.com/?next=javascript:alert(1)`) — o href continua https, o esquema externo é o que manda.'
+  b_contar_pontos: 'CUMPRIDA, E PEGOU ERRO REAL — ver status_reason. Sem essa ressalva a story teria fechado afirmando 6 pontos com 8 implementados, e a próxima pessoa a auditar não saberia se sobrou algum.'
+top_issues:
+  - id: 'UX-001'
+    severity: low
+    finding: 'Detecção deliberadamente conservadora: exige `http(s)://` ou o prefixo `www.`. Então `acessa trifold.eng.br` (domínio sem esquema e sem www) NÃO vira link. É trade-off consciente do risco 1 da story — a alternativa, adivinhar por TLD, transformaria `arquivo.pdf` e `ok.vou ver` em link.'
+    suggested_action: 'Se o time reclamar de link não detectado, o ajuste é uma allowlist de TLD comum (.com.br, .com, .br), não afrouxar a regra geral.'
+  - id: 'SEC-001'
+    severity: low
+    finding: 'O destino do link é de terceiro e pode ser malicioso — phishing enviado pelo lead vira clique de um toque para quem atende. O `rel="noopener noreferrer"` protege a aba de origem e o referrer, mas não julga o destino.'
+    suggested_action: 'Não cabe ao CRM filtrar destino. Se virar preocupação real, o caminho é aviso de saída ("você está saindo do CRM"), não bloqueio.'
+  - id: 'DEBT-001'
+    severity: low
+    finding: 'Telefone e e-mail seguem não clicáveis (tel:/mailto:), por decisão de escopo. Cada esquema novo é superfície de decisão própria.'
+    suggested_action: 'Story própria se o time pedir. A tokenização já é o lugar certo para estender.'
+  - id: 'PROC-001'
+    severity: low
+    finding: 'Terceira vez na sessão que um grep meu deu falso positivo na verificação (aqui: `dangerouslySetInnerHTML` casando comentário, e `{msg.content}` casando prop do próprio componente novo). Nos três casos o código estava certo e o padrão de busca errado.'
+    suggested_action: 'Ao concluir "está errado" a partir de grep, ler o arquivo antes de afirmar. Já custou um alarme falso de segurança hoje (guard do configuracoes/empresa).'
+waiver: { active: false }

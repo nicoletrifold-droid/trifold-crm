@@ -5,6 +5,7 @@ import { canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broker-message-input"
 import { MessageMedia } from "@web/components/conversas/message-media"
+import { MessageText } from "@web/components/ui/message-text"
 
 /**
  * Story 76-4 — Detalhe do Chat (Relacionamento). Thread da conversa + composer
@@ -140,7 +141,7 @@ export default async function ChatDetailPage({
                 <div key={msg.id} className={`flex ${config.align}`}>
                   <div className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${config.bubble}`}>
                     <div className="mb-1 text-[10px] font-medium uppercase opacity-60">{label}</div>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <MessageText content={msg.content} className="whitespace-pre-wrap" />
                     {/* Story 75-222: renderiza mídia (imagem/áudio/documento). Colunas
                         top-level primeiro; fallback ao metadata cobre o histórico gravado
                         antes do fix (inbound antigo só tinha metadata.media_*). */}

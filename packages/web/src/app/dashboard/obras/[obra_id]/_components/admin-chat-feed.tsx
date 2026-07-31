@@ -5,6 +5,7 @@ import { createClient } from "@web/lib/supabase/client"
 import { Paperclip, Send, User } from "lucide-react"
 import { reviewOutgoing } from "@web/lib/messages/review-outgoing"
 import { ReviewSuggestion } from "@web/components/messages/review-suggestion"
+import { MessageText } from "@web/components/ui/message-text"
 
 interface Mensagem {
   id: string
@@ -174,9 +175,10 @@ function MensagemBubble({
   const bubbleContent = () => {
     if (mensagem.message_type === "text") {
       return (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {mensagem.content}
-        </p>
+        <MessageText
+          content={mensagem.content}
+          className="whitespace-pre-wrap text-sm leading-relaxed"
+        />
       )
     }
     if (mensagem.message_type === "image" && mensagem.storage_path) {

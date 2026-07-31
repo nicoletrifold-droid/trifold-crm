@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { BrokerMessageInput } from "@web/app/broker/leads/[id]/_components/broker-message-input"
 import { TransferConversa, type TargetUser } from "./_components/transfer-conversa"
 import { MessageMedia } from "@web/components/conversas/message-media"
+import { MessageText } from "@web/components/ui/message-text"
 
 const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
 const CAN_TRANSFER_ROLES = ["admin", "supervisor"]
@@ -195,7 +196,7 @@ export default async function ConversationDetailPage({
                     <div className="mb-1 text-[10px] font-medium uppercase opacity-60">
                       {displayLabel}
                     </div>
-                    {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                    <MessageText content={msg.content} className="whitespace-pre-wrap" />
                     <MessageMedia
                       mediaType={msg.metadata?.media_type as string | undefined}
                       mediaUrl={msg.metadata?.media_url as string | undefined}
