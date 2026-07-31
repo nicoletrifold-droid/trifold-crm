@@ -1,0 +1,44 @@
+-- 206_hotfix_p3_system_events_anon.sql
+-- HOTFIX DE SEGURANÇA — item P3 da auditoria (docs/audits/rls-multi-tenant-audit.md)
+--
+-- ⚠️ JÁ APLICADO EM PRODUÇÃO E EM DEV em 31/07/2026, ANTES deste arquivo existir.
+-- O vazamento estava ATIVO e crescendo; o registro no repo veio depois, de
+-- propósito. Este arquivo existe para que um ambiente novo (db reset, staging)
+-- não nasça vazando.
+--
+-- O ACHADO
+-- `system_events` tinha DUAS policies:
+--   • "Admins can read org events" — SELECT escopado por org E role='admin'. Correta.
+--   • "Service role full access"   — ALL com USING(true) para o pseudo-role `public`.
+--
+-- A segunda foi escrita pensando no service role, mas o service role tem
+-- rolbypassrls: ele IGNORA RLS por natureza e nunca precisou de policy. O efeito
+-- real dela era liberar a tabela inteira para qualquer um — incluindo `anon`, a
+-- chave que vai no bundle do navegador e qualquer pessoa extrai do site.
+--
+-- MEDIDO EM PRODUÇÃO (chave anon, sem login):
+--   antes:  GET /rest/v1/system_events?select=id → HTTP 206, content-range 0-0/10275
+--   depois: GET /rest/v1/system_events?select=id → HTTP 200, content-range */0
+--
+-- POR QUE FOI SEGURO SEM DEPLOY DE CÓDIGO ANTES (ao contrário do resto do lote):
+--   • /api/system-events já devolve 403 se role !== 'admin', e é servida pela
+--     policy correta, que permanece;
+--   • /api/admin/email-stats usa createAdminClient() = service role;
+--   • lib/logger.ts escreve com service role;
+--   • zero funções/triggers escrevem na tabela (verificado em pg_proc.prosrc pela
+--     auditoria).
+--   Verificado após aplicar: admin segue vendo 3.880 linhas da própria org.
+--
+-- RELAÇÃO COM O PR #308 (lote 0 completo)
+-- A migration do #308 executa exatamente o mesmo statement, também com IF EXISTS
+-- (linha 751 de 199_hotfix_rls_org_scope.sql). Este arquivo é NO-OP quando aquele
+-- lote for aplicado — nada aborta. O #308 segue necessário para P1, P2, P4 e P6,
+-- que exigem o runbook (código antes do banco, transação única, smoke de 4 perfis).
+--
+-- ROLLBACK (só se algo inesperado aparecer — reabre o vazamento):
+--   CREATE POLICY "Service role full access" ON public.system_events
+--     FOR ALL TO public USING (true);
+--
+-- Idempotente.
+
+DROP POLICY IF EXISTS "Service role full access" ON public.system_events;
