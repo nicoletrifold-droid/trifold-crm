@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { claimOrphanVisitsForBroker } from "@web/lib/appointments/claim-orphan-visits"
+import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 
 export async function POST(
   request: NextRequest,
@@ -54,9 +54,10 @@ export async function POST(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  // Story 75-247 — se a Nicole já tinha agendado visita para este lead sem
-  // corretor, ela passa a ser do corretor atribuído (e ele é avisado).
-  await claimOrphanVisitsForBroker({
+  // Story 75-249 — 🔥 era AQUI que faltava: reatribuir o lead (Thielly → Matheus,
+  // 31/07) deixava a visita com o corretor antigo, que receberia o lembrete do
+  // dia seguinte. A visita vai para o novo responsável, tenha dono ou não.
+  await syncFutureVisitsWithLeadOwner({
     admin: createAdminClient(),
     orgId: appUser.org_id,
     leadId: id,

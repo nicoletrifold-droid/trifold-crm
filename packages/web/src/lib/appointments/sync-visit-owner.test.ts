@@ -10,8 +10,7 @@ vi.mock("@web/lib/broker/notify-appointment", () => ({
   notifyBrokerOfAppointment: (p: Record<string, unknown>) => notifySpy(p),
 }))
 
-const { claimOrphanVisitsForBroker, transferHouseVisitsToBroker, formatVisitWhen } =
-  await import("./claim-orphan-visits")
+const { syncFutureVisitsWithLeadOwner, formatVisitWhen } = await import("./sync-visit-owner")
 
 const BROKER = "34260eb8-e20b-422f-aadb-1f12806adc82"
 const LEAD = "81f90ea4-5544-42a7-b7da-37a8eb834d58"
@@ -78,13 +77,14 @@ const row = (over: Partial<ApptRow & { lead_id: string }> = {}) => ({
 
 beforeEach(() => notifySpy.mockClear())
 
-describe("claimOrphanVisitsForBroker (Story 75-247)", () => {
-  it("carimba a visita órfã futura e avisa o corretor com o horário certo", async () => {
+describe("syncFutureVisitsWithLeadOwner — visita órfã (Story 75-247)", () => {
+  it("carimba a visita sem dono e avisa o novo responsável com o horário certo", async () => {
     const { admin, activities, updated } = fakeAdmin([row()])
-    const res = await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
 
-    expect(res.claimed).toBe(1)
+    expect(res.moved).toBe(1)
     expect(updated).toEqual([{ id: "appt-1", broker_id: BROKER }])
+    // sem dono anterior → ninguém é avisado de perda
     expect(notifySpy).toHaveBeenCalledTimes(1)
     expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({
       brokerUserId: BROKER,
@@ -96,74 +96,49 @@ describe("claimOrphanVisitsForBroker (Story 75-247)", () => {
     expect(String(activities[0]!.description)).toContain("roleta")
   })
 
-  it("NÃO rouba visita que já tem corretor (idempotente / no-op)", async () => {
-    const { admin, updated } = fakeAdmin([row({ broker_id: "outro-corretor" })])
-    const res = await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
-    expect(res.claimed).toBe(0)
-    expect(updated).toEqual([])
-    expect(notifySpy).not.toHaveBeenCalled()
-  })
-
   it("ignora visita passada, cancelada e de outro lead", async () => {
     const { admin } = fakeAdmin([
       row({ id: "passada", scheduled_at: "2020-01-01T13:00:00.000Z" }),
       row({ id: "cancelada", status: "cancelled" }),
       { ...row({ id: "outro-lead" }), lead_id: "outro" } as ApptRow,
     ])
-    const res = await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "bolsão" })
-    expect(res.claimed).toBe(0)
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "bolsão" })
+    expect(res.moved).toBe(0)
     expect(notifySpy).not.toHaveBeenCalled()
   })
 
   it("sem lead ou sem corretor não faz nada", async () => {
     const { admin } = fakeAdmin([row()])
-    expect((await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: "", brokerUserId: BROKER, origem: "x" })).claimed).toBe(0)
-    expect((await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: "", origem: "x" })).claimed).toBe(0)
+    expect((await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: "", brokerUserId: BROKER, origem: "x" })).moved).toBe(0)
+    expect((await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: "", origem: "x" })).moved).toBe(0)
     expect(notifySpy).not.toHaveBeenCalled()
   })
 
-  it("avisa uma vez por visita quando o lead tem mais de uma órfã", async () => {
+  it("avisa uma vez por visita quando o lead tem mais de uma", async () => {
     const { admin } = fakeAdmin([row({ id: "a1" }), row({ id: "a2", scheduled_at: "2099-08-02T13:00:00.000Z" })])
-    const res = await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
-    expect(res.claimed).toBe(2)
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
+    expect(res.moved).toBe(2)
     expect(notifySpy).toHaveBeenCalledTimes(2)
   })
 
   it("erro no banco não derruba a distribuição (best-effort)", async () => {
     const admin = {
       from: () => ({
-        update: () => ({ eq: () => ({ is: () => ({ in: () => ({ gte: () => ({ select: async () => ({ data: null, error: { message: "boom" } }) }) }) }) }) }),
+        select: () => ({ eq: () => ({ eq: () => ({ in: () => ({ gte: () => Promise.resolve({ data: null, error: { message: "boom" } }) }) }) }) }),
       }),
     } as unknown as SupabaseClient
-    const res = await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
-    expect(res.claimed).toBe(0)
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
+    expect(res.moved).toBe(0)
     expect(notifySpy).not.toHaveBeenCalled()
   })
 })
 
-describe("formatVisitWhen (Story 75-247)", () => {
-  it("formata em BRT com 'às' antes da hora", () => {
-    // 2026-08-01T13:00Z = sábado 01/08 10:00 BRT (a visita do Ailton)
-    expect(formatVisitWhen("2026-08-01T13:00:00.000Z")).toBe("sáb., 01/08 às 10:00")
-  })
-})
+describe("syncFutureVisitsWithLeadOwner — troca de dono (Story 75-249)", () => {
+  const NOVO = "12089ddc-5bf2-482f-9915-1b3518df43bb" // Matheus, o caso real
 
-describe("claim NÃO invade o mundo IMOB (Story 75-247)", () => {
-  it("visita IMOB nasce sem corretor de propósito — não é carimbada", async () => {
-    const { admin, updated } = fakeAdmin([row({ id: "imob-1", team: "imob" })])
-    const res = await claimOrphanVisitsForBroker({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
-    expect(res.claimed).toBe(0)
-    expect(updated).toEqual([])
-    expect(notifySpy).not.toHaveBeenCalled()
-  })
-})
-
-describe("transferHouseVisitsToBroker (Story 75-247 — decisão do Marcos)", () => {
-  const NOVO = "novo-corretor-id"
-
-  it("visita COM dono vai para o novo corretor e os dois lados são avisados", async () => {
+  it("🔥 caso do Marcos: lead reatribuído leva a visita, e os dois lados são avisados", async () => {
     const { admin, activities, updated } = fakeAdmin([row({ broker_id: BROKER })])
-    const res = await transferHouseVisitsToBroker({ admin, orgId: "org1", leadId: LEAD, toBrokerUserId: NOVO, origem: "transferência" })
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: NOVO, origem: "atribuição manual" })
 
     expect(res.moved).toBe(1)
     expect(updated).toEqual([{ id: "appt-1", broker_id: NOVO }])
@@ -172,22 +147,13 @@ describe("transferHouseVisitsToBroker (Story 75-247 — decisão do Marcos)", ()
     expect(variants).toEqual(["inherited", "moved_out"])
     const destinos = notifySpy.mock.calls.map((c) => (c[0] as Record<string, unknown>).brokerUserId)
     expect(destinos).toEqual([NOVO, BROKER])
-    expect(String(activities[0]!.description)).toContain("transferida junto com o lead")
+    expect(String(activities[0]!.description)).toContain("novo responsável")
     expect(activities[0]!.metadata).toMatchObject({ from_broker_user_id: BROKER, to_broker_user_id: NOVO })
   })
 
-  it("visita órfã também vai — e ninguém é avisado de perda (não havia dono)", async () => {
-    const { admin, updated } = fakeAdmin([row({ broker_id: null })])
-    const res = await transferHouseVisitsToBroker({ admin, orgId: "org1", leadId: LEAD, toBrokerUserId: NOVO, origem: "transferência" })
-    expect(res.moved).toBe(1)
-    expect(updated).toEqual([{ id: "appt-1", broker_id: NOVO }])
-    expect(notifySpy).toHaveBeenCalledTimes(1)
-    expect((notifySpy.mock.calls[0]![0] as Record<string, unknown>).variant).toBe("inherited")
-  })
-
-  it("visita que JÁ é do destino não é mexida nem notificada", async () => {
+  it("visita que JÁ é do dono não é mexida nem notificada (idempotente)", async () => {
     const { admin, updated } = fakeAdmin([row({ broker_id: NOVO })])
-    const res = await transferHouseVisitsToBroker({ admin, orgId: "org1", leadId: LEAD, toBrokerUserId: NOVO, origem: "transferência" })
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: NOVO, origem: "transferência" })
     expect(res.moved).toBe(0)
     expect(updated).toEqual([])
     expect(notifySpy).not.toHaveBeenCalled()
@@ -200,8 +166,25 @@ describe("transferHouseVisitsToBroker (Story 75-247 — decisão do Marcos)", ()
       row({ id: "cancelada", status: "cancelled", broker_id: BROKER }),
       { ...row({ id: "outro-lead", broker_id: BROKER }), lead_id: "outro" } as ApptRow,
     ])
-    const res = await transferHouseVisitsToBroker({ admin, orgId: "org1", leadId: LEAD, toBrokerUserId: NOVO, origem: "transferência" })
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: NOVO, origem: "transferência" })
     expect(res.moved).toBe(0)
     expect(notifySpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("não invade o mundo IMOB (Story 75-247)", () => {
+  it("visita IMOB sem corretor NÃO é carimbada — dono é a imobiliária", async () => {
+    const { admin, updated } = fakeAdmin([row({ id: "imob-1", team: "imob" })])
+    const res = await syncFutureVisitsWithLeadOwner({ admin, orgId: "org1", leadId: LEAD, brokerUserId: BROKER, origem: "roleta" })
+    expect(res.moved).toBe(0)
+    expect(updated).toEqual([])
+    expect(notifySpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("formatVisitWhen (Story 75-247)", () => {
+  it("formata em BRT com 'às' antes da hora", () => {
+    // 2026-08-01T13:00Z = sábado 01/08 10:00 BRT (a visita do Ailton)
+    expect(formatVisitWhen("2026-08-01T13:00:00.000Z")).toBe("sáb., 01/08 às 10:00")
   })
 })

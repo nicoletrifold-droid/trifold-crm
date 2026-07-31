@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { claimOrphanVisitsForBroker } from "@web/lib/appointments/claim-orphan-visits"
+import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 
 // Story 75-81 (Epic 64) — corretor puxa um lead do bolsão. A atomicidade e as
 // regras (teto + empreendimento) ficam na RPC pegar_lead_bolsao (SECURITY DEFINER).
@@ -38,10 +38,10 @@ export async function POST(
 
   const status = String(data)
 
-  // Story 75-247 — lead puxado do bolsão pode ter visita marcada pela Nicole sem
-  // corretor (ela agenda 24h, antes de o lead ter dono). A visita vai com o lead.
+  // Story 75-247/75-249 — lead puxado do bolsão traz a visita com ele, seja ela
+  // órfã (Nicole agendou antes do dono) ou do corretor que deixou o lead cair.
   if (status === "ok") {
-    await claimOrphanVisitsForBroker({
+    await syncFutureVisitsWithLeadOwner({
       admin,
       orgId: appUser.org_id,
       leadId: id,

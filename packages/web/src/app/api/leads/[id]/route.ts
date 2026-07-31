@@ -4,7 +4,7 @@ import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { claimOrphanVisitsForBroker } from "@web/lib/appointments/claim-orphan-visits"
+import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 
 export async function GET(
   _req: NextRequest,
@@ -160,11 +160,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  // Story 75-247 — ganhou dono por aqui (form do lead / seletor de corretor):
-  // visita marcada pela Nicole sem corretor vai com o lead. No-op quando não há
-  // órfã, e só roda quando o corretor foi realmente mexido nesta requisição.
+  // Story 75-247/75-249 — trocou de dono por aqui (form do lead / seletor de
+  // corretor): a visita futura acompanha o novo responsável. Só roda quando o
+  // corretor foi realmente mexido nesta requisição.
   if (typeof fields.assigned_broker_id === "string" && fields.assigned_broker_id) {
-    await claimOrphanVisitsForBroker({
+    await syncFutureVisitsWithLeadOwner({
       admin: createAdminClient(),
       orgId: appUser.org_id,
       leadId: id,

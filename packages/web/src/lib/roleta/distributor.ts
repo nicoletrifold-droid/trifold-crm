@@ -4,7 +4,7 @@ import { STAGE_IDS, normalizePhoneBR } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { notifyBroker, notifyImobiliaria } from "./notify-broker"
 import { getOrgSchedule, isOpenAtNow } from "./business-time"
-import { claimOrphanVisitsForBroker } from "@web/lib/appointments/claim-orphan-visits"
+import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 
 export type DistributionStatus =
   | "distributed"
@@ -165,9 +165,9 @@ export async function distributeLeadToNextBroker(
 
         if (!claimed) return { status: "sem_corretor_disponivel" }
 
-        // Story 75-247 — a Nicole pode ter agendado ANTES de o lead ter dono
-        // (appointment com broker_id nulo). Carimba e avisa o corretor.
-        await claimOrphanVisitsForBroker({
+        // Story 75-247/75-249 — a visita futura é de quem atende o lead: a
+        // Nicole pode ter agendado antes de o lead ter dono. Carimba e avisa.
+        await syncFutureVisitsWithLeadOwner({
           admin, orgId, leadId, brokerUserId: assignedUserId, origem: "roleta (atendimento contínuo)",
         })
 
@@ -282,9 +282,9 @@ export async function distributeLeadToNextBroker(
   const brokerEmail  = (result.broker_email as string) ?? ""
   const brokerPhone  = (result.broker_phone as string | null) ?? null
 
-  // Story 75-247 — visita agendada pela Nicole antes da distribuição fica sem
-  // corretor; ao ganhar dono, a visita vai com o lead (e o corretor é avisado).
-  await claimOrphanVisitsForBroker({
+  // Story 75-247/75-249 — visita agendada pela Nicole antes da distribuição fica
+  // sem corretor; ao ganhar dono, a visita vai com o lead (e ele é avisado).
+  await syncFutureVisitsWithLeadOwner({
     admin, orgId, leadId, brokerUserId, origem: "roleta",
   })
 
