@@ -372,7 +372,7 @@ export async function GET(
 
   // 7. ROAS — graceful fallback if view doesn't exist
   //
-  // Hotfix de segurança (migration 199 / auditoria P2): `meta_campaign_roas` NÃO é uma view —
+  // Hotfix de segurança (migration 209 / auditoria P2): `meta_campaign_roas` NÃO é uma view —
   // é uma MATERIALIZED VIEW (pg_class.relkind='m'), materializada desde
   // 035_materialize_meta_campaign_roas_remote_only.sql (Story 29.6) e atualizada por pg_cron
   // (jobid=5, a cada 3h, REFRESH ... CONCURRENTLY sob o usuário `postgres`).
@@ -385,7 +385,7 @@ export async function GET(
   // incluso) lia total_spend, total_revenue, roas e cpl_real de todas as campanhas via
   // PostgREST, e `anon` também (confirmado: HTTP 206, 104 linhas, sem login).
   //
-  // A 199 revoga a matview de `anon` E de `authenticated`. Por isso esta leitura passa a usar
+  // A 209 revoga a matview de `anon` E de `authenticated`. Por isso esta leitura passa a usar
   // service-role: é o único caminho que continua tendo o grant. O escopo de org fica
   // EXPLÍCITO no `.eq("org_id", appUser.org_id)` abaixo — org derivada do usuário
   // server-side, nunca do cliente. Padrão de 131_imobiliarias.sql. Comportamento preservado

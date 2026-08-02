@@ -7,7 +7,7 @@ import { avancarCiclo } from "@web/lib/billing/reminder-schedule"
 // Story 78-8 — edição/remoção de um vencimento (service_billing_reminders). Admin-only.
 // Story 78-11 — recorrência-ao-pagar: ao marcar 'paid', avança due_date para o próximo ciclo.
 //
-// Hotfix de segurança (migration 199 / auditoria P4): a 199 revoga `authenticated` das tabelas
+// Hotfix de segurança (migration 209 / auditoria P4): a 209 revoga `authenticated` das tabelas
 // de custo interno da plataforma (a policy `admin_only` não tinha noção de org). Acesso só por
 // service-role em rota gated por admin — daí o createAdminClient() em vez do client de usuário
 // do requireAuth(). O gate de autorização segue sendo o requireRole(["admin"]).

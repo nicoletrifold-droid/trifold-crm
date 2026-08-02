@@ -8,7 +8,7 @@ import { validateCreate } from "@web/lib/billing/reminder-validation"
 // Admin-only via requireAuth() + requireRole(["admin"]) (padrão de admin/agent-prompts).
 // Estas tabelas NÃO têm org_id (custo da própria plataforma, não de tenant — ver 78-1).
 //
-// Hotfix de segurança (migration 199 / auditoria P4): a 199 revoga `authenticated` das 5
+// Hotfix de segurança (migration 209 / auditoria P4): a 209 revoga `authenticated` das 5
 // tabelas de custo interno da plataforma, porque a policy `admin_only` não tinha noção de org
 // (um admin de CLIENTE leria o custo que a Trifold paga → nossa margem). O acesso passa a ser
 // só por service-role em rota gated por admin — daí o createAdminClient() aqui em vez do

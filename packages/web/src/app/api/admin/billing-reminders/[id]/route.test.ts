@@ -50,8 +50,8 @@ vi.mock("@web/lib/api-auth", () => ({
   requireRole: () => null,
 }))
 
-// Hotfix de segurança (migration 199 / auditoria P4): a rota passou a ler/escrever
-// service_billing_reminders via createAdminClient() (service-role), porque a 199 revoga
+// Hotfix de segurança (migration 209 / auditoria P4): a rota passou a ler/escrever
+// service_billing_reminders via createAdminClient() (service-role), porque a 209 revoga
 // `authenticated` das tabelas de custo interno da plataforma. O gate de autorização segue
 // sendo requireRole(["admin"]). O mock espelha essa troca de client — a lógica de
 // recorrência-ao-pagar sob teste é a mesma.

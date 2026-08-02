@@ -9,13 +9,13 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 // separadamente pela UI. Admin-only via requireAuth() + requireRole(["admin"]).
 // Sem org_id (custo da própria plataforma).
 //
-// Hotfix de segurança (migration 199 / auditoria P4): estas tabelas guardam o custo que a
+// Hotfix de segurança (migration 209 / auditoria P4): estas tabelas guardam o custo que a
 // TRIFOLD paga pelos serviços. A policy `admin_only` (78-1) era `user_role() = 'admin'` SEM
 // noção de org — na primeira conta admin de CLIENTE, esse cliente leria nosso custo e, como a
-// cobrança é custo + markup, deduziria nossa margem. A migration 199 revoga `authenticated`
+// cobrança é custo + markup, deduziria nossa margem. A migration 209 revoga `authenticated`
 // dessas 5 tabelas; o acesso passa a ser exclusivamente por service-role em rota gated por
 // admin (padrão de 131_imobiliarias.sql). Por isso a leitura usa createAdminClient() e NÃO o
-// client de usuário do requireAuth() — que a partir da 199 receberia lista vazia.
+// client de usuário do requireAuth() — que a partir da 209 receberia lista vazia.
 // O gate de autorização é o requireRole(["admin"]) abaixo (não mais a RLS).
 
 type CollectionStatus = "ok" | "manual" | "no_data" | "error"
@@ -101,7 +101,7 @@ export async function GET() {
   const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
 
-  // Tabelas de plataforma (sem org_id) — leitura só por service-role (migration 199).
+  // Tabelas de plataforma (sem org_id) — leitura só por service-role (migration 209).
   const supabase = createAdminClient()
 
   // 1. Catálogo de serviços habilitados, na ordem de exibição.
