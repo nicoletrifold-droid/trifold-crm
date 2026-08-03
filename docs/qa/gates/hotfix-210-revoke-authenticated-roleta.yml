@@ -1,0 +1,213 @@
+schema: 1
+storyId: "hotfix-210-revoke-authenticated"
+story: "Follow-up #1 do lote 0 — revogar EXECUTE de authenticated em roleta_pick_and_advance e seed_system_roles"
+title: "Quality Gate — migration 210_hotfix_revoke_authenticated_roleta + runbook de aplicação"
+epic: null
+gate: PASS
+verdict: PASS
+review_round: 1
+pr: 338
+depends_on:
+  - pr: 308
+    gate: docs/qa/gates/hotfix-rls-org-scope-lote0.yml
+    relacao: >
+      A 210 só é aplicável DEPOIS da 209. Este gate não revalida a 209 — assume o PASS do
+      round 2 daquele gate e cobre apenas o delta de ACL.
+
+status_reason: >
+  PASS. O delta é pequeno (2 REVOKE + 2 GRANT + guarda de ordem) mas mexe em ACL de produção
+  no caminho de escrita da roleta, então validei por execução, não por leitura. Executei a
+  migration ponta a ponta no projeto DEV (xnxvygyfyyyzwhiuoehz), que confirmei espelhar a ACL
+  de produção entrada por entrada antes de começar, nos três cenários: guarda disparando,
+  caminho feliz e segunda aplicação. Isso FECHA o gap que a 209 não conseguiu fechar — a
+  ausência de parser plpgsql — porque o protocolo de query simples parseia todos os statements
+  antes de executar qualquer um, logo a execução no dev prova que o arquivo inteiro parseia.
+  O inventário de chamadores foi fechado por quatro caminhos independentes, não só por grep no
+  código. As duas queries de verificação foram pré-rodadas read-only contra PRODUÇÃO e batem
+  com os números documentados (4 e 2). Dev foi restaurado ao estado inicial.
+  Nenhum bloqueante. Quatro CONCERNS, todos não-bloqueantes e três deles pré-existentes.
+
+evidence:
+  - id: E1
+    titulo: "Assinaturas exatas — nenhuma sobrecarga esquecida"
+    evidence: >
+      `select p.oid::regprocedure from pg_proc ...` em PRODUÇÃO retorna exatamente uma
+      sobrecarga de cada: `roleta_pick_and_advance(uuid,uuid,uuid,integer)` e
+      `seed_system_roles(uuid)`, ambas `prokind='f'`, `lanname='plpgsql'`. As assinaturas na
+      migration são idênticas. Importa porque REVOKE é por assinatura: uma sobrecarga não
+      listada continuaria aberta, e o silêncio seria total (não há erro para grant que sobra).
+
+  - id: E2
+    titulo: "Inventário de chamadores fechado por 4 caminhos independentes"
+    evidence: >
+      (a) `grep` em `packages/**/*.ts{,x}`: só `lib/roleta/distributor.ts:237` e `:259`. Li os
+      dois — ambos usam `admin`, que vem de `createAdminClient()` (`lib/supabase/admin.ts`),
+      que instancia com `SUPABASE_SERVICE_ROLE_KEY`. Nenhum client de usuário.
+      (b) `grep` no repo INTEIRO fora de packages/ (edge functions, scripts, workers, .sh, .py):
+      zero ocorrências.
+      (c) `pg_proc.prosrc ilike` em produção para achar função/trigger SQL que chame qualquer
+      uma das duas: zero linhas. Cobre o vetor que grep no código não alcança.
+      (d) `cron.job` em produção: 6 jobs, TODOS com `username='postgres'`, e nenhum chama
+      qualquer uma das duas. Cobre o vetor de scheduler rodando sob role não-privilegiado.
+      `seed_system_roles` tem ZERO chamadores em qualquer um dos quatro.
+
+  - id: E3
+    titulo: "DEV espelha PROD antes do teste — a bancada é fiel"
+    evidence: >
+      Antes de tocar em nada, comparei os dois projetos:
+      prod e dev retornam a MESMA ACL nas duas funções —
+      `roleta_pick_and_advance: postgres=X | anon=X | authenticated=X | service_role=X` e
+      `seed_system_roles: =X | postgres=X | anon=X | authenticated=X | service_role=X` —
+      e em ambos `assert_org_scope` não existe (`count=0`), confirmando que a 209 não foi
+      aplicada em nenhum dos dois. Sem esse passo o teste no dev não valeria como evidência.
+
+  - id: E4
+    titulo: "TESTE 1 — guarda de ordem dispara e o abort é atômico"
+    evidence: >
+      Apliquei a 210 no dev com a 209 ausente. Retorno:
+      `ERROR: P0001: A migration 209_hotfix_rls_org_scope.sql nao foi aplicada (...)`,
+      `CONTEXT: PL/pgSQL function inline_code_block line 10 at RAISE`.
+      Reli a ACL das duas funções imediatamente depois: **intacta**, idêntica à de E3. Prova
+      que o RAISE aborta a transação implícita antes de qualquer REVOKE — nada de estado
+      parcial. Prova também, de graça, que o arquivo inteiro parseia: o protocolo de query
+      simples parseia todos os statements antes de executar o primeiro, então um erro de
+      sintaxe em qualquer ponto do arquivo teria aparecido aqui em vez do P0001.
+      É a asserção que a 209 não conseguiu fazer por falta de postgres local.
+
+  - id: E5
+    titulo: "TESTE 2 — caminho feliz faz exatamente o que promete"
+    evidence: >
+      Criei no dev um stub `assert_org_scope(uuid)` no-op para satisfazer a guarda (simulando a
+      209 aplicada) e apliquei a 210. Resultado: sem erro. A query de regressão foi de
+      **4 linhas → ZERO**; a contraprova do service_role seguiu em **2 linhas**. ACL final:
+      `roleta_pick_and_advance: postgres=X | service_role=X` e
+      `seed_system_roles: postgres=X | service_role=X`.
+      Confirma as três coisas que importam: `authenticated` saiu, `anon` saiu, o `=X` (grant
+      default para PUBLIC do `seed_system_roles`) saiu, e `service_role` — o único chamador
+      real — permaneceu.
+
+  - id: E6
+    titulo: "TESTE 3 — idempotência de fato, não por argumento"
+    evidence: >
+      Segunda aplicação da 210 no dev, arquivo idêntico: sem erro, e ACL byte a byte igual à
+      de E5. Confirma a afirmação do header (REVOKE de grant inexistente é no-op silencioso) e
+      que a 210 pode ser reaplicada sem consequência — relevante porque o registro
+      `schema_migrations` deste projeto não é confiável (ver C3).
+
+  - id: E7
+    titulo: "Queries de verificação pré-rodadas contra PRODUÇÃO"
+    evidence: >
+      As duas queries do bloco de verificação da migration foram executadas read-only contra
+      prod: a de regressão retorna **4 linhas** (2 funções × anon/authenticated) e a
+      contraprova do service_role retorna **2**. São os números documentados no arquivo e no
+      runbook como controle positivo. O @devops não precisa confiar no zero sem antes ter visto
+      a query acusar — uma query quebrada também retorna zero.
+
+  - id: E8
+    titulo: "Dev restaurado"
+    evidence: >
+      Re-concedi `anon`/`authenticated` nas duas e `public` no `seed_system_roles`, e dropei o
+      stub `assert_org_scope` e o marcador `__qa_stub_marker`. ACL final do dev tem o MESMO
+      CONJUNTO de entradas do estado inicial em E3 (a ordem dentro do array difere, porque
+      GRANT faz append — semanticamente idêntico), e `assert_org_scope` voltou a não existir.
+      Dev não ficou com guarda falsa nem com ACL divergente de prod.
+
+  - id: E9
+    titulo: "Runbook — todas as citações de linha conferidas"
+    evidence: >
+      `docs/runbooks/aplicar-209-210.md` cita posições dentro da 209. Conferi uma a uma:
+      653/654 (REVOKE de PUBLIC,anon), 664/665 (GRANT a authenticated — o objeto deste PR),
+      718 (REVOKE da matview), 751 (DROP POLICY do P3), 1011 (DROP do helper, comentado),
+      1014 (ALTER VIEW do rollback, comentado). Todas corretas. Arquivo com 1.029 linhas,
+      como o runbook afirma. O bloco de verificação extraído por `sed -n '807,879p'` foi
+      executado contra prod e retornou as 24 linhas com o detalhamento exato por item
+      (8+8+1+1+1+5), confirmando que o comando do runbook funciona como escrito.
+      Os helpers `sbq`/`sbi` foram executados na forma literal em que aparecem no doc.
+      Colunas usadas nas queries de monitoramento conferidas em `information_schema`
+      (`lead_distribution_log.status`, `.created_at` existem).
+
+  - id: E10
+    titulo: "Numeração 210 livre"
+    evidence: >
+      `main` vai até 209. Varri as 4 branches de PR abertas (#337, #306, #301, #148): zero
+      arquivos `210*`. Relevante porque este repo teve duas colisões de numeração em 4 dias.
+
+concerns:
+  - id: C1
+    severity: medium
+    pre_existente: true
+    titulo: "Zero cobertura automatizada em roleta_pick_and_advance"
+    detalhe: >
+      Nenhum teste em `packages/**/*.test.ts` exercita a RPC. A mudança de ACL no único
+      caminho de ESCRITA do lote é validada apenas por smoke manual. Mesma limitação do gate
+      da 209, herdada, não introduzida aqui.
+    mitigacao: >
+      O runbook exige, no passo 9, REPETIR o smoke da roleta depois da 210 — não só depois da
+      209 — porque a 210 mexe na ACL do mesmo caminho. Validar antes e não depois deixaria a
+      mudança nova sem teste. Não aceitar o PR como aplicado sem esse passo.
+
+  - id: C2
+    severity: low
+    pre_existente: false
+    titulo: "A guarda prova ordem, não sucesso da 209"
+    detalhe: >
+      A sentinela é a EXISTÊNCIA de `public.assert_org_scope`, não sua correção. Meu teste E5
+      passou com um stub no-op, o que demonstra o ponto. Em produção o risco é baixo (só a 209
+      cria essa função, e ela aborta inteira se falhar), mas a guarda não substitui o bloco de
+      verificação da 209 retornando zero.
+    mitigacao: "Passo 4 do runbook (verificação da 209 em zero) precede o passo 8."
+
+  - id: C3
+    severity: medium
+    pre_existente: true
+    titulo: "schema_migrations 52 migrations atrasado"
+    detalhe: >
+      Achado durante esta revisão, ao conferir o passo de registro: a última versão em
+      `supabase_migrations.schema_migrations` de PRODUÇÃO é `20260710171933` (10/07/2026), e o
+      repo já vai até a 210. São ~52 migrations aplicadas e não registradas. O runbook da 209
+      chamava isso de "drift conhecido" e mandava registrar a versão; na prática o registro
+      está abandonado desde julho, então `supabase db push` contra produção tentaria reaplicar
+      tudo desde a 164.
+    mitigacao: >
+      Entrou como PROIBIÇÃO nº 1 do runbook, com o número medido. Recomendo tarefa própria:
+      ou registrar as 52, ou documentar formalmente que `db push` não vale para este projeto.
+      Não bloqueia este PR.
+
+  - id: C4
+    severity: low
+    pre_existente: false
+    titulo: "Rollback restaura o estado pós-209, não o estado original"
+    detalhe: >
+      O bloco ROLLBACK da 210 re-concede apenas a `authenticated`. NÃO restaura o `anon=X` das
+      duas nem o `=X` (PUBLIC) do `seed_system_roles` que existiam antes da 209.
+    veredito: >
+      CORRETO E INTENCIONAL — aquele era o vetor anônimo, e o arquivo diz explicitamente
+      "NUNCA re-conceder a PUBLIC nem a anon". O texto do header já descreve o alvo como
+      "o estado que a 209 deixa", sem ambiguidade. Registro só para que ninguém leia o bloco
+      como reversão ao estado de 02/08.
+
+judgment_call:
+  decisao: >
+    Aceito o escopo estreito. Havia argumento para exigir que este PR também resolvesse o P13
+    (`SET search_path` em 3 funções DEFINER, incluindo `seed_system_roles`, que este PR toca) —
+    mas juntar as duas coisas repetiria exatamente o erro que criou este follow-up: um lote
+    grande demais para aplicar rápido, num momento em que há PII legível sem login em produção.
+    O P13 muda o CORPO de funções e exigiria re-diffar contra produção no momento da aplicação
+    (a lição do `CREATE OR REPLACE` registrada no gate da 209); este PR só mexe em ACL e é
+    reversível com dois GRANTs. São perfis de risco diferentes e merecem migrations diferentes.
+
+recomendacao_de_aplicacao: >
+  Aplicar junto com a 209, na mesma janela, seguindo `docs/runbooks/aplicar-209-210.md`.
+  Não faz sentido mergear esta e deixar a aplicação para outro dia: enquanto a 209 não roda, o
+  `anon` continua com EXECUTE na função de escrita da roleta, e a 210 nem aplica (a guarda
+  aborta). Concordo com a recomendação do runbook de aplicar de manhã: o sintoma de regressão
+  é lead caindo em `sem_corretor_disponivel`, que é silencioso.
+
+follow_ups_nao_bloqueantes:
+  - "P13: SET search_path em get_broker_dashboard_counts, get_broker_funnel_stats, seed_system_roles"
+  - "Converter assert_org_scope de fail-open para fail-closed — PRÉ-REQUISITO da Onda 0 do épico 86, não follow-up solto: hoje a guarda nega só quando claims->>'role' = 'anon', então um authenticated de outro tenant a atravessa"
+  - "C3: regularizar ou aposentar formalmente o schema_migrations deste projeto"
+  - "C1: cobertura automatizada para roleta_pick_and_advance"
+
+reviewed_by: "Quinn (@qa)"
+reviewed_at: "2026-08-03"
