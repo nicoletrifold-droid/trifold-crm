@@ -43,7 +43,7 @@ export const MAX_SUBTITULO_CHARS = 60
  * reproduzir a constante.
  */
 const PILHA: Record<ArteAspectRatio, { titulo: number; subtitulo: number; respiro: number }> = {
-  "9:16": { titulo: 0.085, subtitulo: 0.05, respiro: 0.013 },
+  "9:16": { titulo: 0.07, subtitulo: 0.038, respiro: 0.009 },
   // Formatos quadrados têm menos altura total, então o texto precisa de fração
   // maior para manter o mesmo corpo de fonte aparente.
   "4:5": { titulo: 0.1, subtitulo: 0.058, respiro: 0.015 },

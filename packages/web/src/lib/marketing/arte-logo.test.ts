@@ -5,12 +5,15 @@ import { composeLogo, logoBox, logoPosition, selectLogoAsset, LOGO_MIME_ALLOWLIS
 
 // Story 75-246 — layout do logo composto: PURO, sem sharp e sem rede (AC5).
 describe("logoBox", () => {
-  it("story 9:16 (1080×1920): faixa de 14% no rodapé, logo até 26% da largura", () => {
+  // 75-260: a faixa do logo caiu de 14% para 9,5% — a peça inteira ficou pesada
+  // demais com a faixa composta da 75-256, e este era o maior pedaço dela (e o
+  // mais vazio: o logo só ocupa 60% da altura da faixa).
+  it("story 9:16 (1080×1920): faixa de 9,5% no rodapé, logo até 26% da largura", () => {
     const b = logoBox("9:16", 1080, 1920)
-    expect(b.bandHeight).toBe(269) // 1920 * 0.14
-    expect(b.bandTop).toBe(1920 - 269)
+    expect(b.bandHeight).toBe(182) // 1920 * 0.095
+    expect(b.bandTop).toBe(1920 - 182)
     expect(b.maxWidth).toBe(281) // 1080 * 0.26
-    expect(b.maxHeight).toBe(161) // 269 * 0.6
+    expect(b.maxHeight).toBe(109) // 182 * 0.6
   })
 
   it("feed 4:5 e 1:1 usam faixa de 12% e logo menor que o do story", () => {

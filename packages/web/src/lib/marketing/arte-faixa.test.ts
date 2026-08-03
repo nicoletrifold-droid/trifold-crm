@@ -36,9 +36,11 @@ describe("faixaLayout (AC1)", () => {
         expect(l.faixaTop, `${ar} ${JSON.stringify(opts)}`).toBeGreaterThan(0)
         expect(l.faixaHeight).toBe(h - l.faixaTop)
         expect(l.faixaWidth).toBe(w)
-        // a faixa nunca pode comer metade da peça
-        expect(l.fracaoReservada).toBeLessThan(0.5)
-        expect(l.fracaoReservada).toBeGreaterThan(0.2)
+        // a faixa nunca pode comer metade da peça (teto), e nunca pode ficar
+        // tão fina que o título não caiba (piso). 75-260 baixou os dois: o caso
+        // mínimo (só título) agora dá ~18%, contra 25% antes.
+        expect(l.fracaoReservada).toBeLessThan(0.42)
+        expect(l.fracaoReservada).toBeGreaterThan(0.15)
       }
     }
   })
