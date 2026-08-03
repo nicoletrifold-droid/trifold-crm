@@ -19,9 +19,11 @@ import {
 import {
   composeCta,
   fontePadrao,
+  pesoDaFonte,
   pickAccentColor,
   selectFonteAsset,
   FONTE_MIME_ALLOWLIST,
+  PESO_LEVE_DEMAIS,
 } from "@web/lib/marketing/arte-cta"
 import {
   composeLogo,
@@ -214,6 +216,9 @@ export async function gerarArteParaPost(
       console.warn(
         "[arte-service] paleta do Kit sem cor de faixa — título NÃO será composto (não inventamos cor); a arte volta ao modo antigo"
       )
+    } else if (bandColor) {
+      // AC5 — a outra metade do par: cor da faixa resolvida, observável.
+      console.info(`[arte-service] cor da faixa resolvida: ${bandColor}`)
     }
     const temFaixa = !!titulo && !!bandColor
     // A fração vem do layout, com as dimensões NOMINAIS do formato. A arte real
@@ -255,7 +260,21 @@ export async function gerarArteParaPost(
     const resolverFonte = async (): Promise<Buffer> => {
       if (fonteCache) return fonteCache
       const fonteAsset = selectFonteAsset(candidatos, brandPriority)
+      // Story 75-259 (AC4) — fonte leve não é decisão de marca, é ausência de
+      // arquivo: título de ~100px em Light fica magro. A SemiBold empacotada
+      // ganha, e o log avisa quem administra o Kit que falta um peso.
+      if (fonteAsset && pesoDaFonte(fonteAsset.file_name) >= PESO_LEVE_DEMAIS) {
+        console.warn(
+          `[arte-service] Kit só tem fonte leve (${fonteAsset.file_name}) — usando a Montserrat SemiBold empacotada. Cadastre um peso Bold/SemiBold no Kit da marca.`
+        )
+        fonteCache = fontePadrao()
+        return fonteCache
+      }
       fonteCache = (fonteAsset && (await baixarFonte(fonteAsset.file_url))) || fontePadrao()
+      // AC5: quando a peça sai estranha, é isto que diz se foi a fonte ou a cor.
+      console.info(
+        `[arte-service] fonte do texto composto: ${fonteAsset?.file_name ?? "Montserrat-SemiBold.ttf (empacotada)"}`
+      )
       return fonteCache
     }
 
