@@ -253,9 +253,14 @@ Mesmo aí, a correção definitiva é migrar o caminho para service-role. **Nunc
 ## Follow-ups que ficam abertos (não são deste runbook)
 
 1. `SET search_path` em 3 funções `SECURITY DEFINER` — P13 da auditoria.
-2. Converter `assert_org_scope` de **fail-open** para fail-closed. Hoje nega só quando
-   `claims->>'role' = 'anon'`. Suficiente agora (o vetor anônimo morre no REVOKE), mas **quando o
-   multi-tenant do épico 86 entrar, um `authenticated` de outro tenant atravessa a guarda.**
-   Pré-requisito da Onda 0.
+2. Converter o ramo **fail-open** de `assert_org_scope` para fail-closed. O fail-open vale
+   **somente quando `auth.uid() IS NULL`**: aí a guarda nega apenas se conseguir identificar o
+   request como anônimo (`claims->>'role' = 'anon'`) e libera qualquer formato de claims que não
+   reconheça — necessário porque a service role key deste projeto é do formato novo
+   (`sb_secret_…`, não-JWT) e negar por padrão pararia a distribuição de leads no cron.
+   **Com usuário logado a guarda já é fail-closed** e barra cross-tenant
+   (`p_org_id IS DISTINCT FROM user_org_id()` → `org mismatch`), então isto **não** é um
+   bloqueio do multi-tenant. É endurecimento de defesa em profundidade: hoje o controle que
+   fecha o vetor anônimo é o `REVOKE`, e a guarda é no-op nesse caminho.
 3. Registrar as ~52 migrations não registradas em `schema_migrations`, ou aceitar formalmente que
    `db push` não vale para produção neste projeto.

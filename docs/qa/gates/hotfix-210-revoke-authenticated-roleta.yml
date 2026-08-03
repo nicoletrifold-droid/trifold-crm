@@ -205,7 +205,18 @@ recomendacao_de_aplicacao: >
 
 follow_ups_nao_bloqueantes:
   - "P13: SET search_path em get_broker_dashboard_counts, get_broker_funnel_stats, seed_system_roles"
-  - "Converter assert_org_scope de fail-open para fail-closed — PRÉ-REQUISITO da Onda 0 do épico 86, não follow-up solto: hoje a guarda nega só quando claims->>'role' = 'anon', então um authenticated de outro tenant a atravessa"
+  - >
+    Converter o ramo fail-open de assert_org_scope para fail-closed. CORREÇÃO de uma
+    afirmação anterior deste gate: eu havia escrito que um `authenticated` de outro tenant
+    atravessa a guarda e que isso era pré-requisito da Onda 0. Está ERRADO. Lendo o corpo
+    (209, linhas 106-150): o fail-open está DENTRO do ramo `auth.uid() IS NULL`, onde a
+    guarda nega só se identificar o request como anônimo e libera formato de claims
+    desconhecido — deliberado, porque a service role key é do formato novo `sb_secret_…`
+    (não-JWT) e negar por padrão pararia `roleta_pick_and_advance` em toda rodada de cron.
+    Com usuário logado a guarda JÁ é fail-closed: `p_org_id IS DISTINCT FROM user_org_id()`
+    levanta `org mismatch`. Logo o caminho cross-tenant de usuário logado — o que importa
+    para multi-tenant — está coberto, e isto é endurecimento de defesa em profundidade,
+    não bloqueio do épico 86.
   - "C3: regularizar ou aposentar formalmente o schema_migrations deste projeto"
   - "C1: cobertura automatizada para roleta_pick_and_advance"
 
