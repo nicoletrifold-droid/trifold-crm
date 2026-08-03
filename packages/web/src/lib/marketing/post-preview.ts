@@ -67,6 +67,20 @@ function quebrarPorMarcador(copy: string, re: RegExp, nome: string): PreviewTela
   return telas
 }
 
+/**
+ * PURA (Story 75-263) — como se chama cada unidade da peça: story tem TELAS,
+ * carrossel tem CARDS, e peça única não tem unidade nomeada.
+ *
+ * Existe para ser a fonte única desse vocabulário: ele nasceu aqui, no parser do
+ * preview, e o card do post o duplicou ao passar a mostrar todas as artes. Duas
+ * cópias divergiriam no dia em que um formato novo entrar.
+ */
+export function nomeDaUnidade(tipo: PreviewTipo): "Tela" | "Card" | null {
+  if (tipo === "story") return "Tela"
+  if (tipo === "carrossel") return "Card"
+  return null
+}
+
 /** PURA: formato do post → tipo de preview. NULL (legado) vira "indefinido". */
 export function tipoDePreview(formato: MarketingPostFormato | null): PreviewTipo {
   switch (formato) {
@@ -121,7 +135,7 @@ export function buildPostPreview(input: {
   }
 
   const re = marcadorDe(tipo)
-  const nome = tipo === "story" ? "Tela" : "Card"
+  const nome = nomeDaUnidade(tipo) ?? "Card"
   const quebradas = re ? quebrarPorMarcador(copy, re, nome) : []
 
   // Sem marcador (ou formato de peça única): uma tela com a copy inteira.
