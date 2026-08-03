@@ -43,6 +43,18 @@ export interface ArtePromptInput {
   fontes: string[]
   /** Ajuste do humano no "Refazer arte" (ex.: "menos texto, usa a piscina") */
   ajuste?: string | null
+  /**
+   * Story 75-256 — fração da ALTURA que a faixa composta vai COBRIR, vinda de
+   * `faixaLayout` (arte-faixa.ts). Presente = título/subtítulo são compostos por
+   * código e a arte não pode ter texto NENHUM.
+   *
+   * Ausente = comportamento anterior (25% reservados, o modelo escreve o título).
+   * É o caso de paleta sem cor de faixa — não inventamos cor, então não há faixa.
+   *
+   * 🔴 NUNCA escrever um número literal aqui: a fração tem de vir do layout, ou
+   * prompt e composição divergem em silêncio (AC6).
+   */
+  fracaoReservada?: number | null
 }
 
 const FORMATO_ARTE: Record<Exclude<MarketingPostFormato, "reel">, string> = {
@@ -83,15 +95,39 @@ export function buildArtePrompt(input: ArtePromptInput): string {
   lines.push(
     "LOGO E CTA — NÃO DESENHE: as imagens de referência da marca servem apenas como guia de estilo, cor e clima. É PROIBIDO desenhar o logo, o nome da marca, assinatura, selo, marca d'água, botão, pílula ou qualquer texto de call-to-action. O logo oficial e o CTA são aplicados depois, por cima da imagem, com os arquivos e as cores exatas da marca."
   )
-  lines.push(
-    "ÁREA RESERVADA (obrigatório): o QUARTO INFERIOR da arte — os últimos 25% da altura — fica completamente limpo: só fundo, sem texto, sem logo, sem botão, sem elemento gráfico. É onde o CTA e o logo são compostos depois. Todo texto da arte fica ACIMA desses 25%."
-  )
+  // 75-256: com faixa composta, a arte é SÓ IMAGEM. A instrução deixou de ser
+  // "reserve espaço" (que o modelo desobedeceu na Tela 2 do Vind em 03/08,
+  // escrevendo o título dentro da área reservada) e passou a ser "não escreva
+  // nada" — e a faixa opaca cobre a região de qualquer forma. A proibição aqui
+  // melhora o resultado; ela não é mais o que garante o layout.
+  if (input.fracaoReservada && input.fracaoReservada > 0) {
+    const pct = Math.round(input.fracaoReservada * 100)
+    lines.push(
+      `A ARTE NÃO TEM TEXTO — nenhum: sem título, sem subtítulo, sem frase, sem número, sem data, sem selo, sem legenda, sem palavra alguma. É uma FOTOGRAFIA/CENA pura. Título, subtítulo, CTA e logo são compostos depois, por cima, com a tipografia e as cores exatas da marca. Se você escrever qualquer texto, ele será COBERTO e a peça sai defeituosa.`
+    )
+    lines.push(
+      `ÁREA COBERTA (obrigatório): os últimos ${pct}% da altura serão cobertos por uma faixa sólida da marca. Não coloque nada de importante ali — nem parte do prédio, nem o horizonte, nem elemento que a composição precise. Enquadre a cena para que ela funcione usando apenas os ${100 - pct}% de cima.`
+    )
+  } else {
+    lines.push(
+      "ÁREA RESERVADA (obrigatório): o QUARTO INFERIOR da arte — os últimos 25% da altura — fica completamente limpo: só fundo, sem texto, sem logo, sem botão, sem elemento gráfico. É onde o CTA e o logo são compostos depois. Todo texto da arte fica ACIMA desses 25%."
+    )
+  }
   lines.push("")
   // 75-244: a arte é vista no scroll do Instagram, no celular. Peça escura demais
   // e CTA em cinza discreto foram o que reprovou a 1ª leva de artes (31/07).
-  lines.push(
-    "CONTRASTE (obrigatório): a arte é vista no celular, no meio do scroll — todo texto tem que ser lido de relance. Texto claro SOMENTE sobre área escura, texto escuro SOMENTE sobre área clara; nunca cinza sobre fundo escuro. A arte NÃO pode ser quase toda preta ou monocromática escura: garanta uma área luminosa de verdade (céu, luz, reflexo, superfície clara) e posicione o título sobre ela ou sobre a região de maior contraste."
-  )
+  // 75-256: a versão original desta regra manda "posicione o título sobre a área
+  // luminosa" — instrução que passa a CONTRADIZER a proibição total de texto.
+  // A parte que continua valendo é a luminosidade da cena.
+  if (input.fracaoReservada && input.fracaoReservada > 0) {
+    lines.push(
+      "LUZ (obrigatório): a arte é vista no celular, no meio do scroll. Ela NÃO pode ser quase toda preta ou monocromática escura — garanta uma área luminosa de verdade (céu, luz, reflexo, superfície clara) para a peça respirar ao lado da faixa sólida da marca."
+    )
+  } else {
+    lines.push(
+      "CONTRASTE (obrigatório): a arte é vista no celular, no meio do scroll — todo texto tem que ser lido de relance. Texto claro SOMENTE sobre área escura, texto escuro SOMENTE sobre área clara; nunca cinza sobre fundo escuro. A arte NÃO pode ser quase toda preta ou monocromática escura: garanta uma área luminosa de verdade (céu, luz, reflexo, superfície clara) e posicione o título sobre ela ou sobre a região de maior contraste."
+    )
+  }
   // 75-248: a regra de "CTA com peso visual" da 75-244 saiu pela culatra — o
   // modelo entregou um botão desproporcional. O CTA saiu do modelo (arte-cta.ts),
   // então aqui só resta proibir. A moldura foi ignorada uma vez: endurecida.

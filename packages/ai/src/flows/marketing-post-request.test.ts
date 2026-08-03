@@ -51,7 +51,15 @@ describe("parseMarketingPostRequest", () => {
       arte: { descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png", "  ", 42] },
     }
     const r = parseMarketingPostRequest(JSON.stringify(comArte), "story")
-    expect(r?.arte).toEqual({ descricao: "Fundo verde #11220F, título 'Entrega em abril'", arquivos_kit: ["logo.png"], cta: null })
+    // 75-256: o contrato ganhou titulo/subtitulo. Ausentes ⇒ null, e o
+    // arte-service não compõe faixa — a arte sai no modo anterior, sem quebrar.
+    expect(r?.arte).toEqual({
+      descricao: "Fundo verde #11220F, título 'Entrega em abril'",
+      arquivos_kit: ["logo.png"],
+      cta: null,
+      titulo: null,
+      subtitulo: null,
+    })
     // sem descrição = sem arte (a rota pula a geração, copy sobrevive)
     const semDesc = parseMarketingPostRequest(JSON.stringify({ ...VALID, arte: { arquivos_kit: ["x"] } }), "estatico")
     expect(semDesc?.arte).toBeNull()
@@ -141,15 +149,22 @@ describe("generateMarketingPostFromRequest — prompt", () => {
   // 75-248 SUPERSEDE a parte do CTA desta regra: pedir "CTA com peso visual"
   // produziu um botão desproporcional, então o CTA saiu do modelo e virou
   // composição. O que resta aqui é contraste e área luminosa, que seguem valendo.
-  it("prompt exige legibilidade na direção de arte: contraste e área luminosa", async () => {
+  // 75-256 SUPERSEDE a parte de contraste desta regra, pela mesma lógica com que
+  // a 75-248 superseded a do CTA: o texto saiu do modelo e virou composição, então
+  // instruir contraste de TEXTO na imagem passou a não ter objeto. O que resta —
+  // e continua valendo — é a luz da CENA e a proibição de moldura.
+  it("prompt exige luz na cena e não pede mais contraste de texto na imagem", async () => {
     const { client, getPrompt } = spyClient()
     await generateMarketingPostFromRequest(client, input)
     const prompt = getPrompt()
-    expect(prompt).toContain("LEGIBILIDADE DA ARTE")
-    expect(prompt).toContain("nunca cinza sobre fundo escuro")
+    expect(prompt).toContain("LUZ DA ARTE")
     expect(prompt).toContain("area luminosa")
     // proibição de moldura seguiu, e endurecida
     expect(prompt).toContain("Nao peca forma geometrica solta, moldura ou linha decorativa")
+    // o texto agora é campo próprio, e a imagem é só cena
+    expect(prompt).toContain("titulo")
+    expect(prompt).toContain("subtitulo")
+    expect(prompt).toContain("NAO escreva texto nenhum aqui")
   })
 
   // 75-250: o Sonnet escrevia hex inventado porque nunca recebia a paleta — e o

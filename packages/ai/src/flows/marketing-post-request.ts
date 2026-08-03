@@ -64,10 +64,20 @@ export interface MarketingPostRequestResult {
    * O campo `arte` singular continua exposto como `artes[0]` para não quebrar
    * quem já lê (retrocompatibilidade dos dois lados).
    */
-  artes: Array<{ descricao: string; arquivos_kit: string[]; cta: string | null }> | null
+  artes: Array<{
+    descricao: string
+    arquivos_kit: string[]
+    cta: string | null
+    /**
+     * Story 75-256 — o TEXTO que vai na faixa inferior, composto por código.
+     * Não é descrição de como desenhar: é o texto exato.
+     */
+    titulo: string | null
+    subtitulo: string | null
+  }> | null
   /** @deprecated use `artes[0]` — mantido para não quebrar chamadas existentes */
   arte: {
-    /** Descrição visual completa (composição, clima, texto NA arte) */
+    /** Descrição visual da CENA (75-256: sem texto — o texto é titulo/subtitulo) */
     descricao: string
     /** file_name EXATOS dos arquivos do Kit a usar como referência (pode ser vazio) */
     arquivos_kit: string[]
@@ -77,6 +87,8 @@ export interface MarketingPostRequestResult {
      * composto (nunca inventar um).
      */
     cta: string | null
+    titulo: string | null
+    subtitulo: string | null
   } | null
 }
 
@@ -99,10 +111,15 @@ REGRAS INEGOCIAVEIS:
 - So afirme numeros (preco, metragem, % vendido, prazo) que estejam no Kit. Prazo de entrega: SOMENTE o contratual.
 - Portugues do Brasil. Emojis com moderacao (a voz da marca manda).
 - BLOCO ARTES (Story 75-255) — **UMA ENTRADA POR TELA/CARD**: o campo "artes" e uma LISTA. Para formato 'story', devolva **uma entrada para CADA TELA** da copy (2 telas = 2 entradas), na mesma ordem — cada tela e uma imagem publicada, e sem isso a tela 2 sai sem arte. Para 'carrossel', devolva **apenas 1** entrada (a CAPA; os demais cards a equipe monta). Para 'estatico', 1. Para 'reel', "artes": null. Maximo 3 entradas.
-- CADA ENTRADA de "artes": "descricao" = direcao de arte COMPLETA para um gerador de imagem — composicao, clima, tipografia, e o TEXTO EXATO que aparece NA arte (titulo/subtitulo/CTA curtos; texto em portugues perfeito). "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva o fundo ideal na descricao.
-- LEGIBILIDADE DA ARTE (a descricao PRECISA cuidar disso; peca vista no celular, no meio do scroll): exija contraste alto entre texto e fundo — texto claro so sobre area escura, texto escuro so sobre area clara, nunca cinza sobre fundo escuro. NAO descreva a arte inteira como escura/preta/monocromatica: sempre reserve uma area luminosa (ceu, luz, reflexo, superficie clara) e diga onde o titulo entra. Nao peca forma geometrica solta, moldura ou linha decorativa para preencher espaco — isso e erro.
+- CADA ENTRADA de "artes" (Story 75-256 — o TEXTO SAIU DA IMAGEM):
+  · "descricao" = direcao da CENA para o gerador de imagem: enquadramento, luz, clima, hora do dia, o que aparece. **NAO escreva texto nenhum aqui, nem peca texto na imagem** — a imagem e uma FOTOGRAFIA pura. Sem titulo, sem frase, sem numero, sem data, sem selo.
+  · "titulo" = o texto EXATO do titulo da peca, curto e forte (ate 40 caracteres, ex.: "A OBRA AVANCA", "48 UNIDADES"). O codigo desenha ele numa faixa solida da marca, com a tipografia exata.
+  · "subtitulo" = a linha de apoio, ate 60 caracteres (ex.: "Entrega contratual: abril de 2027", "Liberado para Airbnb"). null se nao houver.
+  · "arquivos_kit" = file_name EXATOS da lista de ARQUIVOS DO KIT que devem entrar como referencia (logo da marca sempre que existir; foto citada no pedido quando houver). Se o pedido citar arquivo que nao existe, deixe fora, avise na justificativa e descreva a cena ideal na descricao.
+- LUZ DA ARTE (a descricao PRECISA cuidar disso; peca vista no celular, no meio do scroll): NAO descreva a arte inteira como escura/preta/monocromatica — sempre garanta uma area luminosa de verdade (ceu, luz, reflexo, superficie clara). O QUARTO INFERIOR da imagem sera COBERTO por uma faixa solida da marca: nao coloque nada de importante ali (nem o horizonte, nem a base do predio). Nao peca forma geometrica solta, moldura ou linha decorativa para preencher espaco — isso e erro.
 - COR (Story 75-250): use SOMENTE os hex listados em PALETA DA MARCA. E PROIBIDO escrever qualquer outro codigo hex na descricao — inclusive hex que apareca no briefing ou nas diretrizes de OUTRA marca. Se a secao PALETA DA MARCA estiver vazia, descreva a cor por NOME (ex.: "verde escuro", "areia") e nao escreva hex nenhum.
-- CTA (Story 75-248): o campo "cta" recebe o texto EXATO do call-to-action, curto (ate ~30 caracteres, ex.: "Arraste e agende sua visita"). O CTA **NAO** e desenhado pelo gerador de imagem — o codigo compoe a pilula com a cor do Kit. Portanto: NAO descreva o CTA na "descricao", NAO peca botao/pilula/texto de CTA na arte, e reserve a zona inferior. Se o post nao pedir CTA, "cta": null.
+- CTA (Story 75-248): o campo "cta" recebe o texto EXATO do call-to-action, curto (ate ~30 caracteres, ex.: "Arraste e agende sua visita"). O CTA **NAO** e desenhado pelo gerador de imagem — o codigo compoe a pilula com a cor do Kit. Portanto: NAO descreva o CTA na "descricao" e NAO peca botao/pilula/texto de CTA na arte. Se o post nao pedir CTA, "cta": null.
+- RESUMO DO QUE E IMAGEM E DO QUE E TEXTO: a "descricao" produz a FOTOGRAFIA. "titulo", "subtitulo" e "cta" produzem a TIPOGRAFIA, desenhada pelo codigo com as cores e a fonte exatas da marca. Nunca misture os dois — texto pedido dentro da descricao sai COBERTO pela faixa.
 
 RETORNE APENAS JSON valido, sem markdown:
 {
@@ -110,7 +127,13 @@ RETORNE APENAS JSON valido, sem markdown:
   "roteiro": "roteiro de gravacao (SOMENTE formato reel; senao null)",
   "justificativa": "racional + ajustes feitos por diretriz",
   "scheduled_for": "YYYY-MM-DD ou null",
-  "artes": [{ "descricao": "direcao de arte da TELA 1 (SEM o CTA)", "arquivos_kit": ["file_name"], "cta": "texto curto do CTA ou null" }]
+  "artes": [{
+    "descricao": "a CENA da TELA 1, sem texto algum",
+    "titulo": "TITULO CURTO",
+    "subtitulo": "linha de apoio ou null",
+    "arquivos_kit": ["file_name"],
+    "cta": "texto curto do CTA ou null"
+  }]
 }`
 
 /**
@@ -239,7 +262,12 @@ export function parseMarketingPostRequest(
         ? (a.arquivos_kit as unknown[]).filter((f): f is string => typeof f === "string" && f.trim().length > 0).map((f) => f.trim())
         : []
       const cta = str(a.cta) ? (a.cta as string).trim().slice(0, 60) : null
-      artes.push({ descricao: (a.descricao as string).trim(), arquivos_kit: arquivos, cta })
+      // Story 75-256 — tolerante de propósito: título ausente ⇒ null ⇒ o
+      // arte-service não compõe faixa e a arte sai no modo anterior. Resposta em
+      // cache do modelo (sem os campos novos) não pode derrubar o post.
+      const titulo = str(a.titulo) ? (a.titulo as string).trim().slice(0, 40) : null
+      const subtitulo = str(a.subtitulo) ? (a.subtitulo as string).trim().slice(0, 60) : null
+      artes.push({ descricao: (a.descricao as string).trim(), arquivos_kit: arquivos, cta, titulo, subtitulo })
     }
 
     // `arte` singular = artes[0], só para retrocompatibilidade de quem já lê.

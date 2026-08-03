@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { faixaLayout } from "./arte-faixa"
 import { arteFileExtension, aspectRatioForFormato, buildArtePrompt, selectArteReferencias } from "./arte-gen"
 
 // Story 75-240 — helpers puros do motor de arte
@@ -82,6 +83,83 @@ describe("buildArtePrompt", () => {
     expect(p).not.toContain("TIPOGRAFIA")
     const sem = buildArtePrompt({ ...base, ajuste: "  " })
     expect(sem).not.toContain("AJUSTE PEDIDO")
+  })
+
+  // ─── Story 75-256 — faixa composta ────────────────────────────────────────
+
+  describe("com faixa composta (fracaoReservada)", () => {
+    const comFaixa = { ...base, fracaoReservada: 0.3242 }
+
+    it("AC7 — proíbe TODO texto, não só logo e CTA", () => {
+      const p = buildArtePrompt(comFaixa)
+      expect(p).toContain("A ARTE NÃO TEM TEXTO")
+      expect(p).toContain("sem título, sem subtítulo")
+      expect(p).toContain("sem número, sem data, sem selo")
+      expect(p).toContain("será COBERTO")
+    })
+
+    it("AC6 — imprime a fração recebida, arredondada, e não o 25% fixo", () => {
+      const p = buildArtePrompt(comFaixa)
+      expect(p).toContain("os últimos 32% da altura")
+      expect(p).toContain("apenas os 68% de cima")
+      expect(p).not.toContain("últimos 25% da altura")
+      expect(p).not.toContain("ÁREA RESERVADA (obrigatório)")
+    })
+
+    it("troca CONTRASTE por LUZ — instruir contraste de texto perdeu objeto", () => {
+      const p = buildArtePrompt(comFaixa)
+      expect(p).toContain("LUZ (obrigatório)")
+      expect(p).not.toContain("CONTRASTE (obrigatório)")
+      expect(p).not.toContain("posicione o título")
+      // a parte que continua valendo
+      expect(p).toContain("área luminosa de verdade")
+    })
+
+    it("AC9 — sem fração, o prompt é EXATAMENTE o de antes", () => {
+      const antes = buildArtePrompt(base)
+      expect(buildArtePrompt({ ...base, fracaoReservada: null })).toBe(antes)
+      expect(buildArtePrompt({ ...base, fracaoReservada: 0 })).toBe(antes)
+      expect(antes).toContain("ÁREA RESERVADA (obrigatório)")
+      expect(antes).toContain("CONTRASTE (obrigatório)")
+      expect(antes).not.toContain("A ARTE NÃO TEM TEXTO")
+    })
+
+    it("a proibição de logo/CTA e a de moldura seguem valendo nos dois modos", () => {
+      for (const p of [buildArtePrompt(base), buildArtePrompt(comFaixa)]) {
+        expect(p).toContain("LOGO E CTA — NÃO DESENHE")
+        expect(p).toContain("Espaço vazio permanece vazio")
+      }
+    })
+  })
+})
+
+/**
+ * Story 75-256, AC6 — o teste que impede a divergência que ESTA story existe
+ * para fechar: a fração dita ao modelo tem de ser a que a faixa cobre. Se
+ * alguém mexer na PILHA de `arte-faixa.ts` e não no prompt (ou o contrário),
+ * isto quebra.
+ */
+describe("prompt × faixa — fonte única da fração (AC6)", () => {
+  it("a fração impressa no prompt é a que o faixaLayout devolve", () => {
+    for (const [ar, w, h] of [
+      ["9:16", 1080, 1920],
+      ["4:5", 1080, 1350],
+      ["1:1", 1080, 1080],
+    ] as const) {
+      const layout = faixaLayout(ar, w, h, { temSubtitulo: true, temCta: true })
+      const formato = ar === "9:16" ? "story" : ar === "4:5" ? "estatico" : "carrossel"
+      const p = buildArtePrompt({
+        descricao: "cena",
+        formato,
+        marca: "Vind",
+        cores: [{ hex: "#11220F", nome: null }],
+        fontes: [],
+        fracaoReservada: layout.fracaoReservada,
+      })
+      const pct = Math.round(layout.fracaoReservada * 100)
+      expect(p, `${ar}`).toContain(`os últimos ${pct}% da altura`)
+      expect(p, `${ar}`).toContain(`apenas os ${100 - pct}% de cima`)
+    }
   })
 })
 

@@ -28,6 +28,13 @@ import {
   selectLogoAsset,
   LOGO_MIME_ALLOWLIST,
 } from "@web/lib/marketing/arte-logo"
+import {
+  composeFaixa,
+  faixaLayout,
+  pickBandColor,
+  MAX_SUBTITULO_CHARS,
+  MAX_TITULO_CHARS,
+} from "@web/lib/marketing/arte-faixa"
 import { resolvePaletaDoPost, scopeBrandsForPost } from "@web/lib/marketing/brands"
 import type { MarketingPostFormato } from "@web/lib/marketing/posts"
 
@@ -60,6 +67,14 @@ export interface GerarArteParaPostInput {
    * Ausente/vazio = arte sem CTA composto.
    */
   cta?: string | null
+  /**
+   * Story 75-256 — título e subtítulo a COMPOR na faixa inferior. Ausente/vazio
+   * = sem faixa, e a arte volta a ser gerada como antes (o modelo escreve o
+   * título). Não é fallback preguiçoso: é o caminho de quem não tem cor de faixa
+   * no Kit, e mantém a peça saindo em vez de sair vazia.
+   */
+  titulo?: string | null
+  subtitulo?: string | null
 }
 
 export interface GerarArteParaPostResult {
@@ -189,7 +204,27 @@ export async function gerarArteParaPost(
       arquivosUsados.push(b.file_name)
     }
 
-    // 3. Prompt com a identidade do Kit
+    // 3. Story 75-256 — a faixa é decidida ANTES do prompt, porque a fração que
+    // o modelo recebe tem de ser a mesma que vai ser coberta. Duas fontes para
+    // esse número divergiriam em silêncio (AC6).
+    const titulo = input.titulo?.trim().slice(0, MAX_TITULO_CHARS) || null
+    const subtitulo = input.subtitulo?.trim().slice(0, MAX_SUBTITULO_CHARS) || null
+    const bandColor = titulo ? pickBandColor(cores) : null
+    if (titulo && !bandColor) {
+      console.warn(
+        "[arte-service] paleta do Kit sem cor de faixa — título NÃO será composto (não inventamos cor); a arte volta ao modo antigo"
+      )
+    }
+    const temFaixa = !!titulo && !!bandColor
+    // A fração vem do layout, com as dimensões NOMINAIS do formato. A arte real
+    // pode vir com outro tamanho; a fração é proporcional, então não muda.
+    const fracaoReservada = temFaixa
+      ? faixaLayout(aspectRatio, 1080, aspectRatio === "9:16" ? 1920 : aspectRatio === "4:5" ? 1350 : 1080, {
+          temSubtitulo: !!subtitulo,
+          temCta: !!input.cta?.trim(),
+        }).fracaoReservada
+      : null
+
     const prompt = buildArtePrompt({
       descricao: input.descricao,
       formato: input.formato,
@@ -197,6 +232,7 @@ export async function gerarArteParaPost(
       cores,
       fontes,
       ajuste: input.ajuste ?? null,
+      fracaoReservada,
     })
 
     // 4. Geração + upload
@@ -212,15 +248,45 @@ export async function gerarArteParaPost(
     // 🔥 Atenção: como o modelo foi PROIBIDO de desenhar CTA, falha aqui
     // significa arte SEM CTA — não "CTA feio". Por isso o log é alto.
     let arteBuffer = arte.buffer
+
+    // Fonte do Kit resolvida UMA vez: faixa e CTA usam a mesma, e baixar duas
+    // vezes gastaria 15s de timeout a mais no pior caso.
+    let fonteCache: Buffer | null = null
+    const resolverFonte = async (): Promise<Buffer> => {
+      if (fonteCache) return fonteCache
+      const fonteAsset = selectFonteAsset(candidatos, brandPriority)
+      fonteCache = (fonteAsset && (await baixarFonte(fonteAsset.file_url))) || fontePadrao()
+      return fonteCache
+    }
+
+    // 4.3. Story 75-256 — FAIXA com título/subtítulo. Vem ANTES do CTA e do logo
+    // porque é opaca: ela cobre o que o modelo tenha escrito na região, e o CTA
+    // e o logo são compostos POR CIMA dela.
+    if (temFaixa && titulo && bandColor) {
+      try {
+        arteBuffer = await composeFaixa(
+          arteBuffer,
+          titulo,
+          subtitulo,
+          aspectRatio,
+          bandColor,
+          await resolverFonte(),
+          !!input.cta?.trim()
+        )
+      } catch (faixaErr) {
+        // 🔥 Alto de propósito: com faixa ativa o modelo foi proibido de escrever
+        // QUALQUER texto, então falhar aqui entrega uma arte MUDA — sem título.
+        console.error("[arte-service] FALHA AO COMPOR A FAIXA — a arte sai SEM título/subtítulo:", faixaErr)
+      }
+    }
+
     if (input.cta?.trim()) {
       try {
         const accent = pickAccentColor(cores)
         if (!accent) {
           console.warn("[arte-service] paleta do Kit sem cor de destaque — CTA não composto (não inventamos cor)")
         } else {
-          const fonteAsset = selectFonteAsset(candidatos, brandPriority)
-          const fonte = (fonteAsset && (await baixarFonte(fonteAsset.file_url))) || fontePadrao()
-          arteBuffer = await composeCta(arteBuffer, input.cta.trim(), aspectRatio, accent, fonte)
+          arteBuffer = await composeCta(arteBuffer, input.cta.trim(), aspectRatio, accent, await resolverFonte())
         }
       } catch (ctaErr) {
         console.error("[arte-service] FALHA AO COMPOR CTA — a arte sai SEM call-to-action:", ctaErr)
@@ -288,6 +354,9 @@ export interface ArteSpec {
   descricao: string
   arquivosKit: string[]
   cta: string | null
+  /** Story 75-256 — texto composto por código na faixa inferior */
+  titulo?: string | null
+  subtitulo?: string | null
 }
 
 export interface ArteGerada {
@@ -296,6 +365,9 @@ export interface ArteGerada {
   descricao: string
   cta: string | null
   arquivosUsados: string[]
+  /** Story 75-256 — persistidos para o "Refazer arte" recompor igual */
+  titulo?: string | null
+  subtitulo?: string | null
 }
 
 /**
@@ -319,6 +391,8 @@ export async function gerarArtesParaPost(
         descricao: spec.descricao,
         arquivosKit: spec.arquivosKit,
         cta: spec.cta,
+        titulo: spec.titulo ?? null,
+        subtitulo: spec.subtitulo ?? null,
       })
       if (!r) {
         console.warn(`[arte-service] tela ${spec.ordem}: motor não devolveu imagem — segue sem ela`)
@@ -330,6 +404,8 @@ export async function gerarArtesParaPost(
         descricao: spec.descricao,
         cta: spec.cta,
         arquivosUsados: r.arquivosUsados,
+        titulo: spec.titulo ?? null,
+        subtitulo: spec.subtitulo ?? null,
       })
     } catch (err) {
       console.error(`[arte-service] tela ${spec.ordem} falhou — as outras seguem:`, err)

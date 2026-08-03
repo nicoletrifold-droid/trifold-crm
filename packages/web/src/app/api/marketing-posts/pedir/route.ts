@@ -213,6 +213,9 @@ export async function POST(req: NextRequest) {
         // seu próprio teto de 7MB de referência.
         arquivosKit: i === 0 ? arquivosArte : a.arquivos_kit,
         cta: a.cta,
+        // Story 75-256 — o texto da faixa vem do Sonnet e é composto por código
+        titulo: a.titulo,
+        subtitulo: a.subtitulo,
       }))
 
       const geradas = await gerarArtesParaPost(

@@ -63,7 +63,15 @@ export interface MarketingPostInput {
   roteiro: string | null
   arte_url: string | null
   /** Story 75-255 — artes do post, uma por tela. arte_url espelha a de ordem 1. */
-  artes: Array<{ ordem: number; url: string; descricao?: string | null; cta?: string | null }> | null
+  artes: Array<{
+    ordem: number
+    url: string
+    descricao?: string | null
+    cta?: string | null
+    /** Story 75-256 — texto composto na faixa; persistido p/ o Refazer recompor igual */
+    titulo?: string | null
+    subtitulo?: string | null
+  }> | null
   scheduled_for: string | null
 }
 
