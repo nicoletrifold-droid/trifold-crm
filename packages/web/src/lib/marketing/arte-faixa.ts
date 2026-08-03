@@ -130,8 +130,9 @@ export function faixaLayout(
  * Paleta sem candidata ⇒ null ⇒ SEM faixa, e o prompt volta ao comportamento
  * anterior. Mesma regra da `pickAccentColor` da 75-248: **não inventamos cor**.
  */
-export function pickBandColor(cores: Array<{ hex: string }>): string | null {
+export function pickBandColor(cores: Array<{ hex: string; nome?: string | null }>): string | null {
   const norm = (rgb: [number, number, number]) => `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("")}`
+  let declarada: { hex: string; lum: number } | null = null
   let cromatica: { hex: string; lum: number } | null = null
   let neutra: { hex: string; lum: number } | null = null
 
@@ -141,15 +142,39 @@ export function pickBandColor(cores: Array<{ hex: string }>): string | null {
     const lum = luminancia(rgb)
     // Teto: acima disso o título perde peso e a faixa deixa de ancorar a peça.
     if (lum > 0.6) continue
+
+    const escolha = { hex: norm(rgb), lum }
+    // Story 75-259 (AC1) — a INTENÇÃO declarada no Kit ganha da heurística. Sem
+    // isto, a institucional da Trifold saía com faixa LARANJA (#F27A5E, "energia/
+    // promo") em vez do #000000 que o próprio Kit chama de "fundo prioritário",
+    // porque laranja é cromático e preto é neutro.
+    if (nomeIndicaFundo(c.nome)) {
+      if (!declarada || lum < declarada.lum) declarada = escolha
+      continue
+    }
     const alvo = saturacao(rgb) >= 0.15 ? "cromatica" : "neutra"
     const atual = alvo === "cromatica" ? cromatica : neutra
     if (!atual || lum < atual.lum) {
-      const escolha = { hex: norm(rgb), lum }
       if (alvo === "cromatica") cromatica = escolha
       else neutra = escolha
     }
   }
-  return (cromatica ?? neutra)?.hex ?? null
+  // Declarada > cromática > neutra. A paleta do Vind tem `nome: null` nas três
+  // cores e por isso PRECISA seguir caindo na heurística (AC2).
+  return (declarada ?? cromatica ?? neutra)?.hex ?? null
+}
+
+/**
+ * PURA — o cadastro escreve coisas como `"Primária (fundo prioritário)"`: com
+ * acento, com maiúscula e com parênteses. Normaliza antes de casar.
+ */
+export function nomeIndicaFundo(nome: string | null | undefined): boolean {
+  if (!nome) return false
+  const n = nome
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+  return /\b(fundo|primaria|background)\b/.test(n)
 }
 
 /**

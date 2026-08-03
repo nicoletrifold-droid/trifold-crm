@@ -54,6 +54,9 @@ export async function POST(
     cta?: string | null
     titulo?: string | null
     subtitulo?: string | null
+    // 75-258: o tipo NÃO declarava este campo, e foi por isso que o `[]` mais
+    // abaixo passou por duas stories sem ninguém ver que apagava dado.
+    arquivosUsados?: string[] | null
   }>
   const telaAtual = artesAtuais.find((a) => a.ordem === ordem) ?? null
 
@@ -64,9 +67,18 @@ export async function POST(
     (post.arte_descricao as string | null) ??
     `Arte para o post abaixo. Extraia o TÍTULO da copy e componha a arte (NÃO desenhe CTA):\n${(post.copy as string).slice(0, 1200)}`
 
-  const arquivosKit = Array.isArray(post.arte_arquivos)
-    ? (post.arte_arquivos as unknown[]).filter((f): f is string => typeof f === "string")
-    : []
+  // 75-258 (AC1) — as referências são DA TELA pedida. `post.arte_arquivos` é a
+  // coluna de topo e, por contrato da 75-255, espelha a tela 1 — usá-la aqui fazia
+  // o refazer da tela 2 gerar com o render da tela 1 (medido em prod: a tela 2 da
+  // piscina voltou com `FACHADA_NOITE_STORY` na lista e a fachada na cena).
+  // `??` e não `||`: lista vazia LEGÍTIMA (Kit sem referência utilizável) não pode
+  // puxar a da tela 1 de novo.
+  const arquivosDaTela = Array.isArray(telaAtual?.arquivosUsados) ? telaAtual.arquivosUsados : null
+  const arquivosKit =
+    arquivosDaTela ??
+    (Array.isArray(post.arte_arquivos)
+      ? (post.arte_arquivos as unknown[]).filter((f): f is string => typeof f === "string")
+      : [])
 
   const arte = await gerarArteParaPost(admin, {
     orgId: appUser.org_id,
@@ -101,7 +113,10 @@ export async function POST(
         url: a.url,
         descricao: a.descricao ?? "",
         cta: a.cta ?? null,
-        arquivosUsados: [] as string[],
+        // 75-258 (AC2) — PRESERVA. Antes era `[]`, e refazer a tela 2 apagava o
+        // registro de quais arquivos do Kit geraram a tela 1 (medido em prod).
+        // É dado de auditoria: é o que liga a arte ao arquivo que a originou.
+        arquivosUsados: Array.isArray(a.arquivosUsados) ? a.arquivosUsados : [],
         titulo: a.titulo ?? null,
         subtitulo: a.subtitulo ?? null,
       })),

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 import { ctaBox } from "@web/lib/marketing/arte-cta"
 import {
   faixaLayout,
+  nomeIndicaFundo,
   pickBandColor,
   textoFontSize,
   MAX_SUBTITULO_CHARS,
@@ -243,5 +244,71 @@ describe("composeFaixa (AC2) — cobre o que o modelo escreveu", () => {
       .raw()
       .toBuffer()
     expect([acima[0], acima[1], acima[2]]).toEqual([0, 0, 255])
+  })
+})
+
+// ─── Story 75-259 — a faixa obedece ao que o Kit declara ─────────────────────
+
+describe("pickBandColor com nome declarado (75-259, AC1/AC2)", () => {
+  // As três paletas REAIS de produção, copiadas de marketing_brands em 03/08.
+  const TRIFOLD = [
+    { hex: "#000000", nome: "Primária (fundo prioritário)" },
+    { hex: "#F27A5E", nome: "Laranja (energia/promo)" },
+    { hex: "#2E2E2E", nome: "Cinza de apoio" },
+    { hex: "#FFFFFF", nome: "Branco de apoio" },
+  ]
+  const VIND = [{ hex: "#FFFFFF", nome: null }, { hex: "#11220F", nome: null }, { hex: "#8FE6A7", nome: null }]
+  const YARDEN = [
+    { hex: "#002338", nome: "Primária" },
+    { hex: "#F8E8D8", nome: "Secundária" },
+    { hex: "#FACB9D", nome: "Destaque" },
+  ]
+
+  /**
+   * 🔴 O BUG DA STORY: antes disto a institucional saía com faixa LARANJA, porque
+   * laranja é cromático e preto é neutro — contrariando o próprio Kit, que chama
+   * o preto de "fundo prioritário".
+   */
+  it("Trifold institucional usa o PRETO declarado como fundo, não o laranja de promo", () => {
+    expect(pickBandColor(TRIFOLD)).toBe("#000000")
+  })
+
+  it("Vind (cores sem nome) segue na heurística e devolve o verde escuro (AC2)", () => {
+    expect(pickBandColor(VIND)).toBe("#11220f")
+  })
+
+  it("Yarden usa a Primária, que também é a mais escura", () => {
+    expect(pickBandColor(YARDEN)).toBe("#002338")
+  })
+
+  it("entre duas declaradas como fundo, a mais escura ganha", () => {
+    const cores = [{ hex: "#333333", nome: "Fundo claro" }, { hex: "#0A0A0A", nome: "fundo escuro" }]
+    expect(pickBandColor(cores)).toBe("#0a0a0a")
+  })
+
+  it("nome declarado NÃO fura o teto de luminância — fundo claro não vira faixa", () => {
+    const cores = [{ hex: "#F5F5F5", nome: "Primária (fundo)" }, { hex: "#11220F", nome: null }]
+    expect(pickBandColor(cores)).toBe("#11220f")
+  })
+})
+
+describe("nomeIndicaFundo", () => {
+  it("casa com acento, maiúscula e parênteses — como o cadastro real escreve", () => {
+    expect(nomeIndicaFundo("Primária (fundo prioritário)")).toBe(true)
+    expect(nomeIndicaFundo("PRIMARIA")).toBe(true)
+    expect(nomeIndicaFundo("background")).toBe(true)
+    expect(nomeIndicaFundo("Fundo")).toBe(true)
+  })
+
+  it("não casa com destaque, apoio, nulo ou vazio", () => {
+    expect(nomeIndicaFundo("Laranja (energia/promo)")).toBe(false)
+    expect(nomeIndicaFundo("Cinza de apoio")).toBe(false)
+    expect(nomeIndicaFundo("Destaque")).toBe(false)
+    expect(nomeIndicaFundo(null)).toBe(false)
+    expect(nomeIndicaFundo("")).toBe(false)
+  })
+
+  it("não casa por substring solta — 'profundo' não é 'fundo'", () => {
+    expect(nomeIndicaFundo("Azul profundo")).toBe(false)
   })
 })

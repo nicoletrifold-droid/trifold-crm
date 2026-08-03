@@ -149,14 +149,58 @@ export function ctaFontSize(texto: string, box: CtaBox): number {
 
 // ─── Composição ─────────────────────────────────────────────────────────────
 
-/** PURA: escolhe o arquivo de fonte do Kit (prioridade de marca), se houver. */
+/**
+ * Story 75-259 — peso da fonte deduzido do NOME do arquivo. Menor = mais pesado.
+ *
+ * O `satori` recebe `fontWeight: 600` mas renderiza com o arquivo que a gente
+ * entrega: CSS não sintetiza negrito. Então **o arquivo escolhido é a única coisa
+ * que decide o peso real** do título e do CTA.
+ */
+const PESO_POR_NOME: Array<{ re: RegExp; rank: number }> = [
+  { re: /black|heavy/i, rank: 0 },
+  { re: /extra[\s_-]?bold|ultra[\s_-]?bold/i, rank: 1 },
+  { re: /semi[\s_-]?bold|demi[\s_-]?bold/i, rank: 2 },
+  { re: /bold/i, rank: 3 },
+  { re: /medium/i, rank: 4 },
+  { re: /regular|book|normal/i, rank: 5 },
+  { re: /extra[\s_-]?light|ultra[\s_-]?light|thin|hairline/i, rank: 7 },
+  { re: /light/i, rank: 6 },
+]
+
+/** PURA (AC3): 0 = mais pesada. 5.5 = nome sem indicação de peso (entre regular e light). */
+export function pesoDaFonte(fileName: string): number {
+  // A ordem da tabela importa: "extrabold" contém "bold", "extralight" contém
+  // "light". O primeiro match ganha, e os compostos vêm antes dos simples.
+  for (const { re, rank } of PESO_POR_NOME) if (re.test(fileName)) return rank
+  return 5.5
+}
+
+/** Acima disto a fonte é leve demais para título — cai na empacotada (AC4). */
+export const PESO_LEVE_DEMAIS = 6
+
+/**
+ * PURA: escolhe o arquivo de fonte do Kit (prioridade de marca), se houver.
+ *
+ * Story 75-259: era `assets.find(...)` — **o primeiro que aparecesse**. A consulta
+ * que alimenta os candidatos não tem `ORDER BY`, então o peso do texto composto
+ * era decidido pela ordem que o Postgres devolveu. O Kit do Vind tem Light,
+ * Medium e Regular (nenhuma SemiBold): o título de ~100px podia sair fino, e
+ * mudar de um dia para o outro sem ninguém alterar nada.
+ */
 export function selectFonteAsset(
   assets: ArteAssetCandidate[],
   brandPriority: string[]
 ): ArteAssetCandidate | null {
   for (const brandId of brandPriority) {
-    const hit = assets.find((a) => a.brand_id === brandId && a.tipo === "fonte")
-    if (hit) return hit
+    const daMarca = assets.filter((a) => a.brand_id === brandId && a.tipo === "fonte")
+    if (daMarca.length === 0) continue
+    // Empate de peso resolve por file_name, para ser determinístico de verdade —
+    // o Kit do Vind tem `Montserrat-Light.ttf` cadastrada DUAS vezes.
+    return (
+      [...daMarca].sort(
+        (a, b) => pesoDaFonte(a.file_name) - pesoDaFonte(b.file_name) || a.file_name.localeCompare(b.file_name)
+      )[0] ?? null
+    )
   }
   return null
 }

@@ -9,12 +9,14 @@ import {
   fontePadrao,
   hexToRgb,
   luminancia,
+  pesoDaFonte,
   pickAccentColor,
   pickTextColor,
   renderCtaPill,
   saturacao,
   selectFonteAsset,
   FONTE_MIME_ALLOWLIST,
+  PESO_LEVE_DEMAIS,
 } from "./arte-cta"
 import { logoBox } from "./arte-logo"
 
@@ -203,5 +205,93 @@ describe("renderCtaPill / composeCta", () => {
     await expect(composeCta(await arteFake(100, 40), "Agende", "9:16", "#8FE6A7", fontePadrao())).rejects.toThrow(
       /pequena demais/
     )
+  })
+})
+
+// ─── Story 75-259 — a fonte deixa de ser sorteada ────────────────────────────
+
+describe("pesoDaFonte (75-259, AC3)", () => {
+  it("ordena do mais pesado ao mais leve", () => {
+    const nomes = [
+      "Montserrat-Black.ttf",
+      "Montserrat-ExtraBold.ttf",
+      "Montserrat-SemiBold.ttf",
+      "Montserrat-Bold.ttf",
+      "Montserrat-Medium.ttf",
+      "Montserrat-Regular.ttf",
+      "Montserrat-Light.ttf",
+      "Montserrat-Thin.ttf",
+    ]
+    const pesos = nomes.map(pesoDaFonte)
+    expect(pesos).toEqual([...pesos].sort((a, b) => a - b))
+  })
+
+  /**
+   * A ordem da tabela é load-bearing: "extrabold" CONTÉM "bold" e "extralight"
+   * CONTÉM "light". Se os compostos não vierem antes, o match simples ganha e o
+   * peso sai errado.
+   */
+  it("compostos não são confundidos com os simples", () => {
+    expect(pesoDaFonte("Inter-ExtraBold.ttf")).toBeLessThan(pesoDaFonte("Inter-Bold.ttf"))
+    expect(pesoDaFonte("Inter-ExtraLight.ttf")).toBeGreaterThan(pesoDaFonte("Inter-Light.ttf"))
+    expect(pesoDaFonte("Inter-SemiBold.ttf")).toBeLessThan(pesoDaFonte("Inter-Bold.ttf"))
+  })
+
+  it("aceita separadores e caixa variados", () => {
+    expect(pesoDaFonte("MONTSERRAT_SEMI-BOLD.OTF")).toBe(pesoDaFonte("Montserrat-SemiBold.ttf"))
+    expect(pesoDaFonte("Montserrat semi bold.ttf")).toBe(pesoDaFonte("Montserrat-SemiBold.ttf"))
+  })
+
+  it("nome sem indicação de peso fica entre regular e light", () => {
+    const semPeso = pesoDaFonte("MinhaFonteDaMarca.ttf")
+    expect(semPeso).toBeGreaterThan(pesoDaFonte("X-Regular.ttf"))
+    expect(semPeso).toBeLessThan(pesoDaFonte("X-Light.ttf"))
+  })
+
+  it("light e thin são leves demais para título", () => {
+    expect(pesoDaFonte("X-Light.ttf")).toBeGreaterThanOrEqual(PESO_LEVE_DEMAIS)
+    expect(pesoDaFonte("X-Thin.ttf")).toBeGreaterThanOrEqual(PESO_LEVE_DEMAIS)
+    expect(pesoDaFonte("X-Medium.ttf")).toBeLessThan(PESO_LEVE_DEMAIS)
+  })
+})
+
+describe("selectFonteAsset determinístico (75-259, AC3)", () => {
+  const f = (brand_id: string, file_name: string) => ({ brand_id, tipo: "fonte", file_name, file_url: `u/${file_name}` })
+
+  /**
+   * 🔴 O BUG: era `assets.find(...)` — o PRIMEIRO que aparecesse. A consulta que
+   * alimenta os candidatos não tem ORDER BY, então o peso do título de ~100px era
+   * decidido pela ordem que o Postgres devolveu.
+   */
+  it("escolhe a mais pesada, não a primeira da lista", () => {
+    const assets = [f("v", "Montserrat-Light.ttf"), f("v", "Montserrat-Bold.ttf"), f("v", "Montserrat-Regular.ttf")]
+    expect(selectFonteAsset(assets, ["v"])?.file_name).toBe("Montserrat-Bold.ttf")
+    // e o resultado NÃO depende da ordem de entrada
+    expect(selectFonteAsset([...assets].reverse(), ["v"])?.file_name).toBe("Montserrat-Bold.ttf")
+  })
+
+  it("Kit real do Vind (Light ×2, Medium, Regular) escolhe a Medium", () => {
+    const assets = [
+      f("vind", "Montserrat-Light.ttf"),
+      f("vind", "Montserrat-Light.ttf"),
+      f("vind", "Montserrat-Medium.ttf"),
+      f("vind", "Montserrat-Regular.ttf"),
+    ]
+    expect(selectFonteAsset(assets, ["vind"])?.file_name).toBe("Montserrat-Medium.ttf")
+  })
+
+  it("respeita a prioridade de marca antes do peso", () => {
+    const assets = [f("inst", "Marca-Black.ttf"), f("empr", "Marca-Regular.ttf")]
+    // empreendimento vem primeiro em brandPriority: a fonte DELE ganha, mesmo mais leve
+    expect(selectFonteAsset(assets, ["empr", "inst"])?.file_name).toBe("Marca-Regular.ttf")
+  })
+
+  it("empate de peso resolve por nome — determinístico com duplicados", () => {
+    const assets = [f("v", "B-Medium.ttf"), f("v", "A-Medium.ttf")]
+    expect(selectFonteAsset(assets, ["v"])?.file_name).toBe("A-Medium.ttf")
+  })
+
+  it("marca sem fonte devolve null (cai na empacotada)", () => {
+    expect(selectFonteAsset([f("outra", "X-Bold.ttf")], ["v"])).toBeNull()
   })
 })
