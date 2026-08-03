@@ -15,7 +15,7 @@ objetivo_negocio:
   - Medir e limitar consumo de IA por empresa, com margem por cliente observável.
   - Manter cobrança plugável (manual agora, gateway depois) sem acoplar regra de negócio a provider.
 depends_on:
-  - "PRE-0 (externo): PR #308 / migration 199_hotfix_rls_org_scope.sql aplicada em PRODUÇÃO. Precede 86-2 em diante — NÃO bloqueia 86-1 (criar a esteira de CI independe de migration aplicada)."
+  - "PRE-0 (externo): PR #308 / migration 209_hotfix_rls_org_scope.sql aplicada em PRODUÇÃO. Precede 86-2 em diante — NÃO bloqueia 86-1 (criar a esteira de CI independe de migration aplicada)."
   - "PRE-1 (externo): projeto Supabase descartável criado (autorizado pelo dono do produto, ainda não existe). Bloqueia 86-3 e 86-17."
   - "PRE-2 (fato): não existe CI nem husky no repo (.github/ só tem agents/). A esteira é criação do zero, não configuração."
   - "PRE-3 (comercial): preço dos 3 tiers (PEND-1), cota de atendimentos por tier (PEND-1c) e preço do excedente (PEND-1b). Bloqueiam 86-27b e 86-41 — e SÓ elas, após a quebra 27a/27b."
@@ -48,18 +48,22 @@ Pela convenção do projeto (maior número entre os arquivos de `docs/stories/ep
 
 > Ao ler referências cruzadas: qualquer `84-N` ou `85-N` citado neste documento aponta para uma story **de fora** deste epic. **Nenhuma story deste epic usa o prefixo 84 ou 85.**
 
-### 0.2 ⚠️ Numeração de migration: a próxima é 200, não 193
+### 0.2 ⚠️ Numeração de migration: a próxima é **210** — e o diretório tem armadilhas
 
-A arquitetura (`saas-multi-tenant.md` §2) diz que as migrations novas começam em **193** porque a última era `192_stamp_primeiro_atendimento_ignora_sdr.sql`. **Isso está desatualizado.** O estado real do repo hoje:
+Estado **verificado no repo em 2026-08-03**, não inferido:
 
-```
-193_marketing_posts.sql            196_brindes_destinatarios_cargo.sql
-194_webhook_logs_sources_…sql       197_marketing_brands.sql
-195_sdr_na_roleta.sql               198_marketing_brands_v2.sql
-                                    199_hotfix_rls_org_scope.sql   ← Lote 0, PR #308
-```
+| Fato | Valor | Como conferir |
+|---|---|---|
+| Arquivos `.sql` em `supabase/migrations/` | **222** | `ls supabase/migrations/*.sql \| wc -l` |
+| Maior **número** de prefixo | **209** (`209_hotfix_rls_org_scope.sql`) | — |
+| **Próxima migration deste epic** | **210** | — |
+| Prefixos **duplicados** | **20** | `021 024 025 027 028 029 031 032 033 034 036 044 048 063 066 075 102 104 164 170` |
 
-**Toda migration deste epic começa em 200.** Os números 193-199 citados na arquitetura (193, 195, 196-198) devem ser lidos como "sequência relativa", nunca copiados literalmente.
+**Contagem de arquivos ≠ maior número.** São 222 arquivos e o maior prefixo é 209, porque há 20 prefixos repetidos (e lacunas). Qualquer AC que diga "as N migrations" precisa dizer **qual** N — nunca derivar um do outro.
+
+**O hotfix do Lote 0 foi renumerado de 199 para 209** (commit `0ce64459`, depois da primeira redação deste epic). Toda referência a `199_hotfix_rls_org_scope.sql` neste documento foi corrigida para `209_…`. A arquitetura, que já dizia "começam em 193", está duas renumerações atrás — ver §9.1.
+
+**A armadilha que importa para `86-3`, e ela é real, não teórica:** a ordem **lexicográfica** dos arquivos difere da **numérica**. O caso concreto no repo é `024_phone_normalization_part1.sql`, `024_phone_normalization_part1_remote_only.sql` e `024b_mensagens_sender_display_name.sql`. Como `86-3` aplica as 222 migrations **do zero** num projeto Supabase novo, existe risco concreto de o `db push` aplicá-las em ordem diferente da que produção aplicou historicamente — e o projeto descartável deixaria de ser réplica fiel justamente do que ele existe para provar. Isso virou AC explícita de `86-3`.
 
 ---
 
@@ -73,7 +77,7 @@ Três lacunas medidas, não estimadas:
 |---|---|---|
 | RLS não isola de verdade | ~98 de 195 cláusulas `USING` mencionam `org_id`; 16 tabelas com `org_id` e **zero** policies; 20 policies de Storage e **nenhuma** com escopo de org | `rls-multi-tenant-audit.md` |
 | RLS não é a camada de enforcement efetiva | **166 dos 285 route handlers** usam `createAdminClient()` (service-role, bypassa RLS) | `saas-multi-tenant.md` §1.1 |
-| Não existe camada de entitlement nem medição de IA por org | `permissions.ts` só responde "este usuário pode?", nunca "esta empresa contratou?"; nenhuma das 199 migrations tem `input_tokens`/custo por chamada | §1.1, ADR-007 |
+| Não existe camada de entitlement nem medição de IA por org | `permissions.ts` só responde "este usuário pode?", nunca "esta empresa contratou?"; nenhuma das 222 migrations tem `input_tokens`/custo por chamada | §1.1, ADR-007 |
 
 **Objetivo:** transformar o sistema em SaaS multi-tenant com venda modular escalonada (3 tiers acumulativos), provisionamento pela Trifold via painel super-admin, e cobrança recorrente com cota de IA + excedente — **sem interromper a operação real da Trifold Engenharia, que roda em produção sem staging**.
 
@@ -286,7 +290,7 @@ Artigo IV (No Invention): cada FR aponta para a seção de arquitetura, o achado
 | NFR-11 | Cache: entitlement 300s (tag `entitlements-${orgId}`), stages 300s, cota 30s (tag `quota-${orgId}`). Invalidação explícita obrigatória em toda mutação de `/platform`. | §4.2 |
 | NFR-12 | Webhook nunca responde 4xx/5xx para a Meta (ela desabilita o webhook após falhas repetidas). Persistir evento bruto antes de processar; idempotência por identificador externo. | §7.5 |
 | NFR-13 | `platform_audit_log` é imutável. Quem consegue apagar a auditoria não está auditado. | §2.7 |
-| NFR-14 | Migrations deste epic começam em **200**. Índices `CONCURRENTLY` e `REFRESH CONCURRENTLY` vão em arquivo `_remote_only.sql` (não transacional). | §0.2; convenção do projeto |
+| NFR-14 | Migrations deste epic começam em **210**. Índices `CONCURRENTLY` e `REFRESH CONCURRENTLY` vão em arquivo `_remote_only.sql` (não transacional). | §0.2; convenção do projeto |
 
 ---
 
@@ -300,7 +304,7 @@ Artigo IV (No Invention): cada FR aponta para a seção de arquitetura, o achado
 | CON-4 | **166 de 285 route handlers usam service-role.** O gate de RLS **não** cobre essa superfície. Vender o gate como "isolamento garantido" seria falso (ressalva explícita da auditoria). |
 | CON-5 | `security_invoker` **não se aplica a MATERIALIZED VIEW** (`relkind='m'`): `ALTER VIEW` levanta ERRCODE 42809, e o conteúdo é materializado no REFRESH sob role `postgres` (`rolbypassrls = true`), então RLS de tabela-base nunca filtra. Controle correto para matview é **grant**. |
 | CON-6 | O Supabase tem `ALTER DEFAULT PRIVILEGES … TO anon, authenticated`: **todo objeto novo nasce com grant**. Revogar só de `anon` não fecha o furo quando o grant está no pseudo-role `PUBLIC` (`=X/postgres` em `proacl`). |
-| CON-7 | Duas migrations que fazem `CREATE OR REPLACE FUNCTION` da mesma função **não conflitam no git** e o último aplicado ganha em silêncio. Ocorreu neste ciclo: `195_sdr_na_roleta.sql` (Story 75-226) e `199_hotfix_rls_org_scope.sql` ambos redefinem `roleta_pick_and_advance`. |
+| CON-7 | Duas migrations que fazem `CREATE OR REPLACE FUNCTION` da mesma função **não conflitam no git** e o último aplicado ganha em silêncio. Ocorreu neste ciclo: `195_sdr_na_roleta.sql` (Story 75-226) e `209_hotfix_rls_org_scope.sql` ambos redefinem `roleta_pick_and_advance`. |
 | CON-8 | `ANTHROPIC_API_KEY` e `OPENAI_API_KEY` são **sempre da Trifold** — é a premissa do modelo de cota. Nunca por tenant. |
 | CON-9 | `packages/ai` não pode depender de `packages/web` nem do Supabase. A persistência de medição entra por sink injetado. |
 | CON-10 | LGPD: a Trifold passa a ser **operadora** de dado de terceiro (o lead do cliente não tem relação contratual com a Trifold). Contrato de operador é pré-requisito **jurídico** da venda, fora do escopo técnico deste epic, mas bloqueia o faturamento do primeiro cliente. |
@@ -342,7 +346,7 @@ Herdados de `saas-multi-tenant.md` §11.1, com os três que o dono do produto pr
 
 ## 9. O gate de CI — asserções consolidadas
 
-Story 86-2 implementa `scripts/gate-tenancy.ts` (`pnpm gate:tenancy`). Fonte da verdade do schema: introspecção via Supabase Management API (`SUPABASE_MANAGEMENT_PAT`, padrão já usado no projeto), com fallback para snapshot versionado. **Não parsear as 199 migrations** — o schema efetivo é o que importa.
+Story 86-2 implementa `scripts/gate-tenancy.ts` (`pnpm gate:tenancy`). Fonte da verdade do schema: introspecção via Supabase Management API (`SUPABASE_MANAGEMENT_PAT`, padrão já usado no projeto), com fallback para snapshot versionado. **Não parsear os 222 arquivos de migration** — o schema efetivo é o que importa.
 
 ### 9.1 Correção de fato: o gerador de snapshot não existe
 
@@ -350,7 +354,7 @@ A §8.2 da arquitetura afirma que o fallback usa *"um snapshot versionado `docs/
 
 **Resolução adotada:** `86-2` cria um gerador novo, `scripts/generate-schema-snapshot.ts`. Não é correção do script existente — são coisas diferentes.
 
-**O que NÃO muda, para evitar correção excessiva:** `scripts/sync-schema.sh` **é** corretamente reaproveitável em `86-3`, para aplicar as 199 migrations num projeto Supabase novo. A imprecisão da arquitetura é só sobre a alegação de snapshot; o script serve bem ao propósito para o qual foi escrito.
+**O que NÃO muda, para evitar correção excessiva:** `scripts/sync-schema.sh` **é** corretamente reaproveitável em `86-3`, para aplicar as 222 migrations num projeto Supabase novo. A imprecisão da arquitetura é só sobre a alegação de snapshot; o script serve bem ao propósito para o qual foi escrito.
 
 > **Pendência para o @architect:** corrigir a §8.2 quando revisar o documento. Some-se ao ADR-004, que já está pendente de revisão pela rejeição da impersonation (§3.2). **Não reescrevi a arquitetura** — este epic só registra a divergência e a resolução.
 
@@ -386,7 +390,7 @@ A auditoria produziu 13 achados. **O gate cobre 6.** Isso não é lacuna de impl
 | **R6** | **Auditoria de grant contra o pseudo-role `PUBLIC`**: ler `proacl` (funções) e `relacl` (tabelas/views) procurando entrada de `PUBLIC` (`=X/postgres`, `=r/postgres`), não só `anon`/`authenticated`. O Supabase tem `ALTER DEFAULT PRIVILEGES … TO anon, authenticated`, então **todo objeto novo nasce com grant** — e revoke prescrito só de `anon` não fecha o furo | FAIL | Auditoria P1, lição do @dev |
 | **R7** | `SECURITY DEFINER` **sem** `SET search_path` (`pg_proc.prosecdef = true` e `proconfig` sem `search_path`). Vetor de hijack: a função pode ser induzida a resolver um nome para objeto plantado, executando com privilégio do owner | FAIL | Auditoria **P13** (achado do @dev) |
 | **R8** | Função `SECURITY DEFINER` que recebe `p_org_id` valida contra `user_org_id()` / `assert_org_scope()`, ou está na allowlist de service-role | WARN → FAIL na Onda 2 | §8.2 R4; auditoria P1 |
-| **R9** | **Colisão de `CREATE OR REPLACE FUNCTION`**: se o PR adiciona migration que redefine uma função também redefinida por outra migration ainda não aplicada em produção, FALHA e exige reconhecimento explícito. Duas redefinições **não conflitam no git** e o último aplicado ganha em silêncio. Evidência real: `195_sdr_na_roleta.sql` (Story 75-226) e `199_hotfix_rls_org_scope.sql` ambos redefinem `roleta_pick_and_advance` | FAIL | CON-7 |
+| **R9** | **Colisão de `CREATE OR REPLACE FUNCTION`**: se o PR adiciona migration que redefine uma função também redefinida por outra migration ainda não aplicada em produção, FALHA e exige reconhecimento explícito. Duas redefinições **não conflitam no git** e o último aplicado ganha em silêncio. Evidência real: `195_sdr_na_roleta.sql` (Story 75-226) e `209_hotfix_rls_org_scope.sql` ambos redefinem `roleta_pick_and_advance` | FAIL | CON-7 |
 | **R10** | `sellable_modules.key` ⊇ `ALL_MODULES` de `permissions-modules.ts` (drift do catálogo comercial) | FAIL, a partir da Onda 3 | §8.2 R6 |
 | **R11** | Nenhum arquivo em `packages/web/src/app/api/**` chama `createAnthropicClient()` / `createOpenAIClient()` sem `AiUsageContext` | FAIL, a partir da Onda 4 | §8.2 R7; ADR-007 |
 | **R12** | Nenhum arquivo em `app/api/platform/**` faz `.from("…")` com tabela fora de `PLATFORM_READABLE_TABLES`, nem `select('*')` em `users` | FAIL, a partir da Onda 6 | §3.4 |
@@ -409,7 +413,7 @@ Candidatas identificadas na validação do @po, a quebrar no draft (sufixo `a`/`
 
 | Story | Corte sugerido |
 |---|---|
-| 86-2 | motor + R1-R4 / R5-R9 (grants, `relkind`, colisão) / baseline + allowlist + wiring de CI |
+| 86-2 | **ADOTADO pelo @sm em 2026-08-03** → `86-2a` (motor + R1-R4 + snapshot + `known-tables`) · `86-2b` (R5-R9: grants, `relkind`, colisão) · `86-2c` (baseline + allowlist + wiring de CI) |
 | 86-12 | preparação reversível (varredura de referências + leitor por URL assinada) / **flip dos buckets** (irreversível na prática, R13 alto) |
 | 86-13 | expand (convenção + escritas novas) / migrate (mover objetos + reescrever referências) / contract (policy por path) |
 | 86-20 | **dual-run de 7 dias** / cutover + contract |
@@ -433,9 +437,16 @@ A razão é que este epic **exige** expand → migrate → contract (NFR-1). Fat
 
 **Princípio aplicado em todos os casos abaixo, e vale citar:** *o artefato nasce onde é primeiro usado, e é refinado depois.* Foi assim que `platform_audit_log` foi de `86-42a` para `86-16`, `org_billing_periods` de `86-33` para `86-26`, e `platformQuery()` de `86-42a` para `86-22`. Atributo de segurança (append-only, `NOT NULL`, escopo de org) é **atributo de nascimento**, nunca refino posterior.
 
+> **Nota de leitura:** os IDs `86-2a`/`86-2b`/`86-2c` referem-se às sub-stories já draftadas pelo @sm em `docs/stories/` (a quebra sugerida no §10 foi adotada em 2026-08-03). Elas **não** têm cabeçalho próprio neste epic, que mantém `86-2` como unidade de planejamento — não são referências órfãs.
+
 | Artefato | Criado em | **Estendido por** | 1ª menção | Nota |
 |---|---|---|---|---|
-| `rls-gate-baseline.json` | `86-2` | `86-8`, `86-9`, `86-10` (cada lote abaixa a contagem), `86-18` (zera e torna bloqueante) | `86-2` | Incremental por desenho — é a catraca |
+| `.github/workflows/ci.yml` | `86-1` | `86-2c` (job `tenancy-gate`), `86-17` (job `isolation`), `86-18` (torna o gate bloqueante) | `86-1` | Incremental: cada onda pendura um job. Nunca reescrever o workflow — **acrescentar job** |
+| `scripts/generate-schema-snapshot.ts` | `86-2a` | `86-17` (os testes cross-tenant são data-driven pelo snapshot) | `86-2a` | Criado do zero — **não** existe hoje, ver §9.1 |
+| `scripts/gate-tenancy.ts` | `86-2a` (motor + R1-R4) | `86-2b` (R5-R9), `86-2c` (baseline, allowlist, saída de PR), `86-26` (liga R10), `86-34` (liga R11), `86-42a` (liga R12) | `86-2a` | **O artefato mais estendido do epic depois da `PLATFORM_READABLE_TABLES`.** Três regras são ligadas por ondas futuras |
+| `docs/audits/tenancy-known-tables.json` | `86-2a` | **nenhuma — o arquivo NUNCA cresce** | `86-2a` | Ver o invariante abaixo. É a linha mais importante desta tabela |
+| `docs/audits/tenancy-allowlist.yml` | `86-2c` | `86-10` (16 tabelas service-role-only), `86-26` (tabelas de plataforma sem `org_id`), `86-18` (congela o conteúdo na saída da Onda 1) | `86-2` | Cresce **só** com `reason:` preenchido e diff revisável |
+| `rls-gate-baseline.json` | `86-2c` | `86-8`, `86-9`, `86-10` (cada lote abaixa a contagem), `86-18` (zera e torna bloqueante) | `86-2a` | Incremental por desenho — é a catraca |
 | `createOrgScopedAdminClient()` | `86-14` | `86-15` (migra as rotas; ESLint `warn` → `error`) | `86-14` | |
 | `platform_admins` | `86-16` | — | `86-16` | Atômico |
 | `platform_audit_log` + `platform_audit()` | `86-16` | — | `86-16` | **Movido de `86-42a` para cá (B1).** Nasce append-only na mesma migration: imutabilidade é atributo de nascimento |
@@ -452,6 +463,14 @@ A razão é que este epic **exige** expand → migrate → contract (NFR-1). Fat
 | `/dashboard/configuracoes/plano` | `86-31` | `86-39` (barra de cota), `86-43` (seção de faturas) | `86-31` | |
 | `withPlatformAdmin` | `86-42a` | `86-44` (aplica em todas as rotas de `/platform`) | `86-42a` | |
 | `tenant_invoices`, `tenant_invoice_lines` | `86-43` | `86-50` (campos `provider_*` do gateway) | `86-31` (menção **negativa**) | |
+
+> ### ⚠️ Invariante de `tenancy-known-tables.json` — **o arquivo nunca cresce**
+>
+> Ele é o retrato congelado das tabelas que existiam quando o gate nasceu. É contra esse retrato que a regra **R3** decide o que é "tabela nova" — e R3 é a única regra que este epic marca como **FAIL absoluto desde o dia 1, sem baseline**, justamente porque é a que impede dívida nova.
+>
+> **Tabela nova legítima sem `org_id` vai para `tenancy-allowlist.yml` com `reason:` preenchido — nunca para `known-tables.json`.** Sem esse invariante escrito, o primeiro @dev que vir R3 vermelha resolve acrescentando uma linha no arquivo errado, e **mata a regra em silêncio**: a partir dali toda tabela nova sem `org_id` passa despercebida, e o gate continua verde. É a falha mais barata de cometer e a mais cara de descobrir.
+>
+> AC obrigatória em `86-2a`: comentário no topo do arquivo com esse invariante, e o **próprio gate falha** se `known-tables.json` tiver mais entradas que na revisão anterior.
 
 **As três "menções negativas" são deliberadas e devem permanecer.** São ACs que dizem *"esta story NÃO cria/exibe X — quem cria é Y"*: `86-21` sobre `org_billing_periods`/`org_subscriptions`, `86-31` sobre `tenant_invoices`, `86-33` sobre `consumed_atendimentos`. Elas existem para impedir que o @sm ou o @dev assumam que o artefato está disponível. Uma menção negativa vale mais que a ausência de menção.
 
@@ -492,7 +511,8 @@ A razão é que este epic **exige** expand → migrate → contract (NFR-1). Fat
 #### 86-3 — Projeto Supabase descartável + harness de isolamento
 **Objetivo:** dar aos testes cross-tenant um lugar onde rodar. Sem isso a Onda 1 termina sem prova automatizada (R2).
 **AC:**
-- Projeto Supabase separado provisionado (autorizado em D6), com as 199 migrations aplicadas do zero — o que também prova que a sequência de migrations é reproduzível.
+- Projeto Supabase separado provisionado (autorizado em D6), com os **222 arquivos de migration** aplicados do zero — o que também prova que a sequência é reproduzível.
+- **AC de ordenação (§0.2):** confirmar que a ordem de aplicação do `db push` no projeto novo é equivalente à que produção aplicou. O diretório tem **20 prefixos duplicados** e pelo menos um caso onde a ordem lexicográfica diverge da numérica (`024_…`, `024_…_remote_only`, `024b_…`). Se divergir, o projeto descartável deixa de ser réplica fiel **exatamente daquilo que ele existe para provar** — e o resultado é comparar o schema efetivo dos dois lados, não presumir.
 - Credenciais no CI como secrets, gravadas por REST API (NFR-10).
 - `scripts/` com reset determinístico do projeto de teste.
 - Documentado que este projeto **nunca** recebe dado de produção.
@@ -511,7 +531,7 @@ A razão é que este epic **exige** expand → migrate → contract (NFR-1). Fat
 #### 86-4 — Lote 1 / P5: `privacy_consents` com escopo de org
 **Objetivo:** consentimentos LGPD deixam de ser legíveis por admin de qualquer empresa. A tabela não tem `org_id` e o SELECT libera para todo admin/supervisor.
 **AC:**
-- Migration 200: `ALTER TABLE privacy_consents ADD COLUMN org_id uuid` + backfill via `users.org_id` + `NOT NULL` + FK.
+- Migration 210: `ALTER TABLE privacy_consents ADD COLUMN org_id uuid` + backfill via `users.org_id` + `NOT NULL` + FK.
 - Policy `privacy_consents_select_admin` reescrita para `org_id = user_org_id() AND is_admin_or_supervisor()`.
 - `WITH CHECK` no INSERT garantindo `org_id = user_org_id()`.
 - Zero linhas com `org_id NULL` após o backfill (verificado no QA gate).
@@ -1140,7 +1160,7 @@ Bloqueio **direto** e bloqueio **transitivo** são colunas separadas de propósi
 
 | ID | Pré-requisito | Bloqueio direto | **Bloqueio transitivo (fecho pelos `Dep:`)** | Estado |
 |---|---|---|---|---|
-| PRE-0 | Migration `199_hotfix_rls_org_scope.sql` (PR #308) **aplicada em produção** | **86-2** | tudo a partir de 86-2 | PR aberto em `hotfix/rls-org-scope-lote0`, QA PASS, **não aplicado**. **Não bloqueia 86-1** — criar a esteira de CI independe de migration aplicada |
+| PRE-0 | Migration `209_hotfix_rls_org_scope.sql` (PR #308) **aplicada em produção** | **86-2** | tudo a partir de 86-2 | PR aberto em `hotfix/rls-org-scope-lote0`, QA PASS, **não aplicado**. **Não bloqueia 86-1** — criar a esteira de CI independe de migration aplicada |
 | PRE-1 | Projeto Supabase descartável criado | 86-3, 86-17 | **86-18 e todas as ondas seguintes** — 86-18 depende de 86-17, e a Onda 2 inteira depende de 86-18. Sem o projeto, o epic **para no fim da Onda 1** | autorizado (D6), **não existe** |
 | PRE-2 | Não existe CI nem husky | 86-1 é criação do zero | — | fato verificado |
 | PRE-3 | Preço dos 3 tiers (PEND-1) + cota por tier (PEND-1c) + excedente (PEND-1b) | **86-27b, 86-41** | **apenas essas duas**, depois da quebra 27a/27b. Antes da quebra o fecho era de **20 stories** (86-27 → 86-32 → Ondas 4-8) | PEND-1, PEND-1b, PEND-1c |
@@ -1153,7 +1173,7 @@ Bloqueio **direto** e bloqueio **transitivo** são colunas separadas de propósi
 
 - [ ] Nenhuma story exige janela de indisponibilidade. A Nicole atende leads reais durante todo o epic (CON-3).
 - [ ] Toda mudança que toca dado existente segue expand → migrate (dual-run) → cutover → contract (NFR-1).
-- [ ] Migrations começam em **200** e são backward-compatible; `CONCURRENTLY` em arquivo `_remote_only.sql` (NFR-14).
+- [ ] Migrations começam em **210** e são backward-compatible; `CONCURRENTLY` em arquivo `_remote_only.sql` (NFR-14).
 - [ ] Toda migration de policy traz o `DROP/CREATE` reverso documentado no próprio arquivo (NFR-8).
 - [ ] Nenhuma assinatura pública existente é quebrada: `canAccess()` permanece booleana; `createAnthropicClient()` mantém `ctx` opcional.
 - [ ] UI segue os padrões existentes (App Router em `packages/web/src`, tema claro/escuro, absolute imports).
@@ -1276,11 +1296,27 @@ Confirma `lib/tenancy/` (quem é o tenant e o que contratou) e `lib/revenue/` (o
 - **86-37 e 86-38 foram desbloqueadas** por D11 e D12. `86-37` ainda precisa da regra de contagem de atendimento antes de ir para `Ready` — mas **86-33 não precisa mais dela**: a Onda 4 inteira anda sem resposta do Gabriel, porque `consumed_atendimentos` saiu de 86-33 e nasce em 86-37.
 - **Front de draft imediato: 27 stories.** Ondas 0, 1 e 2 inteiras (`86-1` … `86-25`, 25 stories) mais `86-27a` e `86-42a`. A Onda 2 ficou livre com a correção do ciclo O2↔O3 — ela não depende mais de nenhum artefato comercial. As demais stories não-🔒 (Ondas 3-8) também não têm furo de provenance nem cadeado; ficam gated por **ordem de entrega**, não por falta de informação.
 - `86-1` pode começar **hoje** — não depende de PRE-0. `86-8`/`86-9`/`86-10` podem ser draftadas, mas **não promovidas a `Ready`** antes de 86-2 emitir `rls-gate-baseline.json`: a lista de tabelas de cada lote é a partição desse arquivo. `86-3` e `86-17` idem, até PRE-1 existir.
-- **Consulte a §10.1 (Provenance de artefato) antes de draftar qualquer story.** A tabela diz, para cada artefato, **onde nasce** e **quem o estende depois** — informação que as linhas `Dep:` não carregam. Duas rodadas de validação do @po encontraram 4 artefatos consumidos por ondas anteriores àquelas que os criavam, e **todos eram incrementais**. Se uma AC cita tabela, função ou constante que não está na §10.1 e é tocada por mais de uma story, é defeito do epic: volte para o @pm.
-- **Se sua story estende um artefato incremental, declare a extensão na AC.** Vale especialmente para `PLATFORM_READABLE_TABLES`: toda story que adiciona tela de `/platform` acrescenta, no mesmo PR, as tabelas que aquela tela lê, com justificativa por tabela (regra de crescimento definida em `86-22`).
+### ⛔ Antes de draftar qualquer story — dois passos obrigatórios
+
+Estes dois vinham enterrados no meio da lista de considerações e **falharam na primeira oportunidade**: ao draftar a Onda 0, quatro artefatos incrementais novos (`ci.yml`, `gate-tenancy.ts`, `tenancy-known-tables.json`, `tenancy-allowlist.yml`) nasceram sem entrar na §10.1, e quem pegou foi o @po. A regra existia; estava escondida. Por isso agora ela abre o handoff.
+
+**Passo 1 — leia a §10.1 (Provenance de artefato).** Ela diz, para cada artefato, **onde nasce** e **quem o estende depois** — informação que as linhas `Dep:` não carregam.
+
+**Passo 2 — ao terminar o draft, feche o ciclo em duas direções:**
+
+| Situação | O que fazer |
+|---|---|
+| Sua story **cita** tabela/função/constante que **não está na §10.1** e é tocada por mais de uma story | **Pare e devolva ao @pm.** É defeito do epic, não coisa para resolver no draft |
+| Sua story **cria** um artefato novo que outra story vai estender | **Devolva ao @pm para entrar na §10.1** com a coluna "estendido por". Vale para arquivo de config, workflow de CI e script — não só tabela de banco |
+| Sua story **estende** um artefato incremental | **Declare a extensão na AC.** Vale especialmente para `PLATFORM_READABLE_TABLES` (regra de crescimento em `86-22`) e para `.github/workflows/ci.yml` (acrescentar job, nunca reescrever) |
+| Sua story **quebra** em `a`/`b`/`c` | **Avise o @pm:** as linhas da §10.1 que apontam para o ID antigo precisam apontar para a sub-story certa. Aconteceu com `rls-gate-baseline.json`, que ficou dizendo `86-2` depois da quebra em `2a/2b/2c` |
+
+**O ponto cego tem nome e é previsível:** artefato **incremental** — aquele cuja definição é fatiada entre ondas. `Dep:` ordena *stories*; a fatia de um artefato atravessa stories sem aparecer no grafo delas. Artefato atômico nunca deu problema neste epic; incremental deu **todas** as vezes.
+
+
 - **`86-45` não existe** — removida por D14 (sem impersonation). O ID fica vago de propósito e não deve ser reaproveitado; a numeração salta de 86-44 para 86-46.
 - **Ordem é lei:** nenhuma story de Onda 3+ entra antes de 86-18 (gate bloqueante e verde). Vender antes da Onda 1 é o único erro irrecuperável do epic.
-- Migrations começam em **200**; a numeração 193 citada na arquitetura está desatualizada (193-199 já existem).
+- Migrations começam em **210** (verificado em 2026-08-03); a numeração 193 citada na arquitetura está **duas renumerações atrás**. São 222 arquivos `.sql` com 20 prefixos duplicados — ver §0.2, inclusive a armadilha de ordem lexicográfica que virou AC de `86-3`.
 - Toda story que toca dado existente precisa de fase dual-run explícita nas AC — é o que substitui o staging que não existe.
 - **Dois** arquivos exigem QA gate reforçado e teste do caminho de falha: `lib/permissions.ts` (86-28) e `packages/ai/src/client/anthropic.ts` (86-34). `lib/auth.ts` saiu da lista com D14 — sem overlay de impersonation, este epic não toca `getServerUser()`.
 - **Toda story G deve ser quebrada no draft** pela regra do §10 (mais de uma fase expand→migrate→contract ⇒ mais de uma story; janela de observação ⇒ story própria). Candidatas já mapeadas: 86-2, 86-12, 86-13, 86-20, 86-44, 86-48.
