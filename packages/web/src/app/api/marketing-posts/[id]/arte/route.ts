@@ -52,6 +52,8 @@ export async function POST(
     url: string
     descricao?: string | null
     cta?: string | null
+    titulo?: string | null
+    subtitulo?: string | null
   }>
   const telaAtual = artesAtuais.find((a) => a.ordem === ordem) ?? null
 
@@ -76,6 +78,10 @@ export async function POST(
     // 75-248 — CTA persistido em coluna própria; o Refazer não chama o Sonnet,
     // então sem isso o CTA se perderia a cada refazer.
     cta: telaAtual?.cta ?? ((post.arte_cta as string | null) ?? null),
+    // 75-256 — mesma razão: sem reenviar título/subtítulo, refazer a arte
+    // entregaria uma peça MUDA (o modelo foi proibido de escrever texto).
+    titulo: telaAtual?.titulo ?? null,
+    subtitulo: telaAtual?.subtitulo ?? null,
   })
   if (!arte) {
     return NextResponse.json({ error: "Não consegui gerar a arte agora. Tente novamente." }, { status: 502 })
@@ -96,8 +102,18 @@ export async function POST(
         descricao: a.descricao ?? "",
         cta: a.cta ?? null,
         arquivosUsados: [] as string[],
+        titulo: a.titulo ?? null,
+        subtitulo: a.subtitulo ?? null,
       })),
-    { ordem, url: arte.arteUrl, descricao, cta: telaAtual?.cta ?? ((post.arte_cta as string | null) ?? null), arquivosUsados: arte.arquivosUsados },
+    {
+      ordem,
+      url: arte.arteUrl,
+      descricao,
+      cta: telaAtual?.cta ?? ((post.arte_cta as string | null) ?? null),
+      arquivosUsados: arte.arquivosUsados,
+      titulo: telaAtual?.titulo ?? null,
+      subtitulo: telaAtual?.subtitulo ?? null,
+    },
   ]
 
   const { data, error } = await admin

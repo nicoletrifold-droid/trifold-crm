@@ -122,8 +122,16 @@ export function PostPreviewModal({ copy, formato, roteiro, arteUrl, artes, onClo
             {/* Moldura */}
             <div className={`relative w-full overflow-hidden rounded-xl bg-stone-950 ${aspecto}`}>
               {mostraArte ? (
+                // Story 75-257 (AC4) — `object-contain`, não `cover`: quem aprova
+                // precisa ver a peça INTEIRA. Com `cover`, arte de proporção
+                // diferente da moldura (post que trocou de formato depois da
+                // geração) tem justamente a faixa inferior recortada.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={urlDaTela!} alt={`Arte da ${tela?.rotulo ?? "peça"}`} className="h-full w-full object-cover" />
+                <img
+                  src={urlDaTela!}
+                  alt={`Arte da ${tela?.rotulo ?? "peça"}`}
+                  className="h-full w-full object-contain"
+                />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-white">{tela?.texto}</p>
@@ -136,12 +144,14 @@ export function PostPreviewModal({ copy, formato, roteiro, arteUrl, artes, onClo
                 </div>
               )}
 
-              {/* Texto da tela sobreposto quando há arte (no story o texto é DA tela) */}
-              {mostraArte && preview.tipo === "story" && tela?.texto && (
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                  <p className="whitespace-pre-wrap text-xs leading-snug text-white">{tela.texto}</p>
-                </div>
-              )}
+              {/* Story 75-257 — NADA sobreposto à arte.
+                  A 75-254 desenhava o texto da tela por cima da imagem, no
+                  pressuposto (correto na época) de que a arte não carregava
+                  texto. Desde a 75-246/248 e a 75-256 a faixa inferior da arte
+                  JÁ tem título, subtítulo, CTA e logo compostos — o overlay caía
+                  exatamente sobre eles. Pior: o que vai ao Instagram é o arquivo,
+                  então o overlay simulava uma camada que nunca vai existir.
+                  O texto agora vive abaixo do quadro (AC2). */}
             </div>
 
             {/* Navegação */}
@@ -164,6 +174,20 @@ export function PostPreviewModal({ copy, formato, roteiro, arteUrl, artes, onClo
                 >
                   Próxima →
                 </button>
+              </div>
+            )}
+
+            {/* Story 75-257 (AC2) — o texto da tela, ABAIXO do quadro. Só quando
+                há arte: sem arte ele já é o conteúdo do quadro, e repetir seria
+                mostrar a mesma coisa duas vezes. O rótulo diz o que é — no story
+                não existe "legenda" (post-preview.ts força `legenda: null`), e
+                chamar isso de legenda ensinaria a coisa errada a quem aprova. */}
+            {mostraArte && tela?.texto && (
+              <div className="mt-3 rounded-lg bg-gray-50 p-3 dark:bg-stone-800/60">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-stone-500">
+                  {preview.tipo === "story" ? "Texto desta tela" : "Texto da peça"}
+                </p>
+                <p className="whitespace-pre-wrap text-xs text-gray-700 dark:text-stone-300">{tela.texto}</p>
               </div>
             )}
 
