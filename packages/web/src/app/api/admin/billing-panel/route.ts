@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 
 // Story 78-9 — API consolidada do Painel de Saúde & Billing (admin-only).
 // Lê APENAS platform_services + service_cost_snapshots (contrato fixado em 78-1,
 // valores reais de metric/currency confirmados em 78-3). NÃO lê service_billing_reminders:
 // essa tabela tem API própria (GET /api/admin/billing-reminders — Story 78-8), consumida
-// separadamente pela UI. Admin-only via requireAuth() + requireRole(["admin"]) (mesmo padrão
-// de admin/agent-prompts e da story-irmã 78-8); a RLS admin_only das tabelas (78-1) reforça
-// isso na camada de dados (defesa em profundidade). Sem org_id (custo da própria plataforma).
+// separadamente pela UI. Admin-only via requireAuth() + requireRole(["admin"]).
+// Sem org_id (custo da própria plataforma).
+//
+// Hotfix de segurança (migration 209 / auditoria P4): estas tabelas guardam o custo que a
+// TRIFOLD paga pelos serviços. A policy `admin_only` (78-1) era `user_role() = 'admin'` SEM
+// noção de org — na primeira conta admin de CLIENTE, esse cliente leria nosso custo e, como a
+// cobrança é custo + markup, deduziria nossa margem. A migration 209 revoga `authenticated`
+// dessas 5 tabelas; o acesso passa a ser exclusivamente por service-role em rota gated por
+// admin (padrão de 131_imobiliarias.sql). Por isso a leitura usa createAdminClient() e NÃO o
+// client de usuário do requireAuth() — que a partir da 209 receberia lista vazia.
+// O gate de autorização é o requireRole(["admin"]) abaixo (não mais a RLS).
 
 type CollectionStatus = "ok" | "manual" | "no_data" | "error"
 
@@ -87,10 +96,13 @@ function sumByCurrency(rows: MoneyByCurrency[]): MoneyByCurrency[] {
 export async function GET() {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { supabase, appUser } = auth
+  const { appUser } = auth
 
   const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
+
+  // Tabelas de plataforma (sem org_id) — leitura só por service-role (migration 209).
+  const supabase = createAdminClient()
 
   // 1. Catálogo de serviços habilitados, na ordem de exibição.
   const { data: servicesData, error: servicesError } = await supabase

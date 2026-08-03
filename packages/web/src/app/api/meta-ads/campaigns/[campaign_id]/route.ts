@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import type {
   AssociatedLead,
   CampaignDetailApiResponse,
@@ -370,9 +371,30 @@ export async function GET(
   const allLeadsForFunnel = (allLeadsResult.data ?? []) as LeadStatusRow[]
 
   // 7. ROAS — graceful fallback if view doesn't exist
+  //
+  // Hotfix de segurança (migration 209 / auditoria P2): `meta_campaign_roas` NÃO é uma view —
+  // é uma MATERIALIZED VIEW (pg_class.relkind='m'), materializada desde
+  // 035_materialize_meta_campaign_roas_remote_only.sql (Story 29.6) e atualizada por pg_cron
+  // (jobid=5, a cada 3h, REFRESH ... CONCURRENTLY sob o usuário `postgres`).
+  //
+  // Isso importa por um motivo específico: **RLS é inaplicável a matview**. O conteúdo é
+  // materializado no REFRESH, que roda como `postgres` (rolbypassrls=true), então nenhuma
+  // policy de tabela-base filtra a leitura (relrowsecurity=false, 0 policies). Não existe
+  // `security_invoker` para matview. O ÚNICO controle de acesso possível é o GRANT — e a ACL
+  // dava `arwdDxtm` para `anon` E `authenticated`, ou seja, qualquer usuário logado (corretor
+  // incluso) lia total_spend, total_revenue, roas e cpl_real de todas as campanhas via
+  // PostgREST, e `anon` também (confirmado: HTTP 206, 104 linhas, sem login).
+  //
+  // A 209 revoga a matview de `anon` E de `authenticated`. Por isso esta leitura passa a usar
+  // service-role: é o único caminho que continua tendo o grant. O escopo de org fica
+  // EXPLÍCITO no `.eq("org_id", appUser.org_id)` abaixo — org derivada do usuário
+  // server-side, nunca do cliente. Padrão de 131_imobiliarias.sql. Comportamento preservado
+  // para todos os perfis que já veem o painel (o gate continua sendo o requireAuth() + o
+  // módulo `campanhas` do dashboard).
+  const roasClient = createAdminClient()
   let roas_summary: RoasSummary | null = null
   try {
-    const roasResult = await supabase
+    const roasResult = await roasClient
       .from("meta_campaign_roas")
       .select(
         "total_spend, leads_in_crm, sales_count, total_revenue, roas, cpl_real",

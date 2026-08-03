@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { createAdminClient } from "@web/lib/supabase/admin"
 import { validateCreate } from "@web/lib/billing/reminder-validation"
 
 // Story 78-8 — CRUD admin-only de service_billing_reminders (vencimentos/lembretes de
 // fatura da plataforma). Schema fixado em 78-1 (migration 164) — sem migration nova.
-// Admin-only via requireAuth() + requireRole(["admin"]) (padrão de admin/agent-prompts);
-// a RLS admin_only da tabela (78-1) reforça isso na camada de dados (defesa em profundidade).
+// Admin-only via requireAuth() + requireRole(["admin"]) (padrão de admin/agent-prompts).
 // Estas tabelas NÃO têm org_id (custo da própria plataforma, não de tenant — ver 78-1).
+//
+// Hotfix de segurança (migration 209 / auditoria P4): a 209 revoga `authenticated` das 5
+// tabelas de custo interno da plataforma, porque a policy `admin_only` não tinha noção de org
+// (um admin de CLIENTE leria o custo que a Trifold paga → nossa margem). O acesso passa a ser
+// só por service-role em rota gated por admin — daí o createAdminClient() aqui em vez do
+// client de usuário do requireAuth(). O gate de autorização é o requireRole(["admin"]).
 
 /**
  * GET /api/admin/billing-reminders
@@ -16,10 +22,12 @@ import { validateCreate } from "@web/lib/billing/reminder-validation"
 export async function GET() {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { supabase, appUser } = auth
+  const { appUser } = auth
 
   const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
+
+  const supabase = createAdminClient()
 
   const { data, error } = await supabase
     .from("service_billing_reminders")
@@ -46,10 +54,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { supabase, appUser } = auth
+  const { appUser } = auth
 
   const roleError = requireRole(appUser, ["admin"])
   if (roleError) return roleError
+
+  const supabase = createAdminClient()
 
   let body: unknown
   try {
