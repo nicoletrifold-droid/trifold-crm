@@ -27,7 +27,7 @@ export const LOGO_MIME_ALLOWLIST = ["image/png", "image/jpeg", "image/webp", "im
  * rodapé — o logo precisa subir um pouco.
  */
 const LAYOUT: Record<ArteAspectRatio, { bandRatio: number; logoWidthRatio: number }> = {
-  "9:16": { bandRatio: 0.14, logoWidthRatio: 0.26 },
+  "9:16": { bandRatio: 0.095, logoWidthRatio: 0.26 },
   "4:5": { bandRatio: 0.12, logoWidthRatio: 0.22 },
   "1:1": { bandRatio: 0.12, logoWidthRatio: 0.2 },
 }

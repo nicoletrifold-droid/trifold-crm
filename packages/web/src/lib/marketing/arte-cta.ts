@@ -125,9 +125,9 @@ export interface CtaBox {
  */
 export function ctaBox(aspectRatio: ArteAspectRatio, width: number, height: number): CtaBox {
   const logo = logoBox(aspectRatio, width, height)
-  const h = Math.round(height * 0.062)
+  const h = Math.round(height * 0.05)
   const w = Math.round(width * (aspectRatio === "9:16" ? 0.72 : 0.66))
-  const respiro = Math.round(height * 0.018)
+  const respiro = Math.round(height * 0.013)
   return {
     width: w,
     height: h,
