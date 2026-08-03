@@ -5,7 +5,7 @@ import Link from "next/link"
 import MarcasSection from "./marcas-section"
 import { FORMATO_LABELS, MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
 import { PostPreviewModal } from "./_components/post-preview-modal"
-import { buildPostPreview, quantasArtes } from "@web/lib/marketing/post-preview"
+import { buildPostPreview, nomeDaUnidade, quantasArtes, tipoDePreview } from "@web/lib/marketing/post-preview"
 
 // Story 75-219 — aba "Agente": sugestões do agente de marketing IA + fila de
 // aprovação + publicados. Nada é publicado automaticamente — toda transição é
@@ -89,7 +89,7 @@ function isImageUrl(url: string): boolean {
 
 // onError cai pro link (QA #14: URL externa terminando em .png pode não ser
 // imagem servível — sem fallback ficava um ícone quebrado no card).
-function ArtePreview({ url }: { url: string }) {
+function ArtePreview({ url, rotulo }: { url: string; rotulo?: string | null }) {
   const [broken, setBroken] = useState(false)
   if (!isImageUrl(url) || broken) {
     return (
@@ -99,20 +99,71 @@ function ArtePreview({ url }: { url: string }) {
         rel="noopener noreferrer"
         className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
       >
-        Ver arte ↗
+        Ver {rotulo ? rotulo.toLowerCase() : "arte"} ↗
       </a>
     )
   }
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block" title={rotulo ?? "Abrir arte"}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={url}
-        alt="Arte do post"
+        alt={rotulo ? `Arte da ${rotulo}` : "Arte do post"}
         onError={() => setBroken(true)}
         className="max-h-72 rounded-md border border-gray-200 object-contain dark:border-stone-800"
       />
+      {rotulo && (
+        <span className="mt-1 block text-center text-[11px] font-medium text-gray-500 dark:text-stone-400">
+          {rotulo}
+        </span>
+      )}
     </a>
+  )
+}
+
+/**
+ * Story 75-263 — TODAS as artes do post, uma miniatura por tela/card.
+ *
+ * Antes o card renderizava só `arte_url`, que por contrato da 75-255 espelha a
+ * tela de MENOR ordem: num story de 2 telas a tela 2 existia, tinha botão de
+ * "Refazer arte (tela 2)" ao lado, e não aparecia em lugar nenhum. O card já
+ * sabia que havia 2 artes — só desenhava uma.
+ *
+ * Rótulo segue o vocabulário do preview (`post-preview.ts`): story = "Tela N",
+ * carrossel = "Card N". Peça única não recebe rótulo, para não poluir o card do
+ * post estático com um "Tela 1" que não significa nada.
+ */
+function ArtesDoPost({
+  artes,
+  arteUrl,
+  formato,
+}: {
+  artes: MarketingPost["artes"]
+  arteUrl: string | null
+  formato: MarketingPostFormato | null
+}) {
+  const lista = (artes ?? []).filter((a) => a.url).sort((a, b) => a.ordem - b.ordem)
+
+  // Post legado/manual: sem `artes`, mas com `arte_url`. Mantém o de sempre.
+  if (lista.length === 0) {
+    return arteUrl ? <ArtePreview key={arteUrl} url={arteUrl} /> : null
+  }
+
+  // Vocabulário vem de post-preview.ts — fonte única (ver nomeDaUnidade).
+  const nome = nomeDaUnidade(tipoDePreview(formato))
+  const unica = lista.length === 1
+
+  return (
+    <div className="mt-3 flex flex-wrap items-start gap-3">
+      {lista.map((a) => (
+        <ArtePreview
+          key={`${a.ordem}-${a.url}`}
+          url={a.url}
+          // Peça única não precisa de rótulo; 2+ precisa, senão não se sabe qual é qual.
+          rotulo={unica || !nome ? null : `${nome} ${a.ordem}`}
+        />
+      ))}
+    </div>
   )
 }
 
@@ -607,7 +658,8 @@ function PostCard({
         </div>
       )}
 
-      {post.arte_url && <ArtePreview key={post.arte_url} url={post.arte_url} />}
+      <ArtesDoPost artes={post.artes} arteUrl={post.arte_url} formato={post.formato} />
+
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button
