@@ -31,7 +31,7 @@
 --
 -- RELAÇÃO COM O PR #308 (lote 0 completo)
 -- A migration do #308 executa exatamente o mesmo statement, também com IF EXISTS
--- (linha 751 de 199_hotfix_rls_org_scope.sql). Este arquivo é NO-OP quando aquele
+-- (linha 751 de 209_hotfix_rls_org_scope.sql). Este arquivo é NO-OP quando aquele
 -- lote for aplicado — nada aborta. O #308 segue necessário para P1, P2, P4 e P6,
 -- que exigem o runbook (código antes do banco, transação única, smoke de 4 perfis).
 --
