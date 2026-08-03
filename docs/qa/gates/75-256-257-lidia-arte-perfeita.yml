@@ -1,0 +1,166 @@
+schema: 1
+storyId: "75-256+75-257"
+story: "Título da arte composto por código (75-256) + preview sem sobreposição (75-257)"
+title: "Quality Gate — arte-faixa.ts, prompt do motor, contrato do Sonnet e post-preview-modal"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+
+status_reason: >
+  PASS. As duas stories partem de bug reproduzido em produção (prints de 03/08, story do
+  Vind com 2 telas) e a causa foi MEDIDA antes de qualquer código: a geometria estava
+  correta — pílula do CTA a 78% da altura, área reservada começando a 75%, 57px de folga —
+  logo a colisão só podia ser desobediência do modelo, que escreveu o título dentro da
+  área reservada. Isso descarta a correção óbvia (endurecer o prompt) e justifica a virada
+  de desenho: cobrir a região em vez de evitá-la.
+  A AC2, que é a alegação central da 75-256, foi provada em PIXEL e não por argumento.
+  Dois defeitos foram introduzidos e pegos pelos próprios testes durante a implementação
+  (ver `defeitos_pegos_no_ciclo`) — ambos corrigidos, ambos com o motivo escrito no código.
+  Nenhum bloqueante. Três CONCERNS, dois deles decisão de produto do Marcos, não defeito.
+
+evidence:
+  - id: E1
+    titulo: "A causa foi medida, não suposta — e a primeira hipótese caiu"
+    evidence: >
+      `arte-cta.ts:126` (`ctaBox`) põe a pílula em `logo.bandTop - respiro - h`, o que para
+      9:16 (1080×1920) dá topo em 1497px = 78%. `arte-gen.ts:87` reservava os últimos 25%,
+      a partir de 1440px. A pílula estava DENTRO da área reservada com 57px de sobra.
+      Conferido por cálculo antes de escrever qualquer linha. Consequência: o bug não era
+      de conta, e endurecer o prompt (4ª tentativa dessa classe no ciclo) não resolveria.
+
+  - id: E2
+    titulo: "AC2 provada em PIXEL, sem rede e sem Vertex"
+    evidence: >
+      `arte-faixa.test.ts` — imagem sintética 1080×1920 com faixa VERMELHA atravessando
+      `tituloBox.top + 10`, simulando o título que o modelo desenhou indevidamente.
+      Asserções: (a) antes de compor, o pixel é `[255,0,0]`; (b) depois de `composeFaixa`,
+      é `[0x11,0x22,0x0f]` — a cor da faixa; (c) um pixel 30px ACIMA de `faixaTop` segue
+      `[0,0,255]`, provando que a imagem não foi destruída, só a região da faixa.
+      É a diferença entre "a faixa deveria cobrir" e "a faixa cobre".
+
+  - id: E3
+    titulo: "Fonte única da fração (AC6) com teste que quebra na divergência"
+    evidence: >
+      `faixaLayout` devolve `fracaoReservada`, e `arte-service.ts` a passa ao
+      `buildArtePrompt`. O teste "a fração impressa no prompt é a que o faixaLayout
+      devolve" varre os 3 formatos e compara o texto do prompt com o layout. Se alguém
+      mexer na tabela `PILHA` sem mexer no prompt (ou o contrário), quebra.
+      Relevante porque a divergência silenciosa entre duas fontes de verdade é exatamente
+      o defeito que E5 registra.
+
+  - id: E4
+    titulo: "Fail-open em camadas preservado, com log proporcional ao dano"
+    evidence: >
+      Ordem `faixa → CTA → logo`, cada um em `try/catch` PRÓPRIO — padrão estabelecido na
+      75-246/248. O log da faixa é `console.error` e não `warn`, com a razão escrita:
+      com faixa ativa o modelo foi proibido de escrever texto, então falhar ali entrega
+      uma peça MUDA, não uma peça sem enfeite. Mesma lógica que a 75-248 aplicou ao CTA.
+      A fonte do Kit passou a ser resolvida uma vez (`resolverFonte` memoizado) — antes
+      faixa e CTA baixariam o mesmo arquivo duas vezes, 15s de timeout a mais no pior caso.
+
+  - id: E5
+    titulo: "Sem regressão — o caminho antigo é bit-a-bit o mesmo"
+    evidence: >
+      Teste "AC9 — sem fração, o prompt é EXATAMENTE o de antes" compara
+      `buildArtePrompt(base)` com as variantes `fracaoReservada: null` e `: 0` por
+      igualdade de string. Post sem `titulo` (ou Kit sem cor de faixa) segue o fluxo
+      anterior integralmente. Os testes pré-existentes de `arte-gen` passaram sem
+      alteração, o que é a evidência mais forte disso.
+
+  - id: E6
+    titulo: "Suíte, tipos e lint"
+    evidence: >
+      `npx vitest run` → **1512/1512** em 129 arquivos (21 novos em `arte-faixa.test.ts`).
+      `tsc --noEmit` limpo em `packages/web` E em `packages/ai`.
+      Baseline de `main` medida no mesmo commit: **também limpa** — os "4 erros
+      pré-existentes (react-email-editor ×3, pdf-lib ×1)" citados no gate do lote RLS
+      já não existem; a anotação está velha e não deve ser reusada como referência.
+      `eslint` limpo nos 9 arquivos tocados de `packages/web` (o `packages/ai` não tem
+      eslint: seu script `lint` é `tsc --noEmit`, que rodou limpo).
+
+  - id: E7
+    titulo: "Saída visual inspecionada, não presumida"
+    evidence: >
+      Duas amostras renderizadas com `composeFaixa` + `composeCta` sobre um "render" falso
+      e abertas para conferência: (a) título + subtítulo + CTA, faixa a 38% da altura;
+      (b) título só, faixa a 25%. Hierarquia, contraste e centralização corretos nas duas;
+      o vazio abaixo da pílula é a faixa do logo (14%), preenchida em produção.
+
+defeitos_pegos_no_ciclo:
+  - id: D1
+    severity: high
+    titulo: "A faixa recriou a constante do CTA — a MESMA classe de bug que a story fecha"
+    detalhe: >
+      A primeira `PILHA` tinha um `cta: 0.058` próprio, enquanto o `ctaBox` real usa 0.062
+      com respiro 0.018. A `faixaLayout` empilhava o subtítulo 18px DENTRO da pílula.
+      Pego pelo teste "a pílula do CTA nunca invade o título nem o subtítulo"
+      (`9:16: pílula em 1497, texto termina em 1515`).
+    correcao: >
+      `faixaLayout` passou a CONSULTAR `ctaBox` e `logoBox` em vez de reproduzir as
+      constantes. `cta` saiu da tabela `PILHA`, com o motivo escrito no comentário — é o
+      registro de que o autor da story cometeu, dentro dela, o defeito que ela fecha.
+
+  - id: D2
+    severity: high
+    titulo: "O filtro de cor reprovava a cor de marca do Vind — o próprio caso de uso"
+    detalhe: >
+      `pickBandColor` rejeitava luminância ≤ 0.02 "para não pegar preto". O `#11220F` do
+      Kit do Vind — exatamente a cor da faixa que a peça real já usava — tem luminância
+      **0.013**, e caía no filtro. Resultado: nenhuma faixa, e a story não faria nada
+      justamente na marca que motivou o bug.
+    correcao: >
+      Regra trocada por uma defensável: entre as cores escuras, **cromática ganha de
+      neutra**. Kit com preto e verde escuro produz faixa VERDE — senão a peça perde a
+      identidade no elemento mais visível dela. Preto do Kit segue válido quando é a única
+      escura (está na paleta, não foi inventado). O teste que eu havia escrito para
+      "ignora preto puro" estava errado e foi substituído pelos dois casos corretos.
+
+concerns:
+  - id: C1
+    severity: medium
+    tipo: decisão de produto
+    titulo: "A faixa com subtítulo + CTA ocupa 38% da altura — a peça muda de cara"
+    detalhe: >
+      Geometria por combinação (9:16): título só = 25%; +subtítulo = 30%; +subtítulo+CTA =
+      **38%**. Hoje a área reservada é 25% fixos, então a peça vai ficar visivelmente
+      diferente: mais faixa, menos imagem. Está na mesma faixa do que o modelo já produzia
+      na Tela 2 do Vind (~30-35%), e as amostras ficaram boas — mas é mudança estética que
+      o Marcos vai notar, e é dele a chamada.
+    ajuste: "uma tabela, `PILHA` em arte-faixa.ts — título/subtítulo/respiro por formato."
+
+  - id: C2
+    severity: medium
+    tipo: dependência externa
+    titulo: "A largura do texto é estimada por heurística, não medida"
+    detalhe: >
+      `textoFontSize` estima avanço por caractere (0.58 caixa mista, 0.68 caixa alta). Se
+      subestimar, o satori quebra a linha e o texto desce para dentro da pílula — o mesmo
+      sintoma que a story conserta. Mitigado em três frentes: fator maior para caixa alta,
+      caixa alta aplicada em JS (o cálculo vê a string final, em vez de confiar em
+      `textTransform` do satori), e teste que exige o título caber em uma linha para os
+      casos reais do Vind. Não é medição real de glifo — `satori` não expõe isso sem
+      rasterizar.
+    residual: >
+      Título de 40 chars com muitas maiúsculas largas (M, W) pode ainda apertar. O teto de
+      40 no parser é o que limita o pior caso.
+
+  - id: C3
+    severity: low
+    tipo: escopo
+    titulo: "A fidelidade da fachada continua protegida pelo mecanismo frágil"
+    detalhe: >
+      `arte-gen.ts:77` pede "não distorcer arquitetura nem inventar fachadas diferentes das
+      fotos" — instrução de prompt, a mesma classe que esta story acabou de provar
+      insuficiente para posição de texto. O risco jurídico de a IA regenerar a fachada em
+      vez de usar o render **não é teórico**: é o mesmo modo de falha, na mesma geração.
+      Fora de escopo por decisão (é decisão de produto em aberto), mas esta story cria o
+      padrão que a solução vai usar: compor o que precisa ser exato.
+
+verificacao_pendente_de_producao:
+  - "Gerar um story de 2 telas real e conferir que a Tela 2 sai com título legível e pílula abaixo dele — o bug original."
+  - "Refazer arte de uma tela e confirmar que título/subtítulo voltam (sem eles a peça sai muda, ver E4)."
+  - "Post de marca SEM cor escura no Kit: confirmar que cai no modo antigo e a peça sai, em vez de sair sem texto."
+
+reviewed_by: "Quinn (@qa)"
+reviewed_at: "2026-08-03"
