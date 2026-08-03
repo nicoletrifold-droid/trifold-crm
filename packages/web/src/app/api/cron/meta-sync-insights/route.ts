@@ -177,12 +177,31 @@ export async function GET(request: NextRequest) {
     let totalRecords = 0
     let totalApiCalls = 0
 
+    // Story 75-262 — falha de UM nível não pode impedir os outros.
+    // Era isso que fazia o buraco durar 8 semanas: campanha e conjunto gravavam,
+    // o nível de anúncio estourava numa CHECK constraint, e o run era marcado
+    // 'error' com 2/3 do dado dentro. O dashboard de campanha seguia correto e
+    // ninguém olhava o log.
+    const porNivel: Record<"campaign" | "adset" | "ad", { linhas: number; erro: string | null }> = {
+      campaign: { linhas: 0, erro: null },
+      adset: { linhas: 0, erro: null },
+      ad: { linhas: 0, erro: null },
+    }
+    const falhaDeNivel = (nivel: keyof typeof porNivel, err: unknown): void => {
+      // Token morto é da CONTA, não de um nível: sobe para o catch externo, que
+      // marca a conta e alerta.
+      if (err instanceof MetaOAuthException) throw err
+      porNivel[nivel].erro = err instanceof Error ? err.message : String(err)
+      console.error(`[META_INSIGHTS] nível ${nivel} falhou — os outros seguem:`, porNivel[nivel].erro)
+    }
+
     try {
       const token = account.access_token
       const accountPath = account.meta_account_id
       const insightsPath = `${accountPath}/insights`
 
       // --- Campaign level ---
+      try {
       const { data: campaignInsights, apiCalls: campaignCalls } =
         await fetchAllPages<InsightWithCampaignId>(insightsPath, token, {
           level: "campaign",
@@ -223,9 +242,13 @@ export async function GET(request: NextRequest) {
 
         if (campaignErr) throw new Error(`campaign insights upsert: ${campaignErr.message}`)
         totalRecords += campaignRows.length
+        porNivel.campaign.linhas = campaignRows.length
       }
 
+      } catch (e) { falhaDeNivel("campaign", e) }
+
       // --- Adset level ---
+      try {
       const { data: adsetInsights, apiCalls: adsetCalls } =
         await fetchAllPages<InsightWithAdsetId>(insightsPath, token, {
           level: "adset",
@@ -266,9 +289,13 @@ export async function GET(request: NextRequest) {
 
         if (adsetErr) throw new Error(`adset insights upsert: ${adsetErr.message}`)
         totalRecords += adsetRows.length
+        porNivel.adset.linhas = adsetRows.length
       }
 
+      } catch (e) { falhaDeNivel("adset", e) }
+
       // --- Ad level ---
+      try {
       const { data: adInsights, apiCalls: adCalls } = await fetchAllPages<InsightWithAdId>(
         insightsPath,
         token,
@@ -316,24 +343,44 @@ export async function GET(request: NextRequest) {
 
         if (adErr) throw new Error(`ad insights upsert: ${adErr.message}`)
         totalRecords += adRows.length
+        porNivel.ad.linhas = adRows.length
       }
+      } catch (e) { falhaDeNivel("ad", e) }
+
+      // Story 75-262 — o log agora diz O QUE entrou e QUAL nível falhou. Antes era
+      // um `records_synced` único e um status binário: não havia como saber, olhando
+      // o log, que só o nível de anúncio estava morto.
+      const niveisComFalha = (Object.keys(porNivel) as Array<keyof typeof porNivel>).filter(
+        (n) => porNivel[n].erro !== null,
+      )
+      const resumo = niveisComFalha.length
+        ? niveisComFalha.map((n) => `${n}: ${porNivel[n].erro}`).join(" | ")
+        : null
 
       if (syncLog) {
         await supabase
           .from("meta_sync_log")
           .update({
             finished_at: new Date().toISOString(),
-            status: "success",
+            // Qualquer nível com falha mantém o run como 'error' — é o que o cron
+            // de health observa. Mas `details` mostra que os outros entraram.
+            status: niveisComFalha.length ? "error" : "success",
             records_synced: totalRecords,
             api_calls_made: totalApiCalls,
+            error_message: resumo,
+            details: porNivel,
           })
           .eq("id", syncLog.id)
       }
 
       console.log(
-        `[META_INSIGHTS] Account ${account.id}: ${totalRecords} records, ${totalApiCalls} API calls`,
+        `[META_INSIGHTS] Account ${account.id}: ${totalRecords} records (campanha ${porNivel.campaign.linhas}, conjunto ${porNivel.adset.linhas}, anúncio ${porNivel.ad.linhas}), ${totalApiCalls} API calls${resumo ? ` — FALHAS: ${resumo}` : ""}`,
       )
-      results.push({ account_id: account.id, status: "success", records_synced: totalRecords })
+      results.push({
+        account_id: account.id,
+        status: niveisComFalha.length ? "partial" : "success",
+        records_synced: totalRecords,
+      })
     } catch (err) {
       if (err instanceof MetaOAuthException) {
         await supabase

@@ -31,7 +31,13 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createAdminClient()
-  const alerts: string[] = []
+  // Story 75-262 — o alerta passou a ter TIPO, porque agora ele vai para dois
+  // lugares: Telegram (como sempre) e `meta_alerts`, que é o que aparece no sino
+  // do CRM. A detecção de "insights parado" já existia e disparava desde 28/06 —
+  // só ia para o Telegram, que é canal de staging. 5 semanas de alerta correto
+  // sem ninguém ver. Construir um alerta NOVO repetiria o erro; o que faltava era
+  // o alerta existente chegar onde o Marcos olha.
+  const alerts: Array<{ tipo: string; texto: string }> = []
 
   // Check 1: entities sync (last 6h)
   const { data: lastEntities } = await supabase
@@ -49,9 +55,9 @@ export async function GET(request: NextRequest) {
       ? new Date(lastEntities.finished_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
       : "nunca"
     console.warn(`[META_SYNC_HEALTH] Entities sync stale — last success: ${lastSeen}`)
-    alerts.push(
+    alerts.push({ tipo: "sync_entities_stale", texto:
       `⚠️ *[Meta Sync] Sync de campanhas parado*\n\nÚltimo sync de entidades: ${lastSeen}\n\nEsperado a cada ${ENTITIES_STALE_HOURS}h. Verifique o cron \`meta-sync-entities\`.`
-    )
+    })
   }
 
   // Check 2: insights sync (last 26h)
@@ -70,9 +76,9 @@ export async function GET(request: NextRequest) {
       ? new Date(lastInsights.finished_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
       : "nunca"
     console.warn(`[META_SYNC_HEALTH] Insights sync stale — last success: ${lastSeen}`)
-    alerts.push(
+    alerts.push({ tipo: "sync_insights_stale", texto:
       `⚠️ *[Meta Sync] Sync de insights parado*\n\nÚltimo sync de insights: ${lastSeen}\n\nEsperado diariamente. Verifique o cron \`meta-sync-insights\`.`
-    )
+    })
   }
 
   // Check 3: token status
@@ -84,14 +90,40 @@ export async function GET(request: NextRequest) {
   if (errorAccounts && errorAccounts.length > 0) {
     const accountList = errorAccounts.map((a) => `\`${a.meta_account_id}\``).join(", ")
     console.warn(`[META_SYNC_HEALTH] Token error accounts: ${accountList}`)
-    alerts.push(
+    alerts.push({ tipo: "token_invalid", texto:
       `🔴 *[Meta Sync] Token inválido ou expirado*\n\nContas afetadas: ${accountList}\n\nAcesse as configurações para renovar o token.`
-    )
+    })
   }
 
-  // Send all alerts
+  // Story 75-262 — DOIS destinos. O Telegram continua (é onde o alerta nasceu);
+  // `meta_alerts` é novo e é o que aparece no sino do CRM.
+  const hoje = new Date().toISOString().split("T")[0]!
   for (const alert of alerts) {
-    await sendTelegramAdminAlert(alert)
+    await sendTelegramAdminAlert(alert.texto)
+  }
+
+  if (alerts.length > 0) {
+    // O health check é global (olha `meta_sync_log`, não conta a conta), então a
+    // org vem das contas cadastradas. `entity_id` fixo por tipo + `fired_date`
+    // faz o upsert deduplicar: 6 execuções por dia geram UMA linha, não 6.
+    const { data: orgs } = await supabase.from("meta_ad_accounts").select("org_id")
+    const orgIds = [...new Set((orgs ?? []).map((o) => o.org_id))]
+    for (const orgId of orgIds) {
+      for (const alert of alerts) {
+        await supabase.from("meta_alerts").upsert(
+          {
+            org_id: orgId,
+            alert_type: alert.tipo,
+            level: "account",
+            entity_id: alert.tipo, // não é entidade do Meta: é o próprio check
+            severity: alert.tipo === "token_invalid" ? "critical" : "warning",
+            message: alert.texto.replace(/\*/g, ""),
+            fired_date: hoje,
+          },
+          { onConflict: "org_id,alert_type,entity_id,fired_date", ignoreDuplicates: true },
+        )
+      }
+    }
   }
 
   return NextResponse.json({

@@ -106,7 +106,15 @@ export async function GET(request: NextRequest) {
           level: "adset",
           date_preset: "last_7d",
           breakdowns: "publisher_platform,platform_position",
-          fields: "campaign_id,adset_id,spend,impressions,clicks,actions,publisher_platform,platform_position",
+          // Story 75-262 — `publisher_platform` e `platform_position` são
+          // BREAKDOWNS, não fields. Pedi-los nos dois lugares fazia a Graph API
+          // recusar a chamada inteira:
+          //   (#100) publisher_platform, platform_position are not valid for fields param
+          // Este cron NUNCA funcionou por causa disso: 8 domingos, 0 registros.
+          // A API devolve as duas chaves automaticamente por vir de `breakdowns`
+          // — verificado contra a conta real em 03/08: 25 linhas, com
+          // publisher_platform='facebook' e platform_position='facebook_reels'.
+          fields: "campaign_id,adset_id,spend,impressions,clicks,actions",
         },
       )
 
