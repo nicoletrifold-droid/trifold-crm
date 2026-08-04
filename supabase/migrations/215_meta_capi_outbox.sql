@@ -89,6 +89,24 @@ REVOKE ALL ON meta_capi_outbox FROM authenticated, anon;
 --   dependa do tracking Meta. Recriada via CREATE OR REPLACE (idempotente); o
 --   trigger 124 continua apontando para esta função (não recriamos o trigger).
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- GUARDA DE ORDEM — esta migration REESCREVE log_lead_stage_change(), então só
+-- pode rodar num banco onde a 125 já passou. Sem esta guarda, aplicar num banco
+-- sem a 125 (o DEV tem drift grande) gravaria a versão certa por acidente ou a
+-- errada por descuido, sem sinal nenhum.
+-- ---------------------------------------------------------------------------
+DO $guard$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname = 'public_user_id'
+  ) THEN
+    RAISE EXCEPTION
+      'public.public_user_id() nao existe. Esta migration reescreve log_lead_stage_change() e DEPENDE dela (hotfix da migration 125). Aplique a 125 antes.';
+  END IF;
+END
+$guard$;
+
 CREATE OR REPLACE FUNCTION log_lead_stage_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -106,7 +124,17 @@ BEGIN
   VALUES (
     NEW.org_id,
     NEW.id,
-    auth.uid(),                       -- null em ações via service-role (cron/admin server) — OK
+    -- 🔴 public_user_id(), NÃO auth.uid(). Esta linha foi corrigida antes de
+    -- aplicar em prod: o corpo original desta migration foi capturado da
+    -- migration 124, mas a 125 é um HOTFIX que trocou auth.uid() por
+    -- public_user_id() justamente aqui. `auth.uid()` devolve o id de
+    -- `auth.users`, e `activities.user_id` tem FK para `public.users(id)` —
+    -- com auth.uid() o INSERT viola a FK, a trigger AFTER UPDATE estoura e o
+    -- UPDATE de `leads.stage_id` é REVERTIDO INTEIRO. Efeito: arrastar card no
+    -- kanban desfaz sozinho, para TODO usuário logado (só passavam ações via
+    -- service-role, onde auth.uid() é null). Manter auth.uid() aqui reverteria
+    -- a 125 em silêncio — CREATE OR REPLACE não avisa nada.
+    public_user_id(),                 -- auth.uid() → public.users.id; NULL em service-role
     'stage_change',
     'Etapa alterada de "' || COALESCE(from_name, 'Nenhuma') || '" para "' || COALESCE(to_name, '?') || '"',
     jsonb_build_object(
