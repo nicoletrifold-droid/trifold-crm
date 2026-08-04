@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { LOST_REASON_GROUP_LABELS } from "@web/lib/constants"
 
 // ─── In-memory cache (5 min TTL) ──────────────────────────────────────────────
 interface CacheEntry { text: string; ts: number }
@@ -1382,13 +1383,7 @@ interface LossRow {
 }
 
 const LOSS_GROUP_LABELS: Record<string, string> = {
-  nao_conseguimos_falar: "Não conseguimos falar (não atende/não responde)",
-  sem_interesse: "Sem interesse / desistiu",
-  nao_qualifica_preco: "Não qualifica (renda, crédito, preço)",
-  fora_perfil_regiao: "Fora do perfil / região",
-  foi_para_outro: "Comprou outro imóvel / concorrente",
-  clicou_sem_intencao: "Clicou sem intenção de compra",
-  outro: "Outro",
+  ...LOST_REASON_GROUP_LABELS,
   // grupos que só existem no legado classificado por heurística:
   duplicado_teste_corretor: "Duplicado / teste / corretor",
   sem_motivo: "Sem motivo registrado",
@@ -1421,6 +1416,7 @@ export async function fetchLostReasonBreakdown(
     .from("v_lead_lost_reason_grupo")
     .select("grupo_final, fonte, lost_reason, created_at, source")
     .eq("org_id", orgId)
+    .order("id") // range() sem ORDER BY é imprevisível — paginação duplicaria/pularia linhas
   if (window?.startDate) query = query.gte("created_at", window.startDate)
   if (window?.endDate) query = query.lte("created_at", `${window.endDate}T23:59:59`)
   // PostgREST corta em 1000 linhas por default — pagina para não subestimar.

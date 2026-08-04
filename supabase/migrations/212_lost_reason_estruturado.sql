@@ -127,7 +127,7 @@ GRANT SELECT ON public.v_lead_lost_reason_grupo TO authenticated;
 COMMENT ON VIEW public.v_lead_lost_reason_grupo IS
   'Story 75-264: motivo de perda por grupo. Dado novo = lost_reason_grupo (estruturado, fonte=estruturado); '
   'legado = HEURÍSTICA por regex sobre lost_reason normalizado (fonte=heuristica). Cobertura medida em prod '
-  'em 2026-08-04 sobre 1.042 perdidos: 92,0%% dos textos classificados; 7,6%% nao_classificado; 5,5%% sem_motivo. '
+  'em 2026-08-04 sobre 1.042 perdidos: 92,0% dos textos classificados; 7,6% nao_classificado; 5,5% sem_motivo. '
   'NÃO tratar a parte heurística como verdade absoluta. A ordem do CASE é parte da definição. '
   'Admin-only + org própria embutidos no WHERE (security_invoker on).';
 

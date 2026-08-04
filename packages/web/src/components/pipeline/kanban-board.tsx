@@ -24,6 +24,9 @@ import { ScrollableX } from "@web/components/ui/scrollable-x"
 import type { CreativeData } from "@web/lib/pipeline/types"
 import { STAGE_IDS } from "@trifold/shared"
 import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
+
+// Não Qualificado (2º id de PERDIDO_STAGE_IDS) — o endpoint mark-lost decide a etapa pelo `type`.
+const NAO_QUALIFICADO_STAGE_ID = PERDIDO_STAGE_IDS[1]
 import { MarkLostModal } from "@web/components/leads/mark-lost-modal"
 import { VisitFeedbackModal } from "@web/components/appointments/visit-feedback-form"
 
@@ -612,11 +615,7 @@ export function KanbanBoard({
         <MarkLostModal
           leadId={markLostMove.lead.id}
           leadName={markLostMove.lead.name}
-          type={
-            markLostMove.newStageId === "95327bd7-3e88-4038-aa16-250a74ab085c"
-              ? "nao_qualificado"
-              : "represamento"
-          }
+          type={markLostMove.newStageId === NAO_QUALIFICADO_STAGE_ID ? "nao_qualificado" : "represamento"}
           onSuccess={() => {
             // O endpoint mark-lost já persistiu etapa + motivo; aqui só reflete no board.
             const { lead, sourceStageId, newStageId } = markLostMove
