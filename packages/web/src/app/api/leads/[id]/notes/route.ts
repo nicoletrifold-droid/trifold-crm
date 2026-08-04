@@ -62,7 +62,10 @@ export async function POST(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  if (lead.lost_reason || (lead.stage_id && PERDIDO_STAGE_IDS.includes(lead.stage_id as string))) {
+  // "Perdido" é ETAPA, não lost_reason (convenção 75-153) — gate SÓ por etapa.
+  // (75-264: lost_reason agora sempre recebe um rótulo ao perder; o gate antigo
+  // por texto travaria leads reativados que mantivessem qualquer resíduo.)
+  if (lead.stage_id && PERDIDO_STAGE_IDS.includes(lead.stage_id as string)) {
     return NextResponse.json(
       { error: "Não é possível adicionar notas em leads perdidos" },
       { status: 400 }

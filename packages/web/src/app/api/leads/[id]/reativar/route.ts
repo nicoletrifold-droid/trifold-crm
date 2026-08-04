@@ -123,7 +123,7 @@ export async function POST(
 
   const { data: lead } = await admin
     .from("leads")
-    .select("id, org_id, name, stage_id, assigned_broker_id, lost_reason")
+    .select("id, org_id, name, stage_id, assigned_broker_id, lost_reason, lost_reason_grupo")
     .eq("id", id)
     .eq("org_id", appUser.org_id)
     .maybeSingle()
@@ -149,6 +149,7 @@ export async function POST(
         sla_alerta_gestor_em: null,
         bolsao_em: null,
         lost_reason: null,
+        lost_reason_grupo: null, // Story 75-264: grupo não pode ficar residual
         updated_at: now,
       })
       .eq("id", id)
@@ -176,6 +177,7 @@ export async function POST(
         to_broker_id: result.brokerUserId ?? null,
         from_broker_id: lead.assigned_broker_id,
         previous_lost_reason: lead.lost_reason ?? null,
+        previous_lost_reason_grupo: lead.lost_reason_grupo ?? null,
       },
     })
 
@@ -187,7 +189,7 @@ export async function POST(
       entity_type: "lead",
       entity_id: id,
       entity_name: lead.name ?? id,
-      metadata: { motivo, via_roleta: true, roleta_status: result.status, previous_lost_reason: lead.lost_reason ?? null },
+      metadata: { motivo, via_roleta: true, roleta_status: result.status, previous_lost_reason: lead.lost_reason ?? null, previous_lost_reason_grupo: lead.lost_reason_grupo ?? null },
       ip_address: getRequestIp(request.headers),
     })
 
@@ -219,6 +221,7 @@ export async function POST(
       sla_alerta_gestor_em: null,
       bolsao_em: null, // garante que não fique preso como "em bolsão"
       lost_reason: null, // não está mais perdido
+      lost_reason_grupo: null, // Story 75-264: grupo não pode ficar residual
       updated_at: now,
     })
     .eq("id", id)
@@ -239,6 +242,7 @@ export async function POST(
       to_broker_id: brokerUserId,
       from_broker_id: lead.assigned_broker_id,
       previous_lost_reason: lead.lost_reason ?? null,
+      previous_lost_reason_grupo: lead.lost_reason_grupo ?? null,
     },
   })
 
@@ -250,7 +254,7 @@ export async function POST(
     entity_type: "lead",
     entity_id: id,
     entity_name: lead.name ?? id,
-    metadata: { motivo, to_broker_id: brokerUserId, previous_lost_reason: lead.lost_reason ?? null },
+    metadata: { motivo, to_broker_id: brokerUserId, previous_lost_reason: lead.lost_reason ?? null, previous_lost_reason_grupo: lead.lost_reason_grupo ?? null },
     ip_address: getRequestIp(request.headers),
   })
 

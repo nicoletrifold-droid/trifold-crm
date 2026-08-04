@@ -64,8 +64,13 @@ export async function POST(
   // nunca é Perdido — se a origem era Perdido, o lead está sendo reativado e não pode carregar
   // lost_reason (senão some do pipeline / fica read-only). Convenção: "perdido = ETAPA".
   const leavingPerdido = PERDIDO_STAGE_IDS.includes(lead.stage_id)
-  const stageUpdate: { stage_id: string; lost_reason?: null } = { stage_id: body.stage_id }
-  if (leavingPerdido) stageUpdate.lost_reason = null
+  const stageUpdate: { stage_id: string; lost_reason?: null; lost_reason_grupo?: null } = {
+    stage_id: body.stage_id,
+  }
+  if (leavingPerdido) {
+    stageUpdate.lost_reason = null
+    stageUpdate.lost_reason_grupo = null // Story 75-264: grupo não pode ficar residual
+  }
 
   // Update lead stage
   const { data: updatedLead, error: updateError } = await supabase

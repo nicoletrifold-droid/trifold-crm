@@ -4,6 +4,7 @@ import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { STAGE_IDS } from "@trifold/shared"
+import { LOST_REASON_GROUP_LABELS, isLostReasonGrupo } from "@web/lib/constants"
 
 export async function POST(request: NextRequest) {
   const user = await getServerUser()
@@ -14,15 +15,25 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { lead_ids, broker_id, lost_reason, roleta } = body as {
+  const { lead_ids, broker_id, lost_reason, lost_reason_grupo, roleta } = body as {
     lead_ids: string[]
     broker_id?: string | null
     lost_reason?: string | null
+    lost_reason_grupo?: string | null
     roleta?: boolean
   }
 
   if (!Array.isArray(lead_ids) || lead_ids.length === 0) {
     return NextResponse.json({ error: "lead_ids obrigatório" }, { status: 400 })
+  }
+
+  // Story 75-264 — validação server-side do grupo: este endpoint usa service_role,
+  // nenhuma RLS barra valor inválido aqui; só a whitelist (e o CHECK do banco).
+  if ((lost_reason || lost_reason_grupo) && !isLostReasonGrupo(lost_reason_grupo)) {
+    return NextResponse.json(
+      { error: "lost_reason_grupo é obrigatório para finalizar como perdido" },
+      { status: 400 }
+    )
   }
 
   const supabase = createAdminClient()
@@ -39,6 +50,7 @@ export async function POST(request: NextRequest) {
     // Se o lead estava Perdido, ao voltar para etapa ativa não pode carregar lost_reason
     // residual (senão some do pipeline / fica read-only). Convenção: "perdido = ETAPA".
     update.lost_reason = null
+    update.lost_reason_grupo = null
   }
 
   // Story 75-207 — "Voltar para a Roleta": limpa o corretor E o bolsão (senão a
@@ -50,10 +62,15 @@ export async function POST(request: NextRequest) {
     update.bolsao_em = null
     update.stage_id = STAGE_IDS.novo
     update.lost_reason = null
+    update.lost_reason_grupo = null
   }
 
-  if (lost_reason) {
-    update.lost_reason = lost_reason
+  if (lost_reason_grupo && isLostReasonGrupo(lost_reason_grupo)) {
+    // Story 75-264: grupo estruturado + observação livre ao lado. Sem observação,
+    // grava o rótulo do grupo — o analytics conta "perdido" pela presença de
+    // lost_reason (get_analytics_summary* / executive.ts).
+    update.lost_reason_grupo = lost_reason_grupo
+    update.lost_reason = lost_reason?.trim() || LOST_REASON_GROUP_LABELS[lost_reason_grupo]
     update.stage_id = STAGE_IDS.perdido // finalizar como perdido prevalece sobre a transferência
   }
 

@@ -8,6 +8,8 @@ import {
   fetchLeadConversations,
   requiresDrill,
   requiresConversation,
+  requiresLossBreakdown,
+  fetchLostReasonBreakdown,
   requiresCreative,
   fetchCreativePerformance,
   extractDateWindow,
@@ -201,6 +203,20 @@ export async function POST(request: NextRequest) {
   if (admin) {
     // Agregados (sem PII) — sempre para admin, cacheáveis (AC1, AC2, AC3, AC8)
     pipelineContext += "\n\n" + (await fetchPipelineAggregates(supabase, appUser.org_id, dateWindow))
+
+    // Motivos de perda on-demand (Story 75-264) — agregados + texto cru dos não
+    // classificados, com cobertura declarada. A view re-verifica admin+org (RLS).
+    if (requiresLossBreakdown(message)) {
+      // Perda é dado ACUMULADO: sem pedido explícito de período (UI ou texto),
+      // olha todo o histórico — o default implícito de 30d do extractor
+      // esconderia a maior parte das perdas.
+      const explicitWindow =
+        dateWindowSource === "ui" || dateWindow.label !== "Últimos 30 dias"
+          ? dateWindow
+          : undefined
+      const loss = await fetchLostReasonBreakdown(supabase, appUser.org_id, explicitWindow)
+      if (loss) pipelineContext += "\n\n" + loss
+    }
 
     // Drill on-demand (PII) — disparado por heurística; fail-closed (AC4, AC6)
     if (requiresDrill(message)) {
