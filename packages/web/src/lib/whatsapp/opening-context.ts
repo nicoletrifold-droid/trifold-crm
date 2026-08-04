@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import type { OpeningParamContext } from "./opening-templates"
+import { OPENING_PRIVILEGED_ROLES } from "./opening-roles"
 
 // Story 75-217 — contexto compartilhado entre o menu de templates de abertura
 // (GET opening-templates) e o envio (POST start-whatsapp): carrega o lead com
@@ -17,7 +18,10 @@ export type OpeningContextResult =
   | { ok: true; lead: { id: string; name: string | null; phone: string | null }; ctx: OpeningParamContext; waConfig: { phone_number_id: string; access_token: string; waba_id: string | null } }
   | { ok: false; status: number; error: string; message?: string }
 
-export const OPENING_PRIVILEGED_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"]
+// Story 75-267 — a constante mora em opening-roles.ts (módulo client-safe;
+// este arquivo importa createAdminClient e não entra em client component).
+// Re-export mantém os consumidores server existentes.
+export { OPENING_PRIVILEGED_ROLES }
 
 export async function loadOpeningContext(
   leadId: string,

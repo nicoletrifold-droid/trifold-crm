@@ -28,6 +28,10 @@ const WINDOW_MS = 24 * HOUR_MS // janela total de 24h
 const CLOSING_THRESHOLD_MS = 22 * HOUR_MS // alerta âmbar a partir de 22h decorridas
 
 const CLOSED_LABEL = "Janela fechada · aguardando o lead"
+// Story 75-267 — lead que NUNCA teve conversa: "aguardando o lead" mandava a
+// SDR esperar; o badge passa a convidar à abertura. Status segue "closed"
+// (composer bloqueado; abertura só via template).
+const NO_CONVERSATION_LABEL = "Sem conversa · inicie o atendimento"
 
 /**
  * Formata uma duração em ms como "Xh Ym".
@@ -51,9 +55,10 @@ export function getWindowStatus(
     return { status: "open", remainingMs: Infinity, label: "" }
   }
 
-  // Sem histórico de mensagem → tratamos como janela fechada.
+  // Sem histórico de mensagem → tratamos como janela fechada (label próprio
+  // convida à abertura em vez de "aguardando o lead" — Story 75-267).
   if (!lastMessageAt) {
-    return { status: "closed", remainingMs: 0, label: CLOSED_LABEL }
+    return { status: "closed", remainingMs: 0, label: NO_CONVERSATION_LABEL }
   }
 
   const elapsed = now.getTime() - lastMessageAt.getTime()

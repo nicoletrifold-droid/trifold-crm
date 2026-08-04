@@ -1,18 +1,20 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import {
   Paperclip,
   Send,
   Loader2,
   Bell,
   BellRing,
-  MessageSquarePlus,
 } from "lucide-react"
 import { MediaPickerModal } from "./media-picker-modal"
 import { AudioRecorder } from "./audio-recorder"
 import { brokerSendErrorMessage } from "@web/lib/broker/send-errors"
+// Story 75-267 — menu de abertura extraído p/ componente compartilhado
+// (drawer do lead + este composer). Comportamento no /broker idêntico.
+import { OpeningTemplateMenu } from "@web/components/leads/opening-template-menu"
 // Story 83-2 — guarda ortográfica no envio (Epic 83)
 import { reviewOutgoing } from "@web/lib/messages/review-outgoing"
 import { ReviewSuggestion } from "@web/components/messages/review-suggestion"
@@ -43,6 +45,13 @@ interface BrokerMessageInputProps {
    * responder" (já confirmado se `true`).
    */
   notifyOnReply?: boolean
+  /**
+   * Story 75-267 — `true` quando o lead NUNCA teve conversa (thread vazia e
+   * `last_message_at` null, derivado no `ConversationThread`). Nesse estado a
+   * copy convida à abertura ("Iniciar atendimento" é a ação primária) em vez
+   * de mandar aguardar a janela de 24h.
+   */
+  neverHadConversation?: boolean
 }
 
 /**
@@ -57,6 +66,7 @@ export function BrokerMessageInput({
   onSent,
   disabledByWindow = false,
   notifyOnReply = false,
+  neverHadConversation = false,
 }: BrokerMessageInputProps) {
   const router = useRouter()
   const [text, setText] = useState("")
@@ -69,76 +79,6 @@ export function BrokerMessageInput({
   const [notifyEnabled, setNotifyEnabled] = useState(notifyOnReply)
   const [notifyLoading, setNotifyLoading] = useState(false)
   const [notifyError, setNotifyError] = useState<string | null>(null)
-  // Story 75-142 — "Iniciar atendimento" via template (janela fechada / lead frio).
-  // Story 75-217 — o botão abre um menu com os templates de abertura aprovados
-  // na Meta (um por contexto), com preview já renderizado para este lead.
-  const [startDone, setStartDone] = useState(false)
-  const [startError, setStartError] = useState<string | null>(null)
-  const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [templates, setTemplates] = useState<Array<{ name: string; preview: string }> | null>(null)
-  const [templatesLoading, setTemplatesLoading] = useState(false)
-  const [sendingTemplate, setSendingTemplate] = useState<string | null>(null)
-  // Story 75-225 — o menu expande dentro da área rolável da conversa e o fim da
-  // lista fica abaixo da dobra ("só aparecem 3 de 4"). Ao abrir (inclusive quando
-  // os templates chegam depois do loading), garante o fim do menu visível.
-  // `nearest` não mexe no scroll quando já está tudo à vista.
-  const templatesEndRef = useRef<HTMLParagraphElement | null>(null)
-  useEffect(() => {
-    if (!templatesOpen || templates === null) return
-    templatesEndRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" })
-  }, [templatesOpen, templates])
-
-  async function handleToggleTemplates() {
-    if (startDone || sendingTemplate) return
-    setStartError(null)
-    if (templatesOpen) {
-      setTemplatesOpen(false)
-      return
-    }
-    setTemplatesOpen(true)
-    if (templates !== null || templatesLoading) return
-    setTemplatesLoading(true)
-    try {
-      const res = await fetch(`/api/leads/${leadId}/opening-templates`)
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.success) {
-        setStartError(data?.message ?? "Não foi possível carregar as mensagens. Tente novamente.")
-        setTemplatesOpen(false)
-        return
-      }
-      setTemplates(data.templates as Array<{ name: string; preview: string }>)
-    } catch {
-      setStartError("Erro de conexão. Tente novamente.")
-      setTemplatesOpen(false)
-    } finally {
-      setTemplatesLoading(false)
-    }
-  }
-
-  async function handleStartWhatsapp(templateName: string) {
-    if (sendingTemplate || startDone) return
-    setSendingTemplate(templateName)
-    setStartError(null)
-    try {
-      const res = await fetch(`/api/leads/${leadId}/start-whatsapp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template: templateName }),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.success) {
-        setStartError(data?.message ?? "Não foi possível iniciar o atendimento. Tente novamente.")
-        return
-      }
-      setStartDone(true)
-      setTemplatesOpen(false)
-      router.refresh()
-    } catch {
-      setStartError("Erro de conexão. Tente novamente.")
-    } finally {
-      setSendingTemplate(null)
-    }
-  }
 
   async function handleNotifyOnReply() {
     if (notifyEnabled || notifyLoading) return
@@ -244,96 +184,67 @@ export function BrokerMessageInput({
       <div className="mt-4 border-t border-gray-100 pt-4 dark:border-stone-800">
         {disabledByWindow && (
           <div className="mb-2 space-y-2">
-            <p className="rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800 dark:text-stone-300">
-              Janela de 24h encerrada. Aguarde o lead responder para continuar a conversa.
-            </p>
-
-            {/* Story 63-10 — Caminho 1: avisar quando o lead responder */}
-            {notifyEnabled ? (
-              <div
-                className="flex min-h-[44px] items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400"
-                aria-live="polite"
-              >
-                <BellRing className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                Aviso configurado
-              </div>
+            {/* Story 75-267 — "nunca teve conversa" convida a ABRIR o atendimento;
+                "janela de 24h fechada" (teve conversa) mantém a copy original. */}
+            {neverHadConversation ? (
+              <p className="rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                Este lead ainda não tem conversa no WhatsApp. Envie uma mensagem de
+                abertura aprovada para iniciar o atendimento.
+              </p>
             ) : (
-              <button
-                type="button"
-                onClick={() => void handleNotifyOnReply()}
-                disabled={notifyLoading}
-                aria-label="Me avisar quando o lead responder"
-                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-3 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {notifyLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Bell className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                )}
-                Me avisar quando o lead responder
-              </button>
-            )}
-            {notifyError && (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-                {notifyError}
+              <p className="rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                Janela de 24h encerrada. Aguarde o lead responder para continuar a conversa.
               </p>
             )}
 
-            {/* Story 75-142 — Caminho 2: iniciar atendimento via template aprovado */}
-            {startDone ? (
-              <div className="flex min-h-[44px] items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400" aria-live="polite">
-                <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                Convite enviado. Aguarde a resposta do cliente para continuar.
-              </div>
-            ) : (
+            {/* Story 63-10 — Caminho 1: avisar quando o lead responder.
+                Story 75-267 — oculto no estado "sem conversa": antes da abertura
+                não há resposta a aguardar; o menu é a ação primária. */}
+            {!neverHadConversation && (
               <>
-                <button
-                  type="button"
-                  onClick={() => void handleToggleTemplates()}
-                  disabled={templatesLoading || sendingTemplate !== null}
-                  aria-expanded={templatesOpen}
-                  className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
-                >
-                  {templatesLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MessageSquarePlus className="h-4 w-4 flex-shrink-0" aria-hidden="true" />}
-                  Iniciar atendimento (mensagem de abertura)
-                </button>
-                {templatesOpen && templates !== null && (
-                  <div className="space-y-2" role="listbox" aria-label="Escolha a mensagem de abertura">
-                    {templates.length === 0 && (
-                      <p className="rounded-md bg-stone-100 px-3 py-2 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-400">
-                        Nenhuma mensagem de abertura aprovada disponível no momento.
-                      </p>
-                    )}
-                    {templates.map((t) => (
-                      <button
-                        key={t.name}
-                        type="button"
-                        onClick={() => void handleStartWhatsapp(t.name)}
-                        disabled={sendingTemplate !== null}
-                        className="flex w-full items-start gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-left text-sm text-stone-700 hover:border-emerald-400 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-500/10"
-                      >
-                        {sendingTemplate === t.name ? (
-                          <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                        ) : (
-                          <MessageSquarePlus className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                        )}
-                        <span className="whitespace-pre-line">{t.preview}</span>
-                      </button>
-                    ))}
+                {notifyEnabled ? (
+                  <div
+                    className="flex min-h-[44px] items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400"
+                    aria-live="polite"
+                  >
+                    <BellRing className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    Aviso configurado
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleNotifyOnReply()}
+                    disabled={notifyLoading}
+                    aria-label="Me avisar quando o lead responder"
+                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-3 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {notifyLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Bell className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    )}
+                    Me avisar quando o lead responder
+                  </button>
                 )}
-                <p ref={templatesEndRef} className="px-1 text-xs text-stone-500 dark:text-stone-500">
-                  {templatesOpen
-                    ? "Toque na mensagem que combina com o contexto do lead — ela será enviada como está."
-                    : "Abre as mensagens de abertura aprovadas pelo WhatsApp para reabrir a conversa com o cliente."}
-                </p>
+                {notifyError && (
+                  <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                    {notifyError}
+                  </p>
+                )}
               </>
             )}
-            {startError && (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-                {startError}
-              </p>
-            )}
+
+            {/* Story 75-142 — Caminho 2: iniciar atendimento via template aprovado
+                (Story 75-267 — extraído p/ componente compartilhado c/ o drawer). */}
+            <OpeningTemplateMenu
+              leadId={leadId}
+              onSent={() => router.refresh()}
+              idleHint={
+                neverHadConversation
+                  ? "Abre as mensagens de abertura aprovadas pelo WhatsApp para iniciar a conversa com o cliente."
+                  : undefined
+              }
+            />
           </div>
         )}
         {suggestion && (
