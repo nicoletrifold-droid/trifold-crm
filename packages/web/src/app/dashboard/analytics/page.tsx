@@ -12,7 +12,7 @@ import { resolvePeriod } from "@web/lib/analytics/period"
 // Story 75-266: idem p/ os grupos de motivo de perda (deriveLostReasonGroups).
 import { type AnalyticsSummary, deriveAnalyticsMetrics, deriveLostReasonGroups, toCount } from "@web/lib/analytics/metrics"
 import { aggregatePerfil, type PerfilRow } from "@web/lib/analytics/perfil"
-// Story 75-270 — filtros do analytics (corretor, calor, perfil) num módulo só,
+// Story 75-272 — filtros do analytics (corretor, calor, perfil) num módulo só,
 // compartilhado com o endpoint do PDF.
 import {
   parseAnalyticsFilters,
@@ -27,7 +27,7 @@ import {
 import { facetOptions, facetCoverage, optionLabelComContagem } from "@web/lib/analytics/filter-options"
 
 /**
- * Story 75-270 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
+ * Story 75-272 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
  * (o do dado em si vem de labelDoValor / dos mapas canônicos).
  */
 const PERFIL_FILTER_LABELS: Record<string, string> = {
@@ -54,7 +54,7 @@ const RANGE_LABEL: Record<string, string> = {
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  // Story 75-270 — os filtros viraram um conjunto (corretor, calor, perfil do
+  // Story 75-272 — os filtros viraram um conjunto (corretor, calor, perfil do
   // lead). O tipo aceita qualquer string p/ não precisar listar 12 params aqui;
   // quem conhece as chaves é o FILTER_SPEC em lib/analytics/filters.ts.
   searchParams: Promise<Record<string, string | string[] | undefined>>
@@ -62,7 +62,7 @@ export default async function AnalyticsPage({
   const appUser = await getServerUser()
   const supabase = await createClient()
   const params = await searchParams
-  // Story 75-270 — todos os filtros da URL num objeto tipado, lido pela MESMA
+  // Story 75-272 — todos os filtros da URL num objeto tipado, lido pela MESMA
   // função que o endpoint do PDF usa (é o que faz tela e PDF concordarem).
   const filters = parseAnalyticsFilters(params)
   const propertyId = filters.propertyId
@@ -109,7 +109,7 @@ export default async function AnalyticsPage({
     .gte("created_at", sinceISO).lt("created_at", untilISO)
     .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
 
-  // Story 75-270 — aplica TODOS os filtros ativos (era só empreendimento).
+  // Story 75-272 — aplica TODOS os filtros ativos (era só empreendimento).
   const [{ count: lpYardenCount }, { count: lpVindCount }] = await Promise.all([
     applyLeadFilters(lpYardenQ, filters),
     applyLeadFilters(lpVindQ, filters),
@@ -131,7 +131,7 @@ export default async function AnalyticsPage({
   let entradas = 0
   let ativos = 0
 
-  // Story 75-270 — a bifurcação passou a ser "tem ALGUM filtro?" (era só
+  // Story 75-272 — a bifurcação passou a ser "tem ALGUM filtro?" (era só
   // empreendimento): sem filtro, a RPC agregada no banco; com qualquer filtro,
   // queries diretas agregadas em JS, que é onde os filtros novos se aplicam.
   if (!filtrado) {
@@ -162,7 +162,7 @@ export default async function AnalyticsPage({
     // COM filtro de empreendimento — queries diretas, limitadas ao período
     const [stagesData, leadsForAggData] = await Promise.all([
       supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
-      // Story 75-270 — colunas de perfil entram no select p/ facetar as opções
+      // Story 75-272 — colunas de perfil entram no select p/ facetar as opções
       // dos filtros novos sem query extra; applyLeadFilters substitui o
       // `.eq("property_interest_id", …)` fixo (que quebraria com propertyId null).
       applyLeadFilters(
@@ -253,7 +253,7 @@ export default async function AnalyticsPage({
   }
 
   // "Leads por Empreendimento" — sempre ambos, limitado ao período
-  // Story 75-270 — com QUALQUER filtro ativo, recalcula por empreendimento. Os
+  // Story 75-272 — com QUALQUER filtro ativo, recalcula por empreendimento. Os
   // outros filtros valem; o de empreendimento é excluído de propósito (`except`),
   // porque o card mostra TODOS os empreendimentos — aplicá-lo zeraria os demais.
   if (filtrado) {
@@ -295,7 +295,7 @@ export default async function AnalyticsPage({
     .eq("segmento", "principal")
     .gte("created_at", sinceISO).lt("created_at", untilISO)
     .limit(5000)
-  // Story 75-270 — o card de perfil respeita todos os filtros ativos.
+  // Story 75-272 — o card de perfil respeita todos os filtros ativos.
   perfilQuery = applyLeadFilters(perfilQuery, filters)
   const { data: perfilRows } = await perfilQuery
   const perfil = aggregatePerfil((perfilRows ?? []) as PerfilRow[])
@@ -337,7 +337,7 @@ export default async function AnalyticsPage({
     )
   } else {
     const fechadoStageIds = stages.filter((s) => /fechamento|ganho|fechado/i.test(s.name)).map((s) => s.id)
-    // Story 75-270 — o comparativo do período anterior segue os MESMOS filtros.
+    // Story 75-272 — o comparativo do período anterior segue os MESMOS filtros.
     const prevBase = () =>
       applyLeadFilters(supabase
         .from("leads").select("id", { count: "exact", head: true })
@@ -441,7 +441,7 @@ export default async function AnalyticsPage({
 
   // PDF sob demanda segue o período selecionado na tela (Story 75-31).
   //
-  // 🔴 Story 75-270 — AC6 NÃO ENTREGUE, de propósito. O link NÃO leva os filtros
+  // 🔴 Story 75-272 — AC6 NÃO ENTREGUE, de propósito. O link NÃO leva os filtros
   // porque o PDF ainda não sabe aplicá-los: `buildAnalyticsReportData` tira
   // TODOS os números principais (métricas, funil, empreendimentos, corretores,
   // origens) da RPC `get_analytics_summary_ranged`, que só aceita org + datas.
@@ -458,7 +458,7 @@ export default async function AnalyticsPage({
   }
   const reportHref = `/api/analytics/report?${reportParams.toString()}`
 
-  // ── Opções dos filtros, facetadas sobre as ENTRADAS da janela (Story 75-270) ──
+  // ── Opções dos filtros, facetadas sobre as ENTRADAS da janela (Story 75-272) ──
   // `facetRows` é a base de facetamento: o caminho filtrado já tem os leads em
   // memória; o caminho sem filtro busca só as colunas dos filtros (query enxuta,
   // sem embed) — é o preço de oferecer opções sabendo o que existe.
@@ -468,7 +468,7 @@ export default async function AnalyticsPage({
   // por facetOptions, que precisa das linhas cruas para deixar UMA dimensão
   // livre por vez (`except`). Filtrar aqui colapsaria as opções.
   //
-  // QA 75-270 (QA-002) — o recorte é o de ATIVOS (`is_active` + sem
+  // QA 75-272 (QA-002) — o recorte é o de ATIVOS (`is_active` + sem
   // `lost_reason`), o MESMO dos cards. Duas razões, e as duas importam:
   //   1. Consistência: a contagem do rótulo passa a ser a que o usuário vê ao
   //      aplicar o filtro. Com o recorte largo (entradas), "Casado (31)" contaria
@@ -503,7 +503,7 @@ export default async function AnalyticsPage({
   const filtrosAtivos = activeFilterKeys(filters)
 
   /**
-   * Story 75-270 — monta as props do <select> no SERVER: cada opção já leva o
+   * Story 75-272 — monta as props do <select> no SERVER: cada opção já leva o
    * href pronto (o componente client não recebe função, ver comentário nele).
    */
   const filterSelectProps = (key: typeof PERFIL_FILTER_KEYS[number] | "brokerId" | "interestLevel", opts: ReturnType<typeof facetOptions>) => ({
@@ -538,7 +538,7 @@ export default async function AnalyticsPage({
         </div>
         <ScrollableX>
           <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800 min-w-max">
-            {/* Story 75-270 — href montado por buildAnalyticsHref: trocar de
+            {/* Story 75-272 — href montado por buildAnalyticsHref: trocar de
                 empreendimento PRESERVA corretor/calor/perfil. Antes era string
                 à mão e apagava tudo que não fosse property_id + range (AC2). */}
             <a href={buildAnalyticsHref("/dashboard/analytics", filters, periodParams, { propertyId: null })}
@@ -558,7 +558,7 @@ export default async function AnalyticsPage({
       {/* Seletor de período GLOBAL — aplica à página inteira (Story 75-31) */}
       <AnalyticsPeriodSelector />
 
-      {/* ── Filtros (Story 75-270) ──────────────────────────────────────────
+      {/* ── Filtros (Story 75-272) ──────────────────────────────────────────
           Corretor (97,6% preenchido) e Calor (79,6%) primeiro, porque são os
           que respondem pergunta de gestão. Perfil do lead depois: os campos
           estão em 1-2% da base, e cada opção mostra a CONTAGEM justamente para

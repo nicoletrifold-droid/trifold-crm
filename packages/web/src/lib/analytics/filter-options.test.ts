@@ -8,7 +8,7 @@ import {
 import { EMPTY_FILTERS, parseAnalyticsFilters } from "./filters"
 import { INTEREST_LEVEL_LABELS } from "@web/lib/constants"
 
-// Story 75-270 — opções facetadas com contagem. Os dados abaixo imitam a
+// Story 75-272 — opções facetadas com contagem. Os dados abaixo imitam a
 // realidade medida em prod: corretor e calor densos, perfil ralo.
 
 const ROWS = [

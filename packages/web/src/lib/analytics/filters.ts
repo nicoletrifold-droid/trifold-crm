@@ -1,4 +1,4 @@
-// Story 75-270 — os filtros do Analytics em UM lugar: ler da URL, aplicar numa
+// Story 75-272 — os filtros do Analytics em UM lugar: ler da URL, aplicar numa
 // query e montar link preservando o resto.
 //
 // O PROBLEMA QUE ISTO RESOLVE. Os links de filtro eram strings montadas à mão

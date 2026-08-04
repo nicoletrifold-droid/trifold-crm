@@ -1,5 +1,5 @@
 schema: 1
-story: '75-270'
+story: '75-272'
 story_title: 'Filtros do Analytics: corretor, calor e perfil do lead'
 gate: CONCERNS
 status_reason: 'Nenhum HIGH, e a base está bem resolvida: FILTER_SPEC como fonte única, opções

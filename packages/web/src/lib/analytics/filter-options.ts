@@ -1,4 +1,4 @@
-// Story 75-270 — as opções de cada filtro saem dos DADOS, com contagem no
+// Story 75-272 — as opções de cada filtro saem dos DADOS, com contagem no
 // rótulo, e são FACETADAS.
 //
 // POR QUE A CONTAGEM NO RÓTULO NÃO É ENFEITE. Medido em prod em 04/08 (1.657

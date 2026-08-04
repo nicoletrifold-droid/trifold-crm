@@ -1,4 +1,4 @@
-# Story 75-270 — Filtros do Analytics: corretor, calor e perfil do lead
+# Story 75-272 — Filtros do Analytics: corretor, calor e perfil do lead
 
 **Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** L (~10 pts — subida pelo @po, ver R2)
 
@@ -377,7 +377,7 @@ empreendimento. Barato hoje (2 empreendimentos, 612 leads); revisitar se a lista
 
 ### Gate Status
 
-Gate: **CONCERNS** → `docs/qa/gates/75.270-filtros-analytics.yml`
+Gate: **CONCERNS** → `docs/qa/gates/75.272-filtros-analytics.yml`
 (nenhum HIGH; CONCERNS por AC6 não entregue + 4 ACs de render sem cobertura)
 
 ### Recommended Status
@@ -387,3 +387,4 @@ técnica** e 4 ACs precisam de olho na tela. O dono da story decide se aceita en
 tela agora e trata o PDF em story separada (minha recomendação) ou se espera o pacote completo.
 
 | 2026-08-04 | 0.4 | Gate @qa: **CONCERNS, nenhum HIGH**. 1 fix na revisão (QA-002: recorte do facetamento alinhado aos cards — corrige a contagem do rótulo E sai do teto de 1000 do PostgREST, que o recorte largo já estourava com ~1.650 em 90d). QA-001 endossa a decisão de PARAR no AC6 (PDF meio-filtrado mentiria; o furo do empreendimento no PDF é pré-existente). Registrados QA-003 (até 11 seletores, instabilidade visual) e QA-004 (ACs de render sem cobertura). | @qa (Quinn) |
+| 2026-08-04 | 0.5 | **RENUMERADA 75-270 → 75-272.** A sessão paralela do Marcos usou 75-270 no mesmo dia (PR #356, mídia da Nicole por empreendimento) e nenhum dos dois PRs havia mergeado, então ainda dava para desempatar — o precedente "não renumerar" da 75-211 vale para o que já saiu, não para PR aberto. Renomeados apenas o ARQUIVO da story e o gate; a branch (`feat/75-270-filtros-analytics`) e os commits ficam, porque renomear branch com PR aberto custa mais do que resolve. **O título do squash no merge deve citar 75-272.** Escolhi 272 e não 271 porque a 271 já é a branch do PDF (que fecha o AC6 desta story). | @dev (Dex) |
