@@ -5,6 +5,7 @@ import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
 import { ExecutiveCharts } from "@web/components/analytics/executive-charts"
 import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
+import { AnalyticsFilterSelect } from "@web/components/analytics/analytics-filter-select"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { resolvePeriod } from "@web/lib/analytics/period"
 // Story 75-179: fonte única das métricas (tipo da RPC + derivação) — dedup tela/PDF.
@@ -24,6 +25,22 @@ import {
   type PeriodParams,
 } from "@web/lib/analytics/filters"
 import { facetOptions, facetCoverage, optionLabelComContagem } from "@web/lib/analytics/filter-options"
+
+/**
+ * Story 75-270 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
+ * (o do dado em si vem de labelDoValor / dos mapas canônicos).
+ */
+const PERFIL_FILTER_LABELS: Record<string, string> = {
+  finalidade: "Finalidade",
+  profissao: "Profissão",
+  rendaFamiliar: "Renda",
+  filhos: "Filhos",
+  estadoCivil: "Estado civil",
+  faixaEtaria: "Faixa etária",
+  situacaoMoradia: "Moradia",
+  temPet: "Pet",
+  cidadeBairro: "Cidade/Bairro",
+}
 
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
 
@@ -423,12 +440,81 @@ export default async function AnalyticsPage({
     : null
 
   // PDF sob demanda segue o período selecionado na tela (Story 75-31).
+  //
+  // 🔴 Story 75-270 — AC6 NÃO ENTREGUE, de propósito. O link NÃO leva os filtros
+  // porque o PDF ainda não sabe aplicá-los: `buildAnalyticsReportData` tira
+  // TODOS os números principais (métricas, funil, empreendimentos, corretores,
+  // origens) da RPC `get_analytics_summary_ranged`, que só aceita org + datas.
+  // Passar os filtros aplicaria em algumas queries e não nas da RPC — o PDF
+  // sairia MISTURANDO número filtrado com não filtrado, e a divergência com a
+  // tela ficaria invisível. Pior que não filtrar. O caminho certo é dar ao
+  // report-data a mesma bifurcação da tela (agregar em JS quando filtrado), e
+  // isso é story própria. NOTA: o PDF já ignorava o filtro de empreendimento
+  // ANTES desta story — o furo é pré-existente, não regressão.
   const reportParams = new URLSearchParams({ range: period.range })
   if (period.range === "custom" && period.from && period.to) {
     reportParams.set("from", period.from)
     reportParams.set("to", period.to)
   }
   const reportHref = `/api/analytics/report?${reportParams.toString()}`
+
+  // ── Opções dos filtros, facetadas sobre as ENTRADAS da janela (Story 75-270) ──
+  // `facetRows` é a base de facetamento: o caminho filtrado já tem os leads em
+  // memória; o caminho sem filtro busca só as colunas dos filtros (query enxuta,
+  // sem embed) — é o preço de oferecer opções sabendo o que existe.
+  const brokerNameMap = new Map(brokers.map((b) => [b.id, b.name]))
+
+  // Sem nenhum filtro na QUERY, de propósito: o facetamento é feito em memória
+  // por facetOptions, que precisa das linhas cruas para deixar UMA dimensão
+  // livre por vez (`except`). Filtrar aqui colapsaria as opções.
+  //
+  // QA 75-270 (QA-002) — o recorte é o de ATIVOS (`is_active` + sem
+  // `lost_reason`), o MESMO dos cards. Duas razões, e as duas importam:
+  //   1. Consistência: a contagem do rótulo passa a ser a que o usuário vê ao
+  //      aplicar o filtro. Com o recorte largo (entradas), "Casado (31)" contaria
+  //      perdidos e inativos e o card mostraria menos — o rótulo mentiria.
+  //   2. Teto do PostgREST: o recorte largo mede ~1.650 leads em 90d (medido em
+  //      prod 04/08) e seria CORTADO em 1000 em silêncio, subestimando as
+  //      contagens e podendo esconder uma opção rara. O recorte de ativos mede
+  //      612 — bem abaixo do teto. (Quando encostar, usar `fetchAllLeads`.)
+  const { data: facetData } = await supabase
+    .from("leads")
+    .select(
+      "assigned_broker_id, interest_level, finalidade, profissao, renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, tem_pet, cidade_bairro, property_interest_id"
+    )
+    .eq("org_id", appUser.orgId)
+    .eq("segmento", "principal")
+    .eq("is_active", true)
+    .is("lost_reason", null)
+    .gte("created_at", sinceISO).lt("created_at", untilISO)
+  const facetRows = (facetData ?? []) as Array<Record<string, unknown>>
+
+  const brokerOptions = facetOptions(facetRows, filters, "brokerId", brokerNameMap)
+    // Mesma régua dos cards: fora corretor demo e inativo (Story 75-53).
+    .filter((o) => activeBrokerIds.has(o.value) && !HIDDEN_BROKER_NAMES.has(o.label.toLowerCase().trim()))
+  const calorOptions = facetOptions(facetRows, filters, "interestLevel")
+  const perfilFilterGroups = PERFIL_FILTER_KEYS.map((key) => ({
+    key,
+    label: PERFIL_FILTER_LABELS[key] ?? key,
+    options: facetOptions(facetRows, filters, key),
+    coverage: facetCoverage(facetRows, filters, key),
+  })).filter((g) => g.options.length > 0)
+
+  const filtrosAtivos = activeFilterKeys(filters)
+
+  /**
+   * Story 75-270 — monta as props do <select> no SERVER: cada opção já leva o
+   * href pronto (o componente client não recebe função, ver comentário nele).
+   */
+  const filterSelectProps = (key: typeof PERFIL_FILTER_KEYS[number] | "brokerId" | "interestLevel", opts: ReturnType<typeof facetOptions>) => ({
+    allHref: buildAnalyticsHref("/dashboard/analytics", filters, periodParams, { [key]: null }),
+    hasSelection: filters[key] !== null,
+    options: opts.map((o) => ({
+      href: buildAnalyticsHref("/dashboard/analytics", filters, periodParams, { [key]: o.value }),
+      label: optionLabelComContagem(o),
+      selected: filters[key] === o.value,
+    })),
+  })
 
   return (
     <div className="space-y-6">
@@ -452,12 +538,15 @@ export default async function AnalyticsPage({
         </div>
         <ScrollableX>
           <div className="flex items-center gap-1 rounded-md bg-stone-100 p-1 dark:bg-stone-800 min-w-max">
-            <a href={`/dashboard/analytics${period.range !== "30d" ? `?range=${period.range}` : ""}`}
+            {/* Story 75-270 — href montado por buildAnalyticsHref: trocar de
+                empreendimento PRESERVA corretor/calor/perfil. Antes era string
+                à mão e apagava tudo que não fosse property_id + range (AC2). */}
+            <a href={buildAnalyticsHref("/dashboard/analytics", filters, periodParams, { propertyId: null })}
               className={`rounded px-3 py-1 text-sm font-medium transition-colors ${!propertyId ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100" : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"}`}>
               Todos
             </a>
             {(allProperties ?? []).map((p) => (
-              <a key={p.id} href={`/dashboard/analytics?property_id=${p.id}${period.range !== "30d" ? `&range=${period.range}` : ""}`}
+              <a key={p.id} href={buildAnalyticsHref("/dashboard/analytics", filters, periodParams, { propertyId: p.id })}
                 className={`rounded px-3 py-1 text-sm font-medium transition-colors ${propertyId === p.id ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100" : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"}`}>
                 {p.name}
               </a>
@@ -468,6 +557,35 @@ export default async function AnalyticsPage({
 
       {/* Seletor de período GLOBAL — aplica à página inteira (Story 75-31) */}
       <AnalyticsPeriodSelector />
+
+      {/* ── Filtros (Story 75-270) ──────────────────────────────────────────
+          Corretor (97,6% preenchido) e Calor (79,6%) primeiro, porque são os
+          que respondem pergunta de gestão. Perfil do lead depois: os campos
+          estão em 1-2% da base, e cada opção mostra a CONTAGEM justamente para
+          a escassez ser vista antes do clique, em vez de o gráfico esvaziar e
+          parecer defeito. Só aparece dimensão que tem valor no período. */}
+      <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <div className="flex flex-wrap items-end gap-3">
+          <AnalyticsFilterSelect title="Corretor" {...filterSelectProps("brokerId", brokerOptions)} />
+          <AnalyticsFilterSelect title="Calor" {...filterSelectProps("interestLevel", calorOptions)} />
+          {perfilFilterGroups.map((g) => (
+            <AnalyticsFilterSelect
+              key={g.key}
+              title={g.label}
+              coverageNote={`${g.coverage.comValor} de ${g.coverage.total} com o dado`}
+              {...filterSelectProps(g.key, g.options)}
+            />
+          ))}
+          {filtrosAtivos.length > 0 && (
+            <a
+              href={buildClearFiltersHref("/dashboard/analytics", periodParams)}
+              className="mb-0.5 rounded-md border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+            >
+              Limpar {filtrosAtivos.length} {filtrosAtivos.length === 1 ? "filtro" : "filtros"}
+            </a>
+          )}
+        </div>
+      </div>
 
       {/* Cards do período (Story 75-179: Entradas + Ativos + Conversão + Perdidos) */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

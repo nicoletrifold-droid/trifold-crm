@@ -1,6 +1,6 @@
 # Story 75-270 — Filtros do Analytics: corretor, calor e perfil do lead
 
-**Epic:** 75 (CRM Trifold) · **Status:** Ready · **Estimativa:** L (~10 pts — subida pelo @po, ver R2)
+**Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** L (~10 pts — subida pelo @po, ver R2)
 
 ---
 
@@ -238,3 +238,152 @@ QA-002 da 75-266. Se o número de Perdidos divergir entre com/sem filtro por cau
 **Status: Draft → Ready.** Com R1 e R5 aplicados nos ACs, R4 promovido a AC11, e estimativa L.
 
 | 2026-08-04 | 0.2 | Validação @po: GO condicional 8/10 → Ready. R1 reescreve o AC1 (comparar com SQL declarado, não com a lista de Leads — recortes diferentes); R2 sobe a estimativa p/ L (~10 pts) sem cortar escopo (o PDF foi decisão explícita do Marcos); R3 afrouxa a dependência do #353; R4 promove "profissão é texto livre agrupado" a AC11; R5 corrige contradição do AC4 definindo comportamento FACETADO (opções saem do período + demais filtros ativos, exceto a própria dimensão); R6 confirma cálculo de Perdidos em JS, sem tocar a RPC. | @po (Pax) |
+
+---
+
+## Dev Agent Record
+
+**Agente:** @dev (Dex) · **Data:** 2026-08-04 · **Modo:** YOLO
+
+### Decisões de implementação
+
+1. **`FILTER_SPEC` como fonte única** (dimensão → param na URL + coluna em `leads` + se é texto
+   livre). `parse`/`apply`/`buildHref` derivam dele, então filtro novo é uma linha e o tipo
+   (`satisfies Record<keyof AnalyticsFilters, …>`) impede ficar meio-implementado.
+2. **AC11 resolvido no spec, não na UI:** `profissao` e `cidadeBairro` são texto livre e ganharam
+   `ci: true` → o filtro usa **`ilike`** (curinga escapado), não `eq`. Sem isso, "Engenheiro (3)"
+   devolveria 1, porque `aggregatePerfil` agrupa case-insensitive e as outras grafias são
+   "engenheiro"/"ENGENHEIRO". `facetOptions` elege a **grafia mais comum** como rótulo, igual ao
+   card — assim filtro e card dizem a mesma coisa.
+3. **Facetado (R5 do @po) via `except`:** as opções de cada dimensão são contadas com os outros
+   filtros aplicados e a própria dimensão livre. Testado que nenhuma opção leva a resultado vazio
+   e que a dimensão não se auto-colapsa.
+4. **Bifurcação virou `hasAnyFilter`.** Os 7 pontos que fixavam
+   `.eq("property_interest_id", propertyId)` passaram por `applyLeadFilters` — não era cosmético:
+   com filtro de corretor e sem empreendimento, `propertyId` é `null` e aqueles `.eq()` quebrariam.
+5. **`except: "propertyId"` no card "Leads por Empreendimento":** os outros filtros valem, o de
+   empreendimento não — o card mostra TODOS os empreendimentos, e aplicá-lo zeraria os demais.
+6. **[AUTO-DECISION] `<option value>` É o href.** Função não atravessa server → client, então o
+   componente client não pode receber `hrefFor(valor)`. Os hrefs são montados no server (um por
+   opção) e o `onChange` só empurra o que veio pronto — zero lógica de URL no cliente.
+7. **Fix de tipo:** `applyLeadFilters` perdeu a constraint `T extends EqQuery<T>` porque o TS
+   estourava em **TS2589** ("type instantiation excessively deep") ao casá-la contra o tipo do
+   `PostgrestFilterBuilder`. Virou genérico livre + cast interno, com o contrato coberto pelo teste
+   com fake.
+8. **Query de facetamento sem filtro nenhum, de propósito:** `facetOptions` precisa das linhas
+   cruas para poder deixar uma dimensão livre por vez. Filtrar na query colapsaria as opções.
+
+### 🔴 AC6 (PDF) NÃO ENTREGUE — e por que eu PAREI em vez de entregar meio
+
+Comecei a fiação e reverti. `buildAnalyticsReportData` tira **todos** os números principais
+(`deriveAnalyticsMetrics`, funil, empreendimentos, corretores, origens — `:211-230`) da RPC
+`get_analytics_summary_ranged`, que aceita só org + datas. Aplicar os filtros nas 4 queries diretas
+e não nos números da RPC geraria um PDF **misturando filtrado com não filtrado**, divergindo da
+tela sem nenhum sinal. Isso é pior que não filtrar: hoje o PDF ignora os filtros de forma
+previsível; meio-filtrado ele mente.
+
+O caminho certo é dar ao `report-data` a mesma bifurcação da tela (agregar em JS quando há filtro),
+e isso é **story própria** — são 371 linhas e 4 queries, sem como validar o PDF visualmente aqui.
+O link do PDF ficou **sem** os filtros e com o motivo comentado no código, para ninguém achar que
+foi esquecimento.
+
+⚠️ Contexto que atenua: **o PDF já ignorava o filtro de empreendimento antes desta story.** O furo
+é pré-existente; esta story não o piorou.
+
+### Validações
+
+- `npm run type-check` — **8/8, 0 erros**
+- `npx vitest run` — **132 arquivos / 1593 testes** (+80 novos em 2 suítes)
+- `npx eslint` nos arquivos da story — **0 erros, 0 warnings**
+- Zero migration (AC9). Nada de agendamento da Nicole tocado (fronteira da 75-268).
+
+### File List
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/analytics/filters.ts` | **NOVO** — FILTER_SPEC + parse/apply/matches/buildHref/clear |
+| `lib/analytics/filters.test.ts` | **NOVO** — 35 casos (round-trip, preservação, remoção, ilike, escape de curinga) |
+| `lib/analytics/filter-options.ts` | **NOVO** — facetOptions/facetCoverage/rótulos |
+| `lib/analytics/filter-options.test.ts` | **NOVO** — 45 casos (facetado, AC4, AC11, determinismo) |
+| `components/analytics/analytics-filter-select.tsx` | **NOVO** — `<select>` client cujo value é o href |
+| `app/dashboard/analytics/page.tsx` | filtros parseados; bifurcação por `hasAnyFilter`; 7 pontos via `applyLeadFilters`; barra de filtros; links preservam filtros; AC6 documentado como aberto |
+
+### Pendências para @qa
+
+- **AC1/AC2/AC3/AC5 pedem olho na tela** (é server component com links; a lógica está coberta por
+  unidade, o render não).
+- **AC6 aberto** — ver acima. Precisa de story própria.
+- AC7 (sem regressão sem filtro): verificado por leitura — sem filtro, `hasAnyFilter` é false e o
+  caminho da RPC é o de antes, intocado.
+
+| 2026-08-04 | 0.3 | Implementação @dev: módulo único de filtros (FILTER_SPEC como fonte), opções FACETADAS com contagem no rótulo, bifurcação por `hasAnyFilter`, 7 pontos migrados p/ `applyLeadFilters`, barra de filtros na tela e links que preservam o resto (AC2). AC11 resolvido com `ilike` p/ texto livre. **AC6 (PDF) NÃO entregue e revertido de propósito** — o report-data tira tudo da RPC sem filtro, e meio-filtrado mentiria; precisa de story própria. tsc 0, vitest 132/1593 (+80), eslint 0 nos arquivos da story. Status Ready → InReview. | @dev (Dex) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-08-04 · Reviewed By: Quinn (Test Architect)
+
+### Code Quality Assessment
+
+Base bem resolvida. `FILTER_SPEC` como fonte única é a escolha que faz a diferença: adicionar
+filtro é uma linha, e o teste "todas as dimensões do spec são lidas" impede filtro
+meio-implementado — o tipo de bug que só aparece meses depois quando alguém usa a URL na mão.
+
+Verifiquei os dois pontos onde esta story poderia mentir. Primeiro o **AC11**: está fechado no
+lugar certo — no spec (`ci: true` → `ilike` com curinga escapado), não na UI —, e `facetOptions`
+elege a grafia mais comum igual ao `aggregatePerfil`, então filtro e card dizem a mesma coisa.
+Segundo o **AC2**: o teste reproduz o bug original (trocar empreendimento preservando o corretor),
+que era a razão de a story existir antes de qualquer filtro novo.
+
+Registro também a decisão de **parar no AC6** como acerto, não como falha — ver QA-001.
+
+### Refactoring Performed
+
+- **File**: `app/dashboard/analytics/page.tsx`
+  - **Change**: a query de facetamento passou a usar o recorte de **ativos**
+    (`is_active` + sem `lost_reason`), o mesmo dos cards
+  - **Why**: dois defeitos num só ponto. (1) **Consistência:** com o recorte largo, "Casado (31)"
+    contaria perdidos e inativos, e o card mostraria menos ao aplicar o filtro — o rótulo mentiria,
+    e o rótulo é justamente o que esta story promete. (2) **Teto do PostgREST:** o recorte largo
+    mede ~1.650 leads em 90d (medi em prod hoje) e seria cortado em 1000 **em silêncio**,
+    subestimando contagens e podendo esconder uma opção rara.
+  - **How**: o recorte de ativos mede 612 em 90d, longe do teto. Melhor que paginar: paginar
+    corrigiria o corte e deixaria a inconsistência de recorte de pé.
+
+### Compliance Check
+
+- Coding Standards: ✓ · Project Structure: ✓ (puros em `lib/analytics/`, client isolado)
+- Testing Strategy: ✓ na lógica, ✗ no render · All ACs Met: ✗ (AC6 aberto; 4 ACs de render)
+
+### Improvements Checklist
+
+- [x] QA-002 corrigido na revisão (recorte do facetamento alinhado aos cards)
+- [x] AC11 conferido no spec + teste de que a contagem do rótulo é a devolvida
+- [x] AC2 conferido com teste do bug original
+- [ ] **Conferir na tela:** corretor + empreendimento + troca de período coexistindo (AC1/AC2/AC3/AC5)
+- [ ] **AC6 — story própria do PDF** (QA-001)
+
+### Security Review
+
+Sem achados. Filtros são `.eq()`/`.ilike()` parametrizados pelo PostgREST — sem concatenação de
+SQL. O curinga do LIKE é escapado, então valor de usuário não vira busca por prefixo. Gate de role
+da página intocado.
+
+### Performance Considerations
+
+Uma query nova por render (facetamento, recorte de ativos) e, no caminho filtrado, uma contagem por
+empreendimento. Barato hoje (2 empreendimentos, 612 leads); revisitar se a lista crescer.
+
+### Gate Status
+
+Gate: **CONCERNS** → `docs/qa/gates/75.270-filtros-analytics.yml`
+(nenhum HIGH; CONCERNS por AC6 não entregue + 4 ACs de render sem cobertura)
+
+### Recommended Status
+
+**✗ Changes Required** — não por defeito de código, mas porque **AC6 ficou aberto por decisão
+técnica** e 4 ACs precisam de olho na tela. O dono da story decide se aceita entregar os filtros da
+tela agora e trata o PDF em story separada (minha recomendação) ou se espera o pacote completo.
+
+| 2026-08-04 | 0.4 | Gate @qa: **CONCERNS, nenhum HIGH**. 1 fix na revisão (QA-002: recorte do facetamento alinhado aos cards — corrige a contagem do rótulo E sai do teto de 1000 do PostgREST, que o recorte largo já estourava com ~1.650 em 90d). QA-001 endossa a decisão de PARAR no AC6 (PDF meio-filtrado mentiria; o furo do empreendimento no PDF é pré-existente). Registrados QA-003 (até 11 seletores, instabilidade visual) e QA-004 (ACs de render sem cobertura). | @qa (Quinn) |
