@@ -158,10 +158,22 @@ const NOT_HOUR_PREFIX_RE =
   /\b(?:dia|andar|acima do|abaixo do|apto|apartamento|numero|n[º°]|rua|av|avenida|cpf|bloco|torre|r\$)\s*$/
 
 /**
+ * Story 75-268 — a frase toda desqualifica o número pelado: aqui ele é
+ * IMPEDIMENTO, não pedido ("não vou poder, tenho compromisso as 15", "só consigo
+ * depois das 17"). Sem esta guarda, "as 15" viraria pedido de visita às 15h e a
+ * Nicole confirmaria algo que o cliente não pediu — a mesma classe do
+ * agendamento fantasma da 75-245. Aqui a regra da 75-245 vale inteira:
+ * na dúvida, PERGUNTE. Quem quiser afirmar a hora escreve com marcador ("15h").
+ */
+const BARE_HOUR_BLOCKER_RE =
+  /\bnao\s+(?:vou|posso|consigo|da|tenho|rola)\b|\bnao\s+da\b|\bcompromisso\b|\bocupad[ao]\b|\breuniao\b|\btrabalh[oa]\s+(?:ate|das)\b|\b(?:antes|depois)\s+d[ae]s\b|\bs[oó]\s+(?:consigo|posso|depois)\b|\bimpossivel\b/
+
+/**
  * Story 75-268 — número pelado como hora, com as guardas todas. Recebe o texto
  * JÁ normalizado (sem acento, minúsculo, "10,30" → "10:30").
  */
 function parseBareHour(t: string): { hour: number; minute: number } | null {
+  if (BARE_HOUR_BLOCKER_RE.test(t)) return null
   for (const m of t.matchAll(/(?<![\d.,:/])(\d{1,2})(?![\d.,:h/])/g)) {
     const raw = m[1]!
     const hour = parseInt(raw, 10)

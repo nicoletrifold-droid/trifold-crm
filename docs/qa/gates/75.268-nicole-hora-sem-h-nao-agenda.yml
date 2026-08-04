@@ -1,0 +1,74 @@
+storyId: "75-268"
+title: "\"Umas 14\" não é horário: a Nicole confirma visita que não existe"
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-04
+branch: feat/75-268-nicole-agendamento-hora-pelada
+commit: pending-push
+
+checks:
+  code_review: PASS         # opção opt-in preserva os 6 consumidores; helper do gate é puro e exportado; nada de novo I/O
+  unit_tests: PASS          # 130 files / 1559 tests PASS (74 na suíte de visit-slot)
+  acceptance_criteria: CONCERNS # AC1/AC2/AC6 cobertos; AC3/AC4 cobertos até o slot, NÃO até o INSERT; AC7 pendente
+  regressions: PASS         # default de parseTimeParts idêntico; 75-162 e 75-245 com teste explícito de preservação
+  performance: PASS         # regex local por turno; zero query nova
+  security: PASS            # n/a — não toca RLS, auth nem dado de terceiro
+  documentation: CONCERNS   # prompt do CÓDIGO atualizado; o de PROD (agent_prompts) ainda não
+
+acceptance_criteria_trace:
+  AC1: "PASS — parseTimeParts('Umas 14'|'As 10'|'10'|'por volta das 14') resolve só com bareNumberAllowed."
+  AC2: "PASS — 'Acima do 5', '2 suítes', '66,91m²', '3 vagas', '500 mil', 'dia 5 de agosto', '1337', CPF, telefone, R$ → null."
+  AC3: "CONCERNS — diálogo da Valnira reproduzido turno a turno até 2026-08-06T13:00:00Z; o INSERT em appointments não é coberto (sem harness)."
+  AC4: "CONCERNS — diálogo da Sueli reproduzido até 2026-08-07T17:00:00Z, com outsideHours=false; mesmo limite de harness."
+  AC5: "PASS por construção — nenhum bloco [SISTEMA] foi afrouxado; a regra da 75-245 segue colada em todos."
+  AC6: "PASS — 'Semana de manhã' com visit_availability de sábado devolve day=null (pergunta o dia)."
+  AC7: "PENDENTE — validação em prod (Marcos/Thielly) com lead dizendo a hora sem 'h'."
+
+achado_do_gate:
+  descricao: >
+    Probe adversarial no parser revelou falso-positivo NÃO previsto na story: em
+    "não vou poder, tenho compromisso as 15" o número é IMPEDIMENTO e virava pedido
+    de visita às 15h — a Nicole confirmaria horário que o cliente não pediu, mesma
+    classe do agendamento fantasma da 75-245.
+  severidade: high
+  status: CORRIGIDO no mesmo ciclo
+  fix: "BARE_HOUR_BLOCKER_RE — negação/impedimento na frase desqualifica o número pelado; 6 casos em teste."
+
+issues:
+  - severity: medium
+    category: tests
+    description: "O INSERT em appointments (AC3/AC4) não tem cobertura automatizada — pipeline.test.ts só exercita helpers puros e não existe harness com Supabase/Anthropic mockados."
+    recommendation: "Aceitar nesta story e cobrir pelo AC7 em prod. Harness de integração do processMessage vale uma story própria — seria a 4ª recaída desta área a pedir isso."
+  - severity: medium
+    category: docs
+    description: "agent_prompts 'Agendamento de Visitas' (ae2255d2…c848) em PROD mascara o prompt do código: sem editar o banco, o guardrail do Item 4 não vale em runtime."
+    recommendation: "Aplicar o UPDATE em prod com o Marcos (muda a conversa do cliente na hora). BLOQUEIA o Done."
+  - severity: low
+    category: code
+    description: "detectSlotMismatch (75-245) segue sem hora pelada: se a Nicole afirmar 'confirmado para as 14' sem marcador, a guarda não acusa."
+    recommendation: "Limitação pré-existente, fail-open e só de log. Backlog."
+  - severity: low
+    category: code
+    description: "Com 2 horários marcados, parseHour devolve o primeiro ('não vou poder as 10h, pode ser 14h?' → 10h). Pré-existente, documentado em teste."
+    recommendation: "Backlog. O bloco [SISTEMA] limita o dano."
+
+build:
+  tests: "vitest 130 files / 1559 tests passed"
+  type_check: "8/8 tasks successful"
+  lint: "0 errors (18 warnings pré-existentes, fora dos arquivos tocados)"
+
+nao_bloqueia_merge:
+  - "AC7 é validação de campo — depende de lead real."
+
+bloqueia_done:
+  - "UPDATE do agent_prompts em prod (issue medium/docs)."
+  - "AC7 confirmado em prod."
+
+files:
+  - packages/ai/src/flows/visit-slot.ts
+  - packages/ai/src/flows/visit-slot.test.ts
+  - packages/ai/src/chat/pipeline.ts
+  - packages/ai/src/chat/pipeline.test.ts
+  - packages/ai/src/prompts/visit-scheduling.ts
+  - docs/stories/75-268-nicole-hora-sem-h-nao-agenda.story.md

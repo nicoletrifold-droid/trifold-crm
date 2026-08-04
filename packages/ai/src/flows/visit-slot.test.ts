@@ -537,6 +537,22 @@ describe("parseTimeParts — número que NÃO é hora (Story 75-268 AC2)", () =>
     expect(parseTimeParts("pode ser 10 de agosto", BARE)).toBeNull()
     expect(parseTimeParts("dia 5 de manhã", BARE)).toBeNull()
   })
+  it("🔥 número que é IMPEDIMENTO não é pedido de horário (achado no gate de QA)", () => {
+    // "as 15" aqui é o compromisso que ele TEM, não o horário que ele quer.
+    expect(parseTimeParts("não vou poder, tenho compromisso as 15", BARE)).toBeNull()
+    expect(parseTimeParts("só consigo depois das 17", BARE)).toBeNull()
+    expect(parseTimeParts("antes das 10 não dá", BARE)).toBeNull()
+    expect(parseTimeParts("tenho reunião as 14", BARE)).toBeNull()
+    expect(parseTimeParts("trabalho até 18", BARE)).toBeNull()
+    expect(parseTimeParts("não consigo 9", BARE)).toBeNull()
+  })
+  it("com marcador, o caminho antigo segue intacto — inclusive no seu limite conhecido", () => {
+    // ⚠️ Documenta comportamento PRÉ-EXISTENTE, não comportamento desejado: com
+    // dois horários marcados a função devolve o PRIMEIRO, mesmo quando o segundo
+    // é o pedido de verdade. Não mexido aqui (fora do escopo da 75-268); quem
+    // protege o cliente nesse caso é o bloco [SISTEMA] + a regra da 75-245.
+    expect(parseTimeParts("não vou poder as 10h, pode ser 14h?", BARE)).toEqual({ hour: 10, minute: 0 })
+  })
   it("endereço, CPF, telefone e dinheiro seguem protegidos", () => {
     expect(parseTimeParts("Av. Nildo Ribeiro da Rocha, 1337", BARE)).toBeNull()
     expect(parseTimeParts("CPF 174.677.569.68", BARE)).toBeNull()

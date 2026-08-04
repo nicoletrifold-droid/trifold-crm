@@ -265,3 +265,28 @@ fail-open e só de log — anotada para o backlog, não corrigida aqui.
 | 2026-08-04 | @sm | Story criada a partir dos dois incidentes de 03/08 |
 | 2026-08-04 | @po | Validação 9/10 → GO; Draft → Ready |
 | 2026-08-04 | @dev | 4 itens implementados; 1557 testes verdes; Status → InReview |
+
+## QA Results (@qa — 2026-08-04)
+
+**Gate: CONCERNS (8/10)** — `docs/qa/gates/75.268-nicole-hora-sem-h-nao-agenda.yml`. Não bloqueia
+merge; bloqueia **Done**.
+
+🔥 **O gate achou um bug que a story não previa.** Probe adversarial no parser: em *"não vou poder,
+tenho compromisso as 15"* o número é **impedimento**, e virava pedido de visita às 15h — a Nicole
+confirmaria um horário que o cliente não pediu. É a mesma classe do agendamento fantasma da 75-245,
+que esta story existe para não repetir. Corrigido no mesmo ciclo (`BARE_HOUR_BLOCKER_RE`: negação ou
+impedimento na frase desqualifica o número pelado), com 6 casos em teste. Quem quiser afirmar a hora
+nesse contexto escreve com marcador ("15h").
+
+**Aberto, por severidade:**
+
+| sev | o quê | encaminhamento |
+|---|---|---|
+| medium | INSERT em `appointments` sem cobertura automatizada (AC3/AC4) | aceito aqui; vira AC7 em prod. Harness de integração do `processMessage` merece story própria — é a 4ª recaída desta área a pedir isso |
+| medium | `agent_prompts` de prod mascara o prompt do código | **bloqueia Done**; aplicar com o Marcos |
+| low | `detectSlotMismatch` não lê hora pelada na fala da Nicole | pré-existente, fail-open, só log → backlog |
+| low | com 2 horários marcados, `parseHour` devolve o primeiro | pré-existente, documentado em teste → backlog |
+
+| data | quem | o que |
+|---|---|---|
+| 2026-08-04 | @qa | Gate CONCERNS 8/10; achou e devolveu o falso-positivo de impedimento; 1559 testes verdes |
