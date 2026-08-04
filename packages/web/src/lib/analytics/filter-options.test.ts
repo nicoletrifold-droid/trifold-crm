@@ -4,6 +4,8 @@ import {
   facetCoverage,
   optionLabelComContagem,
   labelDoValor,
+  brokerFilterOptions,
+  coverageNote,
 } from "./filter-options"
 import { EMPTY_FILTERS, parseAnalyticsFilters } from "./filters"
 import { INTEREST_LEVEL_LABELS } from "@web/lib/constants"
@@ -127,6 +129,67 @@ describe("facetCoverage — o aviso do AC5", () => {
 
   it("dimensão densa tem cobertura alta (corretor)", () => {
     expect(facetCoverage(ROWS, EMPTY_FILTERS, "brokerId")).toEqual({ comValor: 5, total: 6 })
+  })
+})
+
+// Story 75-274 — o defeito de prod: o mapa de nomes vinha do card "Leads por
+// Corretor", derivado dos leads JÁ filtrados, então com um corretor selecionado
+// sobrava um nome e os outros seis saíam como uuid no dropdown.
+describe("brokerFilterOptions", () => {
+  const NOMES = new Map([
+    ["joabe", "Joabe Albuquerque"],
+    ["thielly", "Thielly"],
+  ])
+
+  it("rotula toda opção com nome (AC1)", () => {
+    const opts = brokerFilterOptions(ROWS, EMPTY_FILTERS, NOMES)
+    expect(opts.map((o) => o.label)).toEqual(["Joabe Albuquerque", "Thielly"])
+  })
+
+  it("mapa incompleto NÃO produz opção com uuid — ela não entra (AC6)", () => {
+    const soUm = new Map([["thielly", "Thielly"]])
+    const opts = brokerFilterOptions(ROWS, EMPTY_FILTERS, soUm)
+    expect(opts).toEqual([{ value: "thielly", label: "Thielly", count: 2 }])
+    expect(opts.map((o) => o.label)).not.toContain("joabe")
+  })
+
+  it("FACETADO: com um corretor selecionado, os OUTROS seguem na lista com nome (AC1)", () => {
+    // O caso exato do print: broker_id=thielly na URL. A dimensão fica livre de
+    // propósito (senão não há como trocar), e é justamente aí que faltava nome.
+    const f = parseAnalyticsFilters({ broker_id: "thielly" })
+    const opts = brokerFilterOptions(ROWS, f, NOMES)
+    expect(opts.map((o) => o.label)).toEqual(["Joabe Albuquerque", "Thielly"])
+  })
+
+  it("corretor oculto sai da lista mesmo com outro selecionado (AC3)", () => {
+    // Antes o rótulo era uuid e a peneira, que compara por NOME, não pegava.
+    const nomes = new Map([...NOMES, ["demo-id", "Corretor Demo"]])
+    const rows = [...ROWS, { assigned_broker_id: "demo-id", interest_level: "hot" }]
+    const f = parseAnalyticsFilters({ broker_id: "thielly" })
+    const opts = brokerFilterOptions(rows, f, nomes, new Set(["corretor demo"]))
+    expect(opts.map((o) => o.value)).toEqual(["joabe", "thielly"])
+  })
+
+  it("contagens seguem as mesmas de facetOptions (o defeito era só de rótulo — AC2)", () => {
+    const cru = facetOptions(ROWS, EMPTY_FILTERS, "brokerId")
+    const comNome = brokerFilterOptions(ROWS, EMPTY_FILTERS, NOMES)
+    expect(comNome.map((o) => o.count)).toEqual(cru.map((o) => o.count))
+  })
+})
+
+describe("coverageNote", () => {
+  it("avisa quando falta o dado em parte do recorte (AC4)", () => {
+    // Medido em prod: 28 frios + 1 morno + 21 sem calor num recorte de 50.
+    expect(coverageNote({ comValor: 29, total: 50 })).toBe("29 de 50 com o dado")
+  })
+
+  it("cala quando a cobertura é total — aviso sempre visível não é lido (AC5)", () => {
+    expect(coverageNote({ comValor: 50, total: 50 })).toBeNull()
+    expect(coverageNote({ comValor: 0, total: 0 })).toBeNull()
+  })
+
+  it("formata milhar em pt-BR (o número é para ler, não para contar dígito)", () => {
+    expect(coverageNote({ comValor: 31, total: 1657 })).toBe("31 de 1.657 com o dado")
   })
 })
 

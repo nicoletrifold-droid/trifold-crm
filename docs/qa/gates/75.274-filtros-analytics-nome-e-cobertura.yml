@@ -1,0 +1,24 @@
+schema: 1
+story: '75.274'
+gate: PASS
+status_reason: 'Causa-raiz correta e no lugar certo: o nome do corretor deixou de sair de um array derivado dos leads JÁ filtrados e passou a vir de `users` pelos ids dos ativos, então o dropdown facetado (que deixa a dimensão livre de propósito) não tem mais como cair no uuid. A régua "só ativo, sem corretor demo" virou invariante de `brokerFilterOptions` — quem não tem nome no mapa não entra —, o que também fecha o furo em que a peneira por NOME não pegava um rótulo uuid. Cobertura passa a valer p/ Corretor e Calor e SOME quando é total (não vira ruído). Verificado com dado real de prod (read-only): 7 nomes com as contagens idênticas às do print (50/45/44/44/29/25/23) e Calor "29 de 50 com o dado". 25 testes no módulo, 1735 na suíte, type-check e lint sem erro novo.'
+reviewer: 'Quinn'
+updated: '2026-08-04T20:40:00Z'
+top_issues:
+  - id: 'OBS-001'
+    severity: low
+    finding: 'A verificação com dado real foi por script descartável replicando o pipeline (funções reais + prod read-only), não pela tela logada. Cobre dados e rótulos; NÃO cobre o render (largura do <select> com nome longo — "Elisabete Rodrigues Baticiotto" é bem maior que um label de perfil, e o container é flex-wrap).'
+    suggested_action: 'Marcos: abrir /dashboard/analytics com um corretor filtrado e conferir que o select não estoura a linha nem corta o nome. Se cortar, é CSS no AnalyticsFilterSelect (min-w-[9rem] + truncate), não lógica.'
+  - id: 'OBS-002'
+    severity: low
+    finding: 'Uma query a mais por render (`users` pelos ids dos ativos, 8 linhas). Sequencial após a de brokers, que já era necessária.'
+    suggested_action: 'Nenhuma ação. Se a página encostar em latência, entra no Promise.all das agregações.'
+  - id: 'OBS-003'
+    severity: low
+    finding: 'Empate de contagem entre corretores agora desempata por NOME (antes, por uuid): Matheus (44) aparece antes de Robson (44). Mudança de ordem visível, intencional e mais estável.'
+    suggested_action: 'Nenhuma — é o critério documentado em facetOptions.'
+  - id: 'OBS-004'
+    severity: low
+    finding: '`HIDDEN_BROKER_NAMES` ("corretor demo", "target editado") existe em 3 arquivos (page.tsx, api/analytics/executive/route.ts, analytics-report-data.ts). Não foi unificado nesta story p/ manter o diff no defeito; o conjunto entra em brokerFilterOptions por parâmetro, igual aggregateFilteredLeads já fazia.'
+    suggested_action: 'Candidato a uma limpeza futura (constante única em lib/analytics) — hoje as 3 cópias têm os mesmos valores, o risco é divergirem.'
+waiver: { active: false }
