@@ -8,7 +8,8 @@ import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-per
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import { resolvePeriod } from "@web/lib/analytics/period"
 // Story 75-179: fonte única das métricas (tipo da RPC + derivação) — dedup tela/PDF.
-import { type AnalyticsSummary, deriveAnalyticsMetrics, toCount } from "@web/lib/analytics/metrics"
+// Story 75-266: idem p/ os grupos de motivo de perda (deriveLostReasonGroups).
+import { type AnalyticsSummary, deriveAnalyticsMetrics, deriveLostReasonGroups, toCount } from "@web/lib/analytics/metrics"
 import { aggregatePerfil, type PerfilRow } from "@web/lib/analytics/perfil"
 
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
@@ -75,7 +76,13 @@ export default async function AnalyticsPage({
   let properties: { id: string; name: string; count: number }[] = []
   let brokers: { id: string; name: string; count: number; avgScore: number }[] = []
   const sourceCounts: Record<string, number> = {}
-  const lostReasons: Record<string, number> = {}
+  // Story 75-266: o card "Motivos de Perda" agrega por GRUPO (mig 213), não por texto cru.
+  // Mesmo universo do lost_reasons da RPC → a soma continua sendo o KPI Perdidos.
+  const lostGroups: Record<string, number> = {}
+  let lostEstruturados = 0
+  // QA-002: KPI Perdidos pelo caminho antigo, usado só se os grupos vierem vazios
+  // (janela em que o deploy chega antes da mig 213).
+  let perdidosFallback = 0
   // Story 75-179: Entradas (todas do período) + Ativos (subconjunto ativo/não-perdido),
   // via helper único deriveAnalyticsMetrics (mesma fonte da tela e do PDF).
   let entradas = 0
@@ -99,10 +106,12 @@ export default async function AnalyticsPage({
       .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()) && activeBrokerIds.has(b.user_id))
       .map((b) => ({ id: b.user_id, name: b.name, count: toCount(b.count), avgScore: b.avg_score ?? 0 }))
     for (const [k, v] of Object.entries(summary?.source_counts ?? {})) sourceCounts[k] = toCount(v)
-    for (const [k, v] of Object.entries(summary?.lost_reasons ?? {})) lostReasons[k] = toCount(v)
+    for (const [k, v] of Object.entries(summary?.lost_reason_groups ?? {})) lostGroups[k] = toCount(v)
+    lostEstruturados = toCount(summary?.lost_reason_estruturados)
     const m = deriveAnalyticsMetrics(summary)
     entradas = m.entradas
     ativos = m.ativos
+    perdidosFallback = m.perdidos
   } else {
     // COM filtro de empreendimento — queries diretas, limitadas ao período
     const [stagesData, leadsForAggData] = await Promise.all([
@@ -163,18 +172,29 @@ export default async function AnalyticsPage({
       .gte("created_at", sinceISO).lt("created_at", untilISO)
     entradas = entradasCount ?? 0
 
-    // Lost reasons — perdidos do empreendimento no período (query separada, pois
-    // allLeads exclui lost_reason). Story 75-178: sem filtro is_active, para casar
-    // com o lost_reasons da RPC (que conta todos os perdidos da janela).
-    const lostData = await supabase
-      .from("leads").select("lost_reason")
-      .eq("org_id", appUser.orgId).eq("segmento", "principal")
-      .not("lost_reason", "is", null)
-      .eq("property_interest_id", propertyId)
-      .gte("created_at", sinceISO).lt("created_at", untilISO)
-    for (const l of (lostData.data ?? []) as { lost_reason: string | null }[]) {
-      if (l.lost_reason) lostReasons[l.lost_reason] = (lostReasons[l.lost_reason] ?? 0) + 1
+    // Motivos de perda por GRUPO — Story 75-266. Mesmo universo do caminho sem
+    // filtro (lost_reason IS NOT NULL + janela + segmento principal, Story 75-178:
+    // sem filtro is_active), agregado no banco pela mesma f_lost_reason_grupo.
+    const { data: lostGroupsData, error: lostGroupsError } = await supabase.rpc("get_lost_reason_groups", {
+      p_org_id: appUser.orgId,
+      p_since: sinceISO,
+      p_until: untilISO,
+      p_property_id: propertyId,
+    })
+    if (lostGroupsError) {
+      console.error("[ANALYTICS] get_lost_reason_groups RPC failed", lostGroupsError)
+      // QA-002: RPC ausente/quebrada → KPI pelo caminho antigo (head-count do cru).
+      const { count: lostCount } = await supabase
+        .from("leads").select("id", { count: "exact", head: true })
+        .eq("org_id", appUser.orgId).eq("segmento", "principal")
+        .not("lost_reason", "is", null)
+        .eq("property_interest_id", propertyId)
+        .gte("created_at", sinceISO).lt("created_at", untilISO)
+      perdidosFallback = lostCount ?? 0
     }
+    const lg = (lostGroupsData ?? null) as { groups?: Record<string, number | string> | null; estruturados?: number | string | null } | null
+    for (const [k, v] of Object.entries(lg?.groups ?? {})) lostGroups[k] = toCount(v)
+    lostEstruturados = toCount(lg?.estruturados)
   }
 
   // "Leads por Empreendimento" — sempre ambos, limitado ao período
@@ -220,7 +240,13 @@ export default async function AnalyticsPage({
   // ── Métricas do período (cards de topo) ────────────────────────────────────
   // Story 75-179: Entradas = todas as entradas; Ativos = subconjunto ativo/não-perdido.
   // Conversão e média diária usam ENTRADAS (denominador honesto).
-  const perdidos = Object.values(lostReasons).reduce((sum, n) => sum + n, 0)
+  // Story 75-266: soma dos grupos ≡ soma do texto cru (mesmo universo no SQL) — o KPI não muda.
+  // Fallback (QA-002): se a mig 213 ainda não estiver aplicada, o JSONB não tem a chave de
+  // grupos — o KPI cai na soma do cru (comportamento antigo) em vez de zerar em silêncio.
+  const somaGrupos = Object.values(lostGroups).reduce((sum, n) => sum + n, 0)
+  const perdidos = somaGrupos > 0 ? somaGrupos : perdidosFallback
+  const lostGroupEntries = deriveLostReasonGroups(lostGroups)
+  const lostHeuristica = Math.max(0, perdidos - lostEstruturados)
   const fechamento = stages.find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count ?? 0
   const conversao = entradas > 0 ? Math.round((fechamento / entradas) * 100) : 0
   const mediaDiaria = period.days > 0 ? (entradas / period.days) : 0
@@ -548,22 +574,29 @@ export default async function AnalyticsPage({
           )}
         </div>
 
-        {/* Lost Reasons */}
+        {/* Lost Reasons — Story 75-266: grupos estruturados (75-264), não texto cru */}
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Motivos de Perda <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
           <div className="space-y-3">
-            {Object.entries(lostReasons)
-              .sort(([, a], [, b]) => b - a)
-              .map(([reason, count]) => (
-                <div key={reason} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-stone-300">{reason}</span>
+            {lostGroupEntries.map(({ grupo, label, count }) => (
+              <div key={grupo} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-gray-600 dark:text-stone-300">{label}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="text-xs text-stone-400 dark:text-stone-500">{perdidos > 0 ? `${Math.round((count / perdidos) * 100)}%` : ""}</span>
                   <span className="rounded-full bg-red-100 px-3 py-0.5 text-sm font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">{count}</span>
-                </div>
-              ))}
-            {Object.keys(lostReasons).length === 0 && (
+                </span>
+              </div>
+            ))}
+            {lostGroupEntries.length === 0 && (
               <p className="text-sm text-gray-400 dark:text-stone-500">Nenhum lead perdido no período.</p>
             )}
           </div>
+          {perdidos > 0 && (
+            <p className="mt-4 border-t border-stone-100 pt-3 text-xs text-stone-400 dark:border-stone-800 dark:text-stone-500">
+              {lostEstruturados} {lostEstruturados === 1 ? "motivo escolhido" : "motivos escolhidos"} na hora da perda
+              {lostHeuristica > 0 && <> · {lostHeuristica} {lostHeuristica === 1 ? "classificado" : "classificados"} por heurística do texto antigo</>}
+            </p>
+          )}
         </div>
       </div>
 
