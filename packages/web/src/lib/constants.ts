@@ -75,6 +75,19 @@ export function isLostReasonGrupo(value: unknown): value is string {
   return typeof value === 'string' && LOST_REASON_GROUPS.some((g) => g.value === value);
 }
 
+/**
+ * Story 75-266 — labels de TODOS os grupos que a classificação pode devolver:
+ * os 7 escolhíveis (acima) + os 3 que só existem no legado classificado por
+ * heurística (f_lost_reason_grupo / v_lead_lost_reason_grupo, migs 212/213).
+ * Fonte única — o card do analytics e o contexto do agente leem daqui.
+ */
+export const LOST_REASON_ALL_GROUP_LABELS: Record<string, string> = {
+  ...LOST_REASON_GROUP_LABELS,
+  duplicado_teste_corretor: 'Duplicado / teste / corretor',
+  sem_motivo: 'Sem motivo registrado',
+  nao_classificado: 'Não classificado',
+};
+
 export const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: 'referral',         label: 'Indicação' },
   { value: 'broker_sponsored', label: 'Patrocinado Corretor' },

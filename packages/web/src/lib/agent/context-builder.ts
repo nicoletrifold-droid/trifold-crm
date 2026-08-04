@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LOST_REASON_GROUP_LABELS } from "@web/lib/constants"
+import { LOST_REASON_ALL_GROUP_LABELS } from "@web/lib/constants"
 
 // ─── In-memory cache (5 min TTL) ──────────────────────────────────────────────
 interface CacheEntry { text: string; ts: number }
@@ -1382,13 +1382,8 @@ interface LossRow {
   source: string | null
 }
 
-const LOSS_GROUP_LABELS: Record<string, string> = {
-  ...LOST_REASON_GROUP_LABELS,
-  // grupos que só existem no legado classificado por heurística:
-  duplicado_teste_corretor: "Duplicado / teste / corretor",
-  sem_motivo: "Sem motivo registrado",
-  nao_classificado: "Não classificado",
-}
+// Story 75-266: o mapa completo (7 grupos + 3 só-legado) virou fonte única em constants.ts.
+const LOSS_GROUP_LABELS = LOST_REASON_ALL_GROUP_LABELS
 
 /**
  * fetchLostReasonBreakdown — grupos de motivo de perda da view
