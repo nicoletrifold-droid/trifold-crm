@@ -336,3 +336,26 @@ describe("isVisitSchedulingMode (Story 75-268 — o gate que ficou fechado)", ()
     expect(isVisitSchedulingMode({ lastAssistantMessage: null })).toBe(false)
   })
 })
+
+describe("mediaContextLine — a fala não infla o que vai sair (Story 75-270)", () => {
+  it("com títulos, instrui a citar EXATAMENTE o que sai", () => {
+    const line = mediaContextLine({
+      requested: true, willSend: true, empreendimento: "Vind Residence", materiais: ["Localização"],
+    })
+    expect(line).toContain("EXATAMENTE")
+    expect(line).toContain("Localização")
+    expect(line).toContain("1 arquivo")
+    expect(line).toContain("nao pluralize")
+  })
+  it("plural correto com mais de um arquivo", () => {
+    const line = mediaContextLine({
+      requested: true, willSend: true, empreendimento: "Yarden", materiais: ["Planta", "Fachada"],
+    })
+    expect(line).toContain("Planta, Fachada")
+    expect(line).toContain("2 arquivos")
+  })
+  it("sem a lista, mantém a instrução antiga (compat 75-157)", () => {
+    const line = mediaContextLine({ requested: true, willSend: true, empreendimento: "Vind Residence" })
+    expect(line).toContain("ESTAO SENDO ENVIADAS")
+  })
+})

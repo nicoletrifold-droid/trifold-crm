@@ -1,6 +1,6 @@
 # Story 75-270 — Planta do Vind no papo do Yarden (e "comprar na planta" não é pedir planta)
 
-**Epic:** 75 (CRM Trifold) · **Status:** Draft
+**Epic:** 75 (CRM Trifold) · **Status:** InReview
 **Criada por:** @sm (River) em 2026-08-04
 **Formato:** Correção de bug com incidente real em prod
 **Origem:** Marcos, 04/08/2026 — "a Nicole ofereceu o Yarden e foi ótimo, porém ela mandou a planta do Vind quando o assunto já era outro"
@@ -133,3 +133,96 @@ transforma um erro silencioso em erro visível.
 - Gerar planta do Yarden que não existe no acervo: se falta asset, o certo é faltar — cadastro é
   operação, não código.
 - A questão da fachada gerada por IA (#343) segue independente.
+
+---
+
+## PO Validation (@po — 2026-08-04)
+
+**Verdict: GO (9/10).** Incidente medido no banco (asset conferido por `media_asset_id`), causa dupla
+identificada, escopo separado da 75-268. Ajuste de prioridade registrado antes de implementar: a
+varredura de prod mostrou **1 cliente real em 45 dias** (31 mídias, 15 leads) — bug real, baixa
+frequência. O Marcos escolheu corrigir mesmo assim. Status Draft → Ready → InProgress.
+
+## Dev Agent Record (@dev — 2026-08-04)
+
+### O que foi construído
+
+**Item 1 — "na planta" (`send-library-media.ts`).** `OFF_PLAN_IDIOM_RE` remove a expressão antes de
+testar o `PLANTA_RE`. Some só a expressão, não a palavra: *"quero comprar na planta, me manda a
+planta"* continua sendo pedido, porque a segunda menção sobrevive.
+
+**Item 2 — a mídia segue a fala.** `reconcileMediaWithResponse` roda **depois** de `processMessage`,
+com a resposta na mão: se ela nomeia outro empreendimento, re-resolve para ele; se lá não houver o
+material pedido, **não envia nada** e loga `nicole_media_property_pivot`. Best-effort — em erro
+devolve a resolução original. Para isso, `resolveSendableMedia` ganhou `propertyIdOverride`, e o match
+por nome saiu de dentro dela para `pickPropertyFromText` (pura, testável sem banco) + 
+`loadPropertiesWithAssets`. A checagem pré-fala da 75-157 **continua** onde estava.
+
+**Item 3 — caption com empreendimento.** `mediaCaption` → "Yarden Residence — Planta"; não repete
+quando o título já cita o nome. O mesmo caption vai para `messages.content`, que é onde o Marcos
+enxergou o bug na tela.
+
+**AC6 — a fala não infla.** `mediaContext.materiais` leva os títulos exatos, e a instrução passou a
+ser "comente SÓ o que está nessa lista, não pluralize o que é único". Ataca direto o *"já te mandei
+aqui algumas fotos e a planta"* de 17:37, que saiu com **um** arquivo (Localização).
+
+### Efeito no caso real, conferido contra o acervo de prod
+
+O acervo tem, ativo: **Vind** (planta, fachada, localização, academia, brinquedoteca, pilates,
+piscina) e **Yarden** (planta, fachada, localização, lazer, piscina) — **nenhum dos dois tem asset de
+`tabela`**. Então o turno da Orlice, com o fix, **não envia nada**: "na planta" não dispara mais
+planta, e o "valores" (tabela) não tem material em lugar nenhum. É o resultado correto.
+
+### Trade-off assumido (dito na cara)
+
+A resolução pré-fala é o que alimenta a fala; a reconciliação vem depois. Logo, num pivô que **cancela**
+o envio, a Nicole pode ter dito que está mandando algo que não sai. Trocamos *imagem do
+empreendimento errado* (informa errado: 66,91m² como se fosse Yarden) por *promessa não cumprida*
+(chato, sem desinformar) — e agora isso fica logado, antes era invisível. Corrigir de verdade exigiria
+resolver a mídia antes da fala **sabendo** do pivô, o que inverte a ordem que a 75-157 estabeleceu.
+
+### Verificação
+
+- `npx vitest run` → **130 arquivos, 1575 testes** passando (17 novos nas 2 suítes)
+- `npm run type-check` → 8/8 · `npm run lint` → **0 erros** (18 warnings pré-existentes)
+- Confirmado que ninguém parseia `"[Mídia enviada] …"` (só é produzido) → mudar o caption não quebra UI
+
+### File List
+
+- `packages/web/src/lib/ai/send-library-media.ts` (M) — itens 1, 2 e 3
+- `packages/web/src/lib/ai/send-library-media.test.ts` (M) — AC1..AC5 + fake que respeita `.eq()`
+- `packages/web/src/app/api/webhook/whatsapp/route.ts` (M) — reconciliação + `materiais` no contexto
+- `packages/ai/src/chat/pipeline.ts` (M) — `MediaAvailability.materiais`, `property_pivot` no union
+- `packages/ai/src/chat/pipeline.test.ts` (M) — AC6
+
+## Change Log
+
+| data | quem | o que |
+|---|---|---|
+| 2026-08-04 | @sm | Story criada (incidente Orlice) |
+| 2026-08-04 | @po | 9/10 GO; incidência medida (1 cliente/45d) e decisão do Marcos de corrigir |
+| 2026-08-04 | @dev | Itens 1-3 + AC6; 1575 testes verdes; Status → InReview |
+
+## QA Results (@qa — 2026-08-04)
+
+**Gate: CONCERNS (8/10)** — `docs/qa/gates/75.270-nicole-midia-empreendimento-errado.yml`. Não
+bloqueia merge. AC1–AC6 cobertos por teste.
+
+Duas checagens do gate que mudaram o resultado do trabalho:
+
+1. **O fake do arquivo de teste ignorava os `.eq()`** — com ele, o re-resolve por Yarden recebia o
+   acervo do Vind e o teste do AC4 passava por motivo errado (mandando o asset do Vind e ninguém
+   percebendo). Escrevi `fakeDbFiltrado`, que aplica os filtros; foi ele que expôs o caso "empreendimento
+   novo sem o material".
+2. **Ninguém parseia `"[Mídia enviada] …"`** (só é produzido) — logo mudar o caption não quebra tela.
+
+| sev | o quê | encaminhamento |
+|---|---|---|
+| medium | pivô que cancela envio: a fala pode ter prometido | trade-off assumido e agora **logado**; inverter a ordem quebraria a 75-157 |
+| medium | guardrail de mídia no `agent_prompts` do banco não revisado | conferir com o Marcos; **não** bloqueia, o AC6 age pelo `mediaContext` |
+| low | fala citando os DOIS empreendimentos → não pivota | conservador de propósito |
+| low | `none_selected` junta dedup com "não tem esse tipo" e afirma "já enviei antes" | pré-existente (75-157) → backlog |
+
+| data | quem | o que |
+|---|---|---|
+| 2026-08-04 | @qa | Gate CONCERNS 8/10; achou o fake que escondia o AC4; 1575 testes verdes |

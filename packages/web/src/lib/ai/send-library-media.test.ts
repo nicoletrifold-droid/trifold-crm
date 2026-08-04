@@ -5,6 +5,9 @@ import {
   selectAssets,
   sendLibraryMediaIfRequested,
   resolveSendableMedia,
+  reconcileMediaWithResponse,
+  pickPropertyFromText,
+  mediaCaption,
   MAX_MEDIA_PER_TURN,
   type MediaAsset,
 } from "./send-library-media"
@@ -327,5 +330,181 @@ describe("detectMaterialRequest (compat 75-17)", () => {
     expect(detectMaterialRequest("tabela de valores")).toBe("tabela")
     expect(detectMaterialRequest("pode mandar fotos")).toBe("qualquer")
     expect(detectMaterialRequest("bom dia")).toBe(null)
+  })
+})
+
+// ============================================================================
+// Story 75-270 — a mídia tem que seguir o empreendimento da FALA
+// Incidente Orlice (03/08/2026): lead do Vind, Nicole ofereceu o Yarden e saiu
+// a planta do Vind (66,91m² onde o Yarden começa em 79m²).
+// ============================================================================
+
+describe("detectMediaRequest — 'na planta' é lançamento, não planta baixa (75-270 AC1)", () => {
+  it("🔥 a frase real da Orlice não pede material", () => {
+    expect(
+      detectMediaRequest(
+        "eu tô vendendo a minha casa, daí que eu queria comprar um na planta. Quando tivesse, assim, lançando"
+      )
+    ).not.toContain("planta")
+  })
+  it("outras formas do mesmo idioma", () => {
+    expect(detectMediaRequest("procuro imóvel na planta")).toEqual([])
+    expect(detectMediaRequest("prefiro comprar na planta")).toEqual([])
+    expect(detectMediaRequest("ainda na planta é melhor pra mim")).toEqual([])
+  })
+  it("pedido de verdade continua disparando (nenhuma regressão)", () => {
+    expect(detectMediaRequest("me manda a planta")).toContain("planta")
+    expect(detectMediaRequest("tem a planta baixa?")).toContain("planta")
+    expect(detectMediaRequest("qual a metragem?")).toContain("planta")
+    // Mistura: quer lançamento E pede a planta — a segunda menção sobrevive.
+    expect(detectMediaRequest("quero comprar na planta, me manda a planta")).toContain("planta")
+  })
+})
+
+describe("pickPropertyFromText (75-270)", () => {
+  const NOMES = new Map([["vind", "Vind Residence"], ["yarden", "Yarden"]])
+  it("casa por nome completo e por token distintivo", () => {
+    expect(pickPropertyFromText(NOMES, "temos o Yarden Residence, lançamento novo")?.propertyId).toBe("yarden")
+    expect(pickPropertyFromText(NOMES, "o Vind tem 2 suítes")?.propertyId).toBe("vind")
+  })
+  it("não adivinha quando cita os dois, nem quando não cita nenhum", () => {
+    expect(pickPropertyFromText(NOMES, "vi o Vind e o Yarden")).toBeNull()
+    expect(pickPropertyFromText(NOMES, "qual o valor do apartamento?")).toBeNull()
+  })
+})
+
+describe("mediaCaption (75-270 AC5)", () => {
+  it("prefixa o empreendimento", () => {
+    expect(mediaCaption("Planta", "Yarden Residence")).toBe("Yarden Residence — Planta")
+  })
+  it("não repete quando o título já cita o empreendimento", () => {
+    expect(mediaCaption("Planta Yarden Residence", "Yarden Residence")).toBe("Planta Yarden Residence")
+  })
+  it("sem empreendimento resolvido, devolve só o título", () => {
+    expect(mediaCaption("Planta", null)).toBe("Planta")
+  })
+})
+
+// Story 75-270 — o `fakeDb` acima ignora os `.eq()`, o que serve para os testes
+// dele mas não aqui: a reconciliação re-resolve FILTRANDO por property_id, e um
+// fake que devolve o acervo inteiro esconderia justamente o bug (mandar asset do
+// empreendimento errado). Este fake aplica os `.eq()` cujas colunas existem nas
+// linhas — property_id inclusive.
+function fakeDbFiltrado(tables: Record<string, { list?: Record<string, unknown>[]; single?: unknown }>) {
+  function builder(table: string) {
+    const eqs: Array<[string, unknown]> = []
+    const b: Record<string, unknown> = {}
+    const chain = () => b
+    b.select = chain
+    b.not = chain
+    b.order = chain
+    b.limit = chain
+    b.eq = (col: string, val: unknown) => {
+      eqs.push([col, val])
+      return b
+    }
+    const rows = () => {
+      const list = tables[table]?.list ?? []
+      return list.filter((row) =>
+        eqs.every(([col, val]) => !(col in row) || row[col] === val)
+      )
+    }
+    b.maybeSingle = () => Promise.resolve({ data: tables[table]?.single ?? null })
+    b.insert = () => Promise.resolve({ error: null })
+    b.then = (resolve: (v: unknown) => void) => resolve({ data: rows() })
+    return b
+  }
+  return { from: (t: string) => builder(t) } as never
+}
+
+describe("reconcileMediaWithResponse (75-270 AC3/AC4)", () => {
+  const YARDEN_FULL = [
+    { id: "y-planta", title: "Planta", category: "planta", file_url: "u", file_name: "yp.png", file_type: "image", property_id: "yarden", property: { name: "Yarden Residence" } },
+  ]
+  const PRE_VIND = {
+    kinds: ["planta" as const],
+    propertyId: "vind",
+    propertyName: "Vind Residence",
+    chosen: [{ id: "planta", title: "Planta", category: "planta", file_url: "u", file_name: "p.png", file_type: "image" }],
+    skipReason: null,
+  }
+
+  it("🔥 AC3 — a fala pivotou para o Yarden: NÃO manda o asset do Vind", async () => {
+    const admin = fakeDbFiltrado({
+      agent_media_assets: { list: [...VIND_FULL, ...YARDEN_FULL] },
+      leads: { single: { property_interest_id: "vind" } },
+      messages: { list: [] },
+      properties: { single: { name: "Yarden Residence" } },
+    })
+    const r = await reconcileMediaWithResponse(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+      assistantMessage:
+        "Temos o Yarden Residence, que é nosso lançamento mais recente — obras já iniciadas, a partir de 79m².",
+      preResolved: PRE_VIND,
+    })
+    expect(r.chosen.some((a) => a.id === "planta")).toBe(false)
+    expect(r.propertyId).toBe("yarden")
+  })
+
+  it("AC4 — havendo o material no Yarden, é o do Yarden que sai", async () => {
+    const admin = fakeDbFiltrado({
+      agent_media_assets: { list: [...VIND_FULL, ...YARDEN_FULL] },
+      leads: { single: { property_interest_id: "vind" } },
+      messages: { list: [] },
+      properties: { single: { name: "Yarden Residence" } },
+    })
+    const r = await reconcileMediaWithResponse(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+      assistantMessage: "Temos o Yarden Residence, obras iniciadas, a partir de 79m². Vale conhecer!",
+      preResolved: PRE_VIND,
+    })
+    expect(r.chosen.map((a) => a.id)).toEqual(["y-planta"])
+    expect(r.skipReason).toBeNull()
+  })
+
+  it("AC4 — sem o material no empreendimento novo, NÃO envia nada (property_pivot)", async () => {
+    const admin = fakeDbFiltrado({
+      // Yarden existe no acervo, mas só com fachada — não tem planta.
+      agent_media_assets: {
+        list: [
+          ...VIND_FULL,
+          { id: "y-fach", title: "Fachada", category: "fachada", file_url: "u", file_name: "yf.jpg", file_type: "image", property_id: "yarden", property: { name: "Yarden Residence" } },
+        ],
+      },
+      leads: { single: { property_interest_id: "vind" } },
+      messages: { list: [] },
+      properties: { single: { name: "Yarden Residence" } },
+    })
+    const r = await reconcileMediaWithResponse(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+      assistantMessage: "Temos o Yarden Residence, nosso lançamento mais recente.",
+      preResolved: PRE_VIND,
+    })
+    expect(r.chosen).toHaveLength(0)
+    expect(r.skipReason).toBe("property_pivot")
+  })
+
+  it("sem pivô (a fala segue no Vind) → devolve a resolução original intacta", async () => {
+    const admin = fakeDbFiltrado({
+      agent_media_assets: { list: VIND_FULL },
+      leads: { single: { property_interest_id: "vind" } },
+      messages: { list: [] },
+    })
+    const r = await reconcileMediaWithResponse(admin, {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+      assistantMessage: "O Vind tem 66,91m², com 2 suítes e sacada com churrasqueira.",
+      preResolved: PRE_VIND,
+    })
+    expect(r).toBe(PRE_VIND)
+  })
+
+  it("nada seria enviado de qualquer forma → não faz query nem muda nada", async () => {
+    const vazio = { ...PRE_VIND, chosen: [], skipReason: "no_assets" as const }
+    const r = await reconcileMediaWithResponse(fakeDbFiltrado({}), {
+      orgId: "o", leadId: "l", conversationId: "c", text: "me manda a planta",
+      assistantMessage: "Temos o Yarden Residence!",
+      preResolved: vazio,
+    })
+    expect(r).toBe(vazio)
   })
 })
