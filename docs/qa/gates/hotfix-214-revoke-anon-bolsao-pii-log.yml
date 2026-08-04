@@ -1,0 +1,119 @@
+schema: 1
+story: 'hotfix-214'
+story_title: 'Hotfix de segurança 214 — revoga anon/PUBLIC de pegar_lead_bolsao e log_pii_access'
+gate: PASS
+status_reason: 'Migration de ACL apenas, validada em produção DENTRO DE UMA TRANSAÇÃO REVERTIDA:
+  aplicada de verdade, verificada (0 exposições) e desfeita. Com o controle positivo antes
+  (3 linhas) e a confirmação de que o ROLLBACK pegou (prod segue nas 3), a asserção está
+  comprovadamente viva — não é um teste que passa vazio. O REVOKE não tira permissão de nenhum
+  caller real: `pegar_lead_bolsao` só é chamada via service_role e `log_pii_access` mantém
+  `authenticated`, que é o que o agente usa. Achado ORIGINADO nesta revisão (não estava na
+  auditoria do lote 0), com a varredura que o encontrou documentada no cabeçalho da migration
+  para ser repetível.'
+reviewer: 'Quinn'
+updated: '2026-08-04T13:52:00Z'
+quality_score: 100
+expires: '2026-08-18T13:52:00Z'
+
+achado:
+  origem: 'Re-rodagem dos probes da auditoria RLS em 04/08, DEPOIS de confirmar 209 e 210
+    aplicadas. A auditoria original varreu funções que recebem p_org_id (vetor cross-tenant) e a
+    210 varreu o que a 209 reabria para authenticated — nenhuma das duas cobria "toda função
+    SECURITY DEFINER executável por anon", que é onde estas estavam.'
+  varredura: 'pg_proc + has_function_privilege(anon) + prosecdef + exclui extensões via pg_depend
+    e exclui retorno trigger. 15 resultados; 13 inócuos (predicados de auth que dependem de
+    auth.uid(), 1 função pura de texto, 1 event_trigger não chamável).'
+  achado_1: 'public.pegar_lead_bolsao(uuid,uuid) — SECURITY DEFINER e de ESCRITA (puxa lead do
+    bolsão e atribui a corretor). ACL em prod: {=X/postgres, postgres=X, anon=X, authenticated=X,
+    service_role=X}. Um chamador SEM LOGIN, com dois UUIDs válidos, atribuiria lead a corretor
+    arbitrário — DEFINER ignora RLS. Mesma família que a 210 fechou para roleta_pick_and_advance;
+    passou batido lá. NÃO exercitei o vetor: mutaria produção.'
+  achado_2: 'public.log_pii_access(uuid,uuid,text,jsonb,text) — DEFINER e de escrita, mas escreve
+    no LOG de acesso a PII. Exposta a anon, permite POLUIR a trilha de auditoria (registrar
+    acessos que nunca houve): corrompe a prova, não vaza dado. Severidade menor, mesma origem.'
+  por_que_as_de_dados_ficaram: 'get_analytics_summary, get_admin_mensagens_paginated,
+    search_conversation_messages e get_dashboard_stage_counts são executáveis por anon mas são
+    SECURITY **INVOKER** → RLS se aplica e anon não lê nada. Conferido e deliberadamente não
+    mexido: revogar não agrega e arrisca quebrar caminho legítimo.'
+
+evidence:
+  dry_run_transacional: 'BEGIN + migration completa + verificação + ROLLBACK, via Management API
+    (1 POST = 1 transação). Resultado da verificação DENTRO da transação: `[]` — zero exposições.'
+  controle_positivo: '3 linhas ANTES de aplicar (bolsão×anon, bolsão×authenticated,
+    log_pii×anon) — prova que a query de verificação detecta o problema quando ele existe.'
+  rollback_confirmado: 'Re-consultado após o dry-run: prod segue com as MESMAS 3 linhas. O
+    ROLLBACK pegou e o dry-run não commitou nada por acidente.'
+  callers_bolsao: 'Varredura em packages/web/src e supabase/migrations: único caller é
+    packages/web/src/app/api/bolsao/[id]/pegar/route.ts:29 via `admin.rpc` (createAdminClient →
+    service_role). As outras 3 ocorrências são COMENTÁRIOS (cron/roleta-retry:43,
+    roles-hierarchy.ts:42, distributor.ts:99) e 1 teste que faz asserção sobre o nome da RPC.'
+  callers_log_pii: 'context-builder.ts:1083 (fetchLeadDrill) e :1133 (fetchLeadList), com o
+    `supabase` que vem de requireAuth() em app/api/agent/chat/route.ts:88-90 — client de USUÁRIO.
+    Por isso `authenticated` PERMANECE: revogar quebraria o fail-closed do agente (a função
+    retorna true antes de ler PII; sem permissão o agente para de responder drill de leads).
+    Esta é a diferença que separa o tratamento dos dois achados.'
+  assinaturas: 'Conferidas por pg_get_function_identity_arguments em prod e travadas em guarda
+    que aborta com RAISE se mudarem — REVOKE em assinatura errada fecharia nada em silêncio.'
+  suite_de_testes: 'N/A e declarado como tal: a mudança é 1 arquivo .sql, zero linhas de
+    TypeScript. Rodei por precaução e 44 arquivos falharam com `Cannot find package
+    @anthropic-ai/sdk` — worktree novo sem node_modules instalado, NÃO regressão. A mesma base
+    (origin/main 116987da) rodou 132 arquivos / 1552 testes verdes no worktree da 75-267 hoje.
+    Não instalei dependências porque a suíte não exercita migrations: seria número decorativo.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Fecha um caminho de ESCRITA exposto a anônimo e um de poluição de trilha de
+      auditoria. Nenhum caller legítimo perde permissão. Respeita a lição da 210: REVOKE FROM
+      PUBLIC não alcança grant explícito de role — os três são nomeados.'
+  performance:
+    status: PASS
+    notes: 'ACL apenas; nenhum plano de query muda.'
+  reliability:
+    status: PASS
+    notes: 'Idempotente (REVOKE de grant inexistente é no-op). Guarda de assinatura aborta em vez
+      de aplicar no alvo errado. Sem mudança de código, então não existe a assimetria
+      código-antes-do-banco do runbook do lote 0 — pode aplicar a qualquer momento.'
+  maintainability:
+    status: PASS
+    notes: 'A varredura que achou o problema está no cabeçalho, executável e repetível — a
+      próxima auditoria não precisa redescobrir o método. Armadilha do DROP+CREATE (que RESETA
+      ACL, ao contrário de CREATE OR REPLACE, que o PRESERVA) documentada no rollback.'
+
+top_issues:
+  - id: 'OBS-001'
+    severity: low
+    category: security
+    finding: 'Causa-raiz não endereçada: o Supabase concede EXECUTE a anon/authenticated por
+      default para toda função nova no schema public, então CADA função DEFINER de escrita criada
+      daqui pra frente nasce exposta. Esta migration corrige duas instâncias, não a classe.'
+    suggested_action: 'Story própria: avaliar `ALTER DEFAULT PRIVILEGES ... REVOKE EXECUTE ON
+      FUNCTIONS FROM anon` (ou uma checagem em CI que roda a varredura do cabeçalho e falha se
+      aparecer DEFINER+escrita executável por anon). Mais barato que auditar de novo a cada 6
+      meses.'
+    suggested_owner: architect
+  - id: 'OBS-002'
+    severity: low
+    category: process
+    finding: 'A varredura desta revisão cobriu funções. Views/matviews e tabelas com grant direto
+      para anon foram checadas só nos 3 probes nomeados da auditoria (P1/P2/P3, todos fechados) —
+      não houve varredura exaustiva de RELAÇÕES nesta passada.'
+    suggested_action: 'Complementar quando houver folga: mesma abordagem, sobre pg_class +
+      has_table_privilege(anon), excluindo objetos de extensão.'
+    suggested_owner: qa
+
+recommendations:
+  immediate:
+    - action: 'Aplicar a 214 em prod (1 POST = 1 transação) e rodar as duas verificações do
+        cabeçalho: 0 linhas na de exposição, 3 na contraprova'
+      refs: ['supabase/migrations/214_hotfix_revoke_anon_bolsao_pii_log.sql']
+    - action: 'Após aplicar, exercitar 1 puxada real de lead do bolsão pela UI — é a única função
+        de escrita afetada, e o sintoma de erro seria 42501 nos logs da Vercel'
+      refs: ['packages/web/src/app/api/bolsao/[id]/pegar/route.ts']
+  future:
+    - action: 'Fechar a CLASSE, não as instâncias: ALTER DEFAULT PRIVILEGES ou check em CI (OBS-001)'
+      refs: ['supabase/migrations/']
+    - action: 'Varredura equivalente sobre relações (views/matviews/tabelas) — OBS-002'
+      refs: ['docs/audits/rls-multi-tenant-audit.md']
+
+waiver: { active: false }
