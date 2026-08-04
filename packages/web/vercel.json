@@ -171,6 +171,10 @@
     {
       "path": "/api/cron/aprovacoes-digest",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/meta-capi-dispatch",
+      "schedule": "*/3 * * * *"
     }
   ]
 }
