@@ -4,6 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import type { AnalyticsReportData, WeekComparisonGroup } from "@web/lib/pdf/analytics-report-pdf"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
+// Story 75-271 — o relatório passa a respeitar os filtros da tela. Mesmo módulo
+// de filtros da página (75-270) e mesma soma em JS que ela faz no ramo filtrado.
+import { applyLeadFilters, hasAnyFilter, activeFilterKeys, EMPTY_FILTERS, FILTER_SPEC, type AnalyticsFilters } from "@web/lib/analytics/filters"
+import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
 // Story 75-179: tipo da RPC + derivação de métricas centralizados (dedup tela/PDF).
 import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
@@ -144,7 +148,13 @@ export async function buildAnalyticsReportData(
    * semanal passa `resolvePeriod("7d")`; o PDF sob demanda passa o período
    * selecionado na tela. (Caminho único — não há mais "resumo semanal" fixo.)
    */
-  period: ResolvedPeriod
+  period: ResolvedPeriod,
+  /**
+   * Story 75-271 — filtros ativos na tela (corretor, calor, perfil,
+   * empreendimento). Default SEM filtro mantém o cron semanal intocado: ele
+   * chama sem este argumento e segue no caminho da RPC, byte a byte igual.
+   */
+  filters: AnalyticsFilters = EMPTY_FILTERS
 ): Promise<AnalyticsReportData> {
   const now = new Date()
 
@@ -178,25 +188,31 @@ export async function buildAnalyticsReportData(
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: aggSince.toISOString(), p_until: aggUntil.toISOString() }),
     // Story 75-179: período anterior (mesma duração) p/ a variação de Entradas do card herói.
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: compPrevStart.toISOString(), p_until: compCurrStart.toISOString() }),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"),
+    applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"), filters),
+    applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"), filters),
     // Story 75-180: comparativo na base ENTRADAS — TODAS as entradas da janela
     // (sem filtro is_active/lost_reason), para o Total bater com o card Entradas.
-    supabase.from("leads")
-      .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
-      .eq("org_id", orgId)
-      .eq("segmento", "principal") // Story 75-98
-      .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
-      .order("created_at"),
+    applyLeadFilters(
+      supabase.from("leads")
+        .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
+        .eq("org_id", orgId)
+        .eq("segmento", "principal") // Story 75-98
+        .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
+        .order("created_at"),
+      filters
+    ),
     supabase.from("properties").select("id, name").eq("is_active", true),
     // Tempo de atendimento (Story 75-51): leads ATENDIDOS no período. Mede
     // distribuição → atendimento (primeiro_atendimento_em), igual à tela (75-47).
     // Só mede desde 24/06/2026.
-    supabase.from("leads")
-      .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
-      .eq("org_id", orgId).eq("segmento", "principal").not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
-      .gte("primeiro_atendimento_em", compCurrStart.toISOString()).lt("primeiro_atendimento_em", aggUntil.toISOString())
-      .limit(1000),
+    applyLeadFilters(
+      supabase.from("leads")
+        .select("id, primeiro_atendimento_em, assigned_broker_id, broker:users!assigned_broker_id(id, name)")
+        .eq("org_id", orgId).eq("segmento", "principal").not("assigned_broker_id", "is", null).not("primeiro_atendimento_em", "is", null)
+        .gte("primeiro_atendimento_em", compCurrStart.toISOString()).lt("primeiro_atendimento_em", aggUntil.toISOString())
+        .limit(1000),
+      filters
+    ),
   ])
 
   const summary = (analytics as AnalyticsSummary | null) ?? null
@@ -204,24 +220,98 @@ export async function buildAnalyticsReportData(
   const metrics = deriveAnalyticsMetrics(summary)
   const prevMetrics = deriveAnalyticsMetrics((analyticsPrev as AnalyticsSummary | null) ?? null)
 
-  const stages = (summary?.funnel ?? []).map((st) => ({
-    name: st.name,
-    color: st.color,
-    count: toN(st.count),
-  }))
+  // ── Story 75-271 — com filtro, a soma NÃO pode vir da RPC ─────────────────
+  // `get_analytics_summary_ranged` aceita só org + datas. Enquanto o PDF tirava
+  // TUDO dela, ele ignorava os filtros da tela (inclusive o de empreendimento,
+  // que já existia). Com filtro ativo, buscamos os leads filtrados e somamos com
+  // o MESMO agregador que a tela usa — se cada um somasse do seu jeito, o dia em
+  // que divergissem passaria em branco, porque PDF se confere menos que tela.
+  const filtrado = hasAnyFilter(filters)
 
-  const properties = (summary?.by_property ?? []).map((p) => ({
-    name: p.name,
-    count: toN(p.count),
-  }))
+  let stages: { name: string; color: string; count: number }[]
+  let properties: { name: string; count: number }[]
+  let brokers: { name: string; count: number }[]
+  let sourceCounts: Record<string, number> = {}
+  let entradasFiltradas: number | null = null
+  let prevEntradasFiltradas: number | null = null
+  let perdidosFiltrados: number | null = null
 
-  const brokers = (summary?.by_broker ?? [])
-    .filter((b) => !HIDDEN_BROKERS.has((b.name ?? "").toLowerCase().trim()) && activeBrokerIds.has(b.user_id))
-    .map((b) => ({ name: b.name, count: toN(b.count) }))
+  if (!filtrado) {
+    stages = (summary?.funnel ?? []).map((st) => ({
+      name: st.name,
+      color: st.color,
+      count: toN(st.count),
+    }))
 
-  const sourceCounts: Record<string, number> = {}
-  for (const [k, v] of Object.entries(summary?.source_counts ?? {})) {
-    sourceCounts[k] = toN(v)
+    properties = (summary?.by_property ?? []).map((p) => ({
+      name: p.name,
+      count: toN(p.count),
+    }))
+
+    brokers = (summary?.by_broker ?? [])
+      .filter((b) => !HIDDEN_BROKERS.has((b.name ?? "").toLowerCase().trim()) && activeBrokerIds.has(b.user_id))
+      .map((b) => ({ name: b.name, count: toN(b.count) }))
+
+    for (const [k, v] of Object.entries(summary?.source_counts ?? {})) {
+      sourceCounts[k] = toN(v)
+    }
+  } else {
+    // Base ATIVOS (mesma da tela no ramo filtrado): funil/corretores/origens
+    // falam dos leads em atendimento. Entradas/Perdidos vêm de contagens
+    // próprias abaixo, porque têm recorte diferente (Story 75-179).
+    const [stageDefsRes, ativosRes, entradasRes, prevEntradasRes, perdidosRes] = await Promise.all([
+      supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
+      applyLeadFilters(
+        supabase.from("leads")
+          .select("stage_id, assigned_broker_id, source, property_interest_id, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId).eq("segmento", "principal")
+          .eq("is_active", true).is("lost_reason", null)
+          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()),
+        filters
+      ),
+      applyLeadFilters(
+        supabase.from("leads").select("id", { count: "exact", head: true })
+          .eq("org_id", orgId).eq("segmento", "principal")
+          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()),
+        filters
+      ),
+      applyLeadFilters(
+        supabase.from("leads").select("id", { count: "exact", head: true })
+          .eq("org_id", orgId).eq("segmento", "principal")
+          .gte("created_at", compPrevStart.toISOString()).lt("created_at", compCurrStart.toISOString()),
+        filters
+      ),
+      applyLeadFilters(
+        supabase.from("leads").select("id", { count: "exact", head: true })
+          .eq("org_id", orgId).eq("segmento", "principal")
+          .not("lost_reason", "is", null)
+          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()),
+        filters
+      ),
+    ])
+
+    const stageDefs = (stageDefsRes.data ?? []) as Array<{ id: string; name: string; slug: string | null; color: string | null; position: number | null }>
+    const agg = aggregateFilteredLeads(
+      (ativosRes.data ?? []) as Parameters<typeof aggregateFilteredLeads>[0],
+      stageDefs,
+      { hiddenBrokerNames: HIDDEN_BROKERS, activeBrokerIds }
+    )
+
+    // Cor vazia é aceitável no PDF (o componente trata); o tipo exige string.
+    stages = agg.stages.map((s) => ({ name: s.name, color: s.color ?? "", count: s.count }))
+    brokers = agg.brokers.map((b) => ({ name: b.name, count: b.count }))
+    sourceCounts = { ...agg.sourceCounts }
+
+    const propNames = new Map(((propertiesRaw ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]))
+    properties = Object.entries(agg.byProperty)
+      .map(([id, count]) => ({ name: propNames.get(id) ?? "Outro", count }))
+      .sort((a, b) => b.count - a.count)
+
+    entradasFiltradas = entradasRes.count ?? 0
+    prevEntradasFiltradas = prevEntradasRes.count ?? 0
+    perdidosFiltrados = perdidosRes.count ?? 0
+    // Nota: o PDF não tem card de conversão — a etapa de fechamento já aparece
+    // no funil (`stages`), então não há número extra a calcular aqui.
   }
 
   const lpYarden = lpYardenCount ?? 0
@@ -318,8 +408,14 @@ export async function buildAnalyticsReportData(
           : "Período"
 
   // ── Métricas dos cards do PDF (Story 75-179: fonte única = deriveAnalyticsMetrics) ──
-  const { entradas, ativos, perdidos } = metrics
-  const entradasDelta = entradas - prevMetrics.entradas
+  // Story 75-271 — com filtro, cada número vem da contagem filtrada
+  // correspondente; sem filtro, do helper da RPC, exatamente como antes.
+  // `ativos` é o total agregado da base de ativos (a mesma que alimentou o funil),
+  // então bate com a soma do funil por construção.
+  const entradas = entradasFiltradas ?? metrics.entradas
+  const ativos = filtrado ? stages.reduce((sum, st) => sum + st.count, 0) : metrics.ativos
+  const perdidos = perdidosFiltrados ?? metrics.perdidos
+  const entradasDelta = entradas - (prevEntradasFiltradas ?? prevMetrics.entradas)
 
   // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
   const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
@@ -327,12 +423,21 @@ export async function buildAnalyticsReportData(
   // Card 2: VISITAS REALIZADAS no período — agendamentos (appointments) com
   // scheduled_at na janela e status ≠ cancelado/no-show ("visita que aconteceu",
   // independente de quando o lead entrou). Story 75-71.
-  const { count: visitasCount } = await supabase
-    .from("appointments").select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
-    .not("status", "in", "(cancelled,no_show)")
-  const visitasRealizadas = visitasCount ?? 0
+  // Story 75-271 — appointments NÃO tem as colunas dos filtros (corretor/calor/
+  // perfil vivem em `leads`), então este card não é filtrável sem um join que a
+  // tela também não faz. Para não exibir número que ignora o filtro ao lado de
+  // números que o respeitam, com filtro ativo o card é OMITIDO (null) e o PDF
+  // mostra "—". Ver `fechamentoFiltrado` para o mesmo princípio aplicado ao
+  // contrário: lá havia como calcular, e foi calculado.
+  let visitasRealizadas: number | null = null
+  if (!filtrado) {
+    const { count: visitasCount } = await supabase
+      .from("appointments").select("id", { count: "exact", head: true })
+      .eq("org_id", orgId)
+      .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
+      .not("status", "in", "(cancelled,no_show)")
+    visitasRealizadas = visitasCount ?? 0
+  }
 
   // Tempo médio agregado, ponderado pelo nº de leads de cada corretor (mesma
   // fonte da tabela por corretor). null quando não houve atendimentos no período.
@@ -351,6 +456,10 @@ export async function buildAnalyticsReportData(
     generatedAt,
     periodRange,
     rangeLabel,
+    // Story 75-271 — sem esta linha o PDF filtrado seria indistinguível de um
+    // PDF completo, e alguém compararia dois relatórios de recortes diferentes
+    // achando que são o mesmo. Filtro que não se anuncia no papel é armadilha.
+    filtrosAtivos: describeActiveFilters(filters),
     entradas,
     entradasDelta,
     ativos,
@@ -368,4 +477,35 @@ export async function buildAnalyticsReportData(
     brokerResponseTimes,
     comparison,
   }
+}
+
+/**
+ * Story 75-271 — descreve os filtros ativos para o cabeçalho do PDF. Só nomes
+ * de dimensão + valor bruto: resolver nome de corretor/empreendimento exigiria
+ * outra query, e o objetivo aqui é AVISAR que o recorte não é o total, não
+ * produzir legenda bonita. Vazio quando não há filtro (o PDF omite a linha).
+ */
+function describeActiveFilters(filters: AnalyticsFilters): string[] {
+  const rotulos: Record<string, string> = {
+    propertyId: "Empreendimento",
+    brokerId: "Corretor",
+    interestLevel: "Calor",
+    finalidade: "Finalidade",
+    profissao: "Profissão",
+    rendaFamiliar: "Renda",
+    filhos: "Filhos",
+    estadoCivil: "Estado civil",
+    faixaEtaria: "Faixa etária",
+    situacaoMoradia: "Moradia",
+    temPet: "Pet",
+    cidadeBairro: "Cidade/Bairro",
+  }
+  return activeFilterKeys(filters).map((k) => {
+    const valor = filters[k]
+    const rotulo = rotulos[k] ?? FILTER_SPEC[k].param
+    // Id (uuid) não diz nada no papel; para essas dimensões basta anunciar que
+    // há filtro. Para as de valor legível, mostra o valor.
+    const ehId = k === "propertyId" || k === "brokerId"
+    return ehId ? rotulo : `${rotulo}: ${valor}`
+  })
 }

@@ -26,6 +26,11 @@ export interface AnalyticsReportData {
   periodRange: string
   /** Rótulo curto do período (ex.: "Últimos 7 dias"). */
   rangeLabel: string
+  /**
+   * Story 75-271 — dimensões filtradas (vazio = relatório do período inteiro).
+   * Aparece no cabeçalho para o leitor saber que o recorte não é o total.
+   */
+  filtrosAtivos?: string[]
   // Cards de topo — todos referentes ao período (Story 75-179).
   /** Todas as entradas do período (inclui perdidos). */
   entradas: number
@@ -35,7 +40,13 @@ export interface AnalyticsReportData {
   ativos: number
   visitou: number
   /** Visitas realizadas (agendamentos ≠ cancelado/no-show) no período. */
-  visitasRealizadas: number
+  /**
+   * Story 75-271 — `null` quando há filtro ativo: `appointments` não tem as
+   * colunas dos filtros (corretor/calor/perfil vivem em `leads`), então o card
+   * é omitido em vez de exibir número que ignora o filtro ao lado de números
+   * que o respeitam. Renderiza "—".
+   */
+  visitasRealizadas: number | null
   perdidos: number
   /** Tempo médio de atendimento (min), ponderado por corretor. null = sem dados. */
   tempoMedioMin: number | null
@@ -202,6 +213,9 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
               <Text style={s.headerSub}>Trifold CRM</Text>
               <Text style={s.chip}>{data.rangeLabel}</Text>
               <Text style={s.headerSub}>{data.periodRange}</Text>
+              {data.filtrosAtivos && data.filtrosAtivos.length > 0 && (
+                <Text style={s.headerSub}>Filtros: {data.filtrosAtivos.join(" · ")}</Text>
+              )}
             </View>
           </View>
           <Text style={s.headerDate}>Gerado em {data.generatedAt}</Text>
@@ -221,7 +235,7 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           </View>
           <View style={s.card}>
             <Text style={s.cardLabel}>Visitas (7d)</Text>
-            <Text style={s.cardValueGreen}>{data.visitasRealizadas}</Text>
+            <Text style={s.cardValueGreen}>{data.visitasRealizadas ?? "—"}</Text>
             <Text style={s.cardSub}>
               <Text style={s.cardSubStrong}>{data.visitou}</Text> na etapa Visitou
             </Text>

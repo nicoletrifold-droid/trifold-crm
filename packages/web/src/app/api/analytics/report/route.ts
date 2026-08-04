@@ -4,6 +4,8 @@ import { createElement } from "react"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { buildAnalyticsReportData } from "@web/lib/analytics-report-data"
 import { resolvePeriod } from "@web/lib/analytics/period"
+// Story 75-271 — MESMO parser da tela: é o que faz o PDF concordar com ela.
+import { parseAnalyticsFilters } from "@web/lib/analytics/filters"
 import { AnalyticsReportPDF } from "@web/lib/pdf/analytics-report-pdf"
 
 export async function GET(req: NextRequest) {
@@ -21,7 +23,11 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const period = resolvePeriod(sp.get("range") ?? undefined, sp.get("from") ?? undefined, sp.get("to") ?? undefined)
 
-  const data = await buildAnalyticsReportData(auth.supabase, appUser.org_id, period)
+  // Story 75-271 — o PDF passa a respeitar os filtros da tela (antes lia só o
+  // período e ignorava até o de empreendimento).
+  const filters = parseAnalyticsFilters(sp)
+
+  const data = await buildAnalyticsReportData(auth.supabase, appUser.org_id, period, filters)
 
   const pdfElement = createElement(AnalyticsReportPDF, { data })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

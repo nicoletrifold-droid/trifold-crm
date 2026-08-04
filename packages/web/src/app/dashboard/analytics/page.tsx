@@ -25,6 +25,8 @@ import {
   type PeriodParams,
 } from "@web/lib/analytics/filters"
 import { facetOptions, facetCoverage, optionLabelComContagem } from "@web/lib/analytics/filter-options"
+// Story 75-271 — mesma soma que o PDF usa (QA-002: uma implementação, não duas).
+import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
 
 /**
  * Story 75-272 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
@@ -186,35 +188,22 @@ export default async function AnalyticsPage({
       broker: { id: string; name: string } | { id: string; name: string }[] | null
     }>
 
-    // Funnel
-    const stageMap = new Map<string, number>()
-    for (const l of allLeads) { if (l.stage_id) stageMap.set(l.stage_id, (stageMap.get(l.stage_id) ?? 0) + 1) }
-    stages = (stagesData.data ?? []).map((s) => ({
-      id: s.id, name: s.name, slug: s.slug, color: s.color, position: s.position, count: stageMap.get(s.id) ?? 0,
+    // Story 75-271 (QA-002) — funil, corretores e origens saem do agregador
+    // COMPARTILHADO com o PDF. Antes esta soma vivia aqui e o PDF tinha a sua
+    // (ou pior: não tinha e usava a RPC sem filtro). Duas implementações do
+    // mesmo cálculo divergem em silêncio, e PDF se confere menos que tela.
+    const agg = aggregateFilteredLeads(allLeads, (stagesData.data ?? []) as Parameters<typeof aggregateFilteredLeads>[1], {
+      hiddenBrokerNames: HIDDEN_BROKER_NAMES,
+      activeBrokerIds,
+    })
+    stages = agg.stages.map((s) => ({
+      id: s.id, name: s.name, slug: s.slug ?? "", color: s.color ?? "", position: s.position ?? 0, count: s.count,
     }))
-
-    // Brokers
-    const brokerAgg = new Map<string, { name: string; count: number }>()
-    for (const l of allLeads) {
-      if (!l.assigned_broker_id) continue
-      const b = Array.isArray(l.broker) ? l.broker[0] : l.broker
-      if (!b?.name) continue
-      if (HIDDEN_BROKER_NAMES.has(b.name.toLowerCase().trim())) continue
-      const cur = brokerAgg.get(l.assigned_broker_id) ?? { name: b.name, count: 0 }
-      cur.count++
-      brokerAgg.set(l.assigned_broker_id, cur)
-    }
-    brokers = Array.from(brokerAgg.entries())
-      .filter(([id]) => activeBrokerIds.has(id))
-      .map(([id, v]) => ({ id, name: v.name, count: v.count, avgScore: 0 }))
-
-    // Sources do período
-    for (const l of allLeads) {
-      if (l.source) sourceCounts[l.source] = (sourceCounts[l.source] ?? 0) + 1
-    }
+    brokers = agg.brokers.map((b) => ({ ...b, avgScore: 0 }))
+    for (const [k, v] of Object.entries(agg.sourceCounts)) sourceCounts[k] = v
 
     // Story 75-179: Ativos = criados na janela, ativos e não-perdidos (allLeads já filtra).
-    ativos = allLeads.length
+    ativos = agg.total
     // Entradas = TODOS os criados na janela p/ o empreendimento (inclui perdidos/inativos).
     const { count: entradasCount } = await applyLeadFilters(
       supabase
@@ -439,24 +428,16 @@ export default async function AnalyticsPage({
     ? (allProperties ?? []).find((p) => p.id === propertyId)?.name ?? "Empreendimento"
     : null
 
-  // PDF sob demanda segue o período selecionado na tela (Story 75-31).
-  //
-  // 🔴 Story 75-272 — AC6 NÃO ENTREGUE, de propósito. O link NÃO leva os filtros
-  // porque o PDF ainda não sabe aplicá-los: `buildAnalyticsReportData` tira
-  // TODOS os números principais (métricas, funil, empreendimentos, corretores,
-  // origens) da RPC `get_analytics_summary_ranged`, que só aceita org + datas.
-  // Passar os filtros aplicaria em algumas queries e não nas da RPC — o PDF
-  // sairia MISTURANDO número filtrado com não filtrado, e a divergência com a
-  // tela ficaria invisível. Pior que não filtrar. O caminho certo é dar ao
-  // report-data a mesma bifurcação da tela (agregar em JS quando filtrado), e
-  // isso é story própria. NOTA: o PDF já ignorava o filtro de empreendimento
-  // ANTES desta story — o furo é pré-existente, não regressão.
-  const reportParams = new URLSearchParams({ range: period.range })
-  if (period.range === "custom" && period.from && period.to) {
-    reportParams.set("from", period.from)
-    reportParams.set("to", period.to)
-  }
-  const reportHref = `/api/analytics/report?${reportParams.toString()}`
+  // PDF sob demanda segue o período (Story 75-31) E os filtros (Story 75-271).
+  // O `buildAnalyticsReportData` ganhou a mesma bifurcação da tela: com filtro,
+  // soma em JS pelo agregador compartilhado (`lib/analytics/aggregate-filtered.ts`)
+  // em vez de usar a RPC, que só aceita org + datas. Foi o que destravou o AC6
+  // que a 75-272 havia deixado aberto de propósito — meio-filtrado mentiria.
+  const reportHref = buildAnalyticsHref("/api/analytics/report", filters, {
+    range: period.range,
+    from: period.from,
+    to: period.to,
+  })
 
   // ── Opções dos filtros, facetadas sobre as ENTRADAS da janela (Story 75-272) ──
   // `facetRows` é a base de facetamento: o caminho filtrado já tem os leads em
