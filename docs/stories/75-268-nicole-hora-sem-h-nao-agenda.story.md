@@ -1,6 +1,6 @@
 # Story 75-268 — "Umas 14" não é horário: a Nicole confirma visita que não existe
 
-**Epic:** 75 (CRM Trifold) · **Status:** Draft
+**Epic:** 75 (CRM Trifold) · **Status:** InReview
 **Criada por:** @sm (River) em 2026-08-04
 **Formato:** Correção de bug com dois incidentes reais em prod
 **Origem:** Marcos, 04/08/2026 — "dois leads, Sueli e Valnira marcaram visita e a Nicole não colocou na agenda"
@@ -180,3 +180,88 @@ disponibilidade está na mesma transação. Guardrail no prompt — e, como semp
 - Planta do empreendimento errado / "comprar na planta" → **story 75-270**.
 - A Nicole prometer mídia que não sai ("já te mandei fotos e a planta") → 75-270.
 - Rever `VISIT_INVITE_PATTERNS` por LLM em vez de regex — vale discutir depois, não aqui.
+
+---
+
+## PO Validation (@po — 2026-08-04)
+
+**Verdict: GO (9/10).** Título objetivo, problema medido em prod (não reconstruído), AC testáveis com
+strings reais, escopo IN/OUT explícito (mídia foi separada na 75-270), risco documentado (a função de
+parse tem 6 consumidores), valor de negócio direto (visita perdida = corretor sem cliente na frente).
+Ponto fraco: **AC3/AC4 pedem "um appointment criado"**, e não existe harness de integração para
+`processMessage` — o INSERT em si não é coberto por teste automatizado. Tratado no Dev Agent Record e
+transferido para o AC7 (validação em prod). Status Draft → Ready → InProgress.
+
+## Dev Agent Record (@dev — 2026-08-04)
+
+### O que foi construído
+
+**Item 1 — hora pelada (`visit-slot.ts`).** `parseTimeParts` ganhou 2º parâmetro
+`{ bareNumberAllowed }`, **opt-in**: o default é bit a bit o comportamento antigo, então os 6
+consumidores existentes não mudam. `parseBareHour` roda como ÚLTIMO recurso (depois de meio-dia,
+período e marcador) e só aceita 7–19, rejeitando por unidade posterior (`m²`, `mil`, `vagas`,
+`suítes`, `andar`, `anos`…), por palavra anterior (`dia`, `andar`, `acima do`, `rua`, `av`, `cpf`,
+`R$`…) e por data (`10 de agosto`). Número com 3+ dígitos e decimal/dinheiro já morrem no
+lookbehind/lookahead.
+
+**Item 2 — o gate (`pipeline.ts`).** Novo helper puro **exportado** `isVisitSchedulingMode`, que soma
+às portas antigas (`visit_proposed`, `visit_availability`) duas novas: **pendência de slot** e **a
+última fala da Nicole ter tratado de visita**. `lastAssistantMsg` subiu no arquivo (era calculado só
+depois, para a extração de nome da 75-161 — mesmo valor, uma conta só).
+
+**Item 3 — período não herda dia velho (`visit-slot.ts`).** Em `resolveVisitSlotParts`, período na
+mensagem sem dia na mensagem bloqueia o `visit_availability` como fonte de **dia** (a hora continua
+podendo vir dele — a 75-162 segue de pé).
+
+**Item 4 — guardrail (`prompts/visit-scheduling.ts`).** Bloco novo proibindo "deixa eu confirmar a
+disponibilidade com a equipe" para dia/horário/agenda (segue válido para preço de unidade e detalhe
+técnico), e proibindo dizer "fora do atendimento" e "estamos disponíveis" na mesma frase.
+
+### Decisão de escopo dentro do Item 1
+
+Com visita **já marcada**, hora pelada só é aceita quando há pedido de remarcação ou pendência nossa
+(`negotiatingSlot`). `cancelIntent` ficou **fora** de propósito: em "quero cancelar, fico no trabalho
+até 18" o número não é remarcação, e um slot concreto faria o fluxo remarcar em vez de cancelar.
+Quem quer trocar horário junto do cancelamento segue atendido pelo caminho com marcador.
+
+### Onde o teste não chega (dito na cara)
+
+Os AC3/AC4 estão cobertos **até o slot**: os testes reproduzem os dois diálogos turno a turno e
+provam que a cadeia determinística chega a `2026-08-06T13:00:00Z` (Valnira) e `2026-08-07T17:00:00Z`
+(Sueli) — os mesmos instantes que humanos gravaram à mão em prod. **O INSERT em `appointments` não é
+coberto**: `pipeline.test.ts` só testa helpers puros e não há harness com Supabase/Anthropic
+mockados; criar um é maior que esta correção. Fica com o AC7 (validação em prod).
+
+Também **não** ligamos hora pelada na guarda `detectSlotMismatch` (ela lê a fala da Nicole). Se ela
+inventar "confirmado para as 14" sem marcador, a guarda não acusa. É limitação pré-existente,
+fail-open e só de log — anotada para o backlog, não corrigida aqui.
+
+### Verificação
+
+- `npx vitest run` → **130 arquivos, 1557 testes, todos passando** (incluindo as 4 suítes novas).
+- `npm run type-check` → 8/8 tarefas OK.
+- `npm run lint` → **0 erros** (18 warnings, todas pré-existentes e fora dos arquivos tocados).
+- Parser conferido contra as strings reais das duas conversas de prod, não contra exemplos inventados.
+
+### File List
+
+- `packages/ai/src/flows/visit-slot.ts` (M) — `TimeParseOptions`, `parseBareHour`, guardas, Item 3
+- `packages/ai/src/flows/visit-slot.test.ts` (M) — AC1, AC2, AC3/AC4, AC6
+- `packages/ai/src/chat/pipeline.ts` (M) — `isVisitSchedulingMode`, gate, `timeOptions` nos 2 caminhos
+- `packages/ai/src/chat/pipeline.test.ts` (M) — suíte do gate com as falas reais da Nicole
+- `packages/ai/src/prompts/visit-scheduling.ts` (M) — guardrail do Item 4
+
+### Pendências antes de Done
+
+1. **`agent_prompts` em prod** (Item 4 / AC6 da 75-245): o prompt "Agendamento de Visitas"
+   (`ae2255d2…c848`, 2.786 chars) **mascara o do código** — sem editá-lo, o guardrail não vale em
+   runtime. SQL preparado, aguardando o Marcos (escrita em prod muda a conversa do cliente na hora).
+2. **AC7** — validação em prod com um lead real dizendo a hora sem "h".
+
+## Change Log
+
+| data | quem | o que |
+|---|---|---|
+| 2026-08-04 | @sm | Story criada a partir dos dois incidentes de 03/08 |
+| 2026-08-04 | @po | Validação 9/10 → GO; Draft → Ready |
+| 2026-08-04 | @dev | 4 itens implementados; 1557 testes verdes; Status → InReview |

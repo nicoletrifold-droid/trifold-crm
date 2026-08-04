@@ -132,8 +132,54 @@ function parseDay(text: string, now: Date): { y: number; m: number; d: number } 
   return null
 }
 
+/**
+ * Story 75-268 — opções do parse de hora. `bareNumberAllowed` aceita número SEM
+ * marcador ("as 10", "umas 14"), e existe porque os leads escrevem assim: nos
+ * dois incidentes de 03/08 ("Umas 14" da Sueli, "Na quinta as 10" da Valnira) a
+ * hora era descartada e a visita nunca chegava a `appointments`.
+ *
+ * É opt-in DE PROPÓSITO: número solto no meio de uma conversa de imóvel quase
+ * nunca é hora ("2 suítes", "andar 12", "500 mil"). Só ligue quando o próprio
+ * sistema acabou de pedir o horário — ver `pipeline.ts`.
+ */
+export interface TimeParseOptions {
+  bareNumberAllowed?: boolean
+}
+
+/** Faixa em que número pelado pode ser hora — expediente (8h–18h) com folga. */
+const BARE_HOUR_MIN = 7
+const BARE_HOUR_MAX = 19
+
+/** Unidade logo DEPOIS do número prova que ele não é hora. */
+const NOT_HOUR_UNIT_RE =
+  /^\s*(?:m2|m²|mts?|metros?|mil|reais|%|vagas?|suites?|quartos?|dormitorios?|andar(?:es)?|anos?|dias?|meses|semanas?|pessoas?|filhos?|parcelas?)\b/
+/** Palavra logo ANTES do número prova que ele não é hora. */
+const NOT_HOUR_PREFIX_RE =
+  /\b(?:dia|andar|acima do|abaixo do|apto|apartamento|numero|n[º°]|rua|av|avenida|cpf|bloco|torre|r\$)\s*$/
+
+/**
+ * Story 75-268 — número pelado como hora, com as guardas todas. Recebe o texto
+ * JÁ normalizado (sem acento, minúsculo, "10,30" → "10:30").
+ */
+function parseBareHour(t: string): { hour: number; minute: number } | null {
+  for (const m of t.matchAll(/(?<![\d.,:/])(\d{1,2})(?![\d.,:h/])/g)) {
+    const raw = m[1]!
+    const hour = parseInt(raw, 10)
+    if (hour < BARE_HOUR_MIN || hour > BARE_HOUR_MAX) continue
+    const idx = m.index ?? 0
+    const before = t.slice(0, idx)
+    const after = t.slice(idx + raw.length)
+    if (NOT_HOUR_UNIT_RE.test(after)) continue
+    if (NOT_HOUR_PREFIX_RE.test(before)) continue
+    // "10 de agosto" é data, não hora — quem resolve é o parseDay.
+    if (new RegExp(`^\\s*(?:o|a|º|ª)?\\s*de\\s+(?:${MONTHS.join("|")})\\b`).test(after)) continue
+    return { hour, minute: 0 }
+  }
+  return null
+}
+
 /** Resolve a hora pedida (BRT, 0-23) a partir do texto, ou null. */
-function parseHour(text: string): { hour: number; minute: number } | null {
+function parseHour(text: string, opts?: TimeParseOptions): { hour: number; minute: number } | null {
   // Story 75-245 — "10,00 hora" (o lead escreve assim) precisa virar 10:00 ANTES
   // de qualquer regex: o padrão genérico casava o "00 hora" e devolvia 00:00,
   // que cai fora do expediente e o horário pedido era silenciosamente descartado.
@@ -162,6 +208,9 @@ function parseHour(text: string): { hour: number; minute: number } | null {
     const minute = hMatch[2] ? parseInt(hMatch[2]!, 10) : 0
     if (hour >= 0 && hour <= 23 && minute >= 0 && minute < 60) return { hour, minute }
   }
+
+  // Story 75-268 — último recurso, só sob contexto explícito: "as 10", "umas 14".
+  if (opts?.bareNumberAllowed) return parseBareHour(t)
 
   return null
 }
@@ -244,8 +293,11 @@ export function parseDayParts(message: string, now: Date): DayParts | null {
 }
 
 /** Extrai só o horário referenciado (ou null). Exposto para combinar dia+hora entre turnos. */
-export function parseTimeParts(message: string): { hour: number; minute: number } | null {
-  return parseHour(message)
+export function parseTimeParts(
+  message: string,
+  opts?: TimeParseOptions
+): { hour: number; minute: number } | null {
+  return parseHour(message, opts)
 }
 
 export type TimeParts = { hour: number; minute: number }
@@ -280,15 +332,24 @@ export function resolveVisitSlotParts(input: {
   pendingDay?: DayParts | null
   pendingTime?: TimeParts | null
   visitAvailability?: string | null
+  /** Story 75-268 — opções do parse de hora da MENSAGEM DO LEAD (não do `visit_availability`). */
+  timeOptions?: TimeParseOptions
 }): { day: DayParts | null; time: TimeParts | null } {
-  const { message, now, pendingDay = null, pendingTime = null, visitAvailability } = input
-  let day = parseDayParts(message, now) ?? pendingDay
-  let time = parseTimeParts(message) ?? pendingTime
+  const { message, now, pendingDay = null, pendingTime = null, visitAvailability, timeOptions } = input
+  const dayInMessage = parseDayParts(message, now)
+  let day = dayInMessage ?? pendingDay
+  let time = parseTimeParts(message, timeOptions) ?? pendingTime
+  // Story 75-268 — período dado pelo lead NÃO herda dia velho. Quando ele diz só
+  // o período ("Semana de manhã"), o `visit_availability` antigo entrava como dia
+  // e a Nicole oferecia outro dia: a Valnira pediu dia de semana e ouviu sábado.
+  // Sem dia, o certo é PERGUNTAR o dia.
+  const periodWithoutDayInMessage = !dayInMessage && !!parsePeriodParts(message)
   // Story 75-245 — o `visit_availability` só vale como fonte de slot quando é um
   // slot ÚNICO. Frase de expediente ou lista de opções (ambígua) não agenda
   // nada: era daí que saía o agendamento fantasma (ver isAmbiguousSlotText).
   if ((!day || !time) && visitAvailability && !isAmbiguousSlotText(visitAvailability)) {
-    if (!day) day = parseDayParts(visitAvailability, now)
+    if (!day && !periodWithoutDayInMessage) day = parseDayParts(visitAvailability, now)
+    // Hora vinda da fala da Nicole nunca aceita número pelado (opções não passam).
     if (!time) time = parseTimeParts(visitAvailability)
   }
   return { day, time }

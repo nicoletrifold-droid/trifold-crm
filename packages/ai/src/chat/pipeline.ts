@@ -63,6 +63,42 @@ export function hasConfirmedDay(availability: unknown): boolean {
 }
 
 /**
+ * Story 75-268 — a última fala da Nicole tratou de visita? Substitui a aposta
+ * frágil de `VISIT_INVITE_PATTERNS` (6 regex tentando adivinhar, pela redação, a
+ * intenção que ela própria acabou de ter). No incidente da Sueli ela escreveu
+ * *"Qual o melhor dia e período pra você vir?"* e nenhuma das 6 casou — a regex
+ * `qual.*dia.*melhor pra voc` exige "dia" ANTES de "melhor".
+ */
+const NICOLE_TALKED_VISIT_RE =
+  /\bvisita\b|\bvisitar\b|\bvisitinha\b|\bdecorado\b|\bagendar\b|\bagendamos\b|\bque dia\b|\bqual dia\b|\bmelhor dia\b|\bqual (?:o )?hor[áa]rio\b|\bque hor[áa]rio\b|\bque horas\b|\bvir conhecer\b|\bconhecer pessoalmente\b|\bhor[áa]rios? (?:livres?|dispon[íi]ve[li]s?)\b/i
+
+/**
+ * Story 75-268 — o turno entra no MODO AGENDAMENTO (bloco determinístico de
+ * visita: parser + agenda interna + bloco `[SISTEMA]`)?
+ *
+ * Antes dependia só de `visit_proposed || visit_availability`, e os dois falharam
+ * no mesmo diálogo: `visit_proposed` porque a fala da Nicole não casou nenhuma das
+ * 6 regex, e `visit_availability` porque a lista de keywords exige "sexta-feira"
+ * com hífen — "Sexta a tarde" não casa. Sem o bloco, a Nicole improvisou o
+ * expediente ("sexta à tarde seria após as 18h") e a visita nunca foi gravada.
+ *
+ * Ligar o modo é BARATO e seguro: se nada de dia/hora/período for entendido na
+ * mensagem, nenhum bloco `[SISTEMA]` é injetado e o turno segue igual.
+ */
+export function isVisitSchedulingMode(input: {
+  visitProposed?: boolean | null
+  hasVisitAvailability?: boolean
+  /** Já existe dia/hora pendente de um turno anterior (nós perguntamos algo). */
+  hasPendingSlot?: boolean
+  lastAssistantMessage?: string | null
+}): boolean {
+  if (input.visitProposed) return true
+  if (input.hasVisitAvailability) return true
+  if (input.hasPendingSlot) return true
+  return NICOLE_TALKED_VISIT_RE.test(input.lastAssistantMessage ?? "")
+}
+
+/**
  * Story 75-245 — a Nicole afirmou um dia+horário diferente do que o sistema
  * autorizou neste turno? Devolve o horário que ela afirmou (para logar), ou null.
  *
@@ -579,6 +615,16 @@ export async function processMessageWithMetadata(
   // Story 75-162 — modo agendamento: visit_proposed OU visit_availability capturado.
   const hasVisitAvailability =
     typeof (collectedData as Record<string, unknown>).visit_availability === "string"
+  // Story 75-268 — última fala da Nicole (o modo agendamento também liga por ela,
+  // e a extração de nome da 75-161 usa a mesma string logo abaixo).
+  const lastAssistantMsg =
+    [...history].reverse().find((m) => (m as { role?: string }).role === "assistant")
+      ?.content ?? ""
+  // Story 75-268 — pendência de slot é sinal forte: só existe porque NÓS pedimos
+  // o dia ou o horário num turno anterior.
+  const hasPendingSlot =
+    typeof (collectedData as Record<string, unknown>).visit_pending_date === "string" ||
+    typeof (collectedData as Record<string, unknown>).visit_pending_hour === "number"
   // Story 75-245 — regra de verdade colada em TODO bloco [SISTEMA] de visita.
   // No incidente do lead Ailton o bloco dizia "visita JÁ confirmada para segunda
   // 3/08 às 12:00 — apenas confirme" e a Nicole anunciou "sábado às 9h" e depois
@@ -624,14 +670,31 @@ export async function processMessageWithMetadata(
       const pTime = typeof cdA.visit_pending_hour === "number"
         ? { hour: cdA.visit_pending_hour as number, minute: (cdA.visit_pending_minute as number | undefined) ?? 0 }
         : null
+      const cancelIntent = detectCancelIntent(message)
+      const rescheduleIntent = detectRescheduleIntent(message)
+      // Story 75-268 — com visita JÁ marcada, número pelado ("as 10") só vale como
+      // hora quando o cliente está claramente negociando O MESMO slot: pediu para
+      // remarcar, ou nós deixamos dia/hora pendente. Fora disso, mexer numa visita
+      // existente por causa de um "10" solto é caro demais.
+      //
+      // `cancelIntent` NÃO entra de propósito: em "quero cancelar, fico no trabalho
+      // até 18" o número não é pedido de remarcação, e um slot concreto faria o
+      // fluxo remarcar em vez de cancelar. Quem quer trocar de horário junto com o
+      // cancelamento continua atendido pelo caminho com marcador ("às 10h").
+      const negotiatingSlot = rescheduleIntent || !!pDay || !!pTime
       // Novo slot vem da MENSAGEM + pendências (NÃO do visit_availability, que guarda o slot ANTIGO).
-      const resolved = resolveVisitSlotParts({ message, now: nowA, pendingDay: pDay, pendingTime: pTime, visitAvailability: null })
+      const resolved = resolveVisitSlotParts({
+        message,
+        now: nowA,
+        pendingDay: pDay,
+        pendingTime: pTime,
+        visitAvailability: null,
+        timeOptions: { bareNumberAllowed: negotiatingSlot },
+      })
       let nDay = resolved.day
       const nTime = resolved.time
       // Só hora (sem dia) → assume o MESMO dia da visita atual (troca de horário no dia).
       if (nTime && !nDay) nDay = dayPartsFromUtc(apptWhen)
-      const cancelIntent = detectCancelIntent(message)
-      const rescheduleIntent = detectRescheduleIntent(message)
       // Story 75-245 — período sem número ("de manhã"): antes não resolvia nada e
       // a Nicole inventava o horário. Agora vira oferta de slots livres reais.
       const nPeriod = parsePeriodParts(message)
@@ -685,7 +748,15 @@ export async function processMessageWithMetadata(
         authorizedSlotUtc = apptWhen
         messageWithContext = sistema(`Visita JÁ confirmada para ${formatted} às ${hora}. Se o cliente NÃO pediu para mudar nem cancelar, apenas confirme com simpatia: "Sua visita tá marcada pra ${formatted} às ${hora}, te espero lá!"`)
       }
-    } else if (state?.visit_proposed || hasVisitAvailability) {
+    } else if (
+      // Story 75-268 — o gate deixa de ser só visit_proposed/visit_availability.
+      isVisitSchedulingMode({
+        visitProposed: state?.visit_proposed,
+        hasVisitAvailability,
+        hasPendingSlot,
+        lastAssistantMessage: lastAssistantMsg,
+      })
+    ) {
       // 2) Sem visita ainda → entende o dia/horário pedido (combinando com o que
       //    ficou pendente de turnos anteriores), confere a agenda interna (que inclui
       //    Calendly) e injeta o contexto para a Nicole responder certo na MESMA mensagem.
@@ -704,6 +775,9 @@ export async function processMessageWithMetadata(
         pendingDay,
         pendingTime,
         visitAvailability: typeof cd.visit_availability === "string" ? cd.visit_availability : null,
+        // Story 75-268 — aqui NÃO há visita marcada e já estamos em modo agendamento:
+        // "as 10" / "Umas 14" é hora. Era o que se perdia nos dois incidentes.
+        timeOptions: { bareNumberAllowed: true },
       })
 
       // Story 75-245 — período sem número ("de manhã") vira oferta de horários
@@ -873,9 +947,8 @@ export async function processMessageWithMetadata(
   // Story 75-161 — se a Nicole ACABOU de perguntar o nome (última msg dela no
   // histórico) e ainda não temos nome, aceitamos uma resposta curta em minúsculas
   // como nome (ex.: "maicon"). Contexto claro → baixo risco de falso positivo.
-  const lastAssistantMsg =
-    [...history].reverse().find((m) => (m as { role?: string }).role === "assistant")
-      ?.content ?? ""
+  // (Story 75-268 — `lastAssistantMsg` agora é calculado lá acima, porque o modo
+  // agendamento também depende dele.)
   const nameExpected =
     !collectedData.name &&
     /\bnome\b|\bcomo (?:posso|devo|gostaria de|prefere) (?:te )?chamar\b|\bcom quem (?:eu )?(?:falo|estou falando)\b/i.test(

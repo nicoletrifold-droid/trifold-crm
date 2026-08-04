@@ -485,3 +485,136 @@ describe("parsePeriodParts — saudação não é período (Story 75-245)", () =
     expect(parsePeriodParts("bom dia! prefiro à tarde")).toBe("tarde")
   })
 })
+
+// ============================================================================
+// Story 75-268 — hora sem "h" ("Umas 14", "as 10")
+// Âncora dos incidentes: 03/08/2026 21:52Z = segunda 18:52 BRT.
+// ============================================================================
+const NOW_268 = new Date("2026-08-03T21:52:00Z")
+const BARE = { bareNumberAllowed: true }
+
+describe("parseTimeParts — número pelado é opt-in (Story 75-268 AC1)", () => {
+  it("as strings dos incidentes só resolvem COM a opção ligada", () => {
+    // Sueli, 03/08 18:52
+    expect(parseTimeParts("Umas 14")).toBeNull()
+    expect(parseTimeParts("Umas 14", BARE)).toEqual({ hour: 14, minute: 0 })
+    // Valnira, 03/08 21:09 e 21:10
+    expect(parseTimeParts("Na quinta as 10")).toBeNull()
+    expect(parseTimeParts("Na quinta as 10", BARE)).toEqual({ hour: 10, minute: 0 })
+    expect(parseTimeParts("As 10")).toBeNull()
+    expect(parseTimeParts("As 10", BARE)).toEqual({ hour: 10, minute: 0 })
+  })
+  it("outras formas naturais de dizer a hora sem 'h'", () => {
+    expect(parseTimeParts("10", BARE)).toEqual({ hour: 10, minute: 0 })
+    expect(parseTimeParts("por volta das 14", BARE)).toEqual({ hour: 14, minute: 0 })
+    expect(parseTimeParts("pode ser 9", BARE)).toEqual({ hour: 9, minute: 0 })
+    expect(parseTimeParts("umas 17 então", BARE)).toEqual({ hour: 17, minute: 0 })
+  })
+  it("o caminho com marcador continua idêntico (nenhuma regressão)", () => {
+    expect(parseTimeParts("as 14h", BARE)).toEqual({ hour: 14, minute: 0 })
+    expect(parseTimeParts("14:30", BARE)).toEqual({ hour: 14, minute: 30 })
+    expect(parseTimeParts("10,00 hora", BARE)).toEqual({ hour: 10, minute: 0 })
+    expect(parseTimeParts("meio-dia", BARE)).toEqual({ hour: 12, minute: 0 })
+    expect(parseTimeParts("3 da tarde", BARE)).toEqual({ hour: 15, minute: 0 })
+  })
+})
+
+describe("parseTimeParts — número que NÃO é hora (Story 75-268 AC2)", () => {
+  it("jargão de imóvel não vira horário, mesmo com a opção ligada", () => {
+    expect(parseTimeParts("Acima do 5", BARE)).toBeNull()
+    expect(parseTimeParts("São todos com 2 suítes", BARE)).toBeNull()
+    expect(parseTimeParts("tem 66,91m² de área privativa", BARE)).toBeNull()
+    expect(parseTimeParts("preciso de 3 vagas", BARE)).toBeNull()
+    expect(parseTimeParts("uns 500 mil", BARE)).toBeNull()
+    expect(parseTimeParts("quero no 12 andar", BARE)).toBeNull()
+    expect(parseTimeParts("no andar 15", BARE)).toBeNull()
+    expect(parseTimeParts("a partir de 79m2", BARE)).toBeNull()
+    expect(parseTimeParts("entrega em 2029", BARE)).toBeNull()
+    expect(parseTimeParts("tenho 18 anos de casa", BARE)).toBeNull()
+  })
+  it("data não vira hora", () => {
+    expect(parseTimeParts("dia 10", BARE)).toBeNull()
+    expect(parseTimeParts("pode ser 10 de agosto", BARE)).toBeNull()
+    expect(parseTimeParts("dia 5 de manhã", BARE)).toBeNull()
+  })
+  it("endereço, CPF, telefone e dinheiro seguem protegidos", () => {
+    expect(parseTimeParts("Av. Nildo Ribeiro da Rocha, 1337", BARE)).toBeNull()
+    expect(parseTimeParts("CPF 174.677.569.68", BARE)).toBeNull()
+    expect(parseTimeParts("R$ 250.000,00", BARE)).toBeNull()
+    expect(parseTimeParts("meu whats é 554488296886", BARE)).toBeNull()
+  })
+})
+
+describe("Story 75-268 AC3/AC4 — os dois diálogos reais, turno a turno", () => {
+  it("Valnira: dia num turno, 'as 10' no seguinte → quinta 06/08 10:00 BRT", () => {
+    // Turno 1 — "Quinta ou sexta": resolve o dia, sem hora → fica pendente.
+    const t1 = resolveVisitSlotParts({ message: "Quinta ou sexta", now: NOW_268, timeOptions: BARE })
+    expect(t1.day).toEqual({ y: 2026, m: 7, d: 6 })
+    expect(t1.time).toBeNull()
+    // Turno 2 — "Na quinta as 10", com o dia pendente do turno 1.
+    const t2 = resolveVisitSlotParts({
+      message: "Na quinta as 10",
+      now: NOW_268,
+      pendingDay: t1.day,
+      timeOptions: BARE,
+    })
+    expect(t2.time).toEqual({ hour: 10, minute: 0 })
+    const ev = evaluateSlot(t2.day!, t2.time!, NOW_268)
+    expect(ev.outsideHours).toBe(false)
+    // 10:00 BRT = 13:00Z — exatamente o scheduled_at gravado à mão em prod.
+    expect(ev.startUtc?.toISOString()).toBe("2026-08-06T13:00:00.000Z")
+  })
+
+  it("Sueli: 'Sexta a tarde' → 'Umas 14' → sexta 07/08 14:00 BRT (dentro do expediente)", () => {
+    // Turno 1 — dia + período, sem hora: o fluxo oferece horários livres da tarde.
+    const t1 = resolveVisitSlotParts({ message: "Sexta a tarde", now: NOW_268, timeOptions: BARE })
+    expect(t1.day).toEqual({ y: 2026, m: 7, d: 7 })
+    expect(t1.time).toBeNull()
+    expect(parsePeriodParts("Sexta a tarde")).toBe("tarde")
+    // Turno 2 — "Umas 14" com o dia pendente.
+    const t2 = resolveVisitSlotParts({
+      message: "Umas 14",
+      now: NOW_268,
+      pendingDay: t1.day,
+      timeOptions: BARE,
+    })
+    expect(t2.time).toEqual({ hour: 14, minute: 0 })
+    const ev = evaluateSlot(t2.day!, t2.time!, NOW_268)
+    // Sexta 14h NUNCA foi fora do expediente — a Nicole é que disse que era.
+    expect(ev.outsideHours).toBe(false)
+    // 14:00 BRT = 17:00Z — o scheduled_at que o corretor gravou à mão 18h depois.
+    expect(ev.startUtc?.toISOString()).toBe("2026-08-07T17:00:00.000Z")
+  })
+})
+
+describe("Story 75-268 AC6 — período do lead não herda dia velho", () => {
+  const AVAIL_SABADO = "Sábado, 8 de agosto, às 9h"
+  it("'Semana de manhã' com visit_availability de sábado → NÃO assume sábado", () => {
+    const r = resolveVisitSlotParts({
+      message: "Semana de manhã",
+      now: NOW_268,
+      visitAvailability: AVAIL_SABADO,
+      timeOptions: BARE,
+    })
+    expect(parsePeriodParts("Semana de manhã")).toBe("manha")
+    expect(r.day).toBeNull() // sem dia → o fluxo PERGUNTA o dia
+  })
+  it("mas quando o lead dá o dia, o visit_availability continua completando a hora", () => {
+    const r = resolveVisitSlotParts({
+      message: "pode ser sábado",
+      now: NOW_268,
+      visitAvailability: AVAIL_SABADO,
+    })
+    expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
+    expect(r.time).toEqual({ hour: 9, minute: 0 })
+  })
+  it("e sem período na mensagem o fallback de dia segue valendo (75-162 preservada)", () => {
+    const r = resolveVisitSlotParts({
+      message: "confirmado",
+      now: NOW_268,
+      visitAvailability: AVAIL_SABADO,
+    })
+    expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
+    expect(r.time).toEqual({ hour: 9, minute: 0 })
+  })
+})
