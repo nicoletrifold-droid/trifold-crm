@@ -10,6 +10,8 @@ import {
   pickGranularity,
   type ExecutiveData,
 } from "@web/lib/analytics/executive"
+// Story 75-269 — paginação extraída daqui e compartilhada com o /leads-by-period.
+import { fetchAllLeads, LEADS_PAGE_SIZE, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
 
 // Mesmos nomes ocultos da tela de Analytics (contas de demonstração).
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
@@ -53,10 +55,16 @@ export async function GET(request: NextRequest) {
   const prevFrom = new Date(fromMs - (toMs - fromMs)).toISOString()
   const prevTo = from
 
-  const PAGE = 1000
-  async function fetchLeads(sinceISO: string, untilISO: string, columns: string): Promise<LeadRow[]> {
-    const out: LeadRow[] = []
-    for (let offset = 0; ; offset += PAGE) {
+  // Teto do PostgREST, usado no `.limit()` de appointments abaixo. Era um
+  // `const PAGE = 1000` local; virou a constante compartilhada na Story 75-269
+  // (mesmo valor, um lugar só).
+  const PAGE = LEADS_PAGE_SIZE
+
+  // Story 75-269 — o laço de paginação que vivia aqui virou
+  // `lib/analytics/fetch-all-leads.ts`, compartilhado com o /leads-by-period.
+  // Recorte, filtros e ordem seguem IDÊNTICOS: só o laço saiu daqui.
+  function fetchLeads(sinceISO: string, untilISO: string, columns: string): Promise<LeadRow[]> {
+    return fetchAllLeads<LeadRow>(() => {
       let q = supabase
         .from("leads")
         .select(columns)
@@ -65,15 +73,11 @@ export async function GET(request: NextRequest) {
         .gte("created_at", sinceISO)
         .lt("created_at", untilISO)
         .order("created_at", { ascending: true })
-        .range(offset, offset + PAGE - 1)
       if (propertyId) q = q.eq("property_interest_id", propertyId)
-      const { data, error } = await q
-      if (error) throw error
-      const rows = (data ?? []) as unknown as LeadRow[]
-      out.push(...rows)
-      if (rows.length < PAGE) break
-    }
-    return out
+      // O select com colunas dinâmicas (string) faz o PostgREST devolver
+      // `ParserError`; o cast reconcilia com LeadRow, como já era antes.
+      return q as unknown as RangeableQuery<LeadRow>
+    })
   }
 
   try {
