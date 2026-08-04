@@ -17,6 +17,7 @@ import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
 import {
   sendLibraryMediaIfRequested,
   resolveSendableMedia,
+  reconcileMediaWithResponse,
 } from "@web/lib/ai/send-library-media"
 import { maybeRouteInboundToRelationship } from "@web/lib/relacionamento/route-inbound"
 import { transcribeAudio } from "@web/lib/transcription/transcribe"
@@ -851,6 +852,9 @@ export async function POST(request: NextRequest) {
             willSend: sendableMedia.chosen.length > 0,
             empreendimento: sendableMedia.propertyName,
             reason: sendableMedia.skipReason,
+            // Story 75-270 — os títulos exatos do que sai, para a fala não inflar
+            // ("algumas fotos e a planta" quando saiu 1 arquivo só).
+            materiais: sendableMedia.chosen.map((a) => a.title),
           },
           onEvent: (event) => {
             logEvent({
@@ -949,6 +953,18 @@ export async function POST(request: NextRequest) {
         // só envia com pedido claro + property_interest_id + asset ativo; nunca
         // quebra o fluxo (helper trata erros internamente).
         try {
+          // Story 75-270 — a mídia segue o empreendimento da RESPOSTA: se a Nicole
+          // pivotou de produto nesta fala (caso Orlice, 03/08: Vind → Yarden), a
+          // resolução pré-fala aponta para o empreendimento antigo. Aqui ela é
+          // realinhada; sem material do novo, nada é enviado.
+          const midiaFinal = await reconcileMediaWithResponse(supabase, {
+            orgId,
+            leadId: lead!.id,
+            conversationId: conversation!.id,
+            text: asyncText,
+            assistantMessage: response,
+            preResolved: sendableMedia,
+          })
           // Story 75-157: reusa a resolução pré-fala (mesma verdade da fala) e
           // loga o resultado (enviados/skip/erro) — antes era descartado/silencioso.
           const enviados = await sendLibraryMediaIfRequested(
@@ -964,7 +980,7 @@ export async function POST(request: NextRequest) {
               phoneNumberId: config.phone_number_id,
               accessToken: config.access_token,
             },
-            sendableMedia
+            midiaFinal
           )
           logEvent({
             level: "info",
@@ -975,8 +991,11 @@ export async function POST(request: NextRequest) {
             org_id: orgId,
             metadata: {
               enviados,
-              will_send: sendableMedia.chosen.length,
-              skip_reason: sendableMedia.skipReason,
+              will_send: midiaFinal.chosen.length,
+              skip_reason: midiaFinal.skipReason,
+              // Story 75-270 — a fala prometeu com base na resolução pré-fala;
+              // guardar as duas deixa visível quando o pivô mudou o resultado.
+              will_send_pre_fala: sendableMedia.chosen.length,
               conversation_id: conversation!.id,
               lead_id: lead!.id,
             },

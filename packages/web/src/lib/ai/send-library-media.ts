@@ -52,6 +52,16 @@ const NEGATION_RE = /\bn[au]o\s+(quero|precisa|precis[oa]|manda|envia|mostra|man
 const ALREADY_RE = /\bj[au]\s+(recebi|vi|tenho|peguei|olhei)\b/
 
 /**
+ * Story 75-270 — "na planta" é HOMÔNIMO do mercado imobiliário: quer dizer comprar
+ * em lançamento, não pedir a planta baixa. A lead Orlice disse "queria comprar um
+ * na planta" (03/08/2026) e recebeu a planta do empreendimento errado.
+ *
+ * Some com a expressão ANTES de testar o PLANTA_RE — assim "quero comprar na
+ * planta, e me manda a planta" continua sendo pedido (a segunda menção sobrevive).
+ */
+const OFF_PLAN_IDIOM_RE = /\bn[a]\s+planta\b/g
+
+/**
  * Detecta os tipos de material pedidos na mensagem do lead. Retorna a lista de
  * `MediaKind` na ordem em que aparecem; `[]` quando não é pedido de material.
  *
@@ -66,7 +76,8 @@ export function detectMediaRequest(text: string | null | undefined): MediaKind[]
   if (NEGATION_RE.test(t) || ALREADY_RE.test(t)) return []
 
   const kinds: MediaKind[] = []
-  if (PLANTA_RE.test(t)) kinds.push("planta")
+  // Story 75-270 — "comprar na planta" não é pedido de planta baixa.
+  if (PLANTA_RE.test(t.replace(OFF_PLAN_IDIOM_RE, " "))) kinds.push("planta")
   if (FACHADA_RE.test(t)) kinds.push("fachada")
   if (TABELA_RE.test(t)) kinds.push("tabela")
   if (LAZER_RE.test(t)) kinds.push("lazer")
@@ -198,6 +209,49 @@ export type MediaSkipReason =
   | "no_property" // não deu para identificar o empreendimento
   | "no_assets" // empreendimento sem asset ativo
   | "none_selected" // tudo que casaria já foi enviado antes (dedup) / sem match de tipo
+  | "property_pivot" // Story 75-270: a Nicole trocou de empreendimento na fala e o novo não tem esse material
+
+/**
+ * Story 75-270 — escolhe o empreendimento citado num texto, entre os que têm
+ * mídia ativa. Extraído do fallback por nome (era inline em `resolveSendableMedia`)
+ * para ser reusado na reconciliação pós-fala e ficar testável sem banco.
+ *
+ * Conservador de propósito: só resolve com match ÚNICO — nunca adivinha entre 2+.
+ */
+export function pickPropertyFromText(
+  nomes: Map<string, string>,
+  text: string
+): { propertyId: string; propertyName: string } | null {
+  const t = norm(text)
+  // Palavras do texto, para casar por TOKEN distintivo do nome (nome "Vind
+  // Residence" casa quando o lead diz só "Vind").
+  const words = new Set(t.split(/[^a-z0-9]+/).filter(Boolean))
+  const matches = [...nomes.entries()].filter(([, name]) => {
+    const n = norm(name)
+    if (n.length >= 4 && t.includes(n)) return true // nome completo citado
+    const first = n.split(/\s+/)[0] // token distintivo (1ª palavra)
+    return !!first && first.length >= 4 && words.has(first)
+  })
+  if (matches.length !== 1 || !matches[0]) return null
+  return { propertyId: matches[0][0], propertyName: matches[0][1] }
+}
+
+/** Empreendimentos que têm asset ATIVO, por id → nome. */
+async function loadPropertiesWithAssets(admin: Admin, orgId: string): Promise<Map<string, string>> {
+  const { data } = await admin
+    .from("agent_media_assets")
+    .select("property_id, property:properties(name)")
+    .eq("org_id", orgId)
+    .eq("is_active", true)
+    .not("property_id", "is", null)
+  const nomes = new Map<string, string>()
+  for (const a of data ?? []) {
+    const p = a.property as { name?: string } | { name?: string }[] | null
+    const name = Array.isArray(p) ? p[0]?.name : p?.name
+    if (a.property_id && name) nomes.set(a.property_id as string, name)
+  }
+  return nomes
+}
 
 export interface SendableMedia {
   /** Tipos de material detectados no pedido do lead. */
@@ -222,7 +276,18 @@ export interface SendableMedia {
  */
 export async function resolveSendableMedia(
   admin: Admin,
-  args: { orgId: string; leadId: string; conversationId: string | null; text: string }
+  args: {
+    orgId: string
+    leadId: string
+    conversationId: string | null
+    text: string
+    /**
+     * Story 75-270 — força o empreendimento, ignorando `property_interest_id` e o
+     * fallback por nome. Usado pela reconciliação pós-fala, quando a Nicole
+     * mudou de empreendimento na própria resposta.
+     */
+    propertyIdOverride?: string | null
+  }
 ): Promise<SendableMedia> {
   const kinds = detectMediaRequest(args.text)
   const result = (
@@ -236,8 +301,10 @@ export async function resolveSendableMedia(
 
   // Texto recente da conversa (para o match por NOME do empreendimento) — não só
   // a mensagem atual: o empreendimento costuma já estar estabelecido na conversa.
+  // Story 75-270 — com override não há match por nome: o empreendimento já foi
+  // decidido pela fala da Nicole; pular a query economiza um round-trip.
   let matchText = args.text
-  if (args.conversationId) {
+  if (args.conversationId && !args.propertyIdOverride) {
     const { data } = await admin
       .from("messages")
       .select("content")
@@ -247,44 +314,29 @@ export async function resolveSendableMedia(
     matchText = [args.text, ...(data ?? []).map((m) => (m.content as string) ?? "")].join("  ")
   }
 
-  // 1) Empreendimento de interesse do lead (preferencial).
-  const { data: lead } = await admin
-    .from("leads")
-    .select("property_interest_id")
-    .eq("id", args.leadId)
-    .maybeSingle()
-  let propertyId: string | null = lead?.property_interest_id ?? null
+  // Story 75-270 — override manda: veio da fala da Nicole neste turno, que é mais
+  // recente que qualquer coisa gravada no lead.
+  let propertyId: string | null = args.propertyIdOverride ?? null
   let propertyName: string | null = null
+
+  // 1) Empreendimento de interesse do lead (preferencial).
+  if (!propertyId) {
+    const { data: lead } = await admin
+      .from("leads")
+      .select("property_interest_id")
+      .eq("id", args.leadId)
+      .maybeSingle()
+    propertyId = lead?.property_interest_id ?? null
+  }
 
   // 2) Fallback: identifica o empreendimento pelo NOME citado no contexto recente,
   //    entre os que têm mídia ativa. Só usa se houver exatamente 1 match.
   if (!propertyId) {
-    const { data: assetProps } = await admin
-      .from("agent_media_assets")
-      .select("property_id, property:properties(name)")
-      .eq("org_id", args.orgId)
-      .eq("is_active", true)
-      .not("property_id", "is", null)
-    const t = norm(matchText)
-    // Conjunto de palavras do contexto, para casar por TOKEN distintivo do nome
-    // (ex.: nome "Vind Residence" casa quando o lead diz so "Vind").
-    const words = new Set(t.split(/[^a-z0-9]+/).filter(Boolean))
-    const nomes = new Map<string, string>()
-    for (const a of assetProps ?? []) {
-      const p = a.property as { name?: string } | { name?: string }[] | null
-      const name = Array.isArray(p) ? p[0]?.name : p?.name
-      if (a.property_id && name) nomes.set(a.property_id as string, name)
-    }
-    const matches = [...nomes.entries()].filter(([, name]) => {
-      const n = norm(name)
-      if (n.length >= 4 && t.includes(n)) return true // nome completo citado
-      const first = n.split(/\s+/)[0] // token distintivo (1ª palavra)
-      return !!first && first.length >= 4 && words.has(first)
-    })
-    // Só resolve com match ÚNICO — nunca adivinha entre 2+ empreendimentos.
-    if (matches.length === 1 && matches[0]) {
-      propertyId = matches[0][0]
-      propertyName = matches[0][1]
+    const nomes = await loadPropertiesWithAssets(admin, args.orgId)
+    const hit = pickPropertyFromText(nomes, matchText)
+    if (hit) {
+      propertyId = hit.propertyId
+      propertyName = hit.propertyName
     }
   }
 
@@ -313,6 +365,102 @@ export async function resolveSendableMedia(
   if (chosen.length === 0) return result("none_selected", propertyId, propertyName)
 
   return { kinds, propertyId, propertyName, chosen, skipReason: null }
+}
+
+/**
+ * Story 75-270 — a mídia segue o empreendimento da RESPOSTA, não o de antes dela.
+ *
+ * A resolução pré-fala (`resolveSendableMedia`, chamada antes de `processMessage`)
+ * existe para a fala ser honesta sobre o que vai sair (75-157). O efeito colateral
+ * é que ela fixa o empreendimento ANTES de a Nicole decidir do que falar — então um
+ * pivô de produto feito na mesma resposta nunca chegava à mídia daquele turno.
+ *
+ * Incidente Orlice (03/08/2026): lead do Vind, a Nicole ofereceu o **Yarden** e a
+ * mídia que saiu foi a **planta do Vind** (66,91m² onde o Yarden começa em 79m²).
+ *
+ * Regra: se a resposta nomeia OUTRO empreendimento, re-resolve para ele. Se lá não
+ * houver o material pedido, **não envia nada** — silêncio é melhor que imagem
+ * errada — e loga `nicole_media_property_pivot`. Best-effort: nunca lança; em erro
+ * devolve a resolução original.
+ */
+export async function reconcileMediaWithResponse(
+  admin: Admin,
+  args: {
+    orgId: string
+    leadId: string
+    conversationId: string | null
+    text: string
+    /** Resposta que a Nicole ACABOU de mandar ao lead. */
+    assistantMessage: string
+    preResolved: SendableMedia
+  }
+): Promise<SendableMedia> {
+  const { preResolved } = args
+  try {
+    // Nada sairia de qualquer forma → nada a reconciliar.
+    if (preResolved.chosen.length === 0) return preResolved
+    if (!args.assistantMessage) return preResolved
+
+    const nomes = await loadPropertiesWithAssets(admin, args.orgId)
+    const pivot = pickPropertyFromText(nomes, args.assistantMessage)
+    if (!pivot || pivot.propertyId === preResolved.propertyId) return preResolved
+
+    const reresolved = await resolveSendableMedia(admin, {
+      orgId: args.orgId,
+      leadId: args.leadId,
+      conversationId: args.conversationId,
+      text: args.text,
+      propertyIdOverride: pivot.propertyId,
+    })
+
+    logEvent({
+      level: "info",
+      category: "ai",
+      event_type: "nicole_media_property_pivot",
+      message:
+        reresolved.chosen.length > 0
+          ? `Mídia realinhada para ${pivot.propertyName} (a fala trocou de empreendimento)`
+          : `Mídia cancelada: a fala trocou para ${pivot.propertyName}, que não tem esse material`,
+      source: "ai/send-library-media",
+      org_id: args.orgId,
+      metadata: {
+        lead_id: args.leadId,
+        conversation_id: args.conversationId,
+        de_property_id: preResolved.propertyId,
+        para_property_id: pivot.propertyId,
+        para_property_name: pivot.propertyName,
+        kinds: preResolved.kinds,
+        assets_antes: preResolved.chosen.length,
+        assets_depois: reresolved.chosen.length,
+      },
+    })
+
+    if (reresolved.chosen.length > 0) return reresolved
+    // Sem material do empreendimento novo: melhor não enviar nada.
+    return {
+      kinds: preResolved.kinds,
+      propertyId: pivot.propertyId,
+      propertyName: pivot.propertyName,
+      chosen: [],
+      skipReason: "property_pivot",
+    }
+  } catch (err) {
+    console.error("[send-library-media] reconcile error:", err)
+    return preResolved
+  }
+}
+
+/**
+ * Story 75-270 — caption "{Empreendimento} — {título}". Sem empreendimento
+ * resolvido, ou quando o título já cita o nome, devolve só o título (não repete).
+ */
+export function mediaCaption(title: string, propertyName: string | null): string {
+  const t = (title ?? "").trim()
+  const p = (propertyName ?? "").trim()
+  if (!p) return t
+  if (!t) return p
+  if (norm(t).includes(norm(p))) return t
+  return `${p} — ${t}`
 }
 
 export async function sendLibraryMediaIfRequested(
@@ -357,18 +505,23 @@ export async function sendLibraryMediaIfRequested(
     let enviados = 0
     for (const asset of resolved.chosen) {
       const isImage = asset.file_type === "image"
+      // Story 75-270 — o caption diz DE QUAL empreendimento é ("Yarden Residence —
+      // Planta"). Antes era só o título ("Planta"): quando a mídia saía do
+      // empreendimento errado, nada avisava o lead, que atribuía a metragem ao
+      // produto errado. Barato, e transforma erro silencioso em erro visível.
+      const caption = mediaCaption(asset.title, resolved.propertyName)
       const body = isImage
         ? {
             messaging_product: "whatsapp",
             to: args.leadPhone,
             type: "image",
-            image: { link: asset.file_url, caption: asset.title },
+            image: { link: asset.file_url, caption },
           }
         : {
             messaging_product: "whatsapp",
             to: args.leadPhone,
             type: "document",
-            document: { link: asset.file_url, filename: asset.file_name, caption: asset.title },
+            document: { link: asset.file_url, filename: asset.file_name, caption },
           }
       try {
         const res = await fetch(
@@ -393,7 +546,10 @@ export async function sendLibraryMediaIfRequested(
             await admin.from("messages").insert({
               conversation_id: args.conversationId,
               role: "assistant",
-              content: `[Mídia enviada] ${asset.title}`,
+              // Story 75-270 — o CRM mostra o mesmo caption que o lead recebeu,
+              // com o empreendimento: foi olhando essa linha na conversa que o
+              // Marcos descobriu a planta do Vind no papo do Yarden.
+              content: `[Mídia enviada] ${caption}`,
               metadata: {
                 is_media: true,
                 media_url: asset.file_url,

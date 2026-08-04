@@ -291,8 +291,21 @@ export interface MediaAvailability {
   willSend: boolean
   /** Nome do empreendimento resolvido, se houver. */
   empreendimento?: string | null
-  /** Motivo de não enviar, quando `willSend` é false. */
-  reason?: "no_request" | "no_property" | "no_assets" | "none_selected" | null
+  /**
+   * Story 75-270 — títulos EXATOS do que sai neste turno. Sem isso a Nicole
+   * embelezava: em 03/08 saiu 1 asset (Localização) e ela escreveu "já te mandei
+   * aqui algumas fotos e a planta". Dizer o que é vale mais que proibir o resto.
+   */
+  materiais?: string[] | null
+  /**
+   * Motivo de não enviar, quando `willSend` é false.
+   *
+   * Story 75-270 — `property_pivot` existe só DEPOIS da fala (a reconciliação de
+   * empreendimento roda com a resposta na mão), então `mediaContextLine` nunca o
+   * recebe; está no union para os tipos das duas pontas não divergirem. Se algum
+   * dia chegar aqui, cai no fallback genérico ("não diga que enviou").
+   */
+  reason?: "no_request" | "no_property" | "no_assets" | "none_selected" | "property_pivot" | null
 }
 
 /**
@@ -304,6 +317,12 @@ export function mediaContextLine(mc: MediaAvailability | undefined): string | nu
   if (!mc || !mc.requested) return null
   const emp = mc.empreendimento ? ` do ${mc.empreendimento}` : ""
   if (mc.willSend) {
+    // Story 75-270 — quando se sabe O QUE sai, dizer os títulos: a fala genérica
+    // convidava o modelo a inflar ("algumas fotos e a planta" para 1 asset só).
+    const lista = (mc.materiais ?? []).filter(Boolean)
+    if (lista.length) {
+      return `MATERIAL VISUAL: neste turno esta sendo enviado, junto com a sua resposta, EXATAMENTE isto${emp}: ${lista.join(", ")} (${lista.length} ${lista.length === 1 ? "arquivo" : "arquivos"}). Comente de forma curta e natural SO o que esta nessa lista — nao cite nenhum outro material, nao pluralize o que e unico e nao diga "fotos" se for um arquivo so.`
+    }
     return `MATERIAL VISUAL: neste turno as imagens${emp} ESTAO SENDO ENVIADAS junto com a sua resposta. Comente de forma curta e natural que esta enviando (ex: "Te mandei aqui a planta e umas fotos, da uma olhada!").`
   }
   if (mc.reason === "none_selected") {

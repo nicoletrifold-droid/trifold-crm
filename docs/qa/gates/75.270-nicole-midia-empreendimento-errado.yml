@@ -1,0 +1,69 @@
+storyId: "75-270"
+title: "Planta do Vind no papo do Yarden (e \"comprar na planta\" não é pedir planta)"
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-04
+branch: feat/75-270-nicole-midia-empreendimento-errado
+commit: pending-push
+
+checks:
+  code_review: PASS         # match por nome extraído para função pura; override explícito; reconciliação best-effort (nunca lança)
+  unit_tests: PASS          # 130 files / 1575 tests PASS (17 novos)
+  acceptance_criteria: PASS # AC1..AC6 cobertos por teste; AC7 é validação de campo
+  regressions: PASS         # checagem pré-fala da 75-157 intacta; dedup preservado no re-resolve; ninguém parseia "[Mídia enviada]"
+  performance: PASS         # +1 query só quando haveria envio (31 envios em 45 dias); re-resolve só no pivô
+  security: PASS            # n/a — sem RLS, sem dado de terceiro; assets já eram públicos por URL
+  documentation: CONCERNS   # guardrail de mídia do agent_prompts (banco) NÃO foi tocado
+
+acceptance_criteria_trace:
+  AC1: "PASS — a frase real da Orlice ('queria comprar um na planta') não retorna 'planta'; idem 'imóvel na planta', 'ainda na planta'."
+  AC2: "PASS — 'me manda a planta', 'planta baixa', 'metragem' seguem disparando; 'comprar na planta, me manda a planta' também."
+  AC3: "PASS — cenário Orlice: fala pivota para Yarden → nenhum asset do Vind é enviado."
+  AC4: "PASS — havendo planta no Yarden sai a do Yarden; não havendo o tipo pedido, nada sai (skipReason property_pivot)."
+  AC5: "PASS — mediaCaption prefixa o empreendimento e não repete quando o título já o cita."
+  AC6: "PASS — mediaContext.materiais leva os títulos exatos; instrução proíbe citar outro material e pluralizar o que é único."
+  AC7: "PENDENTE — validação de campo: lead que troca de empreendimento no meio da conversa."
+
+efeito_no_caso_real:
+  descricao: >
+    Conferido contra o acervo ATIVO de prod (Vind: planta/fachada/localização/academia/
+    brinquedoteca/pilates/piscina · Yarden: planta/fachada/localização/lazer/piscina —
+    nenhum dos dois tem asset de 'tabela'). No turno da Orlice o resultado passa a ser
+    NENHUM envio: 'na planta' não dispara mais planta, e 'valores' (tabela) não tem
+    material em lugar nenhum. É o comportamento correto.
+
+issues:
+  - severity: medium
+    category: requirements
+    description: "Num pivô que CANCELA o envio, a fala (gerada antes da reconciliação) pode ter dito que está mandando algo que não sai."
+    recommendation: "Trade-off assumido e documentado: imagem do empreendimento errado desinforma (66,91m² como se fosse Yarden); promessa não cumprida não. Agora fica logado em nicole_media_property_pivot — antes era invisível. Inverter a ordem quebraria a 75-157."
+  - severity: medium
+    category: docs
+    description: "O guardrail de mídia existe no prompt do CÓDIGO (guardrails.ts: 'NUNCA afirme que enviou algo que o MATERIAL VISUAL nao confirmou'), mas o agent_prompts do banco não foi revisado nesta story — e o banco mascara o código."
+    recommendation: "Conferir/atualizar com o Marcos, como foi feito na 75-268. NÃO bloqueia merge: o AC6 age pelo mediaContext, que é injetado por turno e não depende do prompt do banco."
+  - severity: low
+    category: code
+    description: "Se a fala citar OS DOIS empreendimentos (comparação), pickPropertyFromText devolve null e o pivô não acontece — mantém o empreendimento pré-fala."
+    recommendation: "Conservador de propósito (nunca adivinha entre 2+). Se aparecer na prática, tratar como story própria."
+  - severity: low
+    category: code
+    description: "skipReason 'none_selected' junta dois casos diferentes (tudo já enviado × nenhum asset do tipo pedido), e a linha de prompt dele afirma 'já foram enviadas antes' — que pode ser falso no segundo caso. Pré-existente (75-157)."
+    recommendation: "Backlog: separar em 'none_selected' e 'no_kind_match'."
+
+build:
+  tests: "vitest 130 files / 1575 tests passed"
+  type_check: "8/8 tasks successful"
+  lint: "0 errors (18 warnings pré-existentes, fora dos arquivos tocados)"
+
+nao_bloqueia_merge:
+  - "AC7 é validação de campo."
+  - "Revisão do guardrail de mídia no banco (o AC6 não depende dele)."
+
+files:
+  - packages/web/src/lib/ai/send-library-media.ts
+  - packages/web/src/lib/ai/send-library-media.test.ts
+  - packages/web/src/app/api/webhook/whatsapp/route.ts
+  - packages/ai/src/chat/pipeline.ts
+  - packages/ai/src/chat/pipeline.test.ts
+  - docs/stories/75-270-nicole-midia-empreendimento-errado.story.md
