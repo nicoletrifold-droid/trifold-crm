@@ -63,6 +63,10 @@ nfr_validation:
 top_issues:
   - id: 'QA-001'
     severity: medium
+    outcome: 'RESOLVIDO pela Story 75-271 (PR #357, mergeada em 04/08): o `report-data` ganhou a
+      mesma bifurcação da tela e a soma virou `lib/analytics/aggregate-filtered.ts`, consumido pelas
+      DUAS superfícies. O PDF respeita os filtros, anuncia quais estão ativos no cabeçalho, e o
+      caminho sem filtro (cron de domingo) ficou intocado.'
     category: requirements
     finding: 'AC6 (PDF respeita os filtros) NÃO entregue. Endosso a decisão de parar: o
       `buildAnalyticsReportData` tira métricas, funil, empreendimentos, corretores e origens da RPC

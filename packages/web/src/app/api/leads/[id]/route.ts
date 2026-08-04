@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { LEAD_PATCH_ALLOWED_FIELDS } from "@web/lib/leads/patch-allowed-fields"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 import { isLostReasonGrupo } from "@web/lib/constants"
 import { logAudit, getRequestIp } from "@web/lib/audit"
@@ -68,51 +69,9 @@ export async function PATCH(
 
   const body = await request.json()
 
-  const allowedFields = [
-    "name",
-    "phone",
-    "email",
-    "channel",
-    "stage_id",
-    "property_interest_id",
-    "has_down_payment",
-    "preferred_bedrooms",
-    "preferred_floor",
-    "preferred_view",
-    "preferred_garage_count",
-    "qualification_status",
-    "qualification_score",
-    "interest_level",
-    "source",
-    "assigned_broker_id",
-    "ai_summary",
-    "visit_scheduled_at",
-    // Story 75-269 — `lost_reason` SAIU da whitelist. Ele aceitava texto livre
-    // sem exigir grupo, o que recriava motivo não classificado e desfazia a
-    // estruturação da 75-264 um lead por vez. Varredura em packages/ e scripts/:
-    // NENHUM caller escrevia por aqui — marcar perdido passa por
-    // `/api/leads/[id]/mark-lost` (grava motivo E grupo, route.ts:54-55) e por
-    // `/api/leads/bulk` (sempre manda `lost_reason_grupo`); `stage/route.ts:71`,
-    // `bulk/route.ts:52,64` e `reativar/route.ts:151` apenas LIMPAM (`= null`).
-    // Era capacidade vestigial: fechar a porta é melhor que vigiá-la.
-    // Para limpar o motivo, use os endpoints acima (reativar/stage/bulk).
-    "lost_reason_grupo",
-    // Story 75-112 — enriquecimento do perfil (editável por quem já edita o lead)
-    "observacao",
-    "finalidade",
-    "orcamento",
-    "prazo_compra",
-    "forma_pagamento",
-    // Story 75-181 — perfil p/ marketing
-    "profissao",
-    "renda_familiar",
-    "filhos",
-    "estado_civil",
-    "faixa_etaria",
-    "situacao_moradia",
-    "cidade_bairro",
-    "tem_pet",
-  ]
+  // Story 75-273 — a whitelist saiu daqui para um módulo testável, para que
+  // ninguém reintroduza `lost_reason` sem o teste acusar (QA-002 da 75-269).
+  const allowedFields = LEAD_PATCH_ALLOWED_FIELDS
 
   // QA 75-269 (QA-001) — `lost_reason` saiu da whitelist, e `buildUpdatePayload`
   // IGNORA EM SILÊNCIO campo não permitido: um PATCH com `lost_reason` junto de

@@ -7,7 +7,12 @@ import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 // Story 75-271 — o relatório passa a respeitar os filtros da tela. Mesmo módulo
 // de filtros da página (75-270) e mesma soma em JS que ela faz no ramo filtrado.
 import { applyLeadFilters, hasAnyFilter, activeFilterKeys, EMPTY_FILTERS, FILTER_SPEC, type AnalyticsFilters } from "@web/lib/analytics/filters"
-import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
+import { aggregateFilteredLeads, type AggregableLead } from "@web/lib/analytics/aggregate-filtered"
+// Story 75-273 — paginação do PostgREST (helper da 75-269).
+import { fetchAllLeads, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
+
+/** Linha da base de ativos usada pelo agregador (Story 75-273). */
+type AggLeadRow = AggregableLead
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
 // Story 75-179: tipo da RPC + derivação de métricas centralizados (dedup tela/PDF).
 import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
@@ -259,15 +264,23 @@ export async function buildAnalyticsReportData(
     // Base ATIVOS (mesma da tela no ramo filtrado): funil/corretores/origens
     // falam dos leads em atendimento. Entradas/Perdidos vêm de contagens
     // próprias abaixo, porque têm recorte diferente (Story 75-179).
-    const [stageDefsRes, ativosRes, entradasRes, prevEntradasRes, perdidosRes] = await Promise.all([
+    const [stageDefsRes, ativosRows, entradasRes, prevEntradasRes, perdidosRes] = await Promise.all([
       supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
-      applyLeadFilters(
-        supabase.from("leads")
-          .select("stage_id, assigned_broker_id, source, property_interest_id, broker:users!assigned_broker_id(id, name)")
-          .eq("org_id", orgId).eq("segmento", "principal")
-          .eq("is_active", true).is("lost_reason", null)
-          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()),
-        filters
+      // Story 75-273 (QA-003 da 75-271) — paginado. O recorte de ativos mede 612
+      // em TODA a base hoje, longe do teto de 1000 do PostgREST; mas o PDF aceita
+      // `range=custom` com janela arbitrária e a base cresce, e o corte do
+      // PostgREST é SILENCIOSO — o funil do PDF sairia menor que o da tela sem
+      // ninguém saber. Correto por construção custa uma linha.
+      fetchAllLeads<AggLeadRow>(() =>
+        applyLeadFilters(
+          supabase.from("leads")
+            .select("stage_id, assigned_broker_id, source, property_interest_id, broker:users!assigned_broker_id(id, name)")
+            .eq("org_id", orgId).eq("segmento", "principal")
+            .eq("is_active", true).is("lost_reason", null)
+            .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
+            .order("created_at"),
+          filters
+        ) as unknown as RangeableQuery<AggLeadRow>
       ),
       applyLeadFilters(
         supabase.from("leads").select("id", { count: "exact", head: true })
@@ -292,7 +305,7 @@ export async function buildAnalyticsReportData(
 
     const stageDefs = (stageDefsRes.data ?? []) as Array<{ id: string; name: string; slug: string | null; color: string | null; position: number | null }>
     const agg = aggregateFilteredLeads(
-      (ativosRes.data ?? []) as Parameters<typeof aggregateFilteredLeads>[0],
+      ativosRows,
       stageDefs,
       { hiddenBrokerNames: HIDDEN_BROKERS, activeBrokerIds }
     )
@@ -447,6 +460,25 @@ export async function buildAnalyticsReportData(
       ? Math.round(brokerResponseTimes.reduce((sum, b) => sum + b.avgMinutes * b.count, 0) / tempoLeads)
       : null
 
+  // Story 75-273 (QA-004 da 75-271) — resolve o NOME de corretor e
+  // empreendimento para o cabeçalho. Antes o PDF dizia só "Corretor", e quem
+  // recebia sabia que havia filtro mas não de quem — relatório que anuncia o
+  // recorte pela metade ainda obriga a perguntar. Uma query por dimensão, e só
+  // quando ela está filtrada.
+  const nomesDeFiltro = new Map<string, string>()
+  await Promise.all([
+    (async () => {
+      if (!filters.brokerId) return
+      const { data } = await supabase.from("users").select("name").eq("id", filters.brokerId).maybeSingle()
+      if (data?.name) nomesDeFiltro.set(filters.brokerId!, data.name as string)
+    })(),
+    (async () => {
+      if (!filters.propertyId) return
+      const { data } = await supabase.from("properties").select("name").eq("id", filters.propertyId).maybeSingle()
+      if (data?.name) nomesDeFiltro.set(filters.propertyId!, data.name as string)
+    })(),
+  ])
+
   const comparisonTitle =
     period.range === "custom"
       ? "Comparativo — período atual vs período anterior"
@@ -459,7 +491,7 @@ export async function buildAnalyticsReportData(
     // Story 75-271 — sem esta linha o PDF filtrado seria indistinguível de um
     // PDF completo, e alguém compararia dois relatórios de recortes diferentes
     // achando que são o mesmo. Filtro que não se anuncia no papel é armadilha.
-    filtrosAtivos: describeActiveFilters(filters),
+    filtrosAtivos: describeActiveFilters(filters, nomesDeFiltro),
     entradas,
     entradasDelta,
     ativos,
@@ -480,12 +512,17 @@ export async function buildAnalyticsReportData(
 }
 
 /**
- * Story 75-271 — descreve os filtros ativos para o cabeçalho do PDF. Só nomes
- * de dimensão + valor bruto: resolver nome de corretor/empreendimento exigiria
- * outra query, e o objetivo aqui é AVISAR que o recorte não é o total, não
- * produzir legenda bonita. Vazio quando não há filtro (o PDF omite a linha).
+ * Story 75-271 — descreve os filtros ativos para o cabeçalho do PDF. Vazio
+ * quando não há filtro (o PDF omite a linha).
+ *
+ * Story 75-273 — corretor e empreendimento passam a sair com o NOME (resolvido
+ * por quem chama e entregue em `nomes`). Id não resolvido cai no rótulo pelado:
+ * imprimir uuid num relatório que alguém vai ler é pior que não dizer.
  */
-function describeActiveFilters(filters: AnalyticsFilters): string[] {
+function describeActiveFilters(
+  filters: AnalyticsFilters,
+  nomes: Map<string, string> = new Map()
+): string[] {
   const rotulos: Record<string, string> = {
     propertyId: "Empreendimento",
     brokerId: "Corretor",
@@ -505,7 +542,13 @@ function describeActiveFilters(filters: AnalyticsFilters): string[] {
     const rotulo = rotulos[k] ?? FILTER_SPEC[k].param
     // Id (uuid) não diz nada no papel; para essas dimensões basta anunciar que
     // há filtro. Para as de valor legível, mostra o valor.
+    // Id resolvido → mostra o nome. Não resolvido (corretor apagado, por ex.)
+    // → anuncia só a dimensão, em vez de imprimir um uuid no relatório.
     const ehId = k === "propertyId" || k === "brokerId"
-    return ehId ? rotulo : `${rotulo}: ${valor}`
+    if (ehId) {
+      const nome = valor ? nomes.get(valor) : undefined
+      return nome ? `${rotulo}: ${nome}` : rotulo
+    }
+    return `${rotulo}: ${valor}`
   })
 }
