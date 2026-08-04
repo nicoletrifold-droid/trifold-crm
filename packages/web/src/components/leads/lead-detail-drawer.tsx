@@ -10,6 +10,11 @@ import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as 
 import { MarkLostModal } from "@web/components/leads/mark-lost-modal"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
+// Story 75-267 — menu de abertura no drawer: a SDR inicia o atendimento de
+// onde ela navega os leads (Kanban/listas), sem passar pela aba Conversa.
+import { OpeningTemplateMenu } from "@web/components/leads/opening-template-menu"
+import { canShowOpeningMenu } from "@web/lib/whatsapp/opening-roles"
+import { neverHadConversation } from "@web/lib/broker/conversation-state"
 import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
 import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 import { STAGE_IDS } from "@trifold/shared"
@@ -69,6 +74,8 @@ interface DrawerState {
   loading: boolean
   lead: LeadQuickData | null
   messages: Message[]
+  /** Story 75-267 — lead nunca teve conversa (sem conversa OU conversa vazia). */
+  neverHadConversation: boolean
   history: HistoryItem[]
   tasks: Task[]
   showAllHistory: boolean
@@ -82,7 +89,7 @@ interface DrawerState {
 }
 
 type DrawerAction =
-  | { type: "LOADED"; lead: LeadQuickData | null; messages: Message[]; history: HistoryItem[]; tasks: Task[] }
+  | { type: "LOADED"; lead: LeadQuickData | null; messages: Message[]; neverHadConversation: boolean; history: HistoryItem[]; tasks: Task[] }
   | { type: "TOGGLE_HISTORY" }
   | { type: "TOGGLE_DETAILS" }
   | { type: "TASK_FORM_TOGGLE" }
@@ -100,7 +107,7 @@ type DrawerAction =
 function reducer(state: DrawerState, action: DrawerAction): DrawerState {
   switch (action.type) {
     case "LOADED":
-      return { ...state, loading: false, lead: action.lead, messages: action.messages, history: action.history, tasks: action.tasks }
+      return { ...state, loading: false, lead: action.lead, messages: action.messages, neverHadConversation: action.neverHadConversation, history: action.history, tasks: action.tasks }
     case "TOGGLE_HISTORY":
       return { ...state, showAllHistory: !state.showAllHistory }
     case "TOGGLE_DETAILS":
@@ -146,6 +153,7 @@ const initialState: DrawerState = {
   loading: true,
   lead: null,
   messages: [],
+  neverHadConversation: false,
   history: [],
   tasks: [],
   showAllHistory: false,
@@ -206,6 +214,35 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   // Story 75-193 — lead em "Visitou" sem agendamento (ou só no-show/cancelado):
   // porta retroativa. null = ainda carregando (não mostra nada até saber).
   const [leadHasFeedback, setLeadHasFeedback] = useState<boolean | null>(null)
+  // Story 75-267 — abertura enviada pelo drawer: mantém o menu montado (estado
+  // de sucesso + CTA "Ver conversa") mesmo depois do reload dos dados — o
+  // estado vive no componente, não deriva de prop (gotcha 75-228).
+  const [openingSent, setOpeningSent] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
+  // Story 75-267 — quem está olhando: role + id público, p/ o gate do menu de
+  // abertura (privilegiado OU corretor dono). Mesmo padrão da
+  // TransferBrokerSection/75-205: app_metadata.role pode faltar no JWT; a
+  // fonte da verdade é public.users (que também dá o id público p/ o check de
+  // dono contra lead.broker.id).
+  const [viewer, setViewer] = useState<{ id: string | null; role: string }>({ id: null, role: "" })
+  useEffect(() => {
+    let cancelled = false
+    supabase.auth.getUser().then(async ({ data }) => {
+      const authId = data.user?.id
+      if (!authId) return
+      const { data: row } = await supabase
+        .from("users")
+        .select("id, role")
+        .eq("auth_id", authId)
+        .maybeSingle()
+      if (cancelled) return
+      setViewer({
+        id: (row?.id as string | undefined) ?? null,
+        role: (row?.role as string | undefined) ?? ((data.user?.app_metadata?.role as string | undefined) ?? ""),
+      })
+    })
+    return () => { cancelled = true }
+  }, [supabase])
 
   useEffect(() => {
     let cancelled = false
@@ -250,9 +287,17 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         fetch(`/api/leads/${leadId}`),
         supabase
           .from("conversations")
-          .select(`id, messages:messages(id, role, content, created_at)`)
+          // Story 75-267 — last_message_at entra p/ derivar "nunca teve conversa"
+          // com o mesmo helper do ConversationThread (sem fetch extra).
+          .select(`id, last_message_at, messages:messages(id, role, content, created_at)`)
           .eq("lead_id", leadId)
-          .order("last_message_at", { ascending: false })
+          // QA 75-267 (QA-001) — `nullsFirst: false` explícito: em Postgres,
+          // DESC ordena NULLS FIRST, então uma conversa vazia (last_message_at
+          // null — a coluna é nullable) venceria a conversa real e o lead
+          // pareceria "nunca teve conversa", oferecendo abertura a quem já está
+          // em atendimento. Zero incidência em prod hoje (415 conversas, 0 com
+          // null), mas o gate novo depende desta linha estar correta.
+          .order("last_message_at", { ascending: false, nullsFirst: false })
           .limit(1),
         fetch(`/api/leads/${leadId}/tasks`),
         supabase
@@ -301,14 +346,24 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         }
       }
 
-      const msgs = ((convResult.data?.[0]?.messages ?? []) as Message[])
+      const convRow = convResult.data?.[0] as
+        | { last_message_at: string | null; messages: Message[] }
+        | undefined
+      const allMsgs = (convRow?.messages ?? []) as Message[]
+      // Story 75-267 — mesmo sinal do ConversationThread: sem mensagem E sem
+      // last_message_at = lead nunca teve conversa (menu de abertura no drawer).
+      const neverHad = neverHadConversation(
+        allMsgs.length,
+        convRow?.last_message_at ? new Date(convRow.last_message_at) : null
+      )
+      const msgs = allMsgs
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5)
 
       const tasks: Task[] = tasksRes.ok ? ((await tasksRes.json()) as { data: Task[] }).data ?? [] : []
       const history = (historyResult.data ?? []) as HistoryItem[]
 
-      dispatch({ type: "LOADED", lead, messages: msgs, history, tasks })
+      dispatch({ type: "LOADED", lead, messages: msgs, neverHadConversation: neverHad, history, tasks })
 
       // Após o sync em background completar, recarrega tarefas e histórico se houve mudança
       const syncResult = await syncPromise
@@ -329,16 +384,17 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           if (cancelled) return
           const tasks2: Task[] = tasksRes2.ok ? ((await tasksRes2.json()) as { data: Task[] }).data ?? [] : []
           const history2 = (historyRes2.data ?? []) as HistoryItem[]
-          dispatch({ type: "LOADED", lead, messages: msgs, history: history2, tasks: tasks2 })
+          dispatch({ type: "LOADED", lead, messages: msgs, neverHadConversation: neverHad, history: history2, tasks: tasks2 })
         }
       }
     }
 
     load()
     return () => { cancelled = true }
-  }, [leadId, supabase])
+    // Story 75-267 — reloadToken força re-fetch após a abertura enviada pelo drawer.
+  }, [leadId, supabase, reloadToken])
 
-  const { loading, lead, messages, history, tasks, showAllHistory, showDetails, taskForm, taskSaving, noteInput, noteAction, noteSaving, showQuickHistory } = state
+  const { loading, lead, messages, neverHadConversation: neverHadConv, history, tasks, showAllHistory, showDetails, taskForm, taskSaving, noteInput, noteAction, noteSaving, showQuickHistory } = state
   const isCTWA = lead?.source === "whatsapp_click_to_ad"
   const PERDIDO_STAGE_IDS = [
     "00000000-0000-0000-0001-000000000008",
@@ -547,13 +603,41 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             {/* Story 75-140 — atender no WhatsApp pelo número da empresa (abre a Conversa). */}
             <div className="flex flex-wrap items-center gap-2">
               {whatsAppState({ phone: lead.phone, source: lead.source }) !== "none" && (
-                <Link
-                  href={`${leadBasePath}/${leadId}?tab=conversa`}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  Conversar no WhatsApp
-                </Link>
+                // Story 75-267 — lead SEM conversa + role privilegiado (fonte:
+                // OPENING_PRIVILEGED_ROLES) ou corretor dono: menu de abertura
+                // inline no lugar do link. `openingSent` mantém o menu montado
+                // (sucesso + CTA) após o reload trazer as mensagens. Lead COM
+                // conversa ou perfil fora do gate: link original, nada muda.
+                (neverHadConv || openingSent) &&
+                canShowOpeningMenu(viewer.role, viewer.id !== null && lead.broker?.id === viewer.id) ? (
+                  <div className="mt-3 w-full space-y-2">
+                    <OpeningTemplateMenu
+                      leadId={lead.id}
+                      idleHint="Abre as mensagens de abertura aprovadas pelo WhatsApp para iniciar a conversa com o cliente."
+                      onSent={() => {
+                        setOpeningSent(true)
+                        setReloadToken((t) => t + 1)
+                      }}
+                      successExtra={
+                        <Link
+                          href={`${leadBasePath}/${leadId}?tab=conversa`}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          Ver conversa
+                        </Link>
+                      }
+                    />
+                  </div>
+                ) : (
+                  <Link
+                    href={`${leadBasePath}/${leadId}?tab=conversa`}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Conversar no WhatsApp
+                  </Link>
+                )
               )}
               {/* Story 75-186 — feedback da visita direto do drawer do pipeline */}
               {pendingFeedbackAptId && (

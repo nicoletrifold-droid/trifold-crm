@@ -5,10 +5,11 @@ const HOUR = 60 * 60 * 1000
 const NOW = new Date("2026-06-18T12:00:00.000Z")
 
 describe("getWindowStatus", () => {
-  it("sem histórico (null) → janela fechada", () => {
+  it("sem histórico (null) → janela fechada, label convida à abertura (75-267)", () => {
     const s = getWindowStatus(null, true, NOW)
     expect(s.status).toBe("closed")
     expect(s.remainingMs).toBe(0)
+    expect(s.label).toBe("Sem conversa · inicie o atendimento")
   })
 
   it("última mensagem há 1h → aberta, restante ~23h", () => {
@@ -28,10 +29,11 @@ describe("getWindowStatus", () => {
     expect(s.status).toBe("closing")
   })
 
-  it("última mensagem há 25h → fechada, restante 0", () => {
+  it("última mensagem há 25h → fechada, restante 0, label original (AC7 75-267)", () => {
     const s = getWindowStatus(new Date(NOW.getTime() - 25 * HOUR), true, NOW)
     expect(s.status).toBe("closed")
     expect(s.remainingMs).toBe(0)
+    expect(s.label).toBe("Janela fechada · aguardando o lead")
   })
 
   it("Telegram (isWhatsApp=false) → sempre aberta, sem label", () => {

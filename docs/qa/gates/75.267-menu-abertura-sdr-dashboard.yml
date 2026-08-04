@@ -1,0 +1,125 @@
+schema: 1
+story: '75-267'
+story_title: 'Menu de abertura no /dashboard: a SDR inicia atendimento de onde ela trabalha'
+gate: CONCERNS
+status_reason: 'Nenhum problema HIGH. O código está correto e a extração é fiel: conferi o
+  recorte `broker-message-input.tsx` (estado + handlers + UI) contra a main linha a linha — as
+  classes, os textos e o fluxo são idênticos, e a única mudança de contrato é `router.refresh()`
+  → callback `onSent` (o /broker passa exatamente `() => router.refresh()`). A constante
+  `OPENING_PRIVILEGED_ROLES` virou módulo client-safe com re-export e o array inline duplicado da
+  rota morreu — fonte única, sem valor reproduzido. O CONCERNS é por EVIDÊNCIA, não por defeito:
+  AC1 e AC4 são o fluxo central da story (a SDR abrindo de verdade) e seguem sem validação de
+  runtime com o login da Thielly em prod — o dev DB tem drift grande e não serve de prova
+  (lição 75-188). tsc 0 erros, eslint 0 novos (os 2 warnings do drawer já existem na main,
+  conferido), vitest 132 arquivos/1552 testes verdes.'
+reviewer: 'Quinn'
+updated: '2026-08-04T13:15:00Z'
+quality_score: 90
+expires: '2026-08-18T13:15:00Z'
+
+evidence:
+  tests: '132 arquivos / 1552 testes verdes; +2 suítes novas (opening-roles, conversation-state)'
+  tsc: 'limpo (8/8 tasks)'
+  eslint: '0 erros; 18 warnings no monorepo, TODOS pré-existentes. Conferi o único arquivo da
+    story que aparece na lista (lead-detail-drawer.tsx): os 2 warnings (isCTWA, handleAddNote)
+    existem em origin/main nas linhas 342 e 396 — a story não introduz nenhum.'
+  rebase: 'rebase em origin/main pós-merge do #350 (75-266) sem conflito — as duas stories não
+    compartilham arquivo, a fronteira que a Dev Note pediu foi respeitada (zero toque em
+    lib/constants.ts, lib/analytics/*, migrations).'
+  extracao_1_1: 'VERIFICADA contra origin/main: handlers (handleToggleTemplates,
+    handleStartWhatsapp) byte-idênticos exceto onSent; UI (botão, listbox, previews, hint,
+    startError) byte-idêntica; DEFAULT_IDLE_HINT reproduz a string original "reabrir a conversa".
+    scrollIntoView da 75-225 preservado dentro do componente.'
+  fonte_unica_da_constante: 'opening-roles.ts é a fonte; opening-context.ts re-exporta;
+    start-whatsapp/route.ts:83 passou a importar. Nenhum array de roles duplicado sobrou.'
+  gate_de_dono: 'lead.broker.id vem de `broker:users!assigned_broker_id(id,...)` e o viewer.id vem
+    de `public.users.id` (select por auth_id) — mesma chave nos dois lados, comparação válida.
+    O viewer lê role de public.users e não do JWT, como manda o gotcha app_metadata.role.'
+  trace:
+    ac_covered: [2, 3, 5, 6, 7, 8, 9]
+    ac_gaps: [1, 4]
+    ac_gaps_motivo: 'Ambos exigem envio real em prod (login da Thielly). Código pronto e revisado;
+      falta a prova de runtime. Não há como cobrir por teste automatizado.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'O gate de UI não é o controle de acesso — a API mantém o 403 (loadOpeningContext
+      inalterado, opening-context.ts:40-41) e o endpoint start-whatsapp não mudou de
+      comportamento (só trocou array inline por import). imob e roles fora da lista não veem o
+      botão E não passariam pela API. Coberto por teste unitário, incluindo role null/vazio.'
+  performance:
+    status: PASS
+    notes: 'Nenhum fetch novo no caminho crítico: o drawer já buscava conversations e só passou a
+      pedir last_message_at na mesma query. O único request adicional é 1 select em users para
+      resolver o viewer, uma vez por abertura de drawer.'
+  reliability:
+    status: PASS
+    notes: 'O gotcha 75-228 (useState(prop) congela após refresh) foi tratado corretamente:
+      openingSent é estado próprio do componente, não derivado de prop, e o reloadToken força o
+      re-fetch. LeadDetailContent é montado com key={leadId} (:194), então o estado de sucesso
+      NÃO vaza para outro lead — verifiquei porque seria o erro natural aqui.'
+  maintainability:
+    status: PASS
+    notes: 'A story removeu duplicação em vez de criar (REUSE > CREATE): o menu passou de 1 cópia
+      embutida no composer para 1 componente com 2 consumidores, e a constante de roles perdeu a
+      terceira cópia.'
+
+top_issues:
+  - id: 'QA-001'
+    severity: low
+    category: correctness
+    finding: 'RISCO LATENTE CORRIGIDO NA REVISÃO — o drawer escolhe a conversa com
+      `.order("last_message_at", { ascending: false }).limit(1)`, e em Postgres DESC ordena
+      NULLS FIRST. Como `conversations.last_message_at` é nullable (confirmado no
+      information_schema), uma conversa vazia venceria a conversa real e o lead pareceria "nunca
+      teve conversa" — oferecendo abertura a quem já está em atendimento. Medi a incidência em
+      prod antes de decidir a severidade: 415 conversas, 0 com last_message_at null, 1 lead com
+      2+ conversas, 0 leads no padrão de risco. Ou seja: hoje não acontece, mas o gate novo
+      passou a DEPENDER dessa ordenação estar certa.'
+    suggested_action: 'CORRIGIDO pelo @qa: `nullsFirst: false` explícito em
+      lead-detail-drawer.tsx. Zero mudança de comportamento hoje (0 linhas afetadas em prod),
+      correto por construção amanhã.'
+    suggested_owner: dev
+  - id: 'QA-002'
+    severity: low
+    category: ux
+    finding: 'O viewer (role + id) é resolvido em efeito assíncrono, então no primeiro paint
+      `canShowOpeningMenu("", false)` é false e o drawer mostra "Conversar no WhatsApp" por um
+      instante antes de trocar pelo menu de abertura. Cosmético, sem risco de vazamento (o estado
+      inicial é o MAIS restritivo, que é o lado certo para errar).'
+    suggested_action: 'Observar. Se incomodar, o caminho limpo é computar o gate no server e
+      passar prop booleana — a própria Dev Note já registrou essa alternativa.'
+    suggested_owner: dev
+  - id: 'EVID-001'
+    severity: low
+    category: requirements
+    finding: 'AC1 e AC4 sem prova de runtime: ninguém enviou uma abertura de verdade pelo drawer
+      com o login da Thielly em prod. É o coração da story — o resto do trabalho existe para esse
+      fluxo funcionar. O RLS do sdr passa pela matriz do gerente-comercial (75-204) e a API usa
+      admin client para privilegiados; o caminho é plausível, mas plausível não é medido.'
+    suggested_action: 'Validar com a Thielly logada em prod após o deploy: abrir um lead sem
+      conversa pelo Kanban, enviar a abertura, conferir o CTA "Ver conversa", a mensagem na thread
+      e a aparição em /dashboard/conversas. Só então Status → Done.'
+    suggested_owner: po
+  - id: 'PROC-001'
+    severity: low
+    category: process
+    finding: 'Lacuna de processo notada de passagem: as stories 75-264 e 75-266 registraram o
+      resultado do QA só no corpo da story, sem arquivo em docs/qa/gates/ — a convenção
+      75.{story}-{slug}.yml vinha sendo seguida até a 75-256/257.'
+    suggested_action: 'Não é desta story. Vale retomar o arquivo de gate por default, senão o
+      histórico de qualidade fica só dentro das stories.'
+    suggested_owner: sm
+
+recommendations:
+  immediate:
+    - action: 'Validar AC1/AC4 em prod com o login da Thielly antes de marcar Done'
+      refs: ['docs/stories/75-267-menu-abertura-sdr-dashboard.story.md']
+  future:
+    - action: 'Considerar computar o gate de abertura no server (mata o flicker do QA-002)'
+      refs: ['packages/web/src/components/leads/lead-detail-drawer.tsx']
+    - action: 'Avaliar NOT NULL + default em conversations.last_message_at (tira a classe do QA-001)'
+      refs: ['packages/web/src/components/leads/lead-detail-drawer.tsx']
+
+waiver: { active: false }

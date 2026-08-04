@@ -16,6 +16,7 @@ import {
   pruneRealtime,
 } from "./conversation-thread-realtime"
 import { getWindowStatus } from "@web/lib/broker/window-status"
+import { neverHadConversation } from "@web/lib/broker/conversation-state"
 import { deriveBrokerActive } from "@web/lib/broker/broker-takeover-status"
 import { createClient } from "@web/lib/supabase/client"
 import type { RealtimeChannel } from "@supabase/supabase-js"
@@ -212,6 +213,12 @@ export function ConversationThread({
 
   const allMessages = mergeMessages(serverPlusRealtime, optimistic)
 
+  // Story 75-267 — lead que NUNCA teve conversa (thread vazia + sem
+  // last_message_at): o composer troca "aguarde o lead" por convite à abertura.
+  // Usa a lista combinada e o estado local: a primeira mensagem (realtime ou
+  // otimista) já tira o composer desse estado sem reload.
+  const neverHad = neverHadConversation(allMessages.length, localLastMessageAt)
+
   return (
     <div className="flex h-[calc(100dvh-8rem)] flex-col overflow-hidden rounded-lg bg-white shadow-sm lg:h-[calc(100dvh-13rem)] lg:max-h-[52rem] lg:min-h-[34rem] dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
       <div className="shrink-0 border-b border-gray-100 dark:border-stone-800">
@@ -297,6 +304,7 @@ export function ConversationThread({
           <BrokerMessageInput
             leadId={lead.id}
             disabledByWindow={windowClosed}
+            neverHadConversation={neverHad}
             notifyOnReply={notifyOnReply}
             onSent={(msg) => setOptimistic((prev) => [...prev, msg])}
           />

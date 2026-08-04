@@ -4,7 +4,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendWhatsAppTemplate } from "@web/lib/whatsapp/send-template"
 import { toWhatsAppNumber } from "@web/lib/leads/whatsapp"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
-import { loadOpeningContext } from "@web/lib/whatsapp/opening-context"
+import { loadOpeningContext, OPENING_PRIVILEGED_ROLES } from "@web/lib/whatsapp/opening-context"
 import {
   DEFAULT_OPENING_TEMPLATE,
   OPENING_TEMPLATE_PARAMS,
@@ -80,7 +80,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   void logWhatsappSend(admin, { orgId: appUser.org_id, template: templateName, category: "marketing", recipientType: "lead", toPhone: to, status: "sent" })
 
   // Conversa (cria se não existir) + registro no histórico + handoff da Nicole.
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"].includes(appUser.role)
+  // Story 75-267 — importa a fonte (era array inline duplicado).
+  const isPrivileged = OPENING_PRIVILEGED_ROLES.includes(appUser.role)
   const db = isPrivileged ? admin : supabase
   let { data: conversation } = await db
     .from("conversations")
