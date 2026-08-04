@@ -9,6 +9,7 @@ import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
 import { CALOR_LABELS, type CalorValue } from "@web/lib/leads/calor"
 import { ReativarLeadButton } from "@web/components/leads/reativar-lead-button"
+import { LOST_REASON_GROUPS } from "@web/lib/constants"
 
 // Story 75-237 — cores do selinho de Calor (mesma família dos outros badges da
 // tabela; "Não definido" não vira badge, pra não poluir a coluna).
@@ -17,20 +18,6 @@ const CALOR_BADGE: Record<string, string> = {
   warm: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
   cold: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
 }
-
-const LOST_REASONS = [
-  "Cliente Não Atende/Responde Mais",
-  "Comprou com Concorrente",
-  "Condição de Pagamento",
-  "CPF Com Restrição",
-  "Desistiu de Comprar",
-  "Lead Duplicado",
-  "Não Interesse",
-  "Preço",
-  "Renda Insuficiente",
-  "Telefone Inexistente",
-  "Outros",
-]
 
 type Lead = {
   id: string
@@ -64,7 +51,9 @@ export function LeadsBulkTable({
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [newBroker, setNewBroker] = useState("")
+  // Story 75-264 — motivo estruturado (slug) + observação livre opcional
   const [lostReason, setLostReason] = useState("")
+  const [lostObs, setLostObs] = useState("")
   const [isPending, startTransition] = useTransition()
 
   const allSelected = leads.length > 0 && selected.size === leads.length
@@ -96,7 +85,10 @@ export function LeadsBulkTable({
     } else if (newBroker) {
       body.broker_id = newBroker === "__none__" ? null : newBroker
     }
-    if (lostReason) body.lost_reason = lostReason
+    if (lostReason) {
+      body.lost_reason_grupo = lostReason
+      if (lostObs.trim()) body.lost_reason = lostObs.trim()
+    }
 
     startTransition(async () => {
       const res = await fetch("/api/leads/bulk", {
@@ -108,6 +100,7 @@ export function LeadsBulkTable({
         setSelected(new Set())
         setNewBroker("")
         setLostReason("")
+        setLostObs("")
         router.refresh()
       }
     })
@@ -330,12 +323,21 @@ export function LeadsBulkTable({
               className="flex-1 rounded-md border border-stone-600 bg-stone-700 px-3 py-1.5 text-sm text-white focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
             >
               <option value="">Não finalizar</option>
-              {LOST_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+              {LOST_REASON_GROUPS.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label}
                 </option>
               ))}
             </select>
+            {lostReason && (
+              <input
+                type="text"
+                value={lostObs}
+                onChange={(e) => setLostObs(e.target.value)}
+                placeholder="Observação (opcional)"
+                className="flex-1 rounded-md border border-stone-600 bg-stone-700 px-3 py-1.5 text-sm text-white placeholder:text-stone-400 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
+              />
+            )}
           </div>
 
           <button

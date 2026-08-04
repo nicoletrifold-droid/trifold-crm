@@ -1346,3 +1346,130 @@ export async function fetchCreativePerformance(
   if (cacheable) setCached(key, text)
   return text
 }
+
+// ── Story 75-264 — Motivos de perda (grupos + cobertura declarada) ──────────
+
+const LOSS_KEYWORDS = [
+  "perdido",
+  "perdidos",
+  "perdemos",
+  "perda",
+  "perdas",
+  "motivo de perda",
+  "motivos de perda",
+  "por que perde",
+  "porque perde",
+  "lost",
+]
+
+/**
+ * Heurística: a query pede análise de motivos de perda?
+ * Baseada em palavras-chave (case-insensitive) — lista auditável, mesmo
+ * padrão de requiresDrill/requiresConversation. O bloco só flui para admin
+ * (gate no route) e a view v_lead_lost_reason_grupo re-verifica role+org.
+ */
+export function requiresLossBreakdown(userMessage: string): boolean {
+  const msg = userMessage.toLowerCase()
+  return LOSS_KEYWORDS.some((kw) => msg.includes(kw))
+}
+
+interface LossRow {
+  grupo_final: string
+  fonte: string
+  lost_reason: string | null
+  created_at: string
+  source: string | null
+}
+
+const LOSS_GROUP_LABELS: Record<string, string> = {
+  nao_conseguimos_falar: "Não conseguimos falar (não atende/não responde)",
+  sem_interesse: "Sem interesse / desistiu",
+  nao_qualifica_preco: "Não qualifica (renda, crédito, preço)",
+  fora_perfil_regiao: "Fora do perfil / região",
+  foi_para_outro: "Comprou outro imóvel / concorrente",
+  clicou_sem_intencao: "Clicou sem intenção de compra",
+  outro: "Outro",
+  // grupos que só existem no legado classificado por heurística:
+  duplicado_teste_corretor: "Duplicado / teste / corretor",
+  sem_motivo: "Sem motivo registrado",
+  nao_classificado: "Não classificado",
+}
+
+/**
+ * fetchLostReasonBreakdown — grupos de motivo de perda da view
+ * v_lead_lost_reason_grupo (Story 75-264), com a COBERTURA DECLARADA e o
+ * texto cru dos não classificados (para o modelo raciocinar sobre o ambíguo
+ * em vez de tratar a heurística como verdade).
+ *
+ * A view é admin-only + org própria (WHERE embutido, security_invoker) — este
+ * helper roda com o client do usuário, então non-admin recebe 0 linhas.
+ * Cacheável (TTL 5 min) apenas na janela default (sem filtro de data).
+ */
+export async function fetchLostReasonBreakdown(
+  supabase: SupabaseClient,
+  orgId: string,
+  window?: DateWindow,
+): Promise<string> {
+  const cacheable = !window
+  const key = `loss_breakdown:${orgId}`
+  if (cacheable) {
+    const cached = getCached(key)
+    if (cached !== null) return cached
+  }
+
+  let query = supabase
+    .from("v_lead_lost_reason_grupo")
+    .select("grupo_final, fonte, lost_reason, created_at, source")
+    .eq("org_id", orgId)
+  if (window?.startDate) query = query.gte("created_at", window.startDate)
+  if (window?.endDate) query = query.lte("created_at", `${window.endDate}T23:59:59`)
+  // PostgREST corta em 1000 linhas por default — pagina para não subestimar.
+  const rows: LossRow[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await query.range(from, from + 999)
+    if (error || !data) break
+    rows.push(...(data as LossRow[]))
+    if (data.length < 1000) break
+  }
+
+  if (rows.length === 0) return ""
+
+  const total = rows.length
+  const byGroup = new Map<string, number>()
+  for (const r of rows) byGroup.set(r.grupo_final, (byGroup.get(r.grupo_final) ?? 0) + 1)
+  const naoClassificado = byGroup.get("nao_classificado") ?? 0
+  const semMotivo = byGroup.get("sem_motivo") ?? 0
+  const estruturados = rows.filter((r) => r.fonte === "estruturado").length
+  const pct = (n: number) => ((100 * n) / total).toFixed(1).replace(".", ",")
+
+  const lines: string[] = []
+  const windowLabel = window?.label ?? (window ? `${window.startDate} a ${window.endDate}` : "todo o período")
+  lines.push(`=== MOTIVOS DE PERDA (${windowLabel}, ${total} leads perdidos) ===`)
+  lines.push(
+    `[Nota IMPORTANTE — COBERTURA: ${estruturados} leads têm motivo ESTRUTURADO (escolhido por humano); os demais foram classificados por HEURÍSTICA de texto (regex). ` +
+      `${naoClassificado} (${pct(naoClassificado)}%) não foram classificados e ${semMotivo} (${pct(semMotivo)}%) não têm motivo registrado. ` +
+      `Ao responder "por que perdemos", DECLARE essa cobertura — nunca apresente os percentuais como se 100% estivesse classificado. ` +
+      `O texto cru dos não classificados está listado abaixo para você raciocinar sobre eles.]`,
+  )
+  lines.push("")
+  lines.push("| Grupo | Leads | % dos perdidos |")
+  lines.push("|-------|-------|----------------|")
+  for (const [grupo, n] of [...byGroup.entries()].sort((a, b) => b[1] - a[1])) {
+    lines.push(`| ${LOSS_GROUP_LABELS[grupo] ?? grupo} | ${n} | ${pct(n)}% |`)
+  }
+
+  const crus = rows
+    .filter((r) => r.grupo_final === "nao_classificado" && r.lost_reason)
+    .slice(0, 150)
+  if (crus.length > 0) {
+    lines.push("")
+    lines.push(`--- Texto cru dos não classificados (${crus.length} de ${naoClassificado}) ---`)
+    for (const r of crus) {
+      lines.push(`- "${(r.lost_reason ?? "").replace(/\s+/g, " ").slice(0, 160)}"`)
+    }
+  }
+
+  const text = lines.join("\n")
+  if (cacheable) setCached(key, text)
+  return text
+}

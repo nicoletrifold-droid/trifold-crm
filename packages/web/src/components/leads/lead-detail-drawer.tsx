@@ -6,7 +6,8 @@ import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
 import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck } from "lucide-react"
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
-import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors } from "@web/lib/constants"
+import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, LOST_REASON_GROUP_LABELS } from "@web/lib/constants"
+import { MarkLostModal } from "@web/components/leads/mark-lost-modal"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
 import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
@@ -30,6 +31,7 @@ interface LeadQuickData {
   utm_content: string | null
   ai_summary: string | null
   lost_reason: string | null
+  lost_reason_grupo: string | null
   created_at: string
   updated_at: string
   has_down_payment: boolean | null
@@ -199,6 +201,8 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   const leadBasePath = pathname?.startsWith("/broker") ? "/broker/leads" : "/dashboard/leads"
   // Story 75-186 — agendamento pendente de feedback (visita passada sem visit_feedback)
   const [pendingFeedbackAptId, setPendingFeedbackAptId] = useState<string | null>(null)
+  // Story 75-264 — modal "Marcar como Perdido" (grupo estruturado + observação)
+  const [showMarkLost, setShowMarkLost] = useState(false)
   // Story 75-193 — lead em "Visitou" sem agendamento (ou só no-show/cancelado):
   // porta retroativa. null = ainda carregando (não mostra nada até saber).
   const [leadHasFeedback, setLeadHasFeedback] = useState<boolean | null>(null)
@@ -282,6 +286,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             utm_content: (raw.utm_content as string | null) ?? null,
             ai_summary: (raw.ai_summary as string | null) ?? null,
             lost_reason: (raw.lost_reason as string | null) ?? null,
+            lost_reason_grupo: (raw.lost_reason_grupo as string | null) ?? null,
             created_at: raw.created_at as string,
             updated_at: raw.updated_at as string,
             has_down_payment: (raw.has_down_payment as boolean | null) ?? null,
@@ -382,16 +387,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
     await fetch(`/api/leads/${leadId}/tasks/${taskId}`, { method: "DELETE" })
   }
 
-  async function handleMarkAsLost() {
-    const reason = window.prompt("Motivo da perda (será exibido no histórico do lead):")
-    if (reason === null) return
-    const res = await fetch(`/api/leads/${leadId}/mark-lost`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
-    })
-    if (res.ok) window.location.reload()
-    else alert("Erro ao marcar lead como perdido")
+  // Story 75-264 — o prompt de texto livre virou modal com grupo estruturado
+  // + observação (o modal faz o POST em mark-lost).
+  function handleMarkAsLost() {
+    setShowMarkLost(true)
   }
 
   async function handleAddNote() {
@@ -589,7 +588,14 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
                   <div className="flex-1 text-sm">
-                    <p className="font-semibold text-red-700 dark:text-red-300">Lead perdido</p>
+                    <p className="font-semibold text-red-700 dark:text-red-300">
+                      Lead perdido
+                      {lead.lost_reason_grupo && LOST_REASON_GROUP_LABELS[lead.lost_reason_grupo] && (
+                        <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                          {LOST_REASON_GROUP_LABELS[lead.lost_reason_grupo]}
+                        </span>
+                      )}
+                    </p>
                     {lead.lost_reason && (
                       <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{lead.lost_reason}</p>
                     )}
@@ -943,6 +949,16 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         </div>
       ) : (
         <div className="p-5 text-sm text-stone-400 dark:text-stone-500">Lead não encontrado.</div>
+      )}
+
+      {/* Story 75-264 — Marcar como Perdido */}
+      {lead && showMarkLost && (
+        <MarkLostModal
+          leadId={lead.id}
+          leadName={lead.name}
+          onSuccess={() => window.location.reload()}
+          onCancel={() => setShowMarkLost(false)}
+        />
       )}
 
       {/* QuickHistoryModal */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
+import { isLostReasonGrupo } from "@web/lib/constants"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
@@ -87,6 +88,7 @@ export async function PATCH(
     "ai_summary",
     "visit_scheduled_at",
     "lost_reason",
+    "lost_reason_grupo",
     // Story 75-112 — enriquecimento do perfil (editável por quem já edita o lead)
     "observacao",
     "finalidade",
@@ -106,6 +108,11 @@ export async function PATCH(
 
   const { fields, error: payloadError } = buildUpdatePayload(body, allowedFields)
   if (payloadError) return payloadError
+
+  // Story 75-264 — grupo de motivo de perda só aceita a whitelist (ou null p/ limpar).
+  if (fields.lost_reason_grupo != null && !isLostReasonGrupo(fields.lost_reason_grupo)) {
+    return NextResponse.json({ error: "lost_reason_grupo inválido" }, { status: 400 })
+  }
 
   // Transferência de corretor → o lead volta para "Aguardando atendimento"
   // (STAGE_IDS.novo), independente do estágio anterior. Só aplica se o corretor

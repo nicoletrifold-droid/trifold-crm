@@ -23,6 +23,8 @@ import { createClient } from "@web/lib/supabase/client"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 import type { CreativeData } from "@web/lib/pipeline/types"
 import { STAGE_IDS } from "@trifold/shared"
+import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
+import { MarkLostModal } from "@web/components/leads/mark-lost-modal"
 import { VisitFeedbackModal } from "@web/components/appointments/visit-feedback-form"
 
 interface Stage {
@@ -120,6 +122,14 @@ export function KanbanBoard({
   const [showCreativeFilter, setShowCreativeFilter] = useState(false)
   // Story 75-185 (porta 3) — arrastou p/ Visitou com agendamento aberto → oferece o feedback.
   const [feedbackApt, setFeedbackApt] = useState<{ id: string; leadName: string | null } | null>(null)
+  // Story 75-264 — drop em Perdido/Não Qualificado abre o modal de motivo em vez
+  // de mover direto (decisão do Marcos 2026-08-04). O movimento só acontece se o
+  // modal confirmar (o endpoint mark-lost grava etapa + grupo + observação).
+  const [markLostMove, setMarkLostMove] = useState<{
+    lead: Lead
+    sourceStageId: string
+    newStageId: string
+  } | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -280,6 +290,13 @@ export function KanbanBoard({
 
       const previousStageId = movedLead.stage_id ?? sourceStageId
       const updatedLead: Lead = { ...movedLead, stage_id: newStageId }
+
+      // Story 75-264 — perder lead exige motivo estruturado: intercepta o drop,
+      // abre o modal e NÃO move otimisticamente (o modal move ao confirmar).
+      if (PERDIDO_STAGE_IDS.includes(newStageId)) {
+        setMarkLostMove({ lead: movedLead, sourceStageId, newStageId })
+        return
+      }
 
       // Optimistic update on the Map state.
       setStageMap((prev) => {
@@ -587,6 +604,48 @@ export function KanbanBoard({
           subtitle={feedbackApt.leadName ?? undefined}
           onClose={() => setFeedbackApt(null)}
           onSuccess={() => setFeedbackApt(null)}
+        />
+      )}
+
+      {/* Story 75-264 — motivo estruturado ao arrastar p/ Perdido/Não Qualificado */}
+      {markLostMove && (
+        <MarkLostModal
+          leadId={markLostMove.lead.id}
+          leadName={markLostMove.lead.name}
+          type={
+            markLostMove.newStageId === "95327bd7-3e88-4038-aa16-250a74ab085c"
+              ? "nao_qualificado"
+              : "represamento"
+          }
+          onSuccess={() => {
+            // O endpoint mark-lost já persistiu etapa + motivo; aqui só reflete no board.
+            const { lead, sourceStageId, newStageId } = markLostMove
+            setStageMap((prev) => {
+              const next = new Map(prev)
+              const src = next.get(sourceStageId)
+              if (src) {
+                next.set(sourceStageId, {
+                  ...src,
+                  leads: src.leads.filter((l) => l.id !== lead.id),
+                  totalCount: Math.max(0, src.totalCount - 1),
+                })
+              }
+              const dst = next.get(newStageId) ?? {
+                leads: [],
+                totalCount: 0,
+                hasMore: false,
+                loading: false,
+              }
+              next.set(newStageId, {
+                ...dst,
+                leads: [{ ...lead, stage_id: newStageId }, ...dst.leads],
+                totalCount: dst.totalCount + 1,
+              })
+              return next
+            })
+            setMarkLostMove(null)
+          }}
+          onCancel={() => setMarkLostMove(null)}
         />
       )}
     </>

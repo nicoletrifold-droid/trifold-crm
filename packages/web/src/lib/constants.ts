@@ -50,6 +50,31 @@ export const SOURCE_LABELS_SHORT: Record<string, string> = {
  * tela do admin (/dashboard/leads/new) quanto no modal do corretor (Story 75-111).
  * `value` deve ser um valor válido do enum Postgres `lead_source`.
  */
+/**
+ * Story 75-264 — Motivo de perda ESTRUTURADO (6 grupos + outro).
+ * Fonte única para TODOS os pontos que marcam lead como perdido (modal do
+ * drawer, ação em massa, modal do Kanban) e para a validação server-side
+ * (mark-lost, bulk, PATCH). `value` deve casar com o CHECK
+ * leads_lost_reason_grupo_check (migration 212) e com os grupos da view
+ * v_lead_lost_reason_grupo. Taxonomia destilada de 1.042 perdas reais.
+ */
+export const LOST_REASON_GROUPS: { value: string; label: string }[] = [
+  { value: 'nao_conseguimos_falar', label: 'Não conseguimos falar (não atende/não responde)' },
+  { value: 'sem_interesse',         label: 'Sem interesse / desistiu' },
+  { value: 'nao_qualifica_preco',   label: 'Não qualifica (renda, crédito, preço)' },
+  { value: 'fora_perfil_regiao',    label: 'Fora do perfil / região' },
+  { value: 'foi_para_outro',        label: 'Comprou outro imóvel / concorrente' },
+  { value: 'clicou_sem_intencao',   label: 'Clicou sem intenção de compra' },
+  { value: 'outro',                 label: 'Outro' },
+];
+
+export const LOST_REASON_GROUP_LABELS: Record<string, string> =
+  Object.fromEntries(LOST_REASON_GROUPS.map((g) => [g.value, g.label]));
+
+export function isLostReasonGrupo(value: unknown): value is string {
+  return typeof value === 'string' && LOST_REASON_GROUPS.some((g) => g.value === value);
+}
+
 export const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: 'referral',         label: 'Indicação' },
   { value: 'broker_sponsored', label: 'Patrocinado Corretor' },
