@@ -439,24 +439,16 @@ export default async function AnalyticsPage({
     ? (allProperties ?? []).find((p) => p.id === propertyId)?.name ?? "Empreendimento"
     : null
 
-  // PDF sob demanda segue o período selecionado na tela (Story 75-31).
-  //
-  // 🔴 Story 75-272 — AC6 NÃO ENTREGUE, de propósito. O link NÃO leva os filtros
-  // porque o PDF ainda não sabe aplicá-los: `buildAnalyticsReportData` tira
-  // TODOS os números principais (métricas, funil, empreendimentos, corretores,
-  // origens) da RPC `get_analytics_summary_ranged`, que só aceita org + datas.
-  // Passar os filtros aplicaria em algumas queries e não nas da RPC — o PDF
-  // sairia MISTURANDO número filtrado com não filtrado, e a divergência com a
-  // tela ficaria invisível. Pior que não filtrar. O caminho certo é dar ao
-  // report-data a mesma bifurcação da tela (agregar em JS quando filtrado), e
-  // isso é story própria. NOTA: o PDF já ignorava o filtro de empreendimento
-  // ANTES desta story — o furo é pré-existente, não regressão.
-  const reportParams = new URLSearchParams({ range: period.range })
-  if (period.range === "custom" && period.from && period.to) {
-    reportParams.set("from", period.from)
-    reportParams.set("to", period.to)
-  }
-  const reportHref = `/api/analytics/report?${reportParams.toString()}`
+  // PDF sob demanda segue o período (Story 75-31) E os filtros (Story 75-271).
+  // O `buildAnalyticsReportData` ganhou a mesma bifurcação da tela: com filtro,
+  // soma em JS pelo agregador compartilhado (`lib/analytics/aggregate-filtered.ts`)
+  // em vez de usar a RPC, que só aceita org + datas. Foi o que destravou o AC6
+  // que a 75-272 havia deixado aberto de propósito — meio-filtrado mentiria.
+  const reportHref = buildAnalyticsHref("/api/analytics/report", filters, {
+    range: period.range,
+    from: period.from,
+    to: period.to,
+  })
 
   // ── Opções dos filtros, facetadas sobre as ENTRADAS da janela (Story 75-272) ──
   // `facetRows` é a base de facetamento: o caminho filtrado já tem os leads em
