@@ -25,6 +25,8 @@ import {
   type PeriodParams,
 } from "@web/lib/analytics/filters"
 import { facetOptions, facetCoverage, optionLabelComContagem } from "@web/lib/analytics/filter-options"
+// Story 75-271 — mesma soma que o PDF usa (QA-002: uma implementação, não duas).
+import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
 
 /**
  * Story 75-272 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
@@ -186,35 +188,22 @@ export default async function AnalyticsPage({
       broker: { id: string; name: string } | { id: string; name: string }[] | null
     }>
 
-    // Funnel
-    const stageMap = new Map<string, number>()
-    for (const l of allLeads) { if (l.stage_id) stageMap.set(l.stage_id, (stageMap.get(l.stage_id) ?? 0) + 1) }
-    stages = (stagesData.data ?? []).map((s) => ({
-      id: s.id, name: s.name, slug: s.slug, color: s.color, position: s.position, count: stageMap.get(s.id) ?? 0,
+    // Story 75-271 (QA-002) — funil, corretores e origens saem do agregador
+    // COMPARTILHADO com o PDF. Antes esta soma vivia aqui e o PDF tinha a sua
+    // (ou pior: não tinha e usava a RPC sem filtro). Duas implementações do
+    // mesmo cálculo divergem em silêncio, e PDF se confere menos que tela.
+    const agg = aggregateFilteredLeads(allLeads, (stagesData.data ?? []) as Parameters<typeof aggregateFilteredLeads>[1], {
+      hiddenBrokerNames: HIDDEN_BROKER_NAMES,
+      activeBrokerIds,
+    })
+    stages = agg.stages.map((s) => ({
+      id: s.id, name: s.name, slug: s.slug ?? "", color: s.color ?? "", position: s.position ?? 0, count: s.count,
     }))
-
-    // Brokers
-    const brokerAgg = new Map<string, { name: string; count: number }>()
-    for (const l of allLeads) {
-      if (!l.assigned_broker_id) continue
-      const b = Array.isArray(l.broker) ? l.broker[0] : l.broker
-      if (!b?.name) continue
-      if (HIDDEN_BROKER_NAMES.has(b.name.toLowerCase().trim())) continue
-      const cur = brokerAgg.get(l.assigned_broker_id) ?? { name: b.name, count: 0 }
-      cur.count++
-      brokerAgg.set(l.assigned_broker_id, cur)
-    }
-    brokers = Array.from(brokerAgg.entries())
-      .filter(([id]) => activeBrokerIds.has(id))
-      .map(([id, v]) => ({ id, name: v.name, count: v.count, avgScore: 0 }))
-
-    // Sources do período
-    for (const l of allLeads) {
-      if (l.source) sourceCounts[l.source] = (sourceCounts[l.source] ?? 0) + 1
-    }
+    brokers = agg.brokers.map((b) => ({ ...b, avgScore: 0 }))
+    for (const [k, v] of Object.entries(agg.sourceCounts)) sourceCounts[k] = v
 
     // Story 75-179: Ativos = criados na janela, ativos e não-perdidos (allLeads já filtra).
-    ativos = allLeads.length
+    ativos = agg.total
     // Entradas = TODOS os criados na janela p/ o empreendimento (inclui perdidos/inativos).
     const { count: entradasCount } = await applyLeadFilters(
       supabase

@@ -85,10 +85,15 @@ export function aggregateFilteredLeads(
       byProperty[lead.property_interest_id] = (byProperty[lead.property_interest_id] ?? 0) + 1
     }
 
-    // Origem nula cai em "other", igual ao que a RPC faz — assim o total de
-    // origens fecha com o total de leads e ninguém caça a diferença.
-    const src = lead.source ?? "other"
-    sourceCounts[src] = (sourceCounts[src] ?? 0) + 1
+    // Origem NULA é ignorada, porque é o que a RPC faz: a CTE `source_agg` tem
+    // `AND source IS NOT NULL` (migration 213:234-238). Consequência a ter em
+    // mente: a soma das origens pode ser MENOR que o total de leads. Contar nulo
+    // como "other" faria o número do PDF divergir do da RPC — foi exatamente o
+    // erro que eu cometi na primeira versão deste módulo, pego ao conferir a
+    // migration em vez de confiar na memória.
+    if (lead.source) {
+      sourceCounts[lead.source] = (sourceCounts[lead.source] ?? 0) + 1
+    }
 
     const brokerId = lead.assigned_broker_id
     if (!brokerId) continue

@@ -52,10 +52,13 @@ describe("aggregateFilteredLeads", () => {
     expect(so_b1.brokers.map((b) => b.id)).toEqual(["b1"])
   })
 
-  it("origem NULA cai em 'other', igual à RPC — total de origens fecha com o total", () => {
-    expect(agg.sourceCounts).toEqual({ meta_ads: 2, other: 2, website: 1 })
+  it("origem NULA é IGNORADA, igual à RPC (migration 213: source IS NOT NULL)", () => {
+    // O lead sem origem NÃO entra em nenhuma chave. Contá-lo como "other" faria
+    // o PDF divergir da RPC — foi o erro da primeira versão deste módulo.
+    expect(agg.sourceCounts).toEqual({ meta_ads: 2, other: 1, website: 1 })
     const somaOrigens = Object.values(agg.sourceCounts).reduce((a, b) => a + b, 0)
-    expect(somaOrigens).toBe(agg.total)
+    // Consequência a conhecer: a soma das origens pode ser MENOR que o total.
+    expect(somaOrigens).toBe(agg.total - 1)
   })
 
   it("conta por empreendimento e ignora lead sem empreendimento", () => {

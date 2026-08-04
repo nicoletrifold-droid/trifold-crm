@@ -144,3 +144,70 @@ explícito ("faz o pdf também"). Esta story documenta o que foi feito em vez de
 | Data | Versão | Mudança | Autor |
 |---|---|---|---|
 | 2026-08-04 | 0.1 | Story criada e implementada (@dev direto, desvio declarado acima). Fecha o AC6 da 75-272 pelo caminho que o gate dela especificou: extrair a soma que a TELA já fazia (`aggregate-filtered.ts`) e o PDF consumir a mesma, em vez de duas implementações do mesmo cálculo. Acrescentei ao escopo original a **linha de filtros no cabeçalho** (PDF filtrado indistinguível do completo é armadilha) e a **omissão do card Visitas** com filtro (appointments não tem as colunas; misturar recortes é o erro que fez a 75-272 parar). tsc 0 · vitest 132/1605 (+12) · eslint 0. | @dev (Dex) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-08-04 · Reviewed By: Quinn (Test Architect)
+
+### Code Quality Assessment
+
+A story fecha o AC6 pelo caminho certo — extrair a soma que a tela já fazia em vez de escrever a
+segunda implementação do mesmo cálculo. E o caminho de maior risco, o **cron de domingo**, está
+limpo: `filters` tem default `EMPTY_FILTERS` e o bloco da RPC ficou idêntico.
+
+### 🔴 Achei um bug MEU na revisão, e vale registrar como foi
+
+A primeira versão do agregador contava **origem nula como `"other"`**, com um comentário afirmando
+*"igual ao que a RPC faz"*. Fui conferir a migration 213 (CTE `source_agg`, linhas 234-238): ela tem
+**`AND source IS NOT NULL`** — a RPC **ignora** origem nula, e a tela também. Estava errado, **e o
+teste afirmava o comportamento errado**, com uma asserção de que a soma das origens fecha com o
+total. Falsa segurança em dobro.
+
+Efeito se tivesse passado: o PDF filtrado somaria uma origem `"other"` inflada e divergiria da tela
+e da RPC — o exato problema que esta story existe para resolver.
+
+**Lição:** replicar comportamento de RPC exige **ler** a RPC, não lembrar dela.
+
+### Refactoring Performed
+
+- **File**: `lib/analytics/aggregate-filtered.ts` (+ teste)
+  - **Change**: origem nula passou a ser ignorada
+  - **Why/How**: ver acima. O teste agora assere que a soma das origens pode ser **menor** que o
+    total, que é a consequência real e não-óbvia dessa regra.
+
+- **File**: `app/dashboard/analytics/page.tsx`
+  - **Change**: a TELA passou a consumir `aggregateFilteredLeads` (QA-002)
+  - **Why**: o módulo foi criado para ser a soma única, mas a tela seguia com a cópia dela — duas
+    implementações divergem em silêncio, e PDF se confere menos que tela.
+  - **How**: fiz junto em vez de registrar follow-up. Dívida de duplicação datada é a que ninguém
+    volta para pagar.
+
+### Compliance Check
+- Coding Standards ✓ · Project Structure ✓ · Testing Strategy ✓ na lógica · All ACs Met ✗ (AC1 é visual)
+
+### Improvements Checklist
+- [x] Bug da origem nula corrigido no código E no teste
+- [x] QA-002 fechado: uma implementação da soma, consumida pela tela e pelo PDF
+- [x] AC2 (cron de domingo) verificado por leitura
+- [ ] **AC1 — abrir o PDF com filtro ao lado da tela** e comparar número por número
+- [ ] **Conferir o PDF SEM filtro** igual ao de antes (é o que o cron manda todo domingo)
+- [ ] QA-003: paginar a query de ativos (`range=custom` com janela grande cortaria em silêncio)
+
+### Security Review
+Sem achados. `requireRole(["admin","supervisor"])` intocado; filtros parametrizados; nenhum dado
+novo exposto (quem vê o PDF já via esses números).
+
+### Performance Considerations
+Com filtro, +5 queries no PDF. É sob demanda e já era pesado (render do @react-pdf), então aceitável.
+
+### Gate Status
+Gate: **CONCERNS** → `docs/qa/gates/75.271-pdf-respeita-filtros.yml`
+(nenhum HIGH; CONCERNS porque o AC1 só se prova abrindo o PDF)
+
+### Recommended Status
+**✗ Changes Required — só validação visual.** O código está aprovado, incluindo o fix do bug que eu
+mesmo introduzi. Falta comparar PDF × tela com filtro, e confirmar que o PDF sem filtro não mudou.
+
+| 2026-08-04 | 0.2 | Gate @qa: **CONCERNS, nenhum HIGH**. 🔴 Encontrei e corrigi um **bug meu**: o agregador contava origem nula como "other" afirmando ser o comportamento da RPC — a migration 213 (`source_agg`) tem `AND source IS NOT NULL`, então a RPC IGNORA nulo. O teste confirmava a suposição errada (falsa segurança em dobro). Corrigido nos dois. Também fechei o QA-002 na revisão: a TELA passou a consumir o agregador, então agora existe UMA soma em vez de duas. Registrados QA-001 (desvio de processo declarado), QA-003 (query de ativos sem paginação) e QA-004 (cabeçalho anuncia "Corretor" sem o nome, porque o valor é uuid). | @qa (Quinn) |

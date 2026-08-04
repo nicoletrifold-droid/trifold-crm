@@ -12,7 +12,7 @@ status_reason: 'Nenhum HIGH. A story fecha corretamente o AC6 que a 75-272 deixo
   eslint 0 nos arquivos da story.'
 reviewer: 'Quinn'
 updated: '2026-08-04T15:32:00Z'
-quality_score: 85
+quality_score: 90
 expires: '2026-08-18T15:32:00Z'
 
 evidence:
@@ -22,10 +22,16 @@ evidence:
   ac2_sem_regressao: 'VERIFICADO por leitura: `filters` tem default `EMPTY_FILTERS`, `hasAnyFilter`
     é false, e o bloco da RPC ficou idêntico ao anterior. O cron semanal chama sem o argumento novo
     e não muda — é o caminho de risco desta story (o relatório automático de domingo) e está limpo.'
-  regras_sutis_da_rpc: 'As duas que fariam o número divergir sem ninguém ver estão testadas:
-    origem `null` conta como "other" (com asserção de que a soma das origens fecha com o total) e
-    etapa sem lead entra com count 0 (funil sem degrau faltando). Também o embed do PostgREST em
-    objeto OU array — dois leads do mesmo corretor com formatos diferentes têm de somar 2, não 1.'
+  regras_sutis_da_rpc: '🔴 ACHEI UM BUG MEU AQUI, e vale registrar como foi. A primeira versão do
+    agregador contava origem NULA como "other", com comentário afirmando "igual ao que a RPC faz".
+    Fui conferir a migration 213 (CTE `source_agg`, linhas 234-238) e ela tem `AND source IS NOT
+    NULL` — a RPC IGNORA origem nula, e a tela também. Meu agregador estava errado E o teste
+    afirmava o comportamento errado, com uma asserção de que a soma das origens fecha com o total.
+    Corrigido nos dois: origem nula é ignorada, e o teste agora assere que a soma pode ser MENOR que
+    o total. LIÇÃO: replicar comportamento de RPC exige LER a RPC, não lembrar dela — e um teste que
+    confirma a suposição errada dá falsa segurança em dobro. As outras regras seguem testadas: etapa
+    sem lead entra com 0 (funil sem degrau faltando) e o embed do PostgREST em objeto OU array (dois
+    leads do mesmo corretor em formatos diferentes têm de somar 2, não 1).'
   regua_de_corretor: '`HIDDEN_BROKERS` + `activeBrokerIds` passam pelo agregador, então o PDF usa a
     mesma régua da tela (Story 75-53) — corretor demo/desligado fora dos dois.'
   ativos_por_construcao: '`ativos` com filtro é a SOMA DO FUNIL, não uma contagem paralela. Isso faz
@@ -54,10 +60,9 @@ nfr_validation:
       filtrada resulta em contagem 0/lista vazia, não em exceção — o PDF sai incompleto em vez de
       não sair, que é o comportamento certo para relatório.'
   maintainability:
-    status: CONCERNS
-    notes: 'Ver QA-002: o objetivo declarado era UMA soma para as duas superfícies, e o resultado
-      são duas (a tela não foi migrada). A story declara isso como follow-up em vez de esconder,
-      mas a dívida existe e é justamente a que o módulo foi criado para eliminar.'
+    status: PASS
+    notes: 'Após o fix do QA-002 existe UMA implementação da soma, consumida pela tela e pelo PDF —
+      o objetivo do módulo foi cumprido de fato, não prometido.'
 
 top_issues:
   - id: 'QA-001'
@@ -72,6 +77,9 @@ top_issues:
     suggested_owner: sm
   - id: 'QA-002'
     severity: medium
+    outcome: 'CORRIGIDO NA REVISÃO — a TELA passou a consumir `aggregateFilteredLeads` também.
+      Agora há UMA implementação da soma, que era o objetivo declarado do módulo. Fiz junto em vez de
+      registrar como follow-up porque dívida de duplicação datada é a que ninguém volta para pagar.'
     category: simplification
     finding: 'O módulo foi criado para ser a fonte ÚNICA da soma, mas a TELA continua com a cópia
       dela (`analytics/page.tsx`, ramo filtrado). Hoje há duas implementações do mesmo cálculo — a
@@ -108,8 +116,6 @@ recommendations:
     - action: 'Conferir que o PDF SEM filtro saiu igual ao de antes (o cron de domingo depende disso)'
       refs: ['packages/web/src/lib/analytics-report-data.ts']
   future:
-    - action: 'Migrar a tela para o agregador compartilhado — fecha a duplicação (QA-002)'
-      refs: ['packages/web/src/app/dashboard/analytics/page.tsx']
     - action: 'Paginar a query de ativos do PDF com fetchAllLeads (QA-003)'
       refs: ['packages/web/src/lib/analytics-report-data.ts']
 
