@@ -87,7 +87,15 @@ export async function PATCH(
     "assigned_broker_id",
     "ai_summary",
     "visit_scheduled_at",
-    "lost_reason",
+    // Story 75-269 — `lost_reason` SAIU da whitelist. Ele aceitava texto livre
+    // sem exigir grupo, o que recriava motivo não classificado e desfazia a
+    // estruturação da 75-264 um lead por vez. Varredura em packages/ e scripts/:
+    // NENHUM caller escrevia por aqui — marcar perdido passa por
+    // `/api/leads/[id]/mark-lost` (grava motivo E grupo, route.ts:54-55) e por
+    // `/api/leads/bulk` (sempre manda `lost_reason_grupo`); `stage/route.ts:71`,
+    // `bulk/route.ts:52,64` e `reativar/route.ts:151` apenas LIMPAM (`= null`).
+    // Era capacidade vestigial: fechar a porta é melhor que vigiá-la.
+    // Para limpar o motivo, use os endpoints acima (reativar/stage/bulk).
     "lost_reason_grupo",
     // Story 75-112 — enriquecimento do perfil (editável por quem já edita o lead)
     "observacao",
@@ -105,6 +113,21 @@ export async function PATCH(
     "cidade_bairro",
     "tem_pet",
   ]
+
+  // QA 75-269 (QA-001) — `lost_reason` saiu da whitelist, e `buildUpdatePayload`
+  // IGNORA EM SILÊNCIO campo não permitido: um PATCH com `lost_reason` junto de
+  // outro campo válido responderia 200 tendo descartado o motivo. Rejeitar
+  // explicitamente torna o contrato audível — quem tentar escreve por aqui
+  // descobre na hora, em vez de achar que gravou.
+  if ("lost_reason" in body) {
+    return NextResponse.json(
+      {
+        error:
+          "lost_reason não é editável por este endpoint. Use POST /api/leads/[id]/mark-lost (grava motivo e grupo juntos) ou os fluxos de reativação/etapa para limpar.",
+      },
+      { status: 400 }
+    )
+  }
 
   const { fields, error: payloadError } = buildUpdatePayload(body, allowedFields)
   if (payloadError) return payloadError

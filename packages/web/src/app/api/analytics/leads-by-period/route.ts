@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+// Story 75-269 — paginação do PostgREST compartilhada com /analytics/executive.
+import { fetchAllLeads } from "@web/lib/analytics/fetch-all-leads"
+import { SEM_ORIGEM_KEY } from "@web/lib/analytics/sources-presentes"
 
 type Granularity = "day" | "week" | "month"
 
@@ -7,6 +10,13 @@ interface PeriodEntry {
   period: string
   count: number
   byProperty: Record<string, number>
+}
+
+/** Story 75-269 — `source` entrou no select p/ derivar as origens da janela. */
+interface LeadRow {
+  created_at: string
+  property_interest_id: string | null
+  source: string | null
 }
 
 function getPeriodKey(isoDate: string, granularity: Granularity): string {
@@ -92,25 +102,37 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid granularity" }, { status: 400 })
   }
 
-  // Parallel: leads + property names
-  let leadsQuery = supabase
-    .from("leads")
-    .select("created_at, property_interest_id")
-    .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB (fix: faltava aqui)
-    .eq("is_active", true)
-    .is("lost_reason", null)
-    .gte("created_at", from)
-    .lte("created_at", to)
-    .order("created_at")
-
-  if (source) leadsQuery = leadsQuery.eq("source", source as "whatsapp_organic" | "whatsapp_click_to_ad" | "meta_ads" | "website" | "referral" | "walk_in" | "telegram" | "other")
-
-  const [{ data: rawLeads, error }, { data: rawProperties }] = await Promise.all([
-    leadsQuery,
-    supabase.from("properties").select("id, name").eq("is_active", true),
-  ])
-
-  if (error) {
+  // Story 75-269 — a janela inteira, paginada: o PostgREST corta em 1000 em
+  // silêncio (não falha, devolve menos). Medido em prod 04/08: 612 leads em 90d
+  // neste recorte — 61% do teto, ainda não corta, mas o dia em que passar o
+  // gráfico simplesmente mostraria menos sem avisar. Mesmo helper do
+  // /api/analytics/executive, que já paginava porque o recorte DELE (sem
+  // is_active/lost_reason) passa de 1000 com folga (1.650 em 90d).
+  //
+  // O filtro de ORIGEM saiu da query e passou a ser aplicado em JS, ao lado do
+  // de empreendimento (que já era assim, ver abaixo): é o que permite conhecer
+  // TODAS as origens presentes na janela para montar o dropdown (Story 75-269),
+  // em vez de oferecer uma lista fixa que escondia 41,5% dos leads.
+  let rawLeads: LeadRow[]
+  let rawProperties: Array<{ id: string; name: string }> | null
+  try {
+    const [leads, props] = await Promise.all([
+      fetchAllLeads<LeadRow>(() =>
+        supabase
+          .from("leads")
+          .select("created_at, property_interest_id, source")
+          .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB (fix: faltava aqui)
+          .eq("is_active", true)
+          .is("lost_reason", null)
+          .gte("created_at", from)
+          .lte("created_at", to)
+          .order("created_at")
+      ),
+      supabase.from("properties").select("id, name").eq("is_active", true),
+    ])
+    rawLeads = leads
+    rawProperties = props.data
+  } catch (error) {
     console.error("[ANALYTICS/leads-by-period]", error)
     return NextResponse.json({ error: "Database error" }, { status: 500 })
   }
@@ -124,11 +146,28 @@ export async function GET(request: NextRequest) {
     periodMap.set(p, { period: p, count: 0, byProperty: {} })
   }
 
+  // Story 75-269 — origens presentes na janela INTEIRA (antes de qualquer
+  // filtro), para o dropdown oferecer só o que existe. Conta sempre a janela
+  // toda, mesmo com uma origem selecionada: senão escolher uma origem colapsaria
+  // o dropdown para ela só, e não haveria como voltar.
+  const sources: Record<string, number> = {}
+
   // Aggregate
-  for (const lead of rawLeads ?? []) {
+  for (const lead of rawLeads) {
+    // Ressalva R3 do @po: lead sem origem entra em chave própria em vez de ser
+    // descartado — assim a soma das origens fecha com o total da janela.
+    const sourceKey = lead.source ?? SEM_ORIGEM_KEY
+    sources[sourceKey] = (sources[sourceKey] ?? 0) + 1
+
     const period = getPeriodKey(lead.created_at, granularity)
     const entry = periodMap.get(period)
     if (!entry) continue
+
+    // Filtro de origem: era `.eq("source", …)` na query (Story 75-269 moveu
+    // para cá). Aplicado ANTES do byProperty para preservar o comportamento
+    // anterior — com uma origem selecionada, o tooltip de empreendimento
+    // também só considerava aquela origem.
+    if (source && lead.source !== source) continue
 
     const propName = lead.property_interest_id ? (propNames.get(lead.property_interest_id) ?? "Outro") : "Outro"
     entry.byProperty[propName] = (entry.byProperty[propName] ?? 0) + 1
@@ -155,6 +194,10 @@ export async function GET(request: NextRequest) {
       dailyAvg: Math.round((total / days) * 10) / 10,
       peakPeriod: peakEntry.period,
       peakCount: peakEntry.count,
+      // Story 75-269 — origens presentes na janela (contagem da janela inteira,
+      // independente dos filtros ativos): é a partir disto que o dropdown de
+      // Origem se monta, em vez de uma lista fixa.
+      sources,
     },
   })
 }

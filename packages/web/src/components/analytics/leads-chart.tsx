@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+// Story 75-269 — opções de Origem derivadas dos dados, com rótulo da fonte única.
+import { opcoesDeOrigem, labelDaOrigem } from "@web/lib/analytics/sources-presentes"
 import {
   BarChart,
   Bar,
@@ -24,6 +26,12 @@ interface Summary {
   dailyAvg: number
   peakPeriod: string
   peakCount: number
+  /**
+   * Story 75-269 — origens presentes na janela (contagem da janela inteira,
+   * independente dos filtros ativos). O dropdown de Origem se monta a partir
+   * daqui. Opcional para não quebrar se a resposta vier de um deploy antigo.
+   */
+  sources?: Record<string, number>
 }
 
 interface Property {
@@ -31,15 +39,11 @@ interface Property {
   name: string
 }
 
-// Rótulos batem com SOURCE_LABELS_SHORT (Visão Executiva/badges/PDF) —
-// decisão 2026-07-23: WhatsApp Orgânico × WhatsApp Patrocinado explícitos.
-const SOURCE_OPTIONS = [
-  { value: "", label: "Todos" },
-  { value: "whatsapp_organic", label: "WhatsApp Orgânico" },
-  { value: "meta_ads", label: "Meta Ads" },
-  { value: "whatsapp_click_to_ad", label: "WhatsApp Patrocinado" },
-  { value: "walk_in", label: "Manual" },
-]
+// Story 75-269 — a lista LITERAL de origens que vivia aqui (5 opções) foi
+// removida: ela escondia 41,5% dos leads (`other` 188, `broker_sponsored` 55,
+// `website` 8, `referral` 3 — medido em prod 04/08) e duplicava
+// SOURCE_LABELS_SHORT. Agora as opções vêm dos DADOS da janela, rotuladas pela
+// fonte canônica — ver `opcoesDeOrigem` em lib/analytics/sources-presentes.ts.
 
 const GRANULARITY_OPTIONS: { value: Granularity; label: string }[] = [
   { value: "day", label: "Dia" },
@@ -129,6 +133,19 @@ export function LeadsChart({ properties, initialPropertyId, from, to }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  // Story 75-269 — o dropdown de Origem se monta a partir das origens presentes
+  // na janela. Guarda: se a origem selecionada não estiver na lista (primeiro
+  // paint, erro de fetch, ou resposta de um deploy sem `sources`), ela entra
+  // mesmo assim — senão o <select> renderizaria em branco e pareceria que o
+  // filtro se perdeu.
+  const sourceOptions = useMemo(() => {
+    const opts = opcoesDeOrigem(summary?.sources)
+    if (source && !opts.some((o) => o.value === source)) {
+      opts.push({ value: source, label: labelDaOrigem(source) })
+    }
+    return opts
+  }, [summary?.sources, source])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(false)
@@ -203,7 +220,7 @@ export function LeadsChart({ properties, initialPropertyId, from, to }: Props) {
           onChange={(e) => setSource(e.target.value)}
           className="rounded border border-gray-200 px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
         >
-          {SOURCE_OPTIONS.map((s) => (
+          {sourceOptions.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>

@@ -1,0 +1,143 @@
+schema: 1
+story: '75-269'
+story_title: 'Higiene do Analytics: o filtro de Origem esconde 41% dos leads'
+gate: CONCERNS
+status_reason: 'Nenhum problema HIGH, e a entrega é boa: a lista literal de origens morreu, o
+  rótulo passou a vir da fonte única e o laço de paginação virou um helper que os DOIS endpoints
+  consomem. O que mais vale nesta story, porém, aconteceu ANTES do código: o @sm mediu as três
+  premissas do backlog em prod e derrubou a que estava errada. Se ninguém tivesse medido, o
+  esforço iria para paginar um endpoint que não está quebrado (612/1000) enquanto 41,5% dos leads
+  seguiriam sem filtro. O CONCERNS vem de duas coisas: (a) AC1/AC3 são de RENDER e não têm
+  cobertura — a lógica está testada, a tela não; (b) a guarda que eu mesmo adicionei (QA-001) não
+  tem teste, porque a rota não tem harness. tsc 0 erros, lint 0 novos, vitest 132/1561 (+19).'
+reviewer: 'Quinn'
+updated: '2026-08-04T14:20:00Z'
+quality_score: 90
+expires: '2026-08-18T14:20:00Z'
+
+evidence:
+  tests: '132 arquivos / 1561 testes verdes; +19 em 2 suítes novas'
+  tsc: 'limpo (8/8 tasks)'
+  eslint: '0 erros; 18 warnings, todos pré-existentes na main (conferido)'
+  premissa_derrubada: 'Reconferi por query independente: com os filtros EXATOS do endpoint são
+    612 leads em 90d (61% do teto de 1000), NÃO os 1.182 da anotação. Os 1.650 vêm do recorte sem
+    is_active/lost_reason, que é o do /analytics/executive — e é justamente por isso que ele JÁ
+    era paginado. A anotação misturou os dois endpoints. O item de paginação é preventivo, e a
+    story diz isso em vez de fingir urgência.'
+  impacto_do_item_real: 'Confirmado em prod: das 8 origens com lead, 4 não eram selecionáveis —
+    other (188), broker_sponsored (55), website (8), referral (3) = 254 de 612 = 41,5%.'
+  invariante_ac7: 'Verificado por leitura: com nenhuma origem selecionada o `count` por período é
+    idêntico ao anterior (o filtro de origem em JS só entra quando `source` está setado), então o
+    `Total` não muda e segue igual ao `new_leads` da RPC (612 hoje).'
+  comportamento_preservado: 'O `continue` do filtro de origem ficou ANTES do `byProperty`,
+    reproduzindo o que o `.eq("source", …)` no banco fazia — com uma origem selecionada, o
+    tooltip de empreendimento continua considerando só aquela origem. Conferi essa ordem
+    especificamente porque é onde uma extração dessas silenciosamente muda número.'
+  executive_intocado: 'Diff do executive: só o laço saiu. `select`, `org_id`, `segmento`, janela,
+    `.order()` e o filtro de empreendimento idênticos; `PAGE` preservado (agora
+    `= LEADS_PAGE_SIZE`) porque ainda serve ao `.limit()` de appointments.'
+  trace:
+    ac_covered: [2, 4, 5, 6, 7, 8]
+    ac_gaps: [1, 3]
+    ac_gaps_motivo: 'AC1 e AC3 são de RENDER (dropdown listando as 8 origens; filtrar por uma
+      origem antes inalcançável). A lógica que os alimenta está coberta por unidade
+      (`sources-presentes.test.ts`, com a distribuição real de prod), mas ninguém abriu a tela.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Sem mudança de autorização: `requireRole` intocado nos dois endpoints. O item 3 FECHA
+      superfície (um campo escrevível a menos no PATCH). Nenhum dado novo exposto — `sources` é
+      contagem agregada da mesma janela que o usuário já podia ver.'
+  performance:
+    status: PASS
+    notes: 'O leads-by-period passa a poder fazer N requisições em vez de 1, mas só quando a
+      janela passar de 1000 (hoje: 1 página, 612 linhas). O `sources` é um contador no laço que
+      já existia — custo zero. O select ganhou 1 coluna (`source`).'
+  reliability:
+    status: PASS
+    notes: 'O erro do PostgREST propaga e vira 500 como antes (agora via try/catch em volta do
+      helper). Teste cobre erro na 1ª E na 2ª página — o segundo caso é o que garante que uma
+      falha no meio não entrega meia janela como se fosse a janela inteira. Múltiplo exato de
+      1000 testado contra laço infinito.'
+  maintainability:
+    status: PASS
+    notes: 'Story remove duplicação em vez de criar: 1 lista literal de origens e 1 laço de
+      paginação a menos. `RangeableQuery` (só `.range()`) em vez de `PostgrestFilterBuilder` foi
+      a escolha que tornou o helper testável com fake — é o detalhe que faz a diferença entre
+      código testado e código "confia em mim".'
+
+top_issues:
+  - id: 'QA-001'
+    severity: medium
+    category: correctness
+    finding: 'CORRIGIDO NA REVISÃO — remover `lost_reason` da whitelist não bastava:
+      `buildUpdatePayload` (`api-utils.ts:10-17`) itera a lista PERMITIDA e ignora o resto **em
+      silêncio**. Então `PATCH {lost_reason:"x"}` sozinho dava 400 ("No fields to update"), mas
+      `PATCH {lost_reason:"x", interest_level:"hot"}` responderia **200** tendo descartado o
+      motivo — sucesso aparente, escrita perdida. A porta foi fechada, mas quem batesse não
+      recebia resposta.'
+    suggested_action: 'Adicionada rejeição explícita: `if ("lost_reason" in body)` → 400 com
+      mensagem que aponta o endpoint certo (`mark-lost`). Belt and suspenders — o campo não é
+      gravável E quem tenta é avisado.'
+    suggested_owner: dev
+  - id: 'QA-002'
+    severity: low
+    category: test-coverage
+    finding: 'A guarda do QA-001 não tem teste: `api/leads/[id]/route.ts` não possui harness (nem
+      arquivo de teste, nem mock de `requireAuth`/supabase no repo para ela), e `api-utils.ts`
+      também não é testado. Cenário de regressão real: alguém re-adiciona `lost_reason` ao
+      `allowedFields` numa story futura e nada acusa — a suíte segue verde.'
+    suggested_action: 'Não inventei teste frágil aqui. O caminho limpo é extrair a whitelist para
+      módulo próprio (ou um `patch-guards.ts` puro) e assertar a ausência do campo — vale quando
+      houver a segunda regra desse tipo, não por uma.'
+    suggested_owner: dev
+  - id: 'QA-003'
+    severity: low
+    category: ux
+    finding: 'O `sources` conta a janela inteira SEM aplicar o filtro de empreendimento (só o de
+      origem é ignorado de propósito, para o dropdown não colapsar). Consequência concreta: com
+      um empreendimento selecionado, o dropdown pode oferecer uma origem que tem 0 lead naquele
+      empreendimento — o usuário escolhe e vê gráfico vazio, sem entender por quê. Bate com o AC1
+      como escrito ("origens presentes no período"), então não é desvio de spec.'
+    suggested_action: 'Se incomodar: aplicar o filtro de empreendimento ao acumular `sources`
+      (mantendo o de origem fora). Contrapartida a pesar: opções passariam a aparecer e
+      desaparecer ao trocar de empreendimento, o que também confunde. Decisão de UX, não de
+      código — vale observar em uso antes de mexer.'
+    suggested_owner: po
+  - id: 'QA-004'
+    severity: low
+    category: correctness
+    finding: 'Mudança de comportamento não declarada na story (benigna): o filtro de origem saiu
+      da query, onde havia cast para o enum. Antes, `?source=lixo` mandava valor inválido ao
+      Postgres e dava 500; agora não casa com nada e devolve gráfico vazio com 200. É melhor que
+      500, mas é diferente.'
+    suggested_action: 'Aceitar e registrar. Se quiser rigor, validar `source` contra as chaves de
+      `SOURCE_LABELS_SHORT` e devolver 400 em valor desconhecido.'
+    suggested_owner: dev
+  - id: 'OBS-001'
+    severity: low
+    category: correctness
+    finding: 'FORA DO ESCOPO, notado de passagem: no `executive`, appointments usa `.limit(PAGE)`
+      (`route.ts:91`) — isso é TETO, não paginação. Se a org passar de 1000 agendamentos na
+      janela, a série de visitas da Visão Executiva subconta em silêncio, exatamente a classe de
+      problema que esta story fechou para leads. Não medi a incidência.'
+    suggested_action: 'Story própria (pequena): medir agendamentos por janela em prod e, se
+      relevante, trocar o `.limit()` por `fetchAllLeads` — o helper já serve, basta o construtor
+      de query de appointments.'
+    suggested_owner: sm
+
+recommendations:
+  immediate:
+    - action: 'Abrir a tela pós-deploy e conferir AC1/AC3: dropdown com as 8 origens e filtro por
+        `other` (188 leads) funcionando'
+      refs: ['packages/web/src/components/analytics/leads-chart.tsx']
+    - action: 'Conferir que a Visão Executiva não mudou nenhum número (AC5)'
+      refs: ['packages/web/src/app/api/analytics/executive/route.ts']
+  future:
+    - action: 'Paginar appointments no executive (OBS-001)'
+      refs: ['packages/web/src/app/api/analytics/executive/route.ts']
+    - action: 'Tornar a whitelist do PATCH testável para travar a ausência de `lost_reason` (QA-002)'
+      refs: ['packages/web/src/app/api/leads/[id]/route.ts']
+
+waiver: { active: false }
