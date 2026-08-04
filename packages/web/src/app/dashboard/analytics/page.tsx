@@ -24,7 +24,14 @@ import {
   PERFIL_FILTER_KEYS,
   type PeriodParams,
 } from "@web/lib/analytics/filters"
-import { facetOptions, facetCoverage, optionLabelComContagem } from "@web/lib/analytics/filter-options"
+import {
+  facetOptions,
+  facetCoverage,
+  optionLabelComContagem,
+  // Story 75-274 — opções de corretor com nome garantido + a frase de cobertura.
+  brokerFilterOptions,
+  coverageNote,
+} from "@web/lib/analytics/filter-options"
 // Story 75-271 — mesma soma que o PDF usa (QA-002: uma implementação, não duas).
 import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
 
@@ -96,6 +103,23 @@ export default async function AnalyticsPage({
     .eq("org_id", appUser.orgId)
     .eq("is_available", true)
   const activeBrokerIds = new Set((activeBrokersData ?? []).map((b) => b.user_id as string))
+
+  // Story 75-274 — NOME dos corretores ativos, direto de `users`. Antes o mapa
+  // saía do array `brokers` (o card "Leads por Corretor"), que é derivado dos
+  // leads JÁ filtrados: com um corretor selecionado o card tem uma linha só, e o
+  // dropdown — facetado de propósito, para dar como trocar de corretor — listava
+  // os outros seis como uuid cru. A fonte do nome não pode depender do recorte
+  // que o próprio filtro aplica.
+  const { data: brokerUsersData } =
+    activeBrokerIds.size > 0
+      ? await supabase.from("users").select("id, name").in("id", [...activeBrokerIds])
+      : { data: [] }
+  const brokerNameMap = new Map<string, string>(
+    (brokerUsersData ?? []).flatMap((u) => {
+      const name = (u.name as string | null)?.trim()
+      return name ? ([[u.id as string, name]] as [string, string][]) : []
+    })
+  )
 
   // Landing Pages do período (extraídas do utm_campaign e subtraídas do "other")
   const lpYardenQ = supabase
@@ -443,8 +467,7 @@ export default async function AnalyticsPage({
   // `facetRows` é a base de facetamento: o caminho filtrado já tem os leads em
   // memória; o caminho sem filtro busca só as colunas dos filtros (query enxuta,
   // sem embed) — é o preço de oferecer opções sabendo o que existe.
-  const brokerNameMap = new Map(brokers.map((b) => [b.id, b.name]))
-
+  //
   // Sem nenhum filtro na QUERY, de propósito: o facetamento é feito em memória
   // por facetOptions, que precisa das linhas cruas para deixar UMA dimensão
   // livre por vez (`except`). Filtrar aqui colapsaria as opções.
@@ -470,9 +493,12 @@ export default async function AnalyticsPage({
     .gte("created_at", sinceISO).lt("created_at", untilISO)
   const facetRows = (facetData ?? []) as Array<Record<string, unknown>>
 
-  const brokerOptions = facetOptions(facetRows, filters, "brokerId", brokerNameMap)
-    // Mesma régua dos cards: fora corretor demo e inativo (Story 75-53).
-    .filter((o) => activeBrokerIds.has(o.value) && !HIDDEN_BROKER_NAMES.has(o.label.toLowerCase().trim()))
+  // Story 75-274 — a régua dos cards (corretor ATIVO na roleta, Story 75-53, e
+  // fora "corretor demo") virou responsabilidade de brokerFilterOptions: quem
+  // não tem nome no mapa não entra, e o mapa já é só dos ativos. Assim não
+  // existe mais o caminho em que a opção aparece rotulada com uuid — e a peneira
+  // por NOME, que o uuid furava, volta a valer.
+  const brokerOptions = brokerFilterOptions(facetRows, filters, brokerNameMap, HIDDEN_BROKER_NAMES)
   const calorOptions = facetOptions(facetRows, filters, "interestLevel")
   const perfilFilterGroups = PERFIL_FILTER_KEYS.map((key) => ({
     key,
@@ -547,13 +573,25 @@ export default async function AnalyticsPage({
           parecer defeito. Só aparece dimensão que tem valor no período. */}
       <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <div className="flex flex-wrap items-end gap-3">
-          <AnalyticsFilterSelect title="Corretor" {...filterSelectProps("brokerId", brokerOptions)} />
-          <AnalyticsFilterSelect title="Calor" {...filterSelectProps("interestLevel", calorOptions)} />
+          {/* Story 75-274 — Corretor e Calor também levam o aviso de cobertura.
+              Sem ele, "Frio (28) + Morno (1)" num recorte de 50 parece contador
+              quebrado; com ele, lê-se "21 leads sem calor". Some quando a
+              cobertura é total, para não virar ruído. */}
+          <AnalyticsFilterSelect
+            title="Corretor"
+            coverageNote={coverageNote(facetCoverage(facetRows, filters, "brokerId")) ?? undefined}
+            {...filterSelectProps("brokerId", brokerOptions)}
+          />
+          <AnalyticsFilterSelect
+            title="Calor"
+            coverageNote={coverageNote(facetCoverage(facetRows, filters, "interestLevel")) ?? undefined}
+            {...filterSelectProps("interestLevel", calorOptions)}
+          />
           {perfilFilterGroups.map((g) => (
             <AnalyticsFilterSelect
               key={g.key}
               title={g.label}
-              coverageNote={`${g.coverage.comValor} de ${g.coverage.total} com o dado`}
+              coverageNote={coverageNote(g.coverage) ?? undefined}
               {...filterSelectProps(g.key, g.options)}
             />
           ))}
