@@ -291,7 +291,13 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           // com o mesmo helper do ConversationThread (sem fetch extra).
           .select(`id, last_message_at, messages:messages(id, role, content, created_at)`)
           .eq("lead_id", leadId)
-          .order("last_message_at", { ascending: false })
+          // QA 75-267 (QA-001) — `nullsFirst: false` explícito: em Postgres,
+          // DESC ordena NULLS FIRST, então uma conversa vazia (last_message_at
+          // null — a coluna é nullable) venceria a conversa real e o lead
+          // pareceria "nunca teve conversa", oferecendo abertura a quem já está
+          // em atendimento. Zero incidência em prod hoje (415 conversas, 0 com
+          // null), mas o gate novo depende desta linha estar correta.
+          .order("last_message_at", { ascending: false, nullsFirst: false })
           .limit(1),
         fetch(`/api/leads/${leadId}/tasks`),
         supabase

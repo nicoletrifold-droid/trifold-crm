@@ -289,3 +289,99 @@ fechada"** (teve conversa e expirou) no bloco do composer:
 | 2026-08-04 | 0.1 | Story criada a partir da decisão do modelo SDR (04/08) que cancelou a 75-265. Investigação mudou o recorte: o botão JÁ chega ao /dashboard via aba Conversa (reuso 75-155) — o trabalho real é extrair o menu p/ componente compartilhado, plantá-lo no drawer e trocar a copy "aguarde o lead" do estado sem-conversa. Zero migration; restrição de colisão com a 75-266 declarada. | @sm (River) |
 | 2026-08-04 | 0.2 | Validação @po: GO 9/10 — Status Draft → Ready. Todas as referências de código conferidas no worktree (cadeia 75-155, recorte da extração, server-only da constante, âncoras do drawer/kanban/imob). Estimativa adicionada (M, ~5 pts — era o único ponto ausente do checklist). Ressalvas ao @dev registradas no parecer: sinal "nunca teve conversa" via prop derivada no ConversationThread; gate do drawer NÃO copiar o array inline de TransferBrokerSection (:1009); descartar worktree da 75-265 antes de tocar start-whatsapp/route.ts; follow-up de aviso ao corretor dono quando privilegiado reabre lead com conversa. | @po (Pax) |
 | 2026-08-04 | 0.3 | Implementação @dev: menu extraído p/ `OpeningTemplateMenu` (compartilhado /broker + drawer), constante em módulo client-safe (`opening-roles.ts`) c/ re-export e import na rota (:83), estado "sem conversa" c/ copy de abertura (helper puro + prop no composer; "Me avisar" oculto nesse estado — AUTO-DECISION documentada), menu no drawer gateado por `canShowOpeningMenu` (dono só p/ `broker`; imob nunca) c/ sucesso + CTA "Ver conversa", badge do caso null discernido (item desejável). tsc 0 erros, eslint 0 erros novos, vitest 132/1547 verde (+2 suítes novas). Status Ready → InReview; pendência runtime: validar c/ login da Thielly (AC1/AC4). | @dev (Dex) |
+| 2026-08-04 | 0.4 | Rebase em origin/main após o merge do #350 (75-266) — sem conflito. Gate @qa: **CONCERNS, nenhum HIGH**; 1 fix aplicado na revisão (QA-001, `nullsFirst: false`). Gate em `docs/qa/gates/75.267-menu-abertura-sdr-dashboard.yml`. | @qa (Quinn) |
+
+---
+
+## QA Results
+
+### Review Date: 2026-08-04
+
+### Reviewed By: Quinn (Test Architect)
+
+### Code Quality Assessment
+
+Trabalho de boa qualidade, e o mérito principal é o que a story **não** fez: em vez de plantar um
+segundo menu no drawer, removeu duplicação. O menu saiu de dentro do composer e virou um
+componente com dois consumidores; a constante de roles perdeu a terceira cópia (o array inline da
+rota morreu). Isso é o inverso do erro que já apareceu duas vezes neste repo.
+
+Verifiquei a extração **linha a linha contra `origin/main`**, porque "extração 1:1" é uma
+afirmação fácil de fazer e difícil de sustentar: os handlers (`handleToggleTemplates`,
+`handleStartWhatsapp`) são idênticos exceto pela troca de `router.refresh()` pelo callback
+`onSent` — e o /broker passa exatamente `() => router.refresh()`. A UI (botão, listbox, previews,
+hint, bloco de erro) é idêntica em classes e textos, e o `DEFAULT_IDLE_HINT` reproduz a string
+original do caminho "janela fechada". O `scrollIntoView` da 75-225 ficou dentro do componente,
+decisão certa: no drawer o `block: "nearest"` é inócuo e evita fork.
+
+Dois pontos onde eu esperava encontrar bug e não encontrei, por terem sido tratados de propósito:
+o gotcha do `useState(prop)` (75-228) — `openingSent` é estado próprio e o `reloadToken` força o
+re-fetch — e o vazamento do estado de sucesso entre leads, impedido pelo `key={leadId}` no mount
+do `LeadDetailContent` (`:194`). Também confirmei que `lead.broker.id` e `viewer.id` são a mesma
+chave (`public.users.id`), senão o check de dono seria silenciosamente sempre falso.
+
+### Refactoring Performed
+
+- **File**: `packages/web/src/components/leads/lead-detail-drawer.tsx`
+  - **Change**: `.order("last_message_at", { ascending: false })` → `{ ascending: false, nullsFirst: false }`
+  - **Why**: em Postgres, `DESC` ordena **NULLS FIRST**. Como `conversations.last_message_at` é
+    nullable (confirmado no `information_schema`), uma conversa vazia venceria a conversa real no
+    `.limit(1)` e o lead apareceria como "nunca teve conversa" — oferecendo abertura a quem já
+    está em atendimento. A ordenação era pré-existente (servia só ao preview de mensagens), mas
+    agora o **gate novo depende dela**.
+  - **How**: antes de decidir a severidade medi a incidência em prod: 415 conversas, **0** com
+    `last_message_at` null, 1 lead com 2+ conversas, **0** leads no padrão de risco. O fix não
+    muda nada hoje e fecha a classe do problema amanhã.
+
+### Compliance Check
+
+- Coding Standards: ✓ comentários com o "porquê" e referência de story, padrão do repo
+- Project Structure: ✓ componente compartilhado em `components/leads/`, helpers puros em `lib/`
+- Testing Strategy: ✓ 2 suítes novas em helpers puros; o gate de visibilidade (AC5) é testado
+  onde a lógica mora, não via UI
+- All ACs Met: ✗ AC1 e AC4 pendentes de runtime (ver EVID-001) — os outros 7 conferidos
+
+### Improvements Checklist
+
+- [x] QA-001 corrigido pelo @qa: `nullsFirst: false` explícito (evidência medida em prod)
+- [x] Extração 1:1 conferida contra `origin/main` (AC7/AC9)
+- [x] Fonte única de `OPENING_PRIVILEGED_ROLES` conferida nos 3 consumidores
+- [x] Rebase em `origin/main` pós-#350, sem conflito e sem toque na fronteira da 75-266
+- [ ] **AC1/AC4 — validar em prod com o login da Thielly** (enviar abertura pelo drawer, conferir
+      CTA "Ver conversa", mensagem na thread e aparição em `/dashboard/conversas`)
+- [ ] Considerar computar o gate no server, matando o flicker do QA-002
+- [ ] Avaliar `NOT NULL` + default em `conversations.last_message_at`
+
+### Security Review
+
+Sem achados. O gate de UI não é o controle de acesso: `loadOpeningContext` está intocado e a API
+segue devolvendo 403 (`opening-context.ts:40-41`). O `imob` e qualquer role fora da lista não veem
+o botão **e** não passariam pela API — e o teste cobre role `null`/vazio, que é onde esse tipo de
+gate costuma falhar aberto. O viewer lê `role` de `public.users`, não do JWT, como manda o gotcha
+de `app_metadata.role`. O estado inicial do gate (viewer ainda carregando) é o **mais restritivo**,
+que é o lado certo para errar.
+
+### Performance Considerations
+
+Nenhum fetch novo no caminho crítico: o drawer já buscava `conversations` e só passou a pedir
+`last_message_at` na mesma query. O único request adicional é um `select` em `users` por abertura
+de drawer, para resolver o viewer.
+
+### Files Modified During Review
+
+- `packages/web/src/components/leads/lead-detail-drawer.tsx` (QA-001)
+- `docs/qa/gates/75.267-menu-abertura-sdr-dashboard.yml` (novo — gate)
+
+*Ambos já constam do escopo da story; @dev não precisa alterar a File List além de acrescentar o
+arquivo de gate, se quiser refletir o artefato.*
+
+### Gate Status
+
+Gate: **CONCERNS** → `docs/qa/gates/75.267-menu-abertura-sdr-dashboard.yml`
+(nenhum issue HIGH; o CONCERNS é por evidência de runtime ausente, não por defeito de código)
+
+### Recommended Status
+
+**✗ Changes Required — apenas validação de runtime**: o código está aprovado; o que falta é o
+AC1/AC4 medido em prod com a Thielly. Enquanto isso não acontecer, a story não deve ir para Done.
+Quem decide o status final é o dono da story.
