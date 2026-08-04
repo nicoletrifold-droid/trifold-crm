@@ -92,6 +92,9 @@ top_issues:
     suggested_owner: dev
   - id: 'QA-003'
     severity: low
+    outcome: 'CORRIGIDO pela Story 75-273: a query de ativos do PDF passou a usar `fetchAllLeads`
+      (helper da 75-269, já na main). Segue sem incidência hoje — o recorte mede 612 em TODA a base
+      —, mas o corte do PostgREST é silencioso e o PDF aceita `range=custom` com janela arbitrária.'
     category: correctness
     finding: 'A query de ativos do caminho filtrado não é paginada (teto de 1000 do PostgREST). O
       recorte é o de ativos, que medi hoje em 612 em 90d — longe do teto —, mas o PDF aceita
@@ -102,6 +105,10 @@ top_issues:
     suggested_owner: dev
   - id: 'QA-004'
     severity: low
+    outcome: 'CORRIGIDO pela Story 75-273: o cabeçalho passou a mostrar o NOME de corretor e
+      empreendimento (uma query por dimensão, só quando filtrada). Id não resolvido — corretor
+      apagado, por exemplo — cai no rótulo pelado, porque imprimir uuid num relatório que alguém vai
+      ler é pior que não dizer.'
     category: ux
     finding: 'O cabeçalho anuncia "Corretor" e "Empreendimento" sem o NOME (o valor é uuid e o
       report-data não resolve o nome). Quem recebe o PDF sabe que há filtro, mas não de quem.'

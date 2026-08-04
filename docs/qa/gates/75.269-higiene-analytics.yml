@@ -83,6 +83,10 @@ top_issues:
     suggested_owner: dev
   - id: 'QA-002'
     severity: low
+    outcome: 'CORRIGIDO pela Story 75-273: a whitelist virou
+      `lib/leads/patch-allowed-fields.ts` com `LEAD_PATCH_FORBIDDEN_FIELDS` (campo + motivo) e um
+      teste que FALHA se `lost_reason` voltar, citando o motivo na mensagem. Era exatamente o
+      cenário que eu havia descrito: guard-rail que não é testado é intenção, não regra.'
     category: test-coverage
     finding: 'A guarda do QA-001 não tem teste: `api/leads/[id]/route.ts` não possui harness (nem
       arquivo de teste, nem mock de `requireAuth`/supabase no repo para ela), e `api-utils.ts`
@@ -117,6 +121,11 @@ top_issues:
     suggested_owner: dev
   - id: 'OBS-001'
     severity: low
+    outcome: 'MEDIDO E DELIBERADAMENTE NÃO CORRIGIDO (Story 75-273). Medi em prod: a org tem **59
+      agendamentos no total** (55 `team=house`), contra um teto de 1000. Está a ordens de magnitude
+      de importar. Trocar o `.limit()` por paginação seria churn sem risco eliminado — a nota fica
+      como registro para quando o volume mudar. Regra que apliquei: risco latente só vira trabalho
+      depois de medido.'
     category: correctness
     finding: 'FORA DO ESCOPO, notado de passagem: no `executive`, appointments usa `.limit(PAGE)`
       (`route.ts:91`) — isso é TETO, não paginação. Se a org passar de 1000 agendamentos na
