@@ -1,0 +1,116 @@
+schema: 1
+story: '75-271'
+story_title: 'O PDF do Analytics respeita os filtros da tela'
+gate: CONCERNS
+status_reason: 'Nenhum HIGH. A story fecha corretamente o AC6 que a 75-272 deixou aberto, e faz
+  isso pelo caminho certo: extrair a soma que a TELA já fazia num agregador puro e o PDF consumir a
+  mesma, em vez de escrever a segunda implementação do mesmo cálculo. As duas regras sutis da RPC
+  (origem nula → "other"; etapa sem lead → 0) estão replicadas e testadas — são exatamente onde um
+  agregador desses divergiria em silêncio. CONCERNS por dois motivos: (a) **AC1 exige o PDF aberto
+  ao lado da tela** e isso não tem como ser provado por teste; (b) a duplicação foi reduzida de duas
+  superfícies para... duas — a tela ainda tem a cópia dela (QA-002). tsc 0, vitest 132/1605 (+12),
+  eslint 0 nos arquivos da story.'
+reviewer: 'Quinn'
+updated: '2026-08-04T15:32:00Z'
+quality_score: 85
+expires: '2026-08-18T15:32:00Z'
+
+evidence:
+  tests: '132 arquivos / 1605 testes; +12 no agregador'
+  tsc: 'limpo (8/8)'
+  eslint: '0 erros nos arquivos da story (2 warnings em distributor.test.ts são pré-existentes)'
+  ac2_sem_regressao: 'VERIFICADO por leitura: `filters` tem default `EMPTY_FILTERS`, `hasAnyFilter`
+    é false, e o bloco da RPC ficou idêntico ao anterior. O cron semanal chama sem o argumento novo
+    e não muda — é o caminho de risco desta story (o relatório automático de domingo) e está limpo.'
+  regras_sutis_da_rpc: 'As duas que fariam o número divergir sem ninguém ver estão testadas:
+    origem `null` conta como "other" (com asserção de que a soma das origens fecha com o total) e
+    etapa sem lead entra com count 0 (funil sem degrau faltando). Também o embed do PostgREST em
+    objeto OU array — dois leads do mesmo corretor com formatos diferentes têm de somar 2, não 1.'
+  regua_de_corretor: '`HIDDEN_BROKERS` + `activeBrokerIds` passam pelo agregador, então o PDF usa a
+    mesma régua da tela (Story 75-53) — corretor demo/desligado fora dos dois.'
+  ativos_por_construcao: '`ativos` com filtro é a SOMA DO FUNIL, não uma contagem paralela. Isso faz
+    o card bater com o funil por construção em vez de por coincidência — o tipo de escolha que evita
+    bug de arredondamento entre dois números que deveriam ser o mesmo.'
+  trace:
+    ac_covered: [2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: [1]
+    ac_gaps_motivo: 'AC1 é comparação visual PDF × tela com filtro ativo. Não há harness de PDF no
+      repo e o número depende de dado real.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Endpoint mantém `requireRole(["admin","supervisor"])`. Os filtros chegam por
+      `parseAnalyticsFilters` (mesmo parser da tela) e são aplicados por `.eq()`/`.ilike()`
+      parametrizados. Nenhum dado novo exposto: quem pode ver o PDF já via esses números.'
+  performance:
+    status: CONCERNS
+    notes: 'Com filtro, o PDF passa a fazer 5 queries extras (etapas + ativos + entradas +
+      entradas-anterior + perdidos). O PDF é sob demanda e já era pesado (renderiza com
+      @react-pdf), então é aceitável — mas ver QA-003: a query de ativos NÃO é paginada.'
+  reliability:
+    status: PASS
+    notes: 'Agregador é puro e testado; o caminho sem filtro é o de antes. Falha de uma query
+      filtrada resulta em contagem 0/lista vazia, não em exceção — o PDF sai incompleto em vez de
+      não sair, que é o comportamento certo para relatório.'
+  maintainability:
+    status: CONCERNS
+    notes: 'Ver QA-002: o objetivo declarado era UMA soma para as duas superfícies, e o resultado
+      são duas (a tela não foi migrada). A story declara isso como follow-up em vez de esconder,
+      mas a dívida existe e é justamente a que o módulo foi criado para eliminar.'
+
+top_issues:
+  - id: 'QA-001'
+    severity: low
+    category: process
+    finding: 'Story escrita DEPOIS da implementação, sem @sm/@po. O @dev declarou o desvio no
+      próprio Dev Agent Record em vez de simular um fluxo que não houve — e o desenho realmente já
+      estava especificado no QA-001 do gate da 75-272 (problema, causa e caminho), então não houve
+      decisão de produto tomada sem validação.'
+    suggested_action: 'Aceitável neste caso. Não normalizar: quando o desenho NÃO estiver
+      pré-especificado, o @po precisa entrar antes.'
+    suggested_owner: sm
+  - id: 'QA-002'
+    severity: medium
+    category: simplification
+    finding: 'O módulo foi criado para ser a fonte ÚNICA da soma, mas a TELA continua com a cópia
+      dela (`analytics/page.tsx`, ramo filtrado). Hoje há duas implementações do mesmo cálculo — a
+      story reduziu o risco (o PDF deixou de ter a sua própria terceira versão), não o eliminou.
+      Cenário concreto: alguém corrige uma regra de agregação num lado e o outro segue errado; e
+      como PDF se confere menos que tela, a divergência dura.'
+    suggested_action: 'Migrar a tela para `aggregateFilteredLeads` — é refactor sem mudança de
+      comportamento e os testes do agregador já cobrem as regras. Vale fazer JUNTO, enquanto o
+      contexto está fresco, em vez de virar dívida datada.'
+    suggested_owner: dev
+  - id: 'QA-003'
+    severity: low
+    category: correctness
+    finding: 'A query de ativos do caminho filtrado não é paginada (teto de 1000 do PostgREST). O
+      recorte é o de ativos, que medi hoje em 612 em 90d — longe do teto —, mas o PDF aceita
+      `range=custom` com janela arbitrária, então uma janela grande o suficiente cortaria em
+      silêncio e o funil do PDF sairia menor que o da tela.'
+    suggested_action: 'Usar `fetchAllLeads` (`lib/analytics/fetch-all-leads.ts`, PR #353) aqui —
+      mesmo helper e mesmo motivo. Barato: importar e envolver.'
+    suggested_owner: dev
+  - id: 'QA-004'
+    severity: low
+    category: ux
+    finding: 'O cabeçalho anuncia "Corretor" e "Empreendimento" sem o NOME (o valor é uuid e o
+      report-data não resolve o nome). Quem recebe o PDF sabe que há filtro, mas não de quem.'
+    suggested_action: 'Resolver o nome exige 1 query por dimensão de id. Vale se o PDF filtrado
+      virar rotina de envio; hoje o aviso de que o recorte não é o total já resolve o risco maior.'
+    suggested_owner: po
+
+recommendations:
+  immediate:
+    - action: 'Abrir o PDF com filtro ativo ao lado da tela e comparar número por número (AC1)'
+      refs: ['packages/web/src/lib/analytics-report-data.ts']
+    - action: 'Conferir que o PDF SEM filtro saiu igual ao de antes (o cron de domingo depende disso)'
+      refs: ['packages/web/src/lib/analytics-report-data.ts']
+  future:
+    - action: 'Migrar a tela para o agregador compartilhado — fecha a duplicação (QA-002)'
+      refs: ['packages/web/src/app/dashboard/analytics/page.tsx']
+    - action: 'Paginar a query de ativos do PDF com fetchAllLeads (QA-003)'
+      refs: ['packages/web/src/lib/analytics-report-data.ts']
+
+waiver: { active: false }
