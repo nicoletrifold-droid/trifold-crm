@@ -139,12 +139,17 @@ export interface EqQuery<T> {
  *   outros filtros aplicados MENOS o de X — senão a própria seleção colapsaria
  *   a lista de opções e não haveria caminho de volta.
  */
-export function applyLeadFilters<T extends EqQuery<T>>(
+export function applyLeadFilters<T>(
   query: T,
   filters: AnalyticsFilters,
   except?: FilterKey
 ): T {
-  let q = query
+  // O genérico é LIVRE (não `T extends EqQuery<T>`) de propósito: com a
+  // constraint recursiva, o TS tentava casar o tipo gigante do
+  // PostgrestFilterBuilder contra ela e estourava em
+  // "Type instantiation is excessively deep" (TS2589) no caller. O contrato
+  // real é o cast abaixo — só `.eq()`/`.ilike()`, verificado pelo teste com fake.
+  let q = query as unknown as EqQuery<T>
   for (const key of FILTER_KEYS) {
     if (key === except) continue
     const value = filters[key]
@@ -152,11 +157,12 @@ export function applyLeadFilters<T extends EqQuery<T>>(
     const { column } = FILTER_SPEC[key]
     // `ilike` sem `%` = igualdade sem caixa. Escapar curinga é obrigatório:
     // uma profissão com "%" no texto viraria busca por prefixo.
-    q = isCaseInsensitive(key)
+    const proximo = isCaseInsensitive(key)
       ? q.ilike(column, value.replace(/([%_\\])/g, "\\$1"))
       : q.eq(column, value)
+    q = proximo as unknown as EqQuery<T>
   }
-  return q
+  return q as unknown as T
 }
 
 /** Mesma decisão do `applyLeadFilters`, mas sobre linhas já em memória. */

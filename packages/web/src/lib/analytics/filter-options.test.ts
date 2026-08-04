@@ -81,7 +81,7 @@ describe("facetOptions", () => {
     const invertido = facetOptions([...rows].reverse(), EMPTY_FILTERS, "profissao")
     expect(direto).toEqual(invertido)
     expect(direto).toHaveLength(1)
-    expect(direto[0].count).toBe(2)
+    expect(direto[0]!.count).toBe(2)
   })
 
   it("a contagem do rótulo é a contagem que o filtro devolve (AC11)", () => {
@@ -100,12 +100,12 @@ describe("facetOptions", () => {
   it("usa mapa de rótulos externo quando fornecido (corretor → nome)", () => {
     const nomes = new Map([["joabe", "Joabe Albuquerque"], ["thielly", "Thielly"]])
     const opts = facetOptions(ROWS, EMPTY_FILTERS, "brokerId", nomes)
-    expect(opts[0].label).toBe("Joabe Albuquerque")
+    expect(opts[0]!.label).toBe("Joabe Albuquerque")
   })
 
   it("calor usa INTEREST_LEVEL_LABELS (fonte única, não cópia)", () => {
     const opts = facetOptions(ROWS, EMPTY_FILTERS, "interestLevel")
-    expect(opts[0]).toEqual({ value: "hot", label: INTEREST_LEVEL_LABELS.hot, count: 3 })
+    expect(opts[0]!).toEqual({ value: "hot", label: INTEREST_LEVEL_LABELS.hot, count: 3 })
     expect(opts.map((o) => o.label)).not.toContain("hot")
   })
 

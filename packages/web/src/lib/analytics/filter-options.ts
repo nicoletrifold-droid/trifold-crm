@@ -108,9 +108,11 @@ export function facetOptions(
   for (const { count, grafias } of grupos.values()) {
     // Empate de grafia resolvido alfabeticamente, para o rótulo não oscilar
     // entre renders com os mesmos dados.
-    const value = [...grafias.entries()].sort(
+    const ordenadas = [...grafias.entries()].sort(
       (a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")
-    )[0][0]
+    )
+    // O grupo só existe porque teve ao menos uma linha, então há grafia.
+    const value = ordenadas[0]![0]
     opcoes.push({ value, label: labelDoValor(key, value, labels), count })
   }
 

@@ -11,6 +11,19 @@ import { resolvePeriod } from "@web/lib/analytics/period"
 // Story 75-266: idem p/ os grupos de motivo de perda (deriveLostReasonGroups).
 import { type AnalyticsSummary, deriveAnalyticsMetrics, deriveLostReasonGroups, toCount } from "@web/lib/analytics/metrics"
 import { aggregatePerfil, type PerfilRow } from "@web/lib/analytics/perfil"
+// Story 75-270 — filtros do analytics (corretor, calor, perfil) num módulo só,
+// compartilhado com o endpoint do PDF.
+import {
+  parseAnalyticsFilters,
+  applyLeadFilters,
+  hasAnyFilter,
+  buildAnalyticsHref,
+  buildClearFiltersHref,
+  activeFilterKeys,
+  PERFIL_FILTER_KEYS,
+  type PeriodParams,
+} from "@web/lib/analytics/filters"
+import { facetOptions, facetCoverage, optionLabelComContagem } from "@web/lib/analytics/filter-options"
 
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
 
@@ -24,15 +37,27 @@ const RANGE_LABEL: Record<string, string> = {
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ property_id?: string; range?: string; from?: string; to?: string }>
+  // Story 75-270 — os filtros viraram um conjunto (corretor, calor, perfil do
+  // lead). O tipo aceita qualquer string p/ não precisar listar 12 params aqui;
+  // quem conhece as chaves é o FILTER_SPEC em lib/analytics/filters.ts.
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const appUser = await getServerUser()
   const supabase = await createClient()
   const params = await searchParams
-  const propertyId = params.property_id || null
+  // Story 75-270 — todos os filtros da URL num objeto tipado, lido pela MESMA
+  // função que o endpoint do PDF usa (é o que faz tela e PDF concordarem).
+  const filters = parseAnalyticsFilters(params)
+  const propertyId = filters.propertyId
+  const filtrado = hasAnyFilter(filters)
+  const periodParams: PeriodParams = {
+    range: typeof params.range === "string" ? params.range : undefined,
+    from: typeof params.from === "string" ? params.from : undefined,
+    to: typeof params.to === "string" ? params.to : undefined,
+  }
 
   // Período global (Story 75-31) — aplica à página inteira.
-  const period = resolvePeriod(params.range, params.from, params.to)
+  const period = resolvePeriod(periodParams.range ?? undefined, periodParams.from ?? undefined, periodParams.to ?? undefined)
   const sinceISO = period.sinceISO
   const untilISO = period.untilISO
   const rangeLabel = RANGE_LABEL[period.range] ?? "período"
@@ -67,9 +92,10 @@ export default async function AnalyticsPage({
     .gte("created_at", sinceISO).lt("created_at", untilISO)
     .or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%")
 
+  // Story 75-270 — aplica TODOS os filtros ativos (era só empreendimento).
   const [{ count: lpYardenCount }, { count: lpVindCount }] = await Promise.all([
-    propertyId ? lpYardenQ.eq("property_interest_id", propertyId) : lpYardenQ,
-    propertyId ? lpVindQ.eq("property_interest_id", propertyId) : lpVindQ,
+    applyLeadFilters(lpYardenQ, filters),
+    applyLeadFilters(lpVindQ, filters),
   ])
 
   let stages: { id: string; name: string; slug: string; color: string; position: number; count: number }[] = []
@@ -88,8 +114,11 @@ export default async function AnalyticsPage({
   let entradas = 0
   let ativos = 0
 
-  if (!propertyId) {
-    // SEM filtro de empreendimento — usa o RPC período-aware
+  // Story 75-270 — a bifurcação passou a ser "tem ALGUM filtro?" (era só
+  // empreendimento): sem filtro, a RPC agregada no banco; com qualquer filtro,
+  // queries diretas agregadas em JS, que é onde os filtros novos se aplicam.
+  if (!filtrado) {
+    // SEM filtro nenhum — usa o RPC período-aware
     const { data: analytics, error: analyticsError } = await supabase.rpc("get_analytics_summary_ranged", {
       p_org_id: appUser.orgId,
       p_since: sinceISO,
@@ -116,15 +145,20 @@ export default async function AnalyticsPage({
     // COM filtro de empreendimento — queries diretas, limitadas ao período
     const [stagesData, leadsForAggData] = await Promise.all([
       supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
-      supabase
-        .from("leads")
-        .select("stage_id, assigned_broker_id, source, lost_reason, broker:users!assigned_broker_id(id, name)")
-        .eq("org_id", appUser.orgId)
-        .eq("segmento", "principal") // Story 75-98
-        .eq("is_active", true)
-        .is("lost_reason", null)
-        .eq("property_interest_id", propertyId)
-        .gte("created_at", sinceISO).lt("created_at", untilISO),
+      // Story 75-270 — colunas de perfil entram no select p/ facetar as opções
+      // dos filtros novos sem query extra; applyLeadFilters substitui o
+      // `.eq("property_interest_id", …)` fixo (que quebraria com propertyId null).
+      applyLeadFilters(
+        supabase
+          .from("leads")
+          .select("stage_id, assigned_broker_id, source, lost_reason, interest_level, finalidade, profissao, renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, tem_pet, cidade_bairro, property_interest_id, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", appUser.orgId)
+          .eq("segmento", "principal") // Story 75-98
+          .eq("is_active", true)
+          .is("lost_reason", null)
+          .gte("created_at", sinceISO).lt("created_at", untilISO),
+        filters
+      ),
     ])
 
     const allLeads = (leadsForAggData.data ?? []) as Array<{
@@ -165,11 +199,13 @@ export default async function AnalyticsPage({
     // Story 75-179: Ativos = criados na janela, ativos e não-perdidos (allLeads já filtra).
     ativos = allLeads.length
     // Entradas = TODOS os criados na janela p/ o empreendimento (inclui perdidos/inativos).
-    const { count: entradasCount } = await supabase
-      .from("leads").select("id", { count: "exact", head: true })
-      .eq("org_id", appUser.orgId).eq("segmento", "principal")
-      .eq("property_interest_id", propertyId)
-      .gte("created_at", sinceISO).lt("created_at", untilISO)
+    const { count: entradasCount } = await applyLeadFilters(
+      supabase
+        .from("leads").select("id", { count: "exact", head: true })
+        .eq("org_id", appUser.orgId).eq("segmento", "principal")
+        .gte("created_at", sinceISO).lt("created_at", untilISO),
+      filters
+    )
     entradas = entradasCount ?? 0
 
     // Motivos de perda por GRUPO — Story 75-266. Mesmo universo do caminho sem
@@ -184,12 +220,14 @@ export default async function AnalyticsPage({
     if (lostGroupsError) {
       console.error("[ANALYTICS] get_lost_reason_groups RPC failed", lostGroupsError)
       // QA-002: RPC ausente/quebrada → KPI pelo caminho antigo (head-count do cru).
-      const { count: lostCount } = await supabase
-        .from("leads").select("id", { count: "exact", head: true })
-        .eq("org_id", appUser.orgId).eq("segmento", "principal")
-        .not("lost_reason", "is", null)
-        .eq("property_interest_id", propertyId)
-        .gte("created_at", sinceISO).lt("created_at", untilISO)
+      const { count: lostCount } = await applyLeadFilters(
+        supabase
+          .from("leads").select("id", { count: "exact", head: true })
+          .eq("org_id", appUser.orgId).eq("segmento", "principal")
+          .not("lost_reason", "is", null)
+          .gte("created_at", sinceISO).lt("created_at", untilISO),
+        filters
+      )
       perdidosFallback = lostCount ?? 0
     }
     const lg = (lostGroupsData ?? null) as { groups?: Record<string, number | string> | null; estruturados?: number | string | null } | null
@@ -198,13 +236,20 @@ export default async function AnalyticsPage({
   }
 
   // "Leads por Empreendimento" — sempre ambos, limitado ao período
-  if (propertyId) {
+  // Story 75-270 — com QUALQUER filtro ativo, recalcula por empreendimento. Os
+  // outros filtros valem; o de empreendimento é excluído de propósito (`except`),
+  // porque o card mostra TODOS os empreendimentos — aplicá-lo zeraria os demais.
+  if (filtrado) {
     const counts = await Promise.all((allProperties ?? []).map(async (p) => {
-      const { count } = await supabase
-        .from("leads").select("id", { count: "exact", head: true })
-        .eq("org_id", appUser.orgId).eq("segmento", "principal").eq("is_active", true).is("lost_reason", null)
-        .eq("property_interest_id", p.id)
-        .gte("created_at", sinceISO).lt("created_at", untilISO)
+      const { count } = await applyLeadFilters(
+        supabase
+          .from("leads").select("id", { count: "exact", head: true })
+          .eq("org_id", appUser.orgId).eq("segmento", "principal").eq("is_active", true).is("lost_reason", null)
+          .eq("property_interest_id", p.id)
+          .gte("created_at", sinceISO).lt("created_at", untilISO),
+        filters,
+        "propertyId"
+      )
       return { id: p.id, name: p.name, count: count ?? 0 }
     }))
     properties = counts
@@ -233,7 +278,8 @@ export default async function AnalyticsPage({
     .eq("segmento", "principal")
     .gte("created_at", sinceISO).lt("created_at", untilISO)
     .limit(5000)
-  if (propertyId) perfilQuery = perfilQuery.eq("property_interest_id", propertyId)
+  // Story 75-270 — o card de perfil respeita todos os filtros ativos.
+  perfilQuery = applyLeadFilters(perfilQuery, filters)
   const { data: perfilRows } = await perfilQuery
   const perfil = aggregatePerfil((perfilRows ?? []) as PerfilRow[])
 
@@ -274,12 +320,12 @@ export default async function AnalyticsPage({
     )
   } else {
     const fechadoStageIds = stages.filter((s) => /fechamento|ganho|fechado/i.test(s.name)).map((s) => s.id)
+    // Story 75-270 — o comparativo do período anterior segue os MESMOS filtros.
     const prevBase = () =>
-      supabase
+      applyLeadFilters(supabase
         .from("leads").select("id", { count: "exact", head: true })
         .eq("org_id", appUser.orgId).eq("segmento", "principal")
-        .eq("property_interest_id", propertyId)
-        .gte("created_at", prevSinceISO).lt("created_at", sinceISO)
+        .gte("created_at", prevSinceISO).lt("created_at", sinceISO), filters)
     const [{ count: pe }, { count: pp }, fechadoRes] = await Promise.all([
       prevBase(),
       prevBase().not("lost_reason", "is", null),

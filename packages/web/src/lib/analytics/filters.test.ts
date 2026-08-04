@@ -12,23 +12,29 @@ import {
   FILTER_SPEC,
   PERFIL_FILTER_KEYS,
   type AnalyticsFilters,
-  type EqQuery,
 } from "./filters"
 
 const BASE = "/dashboard/analytics"
 
 /** Fake de query PostgREST: registra os `.eq()` recebidos. */
-function fakeQuery() {
+interface FakeQuery {
+  calls: Array<[string, string]>
+  ilikes: Array<[string, string]>
+  eq(column: string, value: string): FakeQuery
+  ilike(column: string, value: string): FakeQuery
+}
+
+function fakeQuery(): FakeQuery {
   const calls: Array<[string, string]> = []
   const ilikes: Array<[string, string]> = []
-  const q: EqQuery<typeof q> & { calls: typeof calls; ilikes: typeof ilikes } = {
+  const q: FakeQuery = {
     calls,
     ilikes,
-    eq(column: string, value: string) {
+    eq(column, value) {
       calls.push([column, value])
       return q
     },
-    ilike(column: string, value: string) {
+    ilike(column, value) {
       ilikes.push([column, value])
       return q
     },
@@ -123,7 +129,7 @@ describe("texto livre é case-insensitive — AC11", () => {
   it("curinga do LIKE é escapado — '100%' não vira busca por prefixo", () => {
     const q = fakeQuery()
     applyLeadFilters(q, parseAnalyticsFilters({ profissao: "Sócio 100% MEI_x" }))
-    expect(q.ilikes[0][1]).toBe("Sócio 100\\% MEI\\_x")
+    expect(q.ilikes[0]![1]).toBe("Sócio 100\\% MEI\\_x")
   })
 
   it("dimensão de enum segue com eq (calor, filhos, pet)", () => {
