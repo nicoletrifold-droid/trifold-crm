@@ -253,10 +253,11 @@ fail-open e só de log — anotada para o backlog, não corrigida aqui.
 
 ### Pendências antes de Done
 
-1. **`agent_prompts` em prod** (Item 4 / AC6 da 75-245): o prompt "Agendamento de Visitas"
-   (`ae2255d2…c848`, 2.786 chars) **mascara o do código** — sem editá-lo, o guardrail não vale em
-   runtime. SQL preparado, aguardando o Marcos (escrita em prod muda a conversa do cliente na hora).
-2. **AC7** — validação em prod com um lead real dizendo a hora sem "h".
+1. ~~**`agent_prompts` em prod**~~ ✅ **APLICADO 04/08 17:28Z** com aval do Marcos: 2.786 → 3.756
+   chars, `position('75-268')` = 2847, texto conferido linha a linha. Backup do `content` anterior
+   salvo antes do UPDATE. Runbook idempotente em `docs/runbooks/75-268-agent-prompts-guardrail.sql`.
+2. **AC7** — validação em prod com um lead real dizendo a hora sem "h". **Única pendência para Done**
+   (depende do deploy do PR #354 + lead real).
 
 ## Change Log
 
@@ -290,3 +291,5 @@ nesse contexto escreve com marcador ("15h").
 | data | quem | o que |
 |---|---|---|
 | 2026-08-04 | @qa | Gate CONCERNS 8/10; achou e devolveu o falso-positivo de impedimento; 1559 testes verdes |
+
+| 2026-08-04 | @devops | `agent_prompts` de prod atualizado (guardrail Item 4); branch pushed; **PR #354** aberto |

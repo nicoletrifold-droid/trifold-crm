@@ -5,7 +5,8 @@ readiness: 8/10
 reviewer: "@qa (Quinn)"
 date: 2026-08-04
 branch: feat/75-268-nicole-agendamento-hora-pelada
-commit: pending-push
+commit: 046506b3
+pr: 354
 
 checks:
   code_review: PASS         # opção opt-in preserva os 6 consumidores; helper do gate é puro e exportado; nada de novo I/O
@@ -14,7 +15,7 @@ checks:
   regressions: PASS         # default de parseTimeParts idêntico; 75-162 e 75-245 com teste explícito de preservação
   performance: PASS         # regex local por turno; zero query nova
   security: PASS            # n/a — não toca RLS, auth nem dado de terceiro
-  documentation: CONCERNS   # prompt do CÓDIGO atualizado; o de PROD (agent_prompts) ainda não
+  documentation: PASS       # prompt do código E o de PROD (agent_prompts) atualizados em 04/08 17:28Z
 
 acceptance_criteria_trace:
   AC1: "PASS — parseTimeParts('Umas 14'|'As 10'|'10'|'por volta das 14') resolve só com bareNumberAllowed."
@@ -43,7 +44,8 @@ issues:
   - severity: medium
     category: docs
     description: "agent_prompts 'Agendamento de Visitas' (ae2255d2…c848) em PROD mascara o prompt do código: sem editar o banco, o guardrail do Item 4 não vale em runtime."
-    recommendation: "Aplicar o UPDATE em prod com o Marcos (muda a conversa do cliente na hora). BLOQUEIA o Done."
+    recommendation: "RESOLVIDO 04/08 17:28Z — UPDATE idempotente aplicado com aval do Marcos (2.786 → 3.756 chars, texto conferido). Backup do content anterior no scratchpad da sessão."
+    status: RESOLVIDO
   - severity: low
     category: code
     description: "detectSlotMismatch (75-245) segue sem hora pelada: se a Nicole afirmar 'confirmado para as 14' sem marcador, a guarda não acusa."
@@ -62,8 +64,7 @@ nao_bloqueia_merge:
   - "AC7 é validação de campo — depende de lead real."
 
 bloqueia_done:
-  - "UPDATE do agent_prompts em prod (issue medium/docs)."
-  - "AC7 confirmado em prod."
+  - "AC7 confirmado em prod (único pendente — UPDATE do agent_prompts já aplicado)."
 
 files:
   - packages/ai/src/flows/visit-slot.ts
