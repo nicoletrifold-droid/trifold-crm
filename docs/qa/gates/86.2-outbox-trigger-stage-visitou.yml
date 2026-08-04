@@ -1,7 +1,7 @@
 schema: 1
 story: '86.2'
 gate: PASS
-status_reason: 'Migration 200 estende o trigger 124 com zero regressão (corpo do insert em activities preservado byte-a-byte), enqueue isolado em EXCEPTION, RLS+REVOKE presentes e idempotência garantida. Único gap é o teste runtime dos 3 caminhos (AC6/AC7), delegado ao apply em dev/prod.'
+status_reason: 'Migration 215 estende o trigger 124 com zero regressão (corpo do insert em activities preservado byte-a-byte), enqueue isolado em EXCEPTION, RLS+REVOKE presentes e idempotência garantida. Único gap é o teste runtime dos 3 caminhos (AC6/AC7), delegado ao apply em dev/prod.'
 reviewer: 'Quinn'
 updated: '2026-08-04T15:45:00Z'
 top_issues:

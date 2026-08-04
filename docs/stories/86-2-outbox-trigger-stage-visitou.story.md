@@ -93,7 +93,7 @@ na Story 86-4).
 
 ## Tasks
 
-- [x] **T1 (AC1)** — Criar migration `supabase/migrations/200_meta_capi_outbox.sql`
+- [x] **T1 (AC1)** — Criar migration `supabase/migrations/215_meta_capi_outbox.sql`
   com o `CREATE TABLE meta_capi_outbox` completo (colunas, índice, unique
   constraint) descrito no AC1.
 - [x] **T2 (AC2)** — Na mesma migration: `ALTER TABLE meta_capi_outbox ENABLE
@@ -163,9 +163,14 @@ insert em `activities`. Não é necessário nenhuma policy de INSERT para
 ### Numeração de migration
 Última migration confirmada no repo: `199_seed_campanhas_agente_submodule.sql`
 (Story 75-229, ainda em InReview no momento desta auditoria). Esta story usa
-`200_meta_capi_outbox.sql` — **conferir contra o schema remoto de prod antes
+`215_meta_capi_outbox.sql` — **conferir contra o schema remoto de prod antes
 de aplicar** (lição repetida em várias stories recentes, ex. 75-188, 75-229:
 numeração pode colidir se outra story mergear migrations no meio tempo).
+> **Renumeração 200→215 (2026-08-04):** o número 200 foi atribuído antes de `main`
+> avançar ~50 commits; ao abrir o PR #358, `main` já continha
+> `200_marketing_brand_assets_icone.sql` e migrations até a 214. Renumerado para
+> `215_meta_capi_outbox.sql` (próximo livre) para evitar a colisão. Conferir
+> novamente contra o schema remoto de prod antes do apply.
 
 ### `org_id` na outbox
 O trigger tem acesso a `NEW.org_id` (coluna de `leads`, NOT NULL) — mesma
@@ -197,7 +202,7 @@ necessário buscar `org_id` de outra tabela.
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `supabase/migrations/200_meta_capi_outbox.sql` | criado | `CREATE TABLE meta_capi_outbox` (colunas + índice `(status, created_at)` + `UNIQUE(lead_id, event_name)`), RLS habilitada + `REVOKE ALL FROM authenticated, anon`, e `CREATE OR REPLACE FUNCTION log_lead_stage_change()` estendendo o trigger 124 com o enqueue condicional na outbox (isolado em `BEGIN...EXCEPTION`). |
+| `supabase/migrations/215_meta_capi_outbox.sql` | criado | `CREATE TABLE meta_capi_outbox` (colunas + índice `(status, created_at)` + `UNIQUE(lead_id, event_name)`), RLS habilitada + `REVOKE ALL FROM authenticated, anon`, e `CREATE OR REPLACE FUNCTION log_lead_stage_change()` estendendo o trigger 124 com o enqueue condicional na outbox (isolado em `BEGIN...EXCEPTION`). |
 
 ## Dev Agent Record
 
@@ -273,6 +278,7 @@ meta_capi_outbox
 | 2026-08-04 | 0.1 | Draft criado a partir da auditoria de tracking Meta. Estende trigger 124 sem substituí-lo; outbox pattern com idempotência por lead. | @sm (River) |
 | 2026-08-04 | 0.2 | Validação @po (10-point): GO, 8/10. Draft → Ready. Verificado contra migration 124 real (SECURITY DEFINER ✓, NEW.org_id existe ✓, STAGE_IDS.visitou UUID confere ✓). Migration 200 livre (última é 199). RLS/REVOKE explícito presente (respeita gotcha GRANT ALL default ✓). Fix não bloqueante registrado: reconciliar redação do event_id (AC1 vs AC3). | @po (Pax) |
 | 2026-08-04 | 0.3 | Implementação: criada `200_meta_capi_outbox.sql` (tabela + índice + UNIQUE + RLS/REVOKE + `CREATE OR REPLACE` do trigger 124 com enqueue isolado). Fix @po aplicado (event_id = `visit_<lead_id>_<random_uuid>`, coerência AC1/AC3). Arquivo único (não 200+201). Ready → Review. Apply/testes runtime delegados ao @devops (não aplicado em banco). | @data-engineer (Dara) |
+| 2026-08-04 | 0.4 | Renumeração da migration `200_meta_capi_outbox.sql` → `215_meta_capi_outbox.sql` no PR #358: ao abrir o PR, `main` já continha `200_marketing_brand_assets_icone.sql` e migrations até a 214 (colisão de numeração). `215` é o próximo livre. Conteúdo intacto; conferir contra o schema remoto de prod antes do apply. Migration NÃO aplicada em banco. | @devops (Gage) |
 
 ## QA Results
 

@@ -1,4 +1,4 @@
--- 200_meta_capi_outbox.sql
+-- 215_meta_capi_outbox.sql
 -- Story 86-2 (Epic 86 — Conversions API / rastreamento Meta).
 --
 -- Cria a tabela `meta_capi_outbox` (outbox pattern) e ESTENDE — sem substituir —
