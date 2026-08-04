@@ -6,6 +6,7 @@ import {
   mediaContextLine,
   resolvePropertyInterestWrite,
   detectSlotMismatch,
+  isVisitSchedulingMode,
 } from "./pipeline"
 import { OFF_HOURS_PROMPT } from "../prompts"
 
@@ -282,5 +283,56 @@ describe("detectSlotMismatch (Story 75-245 AC8 — guarda anti-alucinação)", (
         now: NOW,
       })
     ).toBeNull()
+  })
+})
+
+describe("isVisitSchedulingMode (Story 75-268 — o gate que ficou fechado)", () => {
+  // Falas REAIS da Nicole na conversa da Sueli, 03/08/2026.
+  const FALA_SUELI =
+    "Que ótimo! Nosso atendimento é de segunda a sexta das 8h às 18h e sábado das 8h às 12h. Qual o melhor dia e período pra você vir, Sueli?"
+  const FALA_CONVITE =
+    "Que tal agendar uma visita ao decorado? Assim você já conhece o espaço e sai com os números na mão."
+
+  it("🔥 o caso Sueli: sem visit_proposed e sem visit_availability, a fala dela LIGA o modo", () => {
+    // Era exatamente esse turno que caía fora do bloco [SISTEMA] — e a Nicole
+    // improvisou "sexta à tarde seria após as 18h".
+    expect(
+      isVisitSchedulingMode({
+        visitProposed: false,
+        hasVisitAvailability: false,
+        hasPendingSlot: false,
+        lastAssistantMessage: FALA_SUELI,
+      })
+    ).toBe(true)
+  })
+
+  it("convite a conhecer o decorado também liga", () => {
+    expect(isVisitSchedulingMode({ lastAssistantMessage: FALA_CONVITE })).toBe(true)
+    expect(
+      isVisitSchedulingMode({ lastAssistantMessage: "Que dia ficaria melhor pra você — durante a semana ou no sábado de manhã?" })
+    ).toBe(true)
+    expect(
+      isVisitSchedulingMode({ lastAssistantMessage: "Que horas ficam melhor pra você? Atendemos das 8h às 18h nesses dias." })
+    ).toBe(true)
+  })
+
+  it("os sinais antigos continuam ligando (nenhuma regressão da 75-162)", () => {
+    expect(isVisitSchedulingMode({ visitProposed: true })).toBe(true)
+    expect(isVisitSchedulingMode({ hasVisitAvailability: true })).toBe(true)
+  })
+
+  it("pendência de dia/hora liga — ela só existe porque nós perguntamos", () => {
+    expect(isVisitSchedulingMode({ hasPendingSlot: true })).toBe(true)
+  })
+
+  it("conversa que não é de visita segue FORA do modo", () => {
+    expect(
+      isVisitSchedulingMode({ lastAssistantMessage: "O Vind tem 66,91m² de área privativa, com 2 suítes. Você prefere andar mais alto ou mais baixo?" })
+    ).toBe(false)
+    expect(
+      isVisitSchedulingMode({ lastAssistantMessage: "Os valores variam conforme o andar e a posição do apartamento." })
+    ).toBe(false)
+    expect(isVisitSchedulingMode({})).toBe(false)
+    expect(isVisitSchedulingMode({ lastAssistantMessage: null })).toBe(false)
   })
 })
