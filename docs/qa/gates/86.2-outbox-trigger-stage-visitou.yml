@@ -1,0 +1,16 @@
+schema: 1
+story: '86.2'
+gate: PASS
+status_reason: 'Migration 215 estende o trigger 124 com zero regressão (corpo do insert em activities preservado byte-a-byte), enqueue isolado em EXCEPTION, RLS+REVOKE presentes e idempotência garantida. Único gap é o teste runtime dos 3 caminhos (AC6/AC7), delegado ao apply em dev/prod.'
+reviewer: 'Quinn'
+updated: '2026-08-04T15:45:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'AC6/AC7 (teste manual dos 3 caminhos de stage change + idempotência em runtime) não executados — migration não foi aplicada em nenhum banco (fora do escopo do @data-engineer). Cobertos por design (UNIQUE + ON CONFLICT DO NOTHING), mas sem prova runtime.'
+    suggested_action: 'Após apply, rodar o SQL de verificação da seção Testing e mover um lead para visitou via drag-and-drop no kanban dev, confirmando 1 linha pending na outbox e nenhuma duplicação no re-move.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'STAGE_IDS.visitou hardcoded na SQL (risco aceito, mesmo padrão do trigger 124). Uma mudança futura no UUID em stages.ts silenciosamente não atualiza a migration.'
+    suggested_action: 'Manter o comentário-âncora ao stages.ts (já presente). Nenhuma ação imediata.'
+waiver: { active: false }

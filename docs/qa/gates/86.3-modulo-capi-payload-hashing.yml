@@ -1,0 +1,8 @@
+schema: 1
+story: '86.3'
+gate: PASS
+status_reason: 'Módulo CAPI puro com hashing SHA-256 correto (normalização antes do hash), AC5 travado por 2 testes dedicados que provam que fbc/fbp/IP/UA nunca são hasheados e em/ph/fn/ln/external_id nunca vazam PII. metaFetch/META_BASE read-only intactos (v21.0, sem diff). 45 testes verdes.'
+reviewer: 'Quinn'
+updated: '2026-08-04T15:45:00Z'
+top_issues: []
+waiver: { active: false }
