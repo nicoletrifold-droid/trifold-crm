@@ -181,12 +181,45 @@ export async function buildAnalyticsReportData(
     .eq("is_available", true)
   const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
 
+  // ── Story 75-278 — o comparativo tem de vir PAGINADO ─────────────────────
+  //
+  // 🔥 DEFEITO QUE ISTO CONSERTA: esta query busca as DUAS janelas de uma vez
+  // (compPrevStart → aggUntil = o dobro do período) e vivia dentro do Promise.all sem
+  // `.limit()` nem paginação. O PostgREST corta em 1000 linhas em silêncio — e como a
+  // ordem é `created_at` ASCENDENTE, as 1000 linhas eram consumidas INTEIRAMENTE pela
+  // janela anterior: a atual não recebia nenhuma linha. Resultado no PDF de 30 dias:
+  // coluna "Atual" ZERADA em todas as linhas (total, empreendimento, corretor, origem) e
+  // "Anterior" travada em exatamente 1000. Medido em prod (05/08): 1.660 linhas na janela
+  // de 30d e 1.666 na de 90d — os dois presets estouravam. O de 7 dias (193) passava, e é
+  // por isso que o cron semanal nunca mostrou o problema e ninguém tinha visto.
+  //
+  // ⚠️ ORDEM COM DESEMPATE POR `id`: paginar com `.range()` exige ordem determinística, e
+  // `created_at` NÃO é único (importação em lote grava vários leads no mesmo instante).
+  // Sem o desempate, linha pulada ou repetida entre páginas — o mesmo defeito dormente
+  // que o gate da 75-276 pegou hoje na paginação de appointments.
+  function fetchComparativeLeads(): Promise<RawLead[]> {
+    return fetchAllLeads<RawLead>(() =>
+      applyLeadFilters(
+        supabase.from("leads")
+          // Story 75-180: base ENTRADAS — TODAS as entradas da janela (sem filtro
+          // is_active/lost_reason), para o Total bater com o card Entradas.
+          .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId)
+          .eq("segmento", "principal") // Story 75-98
+          .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
+          .order("created_at")
+          .order("id"),
+        filters
+      ) as unknown as RangeableQuery<RawLead>
+    )
+  }
+
   const [
     { data: analytics },
     { data: analyticsPrev },
     { count: lpYardenCount },
     { count: lpVindCount },
-    { data: recentLeadsRaw },
+    recentLeadsRaw,
     { data: propertiesRaw },
     { data: responseLeadsRaw },
   ] = await Promise.all([
@@ -195,17 +228,10 @@ export async function buildAnalyticsReportData(
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: compPrevStart.toISOString(), p_until: compCurrStart.toISOString() }),
     applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"), filters),
     applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"), filters),
-    // Story 75-180: comparativo na base ENTRADAS — TODAS as entradas da janela
-    // (sem filtro is_active/lost_reason), para o Total bater com o card Entradas.
-    applyLeadFilters(
-      supabase.from("leads")
-        .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
-        .eq("org_id", orgId)
-        .eq("segmento", "principal") // Story 75-98
-        .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
-        .order("created_at"),
-      filters
-    ),
+    // Story 75-278 — PAGINADO (ver `fetchComparativeLeads` abaixo). Estava aqui dentro
+    // do Promise.all sem `.limit()` nem paginação, e o teto de 1000 linhas do PostgREST
+    // zerava a coluna "Atual" do comparativo em período de 30 e 90 dias.
+    fetchComparativeLeads(),
     supabase.from("properties").select("id, name").eq("is_active", true),
     // Tempo de atendimento (Story 75-51): leads ATENDIDOS no período. Mede
     // distribuição → atendimento (primeiro_atendimento_em), igual à tela (75-47).
@@ -394,7 +420,8 @@ export async function buildAnalyticsReportData(
   // ── Week-over-week comparison ─────────────────────────────────────────────
   const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
 
-  const allRecent = (recentLeadsRaw ?? []) as RawLead[]
+  // Story 75-278 — já vem tipado e sempre array (fetchAllLeads), sem cast nem fallback.
+  const allRecent = recentLeadsRaw
   const currLeads = allRecent.filter((l) => new Date(l.created_at) >= compCurrStart)
   const prevLeads = allRecent.filter((l) => new Date(l.created_at) < compCurrStart)
 
