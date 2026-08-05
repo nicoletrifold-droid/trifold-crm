@@ -259,7 +259,14 @@ export interface CalendarEventInput {
   description?: string
   startAt: Date
   endAt: Date
-  attendeeEmail?: string
+  /**
+   * Story 75-275 — `attendeeEmail` FOI REMOVIDO daqui de propósito. O calendário é conta
+   * Gmail comum (sem Workspace), logo sem Domain-Wide Delegation, e service account sem
+   * DWD não consegue convidar: o Google devolve 403 e derruba a criação do evento
+   * INTEIRO. Como a função é fail-open, o efeito era um `null` silencioso — visita sem
+   * espelho e ninguém sabendo. Não recolocar.
+   */
+  team?: "house" | "imob" | null
 }
 export type CreateCalendarEvent = (input: CalendarEventInput) => Promise<string | null>
 
@@ -1171,7 +1178,6 @@ export async function processMessageWithMetadata(
             description: `Visita agendada pela Nicole.${leadPhone ? ` Telefone: ${leadPhone}.` : ""}`,
             startAt: scheduledAt,
             endAt,
-            attendeeEmail: clientEmail ?? undefined,
           })
           if (googleEventId) {
             await supabase.from("appointments").update({ google_event_id: googleEventId }).eq("id", createdAppt.id)
@@ -1232,7 +1238,6 @@ export async function processMessageWithMetadata(
               description: `Visita remarcada pela Nicole.${leadPhone ? ` Telefone: ${leadPhone}.` : ""}`,
               startAt: newStart,
               endAt: newEnd,
-              attendeeEmail: (finalData.email as string | undefined) ?? undefined,
             })
             await supabase.from("appointments").update({ google_event_id: googleEventId ?? null }).eq("id", apptToReschedule.id)
           } catch (err) {

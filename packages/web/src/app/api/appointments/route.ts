@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { createCalendarEvent } from "@web/lib/google-calendar"
+import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 import { isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
 
@@ -275,26 +275,17 @@ export async function POST(request: Request) {
     await advanceToVisitaAgendada(supabase, leadId)
   }
 
-  // Create Google Calendar event (fire-and-forget)
-  const googleEventId = await createCalendarEvent({
-    title: `Visita ao decorado${body.client_name ? ` — ${body.client_name}` : ""}`,
-    description: [
-      body.notes ?? "",
-      location ? `Local: ${location}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    startAt: newStart,
-    endAt: newEnd,
-    attendeeEmail: body.client_email?.trim() || undefined,
+  // Story 75-275 — espelho no Google Calendar (a copa lê para preparar café).
+  // Best-effort: o helper nunca lança e registra a falha em metadata.google_sync.
+  const googleEventId = await mirrorCreate(supabase, {
+    id: appointment.id,
+    scheduled_at: appointment.scheduled_at,
+    duration_minutes: appointment.duration_minutes,
+    location,
+    notes: body.notes ?? null,
+    client_name: body.client_name?.trim() || null,
+    team: appointment.team,
   })
-
-  if (googleEventId) {
-    await supabase
-      .from("appointments")
-      .update({ google_event_id: googleEventId })
-      .eq("id", appointment.id)
-  }
 
   // Create activity log
   await supabase.from("activities").insert({

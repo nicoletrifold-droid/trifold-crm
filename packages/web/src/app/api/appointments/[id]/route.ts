@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { buildUpdatePayload } from "@web/lib/api-utils"
-import { deleteCalendarEvent } from "@web/lib/google-calendar"
+import { mirrorDelete, mirrorUpdate } from "@web/lib/appointments/google-mirror"
 import { canMutateAppointment, isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
 
 // Campos cuja alteração exige justificativa (edição de dados do compromisso).
@@ -160,9 +160,26 @@ export async function PATCH(
     )
   }
 
-  // If status changed to cancelled, remove Google Calendar event
-  if (body.status === "cancelled" && existing.google_event_id) {
-    await deleteCalendarEvent(existing.google_event_id)
+  // Story 75-275 — espelho no Google Calendar.
+  //
+  // Cancelou → apaga (comportamento que já existia). Remarcou → **MOVE**, que é a
+  // lacuna que esta story conserta: antes, arrastar a visita de 10h para 15h deixava o
+  // Google marcando 10h, e a copa preparava café na hora errada. `reschedules` é o mesmo
+  // sinal que já dispara a revalidação de conflito acima — se mudou horário/duração/local
+  // para o CRM, mudou para o Google.
+  if (body.status === "cancelled") {
+    await mirrorDelete(supabase, appointment.id, existing.google_event_id)
+  } else if (reschedules) {
+    await mirrorUpdate(supabase, {
+      id: appointment.id,
+      scheduled_at: appointment.scheduled_at,
+      duration_minutes: appointment.duration_minutes,
+      location: appointment.location,
+      notes: appointment.notes,
+      client_name: appointment.client_name,
+      team: appointment.team,
+      google_event_id: existing.google_event_id,
+    })
   }
 
   // Create activity log
@@ -239,10 +256,8 @@ export async function DELETE(
     )
   }
 
-  // Delete Google Calendar event if present
-  if (existing.google_event_id) {
-    await deleteCalendarEvent(existing.google_event_id)
-  }
+  // Story 75-275 — some da agenda do CRM, some do Google.
+  await mirrorDelete(supabase, appointment.id, existing.google_event_id)
 
   // Create activity log
   await supabase.from("activities").insert({
