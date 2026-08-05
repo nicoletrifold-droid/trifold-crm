@@ -112,6 +112,9 @@ export const SUBMODULE_MAP: Record<string, Record<string, string>> = {
   sistema: {
     "sistema.notificacoes-financeiras": "Notificações Financeiras",
   },
+  leads: {
+    "leads.qualificacao": "Qualificação Comercial",
+  },
 }
 
 /**

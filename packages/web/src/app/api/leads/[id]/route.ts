@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 import { isLostReasonGrupo } from "@web/lib/constants"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { canAccess } from "@web/lib/permissions"
 import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
@@ -83,6 +84,9 @@ export async function PATCH(
     "qualification_status",
     "qualification_score",
     "interest_level",
+    // Story 84-1 — Qualificação Comercial: manual, independente de interest_level/
+    // qualification_status/qualification_score (que são recalculados pela Nicole).
+    "qualificacao_comercial",
     "source",
     "assigned_broker_id",
     "ai_summary",
@@ -137,21 +141,37 @@ export async function PATCH(
     return NextResponse.json({ error: "lost_reason_grupo inválido" }, { status: 400 })
   }
 
+  // Story 84-1 — Qualificação Comercial é manual e independente do gate de edição
+  // geral do lead (linha 54 acima): exige a permissão específica `leads.qualificacao`
+  // além de já poder editar o lead.
+  if (
+    fields.qualificacao_comercial !== undefined &&
+    !(await canAccess(appUser.id, appUser.org_id, "leads.qualificacao"))
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
   // Transferência de corretor → o lead volta para "Aguardando atendimento"
   // (STAGE_IDS.novo), independente do estágio anterior. Só aplica se o corretor
   // REALMENTE mudou e o stage não foi definido explicitamente nesta requisição
   // (ex.: arrastar no kanban envia stage_id e não deve ser sobrescrito).
-  // Estado atual do lead — precisa dele para DUAS decisões: transferência de
-  // corretor (abaixo) e carimbo do calor (Story 75-237). Uma leitura só.
+  // Estado atual do lead — precisa dele para TRÊS decisões: transferência de
+  // corretor (abaixo), carimbo do calor (Story 75-237) e old_value do audit da
+  // Qualificação Comercial (Story 84-1). Uma leitura só.
   const precisaEstadoAtual =
     (fields.assigned_broker_id !== undefined && body.stage_id === undefined) ||
-    fields.interest_level !== undefined
-  type LeadEstadoAtual = { assigned_broker_id: string | null; interest_level: string | null }
+    fields.interest_level !== undefined ||
+    fields.qualificacao_comercial !== undefined
+  type LeadEstadoAtual = {
+    assigned_broker_id: string | null
+    interest_level: string | null
+    qualificacao_comercial: string | null
+  }
   let atual: LeadEstadoAtual | null = null
   if (precisaEstadoAtual) {
     const { data: cur } = await supabase
       .from("leads")
-      .select("assigned_broker_id, interest_level")
+      .select("assigned_broker_id, interest_level, qualificacao_comercial")
       .eq("id", id)
       .eq("org_id", appUser.org_id)
       .single()
@@ -213,6 +233,25 @@ export async function PATCH(
     entity_name: (lead.name as string | null) ?? undefined,
     ip_address: getRequestIp(request.headers),
   })
+
+  // Story 84-1 — audit específico da Qualificação Comercial (além do genérico acima),
+  // com old_value/new_value para o histórico de mudanças (84-2).
+  if (fields.qualificacao_comercial !== undefined) {
+    void logAudit({
+      org_id: appUser.org_id,
+      user_id: appUser.id,
+      user_name: appUser.name,
+      action: "lead.qualificacao_comercial_updated",
+      entity_type: "lead",
+      entity_id: id,
+      entity_name: (lead.name as string | null) ?? undefined,
+      metadata: {
+        old_value: atual?.qualificacao_comercial ?? null,
+        new_value: (fields.qualificacao_comercial as string | null) ?? null,
+      },
+      ip_address: getRequestIp(request.headers),
+    })
+  }
 
   return NextResponse.json({ data: lead })
 }

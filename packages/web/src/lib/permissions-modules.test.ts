@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { podeVerMenuConfig } from "./permissions-modules"
+import { podeVerMenuConfig, SUBMODULE_MAP } from "./permissions-modules"
 
 // Story 75-251 — o menu Config aparece por SUB-módulo, sem abrir o pai.
 describe("podeVerMenuConfig", () => {
@@ -32,5 +32,12 @@ describe("podeVerMenuConfig", () => {
     for (const sub of ["configuracoes.corretores", "configuracoes.horario", "configuracoes.clientes"]) {
       expect(podeVerMenuConfig({ configuracoes: false, [sub]: true })).toBe(true)
     }
+  })
+})
+
+// Story 84-1 (Epic 84) — sub-módulo leads.qualificacao (Qualificação Comercial).
+describe("SUBMODULE_MAP.leads", () => {
+  it("tem a entrada leads.qualificacao com o label esperado", () => {
+    expect(SUBMODULE_MAP.leads).toEqual({ "leads.qualificacao": "Qualificação Comercial" })
   })
 })
