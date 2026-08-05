@@ -2,6 +2,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { parseCalor } from "@web/lib/leads/calor"
+import { parseQualificacao } from "@web/lib/leads/qualificacao"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
@@ -39,6 +40,7 @@ type LeadsSearchParams = {
   broker_id?: string
   source?: string
   calor?: string
+  qualificacao?: string
   criados?: string
   date_from?: string
   date_to?: string
@@ -61,6 +63,8 @@ function buildPageHref(targetPage: number, params: LeadsSearchParams, view: stri
   if (params.source) p.set("source", params.source)
   const calorParam = parseCalor(params.calor)
   if (calorParam) p.set("calor", calorParam)
+  const qualificacaoParam = parseQualificacao(params.qualificacao)
+  if (qualificacaoParam) p.set("qualificacao", qualificacaoParam)
   return `?${p.toString()}`
 }
 
@@ -154,6 +158,17 @@ export default async function LeadsPage({
   } else if (calor) {
     query = query.eq("interest_level", calor)
     countQuery = countQuery.eq("interest_level", calor)
+  }
+
+  // Story 84-2 (Epic 84) — Qualificação Comercial (leads.qualificacao_comercial). Mesmo padrão
+  // do Calor acima: whitelist própria, combinável (independente) com o filtro de Calor.
+  const qualificacao = parseQualificacao(params.qualificacao)
+  if (qualificacao === "none") {
+    query = query.is("qualificacao_comercial", null)
+    countQuery = countQuery.is("qualificacao_comercial", null)
+  } else if (qualificacao) {
+    query = query.eq("qualificacao_comercial", qualificacao)
+    countQuery = countQuery.eq("qualificacao_comercial", qualificacao)
   }
 
   if (params.days) {
@@ -297,6 +312,7 @@ export default async function LeadsPage({
             broker_id: params.broker_id,
             source: params.source,
             calor: parseCalor(params.calor) ?? undefined,
+            qualificacao: parseQualificacao(params.qualificacao) ?? undefined,
             days: params.days,
             date_from: params.date_from,
             date_to: params.date_to,
@@ -332,6 +348,8 @@ export default async function LeadsPage({
           sourceParam="source"
           showCalor
           calorParam="calor"
+          showQualificacao
+          qualificacaoParam="qualificacao"
           showDateRange
           dateFromParam="date_from"
           dateToParam="date_to"

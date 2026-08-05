@@ -12,6 +12,8 @@ interface LeadEditData {
   phone: string
   email: string | null
   interest_level: string | null
+  // Story 84-2 (Epic 84) — Qualificação Comercial: manual, independente do calor acima
+  qualificacao_comercial: string | null
   property_interest_id: string | null
   preferred_bedrooms: number | null
   preferred_floor: string | null
@@ -48,6 +50,15 @@ const INTEREST_LEVELS = [
   { value: "hot", label: "Quente" },
 ]
 
+// Story 84-2 (Epic 84) — Qualificação Comercial
+const QUALIFICACAO_COMERCIAL_OPTIONS = [
+  { value: "", label: "Não definido" },
+  { value: "bom", label: "Bom" },
+  { value: "regular", label: "Regular" },
+  { value: "ruim", label: "Ruim" },
+  { value: "invalido", label: "Inválido" },
+]
+
 export function LeadEditForm({ lead, properties }: Props) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -59,6 +70,7 @@ export function LeadEditForm({ lead, properties }: Props) {
   const [email, setEmail] = useState(lead.email ?? "")
   const [propertyId, setPropertyId] = useState(lead.property_interest_id ?? "")
   const [interestLevel, setInterestLevel] = useState(lead.interest_level ?? "")
+  const [qualificacaoComercial, setQualificacaoComercial] = useState(lead.qualificacao_comercial ?? "")
   const [preferredBedrooms, setPreferredBedrooms] = useState(lead.preferred_bedrooms?.toString() ?? "")
   const [preferredFloor, setPreferredFloor] = useState(lead.preferred_floor ?? "")
   const [preferredView, setPreferredView] = useState(lead.preferred_view ?? "")
@@ -85,6 +97,7 @@ export function LeadEditForm({ lead, properties }: Props) {
       email: email.trim() || null,
       property_interest_id: propertyId || null,
       interest_level: interestLevel || null,
+      qualificacao_comercial: qualificacaoComercial || null,
       preferred_bedrooms: preferredBedrooms ? parseInt(preferredBedrooms) : null,
       preferred_floor: preferredFloor.trim() || null,
       preferred_view: preferredView.trim() || null,
@@ -177,6 +190,16 @@ export function LeadEditForm({ lead, properties }: Props) {
           <select value={interestLevel} onChange={e => setInterestLevel(e.target.value)} className={inputClass}>
             {INTEREST_LEVELS.map(l => (
               <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Story 84-2 (Epic 84) — Qualificação Comercial: campo separado do Calor acima */}
+        <div>
+          <label className={labelClass}>Qualificação Comercial</label>
+          <select value={qualificacaoComercial} onChange={e => setQualificacaoComercial(e.target.value)} className={inputClass}>
+            {QUALIFICACAO_COMERCIAL_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>

@@ -9,6 +9,8 @@ import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-mod
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, LOST_REASON_GROUP_LABELS } from "@web/lib/constants"
 import { MarkLostModal } from "@web/components/leads/mark-lost-modal"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { QualificacaoComercialBadge } from "@web/components/ui/qualificacao-comercial-badge"
+import { QualificacaoHistorico } from "@web/components/leads/qualificacao-historico"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
 // Story 75-267 — menu de abertura no drawer: a SDR inicia o atendimento de
 // onde ela navega os leads (Kanban/listas), sem passar pela aba Conversa.
@@ -29,6 +31,8 @@ interface LeadQuickData {
   email: string | null
   qualification_score: number | null
   interest_level: string | null
+  // Story 84-2 (Epic 84) — Qualificação Comercial: aditiva, não substitui os campos acima
+  qualificacao_comercial: string | null
   source: string | null
   channel: string | null
   utm_source: string | null
@@ -324,6 +328,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             email: (raw.email as string | null) ?? null,
             qualification_score: (raw.qualification_score as number | null) ?? null,
             interest_level: (raw.interest_level as string | null) ?? null,
+            qualificacao_comercial: (raw.qualificacao_comercial as string | null) ?? null,
             source: (raw.source as string | null) ?? null,
             channel: (raw.channel as string | null) ?? null,
             utm_source: (raw.utm_source as string | null) ?? null,
@@ -587,6 +592,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   {interestLevelLabels[lead.interest_level] ?? lead.interest_level}
                 </span>
               )}
+              <QualificacaoComercialBadge value={lead.qualificacao_comercial} />
               {lead.source && (
                 <SourceBadge
                   source={lead.source}
@@ -594,6 +600,17 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                 />
               )}
             </div>
+            {/* Story 84-2 (Epic 84) — histórico de mudanças da Qualificação Comercial (mesmo
+                sem valor atual definido, pode ter sido definida e limpa antes). Some
+                silenciosamente se o usuário não tiver leads.qualificacao (403). */}
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-stone-500 hover:text-orange-500 dark:text-stone-400">
+                Histórico da Qualificação
+              </summary>
+              <div className="mt-2">
+                <QualificacaoHistorico leadId={lead.id} />
+              </div>
+            </details>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-600 dark:text-stone-400">
               <span className="font-medium">{lead.phone}</span>
               {lead.email && <span className="truncate">{lead.email}</span>}

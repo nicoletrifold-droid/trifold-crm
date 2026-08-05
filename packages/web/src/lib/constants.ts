@@ -10,6 +10,17 @@ export const INTEREST_LEVEL_COLORS: Record<string, string> = {
   hot: 'bg-red-100 text-red-700',
 };
 
+// Story 84-2 (Epic 84) — Qualificação Comercial: manual, independente da Temperatura acima.
+// Formato de badge (rounded-md + dot, ver QualificacaoComercialBadge) e paleta deliberadamente
+// diferentes de INTEREST_LEVEL_COLORS (rounded-full, azul/amarelo/vermelho) para não confundir
+// os dois campos.
+export const QUALIFICACAO_COMERCIAL_LABELS: Record<string, string> = {
+  bom: 'Bom',
+  regular: 'Regular',
+  ruim: 'Ruim',
+  invalido: 'Inválido',
+};
+
 export const SOURCE_LABELS: Record<string, string> = {
   whatsapp_organic: 'WhatsApp Orgânico',
   whatsapp_click_to_ad: 'WhatsApp Patrocinado (Click-to-Ad)',

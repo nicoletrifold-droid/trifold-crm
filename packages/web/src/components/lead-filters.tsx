@@ -4,6 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { useCallback } from "react"
 
 import { CALOR_LABELS, CALOR_VALUES, parseCalor } from "@web/lib/leads/calor"
+import { QUALIFICACAO_LABELS, QUALIFICACAO_VALUES, parseQualificacao } from "@web/lib/leads/qualificacao"
 
 interface Stage { id: string; name: string; color: string | null }
 interface Property { id: string; name: string }
@@ -22,6 +23,8 @@ interface LeadFiltersProps {
   showAtendimento?: boolean
   /** Story 75-236 — filtro de temperatura (Calor do Lead), opt-in: só a tela de Leads. */
   showCalor?: boolean
+  /** Story 84-2 (Epic 84) — filtro de Qualificação Comercial, opt-in: combinável com showCalor. */
+  showQualificacao?: boolean
   stageParam?: string
   propertyParam?: string
   daysParam?: string
@@ -29,6 +32,7 @@ interface LeadFiltersProps {
   sourceParam?: string
   iaParam?: string
   calorParam?: string
+  qualificacaoParam?: string
   /** Mostra os campos de período de captura (De/Até) — usado na tela de Leads (Story 75-94). */
   showDateRange?: boolean
   dateFromParam?: string
@@ -43,6 +47,7 @@ export function LeadFilters({
   includeUnassigned = false,
   showAtendimento = false,
   showCalor = false,
+  showQualificacao = false,
   stageParam = "stage",
   propertyParam = "property",
   daysParam = "days",
@@ -50,6 +55,7 @@ export function LeadFilters({
   sourceParam = "source",
   iaParam = "ia",
   calorParam = "calor",
+  qualificacaoParam = "qualificacao",
   showDateRange = false,
   dateFromParam = "date_from",
   dateToParam = "date_to",
@@ -67,6 +73,7 @@ export function LeadFilters({
   // Valor fora da whitelist (URL forjada) cai em "Todos" — o select nunca fica
   // em branco mostrando um filtro que o servidor ignorou (QA 75-236).
   const activeCalor = parseCalor(searchParams.get(calorParam)) ?? ""
+  const activeQualificacao = parseQualificacao(searchParams.get(qualificacaoParam)) ?? ""
   const activeDateFrom = searchParams.get(dateFromParam) ?? ""
   const activeDateTo = searchParams.get(dateToParam) ?? ""
 
@@ -84,7 +91,7 @@ export function LeadFilters({
   const selectClass =
     "h-8 rounded-lg border border-gray-300 bg-white px-2.5 py-0 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:focus:border-orange-500 dark:focus:ring-orange-500"
 
-  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeSource || activeIa || activeCalor || activeDateFrom || activeDateTo
+  const hasFilters = activeStage || activeProperty || activeDays || activeBroker || activeSource || activeIa || activeCalor || activeQualificacao || activeDateFrom || activeDateTo
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -125,6 +132,15 @@ export function LeadFilters({
         <select value={activeCalor} onChange={(e) => setParam(calorParam, e.target.value)} className={selectClass}>
           <option value="">Calor: Todos</option>
           {CALOR_VALUES.map((v) => <option key={v} value={v}>{CALOR_LABELS[v]}</option>)}
+        </select>
+      )}
+
+      {/* Qualificação Comercial — Story 84-2 (Epic 84), opt-in, combinável com o Calor acima.
+          Valores espelham o enum qualificacao_comercial; "none" = ainda não avaliado. */}
+      {showQualificacao && (
+        <select value={activeQualificacao} onChange={(e) => setParam(qualificacaoParam, e.target.value)} className={selectClass}>
+          <option value="">Qualificação: Todas</option>
+          {QUALIFICACAO_VALUES.map((v) => <option key={v} value={v}>{QUALIFICACAO_LABELS[v]}</option>)}
         </select>
       )}
 
@@ -184,6 +200,7 @@ export function LeadFilters({
             params.delete(sourceParam)
             params.delete(iaParam)
             params.delete(calorParam)
+            params.delete(qualificacaoParam)
             params.delete(dateFromParam)
             params.delete(dateToParam)
             params.delete("page")
