@@ -1,0 +1,71 @@
+storyId: 75-278
+title: 'PDF: comparativo zerava a coluna "Atual" em 30 e 90 dias'
+verdict: CONCERNS
+reviewedAt: "2026-08-05"
+reviewer: "@qa (Quinn)"
+branch: fix/75-278-pdf-comparativo-paginacao
+
+evidence:
+  tests: "1752 passed (143 arquivos) — nenhum novo (ver QA-001)"
+  typecheck: "packages/web tsc --noEmit → 0 erros"
+  lint: "0 erros, 18 warnings (pré-existentes)"
+  prod_measurement: >
+    Janela do comparativo por preset: 7d=193 linhas (passava), 30d=1.660 e 90d=1.666
+    (estouravam o teto de 1000). Esperado pós-fix, pré-calculado por SQL: TOTAL atual 459 /
+    anterior 1201; Vind 372/290; Yarden 11/55; Sem empreendimento 76/856. O 459 bate com o
+    card de topo, que já estava correto — só a tabela estava quebrada.
+
+issues:
+  - id: QA-001
+    severity: medium
+    category: test-coverage
+    status: ACCEPTED
+    description: >
+      Nenhum teste automatizado cobre a correção. `analytics-report-data.ts` tem ZERO
+      arquivo de teste. Pegar este defeito por teste exigiria um fake do PostgREST com
+      >1000 linhas e cadeia completa (rpc + from().select().eq()...), sem infraestrutura
+      existente — trabalho maior que a própria correção.
+    recommendation: >
+      Aceitar com prova pós-deploy contra a tabela esperada (AC1/AC2), pré-calculada para a
+      conferência ser objetiva em vez de "parece melhor". Dívida registrada em OBS-002.
+    mitigation: "`fetchAllLeads` já é testado (75-269) e a correção delega a ele."
+
+verified_not_broken:
+  - >
+    Ramo COM filtro: `applyLeadFilters` continua aplicado DENTRO da query paginada (o
+    paginador recebe o builder já filtrado), não depois — filtro não é perdido.
+  - >
+    Concorrência preservada: a query saiu do Promise.all para uma função nomeada, mas o
+    Promise.all recebe a promessa dela. Nenhuma chamada passou a ser sequencial.
+  - >
+    Preset de 7 dias (caminho do cron semanal) inalterado: 193 linhas, nunca paginava e
+    continua não paginando.
+  - >
+    Ordem com desempate por `id`: `created_at` não é único (importação em lote), e
+    `.range()` sobre ordem com empate pula/repete linha — mesma lição do gate da 75-276.
+  - >
+    `RawLead` reusado em vez de tipo gêmeo; o import de `fetchAllLeads` já existia no
+    arquivo (da 75-273), então não houve import duplicado.
+
+observations:
+  - id: OBS-001
+    forWhom: Marcos
+    description: >
+      PROVA PENDENTE: baixar de novo o PDF com "Últimos 30 dias" depois do deploy e conferir
+      contra TOTAL atual 459 / anterior 1201. Se a coluna Atual continuar zerada, não pegou.
+  - id: OBS-002
+    forWhom: backlog
+    description: >
+      `analytics-report-data.ts` alimenta o PDF inteiro e o cron semanal e não tem nenhum
+      teste. Este defeito viveu num bloco de DESTAQUE do relatório sem ninguém notar. Um
+      harness mínimo com fake do PostgREST pagaria a si mesmo.
+  - id: OBS-003
+    forWhom: Marcos
+    description: >
+      O cron de domingo NÃO estava quebrado (7d passa longe do teto). A anotação que motivou
+      a investigação apontava para o alvo errado; a medição corrigiu o rumo.
+
+notes: >
+  Dois falsos positivos foram investigados e descartados ANTES de virar código: o Funil (a
+  divergência era da minha medição, que ignorava o filtro is_active/lost_reason da RPC) e a
+  query de tempo de atendimento (limit explícito, mas com folga de 397 contra 1000).
