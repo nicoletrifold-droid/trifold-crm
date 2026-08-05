@@ -4,11 +4,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const createCalendarEvent = vi.fn()
 const updateCalendarEvent = vi.fn()
 const deleteCalendarEvent = vi.fn()
+const isCalendarMirrorEnabled = vi.fn(() => true)
 
 vi.mock("@web/lib/google-calendar", () => ({
   createCalendarEvent: (...a: unknown[]) => createCalendarEvent(...a),
   updateCalendarEvent: (...a: unknown[]) => updateCalendarEvent(...a),
   deleteCalendarEvent: (...a: unknown[]) => deleteCalendarEvent(...a),
+  isCalendarMirrorEnabled: () => isCalendarMirrorEnabled(),
 }))
 
 const { mirrorCreate, mirrorUpdate, mirrorDelete } = await import("./google-mirror")
@@ -49,6 +51,35 @@ beforeEach(() => {
   createCalendarEvent.mockReset()
   updateCalendarEvent.mockReset()
   deleteCalendarEvent.mockReset()
+  isCalendarMirrorEnabled.mockReset()
+  isCalendarMirrorEnabled.mockReturnValue(true)
+})
+
+describe("espelho desligado (kill-switch ou sem credencial)", () => {
+  it("QA-003 — é no-op SILENCIOSO: não chama o Google e NÃO grava falha falsa", async () => {
+    isCalendarMirrorEnabled.mockReturnValue(false)
+    const { client, updates } = fakeDb()
+
+    const id = await mirrorCreate(client, APPT)
+
+    expect(id).toBeNull()
+    expect(createCalendarEvent).not.toHaveBeenCalled()
+    // O que este teste protege: antes da correção, todo appointment criado em dev/preview
+    // (sem credencial) ganhava metadata.google_sync {ok:false} — mentira — mais duas
+    // escritas inúteis no banco por agendamento.
+    expect(updates).toEqual([])
+  })
+
+  it("mirrorUpdate também sai sem tocar em nada", async () => {
+    isCalendarMirrorEnabled.mockReturnValue(false)
+    const { client, updates } = fakeDb()
+
+    await mirrorUpdate(client, { ...APPT, google_event_id: "ev-1" })
+
+    expect(updateCalendarEvent).not.toHaveBeenCalled()
+    expect(createCalendarEvent).not.toHaveBeenCalled()
+    expect(updates).toEqual([])
+  })
 })
 
 describe("mirrorCreate", () => {

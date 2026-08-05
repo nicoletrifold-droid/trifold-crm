@@ -20,6 +20,18 @@ function isConfigured(): boolean {
   return !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID)
 }
 
+/**
+ * O espelho está ativo? (kill-switch ligado E as 3 credenciais presentes.)
+ *
+ * Exposto para o `google-mirror` distinguir "o Google falhou" de "o espelho está
+ * desligado de propósito". Sem isso, todo appointment criado em dev/preview — onde não
+ * há credencial — ganharia um `metadata.google_sync: {ok:false}` mentiroso, além de duas
+ * escritas inúteis no banco por agendamento.
+ */
+export function isCalendarMirrorEnabled(): boolean {
+  return isConfigured()
+}
+
 function base64url(input: string | Buffer): string {
   const buf = typeof input === "string" ? Buffer.from(input, "utf8") : input
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")

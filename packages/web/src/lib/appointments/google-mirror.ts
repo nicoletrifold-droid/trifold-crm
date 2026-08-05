@@ -16,6 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   createCalendarEvent,
   deleteCalendarEvent,
+  isCalendarMirrorEnabled,
   updateCalendarEvent,
 } from "@web/lib/google-calendar"
 
@@ -100,6 +101,11 @@ export async function mirrorCreate(
   appt: MirrorableAppointment,
   opts?: { displayName?: string | null; origin?: string }
 ): Promise<string | null> {
+  // Espelho desligado (kill-switch ou sem credencial) = no-op silencioso. NÃO é falha:
+  // registrar `google_sync: {ok:false}` aqui mentiria, e faria duas escritas por
+  // agendamento em todo ambiente sem credencial (dev, preview).
+  if (!isCalendarMirrorEnabled()) return null
+
   try {
     const { startAt, endAt } = windowOf(appt)
     const eventId = await createCalendarEvent({
@@ -115,9 +121,8 @@ export async function mirrorCreate(
       return eventId
     }
 
-    // `null` aqui é ou integração desligada/sem credencial (esperado, nada a registrar
-    // além do log), ou falha real do Google. Registramos como falha: no caminho
-    // desligado o campo simplesmente diz que não houve espelho, o que é verdade.
+    // Chegou aqui com o espelho ATIVO e `null` = falha real do Google (o caso desligado
+    // saiu no guard acima). Vale registrar.
     await recordSync(supabase, appt.id, { ok: false, action: "create", error: "createCalendarEvent devolveu null" })
     return null
   } catch (err) {
@@ -138,6 +143,8 @@ export async function mirrorUpdate(
   appt: MirrorableAppointment,
   opts?: { displayName?: string | null; origin?: string }
 ): Promise<void> {
+  if (!isCalendarMirrorEnabled()) return
+
   try {
     if (!appt.google_event_id) {
       await mirrorCreate(supabase, appt, opts)

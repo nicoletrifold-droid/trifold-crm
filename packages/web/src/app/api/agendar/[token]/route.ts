@@ -234,7 +234,7 @@ export async function POST(
           : {}),
       },
     })
-    .select("id, scheduled_at, location, cancel_token")
+    .select("id, scheduled_at, duration_minutes, location, cancel_token")
     .single()
   if (apptError || !appointment) {
     return NextResponse.json({ error: "Não foi possível agendar. Tente novamente." }, { status: 500 })
@@ -257,7 +257,7 @@ export async function POST(
     {
       id: appointment.id,
       scheduled_at: appointment.scheduled_at,
-      duration_minutes: 60,
+      duration_minutes: appointment.duration_minutes,
       location: appointment.location,
       notes: null,
       client_name: clientName,

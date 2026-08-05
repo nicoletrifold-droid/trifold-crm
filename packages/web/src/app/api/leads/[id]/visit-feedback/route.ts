@@ -121,7 +121,7 @@ export async function POST(
         created_by: appUser.role === "broker" ? "broker" : "admin",
         notes: "Visita registrada retroativamente (sem agendamento prévio no sistema)",
       })
-      .select("id, lead_id, org_id, property_id, scheduled_at")
+      .select("id, lead_id, org_id, property_id, scheduled_at, duration_minutes")
       .single()
 
     if (apptError || !appointment) {
@@ -140,7 +140,10 @@ export async function POST(
       {
         id: appointment.id,
         scheduled_at: appointment.scheduled_at,
-        duration_minutes: 60,
+        // Do banco, NÃO literal: o insert retroativo não define duração, então vale o
+        // default da coluna (30). Cravar 60 aqui faria o evento no Google durar o dobro
+        // do que o CRM diz — as duas telas contando histórias diferentes.
+        duration_minutes: appointment.duration_minutes,
         location: null,
         notes: "Visita registrada retroativamente (sem agendamento prévio no sistema)",
         client_name: lead.name ?? null,

@@ -1,0 +1,121 @@
+storyId: 75-275
+title: "Espelho da agenda no Google Calendar (HOUSE + IMOB)"
+verdict: PASS
+reviewedAt: "2026-08-05"
+reviewer: "@qa (Quinn)"
+branch: feat/75-275-espelho-google-calendar
+
+evidence:
+  tests: "1752 passed (143 arquivos) — 14 novos em google-mirror.test.ts"
+  typecheck: "packages/web e packages/ai → 0 erros"
+  lint: "0 erros, 18 warnings (todos pré-existentes, arquivos não tocados)"
+  live_smoke: >
+    Antes de escrever código, o fluxo inteiro foi exercitado contra o calendário REAL com a
+    chave da service account: token ok · leitura ok (CRM - VISITAS - NICOLE, fuso
+    America/Sao_Paulo) · create ok · PATCH ok · delete ok. Evento de teste criado e
+    apagado. Isso prova que o Google aceita o `events.patch` que a AC2 depende.
+  env_vars: >
+    3 variáveis recriadas na Vercel (production) e conferidas por `vercel env pull`,
+    comparadas byte a byte com o JSON da service account.
+
+issues:
+  - id: QA-001
+    severity: medium
+    category: correctness
+    status: FIXED
+    description: >
+      A visita RETROATIVA mandava `duration_minutes: 60` cravado para o espelho, mas o
+      insert retroativo não define duração — vale o default da coluna, que é **30**
+      (verificado em information_schema). O evento no Google duraria o DOBRO do que o CRM
+      mostra: as duas telas contando histórias diferentes sobre a mesma visita, que é
+      justamente o tipo de divergência que faz alguém deixar de confiar no espelho.
+      O link da imobiliária tinha o mesmo literal (lá coincidia com o insert, mas era
+      duplicação esperando divergir).
+    recommendation: "Ler `duration_minutes` da linha gravada, nunca cravar."
+    resolution: "Ambas as rotas passaram a selecionar e repassar a duração real."
+
+  - id: QA-002
+    severity: low
+    category: correctness
+    status: FIXED
+    description: >
+      O cancelamento por TOKEN (cliente cancela pelo link do WhatsApp) apagava o evento no
+      Google mas **não limpava** `google_event_id`. Ficava id morto na coluna; uma
+      remarcação posterior tentaria mover um evento inexistente. Auto-curável (o
+      `mirrorUpdate` recria ao ver o patch falhar), mas contradizia a razão de existir do
+      `mirrorDelete` — e era o único dos 4 caminhos de cancelamento fora do helper.
+    recommendation: "Usar `mirrorDelete` como os outros três."
+    resolution: "Rota migrada para o helper."
+
+  - id: QA-003
+    severity: medium
+    category: code
+    status: FIXED
+    description: >
+      Com o espelho DESLIGADO (kill-switch) ou sem credencial — o caso de dev e de todo
+      deploy de preview —, `mirrorCreate` gravava
+      `metadata.google_sync: {ok:false, error:"devolveu null"}`. Mentira: não houve falha,
+      houve ausência deliberada de integração. Além de poluir a metadata de TODO
+      appointment, custava duas escritas extras no banco por agendamento. O rastro de
+      falha (AC7) só tem valor se distinguir "o Google falhou" de "o espelho está
+      desligado" — senão vira ruído e ninguém olha, que é o problema que a AC7 existe
+      para resolver.
+    recommendation: "Expor o estado da integração e sair silenciosamente quando desligada."
+    resolution: >
+      `isCalendarMirrorEnabled()` exportado do lib; guard no início de `mirrorCreate` e
+      `mirrorUpdate`; 2 testes novos cobrindo o no-op silencioso.
+
+verified_not_broken:
+  - >
+    Os 4 pontos de criação de appointment agora espelham (modal interno, link da
+    imobiliária, visita retroativa, Nicole) e os 4 de remoção passam pelo helper (status
+    cancelled, exclusão, cancelamento por token, e a Nicole com seu delete+create).
+  - >
+    `attendeeEmail` não existe mais em NENHUM caminho — o type-check do pacote `ai` é a
+    prova, já que o campo saiu da interface `CalendarEventInput`.
+  - >
+    Merge de jsonb ao registrar falha: teste dedicado garante que `origem`,
+    `imobiliaria_nome` e `corretor_parceiro` (usados na tela pela Story 81-6) sobrevivem.
+    `.update({metadata})` sem merge apagaria isso em silêncio.
+  - >
+    Kill-switch preservado (AC10): `GOOGLE_CALENDAR_DISABLED = true` + redeploy volta tudo
+    a no-op sem tocar em env var. Desligar em incidente é uma linha.
+  - >
+    Credencial com poder mínimo: escreve só no calendário `CRM - VISITAS - NICOLE`. Um
+    delete errado não alcança o Devocional, o Curso da Ysadora nem a agenda da Samara.
+
+observations:
+  - id: OBS-001
+    forWhom: Marcos
+    description: >
+      NÃO testado em produção ainda. O teste que importa depois do deploy: marcar uma
+      visita, **REMARCAR**, e confirmar que o evento ANDOU (não duplicou). Remarcação era
+      a lacuna principal e é a que o café depende.
+  - id: OBS-002
+    forWhom: Marcos
+    description: >
+      O backfill (5 visitas futuras sem espelho — 4 house, 1 imob, de 05/08 a 08/08) NÃO
+      rodou. Falta a chave de service role: vem vazia no `vercel env pull` (é sensitive) e
+      as da Management API não autenticam (legadas desabilitadas; a `sb_secret_*` deu
+      "Invalid API key"). Precisa rodar depois do deploy, senão a copa abre um calendário
+      vazio e conclui que não funciona.
+  - id: OBS-003
+    forWhom: backlog
+    description: >
+      Sem cache de token: cada evento faz 2 idas ao Google (OAuth + operação), e o POST de
+      agendamento espera as duas antes de responder. Comportamento pré-existente, volume
+      atual é ~11 visitas/semana — não justifica mexer agora, mas se a latência do modal
+      incomodar, é aqui.
+  - id: OBS-004
+    forWhom: Marcos
+    description: >
+      Nome do calendário é "CRM - VISITAS - NICOLE", mas ele recebe TODAS as visitas
+      (modal interno, link das imobiliárias, retroativas — não só as da Nicole). Se a copa
+      ler o rótulo ao pé da letra, pode desconsiderar visita que veio por outro caminho.
+      Renomear é no campo Nome, sem efeito no ID nem na integração.
+
+notes: >
+  Este gate valeu 3 defeitos, e os 3 nasceram de medir em vez de assumir: o default da
+  coluna (30, não 60) veio do information_schema; o id morto veio de ler o quarto caminho
+  de cancelamento em vez de supor que os 4 eram iguais; e o registro de falha falsa veio de
+  perguntar o que acontece no ambiente SEM credencial, que é a maioria dos ambientes.
