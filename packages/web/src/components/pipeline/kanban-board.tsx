@@ -74,6 +74,8 @@ export interface PipelineFilters {
   campaign_id: string | null
   score: string | null
   sem_contato?: string | null
+  /** Story 84-6 (Epic 84) — Qualificação Comercial (bom|regular|ruim|invalido|none). */
+  qualificacao?: string | null
 }
 
 interface KanbanBoardProps {
@@ -410,6 +412,7 @@ export function KanbanBoard({
         if (activeFilters?.campaign_id) params.set("campaign_id", activeFilters.campaign_id)
         if (activeFilters?.score) params.set("score", activeFilters.score)
         if (activeFilters?.sem_contato) params.set("sem_contato", activeFilters.sem_contato)
+        if (activeFilters?.qualificacao) params.set("qualificacao", activeFilters.qualificacao)
 
         const res = await fetch(`/api/pipeline/leads?${params.toString()}`)
         if (!res.ok) {
