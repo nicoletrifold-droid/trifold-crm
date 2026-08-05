@@ -1,6 +1,6 @@
 # Story 75-275 — Espelho da agenda no Google Calendar (HOUSE + IMOB)
 
-**Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** M (~5 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done (aguardando push) · **Estimativa:** M (~5 pts)
 
 **CodeRabbit Integration:** Disabled (`coderabbit_integration` ausente do `core-config.yaml`).
 
@@ -170,8 +170,34 @@ código. O recorte dele foi validado por SQL: **5 visitas futuras sem espelho** 
 variáveis na Vercel. Não precisou de `vercel login`: o token já estava válido.
 Resta só o merge + deploy, e depois rodar o backfill. Ver [[project-google-calendar-religar]].
 
+## QA Results
+
+Gate: **PASS** — `docs/qa/gates/75.275-espelho-agenda-google-calendar.yml`
+
+**3 defeitos achados e corrigidos no gate**, todos por medir em vez de assumir:
+
+- **QA-001 (medium) — duração errada.** A visita retroativa mandava `duration_minutes: 60`
+  cravado, mas o insert retroativo não define duração: vale o **default da coluna, que é 30**
+  (lido do `information_schema`). O evento no Google duraria o dobro do que o CRM mostra — as
+  duas telas contando histórias diferentes sobre a mesma visita, que é exatamente o que faz
+  alguém deixar de confiar no espelho. Corrigido nas duas rotas: duração vem da linha gravada.
+- **QA-002 (low) — id morto.** O cancelamento por TOKEN apagava o evento mas não limpava
+  `google_event_id`. Era o único dos 4 caminhos de cancelamento fora do helper. Migrado.
+- **QA-003 (medium) — rastro de falha mentiroso.** Com o espelho desligado ou sem credencial
+  (dev e todo preview), o helper gravava `google_sync: {ok:false, error:"devolveu null"}`. Não
+  houve falha: houve ausência deliberada de integração. O rastro da AC7 só serve se distinguir
+  "o Google falhou" de "está desligado" — senão vira ruído e ninguém olha, que é o problema
+  que a AC7 existe para resolver. Corrigido com `isCalendarMirrorEnabled()` + 2 testes.
+
+**1.752 testes verdes** (14 novos), type-check limpo em `web` **e** `ai`, lint 0 erros.
+
+**Para depois do deploy (OBS):** (1) o teste que importa é **remarcar** e ver o evento ANDAR;
+(2) rodar o **backfill** — 5 visitas futuras sem espelho, senão a copa abre calendário vazio;
+(3) o calendário se chama "CRM - VISITAS - NICOLE" mas recebe visita de todos os caminhos.
+
 ## Change Log
 | Data | Mudança |
 |---|---|
 | 2026-08-05 | Story criada. Inverte a decisão 4 do Epic 81; escopo e opção A decididos pelo Marcos |
 | 2026-08-05 | @dev implementou as 8 tasks. Setup do Google concluído e testado antes do código. 2 defeitos achados por execução real (attendeeEmail sobrevivente na remarcação da Nicole; alias @web/* no backfill) |
+| 2026-08-05 | @qa gate **PASS** com 3 correções (duração do retroativo, id morto no cancelamento por token, falha falsa com espelho desligado). InReview → Done, aguardando push |
