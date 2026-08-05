@@ -1,0 +1,187 @@
+storyId: "75-286"   # renumerado de 75-279 (número tomado em main por outra story enquanto o PR #367 estava aberto)
+title: "Digest do bolsão contava lead 'fantasma' (bolsao_em sujo + com dono) e spammava o gerente"
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-05
+branch: fix/bolsao-digest-lead-fantasma
+commit: ea47d730
+deploy: LIBERADO   # nenhuma ressalva bloqueia o merge — o fix estanca o incidente ativo
+
+resumo: |
+  O fix está correto, é cirúrgico e — o mais importante — o teste de regressão REALMENTE
+  afirma algo: revertendo apenas a linha do fix e mantendo os testes, os 2 casos novos
+  falham pelas razões certas (verificado por este gate, não pelo relatório do @dev).
+  Evidência de produção confirma o diagnóstico com precisão.
+  As ressalvas abaixo são de causa raiz (pré-existente), remediação de dado e documentação.
+
+checks:
+  code_review: PASS         # 1 linha de código (.is("assigned_broker_id", null)) + 8 de comentário; espelha o filtro do painel (75-89)
+  unit_tests: PASS          # 8/8 no arquivo; suíte 1654 testes PASS
+  test_discriminates: PASS  # VERIFICADO por revert — ver secao verificacao_do_teste
+  acceptance_criteria: PASS # o digest deixa de contar lead com dono e continua contando pool real
+  regressions: PASS         # toMove/UPDATE de rebalanceamento intactos; nenhum outro arquivo tocado
+  false_negative: PASS      # lead sem dono continua contando (teste 2) — sem janela de corrida, ver rpc_atomica
+  performance: PASS         # mesmo 1 SELECT, limit 1000, agora mais seletivo (menos linhas trafegadas)
+  security: PASS            # sem mudança de auth (CRON_SECRET intacto), sem PII nova, sem migration
+  next_js_conventions: PASS # ver ponto 5 — nenhuma superfície do Next tocada
+  scope: PASS               # 2 arquivos, mesma pasta; nenhum painel, nenhuma migration, nada em produção
+  documentation: CONCERNS   # story file ausente + imprecisão factual no comentário (ver ressalvas)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. O TESTE REALMENTE FALHA SEM O FIX? (verificação independente — a mais importante)
+# ─────────────────────────────────────────────────────────────────────────────
+verificacao_do_teste:
+  metodo: "route.ts revertido (removida SÓ a linha `.is(\"assigned_broker_id\", null)`), route.test.ts intacto, suíte executada; árvore restaurada e `git diff` confirmado vazio."
+  resultado: FALHA_CONFIRMADA
+  evidencia:
+    - "digest ignora lead 'fantasma' → AssertionError: expected 1 to be +0 (digestCount)"
+    - "digest conta lead do pool real → AssertionError: expected 2 to be 1 (digestCount)"
+    - "Test Files 1 failed | Tests 2 failed | 6 passed (8)"
+  conclusao: "O teste NÃO é decorativo. A correção do mock (`is: (col) => { isNullCols.push(col); ... }` + filtro real em `limit()`) foi o que deu poder de discriminação ao caso."
+  nota_de_precisao: |
+    A afirmação do @dev de que "com o mock antigo o teste passaria mesmo SEM o fix" está
+    invertida: com `is: () => b`, `poolData` voltava sempre inteiro, então o teste do
+    fantasma falharia COM e SEM o fix. O efeito material é o mesmo (mock inútil), e o que
+    importa para o gate — o teste discrimina hoje — está empiricamente comprovado.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. REGRESSÃO NO RESTO DO CRON
+# ─────────────────────────────────────────────────────────────────────────────
+regressao_rebalanceamento:
+  query_de_candidatos: "INTACTA (route.ts:92-103) — é uma query SEPARADA, com .is('bolsao_em', null) + .not('assigned_broker_id','is',null). O fix não a toca."
+  toMove: "INTACTO (route.ts:128-137) — lógica de elapsed/BOLSAO_REBALANCE_MIN inalterada."
+  update_rebalanceamento: "INTACTO (route.ts:139-154) — update + insert de activities inalterados."
+  discriminacao_no_mock: "isPool = cols.includes('bolsao_em') && !cols.includes('assigned_broker_id') → a query de candidatos (select 'id, name, assigned_broker_id, distribuido_em') cai em leadsData; só a do pool é filtrada. `isNullCols` tem escopo por chamada de from(), sem vazamento entre queries."
+  testes_de_guarda: "os 3 testes de rebalanceamento (move >=15, não move <15, gate enabled=false) seguem verdes."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. FALSO NEGATIVO (o digest deixaria de avisar sobre lead legítimo?)
+# ─────────────────────────────────────────────────────────────────────────────
+falso_negativo:
+  coberto_por_teste: "sim — 'digest conta lead do pool real': 2 linhas no pool (1 sem dono, 1 fantasma) → digestCount 1, digestSent true, 1 fetch, push chamado."
+  rpc_atomica: |
+    Não há janela de corrida: `pegar_lead_bolsao` (migration 185, versão vigente) faz
+    `SET assigned_broker_id = p_broker_user_id, bolsao_em = NULL` no MESMO UPDATE, com guard
+    `WHERE bolsao_em IS NOT NULL AND assigned_broker_id IS NULL`. Não existe estado
+    intermediário em que um lead legítimo do pool apareça com dono.
+  conclusao: "O filtro é exatamente o do painel. Se some do digest, sumiu do painel também — consistência total entre os 5 leitores."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. OS OUTROS LEITORES DE bolsao_em
+# ─────────────────────────────────────────────────────────────────────────────
+leitores_bolsao_em:
+  ja_corrigidos_na_75_89:
+    - "dashboard/bolsao/page.tsx:38 → .is('assigned_broker_id', null) ✓"
+    - "broker/bolsao/page.tsx:31 → .is('assigned_broker_id', null) ✓"
+    - "dashboard/layout.tsx:219 → .is('assigned_broker_id', null) ✓"
+    - "broker/layout.tsx:94 → .is('assigned_broker_id', null) ✓"
+  sobrevivente: "api/cron/bolsao-rebalance/route.ts (digest) — corrigido aqui. Os 5 leitores estão agora consistentes."
+  sla_alerts_confirmado: |
+    CONFIRMADA a afirmação mais frágil do relatório do @dev. `sla-alerts/route.ts:165` usa
+    `.or("assigned_broker_id.not.is.null,bolsao_em.not.is.null")`: o fantasma entra pelo ramo
+    `assigned_broker_id.not.is.null` e é tratado como lead COM dono — que é o comportamento
+    correto, pois ele de fato tem dono e o SLA do corretor deve valer. Camada extra de
+    proteção: a mesma query tem `.is("primeiro_atendimento_em", null)`, então o lead do
+    incidente (atendido) já estava fora dela. sla-alerts não é afetado nem foi tocado.
+  outros_consumidores_nao_afetados:
+    - "roleta-retry/route.ts:52 → .is('bolsao_em', null) — exclui o pool de propósito, sem relação com o digest."
+    - "distributor.ts:100 → bail 'em_bolsao'; leads/bulk:62 e reativar:150/222 limpam o carimbo."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. CONVENÇÕES DO PROJETO (packages/web/AGENTS.md — Next 16.2.2)
+# ─────────────────────────────────────────────────────────────────────────────
+next_js:
+  leitura_do_lead_confirmada: true
+  justificativa: |
+    CONFIRMO a leitura: a mudança não toca nenhuma API do Next. É um método do query builder
+    do supabase-js (`.is()`) acrescentado a uma cadeia existente, dentro de um
+    `export async function GET(request: NextRequest)` que já existia. Não há `params`,
+    `cookies()`, `headers()`, `searchParams`, `route segment config` nem mudança de assinatura.
+    O `new URL(request.url)` do dry-run é API web padrão e é pré-existente.
+    Não havia necessidade de consultar `node_modules/next/dist/docs/` para esta mudança.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. ESCOPO
+# ─────────────────────────────────────────────────────────────────────────────
+escopo:
+  commits_na_branch: 1
+  diff: "2 arquivos, +51 / -2 — route.ts (+9: 1 de código, 8 de comentário) e route.test.ts"
+  sem_refatoracao: "confirmado — nenhuma linha pré-existente do cron reescrita"
+  paineis_intocados: "confirmado — nenhum arquivo de página/layout no diff"
+  producao: "confirmado — nenhuma migration, nenhum script, nenhuma escrita. Este gate só executou SELECT read-only."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVIDÊNCIA DE PRODUÇÃO (SELECT read-only, Supabase dsopqkqjkmhytudaaolv)
+# ─────────────────────────────────────────────────────────────────────────────
+evidencia_producao:
+  contagem: "leads is_active=true AND bolsao_em IS NOT NULL → pool_real: 0 | fantasmas: 1 | total: 1"
+  lead: "id 299b4e7b… | bolsao_em 2026-08-05 15:45:22Z | primeiro_atendimento_em 2026-08-05 15:46:53Z | delta 00:01:31 | dono 34260eb8…"
+  leitura: |
+    Reproduz o incidente com exatidão: painel mostrava 0 (pool_real=0) enquanto o digest
+    contava 1 (total_carimbados=1) → "Há 1 lead(s) parado(s) no bolsão" a cada 30min
+    (cron */5min + anti-flood de 30min = 6 avisos em 3h, exatamente o relatado).
+  efeito_do_fix: "com o filtro novo, digestCount cai para 0 → o spam cessa no primeiro ciclo pós-deploy."
+
+build:
+  tests: "vitest — 1654 testes PASS; 138/143 arquivos. 5 arquivos falham no IMPORT (sharp/satori/pdf-lib ausentes no ambiente local): marketing/arte-{cta,faixa,gen,logo} e pastas/termo/fill. Nenhum relacionado ao bolsão."
+  eslint: "0 erros nos 2 arquivos alterados (npx eslint, exit 0)"
+  tsc: "13 erros, TODOS pré-existentes e por módulo ausente no ambiente (react-email-editor, sharp, satori, pdf-lib) + 2 implicit-any consequentes. Nenhum em api/cron/bolsao-rebalance. Bate com o relatado pelo @dev."
+  lint_root: "`npm run lint` na raiz falha em @trifold/shared por 'Cannot find type definition file for node' — ambiente (deps não instaladas), não relacionado ao fix."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RESSALVAS (não bloqueiam o deploy — exigem follow-up)
+# ─────────────────────────────────────────────────────────────────────────────
+ressalvas:
+  - id: C1
+    severidade: MEDIA
+    titulo: "Causa raiz na ESCRITA continua aberta — novos fantasmas seguem sendo gerados"
+    detalhe: |
+      Verificado: `/assign` (route.ts:46), `/handoff` (route.ts:72) e `/transferir` (route.ts:83)
+      fazem `.update({ assigned_broker_id: ... })` SEM limpar `bolsao_em`. O fix na LEITURA é a
+      escolha defensiva certa (protege independentemente do caminho), mas o carimbo sujo tem uma
+      consequência que a leitura NÃO cobre:
+        Lead cai no bolsão → gestor usa /assign em vez de o corretor puxar → bolsao_em fica sujo
+        → corretor não atende → o cron bolsao-rebalance NÃO o resgata, porque a query de
+        candidatos exige `.is("bolsao_em", null)` (route.ts:100). O lead perde a rede de
+        segurança do bolsão. Cobertura parcial resta pelo sla-alerts (10min/60min).
+      Pré-existente, fora do escopo declarado do commit, e não mencionado na mensagem de commit.
+    acao: "Story de follow-up: limpar `bolsao_em: null` no UPDATE de /assign, /handoff e /transferir (é o único write path que ainda produz sujeira; roleta e RPC já têm guard)."
+
+  - id: C2
+    severidade: BAIXA
+    titulo: "Dado sujo remanescente em produção não remediado"
+    detalhe: "1 lead (299b4e7b…) segue com bolsao_em preenchido e dono. Inofensivo após o fix (não conta no digest nem aparece no painel) e já atendido, portanto também fora da query de candidatos. Fica só como resíduo."
+    acao: "Opcional, junto de C1: `UPDATE leads SET bolsao_em = NULL WHERE is_active AND bolsao_em IS NOT NULL AND assigned_broker_id IS NOT NULL;` — via @devops/@data-engineer, nunca ad-hoc."
+
+  - id: C3
+    severidade: BAIXA
+    titulo: "Imprecisão factual no comentário do código e na mensagem de commit"
+    detalhe: |
+      O comentário em route.ts:162-163 lista "roleta" entre os caminhos que sujam o carimbo.
+      A roleta NÃO gera fantasma — há guard duplo:
+        - distributor.ts:100 → `if (lead.bolsao_em) return { status: "em_bolsao" }`
+        - RPC roleta_pick_and_advance → `UPDATE leads SET assigned_broker_id = v_user_id
+          WHERE ... AND bolsao_em IS NULL`
+      O comentário existe justamente para guiar quem for atacar a causa raiz (C1); manter
+      "roleta" na lista faz um dev futuro caçar bug onde não há.
+    acao: "Remover 'roleta' da lista no comentário (route.ts:163). Uma palavra."
+
+  - id: C4
+    severidade: BAIXA
+    titulo: "Story file ausente — quebra a convenção do projeto"
+    detalhe: "O commit referencia [Story 75-286], mas não existe `docs/stories/75-286-*.story.md`. Todas as vizinhas (75-270 a 75-285) têm arquivo."
+    acao: "@sm criar `docs/stories/75-286-bolsao-digest-lead-fantasma.story.md` retroativamente, com AC e o registro do incidente de 05/08."
+
+observacoes_menores:
+  - "O mock filtra com `l.assigned_broker_id == null` (loose). Os 2 testes pré-existentes usam fixtures SEM a propriedade (undefined), e passam por causa disso. Trocar para `=== null` quebraria 2 testes verdes — deixar comentado ou normalizar as fixtures para `assigned_broker_id: null`."
+  - "O mock só simula filtro na query do pool; a query de candidatos volta `leadsData` cru. Não é regressão (era assim antes), mas os filtros da query de candidatos não têm cobertura de teste."
+
+verificacao_manual_pos_deploy:
+  - "Após o deploy, aguardar 2 ciclos do cron (10min) e confirmar que o gerente comercial NÃO recebe mais o aviso 'Há 1 lead(s) parado(s) no bolsão'."
+  - "Confirmar no log/summary do cron que digestCount = 0 para a org."
+  - "Colocar 1 lead real no bolsão (sem dono) e confirmar que o aviso VOLTA a disparar — prova de que o fix não silenciou o alerta legítimo."
+
+files:
+  - packages/web/src/app/api/cron/bolsao-rebalance/route.ts
+  - packages/web/src/app/api/cron/bolsao-rebalance/route.test.ts
