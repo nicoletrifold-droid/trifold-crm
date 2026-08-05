@@ -443,3 +443,41 @@ mascarado · nenhuma referência técnica inventada.
 ### Gate Status
 
 Gate: FAIL → docs/qa/gates/84.2-qualificacao-lead-ui.yml
+
+---
+
+### Re-review Date: 2026-08-05
+
+### Reviewed By: Quinn (Test Architect) — @qa
+
+**Veredito: PASS.**
+
+**7 checks:** code_review PASS · unit_tests PASS (1676/1676, confirmado de forma independente,
++1 do teste TEST-002) · acceptance_criteria PASS · regressions PASS · performance PASS ·
+**security PASS (SEC-001 corrigido)** · documentation PASS.
+
+**Verificação do fix (commit `e71ff435`):** reli `route.ts` linha a linha — o `SELECT` de
+ownership (`supabase.from("leads").select("id").eq("id", id).eq("org_id", appUser.org_id).single()`)
+roda **antes** de `createAdminClient()`, usando o client RLS-scoped (`supabase`, retornado por
+`requireAuth()`), não o admin — exatamente a correção sugerida. `single()` do supabase-js
+devolve `{data: null, error: {...}}` (não lança) quando a política `leads_select` filtra a
+linha, e o código só olha `data`, então o `if (!leadCheck) → 404` cobre corretamente tanto
+"lead não existe" quanto "RLS bloqueou" sem distinguir os dois (comportamento correto — não
+vaza a diferença entre "não existe" e "existe mas não é seu"). Admin/supervisor continuam
+vendo qualquer lead da org (a mesma política `leads_select` libera geral para eles via
+`is_admin_or_supervisor()`), então não há regressão de acesso para esses roles.
+
+**Teste TEST-002 confirmado independentemente:** rodei
+`vitest run ".../qualificacao-historico/route.test.ts"` isoladamente — 3/3 verdes, incluindo o
+cenário novo (`leadVisibleToUser = false` → 404, `adminClientCalls` permanece 0, confirmando que
+`audit_logs` nunca é tocado quando o RLS bloqueia).
+
+**Achado anterior TEST-002:** resolvido — teste adicionado e verificado.
+
+**Nenhum achado novo.** Os destaques positivos da revisão anterior continuam válidos (distinção
+visual, badge aditivo, fix do hidden-input do filtro, transparência sobre o gap de teste de
+componente React).
+
+### Gate Status (atualizado)
+
+Gate: PASS → docs/qa/gates/84.2-qualificacao-lead-ui.yml

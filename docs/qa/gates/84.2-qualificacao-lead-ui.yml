@@ -1,16 +1,16 @@
 schema: 1
 story: '84.2'
-gate: FAIL
-status_reason: 'Rota GET /api/leads/[id]/qualificacao-historico usa admin client (bypassa RLS) e só checa a permissão de módulo leads.qualificacao, sem checar se o usuário pode ver ESTE lead — um corretor consegue, via chamada direta à API, ler o histórico de qualificação de leads atribuídos a OUTROS corretores, o que a política RLS leads_select bloqueia para a leitura normal do lead (GET /api/leads/[id]).'
+gate: PASS
+status_reason: 'SEC-001 corrigido (commit e71ff435): a rota de histórico agora confirma ownership do lead via SELECT no client RLS-scoped (mesma política leads_select do GET base) antes de usar o admin client; 404 se o RLS bloquear. Teste TEST-002 adicionado e verificado (3/3 verdes). Nenhum achado novo na re-revisão.'
 reviewer: 'Quinn'
-updated: '2026-08-05T00:25:00Z'
-top_issues:
-  - id: 'SEC-001'
-    severity: high
-    finding: 'GET /api/leads/[id]/qualificacao-historico (route.ts) checa apenas canAccess(appUser.id, appUser.org_id, "leads.qualificacao") — uma permissão de MÓDULO, não de LEAD específico — antes de usar createAdminClient() (que bypassa toda RLS). A política "leads_select" (004_rls_policies.sql:104-112) restringe corretores a ver apenas leads com assigned_broker_id = eles mesmos (ou null); admin/supervisor veem tudo. Como o role broker já tem leads:true (047_roles_permissions.sql:239) e a Story 84-1 optou por NÃO seedar override para leads.qualificacao (herda de leads), TODO corretor tem leads.qualificacao=true por herança. Resultado: um corretor autenticado pode fazer GET direto em /api/leads/{id-de-lead-de-outro-corretor}/qualificacao-historico e receber 200 com nomes de quem alterou e valores antigo/novo — dado que ele não conseguiria ver nem entrando na ficha desse lead (GET /api/leads/[id] devolve 404 por RLS). A UI normal não expõe esse caminho (o drawer só chama a rota depois de já ter carregado o lead pela rota RLS-scoped), mas a API em si não se protege de uma chamada direta.'
-    suggested_action: 'Antes de consultar audit_logs com o admin client, confirmar que o usuário pode ver ESTE lead: fazer um SELECT do lead pelo client RLS-scoped do usuário (auth.supabase, não o admin) — ex. `.from("leads").select("id").eq("id", id).single()` — e devolver 404 se vier vazio/erro (mesmo comportamento do GET base), ANTES de cair para o admin client. Isso reaproveita a política leads_select já existente como fonte de verdade, sem duplicar a lógica de assigned_broker_id em código.'
-  - id: 'TEST-002'
-    severity: medium
-    finding: 'Nenhum teste (dos 2 novos da rota) cobre o cenário de SEC-001 — os testes existentes mockam canAccess=true e nunca testam se um corretor sem relação com o lead consegue ou não ler o histórico.'
-    suggested_action: 'Depois do fix de SEC-001, adicionar um teste que confirma 404 quando o SELECT do lead (client RLS-scoped) não retorna nada — cenário "corretor tentando ver histórico de lead de outro corretor".'
+updated: '2026-08-05T01:10:00Z'
+top_issues: []
 waiver: { active: false }
+
+history:
+  - reviewed: '2026-08-05T00:25:00Z'
+    gate: FAIL
+    reason: 'SEC-001 (high) — corretor conseguia ler histórico de leads de outros corretores via chamada direta à rota (admin client sem checar ownership do lead).'
+  - reviewed: '2026-08-05T01:10:00Z'
+    gate: PASS
+    reason: 'SEC-001 corrigido e verificado; TEST-002 adicionado.'
