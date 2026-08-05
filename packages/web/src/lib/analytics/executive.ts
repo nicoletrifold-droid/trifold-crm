@@ -233,22 +233,37 @@ export function buildHeatmap(rows: { created_at: string }[]): HeatmapData {
 
 // ── Aproveitamento (desfecho) por origem / corretor ──────────────────────────
 
-export type Outcome = "fechado" | "perdido" | "ativo" | "outro"
+export type Outcome = "visita" | "perdido" | "ativo" | "outro"
 
 export interface OutcomeLead {
-  stage_id: string | null
+  id: string
   lost_reason: string | null
   is_active: boolean | null
 }
 
 /**
  * Desfecho do lead, alinhado às definições dos cards de topo (Story 75-178/179):
- * fechado = etapa de fechamento; perdido = lost_reason preenchido (card Perdidos);
+ * perdido = lost_reason preenchido (card Perdidos); visita = tem visita registrada;
  * ativo = is_active sem lost_reason (card Ativos); outro = inativo sem motivo.
+ *
+ * Story 75-276 — a faixa "fechado" (etapa de fechamento) virou "visita": Fechados
+ * media 0% em TODA linha (zero fechamentos em 7d e 30d na medição de 05/08), e visita
+ * é o desfecho que se cobra de origem e de corretor.
+ *
+ * A visita vem de `appointments` (o lead TEM registro), nunca da ETAPA ATUAL: etapa é
+ * foto, não histórico — quem visitou e avançou para Proposta, ou visitou e foi perdido,
+ * sairia da conta e a origem pareceria pior do que foi (medido: etapa atual descarta
+ * mais da metade do sinal em 30d).
+ *
+ * Ordem da cascata carrega duas decisões medidas em prod:
+ * - `perdido` ANTES de `visita` (decisão do Marcos): quem visitou e depois foi perdido
+ *   fica em Perdidos, para a barra vermelha não mudar de sentido.
+ * - `visita` ANTES de `outro`: não-lead/cliente com visita conta como visita (0 casos
+ *   em 90d, mas a ordem decide — então está escolhido, não sorteado).
  */
-export function classifyOutcome(lead: OutcomeLead, fechadoStageIds: Set<string>): Outcome {
-  if (lead.stage_id && fechadoStageIds.has(lead.stage_id)) return "fechado"
+export function classifyOutcome(lead: OutcomeLead, visitLeadIds: Set<string>): Outcome {
   if (lead.lost_reason) return "perdido"
+  if (visitLeadIds.has(lead.id)) return "visita"
   if (lead.is_active) return "ativo"
   return "outro"
 }
@@ -257,7 +272,7 @@ export interface OutcomeRow {
   key: string
   label: string
   total: number
-  fechados: number
+  visitas: number
   ativos: number
   perdidos: number
   outros: number
@@ -266,7 +281,7 @@ export interface OutcomeRow {
 /** Agrega desfechos por uma chave (origem, corretor…). Linhas sem chave são ignoradas. */
 export function buildOutcomeRows<T extends OutcomeLead>(
   rows: T[],
-  fechadoStageIds: Set<string>,
+  visitLeadIds: Set<string>,
   keyOf: (row: T) => string | null,
   labelOf: (key: string) => string
 ): OutcomeRow[] {
@@ -276,12 +291,12 @@ export function buildOutcomeRows<T extends OutcomeLead>(
     if (!key) continue
     let entry = map.get(key)
     if (!entry) {
-      entry = { key, label: labelOf(key), total: 0, fechados: 0, ativos: 0, perdidos: 0, outros: 0 }
+      entry = { key, label: labelOf(key), total: 0, visitas: 0, ativos: 0, perdidos: 0, outros: 0 }
       map.set(key, entry)
     }
     entry.total++
-    const outcome = classifyOutcome(r, fechadoStageIds)
-    if (outcome === "fechado") entry.fechados++
+    const outcome = classifyOutcome(r, visitLeadIds)
+    if (outcome === "visita") entry.visitas++
     else if (outcome === "perdido") entry.perdidos++
     else if (outcome === "ativo") entry.ativos++
     else entry.outros++
