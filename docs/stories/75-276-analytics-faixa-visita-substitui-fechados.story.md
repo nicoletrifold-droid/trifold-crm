@@ -1,6 +1,6 @@
 # Story 75-276 — Aproveitamento: faixa "Agendou/fez visita" substitui "Fechados"
 
-**Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** S (~3 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done (aguardando push) · **Estimativa:** S (~3 pts)
 
 **CodeRabbit Integration:** Disabled (`coderabbit_integration` ausente do `core-config.yaml`) —
 revisão manual no gate do @qa.
@@ -216,9 +216,36 @@ Vind que visitou o Yarden chegou à visita do mesmo jeito. Filtrar subtrairia vi
 | `app/api/analytics/executive/route.ts` | `id` no LeadRow/select; saem `fechadoStageIds` **e** a query `kanban_stages`; entra busca paginada de `appointments` |
 | `components/analytics/executive-charts.tsx` | rótulo da faixa, chave de cor e tipo da paleta |
 
+## QA Results
+
+Gate: **PASS** — `docs/qa/gates/75.276-analytics-faixa-visita-substitui-fechados.yml`
+
+**QA-001 (medium) — CORRIGIDO no gate.** A busca paginada de `appointments` ordenava por
+`lead_id`, que **não é único**: medido em prod, 8 leads têm 2+ visitas e um tem 5. O
+`fetchAllLeads` pagina com `.range()`, e ordem com empate não é determinística entre páginas —
+linha pulada ou repetida. O efeito seria um lead COM visita classificado como "em atendimento":
+número silenciosamente errado na tela, a classe de defeito que este projeto já pagou caro.
+Estava **dormente** (59 linhas, nunca pagina) e acordaria sozinho com o crescimento, sem
+ninguém tocar no código. Corrigido para `.order("id")` (a PK), com comentário do porquê.
+
+**QA-002 (low) — ACEITO.** O AC5 pedia lote por `lead_id`; o @dev entregou conjunto inteiro
+paginado. Desvio medido e documentado; o que o AC protege (nenhum lead perde visita por corte do
+PostgREST) está atendido por paginação real.
+
+**Conferido que NÃO quebrou:** RLS de `appointments` é org-scoped (a query sem filtro de data
+não amplia exposição para nenhum dos 4 perfis) · o card de topo de Fechamento/conversão tem o
+próprio `fechadoStageIds` e segue intacto — a noção de "fechou" não sai da tela · PDF não
+consome esses cards · `stagesData`/`stage_id` ficaram sem consumidor, confirmado por type-check.
+
+1.738 testes verdes, type-check do `web` limpo, lint 0 erros.
+
+**Para os olhos do Marcos:** OBS-001 (14 de 42 visitas viraram Perdido — um terço) e o render
+da legenda, que ganhou rótulo mais largo.
+
 ## Change Log
 | Data | Mudança |
 |---|---|
 | 2026-08-05 | Story criada do pedido do Marcos. Medição em prod trocou a implementação (etapa → `appointments`); decisão "perdido manda" tomada por ele |
 | 2026-08-05 | @po validou: **GO**, 9/10. Draft → **Ready**. Dois furos fechados com medição em prod (AC3 ganhou a ressalva de `fechado`+`lost_reason`; **AC9 novo** para o cinza com visita, que a cascata decidia sem ninguém ter escolhido). Somadas Tasks/Subtasks (a troca de tipo quebra o build dos consumidores — a ordem é o que mantém o type-check útil) e confirmada a contenção da chave de paleta |
 | 2026-08-05 | @dev implementou na branch `feat/75-276-analytics-faixa-visita`. Desvio no T3 (conjunto paginado em vez de lotes de `lead_id`) medido e justificado; `kanban_stages` saiu do Promise.all. 1.738 testes verdes, type-check do `web` limpo, lint 0 erros. Validado com prod real (90d): Perdidos idêntico (998=998), 0 barras fora de 100%. **OBS-001 para o Marcos: 14 de 42 visitas viraram Perdido.** Ready → InReview |
+| 2026-08-05 | @qa gate **PASS**. QA-001 (ordem de paginação por coluna não-única) achado e corrigido; QA-002 aceito. InReview → Done, aguardando push do @devops |

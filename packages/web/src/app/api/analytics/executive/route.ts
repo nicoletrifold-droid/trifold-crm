@@ -113,7 +113,13 @@ export async function GET(request: NextRequest) {
         .eq("org_id", appUser.org_id)
         .eq("team", "house") // agenda IMOB fora do analytics principal (Epic 81)
         .not("lead_id", "is", null)
-        .order("lead_id", { ascending: true }) as unknown as RangeableQuery<{ lead_id: string | null }>
+        // Ordena pela PK, NÃO por lead_id: `fetchAllLeads` pagina com `.range()`, e
+        // ordem com empate não é determinística entre páginas — linha pulada ou
+        // repetida. `lead_id` repete (8 leads têm 2+ visitas, um tem 5); `id` é único.
+        // Hoje a tabela tem 59 linhas e nunca pagina, mas o dia em que paginar o erro
+        // seria um número silenciosamente errado na tela — que é exatamente o defeito
+        // que este projeto já pagou caro algumas vezes.
+        .order("id", { ascending: true }) as unknown as RangeableQuery<{ lead_id: string | null }>
 
     const [leads, prevLeads, { data: activeBrokersData }, apptsRes, visitRows] = await Promise.all([
       fetchLeads(from, to, "id, created_at, source, lost_reason, is_active, assigned_broker_id"),
