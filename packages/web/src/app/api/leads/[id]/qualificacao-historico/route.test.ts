@@ -1,18 +1,36 @@
 /**
  * Story 84-2 (Epic 84) — GET /api/leads/[id]/qualificacao-historico. Cobre: 403 sem
- * `leads.qualificacao`; 200 com a lista mapeada de `audit_logs` (via admin client, não o
- * client RLS-scoped — `audit_logs` restringe SELECT a role='admin', ver 059_audit_logs.sql).
+ * `leads.qualificacao`; 404 quando o lead não é visível pelo client RLS-scoped do usuário
+ * (SEC-001 — corretor sem relação com o lead, sem tocar o admin client); 200 com a lista
+ * mapeada de `audit_logs` (via admin client, não o client RLS-scoped — `audit_logs`
+ * restringe SELECT a role='admin', ver 059_audit_logs.sql).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
 let qualificacaoAccess = true
+let leadVisibleToUser = true
 let adminClientCalls = 0
+
+const rlsScopedSupabase = {
+  from: () => {
+    const chain: Record<string, unknown> = {
+      select: () => chain,
+      eq: () => chain,
+      single: async () => ({
+        data: leadVisibleToUser ? { id: "lead-1" } : null,
+        error: leadVisibleToUser ? null : { message: "not found" },
+      }),
+    }
+    return chain
+  },
+}
 
 vi.mock("@web/lib/api-auth", () => ({
   requireAuth: async () => ({
     appUser: { id: "u-1", name: "User", org_id: "org-1" },
+    supabase: rlsScopedSupabase,
   }),
 }))
 
@@ -51,18 +69,26 @@ import { GET } from "./route"
 
 beforeEach(() => {
   qualificacaoAccess = true
+  leadVisibleToUser = true
   adminClientCalls = 0
 })
 
 describe("GET /api/leads/[id]/qualificacao-historico (Story 84-2)", () => {
-  it("sem leads.qualificacao → 403", async () => {
+  it("sem leads.qualificacao → 403, sem tocar o admin client", async () => {
     qualificacaoAccess = false
     const res = await GET({} as never, { params: Promise.resolve({ id: "lead-1" }) })
     expect(res.status).toBe(403)
     expect(adminClientCalls).toBe(0)
   })
 
-  it("com leads.qualificacao → 200, usa o admin client e mapeia old_value/new_value", async () => {
+  it("SEC-001 — lead não visível pelo client RLS-scoped (corretor sem relação com o lead) → 404, sem tocar o admin client", async () => {
+    leadVisibleToUser = false
+    const res = await GET({} as never, { params: Promise.resolve({ id: "lead-de-outro-corretor" }) })
+    expect(res.status).toBe(404)
+    expect(adminClientCalls).toBe(0)
+  })
+
+  it("com leads.qualificacao e lead visível → 200, usa o admin client e mapeia old_value/new_value", async () => {
     const res = await GET({} as never, { params: Promise.resolve({ id: "lead-1" }) })
     expect(res.status).toBe(200)
     expect(adminClientCalls).toBe(1)

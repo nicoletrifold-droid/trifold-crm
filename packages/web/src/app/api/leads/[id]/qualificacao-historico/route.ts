@@ -12,6 +12,14 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * RLS) com o gate de permissão feito aqui em código (`leads.qualificacao`), para liberar
  * o histórico a qualquer role com essa permissão, não só admin. O filtro por `org_id` é
  * OBRIGATÓRIO (o admin client não tem isolamento multi-tenant automático).
+ *
+ * QA (SEC-001): `leads.qualificacao` é permissão de MÓDULO, não do lead específico — sem
+ * checagem extra, um corretor com essa permissão conseguiria ver o histórico de leads
+ * atribuídos a OUTROS corretores, o que a política `leads_select`
+ * (`004_rls_policies.sql:104-112`) bloqueia para a leitura normal do lead. Por isso, ANTES
+ * de usar o admin client, confirmamos que o usuário pode ver este lead com o client
+ * RLS-scoped dele (`supabase`, não `admin`) — mesma política que já protege
+ * `GET /api/leads/[id]`, sem duplicar a lógica de `assigned_broker_id` em código novo.
  */
 export async function GET(
   _req: NextRequest,
@@ -21,10 +29,21 @@ export async function GET(
 
   const auth = await requireAuth()
   if (auth.error) return auth.error
-  const { appUser } = auth
+  const { supabase, appUser } = auth
 
   if (!(await canAccess(appUser.id, appUser.org_id, "leads.qualificacao"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { data: leadCheck } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("id", id)
+    .eq("org_id", appUser.org_id)
+    .single()
+
+  if (!leadCheck) {
+    return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
   const admin = createAdminClient()

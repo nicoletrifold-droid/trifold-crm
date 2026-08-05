@@ -157,9 +157,14 @@ pra simplesmente ler a tabela do client do usuário.
   `canAccess`, já que `audit_logs` é RLS admin-only).
 - [x] **T7 (AC4)** — Componente `QualificacaoHistorico` consumindo a rota do T6, no drawer
   (seção colapsável).
-- [x] **T8 (AC5)** — Testes: `parseQualificacao` (3), rota de histórico 403/200 (2). Smoke dos
+- [x] **T8 (AC5)** — Testes: `parseQualificacao` (3), rota de histórico (3, ver T9). Smoke dos
   2 forms NÃO feito — sem infra de teste de componente React no projeto (ver Dev Agent Record).
   `tsc --noEmit` + `eslint` + `vitest` + `next build` limpos.
+- [x] **T9 (fix QA SEC-001)** — Rota de histórico verificava só a permissão de módulo
+  (`leads.qualificacao`), não se o usuário pode ver ESTE lead — corretor conseguia ler
+  histórico de leads de outros corretores via chamada direta. Adicionado SELECT do lead pelo
+  client RLS-scoped do usuário (`supabase`, não `admin`) antes do admin client; 404 se a
+  política `leads_select` bloquear. Novo teste TEST-002 cobrindo o cenário.
 
 ## Dev Notes
 
@@ -303,6 +308,23 @@ Claude Sonnet 5 (claude-sonnet-5) — @dev (Dex), modo YOLO, em git worktree iso
   verificação ficou em: typecheck (garante que os componentes recebem os tipos certos), lint,
   e revisão manual do JSX contra o padrão de `SourceBadge`/badges existentes.
 
+### Fix QA (SEC-001) — 2026-08-05
+- **Problema:** `GET /api/leads/[id]/qualificacao-historico` usava `createAdminClient()`
+  (bypassa RLS) checando só `canAccess(...,"leads.qualificacao")` — permissão de módulo, não
+  de lead específico. Como `broker` tem `leads: true` (herança, sem seed na 84-1), qualquer
+  corretor conseguia ler o histórico de leads de OUTROS corretores via chamada direta à rota,
+  mesmo não conseguindo abrir a ficha desses leads (`GET /api/leads/[id]` bloqueia por RLS).
+- **Fix:** antes de instanciar o admin client, faço um `SELECT` do lead pelo client RLS-scoped
+  do usuário (`supabase`, retornado por `requireAuth()` — já usado no gate original, só não
+  para o SELECT) — `eq("id", id).eq("org_id", appUser.org_id).single()`. Se vier vazio (RLS
+  bloqueou), devolvo 404, igual ao comportamento de `GET /api/leads/[id]`. Reaproveita a
+  política `leads_select` (`004_rls_policies.sql:104-112`) como fonte de verdade, sem duplicar
+  a lógica de `assigned_broker_id` em código novo.
+- **Teste novo (TEST-002):** `route.test.ts` ganhou um 3º cenário — lead não visível pelo
+  client RLS-scoped → 404, confirmando que o admin client **não** é chamado nesse caso
+  (`adminClientCalls` continua 0). Suíte completa: `vitest` 1676/1676 (+1 do teste novo),
+  `tsc --noEmit` limpo, `eslint` limpo nos 2 arquivos.
+
 ### Debug Log References
 Nenhum necessário — implementação direta seguindo os padrões mapeados no draft; os únicos
 desvios (cadeia de props mais longa, hidden input do form de busca, componente de badge em vez
@@ -359,3 +381,65 @@ Status: Draft → Ready.
 | 2026-08-04 | 0.2 | Confirmado com o Lucas: o badge de Qualificação Comercial no kanban é aditivo (fica lado a lado com o de `qualification_score`), não substitui nenhum badge existente. AC2/T3 atualizados para deixar isso explícito. | @sm (River) |
 | 2026-08-04 | 0.3 | Validação PO: GO (8/10). Corrigida referência incorreta a `marketingGuard()` (usa `requireRole`, não `canAccess`, na `main` atual — Story 75-229 ainda não mergeada). Substituída referência vaga da query do kanban por citação exata (`LEADS_SELECT` em `broker/pipeline/page.tsx:15` e `dashboard/pipeline/page.tsx:14`), adicionados à Tasks/File List. Status Draft → Ready. | @po (Pax) |
 | 2026-08-05 | 0.4 | Implementação completa (T1-T8, modo YOLO, em worktree isolado a partir de `origin/main`): badge compartilhado (`QualificacaoComercialBadge`), select nos 2 forms (+ 4 arquivos intermediários de mapeamento não previstos no draft), badge aditivo no kanban/drawer, filtro + fix do hidden-input do form de busca, rota de histórico com admin client + gate. `vitest` 1675/1675, `tsc --noEmit` limpo, `eslint` limpo (18 arquivos), `next build` OK. Smoke dos forms não feito — sem infra de teste de componente React no projeto (documentado no Dev Agent Record). Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-08-05 | 0.5 | QA: FAIL (ver QA Results). Achado de segurança SEC-001 na rota de histórico — corretor consegue ler histórico de leads de outros corretores via chamada direta à API (admin client sem checar ownership do lead). Retorna para @dev. | @qa (Quinn) |
+| 2026-08-05 | 0.6 | Fix SEC-001: rota de histórico agora confirma que o usuário pode ver o lead (SELECT via client RLS-scoped, mesma política `leads_select` do GET base) antes de usar o admin client; 404 se bloqueado. Teste novo (TEST-002) cobrindo o cenário. `vitest` 1676/1676, `tsc`/`eslint` limpos. Devolve para @qa. | @dev (Dex) |
+
+## QA Results
+
+### Review Date: 2026-08-05
+
+### Reviewed By: Quinn (Test Architect) — @qa
+
+**Veredito: FAIL — retorna para @dev.**
+
+**7 checks:** code_review CONCERNS (ver SEC-001) · unit_tests PASS (1675/1675, confirmado de
+forma independente) · acceptance_criteria PASS (AC1-AC5 satisfeitas funcionalmente) ·
+regressions PASS · performance PASS · **security FAIL (SEC-001)** · documentation PASS.
+
+**Validações executadas independentemente pelo QA:** `vitest run` completo (1675/1675, 139
+arquivos) · `tsc --noEmit` limpo (`NODE_OPTIONS=--max-old-space-size=8192`) · leitura linha a
+linha do diff completo (`git show HEAD`), incluindo a rota nova, os 2 badges, os 2 forms, o
+filtro e o drawer · conferência cruzada da política RLS `leads_select`
+(`004_rls_policies.sql:104-112`) contra a rota de histórico.
+
+**Achado bloqueante:**
+
+- **SEC-001 (high):** `GET /api/leads/[id]/qualificacao-historico` usa `createAdminClient()`
+  (bypassa toda RLS) e só valida `canAccess(...,"leads.qualificacao")` — uma permissão de
+  **módulo**, não de **lead específico**. A política `leads_select` restringe corretor a ver
+  só leads com `assigned_broker_id` igual ao dele (ou `null`); admin/supervisor veem tudo.
+  Como o role `broker` já tem `leads: true` (`047_roles_permissions.sql:239`) e a Story 84-1
+  decidiu não seedar override para `leads.qualificacao` (herda de `leads`), **todo corretor
+  tem `leads.qualificacao = true` por herança**. Consequência: um corretor autenticado pode
+  chamar diretamente `GET /api/leads/{lead-de-outro-corretor}/qualificacao-historico` e receber
+  200 com nomes de quem alterou e valores antigo/novo — dado que ele **não consegue ver nem
+  abrindo a ficha desse lead** (`GET /api/leads/[id]` devolve 404 por RLS). A UI normal (drawer)
+  não expõe esse caminho porque só chama a rota nova depois de já ter carregado o lead pela
+  rota RLS-scoped — mas a API em si não se protege de uma chamada direta (curl, devtools, ou
+  um bug futuro de UI). Verificado que os 2 testes da rota (`route.test.ts`) só cobrem o
+  caminho de permissão de módulo (403/200), nunca o cenário de ownership do lead — por isso os
+  testes passam mas o gap real não é pego.
+  - **Ação sugerida:** antes de consultar `audit_logs` com o admin client, fazer um SELECT do
+    lead pelo client RLS-scoped do usuário (`auth.supabase`, não o admin) — ex.:
+    `.from("leads").select("id").eq("id", id).single()` — e devolver 404 se vier vazio/erro
+    (mesmo comportamento do GET base), **antes** de cair para o admin client. Isso reaproveita
+    a política `leads_select` já existente como fonte de verdade, sem duplicar a lógica de
+    `assigned_broker_id` em código novo.
+
+**Achado não-bloqueante:**
+
+- **TEST-002 (medium):** depois do fix de SEC-001, adicionar um teste cobrindo "corretor sem
+  relação com o lead → 404", para o gap não voltar silenciosamente.
+
+**Destaques positivos:** distinção visual da Temperatura genuinamente cumprida (paleta
+emerald/slate/rose/fuchsia + formato `rounded-md`+dot vs `rounded-full`, via componente
+`QualificacaoComercialBadge` reaproveitado em 2 lugares) · badge do kanban corretamente aditivo
+(confirmado no diff, ao lado do badge de `qualification_score`, nada removido) · filtro
+corretamente combinável e com o fix do hidden-input do form de busca (sem isso, buscar por nome
+apagaria o filtro de Qualificação silenciosamente — mesmo bug já visto na Story 75-236) · gap de
+teste dos forms (sem infra de componente React) documentado com transparência em vez de
+mascarado · nenhuma referência técnica inventada.
+
+### Gate Status
+
+Gate: FAIL → docs/qa/gates/84.2-qualificacao-lead-ui.yml
