@@ -289,4 +289,56 @@ Status: Draft → Ready.
 | 2026-08-04 | 0.2 | Confirmado com o Lucas: leads/roles fora do comercial não precisam de acesso à Qualificação. Fechado o AUTO-DECISION — sem seed explícito de permissão; `obras` já herda `false` de `leads: false` (047), então a herança já basta. | @sm (River) |
 | 2026-08-04 | 0.3 | Validação PO: GO (9/10). Adicionada seção Tasks (T1-T6) ausente no draft, ligando cada task às ACs correspondentes. Nenhuma referência técnica hallucinada — conferidas contra o código real. Status Draft → Ready. | @po (Pax) |
 | 2026-08-04 | 0.4 | Implementação completa (T1-T6, modo YOLO, em worktree isolado a partir de `origin/main`): migration 215 (enum + coluna + tabela de prazos configuráveis), sub-módulo `leads.qualificacao`, gate + audit específicos no PATCH existente. Migration renumerada de 201→215 (main estava mais adiantada que a branch usada no draft). `vitest` 1675/1675, `tsc --noEmit` limpo, `eslint` limpo nos arquivos tocados, `next build` OK. Status Ready → Ready for Review. | @dev (Dex) |
-| 2026-08-04 | 0.3 | Validação PO: GO (9/10). Adicionada seção Tasks (T1-T6) ausente no draft, ligando cada task às ACs correspondentes. Nenhuma referência técnica hallucinada — conferidas contra o código real. Status Draft → Ready. | @po (Pax) |
+| 2026-08-04 | 0.5 | QA: CONCERNS (ver QA Results). Removida uma linha duplicada de Change Log (artefato mecânico da v0.3) — limpeza administrativa, sem mudança de conteúdo. | @qa (Quinn) |
+
+## QA Results
+
+### Review Date: 2026-08-04
+
+### Reviewed By: Quinn (Test Architect) — @qa
+
+**Veredito: CONCERNS (aprovado com ressalvas — pode seguir para @devops).**
+
+**7 checks:** code_review PASS · unit_tests PASS (1675/1675, confirmado de forma independente) ·
+acceptance_criteria CONCERNS (AC1, AC3-AC8 PASS; AC2 tem redação imprecisa — ver REQ-001) ·
+regressions PASS · performance PASS · security PASS · documentation PASS.
+
+**Validações executadas independentemente pelo QA (não apenas conferindo o relato do @dev):**
+`vitest run` completo (1675/1675, 138 arquivos) · `tsc --noEmit` (limpo, precisou de
+`NODE_OPTIONS=--max-old-space-size=8192` neste ambiente — confirmado como limitação de memória
+do processo local, não relacionado ao código) · `eslint` dirigido nos 4 arquivos de
+código/teste tocados (0 erros/0 warnings) · leitura linha a linha do diff completo (`git show
+HEAD`) · conferência de que `SUBMODULE_MAP` é consumido genericamente em
+`permissions-matrix.tsx:658` e `user-edit-modal.tsx:331` (confirma AC3 sem precisar de mudança
+de UI) · grep confirmando que `chat/pipeline.ts` e `haiku-enrichment.ts` não referenciam
+`qualificacao_comercial` (AC7) · leitura da migration completa (enum sem default, RLS idêntica
+ao padrão de `roleta_config`, `WITH CHECK` implícito correto para `INSERT` por ausência de
+cláusula `FOR`, mesmo padrão pré-existente).
+
+**Achados:**
+- **REQ-001 (low):** AC2 diz "existe `qualificacao_comercial_config` com 1 linha por org" mas a
+  migration não semeia nenhuma linha — a tabela nasce vazia por design (mesmo padrão lazy-create
+  de `roleta_config`, documentado nos Dev Notes/Completion Notes do próprio @dev). O
+  comportamento está correto; só a redação da AC ficou imprecisa. Não bloqueia.
+- **TEST-001 (low):** AC7 pedia confirmação "por grep e por teste"; só o grep foi feito. Sem
+  teste automatizado que travaria uma regressão futura se alguém adicionar o campo em
+  `chat/pipeline.ts`/`haiku-enrichment.ts`. Nice-to-have para story futura.
+- **REL-001 (low):** leitura do `old_value` antes do `UPDATE` sem lock — race condition teórica
+  em edições concorrentes do mesmo lead. Padrão idêntico ao já existente para
+  `interest_level_manual` (Story 75-237) na mesma rota — risco herdado, não introduzido por esta
+  story. Aceitável para o volume de escrita esperado (edição manual).
+- **MNT-001 (low, corrigido nesta revisão):** Change Log tinha uma linha duplicada (artefato
+  mecânico da v0.3) — removida diretamente por ser limpeza administrativa sem decisão de
+  conteúdo.
+
+**Destaques positivos:** reuso extensivo e correto (enum+coluna no padrão de `interest_level`,
+audit via `logAudit()` existente, `SUBMODULE_MAP` sem mudança de UI, RLS copiada 1:1 de
+`roleta_config`, endpoint estendido em vez de rota nova) · nomeação do campo
+(`qualificacao_comercial`) evita corretamente a colisão com o `qualification_status` automático
+já existente — validado lendo o código real do pipeline da Nicole · testes cobrem os 4 cenários
+relevantes (403, 200+audit, old_value correto em mudança de valor, campos não relacionados não
+exigem o gate) · nenhuma referência técnica inventada em toda a cadeia (epic → story → código).
+
+### Gate Status
+
+Gate: CONCERNS → docs/qa/gates/84.1-qualificacao-lead-schema-permissoes-auditoria.yml
