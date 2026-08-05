@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { requireAuth } from "@web/lib/api-auth"
 import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
+import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 
 /** Mesma matriz do /api/appointments/[id]/feedback (75-185). */
 const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
@@ -129,6 +130,24 @@ export async function POST(
         { status: 500 }
       )
     }
+
+    // Story 75-275 — visita RETROATIVA também espelha ("tudo que for pra agenda
+    // espelha", decisão do Marcos). O horário é passado, então não gera café nenhum:
+    // serve para o calendário contar a mesma história que o CRM quando alguém olha para
+    // trás. Best-effort, nunca derruba o feedback já registrado.
+    await mirrorCreate(
+      supabase,
+      {
+        id: appointment.id,
+        scheduled_at: appointment.scheduled_at,
+        duration_minutes: 60,
+        location: null,
+        notes: "Visita registrada retroativamente (sem agendamento prévio no sistema)",
+        client_name: lead.name ?? null,
+        team: lead.segmento === "imob" ? "imob" : "house",
+      },
+      { origin: "Registro retroativo." }
+    )
 
     const result = await applyVisitFeedback(supabase, appointment, {
       feedback: body.feedback,
