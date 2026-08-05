@@ -1,0 +1,53 @@
+storyId: 75-277
+title: 'Sai o card "Conversão" (era 100% etapa Fechamento, media 0%)'
+verdict: PASS
+reviewedAt: "2026-08-05"
+reviewer: "@qa (Quinn)"
+branch: feat/75-276-analytics-faixa-visita
+
+evidence:
+  typecheck: "packages/web tsc --noEmit → 0 erros (é a prova do AC3: órfã em .tsx quebraria)"
+  tests: "1738 passed (142 arquivos) — nenhum teste tocado, nenhum quebrado"
+  lint: "0 erros, 18 warnings (todos pré-existentes, arquivos não tocados)"
+  grep: >
+    Nenhuma referência restante a `conversao`, `prevFechamento`, `prevConversao` ou
+    `fechadoStageIds` no arquivo — só as 2 menções em comentário (explicando a decisão)
+    e o título do Funil de Conversão, que é outro componente.
+
+issues: []
+
+verified_not_broken:
+  - >
+    Funil de Conversão intacto — decisão explícita do Marcos ("não precisa mexer no funil
+    neste momento"). Ele lista todas as etapas em laço; a Fechamento continua aparecendo.
+    Há comentário no código dizendo isso, para ninguém "terminar o serviço" depois achando
+    que foi esquecimento.
+  - >
+    `toCount` continua no import: após remover a linha que o usava no `prevFechamento`,
+    ainda tem 8 usos no arquivo. Import órfão teria virado erro de lint.
+  - >
+    Entradas / Ativos / Perdidos: nenhuma das três métricas passa por código removido; os
+    deltas de Entradas e Perdidos seguem alimentados por `prevEntradas`/`prevPerdidos`,
+    que continuam calculados nos dois ramos (com e sem filtro de empreendimento).
+  - >
+    O ramo COM filtro de empreendimento perdeu uma query do Promise.all (3 → 2) porque
+    `prevFechamento` era seu único consumidor. Menos trabalho no banco, sem efeito em tela.
+
+observations:
+  - id: OBS-001
+    forWhom: Marcos
+    description: >
+      Render: o grid virou 3 colunas, então em tela larga os cards ficam mais largos que
+      antes. Não foi conferido visualmente (trabalho por terminal, sem pilotar o navegador
+      dele). Se ficar esticado demais, é só ajuste de classe no grid.
+  - id: OBS-002
+    forWhom: backlog
+    description: >
+      O 4º slot está livre. Um "Conversão para visita" (% dos leads do recorte que chegaram
+      à visita) reaproveitaria a régua da 75-276 e daria número vivo no lugar do morto —
+      mas exige busca própria de `appointments` na página, porque a rota `executive` serve
+      só a Visão Executiva. Não foi pedido; fica como opção.
+
+notes: >
+  Sem teste automatizado novo, de propósito: a mudança é remoção de JSX e de código morto,
+  sem lógica nova a cobrir. O que garante o AC3 é o type-check, não um teste.

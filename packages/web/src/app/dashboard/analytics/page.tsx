@@ -315,7 +315,10 @@ export default async function AnalyticsPage({
 
   // ── Métricas do período (cards de topo) ────────────────────────────────────
   // Story 75-179: Entradas = todas as entradas; Ativos = subconjunto ativo/não-perdido.
-  // Conversão e média diária usam ENTRADAS (denominador honesto).
+  // Média diária usa ENTRADAS (denominador honesto).
+  // Story 75-277: o card "Conversão" saiu — era 100% baseado na etapa Fechamento e media
+  // 0% (zero fechamentos em 7d e 30d, medido em 05/08). Espaço morto, decisão do Marcos.
+  // A etapa Fechamento SEGUE no Funil de Conversão abaixo: ali ela pertence à lista.
   // Story 75-266: soma dos grupos ≡ soma do texto cru (mesmo universo no SQL) — o KPI não muda.
   // Fallback (QA-002): se a mig 213 ainda não estiver aplicada, o JSONB não tem a chave de
   // grupos — o KPI cai na soma do cru (comportamento antigo) em vez de zerar em silêncio.
@@ -323,8 +326,6 @@ export default async function AnalyticsPage({
   const perdidos = somaGrupos > 0 ? somaGrupos : perdidosFallback
   const lostGroupEntries = deriveLostReasonGroups(lostGroups)
   const lostHeuristica = Math.max(0, perdidos - lostEstruturados)
-  const fechamento = stages.find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count ?? 0
-  const conversao = entradas > 0 ? Math.round((fechamento / entradas) * 100) : 0
   const mediaDiaria = period.days > 0 ? (entradas / period.days) : 0
 
   // ── Deltas vs período anterior de mesma duração (Visão Executiva) ──────────
@@ -333,7 +334,6 @@ export default async function AnalyticsPage({
   const prevSinceISO = new Date(new Date(sinceISO).getTime() - durationMs).toISOString()
   let prevEntradas = 0
   let prevPerdidos = 0
-  let prevFechamento = 0
 
   if (!propertyId) {
     const { data: prevAnalytics } = await supabase.rpc("get_analytics_summary_ranged", {
@@ -345,28 +345,21 @@ export default async function AnalyticsPage({
     const pm = deriveAnalyticsMetrics(prevSummary)
     prevEntradas = pm.entradas
     prevPerdidos = pm.perdidos
-    prevFechamento = toCount(
-      (prevSummary?.funnel ?? []).find((s) => /fechamento|ganho|fechado/i.test(s.name))?.count
-    )
   } else {
-    const fechadoStageIds = stages.filter((s) => /fechamento|ganho|fechado/i.test(s.name)).map((s) => s.id)
     // Story 75-272 — o comparativo do período anterior segue os MESMOS filtros.
     const prevBase = () =>
       applyLeadFilters(supabase
         .from("leads").select("id", { count: "exact", head: true })
         .eq("org_id", appUser.orgId).eq("segmento", "principal")
         .gte("created_at", prevSinceISO).lt("created_at", sinceISO), filters)
-    const [{ count: pe }, { count: pp }, fechadoRes] = await Promise.all([
+    const [{ count: pe }, { count: pp }] = await Promise.all([
       prevBase(),
       prevBase().not("lost_reason", "is", null),
-      fechadoStageIds.length > 0 ? prevBase().in("stage_id", fechadoStageIds) : Promise.resolve({ count: 0 }),
     ])
     prevEntradas = pe ?? 0
     prevPerdidos = pp ?? 0
-    prevFechamento = fechadoRes.count ?? 0
   }
 
-  const prevConversao = prevEntradas > 0 ? Math.round((prevFechamento / prevEntradas) * 100) : 0
   const deltaPct = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null)
 
   /** Badge ▲/▼ vs período anterior. `invert` = subir é ruim (perdidos). */
@@ -606,8 +599,8 @@ export default async function AnalyticsPage({
         </div>
       </div>
 
-      {/* Cards do período (Story 75-179: Entradas + Ativos + Conversão + Perdidos) */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* Cards do período (Story 75-277: Entradas + Ativos + Perdidos — Conversão saiu) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Entradas</p>
           <p className="mt-1 text-3xl font-bold dark:text-stone-100">{entradas}</p>
@@ -618,12 +611,6 @@ export default async function AnalyticsPage({
           <p className="text-sm text-gray-500 dark:text-stone-400">Ativos</p>
           <p className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-300">{ativos}</p>
           <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">em atendimento</p>
-        </div>
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-          <p className="text-sm text-gray-500 dark:text-stone-400">Conversão</p>
-          <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-300">{conversao}%</p>
-          <p className="mt-0.5 text-xs text-stone-400 dark:text-stone-500">{fechamento} de {entradas}</p>
-          {deltaBadge(prevEntradas > 0 ? conversao - prevConversao : null, { suffix: " pp" })}
         </div>
         <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <p className="text-sm text-gray-500 dark:text-stone-400">Perdidos</p>

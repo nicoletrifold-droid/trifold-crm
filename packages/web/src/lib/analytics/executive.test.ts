@@ -118,27 +118,49 @@ describe("buildHeatmap", () => {
 })
 
 describe("classifyOutcome / buildOutcomeRows", () => {
-  const fechadoIds = new Set(["st-fechou"])
+  // Story 75-276: o conjunto é de leads COM visita registrada (appointments).
+  const comVisita = new Set(["lead-visitou"])
 
-  it("prioriza fechado > perdido > ativo > outro", () => {
-    expect(classifyOutcome({ stage_id: "st-fechou", lost_reason: "x", is_active: true }, fechadoIds)).toBe("fechado")
-    expect(classifyOutcome({ stage_id: "st-1", lost_reason: "invalido", is_active: true }, fechadoIds)).toBe("perdido")
-    expect(classifyOutcome({ stage_id: "st-1", lost_reason: null, is_active: true }, fechadoIds)).toBe("ativo")
-    expect(classifyOutcome({ stage_id: "st-1", lost_reason: null, is_active: false }, fechadoIds)).toBe("outro")
+  it("prioriza perdido > visita > ativo > outro", () => {
+    // AC3 — perdido manda: visitou e DEPOIS foi perdido continua em Perdidos.
+    expect(classifyOutcome({ id: "lead-visitou", lost_reason: "x", is_active: true }, comVisita)).toBe("perdido")
+    expect(classifyOutcome({ id: "lead-1", lost_reason: "invalido", is_active: true }, comVisita)).toBe("perdido")
+    expect(classifyOutcome({ id: "lead-visitou", lost_reason: null, is_active: true }, comVisita)).toBe("visita")
+    expect(classifyOutcome({ id: "lead-1", lost_reason: null, is_active: true }, comVisita)).toBe("ativo")
+    expect(classifyOutcome({ id: "lead-1", lost_reason: null, is_active: false }, comVisita)).toBe("outro")
+  })
+
+  it("AC2 — a visita não sai da etapa: lead que já avançou continua contando", () => {
+    // O lead está em Proposta (etapa depois da visita) e é `ativo`; o que decide é ter
+    // registro em appointments, não onde ele está parado hoje.
+    expect(classifyOutcome({ id: "lead-visitou", lost_reason: null, is_active: true }, comVisita)).toBe("visita")
+  })
+
+  it("AC9 — não-lead/cliente COM visita conta como visita, não como outro", () => {
+    expect(classifyOutcome({ id: "lead-visitou", lost_reason: null, is_active: false }, comVisita)).toBe("visita")
   })
 
   it("agrega por chave, soma = total e ordena por volume", () => {
     const rows = [
-      { stage_id: "st-fechou", lost_reason: null, is_active: false, source: "meta_ads" },
-      { stage_id: "st-1", lost_reason: "sem retorno", is_active: false, source: "meta_ads" },
-      { stage_id: "st-1", lost_reason: null, is_active: true, source: "meta_ads" },
-      { stage_id: "st-1", lost_reason: null, is_active: true, source: "telegram" },
-      { stage_id: "st-1", lost_reason: null, is_active: true, source: null },
+      { id: "lead-visitou", lost_reason: null, is_active: false, source: "meta_ads" },
+      { id: "l2", lost_reason: "sem retorno", is_active: false, source: "meta_ads" },
+      { id: "l3", lost_reason: null, is_active: true, source: "meta_ads" },
+      { id: "l4", lost_reason: null, is_active: true, source: "telegram" },
+      { id: "l5", lost_reason: null, is_active: true, source: null },
     ]
-    const r = buildOutcomeRows(rows, fechadoIds, (l) => l.source, (k) => k.toUpperCase())
+    const r = buildOutcomeRows(rows, comVisita, (l) => l.source, (k) => k.toUpperCase())
     expect(r.map((x) => x.key)).toEqual(["meta_ads", "telegram"]) // null ignorado
-    expect(r[0]!).toMatchObject({ label: "META_ADS", total: 3, fechados: 1, perdidos: 1, ativos: 1, outros: 0 })
-    expect(r[0]!.fechados + r[0]!.ativos + r[0]!.perdidos + r[0]!.outros).toBe(r[0]!.total)
+    expect(r[0]!).toMatchObject({ label: "META_ADS", total: 3, visitas: 1, perdidos: 1, ativos: 1, outros: 0 })
+    // AC4 — a barra tem que fechar 100% em toda linha.
+    for (const row of r) {
+      expect(row.visitas + row.ativos + row.perdidos + row.outros).toBe(row.total)
+    }
+  })
+
+  it("AC4 — lead sem visita e sem nada não desaparece da soma", () => {
+    const rows = [{ id: "z1", lost_reason: null, is_active: false, source: "outro" }]
+    const r = buildOutcomeRows(rows, new Set<string>(), (l) => l.source, (k) => k)
+    expect(r[0]!).toMatchObject({ total: 1, visitas: 0, ativos: 0, perdidos: 0, outros: 1 })
   })
 })
 
