@@ -1,6 +1,6 @@
 # Story — Nicole reconhece, mas NÃO oferece, empreendimento em planejamento
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Guardrail de IA (contexto dinâmico)
 **Epic:** Nicole / Agente comercial
 **Story ID:** 75-281
@@ -82,6 +82,8 @@ Não afeta Vind nem Yarden (ambos `selling`, com unidades cadastradas).
 | 2026-08-06 | 0.1 | Story criada após o cadastro de Solun/Japura expor que `loadProperties` ignora `status`. | @sm (River) |
 | 2026-08-06 | 0.2 | Validada: alternativa mais barata (filtrar na query) avaliada e recusada com motivo técnico registrado. **GO**. | @po (Pax) |
 | 2026-08-06 | 1.0 | Implementado: bloco de instrução para `planning` + guard de ESGOTADO exigindo `!isPreLaunch`. 6 testes novos. | @dev (Dex) |
+| 2026-08-06 | 1.1 | Gate **PASS** (8/10). Concern principal: guardrail de prompt, não filtro — conferir no primeiro lead que mencionar Solun/Japura. | @qa (Quinn) |
+| 2026-08-06 | 1.2 | PR #371 squash-merged em `main` pelo diretor. Deploy de produção disparado. **Done**. | @devops (Gage) |
 
 ## Dev Agent Record
 
