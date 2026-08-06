@@ -213,8 +213,18 @@ function parseHour(text: string, opts?: TimeParseOptions): { hour: number; minut
     if (hour >= 0 && hour <= 23) return { hour, minute }
   }
 
-  // "15h", "15:30", "15 horas", "15h30"
-  const hMatch = t.match(/\b(\d{1,2})\s*(?:[:h]|\s*horas?)\s*(\d{2})?\b/)
+  // "15h", "15:30", "15 horas", "15h30" — e, desde a Story 75-279, as grafias
+  // coladas que o cliente realmente escreve: "11hrs", "11hs", "11hr".
+  //
+  // A regra antiga exigia fronteira de palavra logo depois do "h": em "11hrs"
+  // vinha um "r" e ela desistia. O número também não era salvo pelo recurso de
+  // número pelado (`parseBareHour`), que rejeita de propósito dígito seguido de
+  // "h" — então a hora caía no vão entre as duas regras e a visita da lead Maria
+  // Oliveira (06/08) nunca foi gravada.
+  //
+  // O `(?![a-z])` depois do sufixo é o que segura o afrouxamento: sem ele,
+  // "11 hoje" viraria 11:00.
+  const hMatch = t.match(/\b(\d{1,2})\s*(?::|h(?:rs?|s)?(?![a-z])|\s*horas?\b)\s*(\d{2})?(?!\d)/)
   if (hMatch) {
     const hour = parseInt(hMatch[1]!, 10)
     const minute = hMatch[2] ? parseInt(hMatch[2]!, 10) : 0
@@ -263,7 +273,11 @@ export function isAmbiguousSlotText(text: string | null | undefined): boolean {
 function countTimeMentions(t: string): number {
   const mentions = new Set<string>()
   if (/\bmeio[\s-]?dia\b/.test(t)) mentions.add("12:00")
-  for (const m of t.matchAll(/(?<![\d.,:])(\d{1,2})\s*(?::(\d{2})|h(\d{2})?\b|\s*horas?\b)/g)) {
+  // Story 75-279 — o mesmo sufixo colado que `parseHour` passou a entender tem de
+  // ser contado aqui. Senão "8hrs ou 9hrs" contaria ZERO horários, não seria
+  // classificado como ambíguo, e viraria slot único — reabrindo exatamente o
+  // agendamento fantasma que a 75-245 fechou.
+  for (const m of t.matchAll(/(?<![\d.,:])(\d{1,2})\s*(?::(\d{2})|h(?:rs?|s)?(?![a-z])(\d{2})?|\s*horas?\b)/g)) {
     mentions.add(`${m[1]}:${m[2] ?? m[3] ?? "00"}`)
   }
   return mentions.size

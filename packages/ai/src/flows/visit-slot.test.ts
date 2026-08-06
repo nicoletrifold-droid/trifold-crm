@@ -634,3 +634,71 @@ describe("Story 75-268 AC6 — período do lead não herda dia velho", () => {
     expect(r.time).toEqual({ hour: 9, minute: 0 })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Story 75-279 — a grafia colada ("11hrs") não virava hora e a visita da lead
+// Maria Oliveira (06/08) nunca foi gravada. Ver a story para o incidente.
+// ---------------------------------------------------------------------------
+describe("Story 75-279 — sufixo de hora colado ao número", () => {
+  const BARE_ON = { bareNumberAllowed: true }
+
+  it("AC1 — hrs/hs/hr colados viram hora", () => {
+    expect(parseTimeParts("As 11hrs", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("11hs", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 9hs", BARE_ON)).toEqual({ hour: 9, minute: 0 })
+    expect(parseTimeParts("as 11hr", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 11hrs por favor", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+  })
+
+  it("AC1 — e valem SEM o número pelado liberado (fala da Nicole, remarcação)", () => {
+    // Antes, "11hrs" só era lido quando bareNumberAllowed estava ligado — e por
+    // acidente, via parseBareHour. Com marcador reconhecido, vale sempre.
+    expect(parseTimeParts("As 11hrs")).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 11 hrs")).toEqual({ hour: 11, minute: 0 })
+  })
+
+  it("AC2 — nada do que já funcionava regride", () => {
+    expect(parseTimeParts("as 11h", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 11", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("11 horas", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("11h30", BARE_ON)).toEqual({ hour: 11, minute: 30 })
+    expect(parseTimeParts("11:00", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("meio-dia", BARE_ON)).toEqual({ hour: 12, minute: 0 })
+    expect(parseTimeParts("3 da tarde", BARE_ON)).toEqual({ hour: 15, minute: 0 })
+  })
+
+  it("AC3 — palavra que só COMEÇA com h não vira marcador de hora", () => {
+    // O risco de afrouxar o marcador: "11 hoje" virar 11:00.
+    expect(parseTimeParts("11 hoje")).toBeNull()
+    expect(parseTimeParts("as 11 hectares")).toBeNull()
+  })
+
+  it("AC3 — as guardas anti-fantasma da 75-268 seguem de pé", () => {
+    expect(parseTimeParts("nao vou poder, tenho compromisso as 15", BARE_ON)).toBeNull()
+    expect(parseTimeParts("so consigo depois das 17", BARE_ON)).toBeNull()
+    expect(parseTimeParts("andar 11", BARE_ON)).toBeNull()
+    expect(parseTimeParts("11 anos", BARE_ON)).toBeNull()
+    expect(parseTimeParts("67m²", BARE_ON)).toBeNull()
+  })
+
+  it("AC3 — texto ambíguo com a grafia nova continua NÃO agendando nada", () => {
+    // Se o marcador passa a ser entendido, o detector de ambiguidade precisa
+    // enxergar os mesmos horários — senão "8hrs ou 9hrs" viraria slot único e
+    // reabriria o agendamento fantasma da 75-245.
+    expect(isAmbiguousSlotText("Posso 8hrs ou 9hrs")).toBe(true)
+    expect(isAmbiguousSlotText("Atendemos das 8hrs as 18hrs")).toBe(true)
+  })
+
+  it("AC7 — o caso real da Maria: dia num turno, 'As 11hrs' no seguinte", () => {
+    const r = resolveVisitSlotParts({
+      message: "As 11hrs",
+      now: new Date("2026-08-06T13:00:00Z"),
+      pendingDay: isoToDayParts("2026-08-08"),
+      pendingTime: null,
+      visitAvailability: null,
+      timeOptions: BARE_ON,
+    })
+    expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
+    expect(r.time).toEqual({ hour: 11, minute: 0 })
+  })
+})

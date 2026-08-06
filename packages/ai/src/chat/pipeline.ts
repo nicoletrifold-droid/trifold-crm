@@ -112,13 +112,76 @@ export function detectSlotMismatch(input: {
   now: Date
 }): Date | null {
   const { assistantMessage, authorizedSlotUtc, now } = input
-  if (!authorizedSlotUtc || !assistantMessage) return null
+  if (!authorizedSlotUtc) return null
+  const saidUtc = detectAffirmedSlot({ assistantMessage, now })
+  if (!saidUtc) return null
+  const differs = Math.abs(saidUtc.getTime() - authorizedSlotUtc.getTime()) > 30 * 60_000
+  return differs ? saidUtc : null
+}
+
+/**
+ * Story 75-279 — a Nicole AFIRMOU um dia+horário único nesta resposta? Devolve o
+ * horário afirmado, ou null. Sem comparar com nada.
+ *
+ * Existe separado da `detectSlotMismatch` porque o caso mais grave é justamente
+ * aquele em que **não há** slot autorizado para comparar: no incidente da lead
+ * Maria Oliveira (06/08) o sistema mandou PERGUNTAR o horário, e a Nicole
+ * inventou um bloco `[SISTEMA: … LIVRE]`, confirmou "sábado às 11h" e nada foi
+ * agendado. A guarda da 75-245 exigia `authorizedSlotUtc` para rodar e por isso
+ * era cega exatamente aí — em prod ela nunca disparou uma única vez.
+ *
+ * Mesma postura conservadora da 75-245: só AFIRMAÇÃO de dia+hora único. Texto
+ * ambíguo (oferta de opções, frase de expediente) devolve null.
+ */
+export function detectAffirmedSlot(input: {
+  assistantMessage: string
+  now: Date
+}): Date | null {
+  const { assistantMessage, now } = input
+  if (!assistantMessage) return null
   if (isAmbiguousSlotText(assistantMessage)) return null
   const said = resolveVisitSlotParts({ message: assistantMessage, now, visitAvailability: null })
   if (!said.day || !said.time) return null
-  const saidUtc = slotToUtc(said.day, said.time)
-  const differs = Math.abs(saidUtc.getTime() - authorizedSlotUtc.getTime()) > 30 * 60_000
-  return differs ? saidUtc : null
+  return slotToUtc(said.day, said.time)
+}
+
+/**
+ * Story 75-279 — remove blocos `[SISTEMA: …]` da fala antes de qualquer uso.
+ *
+ * O bloco é protocolo INTERNO: o pipeline o injeta na mensagem do usuário para
+ * dizer à Nicole o que o sistema autorizou. Ela nunca deveria reproduzi-lo — mas
+ * em 06/08 ela inventou um (`[SISTEMA: horário 11h do sábado 08/08 — LIVRE]`) e,
+ * como não havia higienização em lugar nenhum, o texto foi enviado à cliente no
+ * WhatsApp e gravado na conversa.
+ *
+ * Roda UMA vez, logo depois de extrair a resposta, porque `assistantMessage`
+ * alimenta seis caminhos (guarda de horário, detecção de convite, extração de
+ * dados, histórico, gravação e retorno). Higienizar só na saída deixaria o
+ * vazamento gravado e poluiria a extração.
+ */
+/**
+ * Story 75-279 — fala de reserva quando a higienização esvazia a resposta.
+ * Neutra de propósito: não afirma dia, horário nem disponibilidade.
+ */
+export const SANITIZED_EMPTY_FALLBACK =
+  "Desculpa, tive um probleminha aqui. Pode repetir, por favor?"
+
+export function stripSystemBlocks(text: string): { text: string; stripped: boolean } {
+  if (!/\[SISTEMA/i.test(text)) return { text, stripped: false }
+  const cleaned = text
+    // Bloco fechado, inclusive quebrando linha ("[^\]]" casa \n).
+    // Sem `\b` depois de SISTEMA de propósito: a variante que o modelo inventa
+    // não é previsível ("[SISTEMAS: …]"), e `[SISTEMA` nunca é texto legítimo
+    // para o cliente — deixar passar por um caractere é o pior dos dois erros.
+    .replace(/\[SISTEMA[^\]]*\]/gi, "")
+    // Bloco que o modelo não fechou: até o fim da linha.
+    .replace(/\[SISTEMA[^\n]*/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+  // `stripped` sai da comparação, não da suspeita: o evento de vazamento só é
+  // emitido quando algo saiu de fato.
+  return { text: cleaned, stripped: cleaned !== text }
 }
 
 /**
@@ -928,8 +991,28 @@ export async function processMessageWithMetadata(
   })
 
   const firstBlock = response.content[0]
-  const assistantMessage =
+  const rawAssistantMessage =
     firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+
+  // Story 75-279 — higieniza ANTES de qualquer consumidor (ver stripSystemBlocks).
+  const { text: cleanedMessage, stripped: leakedSystemBlock } =
+    stripSystemBlocks(rawAssistantMessage)
+  // Se a fala inteira era o bloco vazado, a limpeza deixa string vazia — e o
+  // webhook envia `text.body` sem guarda de vazio (a Graph API recusa). Silêncio
+  // é pior que uma frase neutra: cai numa que não compromete dia nem horário.
+  const assistantMessage = cleanedMessage.trim() ? cleanedMessage : SANITIZED_EMPTY_FALLBACK
+  if (leakedSystemBlock) {
+    emit({
+      level: "error",
+      category: "ai",
+      event_type: "NICOLE_SYSTEM_BLOCK_LEAK",
+      message: "Nicole reproduziu um bloco [SISTEMA] na resposta — removido antes do envio",
+      metadata: {
+        lead_id: conversation?.lead_id ?? null,
+        raw_message: rawAssistantMessage.slice(0, 500),
+      },
+    })
+  }
 
   // Story 75-245 — guarda anti-alucinação de horário. FAIL-OPEN: só observa e
   // loga, nunca bloqueia o envio. No incidente do lead Ailton a Nicole afirmou
@@ -938,20 +1021,41 @@ export async function processMessageWithMetadata(
   // Só roda em AFIRMAÇÃO de dia+hora único: quando ela oferece opções ("8h ou
   // 11h") o texto é ambíguo e a guarda se cala (evita falso positivo).
   if (!apptToCancel) {
-    const saidUtc = detectSlotMismatch({ assistantMessage, authorizedSlotUtc, now: new Date() })
-    if (saidUtc && authorizedSlotUtc) {
-      emit({
-        level: "error",
-        category: "ai",
-        event_type: "NICOLE_SLOT_MISMATCH",
-        message: `Nicole afirmou ${formatBrtDateTime(saidUtc)} mas o sistema autorizou ${formatBrtDateTime(authorizedSlotUtc)}`,
-        metadata: {
-          lead_id: conversation?.lead_id ?? null,
-          said_at: saidUtc.toISOString(),
-          authorized_at: authorizedSlotUtc.toISOString(),
-          assistant_message: assistantMessage.slice(0, 500),
-        },
-      })
+    if (authorizedSlotUtc) {
+      const saidUtc = detectSlotMismatch({ assistantMessage, authorizedSlotUtc, now: new Date() })
+      if (saidUtc) {
+        emit({
+          level: "error",
+          category: "ai",
+          event_type: "NICOLE_SLOT_MISMATCH",
+          message: `Nicole afirmou ${formatBrtDateTime(saidUtc)} mas o sistema autorizou ${formatBrtDateTime(authorizedSlotUtc)}`,
+          metadata: {
+            lead_id: conversation?.lead_id ?? null,
+            said_at: saidUtc.toISOString(),
+            authorized_at: authorizedSlotUtc.toISOString(),
+            assistant_message: assistantMessage.slice(0, 500),
+          },
+        })
+      }
+    } else {
+      // Story 75-279 — o sistema NÃO autorizou horário nenhum neste turno e ela
+      // confirmou mesmo assim. É o caso da Maria Oliveira: cliente sai da conversa
+      // com visita marcada na cabeça e nada na agenda. Fail-open (loga, não
+      // derruba o envio) — bloquear é decisão de produto, fora desta story.
+      const affirmedUtc = detectAffirmedSlot({ assistantMessage, now: new Date() })
+      if (affirmedUtc) {
+        emit({
+          level: "error",
+          category: "ai",
+          event_type: "NICOLE_SLOT_UNAUTHORIZED",
+          message: `Nicole afirmou ${formatBrtDateTime(affirmedUtc)} sem o sistema ter autorizado horário algum`,
+          metadata: {
+            lead_id: conversation?.lead_id ?? null,
+            said_at: affirmedUtc.toISOString(),
+            assistant_message: assistantMessage.slice(0, 500),
+          },
+        })
+      }
     }
   }
 
