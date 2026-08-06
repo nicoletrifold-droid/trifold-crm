@@ -1,6 +1,6 @@
 # Story (Bug) — Cadastro de empreendimento: tela ilegível no dark e POST que nunca gravou
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Bug fix (UI + API)
 **Epic:** Imóveis
 **Story ID:** 75-280
@@ -130,6 +130,7 @@ Esta tela **nunca funcionou em produção** — não é uma regressão:
 | 2026-08-06 | 1.0 | Implementado: tema da tela, `address` obrigatório, `zip_code` fora do INSERT e do PATCH, 8 campos persistidos, validação de `status`, fonte única de status. 9 testes novos. | @dev (Dex) |
 | 2026-08-06 | 1.1 | **Escopo reduzido a pedido do diretor**: o fix do POST de unidades (`area` → `private_area_m2`) foi revertido para não arriscar a integração com o REM. Verificado antes de reverter que o `imoveis-sync` não usa esse endpoint. Dívida registrada. | @dev (Dex) |
 | 2026-08-06 | 1.2 | Gate **PASS** (9/10) com 2 concerns: ACs visuais dependem de conferência no preview; `properties/[id]/edit` segue com cópia própria de statusOptions. | @qa (Quinn) |
+| 2026-08-06 | 1.3 | Preview da Vercel verde. PR #370 squash-merged em `main` pelo diretor. Deploy de produção disparado. **Done**. | @devops (Gage) |
 
 ## Dev Agent Record
 
