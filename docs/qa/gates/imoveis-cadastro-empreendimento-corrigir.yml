@@ -1,0 +1,54 @@
+storyId: "imoveis-cadastro-empreendimento-corrigir"
+title: "Cadastro de empreendimento: tela ilegível no dark e POST que nunca gravou"
+verdict: PASS
+readiness: 9/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-06
+branch: fix/75-280-cadastro-empreendimento
+commit: pending-push
+
+checks:
+  code_review: PASS         # padrão dark: copiado de properties/[id]/edit (não inventado); light preservado; PATCH reduzido a remoção de linha morta
+  unit_tests: PASS          # 145 files / 1785 tests PASS — 9 novos em api/properties/route.test.ts
+  acceptance_criteria: PASS # AC1-AC11 (AC1/AC2 exigem conferência visual no preview)
+  regressions: PASS         # nada em units/*, webhooks/imoveis-sync ou telas de listagem/edição/detalhe
+  performance: PASS         # n/a (classes CSS + objeto de INSERT)
+  security: PASS            # guard de role inalterado (IMOVEIS_CREATE_ROLES) e coberto por teste (corretor → 403)
+  documentation: PASS       # story + gate + comentários explicando o porquê de cada remoção
+
+acceptance_criteria_trace:
+  AC1: "inputClass ganha dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500 — texto digitado passa a ser visível no dark."
+  AC2: "Nenhuma classe de light removida; só variantes dark: acrescentadas."
+  AC3: "zip_code fora do INSERT — testes 'não envia zip_code' e 'ignora zip_code mesmo se o body mandar'."
+  AC4: "address obrigatório na tela (required + asterisco) e na API — testes de ausente e de só-espaços → 400."
+  AC5: "8 campos persistidos — teste toMatchObject com status/neighborhood/concept/description/delivery_date/total_units/total_floors/units_per_floor."
+  AC6: "status fora do enum → 400 — teste com 'em_obras'."
+  AC7: "PATCH /api/properties/[id] sem zip_code; nenhuma outra linha alterada nesse handler."
+  AC8: "Fluxo de unidades intocado — git status confirma zero mudanças em api/properties/[id]/units, api/units/* e webhooks/imoveis-sync."
+  AC9: "Nenhuma migration criada."
+  AC10: "9 testes novos, todos passando."
+  AC11: "PROPERTY_STATUSES/LABELS/OPTIONS em @web/lib/property-status, importado pela API e pela tela."
+
+build:
+  next_build: "Compiled successfully in 19.8s"
+  tests: "vitest 145 files / 1785 tests passed"
+  type_check: "tsc --noEmit limpo"
+  lint: "eslint sem erros nem warnings nos arquivos alterados"
+
+scope_change:
+  what: "POST /api/properties/[id]/units (area → private_area_m2) foi implementado e revertido"
+  why: "Pedido explícito do diretor durante a implementação: não arriscar a integração de unidades com o REM"
+  finding: "Verificado que webhooks/imoveis-sync NÃO usa esse endpoint — escreve direto na tabela e só toca status. O fix seria inócuo para o REM, mas está fora do escopo autorizado."
+  status: "Dívida registrada na story; endpoint segue quebrado (sem consumidor no front)"
+
+concerns:
+  - "AC1/AC2 são visuais: o gate assume conferência no preview da Vercel antes do merge. Nenhum teste automatizado cobre contraste."
+  - "A tela properties/[id]/edit mantém sua própria cópia de statusOptions — a fonte única criada aqui não foi propagada para ela (fora de escopo)."
+
+files:
+  - packages/web/src/app/dashboard/properties/new/page.tsx
+  - packages/web/src/app/api/properties/route.ts
+  - packages/web/src/app/api/properties/[id]/route.ts
+  - packages/web/src/lib/property-status.ts
+  - packages/web/src/app/api/properties/route.test.ts
+  - docs/stories/imoveis-cadastro-empreendimento-corrigir.story.md
