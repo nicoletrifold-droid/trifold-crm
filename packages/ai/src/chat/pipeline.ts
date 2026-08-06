@@ -159,17 +159,29 @@ export function detectAffirmedSlot(input: {
  * dados, histórico, gravação e retorno). Higienizar só na saída deixaria o
  * vazamento gravado e poluiria a extração.
  */
+/**
+ * Story 75-279 — fala de reserva quando a higienização esvazia a resposta.
+ * Neutra de propósito: não afirma dia, horário nem disponibilidade.
+ */
+export const SANITIZED_EMPTY_FALLBACK =
+  "Desculpa, tive um probleminha aqui. Pode repetir, por favor?"
+
 export function stripSystemBlocks(text: string): { text: string; stripped: boolean } {
   if (!/\[SISTEMA/i.test(text)) return { text, stripped: false }
   const cleaned = text
     // Bloco fechado, inclusive quebrando linha ("[^\]]" casa \n).
-    .replace(/\[SISTEMA\b[^\]]*\]/gi, "")
+    // Sem `\b` depois de SISTEMA de propósito: a variante que o modelo inventa
+    // não é previsível ("[SISTEMAS: …]"), e `[SISTEMA` nunca é texto legítimo
+    // para o cliente — deixar passar por um caractere é o pior dos dois erros.
+    .replace(/\[SISTEMA[^\]]*\]/gi, "")
     // Bloco que o modelo não fechou: até o fim da linha.
-    .replace(/\[SISTEMA\b[^\n]*/gi, "")
+    .replace(/\[SISTEMA[^\n]*/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
-  return { text: cleaned, stripped: true }
+  // `stripped` sai da comparação, não da suspeita: o evento de vazamento só é
+  // emitido quando algo saiu de fato.
+  return { text: cleaned, stripped: cleaned !== text }
 }
 
 /**
@@ -983,8 +995,12 @@ export async function processMessageWithMetadata(
     firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
 
   // Story 75-279 — higieniza ANTES de qualquer consumidor (ver stripSystemBlocks).
-  const { text: assistantMessage, stripped: leakedSystemBlock } =
+  const { text: cleanedMessage, stripped: leakedSystemBlock } =
     stripSystemBlocks(rawAssistantMessage)
+  // Se a fala inteira era o bloco vazado, a limpeza deixa string vazia — e o
+  // webhook envia `text.body` sem guarda de vazio (a Graph API recusa). Silêncio
+  // é pior que uma frase neutra: cai numa que não compromete dia nem horário.
+  const assistantMessage = cleanedMessage.trim() ? cleanedMessage : SANITIZED_EMPTY_FALLBACK
   if (leakedSystemBlock) {
     emit({
       level: "error",

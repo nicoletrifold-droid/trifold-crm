@@ -460,4 +460,18 @@ describe("Story 75-279 — stripSystemBlocks (o vazamento que chegou na cliente)
     const normal = "Te espero sábado às 11h!"
     expect(stripSystemBlocks(normal)).toEqual({ text: normal, stripped: false })
   })
+
+  it("QA — variante do marcador também é removida (o modelo não é previsível)", () => {
+    const { text, stripped } = stripSystemBlocks("Oi!\n[SISTEMAS: horário LIVRE]\nTe espero.")
+    expect(stripped).toBe(true)
+    expect(text).not.toContain("SISTEMA")
+  })
+
+  it("QA — `stripped` só é true quando algo saiu de verdade", () => {
+    // Antes, a flag saía da suspeita ("o texto contém [SISTEMA") e não da
+    // remoção — então um caso não tratado emitiria evento de vazamento sem ter
+    // removido nada. Agora a flag é a comparação.
+    const semBloco = "Isso é um texto normal, sem marcador."
+    expect(stripSystemBlocks(semBloco).stripped).toBe(false)
+  })
 })

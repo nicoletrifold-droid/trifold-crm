@@ -242,9 +242,41 @@ o avanço, como deveria.
 75-245 (só dispara com slot autorizado) e agora delega o parse à `detectAffirmedSlot`. Quando há
 autorização, o caminho é byte-idêntico ao anterior.
 
+## QA Results
+
+Gate: **PASS com CONCERNS** — `docs/qa/gates/75.279-nicole-grafia-hora-nao-agendou.yml`
+
+1.776 testes verdes (144 arquivos), type-check limpo em `ai` e `web`.
+
+**A revisão encontrou 2 defeitos no próprio diff, os dois corrigidos antes do gate:**
+
+1. 🔴 **A higienização do AC5 podia calar a Nicole.** Se a resposta inteira fosse o bloco vazado, a
+   limpeza deixaria string vazia — e o webhook envia `text: { body: response }` **sem guarda de
+   vazio** (`whatsapp/route.ts`), com a Graph API recusando corpo vazio. O AC5 teria trocado um
+   vazamento por uma mensagem perdida. Corrigido com fala de reserva neutra, que não afirma dia nem
+   horário, coberta por teste ponta a ponta.
+2. 🟡 **`stripped` saía da suspeita, não da remoção.** A flag ficava `true` só porque o texto continha
+   `[SISTEMA`. Uma variante fora do regex (`[SISTEMAS: …]`) vazaria e ainda seria reportada como
+   higienizada. O `` saiu (a variante que o modelo inventa não é previsível) e a flag passou a ser
+   a comparação `cleaned !== text`.
+
+**Concerns registrados (não bloqueiam):**
+
+- **`NICOLE_SLOT_UNAUTHORIZED` não tem histórico.** Fora do modo agendamento, `authorizedSlotUtc` é
+  sempre null — qualquer afirmação de dia+hora dispara. Medir o volume nos primeiros dias; se houver
+  ruído, apertar o filtro, não desligar o evento.
+- **Nada bloqueia o envio.** Confirmação alucinada continua chegando ao cliente; o ganho é saber no
+  mesmo minuto. Decisão de produto, fora de escopo.
+- **`SANITIZED_EMPTY_FALLBACK` é copy hardcoded** enquanto o resto da fala da Nicole vive em
+  `agent_prompts` (banco). Ver [[project-nicole-guardrails-db]].
+- **Build:** `@trifold/shared` falha no lint e no type-check (`TS2688`, `@types/node` ausente).
+  Verificado com `git stash -u`: **falha igual com a árvore limpa**. É ambiente, não regressão — mas
+  o @devops vai esbarrar nisso no CI.
+
 ## Change Log
 | Data | Mudança |
 |---|---|
 | 2026-08-06 | Achado pelo Marcos na conversa da Maria Oliveira. Causa-raiz confirmada em prod (`conversation_state` com a pendência intacta) e parser reproduzido com a frase real. Story criada (@sm) |
+| 2026-08-06 | **@qa — PASS com CONCERNS (8/10).** 2 defeitos achados no diff e corrigidos: mensagem vazia após higienização (alto) e flag de vazamento imprecisa (médio). +3 testes. Status → InReview mantido até o push |
 | 2026-08-06 | **@dev** — implementado. 1.773 testes verdes (144 arquivos), type-check do pacote `ai` limpo. Harness validado contra o defeito (revert do parser → 3 falhas). Status → InReview |
 | 2026-08-06 | **@po — GO (9/10).** Draft → **Ready**. Acrescentados: campos de executor, dependências, evidência de prod do AC4 (guarda nunca disparou; `APPOINTMENT_INSERT_FAILED` = 0), sequência de implementação. AC4 e AC5 endurecidos (ponto único de higienização; `event_type` sem CHECK verificado) |

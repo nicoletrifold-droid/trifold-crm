@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
 import { STAGE_IDS } from "@trifold/shared"
-import { processMessage } from "./pipeline"
+import { processMessage, SANITIZED_EMPTY_FALLBACK } from "./pipeline"
 import { createFakeSupabase, type FakeSupabase } from "./__fixtures__/fake-supabase"
 
 /**
@@ -141,6 +141,25 @@ describe("Story 75-279 — AC6: 'As 11hrs' grava a visita de verdade", () => {
     const { fake, sabadoIso } = await rodarTurno("as 11h")
     expect(fake.table("appointments")).toHaveLength(1)
     expect(fake.table("appointments")[0]!.scheduled_at).toBe(saturdayAt11Utc(sabadoIso))
+  })
+
+  it("QA — resposta que era SÓ o bloco vazado não vira mensagem vazia", async () => {
+    // Sem esta guarda, a higienização do AC5 deixaria "" e o cliente receberia
+    // silêncio: o webhook manda `text.body` sem checar vazio e a Graph API
+    // recusa. Silêncio é pior que a fala que vazava.
+    const sabadoIso = nextSaturdayIso()
+    const fake = createFakeSupabase(seedDoIncidente(sabadoIso))
+    await processMessage({
+      supabase: fake as unknown as SupabaseClient,
+      anthropic: fakeAnthropic("[SISTEMA: horário 11h — LIVRE]"),
+      conversationId: CONVERSATION,
+      message: "As 11hrs",
+      orgId: ORG,
+    })
+    const enviada = fake.table("messages").filter((m) => m.role === "assistant").pop()!
+    expect(String(enviada.content).trim()).not.toBe("")
+    expect(enviada.content).toBe(SANITIZED_EMPTY_FALLBACK)
+    expect(String(enviada.content)).not.toContain("SISTEMA")
   })
 
   it("horário fora do expediente de sábado NÃO agenda nada", async () => {

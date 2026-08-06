@@ -1,0 +1,66 @@
+storyId: "75-279"
+title: "Nicole confirmou visita e não agendou: 'As 11hrs' não é lido como hora"
+verdict: PASS com CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-06
+branch: fix/75-279-nicole-grafia-hora
+commit: pending-push
+
+checks:
+  code_review: PASS         # 2 defeitos encontrados NO PRÓPRIO diff e corrigidos (ver findings); detectSlotMismatch preservada byte-a-byte no caminho autorizado
+  unit_tests: PASS          # +19 casos; 1.776 testes / 144 arquivos verdes
+  acceptance_criteria: PASS # AC1-AC7 (ver trace)
+  regressions: PASS         # suíte inteira verde; guardas 75-245/75-268 cobertas por teste explícito; countTimeMentions ajustado para não reabrir a 245
+  performance: PASS         # sem query nova; detectAffirmedSlot é puro e roda 1x por turno
+  security: PASS            # não toca RLS, auth nem dado sensível; reduz exposição (protocolo interno deixa de ir ao cliente)
+  documentation: CONCERNS   # story completa, mas a fala de fallback nasce hardcoded no código enquanto o resto da copy da Nicole vive em agent_prompts
+
+acceptance_criteria_trace:
+  AC1: "parseHour aceita hrs/hs/hr colados; 'As 11hrs' → 11:00. Coberto em visit-slot.test.ts."
+  AC2: "as 11h / as 11 / 11 horas / 11h30 / 11:00 / meio-dia / 3 da tarde intactos."
+  AC3: "Guardas da 75-268 verificadas ('compromisso as 15', 'depois das 17', 'andar 11', '11 anos', '67m²') + caso novo '11 hoje' que o afrouxamento poderia quebrar."
+  AC4: "NICOLE_SLOT_UNAUTHORIZED emitido quando ela afirma dia+hora sem slot autorizado; oferta de opções e frase de expediente não disparam."
+  AC5: "stripSystemBlocks roda 1x após extrair a resposta, antes dos 6 consumidores; NICOLE_SYSTEM_BLOCK_LEAK só quando algo saiu de fato."
+  AC6: "processMessage ponta a ponta: INSERT real em appointments, visit_pending_date limpo, lead em Visita Agendada, visit_scheduled_at carimbado."
+  AC7: "Conversa da Maria reproduzida (dia num turno, 'As 11hrs' no seguinte) + grafia antiga ('as 11h') seguindo verde."
+
+findings_corrigidos_no_gate:
+  - severity: medium
+    category: code
+    description: "stripSystemBlocks marcava `stripped: true` a partir da SUSPEITA ('o texto contém [SISTEMA'), não da remoção. Variante não casada pelo regex (ex.: '[SISTEMAS: …]') vazaria E seria reportada como higienizada."
+    resolution: "Removido o `\\b` após SISTEMA (a variante que o modelo inventa não é previsível) e `stripped` passou a sair da comparação `cleaned !== text`. 2 testes novos."
+  - severity: high
+    category: code
+    description: "Se a resposta inteira fosse o bloco vazado, a higienização deixaria string vazia. O webhook envia `text: { body: response }` SEM guarda de vazio e a Graph API recusa corpo vazio — o cliente receberia silêncio. O AC5 teria trocado um vazamento por uma mensagem perdida."
+    resolution: "Fallback neutro (SANITIZED_EMPTY_FALLBACK) quando a limpeza esvazia a fala; não afirma dia, horário nem disponibilidade. Coberto por teste ponta a ponta."
+
+concerns:
+  - severity: medium
+    description: "NICOLE_SLOT_UNAUTHORIZED é novo e sem histórico. Em turno FORA de modo agendamento, authorizedSlotUtc é sempre null — qualquer afirmação de dia+hora pela Nicole dispara o evento. Pode gerar ruído."
+    recommendation: "Medir o volume nos primeiros dias em system_events. Se houver falso positivo, apertar o filtro — não desligar o evento."
+  - severity: medium
+    description: "Nada BLOQUEIA o envio. Uma confirmação alucinada continua chegando ao cliente; o ganho é que agora aparece no log no mesmo minuto."
+    recommendation: "Decisão de produto do Marcos, explicitamente fora de escopo desta story."
+  - severity: low
+    description: "SANITIZED_EMPTY_FALLBACK é copy hardcoded no pipeline, enquanto o resto da fala da Nicole vive em agent_prompts (banco). Divergência futura possível."
+    recommendation: "Se a frase precisar mudar, lembrar que ela NÃO está no banco."
+  - severity: low
+    description: "O fake de Supabase cobre só as operações que este fluxo usa. Reuso em outro fluxo vai exigir estendê-lo (e ele deve falhar alto, não silenciosamente — .or() já lança em forma não suportada)."
+
+build:
+  tsc_ai: "0 erros"
+  tsc_web: "0 erros"
+  tsc_shared: "FALHA — TS2688 'Cannot find type definition file for node'"
+  lint: "FALHA em @trifold/shared (mesma causa)"
+
+nota_sobre_a_falha_de_build: |
+  Verificado com `git stash -u`: `@trifold/shared` falha IGUAL com a árvore limpa,
+  sem nenhuma mudança desta story. É ambiente (dependência de tipos não instalada
+  no pacote), não regressão. Não bloqueia o gate, mas o @devops vai esbarrar nisso
+  no CI e vale resolver em tarefa própria.
+
+pendencia_operacional_fora_do_codigo: |
+  A lead Maria Oliveira acredita ter visita no sábado 08/08 às 11h e não há nada na
+  agenda. Nenhum deploy resolve isso — precisa de ação humana antes de sábado.
+  A lead Silvana (24/07, "As 9hs") teve o mesmo desfecho e hoje está em Perdido.
