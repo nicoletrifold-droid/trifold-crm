@@ -6,6 +6,8 @@ import {
   mediaContextLine,
   resolvePropertyInterestWrite,
   detectSlotMismatch,
+  detectAffirmedSlot,
+  stripSystemBlocks,
   isVisitSchedulingMode,
 } from "./pipeline"
 import { OFF_HOURS_PROMPT } from "../prompts"
@@ -357,5 +359,105 @@ describe("mediaContextLine — a fala não infla o que vai sair (Story 75-270)",
   it("sem a lista, mantém a instrução antiga (compat 75-157)", () => {
     const line = mediaContextLine({ requested: true, willSend: true, empreendimento: "Vind Residence" })
     expect(line).toContain("ESTAO SENDO ENVIADAS")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Story 75-279 — incidente da lead Maria Oliveira (06/08): a Nicole confirmou
+// "sábado às 11h" sem o sistema ter autorizado nada, e vazou o bloco [SISTEMA]
+// para a cliente. Ver docs/stories/75-279-*.
+// ---------------------------------------------------------------------------
+describe("Story 75-279 — detectAffirmedSlot (a guarda que enxerga o pior caso)", () => {
+  const NOW = new Date("2026-08-06T13:00:00Z") // quinta, 10h BRT
+
+  it("AC4 — afirmação de dia+hora único é detectada mesmo sem nada autorizado", () => {
+    const said = detectAffirmedSlot({
+      assistantMessage: "Anotado, Maria! Te espero sábado, dia 8, às 11h aqui na sede.",
+      now: NOW,
+    })
+    expect(said).not.toBeNull()
+    expect(said!.toISOString()).toBe("2026-08-08T14:00:00.000Z") // 11h BRT
+  })
+
+  it("AC4 — oferta de opções NÃO dispara (senão o log vira ruído)", () => {
+    expect(
+      detectAffirmedSlot({ assistantMessage: "Tenho 8h ou 11h no sábado, qual prefere?", now: NOW })
+    ).toBeNull()
+  })
+
+  it("AC4 — frase de expediente NÃO dispara", () => {
+    expect(
+      detectAffirmedSlot({
+        assistantMessage: "Atendemos de segunda a sexta das 8h às 18h e sábado das 8h às 12h.",
+        now: NOW,
+      })
+    ).toBeNull()
+  })
+
+  it("AC4 — pergunta sem horário afirmado NÃO dispara", () => {
+    expect(
+      detectAffirmedSlot({ assistantMessage: "Qual horário fica melhor pra você?", now: NOW })
+    ).toBeNull()
+  })
+
+  it("a detectSlotMismatch continua com o comportamento da 75-245", () => {
+    const autorizado = new Date("2026-08-08T14:00:00.000Z") // sábado 11h BRT
+    // Mesma coisa que o sistema autorizou → sem mismatch.
+    expect(
+      detectSlotMismatch({
+        assistantMessage: "Te espero sábado, dia 8, às 11h!",
+        authorizedSlotUtc: autorizado,
+        now: NOW,
+      })
+    ).toBeNull()
+    // Horário diferente do autorizado → mismatch.
+    expect(
+      detectSlotMismatch({
+        assistantMessage: "Te espero sábado, dia 8, às 9h!",
+        authorizedSlotUtc: autorizado,
+        now: NOW,
+      })
+    ).not.toBeNull()
+    // Sem autorização, a função da 245 segue devolvendo null (quem cobre é a nova).
+    expect(
+      detectSlotMismatch({
+        assistantMessage: "Te espero sábado, dia 8, às 11h!",
+        authorizedSlotUtc: null,
+        now: NOW,
+      })
+    ).toBeNull()
+  })
+})
+
+describe("Story 75-279 — stripSystemBlocks (o vazamento que chegou na cliente)", () => {
+  it("AC5 — remove o bloco exato que foi enviado à Maria", () => {
+    const falaReal =
+      "Deixa eu confirmar se esse horário está disponível no sábado, dia 8.\n\n" +
+      "[SISTEMA: horário 11h do sábado 08/08 — LIVRE]\n\n" +
+      "Anotado, Maria! Te espero sábado, dia 8, às 11h."
+    const { text, stripped } = stripSystemBlocks(falaReal)
+    expect(stripped).toBe(true)
+    expect(text).not.toContain("SISTEMA")
+    expect(text).toContain("Anotado, Maria!")
+    expect(text).toContain("Deixa eu confirmar")
+  })
+
+  it("AC5 — bloco multi-linha também sai", () => {
+    const { text, stripped } = stripSystemBlocks("Oi!\n[SISTEMA: linha um\nlinha dois]\nTchau")
+    expect(stripped).toBe(true)
+    expect(text).not.toContain("SISTEMA")
+    expect(text).toContain("Tchau")
+  })
+
+  it("AC5 — bloco que o modelo não fechou some até o fim da linha", () => {
+    const { text, stripped } = stripSystemBlocks("Oi!\n[SISTEMA: sem fechar\nTchau")
+    expect(stripped).toBe(true)
+    expect(text).not.toContain("SISTEMA")
+    expect(text).toContain("Tchau")
+  })
+
+  it("AC5 — fala normal passa intacta e não marca vazamento", () => {
+    const normal = "Te espero sábado às 11h!"
+    expect(stripSystemBlocks(normal)).toEqual({ text: normal, stripped: false })
   })
 })
