@@ -86,3 +86,71 @@ describe("buildPropertyDataContext — estoque/escassez (Story 75-64)", () => {
     expect(ctx).not.toContain("restam apenas 0")
   })
 })
+
+// Story 75-281: empreendimento em planejamento (ex.: Solun e Japura, cadastrados em
+// 06/08/2026 apenas para permitir vinculo de lead) precisa ser RECONHECIDO pela Nicole
+// mas nunca OFERECIDO — nao tem endereco, planta, preco nem previsao definidos.
+const SOLUN = {
+  id: "00000000-0000-0000-0004-000000000009",
+  name: "Solun",
+  slug: "solun",
+  status: "planning",
+  address: "A definir",
+  city: "Maringa",
+  state: "PR",
+  total_units: undefined,
+  available_units: 0,
+  reserved_units: 0,
+  sold_units: 0,
+}
+
+describe("buildPropertyDataContext — planejamento: reconhece mas nao oferece (Story 75-281)", () => {
+  it("AC1: empreendimento em planejamento CONTINUA no contexto (nome reconhecivel)", () => {
+    const ctx = buildPropertyDataContext([SOLUN], null)
+    expect(ctx).toContain("Solun")
+    expect(ctx).toContain("Em planejamento")
+  })
+
+  it("AC2: traz instrucao explicita de NAO oferecer por iniciativa propria", () => {
+    const ctx = buildPropertyDataContext([SOLUN], null)
+    expect(ctx).toContain("EM PLANEJAMENTO")
+    expect(ctx).toMatch(/NAO ofereca/)
+    expect(ctx).toMatch(/ainda NAO foram liberadas/)
+    expect(ctx).toMatch(/avisar assim que o lancamento for anunciado/)
+  })
+
+  it("AC3: proibe inventar planta, preco, metragem e previsao", () => {
+    const ctx = buildPropertyDataContext([SOLUN], null)
+    expect(ctx).toMatch(/NUNCA invente/)
+    expect(ctx).toMatch(/previsao de entrega/)
+  })
+
+  it("AC4: planejamento com total_units preenchido e zero unidades NAO diz ESGOTADO", () => {
+    const ctx = buildPropertyDataContext(
+      [{ ...SOLUN, total_units: 48, available_units: 0, sold_units: 0 }],
+      SOLUN.id
+    )
+    expect(ctx).not.toContain("ESGOTADO")
+    expect(ctx).toMatch(/LANCAMENTO\/fase inicial/)
+  })
+
+  it("AC4b: pre-lancamento (launching) com zero unidades tambem NAO diz ESGOTADO", () => {
+    const ctx = buildPropertyDataContext(
+      [{ ...SOLUN, status: "launching", total_units: 60, available_units: 0, sold_units: 0 }],
+      SOLUN.id
+    )
+    expect(ctx).not.toContain("ESGOTADO")
+  })
+
+  it("AC5: empreendimento em comercializacao NAO recebe a instrucao de planejamento", () => {
+    const ctx = buildPropertyDataContext([VIND], VIND.id)
+    expect(ctx).not.toContain("EM PLANEJAMENTO")
+    expect(ctx).not.toMatch(/NAO ofereca/)
+    // e o comportamento de esgotado segue valendo para selling
+    const esgotado = buildPropertyDataContext(
+      [{ ...VIND, total_units: 48, sold_units: 48, available_units: 0 }],
+      VIND.id
+    )
+    expect(esgotado).toContain("ESGOTADO")
+  })
+})

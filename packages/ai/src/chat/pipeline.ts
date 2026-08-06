@@ -1877,6 +1877,21 @@ export function buildPropertyDataContext(
     }
 
     parts.push(`\n${p.name} (${statusMap[p.status ?? ""] ?? p.status})`)
+
+    // Story 75-281 — empreendimento em PLANEJAMENTO fica no contexto para a Nicole
+    // RECONHECER o nome (identify-property usa esta mesma lista, pipeline.ts:539) e
+    // vincular o lead. Mas nao pode ser oferecido: normalmente ainda nao tem endereco,
+    // planta, preco nem previsao definidos.
+    if (p.status === "planning") {
+      parts.push(
+        "ATENCAO — EM PLANEJAMENTO: NAO ofereca, NAO sugira e NAO apresente este empreendimento por " +
+          "iniciativa propria. Se o lead perguntar por ele: diga que esta em planejamento, que as " +
+          "informacoes (plantas, valores, metragens e previsao de entrega) ainda NAO foram liberadas, " +
+          "registre o interesse e ofereca avisar assim que o lancamento for anunciado. NUNCA invente " +
+          "planta, preco, metragem, numero de unidades ou previsao de entrega deste empreendimento."
+      )
+    }
+
     parts.push(`Endereco: ${p.address ?? ""}${p.neighborhood ? ", " + p.neighborhood : ""} - ${p.city ?? ""}/${p.state ?? ""}`)
 
     if (p.concept) parts.push(`Conceito: ${p.concept}`)
@@ -1896,7 +1911,10 @@ export function buildPropertyDataContext(
     const availU = p.available_units ?? 0
     const isPreLaunch = p.status === "planning" || p.status === "launching"
     const pctSold = totalU > 0 ? Math.round((soldU / totalU) * 100) : 0
-    if (totalU > 0 && availU === 0) {
+    // Story 75-281: pre-lancamento com total_units preenchido mas nenhuma unidade
+    // cadastrada caia aqui e a Nicole dizia "ESGOTADO". Planejamento/pre-lancamento
+    // sem unidades nao esta esgotado — esta sem estoque cadastrado.
+    if (totalU > 0 && availU === 0 && !isPreLaunch) {
       parts.push("Estoque: ESGOTADO (sem unidades disponiveis) — ofereca lista de espera / proximos lancamentos.")
     } else if (totalU > 0 && !isPreLaunch && pctSold >= SCARCITY_SOLD_THRESHOLD) {
       parts.push(`Estoque (use com SUTILEZA para exclusividade/escassez, NUNCA como abundancia nem numero cru): ${soldU} de ${totalU} unidades ja vendidas (${pctSold}% vendido), restam apenas ${availU} disponiveis`)
