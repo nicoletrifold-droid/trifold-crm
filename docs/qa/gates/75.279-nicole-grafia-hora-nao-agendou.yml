@@ -51,14 +51,19 @@ concerns:
 build:
   tsc_ai: "0 erros"
   tsc_web: "0 erros"
-  tsc_shared: "FALHA — TS2688 'Cannot find type definition file for node'"
-  lint: "FALHA em @trifold/shared (mesma causa)"
+  tsc_shared: "FALHA LOCAL — TS2688 'Cannot find type definition file for node'"
+  lint: "FALHA LOCAL em @trifold/shared (mesma causa)"
+  ci_vercel: "PASS — build do PR #368 concluído com sucesso"
 
 nota_sobre_a_falha_de_build: |
   Verificado com `git stash -u`: `@trifold/shared` falha IGUAL com a árvore limpa,
-  sem nenhuma mudança desta story. É ambiente (dependência de tipos não instalada
-  no pacote), não regressão. Não bloqueia o gate, mas o @devops vai esbarrar nisso
-  no CI e vale resolver em tarefa própria.
+  sem nenhuma mudança desta story.
+
+  CORREÇÃO pós-push: a suspeita de que isso quebraria o CI estava ERRADA. O build
+  da Vercel no PR #368 passou. O repositório não tem job de lint/type-check no CI
+  (só os checks da Vercel), e o build remoto instala as dependências do zero. A
+  falha é exclusiva do node_modules desta máquina — não é dívida do projeto e não
+  precisa de tarefa própria.
 
 pendencia_operacional_fora_do_codigo: |
   A lead Maria Oliveira acredita ter visita no sábado 08/08 às 11h e não há nada na

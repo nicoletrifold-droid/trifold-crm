@@ -269,9 +269,10 @@ Gate: **PASS com CONCERNS** — `docs/qa/gates/75.279-nicole-grafia-hora-nao-age
   mesmo minuto. Decisão de produto, fora de escopo.
 - **`SANITIZED_EMPTY_FALLBACK` é copy hardcoded** enquanto o resto da fala da Nicole vive em
   `agent_prompts` (banco). Ver [[project-nicole-guardrails-db]].
-- **Build:** `@trifold/shared` falha no lint e no type-check (`TS2688`, `@types/node` ausente).
-  Verificado com `git stash -u`: **falha igual com a árvore limpa**. É ambiente, não regressão — mas
-  o @devops vai esbarrar nisso no CI.
+- **Build:** `@trifold/shared` falha no lint e no type-check local (`TS2688`, `@types/node` ausente).
+  Verificado com `git stash -u`: falha igual com a árvore limpa. **A suspeita de que isso quebraria o
+  CI estava errada** — o build da Vercel no PR #368 passou, o repositório não tem job de
+  lint/type-check no CI e o build remoto instala tudo do zero. É só o `node_modules` da máquina.
 
 ## Change Log
 | Data | Mudança |
