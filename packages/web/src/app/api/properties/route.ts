@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { IMOVEIS_CREATE_ROLES } from "@web/lib/permissions-imoveis"
+import { PROPERTY_STATUSES, isPropertyStatus } from "@web/lib/property-status"
 
 function slugify(text: string): string {
   return text
@@ -45,9 +46,14 @@ export async function POST(request: Request) {
   const errors: string[] = []
   if (!body.name?.trim()) errors.push("name is required")
   if (!body.city?.trim()) errors.push("city is required")
+  // properties.address é NOT NULL no schema — validar aqui dá mensagem clara
+  // em vez de deixar o Postgres estourar um 500 opaco.
+  if (!body.address?.trim()) errors.push("address is required")
   if (!body.state?.trim()) errors.push("state is required")
   else if (body.state.trim().length !== 2)
     errors.push("state must be exactly 2 characters")
+  if (body.status !== undefined && !isPropertyStatus(body.status))
+    errors.push(`status must be one of: ${PROPERTY_STATUSES.join(", ")}`)
 
   if (errors.length > 0) {
     return NextResponse.json({ error: errors.join(", ") }, { status: 400 })
@@ -60,10 +66,17 @@ export async function POST(request: Request) {
     .insert({
       name: body.name.trim(),
       slug,
+      status: body.status ?? undefined,
       city: body.city.trim(),
       state: body.state.trim().toUpperCase(),
-      address: body.address?.trim() || null,
-      zip_code: body.zip_code?.trim() || null,
+      address: body.address.trim(),
+      neighborhood: body.neighborhood?.trim() || null,
+      concept: body.concept?.trim() || null,
+      description: body.description?.trim() || null,
+      delivery_date: body.delivery_date ?? null,
+      total_units: body.total_units ?? null,
+      total_floors: body.total_floors ?? null,
+      units_per_floor: body.units_per_floor ?? null,
       org_id: appUser.org_id,
       is_active: true,
     })
