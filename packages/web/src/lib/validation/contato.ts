@@ -52,6 +52,38 @@ export function phoneError(v: string | null | undefined, required = false): stri
 }
 
 // ===== CPF / CNPJ (com dígito verificador) =====
+
+/**
+ * Story 75-282 — Normaliza CPF/CNPJ para ARMAZENAR: somente dígitos.
+ *
+ * A base tinha os dois formatos convivendo (19 registros com máscara, 58 sem) porque as rotas
+ * gravavam o valor cru do formulário. Isso quebrava o casamento do sync Sienge, que compara
+ * `cpf` com o valor já sanitizado da API — e um cliente que não casa é um cliente DUPLICADO.
+ *
+ * Use ao GRAVAR; use `maskCpfCnpj` ao EXIBIR. Retorna `null` para entrada vazia, para poder ir
+ * direto na coluna (que é nullable).
+ */
+export function normalizeCpfCnpj(raw: string | null | undefined): string | null {
+  const d = (raw ?? "").replace(/\D/g, "")
+  return d.length > 0 ? d : null
+}
+
+/**
+ * Story 75-282 — valores a comparar ao BUSCAR por CPF/CNPJ no banco.
+ *
+ * A coluna é normalizada pela migration 216, mas quem digita usa máscara e ambientes que ainda
+ * não receberam a migration têm registros mascarados. Buscar pelos DOIS formatos (via `.in()`)
+ * é o que faz "vincular cliente por CPF" e as checagens de duplicidade continuarem achando o
+ * cliente independentemente de como o valor foi gravado.
+ *
+ * Retorna `[]` para entrada vazia — o chamador deve tratar como "sem filtro de CPF".
+ */
+export function cpfLookupValues(raw: string | null | undefined): string[] {
+  const digits = normalizeCpfCnpj(raw)
+  if (!digits) return []
+  return Array.from(new Set([digits, maskCpfCnpj(digits)]))
+}
+
 export function maskCpf(raw: string | null | undefined): string {
   const d = (raw ?? "").replace(/\D/g, "").slice(0, 11)
   return d

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { normalizePhoneBR } from "@trifold/shared"
+import { cpfLookupValues, normalizeCpfCnpj } from "@web/lib/validation/contato"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
@@ -115,6 +116,13 @@ export async function PATCH(
     )
   }
 
+  // Story 75-282: CPF/CNPJ é ARMAZENADO só com dígitos (ver comentário na rota de criação).
+  // Normaliza ANTES da checagem de obrigatoriedade: entrada só com pontuação vira vazio e é
+  // rejeitada, como deve ser.
+  if ("cpf" in updates && updates.cpf) {
+    updates.cpf = normalizeCpfCnpj(updates.cpf as string)
+  }
+
   // CPF é obrigatório — rejeitar se estiver sendo explicitamente limpo
   if ("cpf" in updates && !updates.cpf) {
     return NextResponse.json(
@@ -123,14 +131,16 @@ export async function PATCH(
     )
   }
 
-  // CPF unicidade na org (excluindo o próprio cliente)
+  // CPF unicidade na org (excluindo o próprio cliente). Compara os dois formatos enquanto a base
+  // tiver registros legados mascarados.
   if (updates.cpf) {
     const { data: existing, error: cpfErr } = await supabase
       .from("clientes")
       .select("id")
       .eq("org_id", appUser.org_id)
-      .eq("cpf", updates.cpf)
+      .in("cpf", cpfLookupValues(updates.cpf as string))
       .neq("id", id)
+      .limit(1)
       .maybeSingle()
     if (cpfErr) {
       return NextResponse.json({ error: cpfErr.message }, { status: 500 })

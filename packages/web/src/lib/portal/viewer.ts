@@ -3,6 +3,7 @@ import "server-only"
 import { redirect } from "next/navigation"
 import { getServerUser, type AppUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { cpfLookupValues, maskCpfCnpj } from "@web/lib/validation/contato"
 
 // Story 78-1 — Portal Cliente "Visão Mestre" (ver como cliente, somente leitura).
 // Modelo real: há UMA `obra` por empreendimento; cada cliente/unidade é uma linha em
@@ -112,7 +113,10 @@ export async function getViewerVinculo(
   const orFilters: string[] = []
   if (siengeCustomerId) orFilters.push(`sienge_customer_id.eq.${siengeCustomerId}`)
   if (email) orFilters.push(`email.eq.${email}`)
-  if (cpf) orFilters.push(`cpf.eq.${cpf}`)
+  // Story 75-282: `clientes.cpf` é só-dígitos, `users.cpf` NÃO foi normalizado (fora de
+  // escopo) — compara os dois formatos para o casamento não silenciar.
+  // (nome `cpfVal` de propósito: `v` já é o vínculo, algumas linhas abaixo)
+  for (const cpfVal of cpfLookupValues(cpf)) orFilters.push(`cpf.eq.${cpfVal}`)
   if (orFilters.length > 0) {
     const { data: users } = await admin
       .from("users")
@@ -127,7 +131,9 @@ export async function getViewerVinculo(
     vinculoId: v.id as string,
     numeroUnidade: (v.numero_unidade as string | null) ?? null,
     clienteNome: c?.nome ?? null,
-    clienteCpf: c?.cpf ?? null,
+    // Story 75-282: `clientes.cpf` é armazenado só com dígitos — máscara aqui, que é onde o
+    // valor entra nos PDFs (extrato/informe) e na tela do viewer.
+    clienteCpf: c?.cpf ? maskCpfCnpj(c.cpf as string) : null,
     siengeCustomerId,
     contractNumbers: (v.sienge_contract_numbers as string[] | null) ?? [],
     portalUserId,

@@ -1,6 +1,8 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { normalizePhoneBR } from "@trifold/shared"
+import { logEvent } from "@web/lib/logger"
+import { cpfLookupValues } from "@web/lib/validation/contato"
 import {
   getAllSalesContracts,
   getCustomerById,
@@ -193,14 +195,17 @@ async function syncContract(
   const cpfSanitized = customer.cpf?.replace(/\D/g, "") || null
   const email = customer.email?.trim().toLowerCase() || null
 
-  // 2. Find or create CRM client
-  const { clienteId, created } = await findOrCreateCliente(
+  // 2. Find or create CRM client — `null` = casamento ambíguo (já logado). Pula o contrato:
+  //    criar cliente aqui é o que gerava duplicata a cada sync (Story 75-282).
+  const resolved = await findOrCreateCliente(
     customer,
     cpfSanitized,
     email,
     obra.org_id,
     supabaseAdmin
   )
+  if (!resolved) return null
+  const { clienteId, created } = resolved
 
   // 3. Upsert clientes_obras_vinculos — persiste a situação do contrato (merge
   //    JSONB) e recalcula a flag `distrato` do vínculo (AC 2, 3, 5, 6).
@@ -238,6 +243,72 @@ interface ClienteRow {
   telefone: string | null
   whatsapp: string | null
   sienge_customer_id: number | null
+  created_at: string | null
+}
+
+const CLIENTE_COLS =
+  "id, cpf, email, telefone, whatsapp, sienge_customer_id, created_at"
+
+/**
+ * Story 75-282 — resultado de uma tentativa de casamento cliente Sienge → cliente CRM.
+ *
+ * `ambiguous` existe para o e-mail: duas pessoas diferentes podem compartilhar e-mail (foi
+ * exatamente o caso Alexandre × MAKTUB), então ali NÃO se escolhe — nem se cria. `error` nunca
+ * pode ser confundido com `none`: era a confusão que fazia o sync duplicar cliente.
+ */
+type Lookup =
+  | { kind: "found"; row: ClienteRow }
+  | { kind: "none" }
+  | { kind: "ambiguous"; ids: string[] }
+  | { kind: "error"; message: string }
+
+/**
+ * Story 75-282 — chaves FORTES (`sienge_customer_id`, CPF): duplicata é o MESMO cliente, então
+ * desempata pela linha mais ANTIGA — a canônica, a que carrega os vínculos de obra. Determinístico:
+ * dois syncs seguidos escolhem a mesma linha.
+ */
+async function lookupStrong(
+  supabaseAdmin: SupabaseClient,
+  orgId: string,
+  column: "sienge_customer_id" | "cpf",
+  values: (string | number)[]
+): Promise<Lookup> {
+  if (values.length === 0) return { kind: "none" }
+
+  const { data, error } = await supabaseAdmin
+    .from("clientes")
+    .select(CLIENTE_COLS)
+    .eq("org_id", orgId)
+    .in(column, values)
+    .order("created_at", { ascending: true })
+    .limit(1)
+
+  if (error) return { kind: "error", message: error.message }
+  const row = (data as ClienteRow[] | null)?.[0]
+  return row ? { kind: "found", row } : { kind: "none" }
+}
+
+/**
+ * Story 75-282 — chave FRACA (e-mail). Busca 2 linhas de propósito: com mais de uma, o casamento é
+ * ambíguo e o sync precisa parar, não adivinhar.
+ */
+async function lookupByEmail(
+  supabaseAdmin: SupabaseClient,
+  orgId: string,
+  email: string
+): Promise<Lookup> {
+  const { data, error } = await supabaseAdmin
+    .from("clientes")
+    .select(CLIENTE_COLS)
+    .eq("org_id", orgId)
+    .eq("email", email)
+    .order("created_at", { ascending: true })
+    .limit(2)
+
+  if (error) return { kind: "error", message: error.message }
+  const rows = (data as ClienteRow[] | null) ?? []
+  if (rows.length > 1) return { kind: "ambiguous", ids: rows.map((r) => r.id) }
+  return rows[0] ? { kind: "found", row: rows[0] } : { kind: "none" }
 }
 
 /**
@@ -259,79 +330,92 @@ function phoneBackfillUpdates(
   return updates
 }
 
+/**
+ * Casa o cliente do Sienge com o cliente do CRM e, só se ele realmente não existir, cria.
+ *
+ * Story 75-282 — a ordem é do mais forte para o mais fraco:
+ *   1. `sienge_customer_id` — vínculo já estabelecido, a evidência mais direta
+ *   2. **CPF por dígitos** — casa `207.363.470-20` (CRM legado) com `20736347020` (Sienge)
+ *   3. e-mail — último recurso, e apenas quando aponta para UMA linha
+ *
+ * Devolve `null` quando não é possível decidir com segurança (e-mail ambíguo): o contrato é pulado
+ * e o fato é logado. Antes, qualquer falha de consulta caía no `INSERT` e o cliente duplicava a
+ * cada sync — o MAKTUB acumulou 5 linhas assim.
+ */
 async function findOrCreateCliente(
   customer: SiengeCustomer,
   cpfSanitized: string | null,
   email: string | null,
   orgId: string,
   supabaseAdmin: SupabaseClient
-): Promise<{ clienteId: string; created: boolean }> {
+): Promise<{ clienteId: string; created: boolean } | null> {
   const phone = extractCustomerPhone(customer)
 
-  // Busca por CPF primeiro
-  if (cpfSanitized) {
-    const { data: byCpf } = await supabaseAdmin
-      .from("clientes")
-      .select("id, cpf, email, telefone, whatsapp, sienge_customer_id")
-      .eq("org_id", orgId)
-      .eq("cpf", cpfSanitized)
-      .maybeSingle()
+  // 1. Vínculo Sienge já existente. 2. CPF nos dois formatos que a base tem hoje — a coluna é
+  // normalizada pela migration 216, mas o sync não depende disso para casar.
+  const cpfCandidates = cpfLookupValues(cpfSanitized)
 
-    const existing = byCpf as ClienteRow | null
-    if (existing) {
-      const updates: Record<string, unknown> = {
-        ...phoneBackfillUpdates(existing, phone),
-      }
-      if (!existing.sienge_customer_id) {
-        updates.sienge_customer_id = customer.id
-      }
-      if (Object.keys(updates).length > 0) {
-        await supabaseAdmin.from("clientes").update(updates).eq("id", existing.id)
-      }
-      // Story 79-1: e-mail segue o Sienge (fonte da verdade) + propaga ao login do portal.
-      await syncClienteEmail(
-        supabaseAdmin,
-        { id: existing.id, email: existing.email, sienge_customer_id: existing.sienge_customer_id ?? customer.id, org_id: orgId },
-        customer.email
-      )
-      return { clienteId: existing.id, created: false }
+  const attempts: Lookup[] = [
+    await lookupStrong(supabaseAdmin, orgId, "sienge_customer_id", [customer.id]),
+    ...(cpfCandidates.length > 0
+      ? [await lookupStrong(supabaseAdmin, orgId, "cpf", cpfCandidates)]
+      : []),
+    // 3. E-mail: só entra em jogo se as chaves fortes não resolveram.
+    ...(email ? [await lookupByEmail(supabaseAdmin, orgId, email)] : []),
+  ]
+
+  let existing: ClienteRow | null = null
+  for (const attempt of attempts) {
+    // Erro de consulta NUNCA vira "não existe" — aborta o contrato sem escrever nada.
+    if (attempt.kind === "error") {
+      throw new Error(`Falha ao buscar cliente CRM: ${attempt.message}`)
+    }
+    if (attempt.kind === "ambiguous") {
+      logEvent({
+        level: "warn",
+        category: "system",
+        event_type: "SIENGE_SYNC_AMBIGUOUS_EMAIL",
+        message: `E-mail ${email} aponta para ${attempt.ids.length} clientes — sync pulou o cliente Sienge ${customer.id} em vez de criar duplicata`,
+        metadata: {
+          email,
+          sienge_customer_id: customer.id,
+          sienge_customer_name: customer.name,
+          cliente_ids: attempt.ids,
+        },
+        source: "sienge-sync",
+        org_id: orgId,
+      })
+      return null
+    }
+    if (attempt.kind === "found") {
+      existing = attempt.row
+      break
     }
   }
 
-  // Fallback: busca por email
-  if (email) {
-    const { data: byEmail } = await supabaseAdmin
-      .from("clientes")
-      .select("id, cpf, email, telefone, whatsapp, sienge_customer_id")
-      .eq("org_id", orgId)
-      .eq("email", email)
-      .maybeSingle()
-
-    const existing = byEmail as ClienteRow | null
-    if (existing) {
-      const updates: Record<string, unknown> = {
-        ...phoneBackfillUpdates(existing, phone),
-      }
-      if (!existing.sienge_customer_id) {
-        updates.sienge_customer_id = customer.id
-      }
-      if (!existing.cpf && cpfSanitized) {
-        updates.cpf = cpfSanitized
-      }
-      if (Object.keys(updates).length > 0) {
-        await supabaseAdmin.from("clientes").update(updates).eq("id", existing.id)
-      }
-      // Story 79-1: e-mail segue o Sienge (fonte da verdade) + propaga ao login do portal.
-      await syncClienteEmail(
-        supabaseAdmin,
-        { id: existing.id, email: existing.email, sienge_customer_id: existing.sienge_customer_id ?? customer.id, org_id: orgId },
-        customer.email
-      )
-      return { clienteId: existing.id, created: false }
+  if (existing) {
+    const updates: Record<string, unknown> = {
+      ...phoneBackfillUpdates(existing, phone),
     }
+    if (!existing.sienge_customer_id) {
+      updates.sienge_customer_id = customer.id
+    }
+    if (!existing.cpf && cpfSanitized) {
+      updates.cpf = cpfSanitized
+    }
+    if (Object.keys(updates).length > 0) {
+      await supabaseAdmin.from("clientes").update(updates).eq("id", existing.id)
+    }
+    // Story 79-1: e-mail segue o Sienge (fonte da verdade) + propaga ao login do portal.
+    await syncClienteEmail(
+      supabaseAdmin,
+      { id: existing.id, email: existing.email, sienge_customer_id: existing.sienge_customer_id ?? customer.id, org_id: orgId },
+      customer.email
+    )
+    return { clienteId: existing.id, created: false }
   }
 
-  // Cria novo
+  // Cria novo — alcançado somente quando TODAS as buscas responderam e vieram vazias.
   const { data: novo, error: insertErr } = await supabaseAdmin
     .from("clientes")
     .insert({
