@@ -1,7 +1,7 @@
 # Story 75-282 — Sync Sienge: CPF com máscara não casa e o cliente duplica a cada sync
 
 **Story ID:** 75-282
-**Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** M (~5 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done · **Estimativa:** M (~5 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Dependências:** nenhuma. Toca `lib/integrations/sienge/sync.ts` e as rotas de cadastro de
@@ -154,7 +154,7 @@ e documento em dobro, ou nenhum, dependendo de qual linha o código pega.
       - ⚠️ O fake do Supabase do repo **ignora `.eq()`** (ver [[project-nicole-envio-midia-proativo]]).
         O fake desta story precisa honrar filtro e ordenação, senão o teste passa sem exercitar a
         regra. Verificar antes de escrever os casos.
-- [x] **AC7 — limpeza dos dados.** Script SQL idempotente que remove as **3 duplicatas órfãs** do
+- [x] **AC7 — limpeza dos dados.** ✅ APLICADO 07/08 (ver Deploy abaixo). Script SQL idempotente que remove as **3 duplicatas órfãs** do
       MAKTUB (17/07, 22/07 ×2 — sem vínculo, sem uso) e consolida a de 07/08 (vínculo duplicado no
       Vind, unidade nula) na linha canônica de 27/05. Entregue como SQL revisável e **aplicado só
       com aprovação explícita do Marcos**, validado antes em transação revertida
@@ -367,3 +367,51 @@ com o array inline foram refatoradas para o helper.
   coluna não tem unique.
 - **A migration 216 precisa ser aplicada junto com o deploy.** Se o código subir sem ela, nada
   quebra (a busca cobre os dois formatos), mas os 19 registros seguem mascarados.
+
+---
+
+## Deploy (@devops, 07/08)
+
+PR **#372** squash-merged em `main` (`ada7db42`). Deploy de produção `Ready` **antes** de tocar no
+banco — ordem deliberada: se a coluna fosse normalizada primeiro, o código antigo (que comparava CPF
+com máscara) quebraria "Vincular cliente por CPF" na janela entre migration e deploy.
+
+### Migration 216 aplicada em produção
+
+Via Management API, arquivo inteiro em um POST (ver [[project-migrations]]). Estado depois:
+
+| Verificação | Antes | Depois |
+|---|---|---|
+| CPFs mascarados | 19 | **0** |
+| Índice `clientes_org_cpf_uniq` | ausente | criado |
+| Trigger `normalize_clientes_cpf_trg` | ausente | ativo |
+| CPF da Sônia | `207.363.470-20` | `20736347020` |
+
+### Limpeza do MAKTUB aplicada
+
+Passo de conferência rodado primeiro — as 4 linhas a apagar tinham exatamente as contagens
+previstas na validação @po. Após o `commit`: **1 linha**, `2 vínculos`, unidades `301, 804` (Yarden
+301 + Vind 804, as legítimas). O brinde da linha canônica foi preservado.
+
+### Estado final do Vind — 4 clientes seguem sem vínculo Sienge
+
+`Alexandre G. Nicolau` (804) · `Francisco José Scramin` (501, 602, 701 e 1004) ·
+`Samara F Braz da Cruz` (1337) · `Vinicius Nery` (903)
+
+Todos agora com **CPF normalizado**, ou seja: casáveis por CPF no próximo sync, que era o que
+falhava. Dois deles (`anicolau0713@gmail.com`, `francisco.scramin@gmail.com`) continuam com e-mail
+duplicado — e isso agora é **seguro**: em vez de criar duplicata, o sync loga
+`SIENGE_SYNC_AMBIGUOUS_EMAIL` e pula. A duplicidade de e-mail em si é cadastro legítimo (pessoa
+física × holding), não lixo a limpar.
+
+### Validação que falta — só o Marcos pode fazer
+
+Apertar **"Sincronizar clientes"** na obra Vind e conferir que (a) os selos ficam verdes para quem
+existe no Sienge e (b) **nenhuma linha nova** aparece em `clientes`. Não rodei o sync por conta
+própria porque ele cria vínculos e usuários de portal — efeito externo que não estava autorizado.
+Depois do sync, conferir o log:
+
+```sql
+select created_at, message, metadata from system_events
+where event_type = 'SIENGE_SYNC_AMBIGUOUS_EMAIL' order by created_at desc;
+```
