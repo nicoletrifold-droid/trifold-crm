@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { cpfLookupValues, normalizeCpfCnpj } from "@web/lib/validation/contato"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
@@ -111,7 +112,9 @@ export async function POST(
       .from("clientes")
       .select("id, nome, cpf, email")
       .eq("org_id", appUser.org_id)
-      .eq("cpf", cpf.trim())
+      // Story 75-282: busca pelos dois formatos — o input vem mascarado e a coluna é só-dígitos
+      .in("cpf", cpfLookupValues(cpf))
+      .limit(1)
       .maybeSingle()
 
     if (crmErr) {
@@ -208,7 +211,9 @@ export async function POST(
       .from("clientes")
       .select("id, nome, cpf, email")
       .eq("org_id", appUser.org_id)
-      .eq("cpf", cpf.trim())
+      // Story 75-282: busca pelos dois formatos — o input vem mascarado e a coluna é só-dígitos
+      .in("cpf", cpfLookupValues(cpf))
+      .limit(1)
       .maybeSingle()
 
     if (existingCrm) {
@@ -222,7 +227,9 @@ export async function POST(
         .insert({
           org_id: appUser.org_id,
           nome: nome.trim(),
-          cpf: cpf.trim(),
+          // Story 75-282: grava só dígitos (o trigger da migration 216 também garante,
+          // mas o valor precisa sair certo daqui para a checagem de unicidade fechar)
+          cpf: normalizeCpfCnpj(cpf),
           email: email.trim(),
         })
         .select("id, nome, cpf, email")
