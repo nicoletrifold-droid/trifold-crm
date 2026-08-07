@@ -122,14 +122,23 @@ export async function getFinancialStatement(
   for (const statement of data.results) {
     for (const bill of statement.billsReceivable) {
       for (const inst of bill.installments) {
+        // Baixa parcial NÃO quita a parcela: "PAGO" exige saldo devedor zerado.
+        // O currentBalance do Sienge (com correção) é a fonte da verdade do que
+        // ainda se deve (Story 75-284).
         let status: InstallmentStatus
-        if (inst.receipts.length > 0) {
+        if (inst.receipts.length > 0 && inst.currentBalance <= 0) {
           status = "PAGO"
+        } else if (inst.receipts.length > 0) {
+          status = "PARCIAL"
         } else if (inst.generatedBillet) {
           status = "BOLETO_GERADO"
         } else {
           status = "EM_ABERTO"
         }
+
+        const receipts = [...inst.receipts].sort((a, b) =>
+          a.receiptDate < b.receiptDate ? -1 : a.receiptDate > b.receiptDate ? 1 : 0
+        )
 
         installments.push({
           billReceivableId: bill.billReceivableId,
@@ -143,9 +152,10 @@ export async function getFinancialStatement(
           generatedBillet: inst.generatedBillet,
           status,
           hasBoleto: inst.generatedBillet && inst.currentBalance > 0,
-          receiptDate: inst.receipts[0]?.receiptDate,
-          receiptValue: inst.receipts.length > 0
-            ? inst.receipts.reduce((sum, r) => sum + r.receiptValue, 0)
+          receipts,
+          receiptDate: receipts[receipts.length - 1]?.receiptDate,
+          receiptValue: receipts.length > 0
+            ? receipts.reduce((sum, r) => sum + r.receiptValue, 0)
             : undefined,
         })
       }
@@ -192,15 +202,18 @@ export function computeInformeFromStatements(
 
   const monthMap = new Map<number, { value: number; entries: InformeMonthEntry["installments"] }>()
 
+  // Cada baixa entra no seu próprio mês — parcela paga em várias baixas não
+  // pode concentrar tudo no mês da primeira (Story 75-284).
   for (const inst of installments) {
-    const rd = inst.receiptDate
-    if (!rd || !rd.startsWith(yearStr)) continue
-    const month = parseInt(rd.split("-")[1] ?? "0")
-    const paid = inst.receiptValue ?? inst.originalValue
-    const entry = monthMap.get(month) ?? { value: 0, entries: [] }
-    entry.value += paid
-    entry.entries.push({ number: inst.installmentNumber, value: paid, date: rd })
-    monthMap.set(month, entry)
+    for (const receipt of inst.receipts) {
+      const rd = receipt.receiptDate
+      if (!rd.startsWith(yearStr)) continue
+      const month = parseInt(rd.split("-")[1] ?? "0")
+      const entry = monthMap.get(month) ?? { value: 0, entries: [] }
+      entry.value += receipt.receiptValue
+      entry.entries.push({ number: inst.installmentNumber, value: receipt.receiptValue, date: rd })
+      monthMap.set(month, entry)
+    }
   }
 
   const monthlyBreakdown: InformeMonthEntry[] = Array.from(monthMap.entries())
@@ -214,9 +227,8 @@ export function computeInformeFromStatements(
 
   const totalPaidInYear = monthlyBreakdown.reduce((sum, m) => sum + m.value, 0)
 
-  const accumulatedPaid = installments
-    .filter((i) => i.status === "PAGO")
-    .reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
+  // Soma tudo que já foi baixado, inclusive baixas parciais de parcelas em aberto.
+  const accumulatedPaid = installments.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
 
   const remainingBalance = installments
     .filter((i) => i.status !== "PAGO")
