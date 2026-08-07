@@ -156,6 +156,17 @@ export async function GET(request: NextRequest) {
     // ── Resumo periódico do bolsão à Fernanda (Story 75-82) ──
     // Conta leads parados no pool há >= BOLSAO_DIGEST_MIN (horário comercial). Anti-flood:
     // claim por (org, 'bolsao_digest') com janela → no máx. 1 resumo a cada 30min por org.
+    //
+    // Story 75-286 — o filtro abaixo espelha EXATAMENTE o do painel (/dashboard/bolsao,
+    // Story 75-89): pool real = bolsao_em preenchido E SEM dono. `bolsao_em` é um carimbo
+    // que só a RPC `pegar_lead_bolsao` limpa; quem atribui corretor por outro caminho
+    // (/assign, /handoff, /transferir) deixa o carimbo sujo → o lead vira "fantasma":
+    // sai do painel mas continuava contando aqui. Incidente de 05/08/2026: o gerente
+    // recebeu 6 avisos em 3h por um lead atendido em 1min22s. Filtrar na LEITURA corrige
+    // independentemente de qual caminho sujou o carimbo.
+    // A roleta NÃO entra nessa lista: tem guard próprio contra o bolsão (distributor.ts
+    // bail "em_bolsao" + `AND bolsao_em IS NULL` no UPDATE da roleta_pick_and_advance),
+    // então nunca atribui lead carimbado — não precisa (nem deve) ser "corrigida".
     let digestCount = 0
     let digestSent = false
     const { data: pool } = await admin
@@ -164,6 +175,7 @@ export async function GET(request: NextRequest) {
       .eq("org_id", orgId)
       .eq("is_active", true)
       .not("bolsao_em", "is", null)
+      .is("assigned_broker_id", null)
       .limit(1000)
     digestCount = ((pool ?? []) as Array<{ bolsao_em: string }>).filter(
       (l) => businessMinutesBetweenSchedule(new Date(l.bolsao_em), now, schedule, scheduleTz) >= BOLSAO_DIGEST_MIN
