@@ -34,6 +34,13 @@ function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
       </span>
     )
   }
+  if (status === "PARCIAL") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-400">
+        Parcialmente pago
+      </span>
+    )
+  }
   if (status === "BOLETO_GERADO") {
     return (
       <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
@@ -93,8 +100,10 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
   const pdfHref = `/api/cliente/obras/${obraId}/financeiro/extrato/pdf${pdfQs ? `?${pdfQs}` : ""}`
 
   const pagas = filtered.filter((i) => i.status === "PAGO")
+  const parciais = filtered.filter((i) => i.status === "PARCIAL")
   const pendentes = filtered.filter((i) => i.status !== "PAGO")
-  const totalPago = pagas.reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
+  // Total pago = todas as baixas, inclusive as parciais de parcelas em aberto.
+  const totalPago = filtered.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
   const totalPendente = pendentes.reduce(
     (sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue),
     0
@@ -151,12 +160,14 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
       {/* Resumo */}
       {filtered.length > 0 && (
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {pagas.length > 0 && (
+          {totalPago > 0 && (
             <div className="rounded-xl border border-stone-800 bg-stone-900 p-3 text-center">
               <p className="text-xs font-semibold text-emerald-400">Pago</p>
               <p className="mt-1 text-sm font-bold text-white">{formatCurrency(totalPago)}</p>
               <p className="text-xs text-stone-500">
                 {pagas.length} parcela{pagas.length !== 1 ? "s" : ""}
+                {parciais.length > 0 &&
+                  ` + ${parciais.length} parcial${parciais.length !== 1 ? "is" : ""}`}
               </p>
             </div>
           )}
@@ -195,7 +206,7 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
                   </div>
                   <p className="mt-1 text-xs text-stone-500">
                     Vencimento: {formatDate(inst.dueDate)}
-                    {inst.receiptDate && (
+                    {inst.receiptDate && inst.receipts.length === 1 && (
                       <span className="ml-3 text-emerald-400">
                         Pago em: {formatDate(inst.receiptDate)}
                       </span>
@@ -212,7 +223,27 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
                           ? inst.currentBalance
                           : inst.originalValue
                     )}
+                    {inst.status === "PARCIAL" && (
+                      <span className="ml-2 text-xs font-medium text-stone-400">em aberto</span>
+                    )}
                   </p>
+                  {inst.status === "PARCIAL" && (
+                    <p className="mt-0.5 text-xs text-emerald-400">
+                      Pago até agora: {formatCurrency(inst.receiptValue ?? 0)}
+                    </p>
+                  )}
+                  {inst.receipts.length > 1 && (
+                    <div className="mt-2 rounded-lg bg-stone-800/60 px-3 py-2">
+                      <p className="text-xs font-semibold text-stone-400">
+                        Pagamentos ({inst.receipts.length})
+                      </p>
+                      {inst.receipts.map((r, ri) => (
+                        <p key={ri} className="mt-0.5 text-xs text-stone-500">
+                          {formatDate(r.receiptDate)} — {formatCurrency(r.receiptValue)}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {inst.hasBoleto && inst.status !== "PAGO" && (

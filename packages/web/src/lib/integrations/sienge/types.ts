@@ -81,7 +81,9 @@ export interface SiengeReceivableBill {
   unityName?: string
 }
 
-export type InstallmentStatus = "PAGO" | "BOLETO_GERADO" | "EM_ABERTO"
+// PARCIAL = parcela com baixa(s) mas saldo devedor > 0 (Story 75-284). Nunca
+// tratar como quitada: o cliente ainda deve o currentBalance.
+export type InstallmentStatus = "PAGO" | "PARCIAL" | "BOLETO_GERADO" | "EM_ABERTO"
 
 export interface FormattedInstallment {
   billReceivableId: number
@@ -95,7 +97,11 @@ export interface FormattedInstallment {
   generatedBillet: boolean
   status: InstallmentStatus
   hasBoleto: boolean
+  /** Todas as baixas da parcela (data + valor), em ordem cronológica. */
+  receipts: SiengeReceipt[]
+  /** Data da última baixa. */
   receiptDate?: string
+  /** Somatório das baixas. */
   receiptValue?: number
 }
 
