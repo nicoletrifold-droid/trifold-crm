@@ -286,7 +286,7 @@ export function LeadsBulkTable({
           {leads.length === 0 && (
             <tr>
               <td
-                colSpan={view === "perdidos" && canReactivate ? 11 : 10}
+                colSpan={view === "perdidos" && canReactivate ? 12 : 11}
                 className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
               >
                 Nenhum lead encontrado.

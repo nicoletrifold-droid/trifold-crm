@@ -204,6 +204,50 @@ Calor) é requisito do Epic 84 — a story já aponta isso; o @dev deve reusar
 
 Status: Draft → Ready.
 
+## QA Results
+
+### Review Date: 2026-08-07
+
+### Reviewed By: Quinn (Test Architect) — @qa
+
+**Veredito: CONCERNS (aprovado com 1 ressalva cosmética — pode seguir para @devops).**
+
+**7 checks:** code_review CONCERNS (UI-001) · unit_tests PASS (1676/1676, confirmado
+independentemente) · acceptance_criteria PASS (AC1-AC4; AC5 validações OK) · regressions PASS ·
+performance PASS · security PASS · documentation PASS.
+
+**Validações independentes do QA:** `vitest run` (1676/1676) · `tsc --noEmit` limpo · leitura
+linha a linha do diff completo (`git show 41ecef95`).
+
+**Segurança / consistência do load-more (ponto que o handoff pediu p/ olhar):**
+- A rota `/api/pipeline/leads` usa o client **RLS-scoped** (`supabase` do `requireAuth`), **não**
+  admin client (route.ts:49) — o filtro de qualificação é só um `.eq/.is` adicional sobre a RLS,
+  sem risco de vazamento cross-broker/cross-org. ✅
+- `parseQualificacao` funciona como whitelist (valor fora da lista → null → filtro ignorado):
+  nada cru chega à query. Sem injeção. ✅
+- Paridade inicial (page.tsx) × load-more (route.ts): **mesma** lógica `.eq/.is` server-side nos
+  dois, e o `LEADS_SELECT` da rota agora inclui `qualificacao_comercial` — cards paginados vêm
+  com filtro E badge. ✅
+- Combinação score+qualificação: o `score` continua filtrado JS-side após o `.range()` (quirk
+  **pré-existente**, não tocado pela 84-6); a qualificação é DB-side (mais correta). A 84-6 não
+  piora o comportamento do score. Sem regressão.
+
+**Achado (não bloqueia):**
+- **UI-001 (low, cosmético):** `leads-bulk-table.tsx:289` — a coluna nova "Qualificação" levou a
+  tabela a 11 colunas base (12 com a ação de perdidos), mas o `colSpan` da linha de estado vazio
+  seguiu `? 11 : 10` (deveria ser `? 12 : 11`). A mensagem "Nenhum lead encontrado" abrange uma
+  coluna a menos — só visível com a lista vazia, sem impacto em dado/filtro. Fix trivial (1 linha),
+  recomendado antes do push.
+
+**Destaques positivos:** reuso integral do helper/badge da 84-2 (IDS REUSE, zero artefato novo) ·
+filtro server-side correto (contagem por etapa exata, diferente do score JS-side) · load-more
+coberto de ponta a ponta (o gap que o @po elevou foi tratado nos 3 arquivos) · `<th>`+célula na
+mesma posição relativa (header/coluna alinhados) · nenhuma referência técnica inventada.
+
+### Gate Status
+
+Gate: CONCERNS → docs/qa/gates/84.6-qualificacao-filtro-pipeline-coluna-lista.yml
+
 ## Change Log
 
 | Date | Version | Description | Author |
@@ -211,3 +255,5 @@ Status: Draft → Ready.
 | 2026-08-05 | 0.1 | Draft criado a partir de pedido do Lucas durante o teste local da 84-2: faltam o filtro de Qualificação no board do Pipeline e a coluna de Qualificação na tabela da lista de Leads (a 84-2 entregou só o filtro na lista + badge no card/drawer). Escopo `/dashboard` apenas, espelhando a 84-2. Referências de linha conferidas contra o código. | @sm (River) |
 | 2026-08-05 | 0.2 | Validação PO: GO (9/10). Afiada a T4 (load-more) — verificado que `kanban-board.tsx` + `/api/pipeline/leads/route.ts` precisam propagar `qualificacao` e incluir a coluna no `LEADS_SELECT`, senão a paginação vaza o filtro. 2 arquivos adicionados à File List. Referências conferidas contra o código real. Status Draft → Ready. | @po (Pax) |
 | 2026-08-05 | 0.3 | Implementação completa (T1-T5, modo YOLO, worktree branchado de feat/84-2): coluna Qualificação na lista (reuso do badge), filtro server-side no board + load-more (kanban-board + api/pipeline/leads, incl. coluna no LEADS_SELECT). `vitest` 1676/1676, `tsc` limpo, `eslint` 0 erros, `next build` OK. Filtro verificado contra o banco de dev (bom/none). Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-08-07 | 0.4 | QA: CONCERNS. Load-more verificado seguro (RLS-scoped, sem injeção, paridade com page.tsx). Achado UI-001 (low/cosmético): colSpan da linha vazia não atualizado com a coluna nova (11/10 → deveria 12/11). Fix trivial recomendado antes do push. | @qa (Quinn) |
+| 2026-08-07 | 0.5 | Fix UI-001: colSpan da linha "Nenhum lead encontrado" ajustado de `11:10` para `12:11` (leads-bulk-table.tsx:289), acompanhando a coluna Qualificação nova. `vitest` 1676/1676, `tsc` limpo, `eslint` sem novos erros. Pronto p/ @devops. | @dev (Dex) |
