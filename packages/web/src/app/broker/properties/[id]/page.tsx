@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { propertyStatusBadge, propertyStatusLabel } from "@web/lib/property-status"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -59,19 +60,9 @@ export default async function BrokerPropertyDetailPage({
           </p>
         </div>
         <span
-          className={`rounded-full px-3 py-1 text-sm font-medium ${
-            property.status === "selling"
-              ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-              : property.status === "launching"
-              ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-              : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-300"
-          }`}
+          className={`rounded-full px-3 py-1 text-sm font-medium ${propertyStatusBadge(property.status)}`}
         >
-          {property.status === "selling"
-            ? "Em venda"
-            : property.status === "launching"
-            ? "Lançamento"
-            : property.status}
+          {propertyStatusLabel(property.status)}
         </span>
       </div>
 

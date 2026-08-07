@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { propertyStatusLabel } from "@web/lib/property-status"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import {
@@ -196,8 +197,6 @@ export default async function BrokerHomePage() {
     id: string; name: string; status: string
     total_units: number | null; available_units: number | null; city: string | null
   }>
-  const statusLabel = (s: string) =>
-    s === "selling" ? "Em venda" : s === "launching" ? "Lançamento" : s
 
   const roletaAtiva = roletaConfigResult.data?.is_active ?? false
   const broker = brokerResult.data
@@ -366,7 +365,7 @@ export default async function BrokerHomePage() {
                           : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
                       }`}
                     >
-                      {statusLabel(property.status)}
+                      {propertyStatusLabel(property.status)}
                     </span>
                   </div>
                   {soldPct != null && (
