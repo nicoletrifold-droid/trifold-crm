@@ -125,14 +125,15 @@ const s = StyleSheet.create({
     fontSize: 7,
     color: GRAY,
   },
-  // Column widths
-  cParcela: { width: "10%" },
-  cTipo: { width: "10%" },
-  cVenc: { width: "14%" },
-  cOrig: { width: "17%", textAlign: "right" as const },
-  cSaldo: { width: "17%", textAlign: "right" as const },
-  cStatus: { width: "15%", paddingLeft: 8 },
-  cPgto: { width: "17%" },
+  // Column widths (somam 100%)
+  cParcela: { width: "8%" },
+  cTipo: { width: "9%" },
+  cVenc: { width: "12%" },
+  cOrig: { width: "14%", textAlign: "right" as const },
+  cPago: { width: "14%", textAlign: "right" as const },
+  cSaldo: { width: "14%", textAlign: "right" as const },
+  cStatus: { width: "13%", paddingLeft: 8 },
+  cPgto: { width: "16%", paddingLeft: 8 },
   // Status pill badges
   badgePago: { backgroundColor: "#D1FAE5", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
   badgePagoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#059669" },
@@ -293,16 +294,18 @@ export function ExtratoPDF({
           <Text style={[s.tableHeadCell, s.cTipo]}>Tipo</Text>
           <Text style={[s.tableHeadCell, s.cVenc]}>Vencimento</Text>
           <Text style={[s.tableHeadCell, s.cOrig]}>Valor Original</Text>
-          <Text style={[s.tableHeadCell, s.cSaldo]}>Saldo/Pago</Text>
+          <Text style={[s.tableHeadCell, s.cPago]}>Pago</Text>
+          <Text style={[s.tableHeadCell, s.cSaldo]}>Saldo</Text>
           <Text style={[s.tableHeadCell, s.cStatus]}>Status</Text>
           <Text style={[s.tableHeadCell, s.cPgto]}>Dt. Pagamento</Text>
         </View>
 
         {/* Table rows */}
         {installments.map((inst, idx) => {
-          const valor =
+          const pago = inst.receiptValue ?? 0
+          const saldo =
             inst.status === "PAGO"
-              ? (inst.receiptValue ?? inst.originalValue)
+              ? 0
               : inst.currentBalance > 0
                 ? inst.currentBalance
                 : inst.originalValue
@@ -314,7 +317,8 @@ export function ExtratoPDF({
                 <Text style={[s.cellGray, s.cTipo]}>{COND[inst.conditionType] ?? inst.conditionType}</Text>
                 <Text style={[s.cell, s.cVenc]}>{fmtDate(inst.dueDate)}</Text>
                 <Text style={[s.cell, s.cOrig]}>{fmtCurrency(inst.originalValue)}</Text>
-                <Text style={[s.cell, s.cSaldo]}>{fmtCurrency(valor)}</Text>
+                <Text style={[s.cell, s.cPago]}>{pago > 0 ? fmtCurrency(pago) : "—"}</Text>
+                <Text style={[s.cell, s.cSaldo]}>{fmtCurrency(saldo)}</Text>
                 <View style={s.cStatus}>
                   {inst.status === "PAGO" ? (
                     <View style={s.badgePago}><Text style={s.badgePagoText}>Pago</Text></View>
@@ -330,23 +334,17 @@ export function ExtratoPDF({
                   {inst.receiptDate ? fmtDate(inst.receiptDate) : "—"}
                 </Text>
               </View>
-              {/* Baixas por dia — parcela com 2+ pagamentos (ou parcial) lista cada um (Story 75-284) */}
-              {(inst.receipts.length > 1 || inst.status === "PARCIAL") &&
+              {/* Baixas por dia — valor alinhado sob a coluna Pago (Story 75-284/285) */}
+              {inst.receipts.length > 1 &&
                 inst.receipts.map((r, ri) => (
                   <View key={ri} style={s.receiptRow}>
-                    <Text style={[s.receiptText, { width: "51%" }]}>
+                    <Text style={[s.receiptText, { width: "43%" }]}>
                       Baixa {ri + 1} de {inst.receipts.length} — {fmtDate(r.receiptDate)}
                     </Text>
-                    <Text style={[s.receiptText, { width: "17%", textAlign: "right" }]}>
+                    <Text style={[s.receiptText, { width: "14%", textAlign: "right" }]}>
                       {fmtCurrency(r.receiptValue)}
                     </Text>
-                    {inst.status === "PARCIAL" && ri === inst.receipts.length - 1 ? (
-                      <Text style={[s.receiptText, { width: "32%", textAlign: "right" }]}>
-                        pago {fmtCurrency(inst.receiptValue ?? 0)} · saldo {fmtCurrency(inst.currentBalance)}
-                      </Text>
-                    ) : (
-                      <Text style={{ width: "32%" }} />
-                    )}
+                    <Text style={{ width: "43%" }} />
                   </View>
                 ))}
             </View>
