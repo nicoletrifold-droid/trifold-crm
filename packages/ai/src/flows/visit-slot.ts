@@ -386,6 +386,37 @@ export function slotToUtc(day: DayParts, time: TimeParts): Date {
   return brtToUtc(day.y, day.m, day.d, time.hour, time.minute)
 }
 
+/**
+ * Story 75-279 — a Nicole AFIRMOU um dia+horário único nesta resposta? Devolve o
+ * horário afirmado, ou null. Sem comparar com nada.
+ *
+ * Existe separado da `detectSlotMismatch` porque o caso mais grave é justamente
+ * aquele em que **não há** slot autorizado para comparar: no incidente da lead
+ * Maria Oliveira (06/08) o sistema mandou PERGUNTAR o horário, e a Nicole
+ * inventou um bloco `[SISTEMA: … LIVRE]`, confirmou "sábado às 11h" e nada foi
+ * agendado. A guarda da 75-245 exigia `authorizedSlotUtc` para rodar e por isso
+ * era cega exatamente aí — em prod ela nunca disparou uma única vez.
+ *
+ * Mesma postura conservadora da 75-245: só AFIRMAÇÃO de dia+hora único. Texto
+ * ambíguo (oferta de opções, frase de expediente) devolve null.
+ *
+ * Story 87-3 — mora AQUI (era `chat/pipeline.ts`) porque as três dependências
+ * dela já estavam neste arquivo e porque `flows/agenda-reconcile.ts` precisa
+ * consumi-la sem criar o ciclo `pipeline → flows/index → agenda-reconcile →
+ * pipeline`. `chat/pipeline.ts` a re-exporta; o corpo é o mesmo.
+ */
+export function detectAffirmedSlot(input: {
+  assistantMessage: string
+  now: Date
+}): Date | null {
+  const { assistantMessage, now } = input
+  if (!assistantMessage) return null
+  if (isAmbiguousSlotText(assistantMessage)) return null
+  const said = resolveVisitSlotParts({ message: assistantMessage, now, visitAvailability: null })
+  if (!said.day || !said.time) return null
+  return slotToUtc(said.day, said.time)
+}
+
 /** Story 75-163 — DayParts (BRT) de uma data UTC (ex.: dia da visita atual, p/ troca só-de-horário). */
 export function dayPartsFromUtc(d: Date): DayParts {
   const p = brtParts(d)

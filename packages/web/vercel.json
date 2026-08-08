@@ -175,6 +175,10 @@
     {
       "path": "/api/cron/meta-capi-dispatch",
       "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/nicole-agenda-reconcile",
+      "schedule": "38 11 * * *"
     }
   ]
 }
