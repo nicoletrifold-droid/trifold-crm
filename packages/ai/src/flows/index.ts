@@ -5,6 +5,24 @@ export {
   extractCollectedData,
   extractVisitConfirmation,
 } from "./qualification"
+// Story 87-4 — o estado de agenda com âncora temporal, procedência e TTL. Público
+// em `@trifold/ai` porque o cron `enrich-leads` (packages/web) precisa da lista de
+// chaves legadas para filtrar o merge do Haiku — ver AC8-b.
+export {
+  AGENDA_STATE_KEY,
+  LEGACY_AGENDA_KEYS,
+  TTL_AGENDA_STATE_HORAS,
+  buildAgendaState,
+  isAgendaStateExpired,
+  readAgendaState,
+  writeAgendaState,
+  stripLegacyAgendaKeys,
+  isPendencia,
+  omitAgendaKeys,
+  omitLegacyAgendaKeys,
+  hasAgendaFact,
+} from "./agenda-state"
+export type { AgendaState, FonteAgenda } from "./agenda-state"
 export { checkYardenGate } from "./yarden-gate"
 export { shouldHandoff, generateHandoffSummary, isNonLeadContact } from "./handoff"
 export { classifyContactIntent, parseContactClassification } from "./classify-contact"

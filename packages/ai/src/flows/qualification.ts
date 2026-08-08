@@ -3,7 +3,14 @@
  * Calculates qualification scores, determines next steps,
  * and extracts collected data from AI responses.
  */
-import { isAmbiguousSlotText } from "./visit-slot"
+import {
+  isAmbiguousSlotText,
+  parseDayParts,
+  parseTimeParts,
+  parsePeriodParts,
+  dayPartsToIso,
+} from "./visit-slot"
+import { AGENDA_STATE_KEY, buildAgendaState, hasAgendaFact } from "./agenda-state"
 
 const SCORE_WEIGHTS: Record<string, number> = {
   name: 10,
@@ -30,6 +37,22 @@ const QUALIFICATION_STEPS = [
 ] as const
 
 /**
+ * Story 87-4 — o campo de agenda mudou de nome e de forma (`visit_availability`
+ * string → `agenda_state` objeto), mas o peso 20 e o passo de qualificação são
+ * OS MESMOS. Esta função é o adaptador: aceita os dois formatos, para que uma
+ * conversa ainda não tocada continue pontuando como pontuava.
+ *
+ * Por que isso importa mais do que parece (Risco 2 da story): o peso 20 é ~1/5
+ * do score, e o score ≥ 70 é uma das condições do `shouldHandoff`. Uma regressão
+ * de score muda o gatilho de handoff sem que ninguém associe as duas coisas.
+ */
+function fieldIsCollected(collectedData: Record<string, unknown>, field: string): boolean {
+  if (field === "visit_availability") return hasAgendaFact(collectedData)
+  const value = collectedData[field]
+  return value !== undefined && value !== null && value !== ""
+}
+
+/**
  * Calculates a qualification score (0-100) based on collected data.
  * Each field contributes its weight when present and non-empty.
  */
@@ -39,8 +62,7 @@ export function calculateQualificationScore(
   let score = 0
 
   for (const [field, weight] of Object.entries(SCORE_WEIGHTS)) {
-    const value = collectedData[field]
-    if (value !== undefined && value !== null && value !== "") {
+    if (fieldIsCollected(collectedData, field)) {
       score += weight
     }
   }
@@ -56,8 +78,7 @@ export function getNextQualificationStep(
   collectedData: Record<string, unknown>
 ): string {
   for (const step of QUALIFICATION_STEPS) {
-    const value = collectedData[step]
-    if (value === undefined || value === null || value === "") {
+    if (!fieldIsCollected(collectedData, step)) {
       return step
     }
   }
@@ -108,7 +129,28 @@ function capitalizeName(raw: string): string {
 export function extractCollectedData(
   aiResponse: string,
   currentData: Record<string, unknown>,
-  opts?: { nameExpected?: boolean }
+  opts?: {
+    nameExpected?: boolean
+    /**
+     * Story 87-4 — de QUEM é o texto. Só `"lead"` produz disponibilidade de
+     * visita. FAIL-CLOSED de propósito: sem `origem` declarada, nenhum fato de
+     * agenda é escrito.
+     *
+     * Esta função sempre rodou DUAS vezes por turno — uma sobre a mensagem do
+     * lead (`pipeline.ts`, correto) e outra sobre a resposta da própria Nicole.
+     * A segunda é a fonte do veneno: em produção, 10 de 13 `visit_availability`
+     * inspecionados em 07/08 eram fala DELA — a pergunta "qual o melhor dia,
+     * durante a semana ou sábado de manhã?" (Nilson), a saudação "Sou a Nicole…
+     * como posso te ajudar hoje?" (Bianca, cujo "hoje" resolvia para a data de
+     * cada leitura), até uma recusa do lead lida como disponibilidade (Maicon).
+     *
+     * A regra que fecha a classe inteira: **fato de agenda sem citação de uma
+     * mensagem `role='user'` não pode virar estado.**
+     */
+    origem?: "lead" | "assistant"
+    /** Story 87-4 — instante da ÂNCORA. O dia é resolvido aqui, uma vez, e nunca mais. */
+    now?: Date
+  }
 ): Record<string, unknown> {
   const updated = { ...currentData }
   const lower = aiResponse.toLowerCase()
@@ -267,8 +309,17 @@ export function extractCollectedData(
 
   // Extract visit availability — only when a DAY reference is present.
   // Time-only mentions (10h, de manhã) are NOT sufficient to trigger scheduling.
-  if (!updated.visit_availability) {
-    // Keywords that confirm a day → set visit_availability
+  //
+  // Story 87-4 — o GATILHO é exatamente o mesmo de antes (mesma lista de
+  // palavras, mesma guarda `isAmbiguousSlotText`): mudar o gatilho seria
+  // caminho de decisão novo, proibido na Onda 1. O que muda são duas coisas, e
+  // as duas são subtração:
+  //   (a) só roda com `origem: "lead"` — a fala da Nicole deixa de virar estado;
+  //   (b) o que se grava deixa de ser a STRING crua (que era reancorada a cada
+  //       leitura) e passa a ser um `agenda_state` com o dia JÁ RESOLVIDO contra
+  //       este instante, mais a citação literal e a validade.
+  if (opts?.origem === "lead" && !updated[AGENDA_STATE_KEY]) {
+    // Keywords that confirm a day → set agenda_state
     const dayKeywords = [
       "sábado", "sabado", "domingo",
       "segunda-feira", "terça-feira", "terca-feira",
@@ -278,7 +329,7 @@ export function extractCollectedData(
       "esse sábado", "esse sabado", "nesse sábado",
     ]
 
-    // Keywords that indicate visit intent → set visit_availability
+    // Keywords that indicate visit intent → set agenda_state
     const visitIntentKeywords = [
       "quero visitar", "quero conhecer", "quero ir",
       "posso ir", "posso visitar", "posso passar",
@@ -295,7 +346,24 @@ export function extractCollectedData(
     // meio-dia" gravava a frase inteira aqui — que virava agendamento fantasma
     // no turno seguinte (incidente do lead Ailton, 30/07/2026).
     if (hasDayOrIntent && !isAmbiguousSlotText(aiResponse)) {
-      updated.visit_availability = aiResponse.trim()
+      // Story 87-4 — A ÂNCORA. O dia relativo ("sábado", "amanhã") é resolvido
+      // AQUI, uma única vez, contra o instante em que o lead falou. Depois disso
+      // `data_absoluta` é uma data, não uma expressão — e nunca mais é reparseada.
+      const now = opts.now ?? new Date()
+      const day = parseDayParts(aiResponse, now)
+      const time = parseTimeParts(aiResponse)
+      updated[AGENDA_STATE_KEY] = buildAgendaState({
+        citacao: aiResponse,
+        now,
+        // MENÇÃO: colhida de texto solto, sem termos perguntado nada. É o que o
+        // `visit_availability` sempre foi — e é por isso que ela NÃO pode mexer
+        // numa visita já marcada (ver `fonte` em `agenda-state.ts`).
+        fonte: "mencao",
+        dataAbsoluta: day ? dayPartsToIso(day) : null,
+        hora: time?.hour ?? null,
+        minuto: time?.minute ?? null,
+        periodo: parsePeriodParts(aiResponse),
+      })
     }
     // Time-only keywords (10h, de manhã, à tarde) intentionally excluded —
     // Nicole should ask for the day before scheduling

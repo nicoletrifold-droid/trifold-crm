@@ -5,6 +5,13 @@ import {
   extractCollectedData,
   extractVisitConfirmation,
 } from "./qualification"
+import type { AgendaState } from "./agenda-state"
+
+// Story 87-4 — âncora fixa: 2026-06-18T17:00:00Z = quinta-feira 14:00 BRT.
+// Sem `now` fixo, "sábado" resolveria uma data diferente a cada dia em que a
+// suíte rodasse — que é literalmente o defeito que esta story fecha.
+const NOW_QUALIF = new Date("2026-06-18T17:00:00Z")
+const LEAD = { origem: "lead" as const, now: NOW_QUALIF }
 
 describe("calculateQualificationScore", () => {
   it("returns 0 for empty data", () => {
@@ -358,24 +365,52 @@ describe("extractCollectedData", () => {
     expect(result.bedrooms).toBe(3)
   })
 
+  // Story 87-4 — a disponibilidade deixou de ser a STRING crua em
+  // `visit_availability` e passou a ser o `agenda_state`, com o dia JÁ resolvido
+  // contra o instante da escrita, a citação literal e a validade. O GATILHO é o
+  // mesmo (mesma lista de palavras, mesma guarda de ambiguidade); o que mudou é
+  // o que se grava e QUEM pode gravar (`origem: "lead"`).
   it("extracts visit availability from intent keyword", () => {
-    const result = extractCollectedData("Quero visitar o apartamento", {})
-    expect(result.visit_availability).toBeTruthy()
+    const result = extractCollectedData("Quero visitar o apartamento", {}, LEAD)
+    expect(result.agenda_state).toBeTruthy()
+    expect((result.agenda_state as AgendaState).origem).toBe("lead")
   })
 
-  it("extracts visit with day/time", () => {
-    const result = extractCollectedData("Pode ser esse sábado às 10h", {})
-    expect(result.visit_availability).toBeTruthy()
-    expect(result.visit_availability).toContain("sábado")
+  it("extracts visit with day/time — e o dia sai ANCORADO, não relativo", () => {
+    const result = extractCollectedData("Pode ser esse sábado às 10h", {}, LEAD)
+    const st = result.agenda_state as AgendaState
+    expect(st.citacao).toContain("sábado")
+    // NOW_QUALIF é quinta 18/06/2026 → o próximo sábado é 20/06.
+    expect(st.data_absoluta).toBe("2026-06-20")
+    expect(st.hora).toBe(10)
+    expect(st.ancorado_em).toBe(NOW_QUALIF.toISOString())
   })
 
   it("does NOT extract visit from time-only mention", () => {
-    const result = extractCollectedData("Pode ser às 10h", {})
-    expect(result.visit_availability).toBeUndefined()
+    const result = extractCollectedData("Pode ser às 10h", {}, LEAD)
+    expect(result.agenda_state).toBeUndefined()
   })
 
   it("does NOT extract visit from 'de manhã' alone", () => {
-    const result = extractCollectedData("Prefiro de manhã", {})
+    const result = extractCollectedData("Prefiro de manhã", {}, LEAD)
+    expect(result.agenda_state).toBeUndefined()
+  })
+
+  // Story 87-4 / AC2 — a metade que faltava: sem `origem: "lead"` declarada,
+  // NENHUM fato de agenda é escrito. Fail-closed.
+  it("🔴 87-4 — sem origem declarada, nada de agenda é gravado", () => {
+    const result = extractCollectedData("Pode ser esse sábado às 10h", {})
+    expect(result.agenda_state).toBeUndefined()
+    expect(result.visit_availability).toBeUndefined()
+  })
+
+  it("🔴 87-4 — a fala da NICOLE (origem assistant) não vira disponibilidade", () => {
+    // O texto real do `visit_availability` do lead Nilson, em produção: é a
+    // pergunta DELA, gravada como se fosse a resposta dele.
+    const falaDaNicole =
+      "Que tal agendar uma visita? Qual o melhor dia pra você, durante a semana ou sábado de manhã?"
+    const result = extractCollectedData(falaDaNicole, {}, { origem: "assistant", now: NOW_QUALIF })
+    expect(result.agenda_state).toBeUndefined()
     expect(result.visit_availability).toBeUndefined()
   })
 
@@ -386,24 +421,27 @@ describe("extractCollectedData", () => {
   it("NÃO grava frase de horário de atendimento como disponibilidade", () => {
     const result = extractCollectedData(
       "Qual o melhor dia pra você vir? Atendemos de segunda a sexta das 8h às 18h e sábado das 8h ao meio-dia.",
-      {}
+      {},
+      LEAD
     )
-    expect(result.visit_availability).toBeUndefined()
+    expect(result.agenda_state).toBeUndefined()
   })
 
   it("NÃO grava oferta de opções da Nicole como disponibilidade", () => {
-    const result = extractCollectedData("Prefere sábado ou segunda?", {})
-    expect(result.visit_availability).toBeUndefined()
+    const result = extractCollectedData("Prefere sábado ou segunda?", {}, LEAD)
+    expect(result.agenda_state).toBeUndefined()
   })
 
   it("continua gravando disponibilidade real do cliente (slot único)", () => {
-    const result = extractCollectedData("Pode ser sábado às 10h", {})
-    expect(result.visit_availability).toContain("sábado")
+    const result = extractCollectedData("Pode ser sábado às 10h", {}, LEAD)
+    expect((result.agenda_state as AgendaState).citacao).toContain("sábado")
   })
 
   it("extracts visit from day keyword 'amanhã'", () => {
-    const result = extractCollectedData("Posso amanhã de manhã", {})
-    expect(result.visit_availability).toBeTruthy()
+    const result = extractCollectedData("Posso amanhã de manhã", {}, LEAD)
+    const st = result.agenda_state as AgendaState
+    expect(st.data_absoluta).toBe("2026-06-19")
+    expect(st.periodo).toBe("manha")
   })
 
   it("preserves existing data and merges new extractions", () => {
