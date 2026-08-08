@@ -625,6 +625,9 @@ async function processNoShowDetection(
   now: Date
 ): Promise<number> {
   const threshold = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+  // Story 87-4 — o reset de estado do no-show precisa apagar a chave nova
+  // (`agenda_state`) junto com as legadas; ver o uso abaixo.
+  const { omitAgendaKeys } = await import("@trifold/ai")
 
   const { data: staleAppointments } = await supabase
     .from("appointments")
@@ -706,8 +709,11 @@ async function processNoShowDetection(
         .single()
 
       if (state) {
-        const cleaned = { ...(state.collected_data as Record<string, unknown>) }
-        delete cleaned.visit_availability
+        // Story 87-4 — o reset precisa apagar a chave NOVA também: um reset que
+        // deixa o `agenda_state` de pé não reseta nada, e o lead que deu no-show
+        // voltaria com o mesmo dia herdado na próxima mensagem.
+        // `omitAgendaKeys` remove as quatro chaves legadas E o `agenda_state`.
+        const cleaned = omitAgendaKeys(state.collected_data as Record<string, unknown>)
         await supabase
           .from("conversation_state")
           .update({ visit_proposed: false, collected_data: cleaned })

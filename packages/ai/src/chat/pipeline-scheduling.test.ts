@@ -51,8 +51,12 @@ function fakeAnthropic(resposta: string): Anthropic {
 
 /**
  * Estado exato do incidente: a Nicole já perguntou o horário no turno anterior
- * (`visit_proposed`), o dia ficou pendente (`visit_pending_date`) e o lead
- * responde só com a hora.
+ * (`visit_proposed`), o dia ficou pendente e o lead responde só com a hora.
+ *
+ * Story 87-4 — o dia pendente mudou de forma: era `visit_pending_date` (uma das
+ * quatro chaves soltas) e passou a ser `agenda_state.data_absoluta`. O cenário é
+ * IDÊNTICO; o que muda é o formato. A chave antiga não arma mais nada — e isso é
+ * o objetivo da story, coberto por `pipeline-agenda-state.test.ts` (AC4).
  */
 function seedDoIncidente(sabadoIso: string) {
   return {
@@ -60,7 +64,19 @@ function seedDoIncidente(sabadoIso: string) {
     conversation_state: [
       {
         conversation_id: CONVERSATION,
-        collected_data: { name: "Maria Oliveira", visit_pending_date: sabadoIso },
+        collected_data: {
+          name: "Maria Oliveira",
+          agenda_state: {
+            citacao: "Pode ser sábado",
+            origem: "lead",
+            data_absoluta: sabadoIso,
+            hora: null,
+            minuto: null,
+            periodo: null,
+            ancorado_em: new Date().toISOString(),
+            expira_em: new Date(Date.now() + 48 * 3600_000).toISOString(),
+          },
+        },
         qualification_step: "floor",
         current_property_id: null,
         visit_proposed: true,
@@ -124,10 +140,12 @@ describe("Story 75-279 — AC6: 'As 11hrs' grava a visita de verdade", () => {
 
   it("limpa a pendência de dia — o rastro que denunciou o defeito em prod", async () => {
     // Em produção o `visit_pending_date` da Maria continuava gravado: prova de
-    // que o ramo que agenda nunca rodou.
+    // que o ramo que agenda nunca rodou. Story 87-4 — a pendência agora mora em
+    // `agenda_state`, e o teste continua verificando a MESMA coisa: ela some.
     const { fake } = await rodarTurno("As 11hrs")
     const estado = fake.table("conversation_state")[0]!
     expect(estado.collected_data).not.toHaveProperty("visit_pending_date")
+    expect(estado.collected_data).not.toHaveProperty("agenda_state")
   })
 
   it("avança o lead para Visita Agendada e carimba visit_scheduled_at", async () => {

@@ -188,6 +188,21 @@ export default async function LeadDetailPage({
     return v !== null && v !== undefined && v !== "" ? String(v) : null
   }
 
+  // Story 87-4 — a disponibilidade de visita deixou de ser uma string crua em
+  // `visit_availability` e virou o objeto `agenda_state`. Sem isto o `cd()`
+  // imprimiria "[object Object]" (ou nada, depois que o legado é apagado). O que
+  // se mostra ao humano é a CITAÇÃO — o trecho literal da mensagem do lead — que
+  // é exatamente a informação que a string antiga tentava carregar, agora com a
+  // garantia de que veio dele e não da Nicole.
+  const agendaCitacao = (() => {
+    const st = collectedData.agenda_state as Record<string, unknown> | undefined
+    if (st && typeof st === "object" && typeof st.citacao === "string" && st.citacao.trim()) {
+      const dia = typeof st.data_absoluta === "string" ? ` (dia ${st.data_absoluta})` : ""
+      return `${st.citacao}${dia}`
+    }
+    return cd("visit_availability") // formato antigo, até a conversa ser tocada
+  })()
+
   // Story 75-186 — agendamento pendente de feedback (mesma regra da página do
   // corretor, 75-185): visita já passada sem visit_feedback → botão no header.
   const { data: pastAppointments } = await supabase
@@ -384,7 +399,7 @@ export default async function LeadDetailPage({
             <InfoRow label="Etapa qualificação" value={convState?.qualification_step} />
             <InfoRow label="Visita proposta" value={convState?.visit_proposed ? "Sim" : "Não"} />
             <InfoRow label="Como conheceu" value={cd("how_found")} />
-            <InfoRow label="Disponibilidade visita" value={cd("visit_availability")} />
+            <InfoRow label="Disponibilidade visita" value={agendaCitacao} />
             <InfoRow label="Família" value={cd("family_size")} />
             <InfoRow label="Faixa investimento" value={cd("budget_range")} />
             <InfoRow label="Prazo decisão" value={cd("timeline")} />

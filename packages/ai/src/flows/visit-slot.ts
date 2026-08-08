@@ -7,6 +7,9 @@
  * Brasil não tem horário de verão desde 2019 → BRT é fixo em UTC-3.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
+// Story 87-4 — import DE TIPO apenas: `agenda-state.ts` é puro e não importa
+// nada daqui em runtime, então não há ciclo.
+import type { AgendaState } from "./agenda-state"
 
 const BRT_OFFSET_HOURS = 3
 export const VISIT_DURATION_MIN = 60
@@ -346,39 +349,92 @@ export function detectRescheduleIntent(text: string | null | undefined): boolean
 }
 
 /**
- * Story 75-162 — resolve dia+hora do slot combinando as fontes, na ordem:
- * 1) mensagem atual do lead, 2) pendências de turnos anteriores, 3) `visit_availability`
- * (slot que a Nicole já capturou, ex.: "Sábado, 18 de julho, às 9h"). Torna o
- * agendamento robusto quando dia e hora vieram em turnos diferentes ou só constam
- * no visit_availability — em vez de depender do frágil flag `visit_proposed`. Puro.
+ * Story 75-162 — resolve dia+hora do slot combinando a mensagem atual do lead
+ * com o que ficou de turnos anteriores. Torna o agendamento robusto quando dia e
+ * hora vieram em turnos diferentes. Puro.
+ *
+ * Story 87-4 — DUAS SUBTRAÇÕES, e elas são o coração da story:
+ *
+ * 1. **A herança nunca reancora.** Antes, o estado herdado chegava aqui como a
+ *    STRING crua do `visit_availability` e esta função chamava
+ *    `parseDayParts(string, now)` — reancorando a expressão relativa contra o
+ *    relógio de cada leitura. A mesma frase da Edicleia ("sexta-feira às 15h")
+ *    resolvia 07/08, 14/08, 21/08, 28/08 conforme o dia em que fosse lida.
+ *    Agora a herança chega como `AgendaState.data_absoluta`, que é uma data já
+ *    resolvida no momento da escrita; a `citacao` NUNCA é fonte de parse.
+ *
+ * 2. **A herança tem UMA porta, e a porta sabe de onde o dia veio.** Antes havia
+ *    dois caminhos — `pendingDay` (que entrava SEMPRE, sem guarda) e
+ *    `visitAvailability` (guardado pelo `periodWithoutDayInMessage`) — e as
+ *    regras dos dois viviam em lugares diferentes. Agora entra tudo por aqui, e
+ *    a decisão depende do `fonte` do estado, que é explícito:
+ *
+ *      • `mencao`    — dia colhido de texto solto. A guarda de período vale.
+ *                      É a classe do incidente da Valnira: conferido na conversa
+ *                      real (03/08 23:57), o sábado dela veio da fala da PRÓPRIA
+ *                      Nicole ("…durante a semana ou sábado de manhã?"), e ela
+ *                      não tinha pendência nenhuma — aquele era o primeiro turno
+ *                      em que se perguntou o dia.
+ *      • `pendencia` — dia que o lead deu respondendo a uma pergunta nossa. A
+ *                      guarda NÃO vale: bloqueá-lo faz o pedido dele
+ *                      ("quinta" → "de manhã") sumir em silêncio, e não teria
+ *                      protegido a Valnira, que nunca teve pendência.
+ *
+ *    `ignorarMencao` existe porque o `HEAD` excluía o `visitAvailability` do ramo
+ *    da visita já marcada de propósito ("NÃO do visit_availability, que guarda o
+ *    slot ANTIGO"). Sem essa exclusão, um "Oi" REMARCA a visita de quem está em
+ *    negociação avançada. A exclusão continua, agora declarada nesta porta em vez
+ *    de por um `null` no chamador.
  */
 export function resolveVisitSlotParts(input: {
   message: string
   now: Date
-  pendingDay?: DayParts | null
-  pendingTime?: TimeParts | null
-  visitAvailability?: string | null
-  /** Story 75-268 — opções do parse de hora da MENSAGEM DO LEAD (não do `visit_availability`). */
+  /** Story 87-4 — o fato de agenda com âncora. Substitui pendingDay/pendingTime/visitAvailability. */
+  agendaState?: AgendaState | null
+  /**
+   * Story 87-4 — descarta o estado quando ele é `mencao` (texto solto), mantendo
+   * só a `pendencia`. Usado no ramo da visita JÁ MARCADA, onde uma menção antiga
+   * não pode mover `scheduled_at`.
+   */
+  ignorarMencao?: boolean
+  /** Story 75-268 — opções do parse de hora da MENSAGEM DO LEAD. */
   timeOptions?: TimeParseOptions
-}): { day: DayParts | null; time: TimeParts | null } {
-  const { message, now, pendingDay = null, pendingTime = null, visitAvailability, timeOptions } = input
+}): {
+  day: DayParts | null
+  time: TimeParts | null
+  /** Story 87-4 — o que veio DESTE turno (o resto veio do estado). Insumo da citação. */
+  fromMessage: { day: boolean; time: boolean }
+} {
+  const { message, now, timeOptions } = input
+  // Story 87-4 — no ramo da visita já marcada, menção não entra (nem como dia nem
+  // como hora): era o `visitAvailability: null` do `HEAD`.
+  const agendaState =
+    input.ignorarMencao && input.agendaState?.fonte === "mencao" ? null : (input.agendaState ?? null)
+
   const dayInMessage = parseDayParts(message, now)
-  let day = dayInMessage ?? pendingDay
-  let time = parseTimeParts(message, timeOptions) ?? pendingTime
+  const timeInMessage = parseTimeParts(message, timeOptions)
+
   // Story 75-268 — período dado pelo lead NÃO herda dia velho. Quando ele diz só
-  // o período ("Semana de manhã"), o `visit_availability` antigo entrava como dia
-  // e a Nicole oferecia outro dia: a Valnira pediu dia de semana e ouviu sábado.
-  // Sem dia, o certo é PERGUNTAR o dia.
+  // o período ("Semana de manhã"), o dia antigo entrava e a Nicole oferecia outro
+  // dia. Sem dia, o certo é PERGUNTAR o dia.
+  // Story 87-4 — a guarda vale para a MENÇÃO, não para a pendência (ver acima).
   const periodWithoutDayInMessage = !dayInMessage && !!parsePeriodParts(message)
-  // Story 75-245 — o `visit_availability` só vale como fonte de slot quando é um
-  // slot ÚNICO. Frase de expediente ou lista de opções (ambígua) não agenda
-  // nada: era daí que saía o agendamento fantasma (ver isAmbiguousSlotText).
-  if ((!day || !time) && visitAvailability && !isAmbiguousSlotText(visitAvailability)) {
-    if (!day && !periodWithoutDayInMessage) day = parseDayParts(visitAvailability, now)
-    // Hora vinda da fala da Nicole nunca aceita número pelado (opções não passam).
-    if (!time) time = parseTimeParts(visitAvailability)
+  const herancaDeDiaBloqueada = periodWithoutDayInMessage && agendaState?.fonte === "mencao"
+
+  const inheritedDay = agendaState?.data_absoluta ? isoToDayParts(agendaState.data_absoluta) : null
+  const inheritedTime =
+    agendaState && agendaState.hora !== null
+      ? { hour: agendaState.hora, minute: agendaState.minuto ?? 0 }
+      : null
+
+  const day = dayInMessage ?? (herancaDeDiaBloqueada ? null : inheritedDay)
+  const time = timeInMessage ?? inheritedTime
+
+  return {
+    day,
+    time,
+    fromMessage: { day: !!dayInMessage, time: !!timeInMessage },
   }
-  return { day, time }
 }
 
 /** Story 75-245 — Date UTC de um dia+hora BRT, sem as regras de expediente. */
@@ -412,7 +468,7 @@ export function detectAffirmedSlot(input: {
   const { assistantMessage, now } = input
   if (!assistantMessage) return null
   if (isAmbiguousSlotText(assistantMessage)) return null
-  const said = resolveVisitSlotParts({ message: assistantMessage, now, visitAvailability: null })
+  const said = resolveVisitSlotParts({ message: assistantMessage, now })
   if (!said.day || !said.time) return null
   return slotToUtc(said.day, said.time)
 }
