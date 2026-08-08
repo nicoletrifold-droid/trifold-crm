@@ -26,11 +26,13 @@ related:
   - packages/ai/src/prompts/guardrails.ts (RN1–RN14 — texto, sem enforcement)
   - packages/web/src/lib/ai/send-library-media.ts (`resolveSendableMedia`)
   - packages/web/src/app/api/webhook/whatsapp/route.ts (orquestração do turno, `is_ai_active`)
+  - packages/web/src/app/api/cron/enrich-leads/route.ts + packages/ai/src/flows/haiku-enrichment.ts — **a SEGUNDA esteira de escrita do `collected_data`, fora do `processMessage`**: último escritor de 39 dos 56 estados residuais (@po, 07/08). Também é o 2º leitor que descarta `role='broker'` (W1-7)
   - supabase/migrations/012_lead_memory_system.sql (registrada como aplicada, sem efeito no banco)
 revisado_por:
   - docs/architecture/2026-08-05-validacao-epic-87.md (@architect, 05/08 — validação adversarial; criou o W0-0)
   - docs/architecture/2026-08-07-debate-tool-use-nicole.md (@architect, 07/08 — §8 lista G-1..G-5, as incoerências deste arquivo)
   - docs/qa/po-validation-epic-88.md (@po, 06/08 — §2 lista as 9 edições obrigatórias aqui)
+  - docs/qa/po-validation-87-3-87-4-87-5.md (@po, 07/08 — §6 lista as 3 edições `P1`–`P3` desta v0.6; §2.1 e §3.3 trazem as medições que elas absorvem)
 epic_irmao:
   - 88 (docs/stories/epics/epic-88-nicole-tool-use-agenda.md) — absorve o antigo W4-1
 stories_planned:
@@ -43,6 +45,15 @@ stories_planned:
   - item: '— (derivado do W0-0, cortado em 05/08: era a AC8)'
     story: docs/stories/87-2-campos-mortos-do-painel-passam-a-valer.story.md
     status: Draft
+  - item: W0-5
+    story: docs/stories/87-3-reconciliacao-diaria-fala-x-banco.story.md
+    status: Ready
+  - item: W1-2b
+    story: docs/stories/87-4-estado-de-agenda-com-ancora-temporal.story.md
+    status: Ready
+  - item: W1-7
+    story: docs/stories/87-5-historico-rotulado-fala-do-corretor.story.md
+    status: Ready
 stories_added: []
 stories_done: []
 ---
@@ -216,6 +227,14 @@ entra no runbook marcada como **não conclusiva**.
 > número saltar para **81%** — porque conta a visita que um **humano criou horas depois** para
 > consertar. Sueli, Valnira e Maria Oliveira, que são os incidentes, apareceriam como sucesso.
 > Qualquer métrica de lastro deste epic herda essa definição.
+>
+> ⚠️ **O `31%` é baseline MANUAL, e o instrumento ainda não o reproduz.** A régua rodada exatamente
+> como especificada contra 60 dias de produção dá **7%** (@po, `po-validation-87-3-87-4.md` §1.4),
+> por quatro causas medidas: denominador (16 falas curadas × 30 disparos do instrumento), unidade
+> nunca declarada (fala × lead), filtro de `status` que contradiz a própria Dev Note da story, e o
+> balde `lembrete` ausente — que rotula **lembrete de visita que já existia** como conserto humano.
+> O viés **subconta** lastro. Recalibrar é a correção **B6** da Story 87-3; até lá, o número informa
+> escopo e ordem e **não arbitra decisão de arquitetura** (ver Onda 4 e `Epic 88 · §8.1`).
 
 ---
 
@@ -292,7 +311,19 @@ do próprio projeto diz que pressa nessa área produz remendo que reincide em 72
 ## 7. Roadmap por ondas
 
 Legenda de esforço: **XS** ≈ 1h · **S** ≈ 2–4h · **M** ≈ 1 dia · **L** ≈ 2–3 dias · **XL** ≈ 1 semana+.
-Risco = risco de **regressão em produção**.
+
+**Legenda de risco — dois eixos, e eles não são a mesma coisa** (correção `A4` do @po, 07/08). Por
+padrão a coluna "Risco" mede **regressão em produção**: a chance de o item quebrar o que hoje
+funciona. Mas os itens que **adicionam um caminho de decisão novo** têm um segundo eixo — a chance
+de o comportamento novo estar **errado** —, e ele pode ser alto com o primeiro baixo. Trinta linhas
+determinísticas dificilmente quebram algo (regressão **Baixa**) e podem, ainda assim, fazer a Nicole
+agendar sozinha (comportamento novo **Alto**). Nesses itens a coluna vem como
+**`regressão / comportamento novo`**; nos demais, um valor só, que é o de regressão.
+
+> **Por que a distinção importa e não é preciosismo:** o @sm e o @po chegaram a classificações
+> opostas do mesmo item (`W1-2c`) porque **mediam eixos diferentes, e os dois estavam certos sobre o
+> próprio eixo**. Um item lido como "Baixo" no eixo errado atravessa a regra de corte da onda sem
+> ninguém perceber.
 
 ### Onda 0 — Verdade e visibilidade (mesmo dia · não muda comportamento)
 
@@ -305,6 +336,7 @@ Risco = risco de **regressão em produção**.
 | **W0-2** | Instrumentar as falhas silenciosas em `system_events` | **CR-2, CR-3** — torna auditável o que hoje é `return ""` | S | **Baixo** (só log) | — | @dev |
 | **W0-3** | Baseline de métricas M1–M5 em produção + runbook de medição | Todas — sem baseline não há prova de melhora | XS | **Nenhum** | W0-2 | @qa + @data-engineer |
 | **W0-4** | Kill switch global da Nicole (flag lido no webhook antes de `processMessage`) | Válvula de segurança operacional; habilita **D1** de verdade | S | **Baixo** | — | @dev + @devops |
+| **W0-5** 🔴 | **Reconciliação diária fala × banco, com alerta nomeado** — cron sobre as falas da Nicole das últimas 24h: afirmou dia+hora e não existe `appointment` a ±30 min → alerta | **O tempo de descoberta.** Nenhum outro item dos dois epics detecta a Célia | **M** | **Nenhum** (só leitura + alerta) | W0-2 | @dev + @data-engineer |
 
 **W0-0 🔒 BLOQUEANTE — item criado pelo @architect na validação de 05/08 (§6.3), era o `W2-4` da
 Onda 2.** Foi promovido porque o próprio epic o descrevia como *"pré-requisito de qualquer
@@ -342,6 +374,36 @@ criação). Não há como pausar a Nicole globalmente sem `UPDATE` em massa. Ind
 a válvula que faltará no próximo incidente. **Atenção ao gotcha do Vercel:** nunca `vercel env add`
 via pipe; usar `scripts/vercel-env-set.sh`.
 
+**W0-5 🔴 — item novo, e é o de maior ROI dos dois epics.** Vem do @architect
+(`2026-08-07-debate-tool-use-nicole.md` §2.3 e §4, itens 0.2 e "(a)") e não tinha dono em epic
+nenhum. O argumento é a Célia: em **28/06** a Nicole escreveu *"Agendei sua visita para este sábado
+às 9h"*; **zero appointments até hoje**; **cinco semanas** até alguém notar, por acidente, lendo a
+conversa. Nenhum outro item destes dois epics detecta isso.
+
+> **O reenquadramento que este item traz:** *a falha de parser durou 5 semanas e custou uma
+> cliente; a falha de detecção durou as mesmas 5 semanas e custou todas as outras.* Enquanto nada
+> compara a fala com a linha no banco, **todo defeito novo — de parser, de gate, de estado, de
+> expediente — tem tempo de descoberta medido em semanas e um descobridor humano por acidente.**
+>
+> **Custo:** uma consulta e um cron. **Critério de aceite que o @architect exige (condição 2):**
+> rodado sobre 60 dias retroativos, o job precisa listar **Célia, Helena, Miriam, Sandra, Sueli,
+> Valnira e Maria Oliveira**. Se não listar, ele não serve.
+>
+> **Esforço corrigido de `S` para `M` (07/08).** A story `87-3` está em **M** desde a v0.2 e o
+> roadmap ficou dizendo `S` — o epic autorizando um dimensionamento que a story já tinha
+> desmentido. Não foi inchaço de escopo: *"uma consulta e um cron"* continua sendo o desenho, mas a
+> régua ganhou o que a validação exigiu para não mentir — **quatro baldes com precedência
+> normativa** (`com_lastro` → `reparo_humano` → `lembrete` → `sem_lastro`), discriminador
+> **visita × ligação**, janela bilateral de 15 min, normalização de `timestamptz` e a publicação do
+> número **nas duas leituras**. **A parte cara deste item é a régua, não o cron.**
+>
+> **Vale independentemente de qualquer decisão de tool** — e é o instrumento que mede o **lastro**,
+> ou seja, é ele que produz o número que **dimensiona** a v1 do Epic 88: escopo, ordem e tamanho dos
+> degraus de rollout (ver Onda 4 e `Epic 88 · §8.1`). Sem ele, o `PM2` do Epic 88 é métrica sem
+> instrumento. **O número não decide se o Epic 88 existe** — condicionar arquitetura a estatística
+> foi a redação revogada em 07/08. Por isso este item está na Onda 0 e não como métrica: **é
+> entrega, não régua.**
+
 ---
 
 ### Onda 1 — Estancar (2–4 dias · muda comportamento, alta certeza)
@@ -354,14 +416,18 @@ via pipe; usar `scripts/vercel-env-set.sh`.
 | ID | Título | Resolve | Esforço | Risco | Depende de | Executor |
 |----|--------|---------|---------|-------|-----------|----------|
 | **W1-2a** | Remediação de dados: purge do estado de agenda fantasma | **CR-4** | S | **Médio** (R-B) | **W0-0**, D8 | @data-engineer |
-| **W1-3a** | Remediação de dados: resumos que afirmam agendamento inexistente | **CR-3** | S | **Médio** (R-B) | **W0-0**, D8 — **sai no mesmo dia da W1-2a** (O-3) | @data-engineer |
+| **W1-3a** | Remediação de dados: resumos que afirmam agendamento inexistente — **tamanho medido em 07/08: 1 lead (Marilda)** | **CR-3** | **XS** | **Baixo** (R-B contido: uma linha revisada, não purge por query) | **W0-0**, D8 — **sai no mesmo dia da W1-2a** (O-3) | @data-engineer |
 | **W1-2b** | Estado de agenda: **âncora temporal** + TTL + não nasce da fala da Nicole — **deploy 1** | **CR-4** | M | **Médio** | W1-2a + W1-3a | @dev |
+| **W1-2c** | **ESCRITA apenas: o estado passa a REGISTRAR o que o SISTEMA ofereceu e o que a Nicole afirmou**, com data absoluta (`ofertas_do_sistema`, `afirmado_pela_nicole`). **A leitura — o "Ok" resolvendo contra a oferta — NÃO está aqui: é o `W3-2e`** | **CR-4, o outro sinal do mesmo defeito** — hoje o "Ok" do lead não tem a que se referir; este item dá a ele um referente persistido | S | **Baixo / Baixo** | W1-2b | @dev |
 | **W1-3b** | `updateLeadMemory` deixa de gravar a fala da Nicole como fato — **deploy 2** | **CR-3** | M | **Médio** | W1-2b em prod | @dev |
 | **W1-1** | Histórico passa a ser a **cauda** da conversa — **deploy 3** | **CR-1** | XS (código) / M (teste + validação) | **Médio** (R-A) | W0-3, W1-3b em prod | @dev |
+| **W1-7** 🆕 | **Histórico passa a incluir a fala do CORRETOR, rotulada por papel** — `role='broker'` deixa de ser descartado por `loadConversationHistory` e pelo `enrich-leads` — **deploy 4** | **CR-1 (parcial)** + o defeito de leitura do `role='broker'`: 882 mensagens em 287 conversas invisíveis, e **31 respostas da Nicole cegas** para negociação em curso | M | **Médio / Baixo** | **W1-1 em prod** (ver condição de escape) | @dev |
+| **W1-6** | `collected_data` **deixa de ser despejado como JSON cru** no system prompt; entra classificado por procedência ou não entra | **CR-3, CR-4** — hoje o fato falso chega ao modelo **duas vezes** | XS | **Baixo** | W1-2b | @dev |
 | **W1-4** | Invariante de isolamento cross-lead como teste (R4) | **R4** | M | **Nenhum** (só testes) | — (paralelo) | @dev + @qa |
 | **W1-5** | Fechar validação em prod das 75-268 e 75-270 (AC7) | Sintomas 2, 3 e 4 | XS (zero código) | **Nenhum** | D7 | @qa + Marcos/Thielly |
 
-**W1-1 vai por último, e não é rebaixamento.** O @architect contou as mensagens no banco: a
+**W1-1 é o último dos três deploys originais, e não é rebaixamento** (o `W1-7`, criado depois,
+é o deploy 4 e vem **atrás** dele — ver adiante). O @architect contou as mensagens no banco: a
 conversa da Sandra tinha **14 mensagens** no momento do incidente — o `limit(20)` não cortou nada,
 CR-1 não teve participação nenhuma nos incidentes relatados (alcance real: 7,3% dos turnos). Pior:
 corrigir o histórico muda o referente de `lastAssistantMsg`, que alimenta `isVisitSchedulingMode` e
@@ -369,8 +435,12 @@ corrigir o histórico muda o referente de `lastAssistantMsg`, que alimenta `isVi
 isso antes do W1-2b piora o sintoma da Sandra durante a própria janela de observação (O-2). A
 correção continua sendo uma linha (`ascending: false` + `.limit(20)` + reverter antes de injetar);
 o trabalho real é o teste de ordem e a **observação**. Deploy **sozinho**. A story precisa trazer
-AC explícita sobre os dois gates e **decisão escrita sobre as mensagens `role='broker'`**
-(recomendação do @architect: continuar cega ao corretor, **com teste que fixe isso como intenção**).
+AC explícita sobre os dois gates e **decisão escrita sobre as mensagens `role='broker'`** — essa
+decisão **existe e é o `W1-7`**: elas entram, **rotuladas**, em item próprio, depois do `W1-1`. A
+recomendação original do @architect (*"continuar cega ao corretor, com teste que fixe isso como
+intenção"*) foi **superada pela decisão do Gabriel de 07/08**, tomada contra dado medido. O que a
+story do `W1-1` mantém é a AC do **referente do `lastAssistantMsg`** no eixo da **janela**; o eixo do
+**papel** é do `W1-7`.
 
 **W1-2** — três partes, e a ordem importa: o purge (a) elimina o dano imediato **sem deploy**; a
 âncora + TTL + o corte da derivação a partir de `assistantMessage` (b) impedem que volte. A guarda
@@ -386,12 +456,42 @@ derivado numa sessão anterior**, que ela não protege.
 > `resolveVisitSlotParts` **nunca reancora**. Teste que o @architect exige ver vermelho antes:
 > `resolveVisitSlotParts(availability_de_27/07, now=12/08)` **não** pode devolver 15/08.
 >
-> **Escala medida em 07/08 (`2026-08-07-debate-tool-use-nicole.md` §2.7), e ela muda a urgência da
-> W1-2a:** são **59** `conversation_state` vivos com resíduo de agenda; a guarda da 75-245 cobre
-> **4**; **46** carregam uma data que anda sozinha; e **3 (Célia, Adriele, Wilson) criam um
-> `appointment` fantasma na próxima mensagem que o lead mandar — inclusive "Oi"**. O purge da
-> W1-2a deixou de ser higiene e virou desarme; e precisa virar **rotina** até a âncora existir
-> (O-7), porque sem cortar a fonte o estado se reenvenena no turno seguinte.
+> **Escala medida em 07/08 (`2026-08-07-debate-tool-use-nicole.md` §2.7):** eram **59**
+> `conversation_state` vivos com resíduo de agenda; a guarda da 75-245 cobria **4**; **46**
+> carregavam uma data que anda sozinha; e **3 (Célia, Adriele, Wilson) criavam um `appointment`
+> fantasma na próxima mensagem que o lead mandasse — inclusive "Oi"**.
+>
+> **✅ Desarme executado em 07/08 (D8, decisão e execução do Gabriel).** Os 3 armados foram
+> desarmados e `visit_availability` / `visit_pending_*` removidos, **com backup das 59 conversas
+> antes** e preservando quem tem visita real — exatamente a opção (b) recomendada em D8 (lista
+> revisada, não purge cego). **O incidente agudo está fechado.**
+>
+> **O que resta da W1-2a, e é menor do que era:** limpeza dos **~22 registros restantes**
+> (majoritariamente fala da própria Nicole, sem data concreta — não armam INSERT, mas continuam
+> entrando no contexto como se fossem disponibilidade do lead) e **a rotina de purge até a âncora
+> existir** (O-7).
+>
+> **O item que sobra é de código, não de dado.** O purge não impede o estado de nascer de novo: a
+> fonte (`extractCollectedData` sobre a fala dela) continua ativa e reenvenena no turno seguinte.
+> **Isso é o W1-2b, e o desarme de 07/08 aumenta — não diminui — a urgência dele:** sem a âncora e
+> sem o corte da derivação, em duas semanas estaremos purgando de novo, com o time acreditando que
+> o problema foi resolvido em 07/08.
+>
+> 🔴 **E são DUAS fontes, não uma — a segunda é a maioria, e este epic a descrevia como caso de
+> borda.** Medição do @po em 07/08 (`po-validation-87-3-87-4-87-5.md` §2.1, correção C1): dos **56**
+> estados com resíduo de agenda, **39 (70%) têm o cron `enrich-leads` como ÚLTIMO ESCRITOR** —
+> `conversation_state.updated_at` a menos de **1 segundo** de `conversations.last_enriched_at`. Não
+> foi turno de conversa que escreveu aquilo; foi o **Haiku do cron**, fora do `processMessage`
+> (`haiku-enrichment.ts:31` → `enrich-leads/route.ts:150`), fazendo merge direto no
+> `collected_data`. **A leitura que muda:** a §1 e o CR-4 contam a história do envenenamento como se
+> ele fosse todo do pipeline (`extractCollectedData` sobre a fala da Nicole). É verdade para o caso
+> Sandra e é **minoria** no agregado. **Consequência prática, e ela não é teórica:** um `W1-2b` que
+> conserte só a esteira do `processMessage` deixa **70% da reposição intocada** — a âncora entra,
+> o cron continua escrevendo texto livre sem procedência por cima, e o item é declarado pronto com o
+> defeito vivo. É por isso que a `87-4` carrega **AC8-b** e **T5-b** para o cron, e por isso a AC8
+> não pode ser lida como *"o contador global chega a zero"* (ele **decai** nos estados dormentes e
+> **oscila** nos ativos): a leitura correta é a da AC8-b-(iii) — *"nada tocado depois do deploy volta
+> a ter a chave"*. **Escritor externo não é caso de borda deste item; é a maioria dele.**
 >
 > **Defeito determinístico da mesma raiz, que a story precisa cobrir (evidência: Valnira, 03/08
 > 23:57):** o lead pediu *"semana de manhã"* e o pré-fetch ofereceu **três sábados**. Causa em
@@ -400,6 +500,166 @@ derivado numa sessão anterior**, que ela não protege.
 > escreve sozinho, sem guarda de ambiguidade nenhuma. **A 75-268 corrigiu metade do bug que ela
 > mesma nomeia.** Não é item novo: é o mesmo estado sem âncora, sem TTL e sem procedência — e é o
 > lado que o Epic 88 preserva intocado, então nenhuma tool o alcança.
+
+**W1-3a — o `Depende de` órfão, fechado em 07/08: EXECUTAR, não dispensar.** O @po achou o furo ao
+validar a `87-4` (`po-validation-87-3-87-4-87-5.md` §2.2): o `W1-2b` declara `Depende de: W1-2a +
+W1-3a`; o `W1-2a` foi executado pelo Gabriel em 07/08 **e ficou registrado**, e o `W1-3a` **sumiu da
+conversa** — sem execução, sem dispensa, sem menção. Um bloqueador que ninguém fechou e ninguém
+dispensou não é um bloqueador: é uma dependência que só reaparece no retrospecto, no dia de subir.
+
+**Tamanho real, medido em produção (@po, 07/08 22h UTC):**
+
+```
+leads com ai_summary                                    224
+… cujo resumo AFIRMA agendamento                          8
+… desses, com appointment de verdade (resumo correto)     7
+… sem appointment nenhum  →  Marilda                      1   ← o W1-3a inteiro
+```
+
+> **Decisão (@pm, 07/08): executar. A dispensa estava disponível e é a escolha errada.** Dispensar
+> custaria zero hoje e deixaria a **M5** (*"0 dos resumos afirmando agendamento sem `appointment`"*)
+> **violada por construção no dia em que o epic fosse declarado fechado** — um critério de sucesso
+> derrubado para poupar **um `UPDATE` de uma linha, sem deploy**. Pior que o número: o resumo da
+> Marilda continua entrando no contexto dela a cada turno (**CR-3**), e o `ai_summary` é o caminho
+> ativo enquanto L1/L2/L3 estão vazios. É literalmente o loop da §1 rodando, com um caso conhecido e
+> nomeado.
+>
+> **Como este item fecha** — mesmo padrão do `W1-2a`, e é a única forma de o `Depende de` do
+> `W1-2b` sair do caminho: @data-engineer executa, **com o valor anterior salvo** (R-B) e a linha
+> revisada por humano antes — nunca por query cega —, e **o registro volta para cá, com data e
+> executor**. Enquanto esse registro não existir, a story `87-4` está `Ready` mas **não
+> desbloqueada**. Operacionalmente é a **T0-a** da `87-4`.
+>
+> **O que este item NÃO é:** os **7** resumos legítimos usam data **relativa** (*"visita agendada
+> para amanhã (sexta-feira às 15h)"*) — é o mesmo defeito de âncora do `W1-2b`, em prosa, e o
+> conserto dele é o **`W1-3b`**. Não ampliar o escopo aqui: 1 linha é 1 linha.
+>
+> **Lado cliente:** a Marilda entra na lista da **D8** (*cliente continua aberto*) — ela pode
+> acreditar que tem visita marcada. Apagar o resumo remove o dano ao sistema, não o dano a ela.
+
+**W1-2c — item novo (@architect, 07/08 §2.5), e é o mesmo defeito com o sinal invertido.** A
+máquina de estados **lê o interlocutor errado nas duas direções**: transcreve a **Nicole** onde
+deveria transcrever o **lead** (caso Sandra, tratado no W1-2b) e é **surda** onde deveria registrar
+a Nicole. Quando o pipeline oferece horários ou autoriza um slot, nada é persistido —
+`authorizedSlotUtc` é variável local e **morre no fim do turno**. Consequência medida:
+
+```
+[04/08 00:10] Valnira
+  NICOLE : "a quinta-feira às 10h está confirmada para você! Anota o endereço…"
+  LEAD   : "Ok"                    → parser: dia=—  hora=—   (o estado não tem nada)
+  NICOLE : "Ótimo! Só para confirmar — qual horário na quinta-feira fica melhor pra você?"
+```
+
+**6 ocorrências em 60 dias** dessa classe (Valnira, Idalina, Sueli-aceite). Custo: ~30 linhas, zero
+chamadas de modelo, zero latência, determinístico. **Duas consequências fora deste item:** (i) é o
+que permite o "Ok" resolver sem modelo nenhum; (ii) **o gatilho turn-local do Epic 88 (§4.1) fica
+cego exatamente nestes turnos** — "Ok" não tem expressão temporal, então o `tool_choice` forçado não
+dispara justamente nos casos que aquele epic promete fechar. Por isso o W1-2c é **habilitante do
+Epic 88**, e o @architect o registra como pré-requisito nos dois caminhos possíveis.
+
+> ### 🔨 O `W1-2c` foi DIVIDIDO em 07/08 — escrita aqui, leitura na Onda 3 (`W3-2e`)
+>
+> Arbitragem do @po (`docs/qa/po-validation-87-3-87-4.md` §3), a partir de um apontamento do @sm.
+> As duas metades têm naturezas opostas:
+>
+> | Metade | O que é | Onda | Por quê |
+> |---|---|---|---|
+> | **ESCRITA** — `W1-2c` | Persistir `ofertas_do_sistema` e `afirmado_pela_nicole` com data absoluta | **1** | **Subtração de cegueira.** Nada passa a decidir nada; o sistema só para de jogar fora o que já calculou. Cabe na regra de corte |
+> | **LEITURA** — `W3-2e` | O `"Ok"` do lead **resolver** um slot concreto contra a oferta registrada | **3** | **Caminho de decisão novo, sem margem:** o `"Ok"` passaria a poder criar `appointment` **sem o lead ter dito dia nem hora em turno nenhum** — que é a classe de incidente que este epic existe para fechar. Hoje o sistema pergunta de novo (medido: Valnira, 04/08 00:10) |
+>
+> **A confiabilidade das duas escritas não é a mesma, e isso decide o que a Onda 3 pode ler:**
+>
+> | Campo | Origem | Confiança | Uso permitido |
+> |---|---|---|---|
+> | **`ofertas_do_sistema`** | `authorizedSlotUtc` / `freeSlotsInPeriod` — **o sistema calculou** | **Alta** — é o mesmo valor determinístico que hoje morre no fim do turno | Escrito aqui; **é este que o `W3-2e` lê** |
+> | **`afirmado_pela_nicole`** | `detectAffirmedSlot` — **parseado da prosa dela** | **~79%** (21% são perguntas e ofertas, não afirmações) | Escrito aqui como **observabilidade write-only, rotulado não-confiável**. **Nunca** é insumo de decisão até a guarda de interrogação do Epic 88 (`88-13`) subir |
+>
+> **A condição nº 4 do @architect é atendida em DUAS ondas — e não há contradição a arbitrar.** O
+> texto dele é *"o estado registrar oferta e afirmação com data absoluta, com teste em que o lead
+> responde 'Ok' a uma oferta e o slot resolve sem chamar modelo nenhum"*. É condição de **aceite do
+> epic inteiro**; ela **não atribui onda**. A atribuição é deste epic, e por omissão ele nunca a
+> fez: a escrita fica no `W1-2c` (Onda 1) e o teste do `"Ok"` no `W3-2e` (Onda 3). **Nada do
+> @architect está sendo revogado** — o @sm achou uma lacuna, não um conflito.
+>
+> ⚠️ **E isto NÃO atrasa o Epic 88.** O item `88-7` depende da metade de **escrita** (basta o gatilho
+> saber que **existe oferta viva**; quem resolve o slot é a tool). Ver `Epic 88 · §4.1`. **Não
+> "restaure" a leitura para a Onda 1 citando urgência do Epic 88** — não desbloqueia nada lá e hoje
+> seria alimentada por um sinal com 21% de erro.
+
+**W1-6 — item novo (@architect, 07/08 §2.5), XS, e derruba uma premissa dos dois epics.**
+`buildSystemPrompt` faz `convoLines.push(\`Data collected so far: ${JSON.stringify(state.collected_data)}\`)`:
+o `collected_data` inteiro vai ao modelo como **JSON cru, sem instrução nenhuma**. Então o
+`visit_availability` envenenado chega **duas vezes** — uma no bloco `[SISTEMA]` (com regras de
+leitura) e outra solta. **Enquanto essa linha existir, tratar o `[SISTEMA]` como "fonte única de
+fatos autorizados" é ficção** — e isso vale para o W3-1 daqui e para o desenho do Epic 88. Cabe na
+regra de corte da Onda 1: remove uma fonte de mentira **sem** adicionar caminho de decisão.
+
+**W1-7 🆕 — item novo (decisão do Gabriel, 07/08, com dado medido pelo @po), e ele fecha o buraco de
+leitura que o `W1-1` deixou aberto.** A fala do corretor **é gravada** desde a migration 001
+(`messages.role='broker'`) e é o **maior volume dos três interlocutores** — **882 mensagens em 287
+conversas** em 30 dias, contra 867 do lead (181 conversas) e 612 da Nicole (136). **E dois leitores a
+descartam com o mesmo filtro:** `loadConversationHistory` (`pipeline.ts:1543`) e o cron
+`enrich-leads` (`route.ts:66`), ambos com `.in("role", ["user","assistant"])`.
+
+**Dano medido:** **9 conversas** em que o corretor falou e a Nicole voltou a responder depois —
+**31 respostas dela cegas para a negociação já em curso**. É o cenário de reativação, o mais caro
+que existe.
+
+> **A decisão do Gabriel: entram COM RÓTULO DE PAPEL, não fundidas na fala dela.** O motivo é
+> concreto e tem caso: o corretor pode dizer valor fechado que a Nicole não pode repetir — o **Odair
+> falou "entrada de 35 mil"** na conversa da Sandra. Sem rótulo, a Nicole leria isso como fala
+> própria e o repetiria; é a mesma classe de defeito do `is_transition` (fala humana gravada como
+> `role='assistant'`), só que com 882 mensagens em vez de 104.
+
+**Por que depois do `W1-1`, e o argumento é técnico e não de fila** (@sm, endossado): com a janela de
+**cabeça-20** de hoje, acrescentar ~3 mensagens de corretor por conversa **come o orçamento** e
+empurra para fora as mensagens recentes, que já eram poucas. Com o `W1-1` em produção o histórico é
+**cauda-20**, e *"as últimas 20 falas de quem quer que seja"* é a janela coerente quando existem
+**três** interlocutores. **Esta story fica estritamente melhor depois do `W1-1`, e o `W1-1` fica
+estritamente mais simples antes dela.** O `lastAssistantMsg` se resolve **ordenando, não fundindo**:
+um deploy por variável — o `W1-1` muda a **janela**, o `W1-7` muda o **papel**, cada um com seu teste.
+
+> ### Condição de escape — **denominador declarado, medida e RESOLVIDA em 07/08**
+>
+> A redação original (*"menos de 10% das conversas ativas passam de 20 mensagens"*) tinha o limiar
+> certo e **nenhum denominador**. O @po mediu as quatro leituras que ela admite, contra 30 dias de
+> produção (`po-validation-87-3-87-4-87-5.md` §3.3):
+>
+> | população | convs | > 20 msgs | % | escape dispararia? |
+> |---|---|---|---|---|
+> | todas com atividade | 338 | 30 | 8,9% | ✅ sim |
+> | só as que têm corretor | 286 | 24 | 8,4% | ✅ sim |
+> | só as que têm Nicole ativa | 136 | 23 | 16,9% | ❌ não |
+> | **Nicole E corretor — a população que a story muda** | **85** | **17** | **20,0%** | ❌ **não, com folga** |
+>
+> **O denominador correto é o da última linha, e ele fica declarado aqui:** *conversas com pelo
+> menos uma mensagem `role='assistant'` **e** pelo menos uma `role='broker'` nos últimos 30 dias*.
+> A razão é mecânica, não de gosto: a **janela de 20 só é disputada onde existem os dois
+> interlocutores**. Nas 253 conversas sem Nicole ativa o `limit(20)` não é lido por ninguém —
+> incluí-las no denominador é diluir a pressão da janela com conversas em que ela não existe.
+>
+> **Resultado: 20,0% — o dobro do limiar. O escape NÃO dispara, e a ordem `W1-7` depois do `W1-1`
+> fica confirmada por número, não só pelo argumento técnico do parágrafo anterior.** Os dois se
+> sustentam sozinhos e agora apontam para o mesmo lado. Reabrir a ordem exige **remedir** esta
+> população e publicar o número, não reinterpretar o percentual.
+>
+> Se algum dia a medição cair abaixo de 10% **neste** denominador, o escape volta a valer com as
+> condições originais: o `W1-7` sobe **sozinho** e a story do `W1-1` recebe a AC de que o referente
+> do `lastAssistantMsg` já está blindado por ele.
+>
+> ⚠️ **Regra que este epic passa a seguir, e ela nasceu de errar aqui:** *régua percentual sem
+> denominador declarado responde o que quiserem perguntar.* Foi a **mesma classe de defeito** que
+> derrubou a régua da `87-3` (4 denominadores possíveis lá, 4 aqui) — e, sem esta correção, **o epic
+> autorizaria por escrito exatamente o que a story proíbe, usando o mesmo número.** Toda régua
+> numérica deste epic declara **unidade e denominador** junto com o limiar.
+
+**Por que cabe na Onda 1 — e a condição é a espinha da story.** O rótulo em si é **subtração**:
+devolve contexto que já está no banco e **remove** a ambiguidade de autoria que hoje existe. Mas
+**dois dos seis consumidores de `history` viram mudança de decisão se ficarem intocados** —
+`lastAssistantMsg` (que alimenta o gate de agendamento) e `buildNoReintroContext`. **O item só é
+Onda 1 porque fixa esses dois na direção RESTRITIVA** (menos coisas contam como fala da Nicole),
+nunca permissiva. Daí o risco em dois eixos: **Médio de regressão** (muda o que a Nicole vê em 287
+conversas) e **Baixo de comportamento novo** (nada novo é decidido; o que muda é o referente).
 
 **W1-3** — `updateLeadMemory` hoje recebe `assistantMessage` e a instrução "incorpore informação
 nova", sem uma única regra sobre compromissos. Duas opções para o @architect avaliar: (i) não
@@ -476,6 +736,7 @@ Ampliar o gatilho sem investigar esse caso reproduz a cegueira com mais código.
 | **W3-2b** | Regra: **nunca introduzir outro empreendimento sem o lead pedir** | **CR-6** (Orlice) — pedido direto do usuário | M | **Médio** (pivô legítimo existe e é bom) | W3-1 | @dev |
 | **W3-2c** | Regra: dia/hora afirmado sem slot autorizado | **CR-5** | S | **Baixo** | W3-1, W2-3 | @dev |
 | **W3-2d** | Regra: mídia prometida além do que sai | 75-157/75-270 (trade-off assumido lá) | S | **Baixo** | W3-1 | @dev |
+| **W3-2e** 🆕 | **LEITURA: o `"Ok"` do lead resolve contra `ofertas_do_sistema`** — a metade de leitura que saiu do `W1-2c` | **CR-4** — fecha a condição nº 4 do @architect (o `"Ok"` resolve sem chamar modelo nenhum) | S | **Baixo / Alto** | `W1-2c` (escrita) + **W3-1** + **guarda de interrogação do Epic 88 (`88-13`)** | @dev |
 | **W3-3** | Ligar **fail-closed**: regenerar 1× → degradar para resposta segura / handoff | **CR-5, R3** | M | **Alto** (R-C) | **D4** + FP < 5% (M6) | @dev + @qa |
 
 **W3-2b tem uma sutileza que a story precisa respeitar:** o pivô da Orlice para o Yarden foi
@@ -484,6 +745,26 @@ mídia acompanhar (já corrigido) e o lead ter **pedido ou consentido**. A regra
 citar outro empreendimento", e sim "não apresentar outro empreendimento como oferta ativa sem que o
 lead tenha sinalizado incompatibilidade com o atual". Regra mal calibrada aqui destrói uma
 capacidade que funciona.
+
+**W3-2e 🆕 — a metade de leitura do `W1-2c`, e ela está aqui por três razões, não por burocracia.**
+(1) É **caminho de decisão novo**: o `"Ok"` passa a poder criar `appointment` sem o lead ter dito dia
+nem hora em turno nenhum — a regra de corte da Onda 1 se aplica sem interpretação. (2) **Resolve
+contra `ofertas_do_sistema` e NUNCA contra `afirmado_pela_nicole`** — e isso precisa estar escrito na
+story com todas as letras: a segunda vem da `detectAffirmedSlot`, cuja precisão medida é **~79%**;
+ligar a leitura sobre ela é deixar o `"Ok"` resolver contra um horário que a Nicole **nunca afirmou**
+em ~1 de cada 5 casos. É também a letra da condição nº 4 do @architect, que diz *"o lead responde
+'Ok' **a uma oferta**"* — não "a uma afirmação". (3) Por isso a **guarda de interrogação (`88-13`,
+Epic 88)** entra como dependência: o próprio autor da condição nº 4 já tinha escrito o pré-requisito
+na condição nº 7; ninguém tinha ligado as duas coisas.
+
+**Risco em dois eixos, e é o caso didático da nova legenda:** ~30 linhas determinísticas dificilmente
+quebram o que existe (**regressão Baixa**), e o comportamento novo é agendar a partir de um "Ok"
+(**comportamento novo Alto**). Classificar só o primeiro eixo foi o que quase deixou este item passar
+como "Baixo" na Onda 1.
+
+**Não bloqueia o Epic 88.** O `88-7` depende da metade de **escrita**; ver `Epic 88 · §4.1`. O
+`W3-2e` é o caminho determinístico equivalente — ele só faz falta no cenário em que a v1 do Epic 88
+é dimensionada para baixo e a tool de escrita chega mais tarde.
 
 **W3-3** é a única story do epic que pode piorar a experiência do lead. Só entra com o número de
 falso positivo na mão e com D4 decidida.
@@ -509,22 +790,36 @@ a Sandra, e a auditoria do @po mostrou que **não** é verdadeiro para a maioria
 a ESCRITA**). W4-2 e W4-3 continuam vivos aqui, e agora dependem da infraestrutura de tool que o
 Epic 88 constrói — não de um item que não existe mais.
 
-> **O veto do @architect mudou de forma em 07/08 (`2026-08-07-debate-tool-use-nicole.md` §6): de
-> REPROVADO para ADIADO COM CRITÉRIO NUMÉRICO DE ENTRADA.** Este é o gate explícito entre os dois
-> epics, e ele é um número, não uma opinião:
+> **A fronteira entre os dois epics é de SEQUENCIAMENTO, não de existência — corrigido em 07/08
+> (Gabriel).** Este bloco dizia, até a v0.3: *"lastro ≥ 90% → a tool de escrita não se justifica;
+> < 90% → o Epic 88 sobe como está escrito"*. **Essa redação condicionava arquitetura a estatística
+> e está REVOGADA.** A formulação que vale (dona: `Epic 88 · §8.1`):
 >
 > 1. Executar primeiro as **correções determinísticas** (âncora e procedência do estado, guarda do
 >    `pendingDay`, `isSlotFree` fail-closed, funil instrumentado, reconciliação diária fala × banco)
->    — a maior parte é Onda 1 e Onda 2 **deste** epic, mais os itens 88-1/88-3/88-4 do Epic 88, que
->    são higiene obrigatória mesmo que tool nenhuma exista.
-> 2. **Remedir o lastro** pelo instrumento novo, com a definição da §3 (`created_by='nicole'` a
->    ±30 min **e** `created_at ≤ fala + 2 min`). **Baseline: 31%.**
-> 3. **Lastro ≥ 90%** → a tool de escrita não se justifica; o Epic 88 fecha reduzido ao que já foi
->    entregue. **Lastro < 90%** → o **Epic 88 sobe como está escrito**, com o gap residual atribuído
->    porta a porta, e o @architect assina.
+>    — a maior parte é Onda 1 e Onda 2 **deste** epic, mais os itens 88-1/88-3/88-4/88-13 do Epic 88,
+>    que são higiene obrigatória mesmo que tool nenhuma exista. **Esta ordem continua valendo, e as
+>    razões dela são técnicas:** tool sobre estado que mente escreve o erro com autoridade;
+>    `tool_choice` forçado sobre gatilho envenenado **fabrica** o argumento e a citação; `isSlotFree`
+>    devolve "livre" quando a query **falha**.
+> 2. **Remedir o lastro** pelo instrumento do `W0-5`, com a definição da §3 (`created_by='nicole'` a
+>    ±30 min **e** `created_at ≤ fala + 2 min`).
+> 3. **O número remedido DIMENSIONA a v1 do Epic 88 — não decide se ela existe.** Lastro alto →
+>    a v1 **encolhe** (menos tools, degraus de rollout mais lentos, shadow mais longo). Lastro baixo
+>    → a v1 sobe no escopo escrito. **O Epic 88 acontece nos dois casos:** o argumento a favor da
+>    tool é de desenho (hoje a fala confirma a visita e um código separado decide se grava — duas
+>    autoridades sobre o mesmo fato), e desenho errado não fica certo por ser raro.
 >
-> O que **não** muda com o gate: a Onda 0 do Epic 88 é higiene e está liberada agora (ver a regra de
-> corte da Onda 2).
+> ⚠️ **E o número ainda não está calibrado.** A régua da PM2, rodada como especificada contra 60 dias
+> de produção, dá **7%** e não os 31% do baseline manual (@po, `po-validation-87-3-87-4.md` §1.4) —
+> e o viés **subconta** lastro, isto é, apontava justamente para *"<90%"*. Recalibrar é a correção
+> **B6** da Story 87-3. Enquanto ela não entrar, **nenhum número desta métrica autoriza nem veta
+> decisão de arquitetura.**
+>
+> O que **não** muda: a Onda 0 do Epic 88 é higiene e está liberada agora (ver a regra de corte da
+> Onda 2). E as condições técnicas de aceite do @architect (harness antes, uma autoridade de escrita
+> só, remoção do ramo do parser no mesmo PR, gatilho turn-local, guarda de interrogação) continuam
+> **todas** vigentes.
 
 **W4-4 por último, e de propósito.** O MemPalace morto **não é causa de alucinação** — o `ai_summary`
 contaminado é (CR-3). Consertar a memória primeiro seria trocar um problema conhecido por 4 meses de
@@ -569,8 +864,9 @@ aberto — nesse caso ele vai atrás do harness (W2-1), nunca antes.
 
 > **Decidida: (b) — grounding incremental, agenda primeiro.** A decisão saiu do papel e virou
 > documento próprio: **`Epic 88 · §2`** (fronteira leitura/escrita), depois do veto do @architect ao
-> W4-1 e da arbitragem @architect × @analyst. **A entrada em execução do Epic 88 está sujeita ao
-> critério numérico de lastro descrito na Onda 4 (≥90% / <90%).** Decisão aberta em dois lugares é
+> W4-1 e da arbitragem @architect × @analyst. **O Epic 88 não está condicionado a nenhum número — o
+> lastro remedido descrito na Onda 4 dimensiona o escopo da v1 dele, não a existência dela.**
+> Decisão aberta em dois lugares é
 > decisão que ninguém executa — esta tem um dono e um documento. O texto abaixo fica como registro
 > do raciocínio que produziu a escolha.
 
@@ -643,7 +939,17 @@ sempre e o epic não fecha.
 > **herda daqui**; o que ele acrescenta é o requisito de **janela de 24h por degrau de rollout**
 > (canário → 10% → 100%). Dois donos para a mesma decisão = zero donos.
 
-### D8 — Remediação dos leads já contaminados: mexer no dado e falar com o cliente?
+### D8 — Remediação dos leads já contaminados — ✅ **DECIDIDA E EXECUTADA (07/08)** · lado cliente aberto
+
+> **Dado: executado.** Gabriel desarmou em 07/08 os 3 estados que criariam `appointment` fantasma
+> (Célia, Adriele, Wilson) e removeu `visit_availability` / `visit_pending_*`, **com backup das 59
+> conversas antes** e preservando quem tem visita real — a opção **(b)** recomendada abaixo (lista
+> revisada por humano), não o purge cego. Resta a limpeza dos ~22 registros restantes e a **rotina**
+> de purge até a âncora existir (W1-2a), além do item de código que impede o renascimento (W1-2b).
+>
+> **Cliente: continua aberto.** Quem recebeu confirmação de visita que não existe ainda não foi
+> contatado — e a auditoria do @po acrescentou um caso que ninguém tinha visto: **a Célia foi
+> confirmada em 28/06 e nunca teve appointment; são 40+ dias.** É decisão comercial, não técnica.
 
 Sandra tem, em produção **agora**, um `ai_summary` afirmando que ela agendou visita para sábado
 dia 8 e um `visit_pending_date` para essa data. Ela não agendou nada. Há outros casos — a lista sai
@@ -668,22 +974,36 @@ W0-0 🔒 (paridade de prompts — story 87-0)   ← BLOQUEANTE: nada da Onda 1 
    │
 W0-1 ─┐
 W0-2 ─┼─▶ W0-3 (baseline) ──┐
-W0-4 ─┘                     │
+W0-4 ─┤                     │
+W0-5 ─┘ 🔴 reconciliação diária fala × banco — o instrumento do lastro
                             ▼
-                    [D1, D8 decididas]
+                [D1 decidida · D8 EXECUTADA 07/08:
+                 3 estados armados desarmados, backup feito]
                             │
         ┌───────────────────┼────────────────────┐
         ▼                   │                    ▼
    W1-2a + W1-3a            │                 W1-4 (test-only,
-   (SQL, juntos, hoje)      │                  paralelo, sem deploy)
+   (SQL — resta ~22 +       │                  paralelo, sem deploy)
+    rotina até a âncora;    │
+    W1-3a = 1 lead,         │
+    Marilda — EXECUTAR,     │
+    registro volta ao epic) │
         │                   │
         ▼                   │
    W1-2b (deploy 1 — âncora + TTL + não deriva da fala dela)
+        ▼                   │
+   W1-2c (ESCRITA: registra oferta e afirmação) ──▶ habilita o 88-7
+        ▼                   │      (a LEITURA do "Ok" é o W3-2e, Onda 3)
+   W1-6  (collected_data sai do prompt como JSON cru)
         ▼ +24h              │
    W1-3b (deploy 2 — resumo)
         ▼ +24h              │
    W1-1  (deploy 3 — histórico = cauda; por último: raio desconhecido)
-        │                   │
+        ▼ +24h              │
+   W1-7  (deploy 4 — histórico inclui o CORRETOR, rotulado)
+        │                   │      ⤷ escape MEDIDO 07/08: 20,0% (17 de 85 convs com Nicole
+        │                   │        E corretor, 30d) — o dobro do limiar ⇒ NÃO dispara.
+        │                   │        Ordem "depois do W1-1" confirmada por número.
    W1-5 (validação em prod das 75-268/270)
                             │
                             ▼
@@ -700,15 +1020,21 @@ W0-4 ─┘                     │
               ┌─────────────┼─────────────┬─────────────┐
               ▼             ▼             ▼             ▼
            W3-2a         W3-2b         W3-2c         W3-2d
+              │             │             │             │
+              │        W3-2e ("Ok" resolve contra ofertas_do_sistema)
+              │        ◀── requer W1-2c(escrita) + 88-13 (guarda de interrogação)
               └─────────────┴──────┬──────┴─────────────┘
                                    ▼  [D4 + M6 (FP<5%)]
                                 W3-3 (fail-closed)
                                    │
                                    ▼
                      ══════════════════════════════════
-                      REMEDIR O LASTRO (baseline 31%)
-                      ≥90% → tool não se justifica
-                      <90% → Epic 88 sobe como escrito
+                      REMEDIR O LASTRO (W0-5) — o número
+                      DIMENSIONA a v1 do Epic 88:
+                        alto  → v1 encolhe (menos tools,
+                                rollout mais lento)
+                        baixo → v1 no escopo escrito
+                      ⚠️ NÃO decide se o Epic 88 existe
                      ══════════════════════════════════
                                    │
                                    ▼
@@ -725,9 +1051,10 @@ W0-4 ─┘                     │
 ```
 
 > **Leitura do diagrama:** o `W0-0` e a Onda 0 do **Epic 88** são as duas coisas que podem começar
-> hoje. O bloco "REMEDIR O LASTRO" é o gate do @architect e é o que decide se o Epic 88 sobe inteiro
-> ou fecha reduzido — ele **não** bloqueia a Onda 0 do 88, que é higiene obrigatória de qualquer
-> forma.
+> hoje. O bloco "REMEDIR O LASTRO" **não é um gate de existência** — ele **dimensiona** a v1 do
+> Epic 88 (quantas tools, qual escopo, que tamanho de degrau no rollout). O Epic 88 acontece de
+> qualquer forma; o que o número muda é **quando e com que escopo**. E ele **não** bloqueia a Onda 0
+> do 88, que é higiene obrigatória de qualquer forma.
 
 **Marcos:**
 - **Fim da Onda 0** — paramos de operar às cegas; existe "antes".
@@ -770,4 +1097,8 @@ W0-4 ─┘                     │
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-08-05 | 0.1 | Epic criado a partir do dossiê de incidente de 05/08 (código real + banco de produção). 6 causas raiz, 5 ondas, 21 itens de roadmap, 8 decisões pendentes do stakeholder. | @pm (Morgan) |
+| 2026-08-07 | 0.6 | **Edição cirúrgica: as três correções `P1`–`P3` pedidas pelo @po na validação de 87-3/87-4/87-5, mais dois fatos medidos que mudam decisão. Nenhum item novo, nenhuma onda reordenada, nenhuma story tocada.** **(P1) A condição de escape do `W1-7` ganha DENOMINADOR declarado, e o número resolve a ordem.** A redação *"<10% das conversas ativas"* admitia **quatro** denominadores, e o @po mediu os quatro: **8,4% · 8,9% · 16,9% · 20,0%** — **dois liberavam a story da fila e dois a mantinham**. O correto é *"conversas com ao menos uma mensagem `assistant` **e** uma `broker` nos últimos 30 dias"* — **a população que a story muda** —, porque a janela de 20 só é disputada onde existem os dois interlocutores; nas 253 conversas sem Nicole ativa o `limit(20)` não é lido por ninguém. **Medido: 20,0% (17 de 85), o dobro do limiar → o escape NÃO dispara e a ordem `W1-7` depois do `W1-1` fica confirmada por número**, e não só pelo argumento técnico da janela. Sem esta edição **o epic autorizava por escrito o que a story proíbe, com o mesmo número**. Corrigido também no diagrama da §9, e registrada a regra geral que o defeito produziu (é a mesma classe que derrubou a régua da `87-3`): **toda régua percentual deste epic declara unidade e denominador junto com o limiar.** **(P2) `W1-3a` — o único `Depende de` declarado do roadmap que ninguém executou nem dispensou — fechado: EXECUTAR.** O `W1-2b` declara `Depende de: W1-2a + W1-3a`; o `W1-2a` foi executado em 07/08 e ficou registrado, o `W1-3a` sumiu da conversa. Tamanho medido pelo @po: dos **224** leads com `ai_summary`, **8** afirmam agendamento, **7 têm `appointment` de verdade** e **1 não tem — a Marilda**. É **uma linha**, e por isso a dispensa foi recusada: dispensar deixaria a **M5** violada por construção no dia de declarar o epic fechado, para poupar um `UPDATE` sem deploy, com o resumo contaminado seguindo no contexto dela a cada turno (**CR-3** rodando com caso conhecido e nomeado). Item repontuado para **XS**, risco **Baixo** (R-B contido: linha revisada, não purge por query), com critério de fechamento igual ao do `W1-2a` — **o registro de execução volta para este epic, com data e executor**; até lá a `87-4` está `Ready` mas **não desbloqueada**. Os **7** resumos legítimos usam data relativa e são `W1-3b`, **não** ampliação daqui. Marilda entra na lista da **D8** (lado cliente, aberto). **(P3) `W0-5`: esforço `S` → `M`** na tabela da Onda 0 — a story `87-3` está em M desde a v0.2 e o roadmap seguia dizendo S. Não é inchaço de escopo: *"uma consulta e um cron"* continua sendo o desenho, mas **a parte cara é a régua**, que ganhou precedência normativa de quatro baldes, discriminador visita×ligação, janela bilateral de 15 min e publicação do número nas duas leituras. **Fato medido nº 1 — a C1 é maior do que este epic dizia:** dos **56** estados com resíduo, **39 (70%) têm o cron `enrich-leads` como ÚLTIMO ESCRITOR** (`updated_at` a < 1 s de `last_enriched_at`) — escrita do **Haiku, fora do `processMessage`**. A §1 e o CR-4 contam o envenenamento como se fosse todo do pipeline: é verdade para a Sandra e **minoria** no agregado. **Um `W1-2b` que conserte só a esteira do `processMessage` deixa 70% da reposição intocada e é declarado pronto com o defeito vivo** — daí a AC8-b/T5-b da `87-4` e a leitura da AC8 pela AC8-b-(iii), não pelo contador global. As duas fontes (`enrich-leads` e `haiku-enrichment.ts`) entraram no `related` do frontmatter, onde nunca estiveram. **Fato medido nº 2 — o fantasma do bolsão, registrado FORA daqui:** o fix da 75-286 corrigiu a **leitura** (o digest parou de contar), e `/assign`, `/handoff` e `/transferir` continuam **criando** o carimbo sujo — 14 avisos em 05/08, **2 em 06/08 depois da limpeza manual**; e o dano maior nunca foi o spam: **lead com carimbo sujo não é resgatado pelo cron** (`bolsao-rebalance:100` exige `bolsao_em IS NULL`) e perde a rede de segurança do bolsão — **antes o spam denunciava, agora o fantasma nasce em silêncio**. Vai para `docs/backlog.md` como **P1**, e **não** para este epic: roleta/distribuição está em `FORA DE ESCOPO` (§4) por raio de impacto próprio, e trazê-lo para cá seria reabrir escopo no meio da Onda 1. | @pm (Morgan) |
+| 2026-08-07 | 0.5 | **Dois itens novos no roadmap e a divisão do `W1-2c` (edições `A1`–`A4` do @po, aplicadas).** **(1) `W1-7` 🆕 na Onda 1, deploy 4** — *"histórico passa a incluir a fala do CORRETOR, rotulada por papel"*, com `Depende de: W1-1 em prod`, Esforço **M**, Risco **Médio / Baixo**, `@dev`; `stories_planned` recebe `W1-7 → 87-5`. Decisão do Gabriel (07/08) contra dado medido pelo @po: `role='broker'` é o **maior volume dos três** (**882 mensagens em 287 conversas** em 30 dias, contra 612 da Nicole em 136) e **dois leitores o descartam** (`pipeline.ts:1543` e `enrich-leads:66`, mesmo `.in("role", ["user","assistant"])`), com dano medido de **31 respostas cegas** em 9 conversas de reativação. **Entram com RÓTULO DE PAPEL** porque o corretor pode falar valor fechado que a Nicole não pode repetir (o Odair falou *"entrada de 35 mil"* na conversa da Sandra). Ordem endossada do @sm — **depois do `W1-1`, por razão técnica**: com cabeça-20 o corretor come o orçamento do histórico; com cauda-20, *"as últimas 20 de quem quer que seja"* é a janela certa para três interlocutores. `lastAssistantMsg` se resolve **ordenando, não fundindo** (um deploy por variável: `W1-1` = janela, `W1-7` = papel), e fica registrada a **condição de escape medível** (<10% das conversas acima de 20 mensagens ⇒ pode ir antes, ainda sozinho). A recomendação anterior do @architect (*"continuar cega ao corretor"*) fica **superada** e a nota do `W1-1` repontada. **(2) `W1-2c` DIVIDIDO** — a Onda 1 fica com a **ESCRITA** (`ofertas_do_sistema`, `afirmado_pela_nicole`, este rotulado write-only e não-confiável a ~79%) e a **LEITURA** vira o **`W3-2e` 🆕 na Onda 3** (*"o `'Ok'` resolve contra `ofertas_do_sistema`"*, atrás do `W3-1` **e** da guarda de interrogação `88-13`), porque a leitura é caminho de decisão novo: o `"Ok"` poderia criar `appointment` sem o lead ter dito dia nem hora em turno nenhum. **(3)** Registrado que **a condição nº 4 do @architect é atendida em duas ondas e não atribui onda** — a atribuição é do epic, que a fazia por omissão; nada dele é revogado. **(4)** **Legenda de risco passa a ter dois eixos** (`regressão / comportamento novo`) nos itens que adicionam caminho de decisão — `W1-2c`, `W1-7`, `W3-2e`; foi por medirem eixos diferentes que @sm e @po classificaram o mesmo item de formas opostas, **os dois certos**. Diagrama §9 atualizado nos dois pontos. **Resolve o ponteiro quebrado** que o Epic 88 v0.3 sinalizou (`W3-2e` citado e inexistente). | @pm (Morgan) |
+| 2026-08-07 | 0.4 | **Edição cirúrgica: o gate com o Epic 88 deixa de ser condição de existência e vira critério de sequenciamento e dimensionamento** (correção do Gabriel, aceita). A redação *"lastro ≥90% → a tool não se justifica; <90% → o Epic 88 sobe"* **condicionava arquitetura a estatística** e foi revogada em quatro lugares: o bloco do gate na **Onda 4**, o **diagrama da §9** (e sua leitura), o ponteiro do **`W0-5`** na Onda 0 e a nota da **`D3`**. Formulação nova, cuja dona é a `Epic 88 · §8.1`: **o Epic 88 acontece; o lastro remedido define escopo, ordem e tamanho dos degraus de rollout** — lastro alto **encolhe** a v1, não a cancela. **A ordem não mudou**, e as razões dela seguem técnicas e escritas: tool sobre estado que mente escreve o erro com autoridade, `tool_choice` forçado sobre gatilho envenenado **fabrica** argumento e citação, e `isSlotFree` devolve "livre" quando a query falha. Acrescentada à **§3** a procedência do baseline: o **`31%` é manual e o instrumento ainda não o reproduz — a régua rodada como especificada dá 7%** (@po, `po-validation-87-3-87-4.md` §1.4), com viés que **subconta** lastro, ou seja, apontava para o próprio lado *"<90%"*; recalibrar é a **B6** da Story 87-3 e, até lá, o número não arbitra decisão de arquitetura. **Nenhum item, onda, ordem ou story foi alterado.** As edições `A1`–`A4` do @po (§3.5 da mesma validação) ficaram fora desta passada por mexerem em roadmap — **aplicadas na v0.5**. | @pm (Morgan) |
+| 2026-08-07 | 0.3 | **Segunda passada: D8 executada e os itens órfãos do Tier 1 do @architect ganharam dono.** **(a)** `W1-2a` atualizado — o **desarme dos 3 estados armados (Célia, Adriele, Wilson) foi executado pelo Gabriel em 07/08**, com backup das 59 conversas e preservando visitas reais; resta a limpeza de ~22 registros e a rotina até a âncora existir. Registrado que **o item que sobra é de código (W1-2b), não de dado** — sem cortar a fonte, purgamos de novo em duas semanas achando que estava resolvido. **(b)** Três itens que não tinham dono em epic nenhum entraram aqui, todos vindos do debate de 07/08: **`W0-5`** (🔴 reconciliação diária fala × banco — o maior ROI dos dois epics, o único que teria pego a Célia no dia seguinte em vez de 5 semanas, e o **instrumento que mede o lastro** do gate com o Epic 88); **`W1-2c`** (o estado passa a registrar oferta e afirmação do sistema — o outro sinal do mesmo defeito, e **habilitante do gatilho turn-local do Epic 88**, que hoje fica cego nos turnos "Ok"); **`W1-6`** (`collected_data` sai do system prompt como JSON cru — enquanto essa linha existir, "bloco `[SISTEMA]` como fonte única de fatos" é ficção nos dois epics). Os demais órfãos foram para o Epic 88 (`isSlotFree` fail-closed, UNIQUE parcial em `appointments`, guarda de interrogação no `detectAffirmedSlot`) e para `docs/backlog.md`. | @pm (Morgan) |
 | 2026-08-07 | 0.2 | **Reconciliação do documento com o que já foi decidido e medido depois de 05/08.** O epic não era editado desde a criação e, por escrito, proibia o Epic 88 e apontava para itens inexistentes — três revisores independentes (@architect §8 do debate de 07/08, @po §2 da validação do Epic 88, @pm) chegaram à mesma lista. **Nenhum item novo foi inventado e nenhuma onda foi reordenada além da que o @architect reprovou.** O que mudou e por quê: **(1)** criado o **`W0-0`** (paridade `agent_prompts`, BLOQUEANTE, Onda 0) e `W2-4` marcado como movido — o item existia na validação do @architect e na story 87-0, e não no epic; **(2)** **`W4-1` removido**, substituído pelo **Epic 88**, e `W4-2`/`W4-3` repontados para "Epic 88 · Onda 3 concluída" (estavam órfãos); **(3)** **regra de corte da Onda 2 reescrita** — o princípio ("nada estrutural sem rede") é mantido e ganha a exceção explícita: Onda 0 do Epic 88 liberada, Onda 1+ atrás do 88-2, porque o harness de efeito colateral já veio na 75-279; **(4)** **`D6` revogada** em favor do **`D88-3`** (teto sobre `whatsapp_async_done`, baseline medido p95 = 12.469 ms, n=442) — havia dois tetos contraditórios em documentos ativos; **(5)** **`M10` vira ponteiro para `PM8`** — eram a mesma métrica com dois nomes; **(6)** **`D3` fechada** (decidida no Epic 88 §2); **(7)** **ordem da Onda 1 corrigida** para a que o @architect assinou (W1-2a+W1-3a → W1-2b → W1-3b → W1-1), com o racional medido (a conversa da Sandra tinha 14 mensagens: CR-1 não causou o incidente, e a cauda deixa o modo agendamento *mais* propenso a ligar); **(8)** `stories_planned` preenchido com o mapa item→story (87-0, 87-1, 87-2). **Fatos novos absorvidos:** F-7 morreu (prompts reconciliados em prod em 05/08 20:58 — o `W0-0` deixa de bloquear o Epic 88 e passa a bloquear só o 88-9); placar de incidentes auditado é **6 de 7** (Silvana sai — era ligação e ela aconteceu; entram Célia, Helena e Miriam), com a Célia invisível por 5 semanas; **baseline de lastro = 31%**, com a definição que impede a métrica de melhorar sozinha quando um humano conserta depois; o veto do @architect virou **critério numérico de entrada** (≥90% / <90%) e está escrito como o gate entre os dois epics; escala das minas vivas (59 estados, 46 com data que anda, **3 armados**) e o defeito determinístico do `pendingDay` ("semana de manhã" → três sábados), ambos ancorados no W1-2a/W1-2b; e a AC de prompt passa a se verificar **no banco**, sob a D-87-0-a. | @pm (Morgan) |

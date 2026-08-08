@@ -28,6 +28,186 @@ com o PAT de leitura do projeto `dsopqkqjkmhytudaaolv` em secret.
 
 ---
 
+### [NICOLE] 🔴 Compromisso de **ligação** da Nicole não vira artefato nenhum
+
+**Adicionado em:** 2026-08-07
+**Prioridade:** P1
+**Origem:** Revisão @po do Epic 88 (`docs/qa/po-validation-epic-88.md` §8, item 1) — auditoria do
+caso Silvana no banco de produção
+
+A Nicole promete *"o corretor te liga segunda às 9h"* e **nada é gravado**. `lead_tasks` só tem
+`source: 'manual'` — na Silvana (24/07 23:41), um humano leu a conversa e criou a tarefa à mão em
+25/07 09:54. A ligação aconteceu **porque alguém percebeu**, não porque o sistema registrou.
+
+**É a mesma classe de dano da agenda — fala sem lastro — por um caminho diferente**, e por isso não
+entra no Epic 88 (que trata só de `appointments`): lá a tool `agendar_visita` não resolveria, porque
+não havia visita a agendar. Nenhum dos dois epics da Nicole cobre este caminho hoje.
+
+**Ação:** decidir se compromisso de ligação vira `lead_tasks` automático (mesma discussão de
+autoridade de escrita do Epic 88) ou se entra apenas na reconciliação diária (Epic 87 · W0-5)
+como alerta. A segunda opção é XS e já pega o dano.
+
+---
+
+### [NICOLE] 🟢 Célia (28/06) nunca foi remediada — acredita ter visita marcada há 40+ dias
+
+**Adicionado em:** 2026-08-07
+**Prioridade:** P3 (decisão comercial, não técnica)
+**Origem:** Revisão @po do Epic 88 §8, item 4 · @architect §2.3
+
+Em 28/06 a Nicole escreveu *"Agendei sua visita para este sábado às 9h"*. **Zero `appointments` até
+hoje**, e ninguém corrigiu à mão — ao contrário de Sueli, Valnira e Maria, que tiveram conserto
+humano. O lead se perdeu em silêncio. É o caso que justifica o `W0-5` (reconciliação diária) do
+Epic 87: com ele, isso teria aparecido em **29/06**.
+
+**Ação:** decidir se há contato ativo com a Célia (e com os demais da lista que o `W0-5` produzir
+ao rodar sobre 60 dias retroativos). Decisão do Gabriel/Marcos.
+
+---
+
+### [NICOLE] 🟡 `detect-appointment.ts:71` — comparação `=== true` num campo que sempre foi string
+
+**Adicionado em:** 2026-08-07
+**Prioridade:** P2 (não urgente — o caminho está **morto**, não errado em produção)
+**Origem:** Achado do @sm ao redigir a Story 87-4; ratificado pelo @po
+(`docs/qa/po-validation-87-3-87-4.md` §4, correção C5)
+
+```ts
+// packages/ai/src/flows/detect-appointment.ts:71
+const hasVisitAvailability = collectedData.visit_availability === true
+```
+
+`visit_availability` **sempre foi string** (`packages/shared/src/constants/lead-fields.ts:23`,
+`type: "text"`). A comparação com booleano é **sempre falsa** — ou seja, `visit_availability`
+**nunca** funcionou como sinal de suporte para detecção de agendamento. O `detected` da função sai
+apenas de `hasKeyword`, `hasDayKeyword` e `dateMatch`.
+
+**Por que NÃO entra na Story 87-4 (Onda 1):** "consertar" isso **liga um caminho de detecção que
+hoje está morto**. Isso é caminho de decisão novo, e a regra de corte da Onda 1 do Epic 87 o
+proíbe (*"nenhuma story pode adicionar um novo caminho de decisão da Nicole"*). O @po conferiu a
+linha e ratificou que está corretamente fora de escopo.
+
+**Por que está aqui e não como tarefa da 87-4:** a v0.1 da 87-4 previa uma T9 para abrir este item.
+**Item de backlog dentro de uma story que ainda não começou é frágil** — se a story escorregar, o
+achado escorrega junto. Aberto agora, com dono próprio.
+
+**Ação:** decidir, **em uma story de Onda 3 ou 4**, se a intenção original era ligar esse sinal.
+Se for, medir o efeito antes (quantos turnos a mais entrariam em `detected: true`) — o risco é
+exatamente o de "agendar sozinho", classe do incidente que os Epics 87 e 88 existem para fechar.
+Se não for, **remover a linha** em vez de corrigi-la.
+⚠️ **Ao migrar o formato na Story 87-4, deixar a comparação morta como está** (ou preservar a
+semântica de "sempre falso"). Trocá-la por uma verdadeira, de carona na migração, muda
+comportamento sem AC.
+
+---
+
+### [NICOLE] 🔴 Fala **humana** gravada como `role='assistant'` — a Nicole é acusada por promessa de gente
+
+**Adicionado em:** 2026-08-07
+**Prioridade:** P1 (não bloqueia hoje; **cada consumidor futuro vai reencontrá-lo**)
+**Origem:** Achado do @sm na Story 87-3; medido e escalado pelo @po
+(`docs/qa/po-validation-87-3-87-4.md` §4) — *"🔴 Não está no backlog em lugar nenhum"*
+
+```ts
+// packages/web/src/app/api/leads/[id]/send-message/route.ts:210-222
+await db.from("messages").insert({
+  role: "assistant",                      // ← linha 214: fala do CORRETOR, humana
+  content: transitionText,
+  metadata: { is_transition: true, broker_id: appUser.id, ... },
+})
+```
+
+A fala de **transição do handoff** — escrita por humano, disparada pelo corretor — é gravada com
+`role: "assistant"`. A única coisa que a distingue da fala da Nicole é `metadata.is_transition`,
+e **quem lê `messages` filtrando por `role` não vê o metadata**.
+
+**Volume medido pelo @po (60 dias, produção):** **104 mensagens**.
+
+**Estado atual do dano — hoje é ZERO, e isso é sorte:** nenhuma dessas 104 dispara a
+`detectAffirmedSlot`. Mas o defeito é de **origem**, e o raio dele é muito maior que qualquer story
+que o contorne:
+
+| quem vai reencontrar | efeito se não filtrar |
+|---|---|
+| Story **87-3** (`W0-5`) | acusaria a Nicole de afirmar visita que **um humano** prometeu — **já tratado** ali como filtro do módulo, que é o certo para o escopo dela |
+| `W2-3` (`detectSlotMismatch` shadow) | mesma classe |
+| `W3-1` (validador) | mesma classe |
+| `88-3` (funil das 7 portas) | contaria turno humano como turno da Nicole na instrumentação |
+| `loadConversationHistory` (`pipeline.ts:1543`) | seleciona só `role, content` — **a Nicole já lê algumas falas humanas achando que são dela** |
+
+**Cada consumidor vai pagar o mesmo imposto de contorno, e um deles vai esquecer.**
+
+**Ação:** decidir a representação correta da fala humana em `messages` — `role` próprio
+(`'broker'` já existe e é usado para as 882 mensagens do corretor nos últimos 30 dias) ou coluna de
+autoria explícita — e migrar os leitores. **Não é conserto de story de agenda:** é decisão de
+modelo de dados, com impacto em histórico, extração e instrumentação. Enquanto não acontecer, todo
+leitor novo de `messages` **precisa** filtrar `metadata.is_transition` explicitamente.
+
+---
+
+### [NICOLE] ℹ️ Dois defeitos desta revisão que **já ganharam dono** — não abrir item novo
+
+**Adicionado em:** 2026-08-07
+**Origem:** @po Epic 88 §8, itens 2 e 3 — registrados aqui só para não serem redescobertos
+
+- **`freeSlotsInPeriod` ignora "semana × fim de semana"** (lead pede "semana de manhã", o pré-fetch
+  oferece três sábados — Valnira, 03/08 23:57; causa em `visit-slot.ts:363-381`, a guarda da 75-268
+  não foi aplicada ao caminho `pendingDay`) → **Epic 87 · W1-2b**.
+- **`detectSlotMismatch` falhou também COM slot autorizado** (Ailton, 30/07 22:17: autorizado 10h,
+  afirmou 9h, **0 eventos em toda a história do `system_events`**) → **Epic 87 · W2-3**.
+
+---
+
+### [BOLSÃO] 🔴 O carimbo sujo continua NASCENDO — a 75-286 calou o sintoma e o dano piorou de forma
+
+**Adicionado em:** 2026-08-07
+**Prioridade:** **P1 — o mais alto desta lista.** O dano deixou de ser visível
+**Origem:** Efeito medido do merge da Story 75-286 (`6d141692`), levantado na revisão de 07/08
+**Decisão (@pm, 07/08):** **backlog, não epic.** O Epic 87 lista *"roleta/distribuição, notificação
+de corretor"* em `FORA DE ESCOPO` (§4) por raio de impacto próprio, e este item é de distribuição,
+não de contexto da Nicole. Trazê-lo para lá reabriria escopo no meio da Onda 1. Precisa de story
+própria — **é a única coisa desta entrada que está pendente de decisão: quem e quando, não se.**
+
+A 75-286 corrigiu **a leitura**, e corrigiu bem: o digest passou a espelhar o filtro do painel
+(`bolsao-rebalance/route.ts:178`, `.is("assigned_broker_id", null)`), e o gerente parou de receber
+aviso sobre lead que já tem dono. **O que ela não fez — e o commit diz isso com todas as letras — é
+impedir o carimbo sujo de nascer.** Os três caminhos de atribuição continuam gravando
+`assigned_broker_id` sem limpar `bolsao_em`, verificado no código de hoje:
+
+```
+leads/[id]/assign/route.ts:46       .update({ assigned_broker_id: body.broker_id })
+leads/[id]/handoff/route.ts:72      .update({ assigned_broker_id: body.broker_id })
+leads/[id]/transferir/route.ts:83   .update({ assigned_broker_id: targetUserId })
+```
+
+`bolsao_em` só é limpo pela RPC `pegar_lead_bolsao`. Quem entra por qualquer outra porta deixa o
+carimbo — e a **cronologia medida prova que o fix não estancou a fonte**: **14 avisos em 05/08** e
+**2 em 06/08, depois da limpeza manual** — ou seja, **um lead novo sujou o carimbo no dia seguinte**.
+
+**O dano maior nunca foi o spam.** Um lead com carimbo sujo é excluído dos candidatos do
+rebalanceamento — `bolsao-rebalance/route.ts:100` exige `.is("bolsao_em", null)`. Ele fica com dono,
+fora do painel do bolsão, **e sem a rede de segurança que devolveria o lead ao pool se o corretor
+não atendesse**. É exatamente a população que o bolsão existe para resgatar.
+
+> **A inversão que torna isto P1:** **antes o spam denunciava o fantasma; agora ele nasce em
+> silêncio.** O único sintoma observável do defeito era o aviso ao gerente, e foi ele que a 75-286
+> removeu. O lead que perde o resgate não gera evento, não aparece em tela nenhuma e não tem
+> descobridor — é a mesma classe de cegueira que o `W0-5` do Epic 87 existe para fechar na agenda da
+> Nicole, aqui na distribuição. **Nenhuma crítica ao fix:** corrigir a leitura primeiro estava certo
+> e parou a sangria visível. O erro seria dar o item por encerrado.
+
+**Ação — a escrita, não a leitura:**
+1. Limpar `bolsao_em` nos três caminhos de atribuição (o certo é na **RPC/atribuição**, um lugar só,
+   não três `update` espalhados). A roleta **não** entra: já tem guard próprio (bail `"em_bolsao"`
+   + `AND bolsao_em IS NULL` na `roleta_pick_and_advance`) e nunca atribui lead carimbado.
+2. **Contar antes de consertar:** quantos leads vivos estão hoje com `bolsao_em IS NOT NULL AND
+   assigned_broker_id IS NOT NULL` — é a lista de quem já perdeu o resgate.
+3. Remediar essa lista (decidir por lead: limpar carimbo ou devolver ao pool).
+4. **Invariante que impede a reincidência:** `bolsao_em IS NOT NULL` ⇒ `assigned_broker_id IS NULL`.
+   É um `CHECK` ou um teste — sem ele, o 4º caminho de atribuição que alguém escrever repete tudo.
+
+---
+
 ### [SEGURANÇA] 🔴 Roleta com guarda nova nunca exercitada em produção
 
 **Adicionado em:** 2026-08-03
