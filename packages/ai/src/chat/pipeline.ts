@@ -30,7 +30,7 @@ import {
   stripManualInterestLevel,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
-import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, isAmbiguousSlotText, slotToUtc, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, isAmbiguousSlotText, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
@@ -120,30 +120,13 @@ export function detectSlotMismatch(input: {
 }
 
 /**
- * Story 75-279 — a Nicole AFIRMOU um dia+horário único nesta resposta? Devolve o
- * horário afirmado, ou null. Sem comparar com nada.
- *
- * Existe separado da `detectSlotMismatch` porque o caso mais grave é justamente
- * aquele em que **não há** slot autorizado para comparar: no incidente da lead
- * Maria Oliveira (06/08) o sistema mandou PERGUNTAR o horário, e a Nicole
- * inventou um bloco `[SISTEMA: … LIVRE]`, confirmou "sábado às 11h" e nada foi
- * agendado. A guarda da 75-245 exigia `authorizedSlotUtc` para rodar e por isso
- * era cega exatamente aí — em prod ela nunca disparou uma única vez.
- *
- * Mesma postura conservadora da 75-245: só AFIRMAÇÃO de dia+hora único. Texto
- * ambíguo (oferta de opções, frase de expediente) devolve null.
+ * Story 87-3 — `detectAffirmedSlot` mudou de casa para `flows/visit-slot.ts` (onde
+ * já moram as três dependências dela) e continua re-exportada daqui: o módulo de
+ * reconciliação (`flows/agenda-reconcile.ts`) precisa dela, e importá-la de
+ * `chat/pipeline` criaria o ciclo `pipeline → flows/index → agenda-reconcile →
+ * pipeline`. O corpo da função não mudou uma linha.
  */
-export function detectAffirmedSlot(input: {
-  assistantMessage: string
-  now: Date
-}): Date | null {
-  const { assistantMessage, now } = input
-  if (!assistantMessage) return null
-  if (isAmbiguousSlotText(assistantMessage)) return null
-  const said = resolveVisitSlotParts({ message: assistantMessage, now, visitAvailability: null })
-  if (!said.day || !said.time) return null
-  return slotToUtc(said.day, said.time)
-}
+export { detectAffirmedSlot } from "../flows/visit-slot"
 
 /**
  * Story 75-279 — remove blocos `[SISTEMA: …]` da fala antes de qualquer uso.

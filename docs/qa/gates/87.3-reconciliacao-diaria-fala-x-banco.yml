@@ -1,0 +1,173 @@
+schema: 1
+story: '87.3'
+story_title: 'Reconciliação diária fala × banco — a Nicole afirmou uma visita que o banco não tem'
+gate: CONCERNS
+status_reason: >-
+  Instrumento verificado de forma independente e reproduz o baseline de produção campo a campo
+  (12,5 % × 0,0 %, 8 leads / 16 falas, Silvana ausente, Ailton não engolido). Ressalvas: uma
+  afirmação factualmente errada no Dev Agent Record ("ZERO alertas para o Ailton na rodada real")
+  e a AC6 que só fecha por efeito em produção (@devops).
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-08-08T01:20:00Z'
+branch: 'story/87-3-reconciliacao-fala-banco'
+base_commit: '17e9a8dc'
+
+evidence:
+  suites:
+    raiz_vitest: '1.781 passando · 7 expected-fail · 5 arquivos falhando por dependência AUSENTE do node_modules (sharp, satori, pdf-lib) — pré-existente, sem relação com a story'
+    story_files: '33 testes verdes (28 no módulo + 5 na rota)'
+  type_check:
+    packages_ai: 'tsc --noEmit limpo'
+    packages_web: 'só erros pré-existentes de módulo ausente (sharp/satori/pdf-lib/react-email-editor); nenhum nos arquivos da story'
+  lint:
+    packages_web: '0 erros · 2 warnings (params de mock não usados em route.test.ts)'
+    packages_ai: 'sem eslint configurado (declarado na AC8)'
+
+  rodada_producao_independente:
+    executor: 'Quinn, 2026-08-08, dsopqkqjkmhytudaaolv, service role, SOMENTE SELECT'
+    resultado: 'total_disparos 30 · descartes.ligacao 1 · lembrete 5 · denominador 24 · com_lastro 3 · reparo_humano 9 · sem_lastro 12 · lastro_pct 12,5 % · lastro_frouxo_pct 50 % · alertas 8'
+    sensibilidade: 'ordem_normativa 12,5 % × lembrete_primeiro 0,0 %'
+    mensagens_lidas: '1.170 (o @dev mediu 1.157 — a janela deslizou ~2 h)'
+    conferencia: 'as 30 linhas batem uma a uma com a tabela do Dev Agent Record'
+
+  mutacoes_verificadas_por_reversao:
+    - id: R1
+      mutacao: "âncora vira new Date()"
+      vermelho: '18 de 28 (o @dev reportou 18/28 — confere)'
+    - id: R2
+      mutacao: 'guarda de faladoEm não-finito removida (e depois as duas guardas)'
+      vermelho: '1 (só a primeira) · 2 (as duas)'
+    - id: R3
+      mutacao: 'ORDEM_NORMATIVA flipada para "lembrete_primeiro"'
+      vermelho: '7 (o @dev reportou 7 — confere) E o número PUBLICADO se move'
+    - id: R4
+      mutacao: 'PADROES_LIGACAO esvaziado'
+      vermelho: '4'
+    - id: R5
+      mutacao: 'balde lembrete removido'
+      vermelho: '4 (o @dev reportou 3 — a cobertura real é maior, não menor)'
+    - id: R6
+      mutacao: "filtro created_by='nicole' removido"
+      vermelho: '1'
+    - id: R7
+      mutacao: 'janela de mesmo turno removida'
+      vermelho: '1'
+    - id: R8
+      mutacao: "[Quinn] filtro .eq('role','assistant') removido — o harness engole predicado?"
+      vermelho: '1 — o createFakeSupabase aplica os predicados de verdade, NÃO é mock complacente'
+    - id: R9
+      mutacao: '[Quinn] short-circuit do ?dry removido na rota'
+      vermelho: '1 — o dry é read-only testado, não prometido'
+    - id: R10
+      mutacao: '[Quinn] supressão lead+dia removida'
+      vermelho: '2'
+
+  ordem_normativa_e_carga_util:
+    pergunta: 'A constante é lida, ou é decorativa como a primeira versão do @dev?'
+    prova: 'Flipando ORDEM_NORMATIVA e rodando reconciliarAgenda: lastro_pct 33,3 % → 0,0 %; com_lastro 1 → 0; denominador 3 → 2; alertas 1 → 2. A constante MOVE o número publicado — não é da classe do mock `is: () => b`.'
+
+  invalid_date_node_25:
+    '"2026-06-28 13:37:40.123+00" (espaço)': 'VÁLIDA → 2026-06-28T13:37:40.123Z'
+    '"2026-06-28T13:37:40.123+00" (com T)': 'INVALID DATE'
+    '"2026-06-28T13:37:40.123+00:00"': 'VÁLIDA'
+    veredito: 'A correção de premissa do @dev está certa. parseTimestamptz normaliza as três grafias e o teste fixa a medição por escrito.'
+
+  detect_affirmed_slot_ac7:
+    diff_da_funcao: 'ZERO — corpo extraído de HEAD:chat/pipeline.ts vs flows/visit-slot.ts, diff vazio'
+    consumidores: 'pipeline.ts:116 e :1028 (caminho vivo, now: new Date(), intocado) · pipeline.test.ts importa de "./pipeline" e passa pelo re-export'
+    testes_de_pipeline: 'git status packages/ai/src/chat/ mostra APENAS pipeline.ts modificado — nenhum teste alterado'
+
+  read_only_ac5:
+    modulo: 'só select:messages, select:conversations, select:leads, select:appointments — nenhum insert/update/upsert/delete/rpc no arquivo'
+    rota_dry: 'o return do ?dry=1 precede o select de dedupe, os dois logEvent e os envios de Telegram'
+    rodada_de_producao: 'executada por mim com service role, nenhuma escrita'
+
+  escopo:
+    caminho_de_decisao_da_nicole: 'INTOCADO — pipeline.ts muda só o import e troca o corpo da função por re-export'
+    migrations: 'nenhuma'
+    cron: '38 11 — expandi os 36 crons do vercel.json: ZERO colisões em 11:38; 10 em 11:30'
+
+  drift_de_dados:
+    contexto: 'o Gabriel corrigiu 3 resumos contaminados em prod (Marilda, Adriele, Sandra) DEPOIS da rodada do @dev'
+    veredito: 'sem impacto — o módulo lê messages.content, nunca resumos; as fixtures são literais no arquivo de teste; minha rodada de hoje reproduz as 30 linhas do @dev, incluindo Adriele ×2 e Sandra ×2'
+
+top_issues:
+  - id: 'DOC-001'
+    severity: medium
+    finding: >-
+      Dev Agent Record §6 afirma "ZERO alertas para o Ailton na rodada real". Falso: na minha rodada
+      há 1 alerta para ele — a fala de 30/07 22:05 BRT, que afirma 03/08 12:00 e não tem fala
+      corretiva NAQUELE dia afirmado. O CÓDIGO está certo (a unidade da supressão é lead + dia
+      afirmado, e 03/08 ≠ 01/08; a fixture literal da AC4-iii é o par 22:17/22:18, e esse par
+      produz zero alertas). A própria story se contradiz: a linha 16 da tabela dela marca
+      "ALERTA" para o Ailton 22:05 e o §7-4 conta "Ailton 22:05" entre os 8 alertas.
+    suggested_action: >-
+      Corrigir a frase do §6 para "ZERO alertas para o PAR 22:17/22:18 (o dia afirmado 01/08); o
+      alerta do Ailton na rodada é o da fala das 22:05, que afirma 03/08". Numa story cuja tese é
+      "um instrumento que mente é pior que um que falha", uma afirmação falsa no registro dele não
+      é cosmética.
+    ac_afetada: 'AC4-(iii) — o comportamento fecha; o RELATO não'
+
+  - id: 'REL-001'
+    severity: low
+    finding: >-
+      O dedupe não é atômico: a rota faz select em system_events e depois insere via logEvent
+      (fire-and-forget). Se dois projetos Vercel deployarem o mesmo vercel.json, os dois crons
+      disparam no MESMO minuto (38 11) e podem ambos ler vazio e ambos escrever. A mitigação do
+      Risco 4 cobre re-execução SEQUENCIAL, não CONCORRENTE.
+    suggested_action: >-
+      Registrar explicitamente que o dedupe não protege o caso concorrente. Quem fecha isso é a
+      pré-tarefa da AC6 (@devops nomear o projeto Vercel), não o código.
+
+  - id: 'REL-002'
+    severity: low
+    finding: >-
+      logEvent é fire-and-forget e, no dia SEM alerta (o caso comum), o insert de
+      NICOLE_LASTRO_DIARIO é a última instrução antes do return — nada mantém a lambda viva. É a
+      classe do incidente da Story 75-139 (void sendEmail não chegava). ATENUANTE MEDIDO: o
+      FOLLOWUP_EXECUTED de api/cron/followup tem exatamente a mesma forma (logEvent → return
+      NextResponse.json) e ESTÁ em produção (2026-07-21) — o padrão funciona neste deploy.
+    suggested_action: >-
+      A prova por efeito da AC6 é o que resolve. Se a linha NICOLE_LASTRO_DIARIO não aparecer
+      depois da primeira execução real do agendador, o conserto é after() (já usado em
+      webhook/whatsapp), não investigação.
+
+  - id: 'REL-003'
+    severity: low
+    finding: >-
+      O select de dedupe não tem .limit() nem filtro por message_id — depende do teto default de
+      1000 linhas do PostgREST. Hoje inofensivo (0,13 alerta/dia), mas degrada em silêncio se o
+      volume mudar.
+    suggested_action: 'Filtrar por metadata->>message_id nos ids candidatos, ou .limit() explícito.'
+
+  - id: 'MNT-001'
+    severity: low
+    finding: 'DEFAULT_ORG_ID hardcoded na rota (consistente com daily-report, mas o projeto está pivotando para multi-tenant).'
+    suggested_action: 'Item de backlog junto com os demais crons org-fixos — não desta story.'
+
+  - id: 'TEST-001'
+    severity: low
+    finding: "eslint: 2 warnings de params não usados (_supabase, _opts) em route.test.ts."
+    suggested_action: 'Remover os params ou prefixar conforme a regra do projeto.'
+
+ac_status:
+  AC1: PASS   # 8 leads / 16 falas, conferidos na minha própria rodada
+  AC1-a: PASS # Ailton sem_lastro com divergencia_min 60 e appointment_id_proximo preenchido
+  AC1-b: PASS # Silvana só como descarte:ligacao, zero alertas, vermelho R4 confirmado
+  AC2: PASS   # vermelho R1 = 18/28
+  AC2-b: PASS # premissa corrigida e verificada no Node 25.6.1; três grafias cobertas
+  AC3: PASS   # número publicado, quatro baldes, unidade, sensibilidade e reconciliação linha a linha
+  AC4: CONCERNS # comportamento correto; o RELATO do Ailton na rodada real está errado (DOC-001)
+  AC5: PASS   # allowlist no harness + minha própria rodada de produção sem escrita
+  AC6: PENDING # só fecha por efeito em produção — @devops
+  AC7: PASS   # diff da função = zero, testes de pipeline sem uma linha alterada
+  AC8: PASS   # 1.781 verdes, tsc sem erro novo, lint sem erro
+
+acoes_requeridas_antes_de_Done:
+  - '[@dev] Corrigir DOC-001 no Dev Agent Record §6 (a frase do Ailton).'
+  - '[@devops] AC6: provar NICOLE_LASTRO_DIARIO por invocação real do agendador e NOMEAR o projeto Vercel que deploya packages/web.'
+  - '[@devops] Os dois select count(*) do dedupe em produção (AC4-i).'
+  - '[@devops] Registrar que o dedupe não cobre execução concorrente (REL-001).'
+  - '[@po/@pm] Propagar 12,5 % à §3 do Epic 87 e ao PM2 do Epic 88; o 31 % passa a "baseline manual, superado".'
+
+waiver: { active: false }
