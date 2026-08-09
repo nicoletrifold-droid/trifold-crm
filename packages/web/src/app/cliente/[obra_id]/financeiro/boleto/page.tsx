@@ -41,6 +41,13 @@ function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
       </span>
     )
   }
+  if (status === "PARCIAL") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-400">
+        Parcialmente pago
+      </span>
+    )
+  }
   if (status === "BOLETO_GERADO") {
     return (
       <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-400">

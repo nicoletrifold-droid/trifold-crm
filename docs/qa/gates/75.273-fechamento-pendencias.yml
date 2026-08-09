@@ -1,0 +1,59 @@
+schema: 1
+story: '75-273'
+story_title: 'Fechamento das pendências dos gates de 04/08'
+gate: PASS
+status_reason: 'Story de higiene, e o mérito dela é o Item 4: **descartar com medição**. Medi 59
+  agendamentos em prod contra um teto de 1000 e decidi NÃO paginar — registrar o número no gate vale
+  mais que o churn, e a próxima pessoa não reinvestiga para concluir o mesmo. Os três itens de código
+  são pequenos, testados e sem mudança de comportamento visível (exceto o cabeçalho do PDF, que
+  melhora). O guard-rail da whitelist é o de maior valor: transforma uma decisão da 75-269 em regra
+  que a suíte defende.'
+reviewer: 'Quinn'
+updated: '2026-08-04T16:45:00Z'
+quality_score: 100
+expires: '2026-08-18T16:45:00Z'
+
+evidence:
+  tests: '132 arquivos / 1676 testes; +6 no guard-rail da whitelist'
+  tsc: 'limpo (8/8)'
+  eslint: '0 erros (2 warnings pré-existentes em distributor.test.ts)'
+  guard_rail: 'Verifiquei que o teste FALHA de verdade se o campo voltar (a asserção usa a mensagem
+    de `LEAD_PATCH_FORBIDDEN_FIELDS`, então quem quebrar lê o motivo em vez de só "expected not to
+    contain"). Também cobre o oposto — remover `lost_reason_grupo` por engano — e o esvaziamento
+    acidental da lista (`length > 25` + amostra de cada época).'
+  medicao_do_item_4: 'Reconferido: 59 appointments totais na org, 55 `team=house`, contra teto de
+    1000. Não é "provavelmente ok": é duas ordens de magnitude de folga.'
+  paginacao_do_pdf: 'Sem mudança de comportamento hoje (recorte de ativos = 612 em toda a base, uma
+    página). O valor é fechar a classe: `range=custom` aceita janela arbitrária e o corte do
+    PostgREST é silencioso.'
+  nomes_no_cabecalho: 'Uma query por dimensão, só quando filtrada. Id não resolvido cai no rótulo
+    pelado em vez de imprimir uuid — o caminho de erro está tratado, não só o de sucesso.'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'O Item 1 FECHA superfície de escrita de forma durável (a regra agora é defendida por
+      teste). As queries de nome são leituras da própria org, pelo client do usuário.'
+  performance:
+    status: PASS
+    notes: 'No PDF com filtro: até 2 queries de nome (só as dimensões filtradas) e a paginação, que
+      hoje é 1 página. Irrelevante num relatório sob demanda.'
+  reliability:
+    status: PASS
+    notes: 'Nada muda no caminho sem filtro — o cron de domingo segue intocado por esta story
+      também.'
+  maintainability:
+    status: PASS
+    notes: 'A whitelist saiu de dentro do handler e ganhou o motivo escrito junto da proibição. Os
+      gates de 04/08 ficaram sem item pendurado sem desfecho.'
+
+top_issues: []
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Se o volume de agendamentos crescer uma ordem de magnitude, paginar o executive
+        (OBS-001 da 75-269 tem o número de referência: 59 em 04/08)'
+      refs: ['packages/web/src/app/api/analytics/executive/route.ts']
+
+waiver: { active: false }

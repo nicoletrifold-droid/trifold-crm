@@ -7,6 +7,7 @@ import { sendPushToUser } from "@web/lib/server/push-service"
 import { notifyImobVisitWhatsApp } from "@web/lib/appointments/notify-imob-visit"
 import { notifyVisitBookedWhatsApp } from "@web/lib/appointments/visit-whatsapp"
 import { overlaps } from "@web/lib/appointments/governance"
+import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 
 // Deep-link do push — SEMPRE o domínio custom (cookie de sessão; ver memória 75-152).
@@ -233,7 +234,7 @@ export async function POST(
           : {}),
       },
     })
-    .select("id, scheduled_at, location, cancel_token")
+    .select("id, scheduled_at, duration_minutes, location, cancel_token")
     .single()
   if (apptError || !appointment) {
     return NextResponse.json({ error: "Não foi possível agendar. Tente novamente." }, { status: 500 })
@@ -246,6 +247,24 @@ export async function POST(
   if (leadId) {
     await advanceToVisitaAgendada(admin, leadId)
   }
+
+  // Story 75-275 — o link da imobiliária passa a espelhar no Google Calendar. Era o
+  // furo mais silencioso do espelho: justamente as visitas que NINGUÉM do escritório
+  // digita (a imobiliária marca sozinha) eram as que a copa não veria. Título ganha
+  // prefixo [IMOB] no helper, porque team='imob'.
+  await mirrorCreate(
+    admin,
+    {
+      id: appointment.id,
+      scheduled_at: appointment.scheduled_at,
+      duration_minutes: appointment.duration_minutes,
+      location: appointment.location,
+      notes: null,
+      client_name: clientName,
+      team: "imob",
+    },
+    { origin: `Marcada pela imobiliária ${imob.nome} via link público.` }
+  )
 
   await admin.from("activities").insert({
     org_id: imob.org_id,

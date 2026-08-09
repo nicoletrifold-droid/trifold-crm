@@ -1,4 +1,6 @@
--- 215_leads_qualificacao_comercial.sql
+-- 217_leads_qualificacao_comercial.sql
+-- (Renumerada de 215 → 217 no rebase da 84-1: a main já tinha 215_meta_capi_outbox
+--  e 216_clientes_cpf_normalizado quando este PR foi rebaseado.)
 -- Story 84-1 (Epic 84) — Qualificação Comercial do lead: campo manual e independente
 -- da Temperatura (leads.interest_level) e do qualification_status/qualification_score
 -- automáticos (calculados pelo pipeline da Nicole: packages/ai/src/chat/pipeline.ts +

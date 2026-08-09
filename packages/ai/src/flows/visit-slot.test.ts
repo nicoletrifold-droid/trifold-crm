@@ -15,9 +15,39 @@ import {
   parsePeriodParts,
   freeSlotsInPeriod,
 } from "./visit-slot"
+import { buildAgendaState, type AgendaState } from "./agenda-state"
+import { extractCollectedData } from "./qualification"
 
 // Âncora: 2026-06-18T17:00:00Z = quinta-feira 14:00 em BRT (UTC-3).
 const NOW = new Date("2026-06-18T17:00:00Z")
+
+/**
+ * Story 87-4 — o estado herdado deixou de ser três parâmetros soltos
+ * (`pendingDay` + `pendingTime` + `visitAvailability`, sendo o último uma STRING
+ * reancorada a cada leitura) e virou UM `AgendaState` com o dia já absoluto.
+ * Este helper existe para que os testes das stories anteriores continuem
+ * exercitando o MESMO cenário no formato novo.
+ */
+/**
+ * `fonte` é OBRIGATÓRIA aqui de propósito: ela é o que substituiu a distinção que
+ * as quatro chaves antigas carregavam. Cada teste declara qual chave do `HEAD`
+ * está reencenando — `visit_availability` → `"mencao"`, `visit_pending_*` →
+ * `"pendencia"`. Um default esconderia exatamente o que precisa ficar visível.
+ */
+function estado(
+  p: {
+    fonte: "pendencia" | "mencao"
+    dataAbsoluta?: string | null
+    hora?: number | null
+    minuto?: number | null
+    periodo?: "manha" | "tarde" | null
+    citacao?: string
+  },
+  ancoraEm: Date = NOW
+): AgendaState {
+  const { citacao, ...partes } = p
+  return buildAgendaState({ citacao: citacao ?? "(fixture do teste)", now: ancoraEm, ...partes })
+}
 
 describe("detectCancelIntent / detectRescheduleIntent (Story 75-163)", () => {
   it("cancelar: pega variações comuns", () => {
@@ -44,30 +74,31 @@ describe("detectCancelIntent / detectRescheduleIntent (Story 75-163)", () => {
 })
 
 describe("resolveVisitSlotParts (Story 75-162)", () => {
-  it("resolve dia+hora só do visit_availability quando a msg não traz (caso Andréia)", () => {
+  it("resolve dia+hora só do estado quando a msg não traz (caso Andréia)", () => {
     const r = resolveVisitSlotParts({
       message: "9 horas",
       now: NOW,
-      visitAvailability: "Sábado, 20 de junho, às 9h",
+      agendaState: estado({ fonte: "mencao", dataAbsoluta: "2026-06-20", hora: 9, citacao: "Sábado, 20 de junho, às 9h" }),
     })
-    expect(r.day).not.toBeNull() // sábado (próximo)
+    expect(r.day).toEqual({ y: 2026, m: 5, d: 20 })
     expect(r.time).toEqual({ hour: 9, minute: 0 })
   })
 
-  it("mensagem do lead tem prioridade sobre visit_availability", () => {
+  it("mensagem do lead tem prioridade sobre o estado", () => {
     const r = resolveVisitSlotParts({
       message: "pode ser sexta às 10h",
       now: NOW,
-      visitAvailability: "sábado às 9h",
+      agendaState: estado({ fonte: "mencao", dataAbsoluta: "2026-06-20", hora: 9, citacao: "sábado às 9h" }),
     })
     expect(r.time).toEqual({ hour: 10, minute: 0 })
+    expect(r.day).toEqual({ y: 2026, m: 5, d: 19 }) // sexta 19/06, não o sábado do estado
   })
 
-  it("combina dia da msg com hora pendente", () => {
+  it("combina dia da msg com hora do estado", () => {
     const r = resolveVisitSlotParts({
       message: "sexta",
       now: NOW,
-      pendingTime: { hour: 15, minute: 0 },
+      agendaState: estado({ fonte: "pendencia", hora: 15, minuto: 0 }),
     })
     expect(r.day).not.toBeNull()
     expect(r.time).toEqual({ hour: 15, minute: 0 })
@@ -77,15 +108,28 @@ describe("resolveVisitSlotParts (Story 75-162)", () => {
     const r = resolveVisitSlotParts({
       message: "quero visitar",
       now: NOW,
-      visitAvailability: "quero visitar sábado",
+      agendaState: estado({ fonte: "mencao", dataAbsoluta: "2026-06-20", citacao: "quero visitar sábado" }),
     })
     expect(r.time).toBeNull()
   })
 
   it("sem sinais → dia e hora null", () => {
-    const r = resolveVisitSlotParts({ message: "bom dia", now: NOW, visitAvailability: "quero conhecer" })
+    const r = resolveVisitSlotParts({
+      message: "bom dia",
+      now: NOW,
+      agendaState: estado({ fonte: "mencao", citacao: "quero conhecer" }),
+    })
     expect(r.day).toBeNull()
     expect(r.time).toBeNull()
+  })
+
+  it("🔴 Story 87-4 — a CITAÇÃO nunca é fonte de parse: a data não anda", () => {
+    // O defeito que esta story fecha: a mesma frase resolvia um sábado diferente
+    // a cada semana em que fosse lida. Agora a citação é só auditoria.
+    const st = estado({ fonte: "mencao", dataAbsoluta: null, citacao: "…durante a semana ou no sábado de manhã?" })
+    for (const now of ["2026-08-05", "2026-08-12", "2026-08-19"].map((d) => new Date(`${d}T12:00:00Z`))) {
+      expect(resolveVisitSlotParts({ message: "Oi", now, agendaState: st }).day).toBeNull()
+    }
   })
 })
 
@@ -348,27 +392,31 @@ describe("isAmbiguousSlotText (Story 75-245)", () => {
   })
 })
 
-describe("resolveVisitSlotParts blinda o visit_availability (Story 75-245)", () => {
-  it("AC1: frase de expediente NÃO vira slot (antes: segunda 03/08 12:00)", () => {
-    const { day, time } = resolveVisitSlotParts({
-      message: "CPF 174.677.569.68",
-      now: NOW_INCIDENTE,
-      visitAvailability: FRASE_EXPEDIENTE,
-    })
-    expect(day).toBeNull()
-    expect(time).toBeNull()
+describe("a guarda da 75-245 blinda a ESCRITA do estado (Story 87-4)", () => {
+  // Story 87-4 — este bloco mudou de LUGAR, não de intenção. A guarda
+  // `isAmbiguousSlotText` protegia o `visit_availability` dentro do
+  // `resolveVisitSlotParts` porque era ali que a string crua era reparseada.
+  // Com a string fora do caminho de parse, a guarda passa a valer onde o fato é
+  // ESCRITO — e é lá que ela precisa estar, porque frase de expediente nunca
+  // mais pode virar estado.
+  it("AC1: frase de expediente NÃO vira estado de agenda (antes: segunda 03/08 12:00)", () => {
+    const out = extractCollectedData(FRASE_EXPEDIENTE, {}, { origem: "lead", now: NOW_INCIDENTE })
+    expect(out.agenda_state).toBeUndefined()
   })
   it("prova do bug: o texto ainda resolve para segunda 12h quando parseado direto", () => {
     // Documenta a causa raiz — o parser não mudou, quem mudou foi quem confia nele.
     expect(parseDayParts(FRASE_EXPEDIENTE, NOW_INCIDENTE)).toEqual({ y: 2026, m: 7, d: 3 })
     expect(parseTimeParts(FRASE_EXPEDIENTE)).toEqual({ hour: 12, minute: 0 })
   })
-  it("AC3: slot único no visit_availability continua agendável (75-162)", () => {
-    const { day, time } = resolveVisitSlotParts({
-      message: "confirmo",
-      now: new Date("2026-07-15T17:00:00Z"),
-      visitAvailability: "Sábado, 18 de julho, às 9h",
-    })
+  it("AC3: slot único vira estado E continua agendável (75-162)", () => {
+    const NOW_15_07 = new Date("2026-07-15T17:00:00Z")
+    const out = extractCollectedData("Sábado, 18 de julho, às 9h", {}, { origem: "lead", now: NOW_15_07 })
+    const st = out.agenda_state as AgendaState
+    expect(st.data_absoluta).toBe("2026-07-18")
+    expect(st.hora).toBe(9)
+    // Texto solto do lead → MENÇÃO. É o que o `visit_availability` sempre foi.
+    expect(st.fonte).toBe("mencao")
+    const { day, time } = resolveVisitSlotParts({ message: "confirmo", now: NOW_15_07, agendaState: st })
     expect(day).toEqual({ y: 2026, m: 6, d: 18 })
     expect(time).toEqual({ hour: 9, minute: 0 })
   })
@@ -571,7 +619,7 @@ describe("Story 75-268 AC3/AC4 — os dois diálogos reais, turno a turno", () =
     const t2 = resolveVisitSlotParts({
       message: "Na quinta as 10",
       now: NOW_268,
-      pendingDay: t1.day,
+      agendaState: estado({ fonte: "pendencia", dataAbsoluta: dayPartsToIso(t1.day!) }, NOW_268),
       timeOptions: BARE,
     })
     expect(t2.time).toEqual({ hour: 10, minute: 0 })
@@ -591,7 +639,7 @@ describe("Story 75-268 AC3/AC4 — os dois diálogos reais, turno a turno", () =
     const t2 = resolveVisitSlotParts({
       message: "Umas 14",
       now: NOW_268,
-      pendingDay: t1.day,
+      agendaState: estado({ fonte: "pendencia", dataAbsoluta: dayPartsToIso(t1.day!) }, NOW_268),
       timeOptions: BARE,
     })
     expect(t2.time).toEqual({ hour: 14, minute: 0 })
@@ -604,33 +652,143 @@ describe("Story 75-268 AC3/AC4 — os dois diálogos reais, turno a turno", () =
 })
 
 describe("Story 75-268 AC6 — período do lead não herda dia velho", () => {
-  const AVAIL_SABADO = "Sábado, 8 de agosto, às 9h"
-  it("'Semana de manhã' com visit_availability de sábado → NÃO assume sábado", () => {
+  // Story 87-4 — o mesmo cenário, agora no formato único. E o ponto que a 75-268
+  // deixou aberto: antes existiam DOIS caminhos de dia herdado e a guarda cobria
+  // um só (`visit_availability`); o `pendingDay` entrava sem passar por ela. Por
+  // isso a Valnira pediu "Semana de manhã" e ouviu três sábados mesmo depois do
+  // fix. Com uma chave só, não há como aplicar a guarda pela metade.
+  const SABADO = estado({ fonte: "mencao", dataAbsoluta: "2026-08-08", hora: 9, citacao: "Sábado, 8 de agosto, às 9h" }, NOW_268)
+  it("'Semana de manhã' com estado de sábado → NÃO assume sábado", () => {
     const r = resolveVisitSlotParts({
       message: "Semana de manhã",
       now: NOW_268,
-      visitAvailability: AVAIL_SABADO,
+      agendaState: SABADO,
       timeOptions: BARE,
     })
     expect(parsePeriodParts("Semana de manhã")).toBe("manha")
     expect(r.day).toBeNull() // sem dia → o fluxo PERGUNTA o dia
   })
-  it("mas quando o lead dá o dia, o visit_availability continua completando a hora", () => {
+  it("87-4 — mas a PENDÊNCIA passa: bloqueá-la apagaria o pedido de quem respondeu", () => {
+    // Revisado depois do gate do @qa. A v1 desta story bloqueava o dia herdado
+    // também quando ele era pendência, e isso estava ERRADO nos dois sentidos:
+    //
+    //  • não protegia a Valnira — conferido na conversa real (03/08 23:57), o
+    //    sábado dela veio da fala da PRÓPRIA Nicole ("…durante a semana ou
+    //    sábado de manhã?") e ela NÃO tinha pendência nenhuma: aquele era o
+    //    primeiro turno em que se perguntou o dia. Menção, não pendência;
+    //  • e apagava em silêncio o fluxo legítimo "nós perguntamos o dia → ele
+    //    respondeu 'quinta' → ele diz 'de manhã'" (4 ocorrências históricas).
+    const diaQuePerguntamos = estado({ fonte: "pendencia", dataAbsoluta: "2026-08-08" }, NOW_268)
     const r = resolveVisitSlotParts({
-      message: "pode ser sábado",
+      message: "Semana de manhã",
       now: NOW_268,
-      visitAvailability: AVAIL_SABADO,
+      agendaState: diaQuePerguntamos,
+      timeOptions: BARE,
     })
+    expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
+  })
+
+  it("🔴 87-4 — e a MENÇÃO continua barrada mesmo sem hora (o caso real da Valnira)", () => {
+    const soMencaoDeDia = estado({ fonte: "mencao", dataAbsoluta: "2026-08-08" }, NOW_268)
+    const r = resolveVisitSlotParts({
+      message: "Semana de manhã",
+      now: NOW_268,
+      agendaState: soMencaoDeDia,
+      timeOptions: BARE,
+    })
+    expect(r.day).toBeNull()
+  })
+
+  it("🔴 87-4 — `ignorarMencao` descarta a menção inteira (o `visitAvailability: null` do HEAD)", () => {
+    // É a guarda do B1: com visita já marcada, uma menção não pode virar slot.
+    const mencao = estado({ fonte: "mencao", dataAbsoluta: "2026-08-08", hora: 9 }, NOW_268)
+    const semGuarda = resolveVisitSlotParts({ message: "Oi", now: NOW_268, agendaState: mencao })
+    expect(semGuarda.day).not.toBeNull()
+    expect(semGuarda.time).not.toBeNull()
+
+    const comGuarda = resolveVisitSlotParts({ message: "Oi", now: NOW_268, agendaState: mencao, ignorarMencao: true })
+    expect(comGuarda.day).toBeNull()
+    expect(comGuarda.time).toBeNull()
+
+    // E a PENDÊNCIA atravessa a mesma guarda — ela é o pedido do lead.
+    const pend = estado({ fonte: "pendencia", dataAbsoluta: "2026-08-08", hora: 9 }, NOW_268)
+    const pendComGuarda = resolveVisitSlotParts({ message: "Oi", now: NOW_268, agendaState: pend, ignorarMencao: true })
+    expect(pendComGuarda.day).toEqual({ y: 2026, m: 7, d: 8 })
+  })
+  it("mas quando o lead dá o dia, o estado continua completando a hora", () => {
+    const r = resolveVisitSlotParts({ message: "pode ser sábado", now: NOW_268, agendaState: SABADO })
     expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
     expect(r.time).toEqual({ hour: 9, minute: 0 })
   })
   it("e sem período na mensagem o fallback de dia segue valendo (75-162 preservada)", () => {
-    const r = resolveVisitSlotParts({
-      message: "confirmado",
-      now: NOW_268,
-      visitAvailability: AVAIL_SABADO,
-    })
+    const r = resolveVisitSlotParts({ message: "confirmado", now: NOW_268, agendaState: SABADO })
     expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
     expect(r.time).toEqual({ hour: 9, minute: 0 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Story 75-279 — a grafia colada ("11hrs") não virava hora e a visita da lead
+// Maria Oliveira (06/08) nunca foi gravada. Ver a story para o incidente.
+// ---------------------------------------------------------------------------
+describe("Story 75-279 — sufixo de hora colado ao número", () => {
+  const BARE_ON = { bareNumberAllowed: true }
+
+  it("AC1 — hrs/hs/hr colados viram hora", () => {
+    expect(parseTimeParts("As 11hrs", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("11hs", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 9hs", BARE_ON)).toEqual({ hour: 9, minute: 0 })
+    expect(parseTimeParts("as 11hr", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 11hrs por favor", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+  })
+
+  it("AC1 — e valem SEM o número pelado liberado (fala da Nicole, remarcação)", () => {
+    // Antes, "11hrs" só era lido quando bareNumberAllowed estava ligado — e por
+    // acidente, via parseBareHour. Com marcador reconhecido, vale sempre.
+    expect(parseTimeParts("As 11hrs")).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 11 hrs")).toEqual({ hour: 11, minute: 0 })
+  })
+
+  it("AC2 — nada do que já funcionava regride", () => {
+    expect(parseTimeParts("as 11h", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("as 11", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("11 horas", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("11h30", BARE_ON)).toEqual({ hour: 11, minute: 30 })
+    expect(parseTimeParts("11:00", BARE_ON)).toEqual({ hour: 11, minute: 0 })
+    expect(parseTimeParts("meio-dia", BARE_ON)).toEqual({ hour: 12, minute: 0 })
+    expect(parseTimeParts("3 da tarde", BARE_ON)).toEqual({ hour: 15, minute: 0 })
+  })
+
+  it("AC3 — palavra que só COMEÇA com h não vira marcador de hora", () => {
+    // O risco de afrouxar o marcador: "11 hoje" virar 11:00.
+    expect(parseTimeParts("11 hoje")).toBeNull()
+    expect(parseTimeParts("as 11 hectares")).toBeNull()
+  })
+
+  it("AC3 — as guardas anti-fantasma da 75-268 seguem de pé", () => {
+    expect(parseTimeParts("nao vou poder, tenho compromisso as 15", BARE_ON)).toBeNull()
+    expect(parseTimeParts("so consigo depois das 17", BARE_ON)).toBeNull()
+    expect(parseTimeParts("andar 11", BARE_ON)).toBeNull()
+    expect(parseTimeParts("11 anos", BARE_ON)).toBeNull()
+    expect(parseTimeParts("67m²", BARE_ON)).toBeNull()
+  })
+
+  it("AC3 — texto ambíguo com a grafia nova continua NÃO agendando nada", () => {
+    // Se o marcador passa a ser entendido, o detector de ambiguidade precisa
+    // enxergar os mesmos horários — senão "8hrs ou 9hrs" viraria slot único e
+    // reabriria o agendamento fantasma da 75-245.
+    expect(isAmbiguousSlotText("Posso 8hrs ou 9hrs")).toBe(true)
+    expect(isAmbiguousSlotText("Atendemos das 8hrs as 18hrs")).toBe(true)
+  })
+
+  it("AC7 — o caso real da Maria: dia num turno, 'As 11hrs' no seguinte", () => {
+    const r = resolveVisitSlotParts({
+      message: "As 11hrs",
+      now: new Date("2026-08-06T13:00:00Z"),
+      agendaState: estado({ fonte: "pendencia", dataAbsoluta: "2026-08-08" }, new Date("2026-08-06T13:00:00Z")),
+      timeOptions: BARE_ON,
+    })
+    expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
+    expect(r.time).toEqual({ hour: 11, minute: 0 })
   })
 })

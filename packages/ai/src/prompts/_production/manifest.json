@@ -1,0 +1,115 @@
+{
+  "story": "87-0",
+  "captured_at": "2026-08-05T23:03:36.062Z",
+  "org_id": "00000000-0000-0000-0000-000000000001",
+  "source": {
+    "table": "agent_prompts",
+    "supabase_url_host": "dsopqkqjkmhytudaaolv.supabase.co",
+    "restore_note": "Este snapshot É o backup (critério de rollback da story 87-0). Restaurar = escrever estes content de volta em agent_prompts por Management API."
+  },
+  "normalization": {
+    "crlf_to_lf": true,
+    "unicode": "NFC",
+    "trim": true
+  },
+  "prompts": [
+    {
+      "slug": "guardrails",
+      "name": "Guardrails da IA",
+      "type": "guardrail",
+      "is_active": true,
+      "updated_at": "2026-07-16T11:30:00.509401+00:00",
+      "char_count": 9071,
+      "sha256": "3c2daa6689fccc9ba82e999cbe40cec36146de4b700b6b8f9dc30fdc1ce85d0e",
+      "raw_char_count": 9071,
+      "raw_sha256": "3c2daa6689fccc9ba82e999cbe40cec36146de4b700b6b8f9dc30fdc1ce85d0e",
+      "file": "guardrails.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    },
+    {
+      "slug": "handoff-summary",
+      "name": "Resumo para Corretor",
+      "type": "handoff",
+      "is_active": true,
+      "updated_at": "2026-06-13T20:55:26.113932+00:00",
+      "char_count": 1891,
+      "sha256": "4d8069741424d880ee4a339353b7563d3d090ada0301253314d1ced0932b5504",
+      "raw_char_count": 1943,
+      "raw_sha256": "f54514cdd1ae5245cef97bd1d0bab3884a7ddb788fd24929599aa5be785542f8",
+      "file": "handoff-summary.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    },
+    {
+      "slug": "off-hours",
+      "name": "Mensagem Fora do Horario",
+      "type": "system",
+      "is_active": true,
+      "updated_at": "2026-06-18T11:23:45.582632+00:00",
+      "char_count": 319,
+      "sha256": "dd6ba0a27ea07b04778d7171f878b8fe8f2e38754cc47725a79862bd36360f53",
+      "raw_char_count": 329,
+      "raw_sha256": "0aacca8f7e1e597b33e7065c950a07a75e1d72e3d73a16622a55935647662d3f",
+      "file": "off-hours.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    },
+    {
+      "slug": "property-presentation",
+      "name": "Apresentacao de Empreendimentos",
+      "type": "system",
+      "is_active": true,
+      "updated_at": "2026-06-26T14:33:47.89663+00:00",
+      "char_count": 3905,
+      "sha256": "4d3343b56b3b21b789dbfd85b58806eb9ec2d4fe5ca1725be608a2bd85aa8988",
+      "raw_char_count": 3952,
+      "raw_sha256": "3d71641e262772c8ca85aa08b9743d1674e1c21655e1f031f813e670e7ce8c62",
+      "file": "property-presentation.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    },
+    {
+      "slug": "qualification-flow",
+      "name": "Fluxo de Qualificacao",
+      "type": "qualification",
+      "is_active": true,
+      "updated_at": "2026-07-10T11:32:42.107962+00:00",
+      "char_count": 2457,
+      "sha256": "2e5b07fa1e7d868e84a3dd5488512470dcc081628a434c8f727ee668f5ba7083",
+      "raw_char_count": 2458,
+      "raw_sha256": "997b18af834a104ee1fc3cae73563842e0af3422df918223bcea0df6a631185f",
+      "file": "qualification-flow.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    },
+    {
+      "slug": "system-personality",
+      "name": "Personalidade Nicole",
+      "type": "system",
+      "is_active": true,
+      "updated_at": "2026-06-18T11:18:04.609361+00:00",
+      "char_count": 2477,
+      "sha256": "2e5cefe05caf78974c4439189b080eedefe121c6657dca069ee1ba4365d5e1b8",
+      "raw_char_count": 2478,
+      "raw_sha256": "1b3963e557e0072f9470f18ac8fb470f8c6f2c515c915146bfbe3946faca7138",
+      "file": "system-personality.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    },
+    {
+      "slug": "visit-scheduling",
+      "name": "Agendamento de Visitas",
+      "type": "system",
+      "is_active": true,
+      "updated_at": "2026-08-05T20:58:13.677989+00:00",
+      "char_count": 5104,
+      "sha256": "11f5ee05fe6ef07f7012cb631715da2d3b11a6e0a9e1e58de7d8c5eb359ec379",
+      "raw_char_count": 5105,
+      "raw_sha256": "1de7d9dab077b73ac42a2c4da80dff6715c85c4c5c172f40d8e9bc6f727bba1d",
+      "file": "visit-scheduling.txt",
+      "org_id": "00000000-0000-0000-0000-000000000001",
+      "captured_at": "2026-08-05T23:03:36.062Z"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { logEvent } from "@web/lib/logger"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const MAX_CONVERSATIONS_PER_RUN = 20
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient()
   const { createAnthropicClient } = await import("@trifold/ai")
-  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel } = await import("@trifold/ai")
+  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel, omitAgendaKeys, omitLegacyAgendaKeys, LEGACY_AGENDA_KEYS, calculateQualificationScore } = await import("@trifold/ai")
   const anthropic = createAnthropicClient()
 
   const cutoff = new Date(Date.now() - ENRICHMENT_WINDOW_MINUTES * 60 * 1000).toISOString()
@@ -100,10 +101,76 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // AC8-AC12: Sync to leads table
+      // Story 87-4 / B2 — UM DONO SÓ PARA OS 20 PONTOS DE AGENDA.
+      //
+      // Antes, o `collected_data` persistido e o `qualification_score` gravado em
+      // `leads` eram calculados a partir de objetos DIFERENTES: o score saía de
+      // `{...currentData, ...extracted}` (com as chaves de agenda) e o estado
+      // persistido saía do merge filtrado (sem elas). Dois escritores respondendo
+      // coisas diferentes sobre o mesmo fato, com o cron sobrescrevendo o lead a
+      // cada 30 min e o pipeline recalculando a cada turno.
+      //
+      // Agora os dois saem do MESMO objeto — o `collected_data` que será
+      // efetivamente gravado — e a pergunta "existe fato de agenda?" é respondida
+      // pela MESMA função dos dois lados (`hasAgendaFact`, dentro do
+      // `calculateQualificationScore`). Se o pipeline concede os 20 pontos, o cron
+      // concede; se não concede, o cron também não.
+      const extraidoSemAgenda = omitAgendaKeys(enrichment.extracted_data)
+
+      // Update conversation_state.collected_data with enriched data (AC8-b):
+      //   • `omitAgendaKeys` no que veio do Haiku — ele lê a conversa inteira (a
+      //     fala do lead E a da Nicole) e não tem citação para oferecer; fato de
+      //     agenda sem citação de mensagem `role='user'` não vira estado. A chave
+      //     já saiu do `ENRICHMENT_PROMPT`; este filtro é a defesa em profundidade.
+      //   • `omitLegacyAgendaKeys` no que já estava gravado — sem isso o cron
+      //     reescreveria o resíduo de volta a cada passada (ele é o ÚLTIMO
+      //     ESCRITOR de 70 % dos 56 estados residuais medidos em 07/08).
+      //     O `agenda_state` do turno é PRESERVADO: só o legado morre.
+      const mergedCollectedData = {
+        ...omitLegacyAgendaKeys(currentData),
+        ...extraidoSemAgenda,
+      }
+
+      // Story 87-4 — O RECIBO DO DESCARTE, TAMBÉM POR AQUI.
+      //
+      // Achado do re-gate do @qa: o `processMessage` retorna FORA DO EXPEDIENTE
+      // antes de descartar o legado (`pipeline.ts`, retorno de off-hours), mas
+      // avança o `last_message_at`. O cron então pega a conversa, apaga o legado
+      // pelo `omitLegacyAgendaKeys`, regrava score/status/Calor — e no turno
+      // seguinte já não há chave para o pipeline encontrar. O evento nunca sairia.
+      //
+      // Isso importa mais do que parece: a decisão de ATUALIZAR os leads (em vez
+      // de preservar os 20 pontos) foi tomada porque a queda seria auditável.
+      // Sem recibo neste caminho, parte dessa decisão fica sem cobertura e o
+      // comercial não teria como explicar por que aqueles leads mudaram de faixa.
+      // Dimensionado: 37 dos 56 estados residuais são alcançáveis pelo cron e
+      // ~25 % das mensagens de lead chegam fora de 8h–18h.
+      //
+      // Mesmo `event_type` e mesmo formato de metadata do pipeline, de propósito:
+      // a contagem da AC8 é UMA só, some quem apagar.
+      const legadoDescartado = LEGACY_AGENDA_KEYS.filter((k) => k in currentData)
+      if (legadoDescartado.length > 0) {
+        logEvent({
+          level: "info",
+          category: "cron",
+          event_type: "NICOLE_AGENDA_STATE_LEGADO_DESCARTADO",
+          message: `Chave(s) de agenda do formato antigo encontradas e apagadas: ${legadoDescartado.join(", ")}`,
+          org_id: conv.org_id ?? undefined,
+          metadata: {
+            lead_id: conv.lead_id ?? null,
+            conversation_id: conv.id,
+            chaves: legadoDescartado,
+            score_antes: calculateQualificationScore(currentData),
+            score_depois: calculateQualificationScore(mergedCollectedData),
+            origem_do_descarte: "cron_enrich_leads",
+          },
+        })
+      }
+
+      // AC8-AC12: Sync to leads table — o score sai do estado que será PERSISTIDO.
       const leadPatch = mapExtractedDataToLeadFields(
-        enrichment.extracted_data,
-        currentData
+        extraidoSemAgenda,
+        mergedCollectedData
       )
 
       // AC8: Always update ai_summary
@@ -118,8 +185,8 @@ export async function GET(request: NextRequest) {
       stripManualInterestLevel(leadPatch, currentLead as Record<string, unknown> | null)
 
       // AC10: Resolve property_interest to property_interest_id
-      if (enrichment.extracted_data.property_interest) {
-        const interest = (enrichment.extracted_data.property_interest as string).toLowerCase()
+      if (extraidoSemAgenda.property_interest) {
+        const interest = (extraidoSemAgenda.property_interest as string).toLowerCase()
         const { data: matchedProperty } = await supabase
           .from("properties")
           .select("id")
@@ -146,8 +213,6 @@ export async function GET(request: NextRequest) {
         await supabase.from("leads").update(cleanPatch).eq("id", conv.lead_id)
       }
 
-      // Update conversation_state.collected_data with enriched data
-      const mergedCollectedData = { ...currentData, ...enrichment.extracted_data }
       await supabase
         .from("conversation_state")
         .update({ collected_data: mergedCollectedData })

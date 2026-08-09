@@ -8,6 +8,7 @@
 - [project_epic_30_analytics_rpc_pattern.md](project_epic_30_analytics_rpc_pattern.md) — Pattern Story 30.1 PASS: RPC JSONB com 6 CTEs (anti-IDOR explícito em todas), SECURITY INVOKER, COALESCE defensivo, enum→text, `toCount()` helper. EXPLAIN 3.8ms (13x abaixo de 50ms).
 - [project_story_30_8_count_filter_pattern.md](project_story_30_8_count_filter_pattern.md) — Pattern Story 30.8 PASS: COUNT(*) FILTER sobre scan único quando todas agregações são na mesma tabela. Alternativa ao multi-CTE da 30.1 (quando há JOINs/tabelas diferentes).
 - [project_epic_30_closure.md](project_epic_30_closure.md) — Epic 30 closed 2026-05-14 (9/9 stories Done). 2 migrations, 3 RPCs, 1 trigger. Composição multiplicativa com Epic 29. Padrão de closure: status Done + closed_at + sumário com ganhos no epic file (sem doc separado).
+- [project_meta_capi_tracking_audit.md](project_meta_capi_tracking_audit.md) — Auditoria Meta tracking (2026-08-04): NÃO há pixel browser nem CAPI no repo. Trigger 124 (`trg_log_lead_stage_change`) é o único hook que vê todas transições de stage; kanban bypassa API route. Design "Visitou" via outbox+cron CAPI.
 
 ## EPIC-ACT Wave 2 Quality Gate Review (2026-02-06)
 - Reviewed: ACT-6 (Unified Activation Pipeline, 67 tests, APPROVED)

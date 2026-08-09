@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { cpfLookupValues } from "@web/lib/validation/contato"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
@@ -49,13 +50,20 @@ export async function GET(request: NextRequest) {
     .limit(10)
 
   if (cpf) {
-    query = query.eq("cpf", cpf)
+    // Story 75-282: coluna é só-dígitos, mas o usuário digita com máscara (e há legado mascarado)
+    query = query.in("cpf", cpfLookupValues(cpf))
   } else if (email) {
     query = query.eq("email", email)
   } else if (q) {
     const sanitized = q.replace(/[%,]/g, "")
     if (sanitized) {
-      query = query.or(`nome.ilike.%${sanitized}%,email.ilike.%${sanitized}%,cpf.ilike.%${sanitized}%`)
+      // Story 75-282: no trecho de CPF compara só dígitos — "207.363" não casa mais com
+      // a coluna normalizada, mas "207363" casa.
+      const digits = sanitized.replace(/\D/g, "")
+      const cpfClause = digits ? `,cpf.ilike.%${digits}%` : ""
+      query = query.or(
+        `nome.ilike.%${sanitized}%,email.ilike.%${sanitized}%${cpfClause}`
+      )
     }
   }
 

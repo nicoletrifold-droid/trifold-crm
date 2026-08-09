@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { deleteCalendarEvent } from "@web/lib/google-calendar"
+import { mirrorDelete } from "@web/lib/appointments/google-mirror"
 import { notifyVisitCancelledWhatsApp } from "@web/lib/appointments/visit-whatsapp"
 
 export async function GET(
@@ -70,8 +70,10 @@ export async function POST(
   }
 
   // Delete Google Calendar event if it exists
-  if (appointment.google_event_id) {
-    await deleteCalendarEvent(appointment.google_event_id)
+  {
+    // Story 75-275 — via helper: apaga no Google E limpa `google_event_id`. Antes só
+    // apagava, deixando id morto na coluna — que uma remarcação futura tentaria mover.
+    await mirrorDelete(supabase, appointment.id, appointment.google_event_id)
   }
 
   // Story 75-192 — cliente cancelou pelo link: avisa quem ia atender por

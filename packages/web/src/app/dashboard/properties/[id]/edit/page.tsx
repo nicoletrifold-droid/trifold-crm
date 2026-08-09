@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { PROPERTY_STATUS_OPTIONS } from "@web/lib/property-status"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -30,13 +31,7 @@ interface PropertyData {
   video_tour_url: string | null
 }
 
-const statusOptions = [
-  { value: "planning", label: "Planejamento" },
-  { value: "launching", label: "Lançamento" },
-  { value: "selling", label: "Em venda" },
-  { value: "delivered", label: "Entregue" },
-  { value: "sold_out", label: "Esgotado" },
-]
+// Story 75-283: opções vêm da fonte única (`PROPERTY_STATUS_OPTIONS`)
 
 export default function PropertyEditPage() {
   const routeParams = useParams<{ id: string }>()
@@ -254,7 +249,7 @@ export default function PropertyEditPage() {
               Status
             </label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
-              {statusOptions.map((opt) => (
+              {PROPERTY_STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>

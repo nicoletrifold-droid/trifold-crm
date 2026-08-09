@@ -1,0 +1,16 @@
+schema: 1
+story: '86.4'
+gate: PASS
+status_reason: 'Cron segue o padrão de auth (Bearer CRON_SECRET, 401/500), usa createAdminClient (obrigatório p/ RLS+REVOKE), busca pending ORDER BY created_at, update condicional em status=pending (idempotência AC10), MAX_ATTEMPTS→failed, e trata token ausente / meta_ad ausente graciosamente. 11 testes verdes. Entrada */3 no vercel.json coerente.'
+reviewer: 'Quinn'
+updated: '2026-08-04T15:45:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'T8 (teste manual end-to-end em dev: lead→outbox→cron→Events Manager) pendente — depende do META_CAPI_ACCESS_TOKEN provisionado na Story 86-1.'
+    suggested_action: 'Após 86-1 provisionar o token, disparar o cron manualmente com o CRON_SECRET de dev e confirmar status=sent na outbox + evento no Events Manager via test_event_code.'
+  - id: 'PERF-001'
+    severity: low
+    finding: 'Updates de status são sequenciais (await em loop, 1 por linha). Aceitável para o volume alvo (~22 leads/mês, lote nunca cheio), mas não escala se o volume crescer muito.'
+    suggested_action: 'Se o volume crescer, considerar update em lote via .in("id", ids) com filtro de status. Nenhuma ação imediata.'
+waiver: { active: false }

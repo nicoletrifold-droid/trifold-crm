@@ -17,9 +17,9 @@ import { fetchAllLeads, LEADS_PAGE_SIZE, type RangeableQuery } from "@web/lib/an
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
 
 interface LeadRow {
+  id: string
   created_at: string
   source: string | null
-  stage_id: string | null
   lost_reason: string | null
   is_active: boolean | null
   assigned_broker_id: string | null
@@ -91,20 +91,47 @@ export async function GET(request: NextRequest) {
       .limit(PAGE)
     if (propertyId) apptsQuery = apptsQuery.eq("property_id", propertyId)
 
-    const [leads, prevLeads, { data: stagesData }, { data: activeBrokersData }, apptsRes] = await Promise.all([
-      fetchLeads(from, to, "created_at, source, stage_id, lost_reason, is_active, assigned_broker_id"),
-      fetchLeads(prevFrom, prevTo, "created_at, source, stage_id, lost_reason, is_active, assigned_broker_id"),
-      supabase.from("kanban_stages").select("id, name, slug"),
+    // Story 75-276 — leads COM visita registrada, base da faixa "Agendou/fez visita".
+    //
+    // O recorte é POR LEAD, nunca por data: a visita pode ser marcada muito depois da
+    // entrada do lead, então filtrar `appointments` por período perderia justamente as
+    // visitas que a faixa existe para contar. Por isso esta query não repete o
+    // `.gte/.lt(scheduled_at)` da `apptsQuery` acima — são perguntas diferentes.
+    //
+    // Traz o conjunto inteiro (paginado) em vez de lotes de `lead_id`: `.in()` com
+    // centenas de uuid estoura o tamanho da URL, e a tabela toda tem 55 visitas house
+    // (medido em prod, 05/08) — o cruzamento sai em memória, de graça. Se um dia passar
+    // da ordem de 20k linhas, aí vale trocar por lotes de lead_id.
+    //
+    // NÃO filtra por `property_id` de propósito: a pergunta é "este lead chegou à
+    // visita?", e o recorte de empreendimento já foi aplicado na lista de leads — um lead
+    // interessado no Vind que visitou o Yarden chegou à visita do mesmo jeito.
+    const visitLeadIdsQuery = () =>
+      supabase
+        .from("appointments")
+        .select("lead_id")
+        .eq("org_id", appUser.org_id)
+        .eq("team", "house") // agenda IMOB fora do analytics principal (Epic 81)
+        .not("lead_id", "is", null)
+        // Ordena pela PK, NÃO por lead_id: `fetchAllLeads` pagina com `.range()`, e
+        // ordem com empate não é determinística entre páginas — linha pulada ou
+        // repetida. `lead_id` repete (8 leads têm 2+ visitas, um tem 5); `id` é único.
+        // Hoje a tabela tem 59 linhas e nunca pagina, mas o dia em que paginar o erro
+        // seria um número silenciosamente errado na tela — que é exatamente o defeito
+        // que este projeto já pagou caro algumas vezes.
+        .order("id", { ascending: true }) as unknown as RangeableQuery<{ lead_id: string | null }>
+
+    const [leads, prevLeads, { data: activeBrokersData }, apptsRes, visitRows] = await Promise.all([
+      fetchLeads(from, to, "id, created_at, source, lost_reason, is_active, assigned_broker_id"),
+      fetchLeads(prevFrom, prevTo, "id, created_at, source, lost_reason, is_active, assigned_broker_id"),
       supabase.from("brokers").select("user_id").eq("org_id", appUser.org_id).eq("is_available", true),
       apptsQuery,
+      fetchAllLeads<{ lead_id: string | null }>(visitLeadIdsQuery),
     ])
     if (apptsRes.error) throw apptsRes.error
 
-    // Etapas de fechamento — mesma regra da tela (regex no nome) + slug canônico.
-    const fechadoStageIds = new Set(
-      (stagesData ?? [])
-        .filter((s) => s.slug === "fechou" || /fechamento|ganho|fechado/i.test(s.name ?? ""))
-        .map((s) => s.id as string)
+    const visitLeadIds = new Set(
+      visitRows.map((r) => r.lead_id).filter((id): id is string => !!id)
     )
 
     // Nomes dos corretores com lead na janela (uma query, sem embed por linha).
@@ -127,13 +154,13 @@ export async function GET(request: NextRequest) {
       heatmap: buildHeatmap(leads),
       outcomeBySource: buildOutcomeRows(
         leads,
-        fechadoStageIds,
+        visitLeadIds,
         (l) => l.source ?? "other",
         (k) => SOURCE_LABELS_SHORT[k] ?? k
       ),
       outcomeByBroker: buildOutcomeRows(
         leads,
-        fechadoStageIds,
+        visitLeadIds,
         (l) => {
           const id = l.assigned_broker_id
           if (!id || !activeBrokerIds.has(id)) return null

@@ -35,12 +35,23 @@ vi.mock("@web/lib/supabase/admin", () => ({
     rpc: async (_fn: string, _args: unknown) => { void _fn; void _args; return { data: claimResult, error: null } },
     from: (table: string) => {
       let cols = ""
+      // Story 75-286: o mock precisa APLICAR o `.is(col, null)` (não só engolir), senão
+      // o teste do lead "fantasma" passaria mesmo sem o fix no cron.
+      const isNullCols: string[] = []
       const b: Record<string, unknown> & { _update?: unknown } = {
         select: (c: string) => { cols = c ?? ""; return b },
-        eq: () => b, is: () => b, not: () => b, gte: () => b,
+        eq: () => b, not: () => b, gte: () => b,
+        is: (col: string) => { isNullCols.push(col); return b },
         update: (p: unknown) => { b._update = p; return b },
         limit: async () => {
-          if (table === "leads") return { data: cols.includes("bolsao_em") && !cols.includes("assigned_broker_id") ? poolData : leadsData, error: null }
+          if (table === "leads") {
+            const isPool = cols.includes("bolsao_em") && !cols.includes("assigned_broker_id")
+            if (!isPool) return { data: leadsData, error: null }
+            const rows = isNullCols.includes("assigned_broker_id")
+              ? poolData.filter((l) => l.assigned_broker_id == null)
+              : poolData
+            return { data: rows, error: null }
+          }
           return { data: null, error: null }
         },
         maybeSingle: async () =>
@@ -121,6 +132,35 @@ describe("GET /api/cron/bolsao-rebalance", () => {
     const init = calls[0]![1] as { body: string }
     const body = JSON.parse(init.body)
     expect(body.template.name).toBe("aviso_bolsao_gestor")
+    expect(pushSpy).toHaveBeenCalled()
+  })
+
+  // Story 75-286 — regressão do incidente de 05/08: o gerente recebeu 6 avisos em 3h
+  // ("Há 1 lead(s) parado(s) no bolsão") por um lead atendido em 1min22s. O painel
+  // (75-89) já filtrava `assigned_broker_id is null`; o cron não → contava o lead
+  // "fantasma" (bolsao_em sujo + dono definido por /assign) para sempre.
+  it("digest ignora lead 'fantasma': bolsao_em preenchido MAS já tem dono → count 0, nada enviado", async () => {
+    leadsData = []
+    poolData = [{ bolsao_em: new Date().toISOString(), assigned_broker_id: "B1" }]
+    const res = await GET(req())
+    const body = (await res.json()) as { summary: Array<{ digestCount: number; digestSent: boolean }> }
+    expect(body.summary[0]!.digestCount).toBe(0)
+    expect(body.summary[0]!.digestSent).toBe(false)
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(pushSpy).not.toHaveBeenCalled()
+  })
+
+  it("digest conta lead do pool real: sem dono há >= 15min de expediente", async () => {
+    leadsData = []
+    poolData = [
+      { bolsao_em: new Date().toISOString(), assigned_broker_id: null }, // pool real → conta
+      { bolsao_em: new Date().toISOString(), assigned_broker_id: "B1" }, // fantasma → não conta
+    ]
+    const res = await GET(req())
+    const body = (await res.json()) as { summary: Array<{ digestCount: number; digestSent: boolean }> }
+    expect(body.summary[0]!.digestCount).toBe(1)
+    expect(body.summary[0]!.digestSent).toBe(true)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
     expect(pushSpy).toHaveBeenCalled()
   })
 

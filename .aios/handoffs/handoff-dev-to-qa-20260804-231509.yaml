@@ -1,0 +1,22 @@
+handoff:
+  from_agent: dev
+  to_agent: qa
+  story_context:
+    story_id: "84-1"
+    story_path: "docs/stories/84-1-qualificacao-lead-schema-permissoes-auditoria.story.md"
+    story_status: "Ready for Review"
+    current_task: "Rodar qa-gate na story 84-1 (implementação completa, T1-T6)"
+    branch: "worktree-84-1-qualificacao-lead-schema (git worktree isolado, partiu de origin/main)"
+  decisions:
+    - "Campo leads.qualificacao_comercial (NÃO leads.qualification) — evita colisão com qualification_status/qualification_score automáticos (pipeline da Nicole)"
+    - "Sem seed de permissão por role — leads.qualificacao herda de leads via canAccess; obras já tem leads:false (047) então já fica de fora"
+    - "Endpoint reaproveitado (PATCH api/leads/[id]/route.ts), não rota nova"
+    - "Migration renumerada de 201 (assumido no draft) para 215 (main estava mais adiantada — última real era 214)"
+  files_modified:
+    - "supabase/migrations/215_leads_qualificacao_comercial.sql (novo)"
+    - "packages/web/src/lib/permissions-modules.ts (SUBMODULE_MAP.leads novo)"
+    - "packages/web/src/lib/permissions-modules.test.ts (teste novo)"
+    - "packages/web/src/app/api/leads/[id]/route.ts (allowedFields + gate + logAudit específico)"
+    - "packages/web/src/app/api/leads/[id]/route.test.ts (novo, 4 testes)"
+  blockers: []
+  next_action: "@qa deve executar *qa-gate na story 84-1: os 7 checks (code review, unit tests, acceptance criteria, regressions, performance, security, documentation). Checks já confirmados pelo @dev: vitest 1675/1675, tsc limpo, eslint limpo, next build OK — @qa deve validar independentemente, não só aceitar o relato do dev (padrão usado na Story 75-229). Migration NÃO aplicada em nenhum banco — instruir @devops sobre isso no gate, se PASS/CONCERNS."

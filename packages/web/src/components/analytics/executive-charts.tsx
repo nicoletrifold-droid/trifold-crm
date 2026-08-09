@@ -33,7 +33,7 @@ interface Palette {
   prev: string
   cat: string[]
   outros: string
-  outcome: { fechado: string; ativo: string; perdido: string; outro: string }
+  outcome: { visita: string; ativo: string; perdido: string; outro: string }
   visits: { realizada: string; agendada: string; noShow: string; cancelada: string }
   /** Rampa sequencial do heatmap — índice 0 = zero (recua pra superfície). */
   heat: string[]
@@ -47,7 +47,7 @@ const LIGHT: Palette = {
   prev: "#a8a29e",
   cat: ["#ea580c", "#2a78d6", "#199e70", "#4a3aa7"],
   outros: "#78716c",
-  outcome: { fechado: "#16a34a", ativo: "#3b82f6", perdido: "#dc2626", outro: "#a8a29e" },
+  outcome: { visita: "#16a34a", ativo: "#3b82f6", perdido: "#dc2626", outro: "#a8a29e" },
   visits: { realizada: "#16a34a", agendada: "#3b82f6", noShow: "#d97706", cancelada: "#a8a29e" },
   heat: ["#fafaf9", "#ffedd5", "#fed7aa", "#fdba74", "#fb923c", "#f97316", "#ea580c", "#c2410c"],
 }
@@ -60,7 +60,7 @@ const DARK: Palette = {
   prev: "#78716c",
   cat: ["#ea580c", "#3987e5", "#1baf7a", "#9085e9"],
   outros: "#78716c",
-  outcome: { fechado: "#16a34a", ativo: "#3b82f6", perdido: "#dc2626", outro: "#78716c" },
+  outcome: { visita: "#16a34a", ativo: "#3b82f6", perdido: "#dc2626", outro: "#78716c" },
   visits: { realizada: "#16a34a", agendada: "#3b82f6", noShow: "#d97706", cancelada: "#78716c" },
   heat: ["#292524", "#431407", "#7c2d12", "#9a3412", "#c2410c", "#ea580c", "#f97316", "#fb923c"],
 }
@@ -331,7 +331,9 @@ function HeatmapChart({ data, p, rangeLabel }: { data: ExecutiveData["heatmap"];
 // ── 4/5. Aproveitamento (100% empilhado) por origem / corretor ───────────────
 
 const OUTCOME_SEGMENTS = [
-  { key: "fechados", label: "Fechados" },
+  // Story 75-276: era "Fechados" — media 0% em toda linha. Vem de `appointments`
+  // (lead TEM visita), não da etapa atual, senão quem avançou sai da conta.
+  { key: "visitas", label: "Agendou/fez visita" },
   { key: "ativos", label: "Em atendimento" },
   { key: "perdidos", label: "Perdidos" },
   // Fora do funil sem perda: classificação não-lead da roleta ou cliente da base (Épico 76).
@@ -352,7 +354,7 @@ function OutcomeBars({
   maxRows?: number
 }) {
   const colorOf: Record<(typeof OUTCOME_SEGMENTS)[number]["key"], string> = {
-    fechados: p.outcome.fechado,
+    visitas: p.outcome.visita,
     ativos: p.outcome.ativo,
     perdidos: p.outcome.perdido,
     outros: p.outcome.outro,

@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { propertyStatusBadge, propertyStatusLabel } from "@web/lib/property-status"
 import { getServerUser } from "@web/lib/auth"
 import { canEditImoveis, canCreateImoveis } from "@web/lib/permissions-imoveis"
 import Link from "next/link"
@@ -52,19 +53,9 @@ export default async function PropertiesPage() {
                 </td>
                 <td className="px-6 py-4">
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      p.status === "selling"
-                        ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                        : p.status === "launching"
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-                        : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
-                    }`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${propertyStatusBadge(p.status)}`}
                   >
-                    {p.status === "selling"
-                      ? "Em venda"
-                      : p.status === "launching"
-                      ? "Lançamento"
-                      : p.status}
+                    {propertyStatusLabel(p.status)}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">

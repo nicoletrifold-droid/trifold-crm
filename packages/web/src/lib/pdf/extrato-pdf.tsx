@@ -110,17 +110,35 @@ const s = StyleSheet.create({
     fontSize: 8,
     color: GRAY,
   },
-  // Column widths
-  cParcela: { width: "10%" },
-  cTipo: { width: "10%" },
-  cVenc: { width: "14%" },
-  cOrig: { width: "17%", textAlign: "right" as const },
-  cSaldo: { width: "17%", textAlign: "right" as const },
-  cStatus: { width: "15%", paddingLeft: 8 },
-  cPgto: { width: "17%" },
+  // Sub-linha de baixa (parcela com 2+ pagamentos)
+  receiptRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    borderBottomStyle: "solid",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingLeft: 24,
+    backgroundColor: "#FAFAF9",
+  },
+  receiptText: {
+    fontSize: 7,
+    color: GRAY,
+  },
+  // Column widths (somam 100%)
+  cParcela: { width: "8%" },
+  cTipo: { width: "9%" },
+  cVenc: { width: "12%" },
+  cOrig: { width: "14%", textAlign: "right" as const },
+  cPago: { width: "14%", textAlign: "right" as const },
+  cSaldo: { width: "14%", textAlign: "right" as const },
+  cStatus: { width: "13%", paddingLeft: 8 },
+  cPgto: { width: "16%", paddingLeft: 8 },
   // Status pill badges
   badgePago: { backgroundColor: "#D1FAE5", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
   badgePagoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#059669" },
+  badgeParcial: { backgroundColor: "#E0F2FE", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
+  badgeParcialText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#0369A1" },
   badgeBoleto: { backgroundColor: "#FEF3C7", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
   badgeBoletoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#D97706" },
   badgeAberto: { backgroundColor: "#F5F5F4", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
@@ -221,11 +239,10 @@ export function ExtratoPDF({
   ate,
   geradoEm,
 }: ExtratoPDFProps) {
-  const totalPago = installments
-    .filter((i) => i.status === "PAGO")
-    .reduce((sum, i) => sum + (i.receiptValue ?? i.originalValue), 0)
+  // Total pago = todas as baixas, inclusive as parciais de parcelas em aberto.
+  const totalPago = installments.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
 
-  // BOLETO_GERADO e EM_ABERTO somados como "Em aberto" (total ainda devido)
+  // PARCIAL, BOLETO_GERADO e EM_ABERTO somados como "Em aberto" (total ainda devido)
   const totalAberto = installments
     .filter((i) => i.status !== "PAGO")
     .reduce((sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue), 0)
@@ -277,42 +294,59 @@ export function ExtratoPDF({
           <Text style={[s.tableHeadCell, s.cTipo]}>Tipo</Text>
           <Text style={[s.tableHeadCell, s.cVenc]}>Vencimento</Text>
           <Text style={[s.tableHeadCell, s.cOrig]}>Valor Original</Text>
-          <Text style={[s.tableHeadCell, s.cSaldo]}>Saldo/Pago</Text>
+          <Text style={[s.tableHeadCell, s.cPago]}>Pago</Text>
+          <Text style={[s.tableHeadCell, s.cSaldo]}>Saldo</Text>
           <Text style={[s.tableHeadCell, s.cStatus]}>Status</Text>
           <Text style={[s.tableHeadCell, s.cPgto]}>Dt. Pagamento</Text>
         </View>
 
         {/* Table rows */}
         {installments.map((inst, idx) => {
-          const valor =
+          const pago = inst.receiptValue ?? 0
+          const saldo =
             inst.status === "PAGO"
-              ? (inst.receiptValue ?? inst.originalValue)
+              ? 0
               : inst.currentBalance > 0
                 ? inst.currentBalance
                 : inst.originalValue
 
           return (
-            <View
-              key={`${inst.billReceivableId}-${inst.installmentId}`}
-              style={[s.tableRow, idx % 2 === 1 ? s.tableRowAlt : {}]}
-            >
-              <Text style={[s.cell, s.cParcela]}>{inst.installmentNumber}</Text>
-              <Text style={[s.cellGray, s.cTipo]}>{COND[inst.conditionType] ?? inst.conditionType}</Text>
-              <Text style={[s.cell, s.cVenc]}>{fmtDate(inst.dueDate)}</Text>
-              <Text style={[s.cell, s.cOrig]}>{fmtCurrency(inst.originalValue)}</Text>
-              <Text style={[s.cell, s.cSaldo]}>{fmtCurrency(valor)}</Text>
-              <View style={s.cStatus}>
-                {inst.status === "PAGO" ? (
-                  <View style={s.badgePago}><Text style={s.badgePagoText}>Pago</Text></View>
-                ) : inst.status === "BOLETO_GERADO" ? (
-                  <View style={s.badgeBoleto}><Text style={s.badgeBoletoText}>Boleto</Text></View>
-                ) : (
-                  <View style={s.badgeAberto}><Text style={s.badgeAbertoText}>Em aberto</Text></View>
-                )}
+            <View key={`${inst.billReceivableId}-${inst.installmentId}`}>
+              <View style={[s.tableRow, idx % 2 === 1 ? s.tableRowAlt : {}]}>
+                <Text style={[s.cell, s.cParcela]}>{inst.installmentNumber}</Text>
+                <Text style={[s.cellGray, s.cTipo]}>{COND[inst.conditionType] ?? inst.conditionType}</Text>
+                <Text style={[s.cell, s.cVenc]}>{fmtDate(inst.dueDate)}</Text>
+                <Text style={[s.cell, s.cOrig]}>{fmtCurrency(inst.originalValue)}</Text>
+                <Text style={[s.cell, s.cPago]}>{pago > 0 ? fmtCurrency(pago) : "—"}</Text>
+                <Text style={[s.cell, s.cSaldo]}>{fmtCurrency(saldo)}</Text>
+                <View style={s.cStatus}>
+                  {inst.status === "PAGO" ? (
+                    <View style={s.badgePago}><Text style={s.badgePagoText}>Pago</Text></View>
+                  ) : inst.status === "PARCIAL" ? (
+                    <View style={s.badgeParcial}><Text style={s.badgeParcialText}>Parcial</Text></View>
+                  ) : inst.status === "BOLETO_GERADO" ? (
+                    <View style={s.badgeBoleto}><Text style={s.badgeBoletoText}>Boleto</Text></View>
+                  ) : (
+                    <View style={s.badgeAberto}><Text style={s.badgeAbertoText}>Em aberto</Text></View>
+                  )}
+                </View>
+                <Text style={[s.cellGray, s.cPgto]}>
+                  {inst.receiptDate ? fmtDate(inst.receiptDate) : "—"}
+                </Text>
               </View>
-              <Text style={[s.cellGray, s.cPgto]}>
-                {inst.receiptDate ? fmtDate(inst.receiptDate) : "—"}
-              </Text>
+              {/* Baixas por dia — valor alinhado sob a coluna Pago (Story 75-284/285) */}
+              {inst.receipts.length > 1 &&
+                inst.receipts.map((r, ri) => (
+                  <View key={ri} style={s.receiptRow}>
+                    <Text style={[s.receiptText, { width: "43%" }]}>
+                      Baixa {ri + 1} de {inst.receipts.length} — {fmtDate(r.receiptDate)}
+                    </Text>
+                    <Text style={[s.receiptText, { width: "14%", textAlign: "right" }]}>
+                      {fmtCurrency(r.receiptValue)}
+                    </Text>
+                    <Text style={{ width: "43%" }} />
+                  </View>
+                ))}
             </View>
           )
         })}

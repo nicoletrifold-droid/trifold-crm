@@ -30,8 +30,10 @@ import {
   stripManualInterestLevel,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
-import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, isAmbiguousSlotText, slotToUtc, VISIT_DURATION_MIN } from "../flows/visit-slot"
+import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
+import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
+import type { AgendaState } from "../flows/agenda-state"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -112,13 +114,59 @@ export function detectSlotMismatch(input: {
   now: Date
 }): Date | null {
   const { assistantMessage, authorizedSlotUtc, now } = input
-  if (!authorizedSlotUtc || !assistantMessage) return null
-  if (isAmbiguousSlotText(assistantMessage)) return null
-  const said = resolveVisitSlotParts({ message: assistantMessage, now, visitAvailability: null })
-  if (!said.day || !said.time) return null
-  const saidUtc = slotToUtc(said.day, said.time)
+  if (!authorizedSlotUtc) return null
+  const saidUtc = detectAffirmedSlot({ assistantMessage, now })
+  if (!saidUtc) return null
   const differs = Math.abs(saidUtc.getTime() - authorizedSlotUtc.getTime()) > 30 * 60_000
   return differs ? saidUtc : null
+}
+
+/**
+ * Story 87-3 — `detectAffirmedSlot` mudou de casa para `flows/visit-slot.ts` (onde
+ * já moram as três dependências dela) e continua re-exportada daqui: o módulo de
+ * reconciliação (`flows/agenda-reconcile.ts`) precisa dela, e importá-la de
+ * `chat/pipeline` criaria o ciclo `pipeline → flows/index → agenda-reconcile →
+ * pipeline`. O corpo da função não mudou uma linha.
+ */
+export { detectAffirmedSlot } from "../flows/visit-slot"
+
+/**
+ * Story 75-279 — remove blocos `[SISTEMA: …]` da fala antes de qualquer uso.
+ *
+ * O bloco é protocolo INTERNO: o pipeline o injeta na mensagem do usuário para
+ * dizer à Nicole o que o sistema autorizou. Ela nunca deveria reproduzi-lo — mas
+ * em 06/08 ela inventou um (`[SISTEMA: horário 11h do sábado 08/08 — LIVRE]`) e,
+ * como não havia higienização em lugar nenhum, o texto foi enviado à cliente no
+ * WhatsApp e gravado na conversa.
+ *
+ * Roda UMA vez, logo depois de extrair a resposta, porque `assistantMessage`
+ * alimenta seis caminhos (guarda de horário, detecção de convite, extração de
+ * dados, histórico, gravação e retorno). Higienizar só na saída deixaria o
+ * vazamento gravado e poluiria a extração.
+ */
+/**
+ * Story 75-279 — fala de reserva quando a higienização esvazia a resposta.
+ * Neutra de propósito: não afirma dia, horário nem disponibilidade.
+ */
+export const SANITIZED_EMPTY_FALLBACK =
+  "Desculpa, tive um probleminha aqui. Pode repetir, por favor?"
+
+export function stripSystemBlocks(text: string): { text: string; stripped: boolean } {
+  if (!/\[SISTEMA/i.test(text)) return { text, stripped: false }
+  const cleaned = text
+    // Bloco fechado, inclusive quebrando linha ("[^\]]" casa \n).
+    // Sem `\b` depois de SISTEMA de propósito: a variante que o modelo inventa
+    // não é previsível ("[SISTEMAS: …]"), e `[SISTEMA` nunca é texto legítimo
+    // para o cliente — deixar passar por um caractere é o pior dos dois erros.
+    .replace(/\[SISTEMA[^\]]*\]/gi, "")
+    // Bloco que o modelo não fechou: até o fim da linha.
+    .replace(/\[SISTEMA[^\n]*/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+  // `stripped` sai da comparação, não da suspeita: o evento de vazamento só é
+  // emitido quando algo saiu de fato.
+  return { text: cleaned, stripped: cleaned !== text }
 }
 
 /**
@@ -259,7 +307,14 @@ export interface CalendarEventInput {
   description?: string
   startAt: Date
   endAt: Date
-  attendeeEmail?: string
+  /**
+   * Story 75-275 — `attendeeEmail` FOI REMOVIDO daqui de propósito. O calendário é conta
+   * Gmail comum (sem Workspace), logo sem Domain-Wide Delegation, e service account sem
+   * DWD não consegue convidar: o Google devolve 403 e derruba a criação do evento
+   * INTEIRO. Como a função é fail-open, o efeito era um `null` silencioso — visita sem
+   * espelho e ninguém sabendo. Não recolocar.
+   */
+  team?: "house" | "imob" | null
 }
 export type CreateCalendarEvent = (input: CalendarEventInput) => Promise<string | null>
 
@@ -631,19 +686,76 @@ export async function processMessageWithMetadata(
   // ou o da visita já existente). Serve de verdade única para a guarda
   // anti-alucinação depois da resposta.
   let authorizedSlotUtc: Date | null = null
-  // Story 75-162 — modo agendamento: visit_proposed OU visit_availability capturado.
-  const hasVisitAvailability =
-    typeof (collectedData as Record<string, unknown>).visit_availability === "string"
+  // ─── Story 87-4 — o estado de agenda, com âncora, procedência e TTL ──────────
+  // Este é o ÚNICO ponto de leitura do fato de agenda no turno. Três coisas
+  // acontecem aqui, nesta ordem, e as três são subtração:
+  //
+  //  1. LÊ o `agenda_state`. Se estiver vencido (TTL de 48 h), ele NÃO entra no
+  //     contexto e é apagado — expirado só-ignorado volta a valer se alguém mexer
+  //     na constante.
+  //  2. APAGA as quatro chaves do formato antigo. Não há migração: os 56 estados
+  //     residuais medidos em produção em 07/08 são exatamente a classe que não
+  //     deve ser preservada (34 deles resolvem um dia DIFERENTE conforme a data em
+  //     que forem lidos; 6 resolvem dia+hora a partir de um "Oi").
+  //  3. EMITE os dois eventos que tornam o decaimento mensurável (AC8) em vez de
+  //     presumido.
+  const nowAgenda = new Date()
+  const agendaRead = readAgendaState(collectedData as Record<string, unknown>, nowAgenda)
+  let agendaState: AgendaState | null = agendaRead.state
+  if (agendaRead.expired) {
+    writeAgendaState(collectedData as Record<string, unknown>, null)
+    emit({
+      level: "info",
+      category: "ai",
+      event_type: "NICOLE_AGENDA_STATE_EXPIRADO",
+      message: "Estado de agenda vencido (TTL 48h) — descartado antes de entrar no contexto",
+      metadata: { lead_id: conversation?.lead_id ?? null, conversation_id: conversationId },
+    })
+  }
+  // Story 87-4 / B2 — o descarte do legado tira os 20 pontos de agenda de quem os
+  // tinha por causa de um fato falso, e isso MUDA `qualification_status` e
+  // `interest_level`. Medido em produção (08/08) sobre os 56 estados residuais:
+  // 27 leads `qualified` estão na faixa 70–89 e caem para `in_progress`; 7 dos 16
+  // `hot` caem para `warm`. É a consequência assumida da tese da story — os 20
+  // pontos vinham, em 10 de 13 registros inspecionados, da fala da própria Nicole
+  // — mas não pode acontecer em silêncio: o evento carrega o score DOS DOIS LADOS
+  // para que a queda seja auditável lead a lead, e não descoberta no retrospecto.
+  const scoreAntesDoDescarte = calculateQualificationScore(collectedData)
+  const chavesLegadas = stripLegacyAgendaKeys(collectedData as Record<string, unknown>)
+  if (chavesLegadas.length > 0) {
+    emit({
+      level: "info",
+      category: "ai",
+      event_type: "NICOLE_AGENDA_STATE_LEGADO_DESCARTADO",
+      message: `Chave(s) de agenda do formato antigo encontradas e apagadas: ${chavesLegadas.join(", ")}`,
+      metadata: {
+        lead_id: conversation?.lead_id ?? null,
+        conversation_id: conversationId,
+        chaves: chavesLegadas,
+        score_antes: scoreAntesDoDescarte,
+        score_depois: calculateQualificationScore(collectedData),
+      },
+    })
+  }
+
+  // Story 75-162/75-268 — modo agendamento. Os dois sinais continuam existindo,
+  // mas agora saem do MESMO objeto: "o lead falou de visita" e "ficou dia ou hora
+  // pendente". Antes eram duas chaves independentes, e era essa duplicidade que
+  // fazia a guarda de período precisar existir em dois lugares — e existir em um.
+  const hasVisitAvailability = !!agendaState
+  // Story 87-4 (revisão pós-gate) — "pendência" é literalmente o que as três
+  // chaves `visit_pending_*` significavam: dia ou hora que ficaram pendentes
+  // porque NÓS perguntamos. É `fonte === "pendencia"`, e nada mais. Uma MENÇÃO
+  // (texto solto do lead) nunca foi pendência e não pode se comportar como uma —
+  // era `visit_availability`, que não entrava neste sinal.
+  const hasPendingSlot =
+    isPendencia(agendaState) &&
+    (agendaState!.data_absoluta !== null || agendaState!.hora !== null)
   // Story 75-268 — última fala da Nicole (o modo agendamento também liga por ela,
   // e a extração de nome da 75-161 usa a mesma string logo abaixo).
   const lastAssistantMsg =
     [...history].reverse().find((m) => (m as { role?: string }).role === "assistant")
       ?.content ?? ""
-  // Story 75-268 — pendência de slot é sinal forte: só existe porque NÓS pedimos
-  // o dia ou o horário num turno anterior.
-  const hasPendingSlot =
-    typeof (collectedData as Record<string, unknown>).visit_pending_date === "string" ||
-    typeof (collectedData as Record<string, unknown>).visit_pending_hour === "number"
   // Story 75-245 — regra de verdade colada em TODO bloco [SISTEMA] de visita.
   // No incidente do lead Ailton o bloco dizia "visita JÁ confirmada para segunda
   // 3/08 às 12:00 — apenas confirme" e a Nicole anunciou "sábado às 9h" e depois
@@ -685,10 +797,6 @@ export async function processMessageWithMetadata(
       const existingWhenStr = formatBrtDateTime(apptWhen)
       const cdA = collectedData as Record<string, unknown>
       const nowA = new Date()
-      const pDay = typeof cdA.visit_pending_date === "string" ? isoToDayParts(cdA.visit_pending_date) : null
-      const pTime = typeof cdA.visit_pending_hour === "number"
-        ? { hour: cdA.visit_pending_hour as number, minute: (cdA.visit_pending_minute as number | undefined) ?? 0 }
-        : null
       const cancelIntent = detectCancelIntent(message)
       const rescheduleIntent = detectRescheduleIntent(message)
       // Story 75-268 — com visita JÁ marcada, número pelado ("as 10") só vale como
@@ -700,16 +808,27 @@ export async function processMessageWithMetadata(
       // até 18" o número não é pedido de remarcação, e um slot concreto faria o
       // fluxo remarcar em vez de cancelar. Quem quer trocar de horário junto com o
       // cancelamento continua atendido pelo caminho com marcador ("às 10h").
-      const negotiatingSlot = rescheduleIntent || !!pDay || !!pTime
-      // Novo slot vem da MENSAGEM + pendências (NÃO do visit_availability, que guarda o slot ANTIGO).
+      const negotiatingSlot = rescheduleIntent || hasPendingSlot
+      // Story 87-4 — novo slot vem da MENSAGEM + da PENDÊNCIA (nunca de uma
+      // menção), e o dia herdado já é absoluto: nada é reancorado aqui.
+      //
+      // `ignorarMencao` é o `visitAvailability: null` do `HEAD`, agora declarado.
+      // Sem ele, o `agenda_state` que o `extractCollectedData` grava a partir de
+      // texto solto entrava como se fosse pedido de remarcação e um "Oi" MOVIA a
+      // `scheduled_at` de um lead em negociação avançada — com Google Calendar e
+      // aviso ao corretor. Achado do gate do @qa.
       const resolved = resolveVisitSlotParts({
         message,
         now: nowA,
-        pendingDay: pDay,
-        pendingTime: pTime,
-        visitAvailability: null,
+        agendaState,
+        ignorarMencao: true,
         timeOptions: { bareNumberAllowed: negotiatingSlot },
       })
+      /** Dia que ficou pendente de uma pergunta NOSSA (o `pDay` do `HEAD`). */
+      const pendenciaDay =
+        isPendencia(agendaState) && agendaState!.data_absoluta
+          ? isoToDayParts(agendaState!.data_absoluta)
+          : null
       let nDay = resolved.day
       const nTime = resolved.time
       // Só hora (sem dia) → assume o MESMO dia da visita atual (troca de horário no dia).
@@ -720,7 +839,22 @@ export async function processMessageWithMetadata(
       const ev = nDay && nTime ? evaluateSlot(nDay, nTime, nowA) : { startUtc: null as Date | null, outsideHours: false }
       const newStartUtc = ev.startUtc
       const differs = newStartUtc ? Math.abs(newStartUtc.getTime() - apptWhen.getTime()) > 30 * 60_000 : false
-      const clearPending = () => { delete cdA.visit_pending_date; delete cdA.visit_pending_hour; delete cdA.visit_pending_minute }
+      // Story 87-4 — uma chave só, um apagamento só.
+      const clearPending = () => { writeAgendaState(cdA, null); agendaState = null }
+      /** Story 87-4 — persiste o fato de agenda com a citação do lead e a âncora deste turno. */
+      const guardarAgenda = (partes: { dataAbsoluta?: string | null; hora?: number | null; minuto?: number | null; periodo?: DayPeriod | null }) => {
+        const st = buildAgendaState({
+          // Citação: a mensagem deste turno quando foi ela que trouxe o fato;
+          // senão preserva a citação original (o dia veio de um turno anterior).
+          citacao: resolved.fromMessage.day || resolved.fromMessage.time ? message : (agendaState?.citacao ?? message),
+          now: nowA,
+          // Escrito por um ramo que ACABOU de perguntar o dia ou a hora.
+          fonte: "pendencia",
+          ...partes,
+        })
+        writeAgendaState(cdA, st)
+        agendaState = st
+      }
       // Story 75-245 — dia diferente do agendado JÁ É pedido de mudança, mesmo sem
       // palavra-chave ("tem como ver no sábado"). Antes caía no "apenas reconfirme"
       // e o pedido real do cliente morria ali.
@@ -749,10 +883,16 @@ export async function processMessageWithMetadata(
         clearPending()
         apptToCancel = { id: apptId, googleEventId: (activeAppointment.google_event_id as string | null) ?? null, when: existingWhenStr, brokerId: (activeAppointment.broker_id as string | null) ?? null }
         messageWithContext = sistema(`O cliente quer CANCELAR a visita de ${existingWhenStr}. Confirme com gentileza que a visita foi cancelada e ofereça remarcar quando ele quiser. NÃO insista.`)
-      } else if (nPeriod && (nDay || pDay)) {
+      } else if (nPeriod && (nDay || pendenciaDay)) {
         // Story 75-245 — PERÍODO com dia conhecido: oferece horários livres de verdade.
-        const targetDay = nDay ?? pDay!
-        cdA.visit_pending_date = dayPartsToIso(targetDay)
+        // Story 87-4 — o `pendenciaDay` continua entrando (é o `pDay` do `HEAD`),
+        // e ISSO ESTÁ CERTO: ele é o dia que o lead deu respondendo à nossa
+        // pergunta. Bloqueá-lo faria o pedido de remarcação sumir em silêncio
+        // (4 ocorrências históricas, medidas pelo @qa) e NÃO protegeria a
+        // Valnira — o sábado dela era MENÇÃO (fala da própria Nicole), e menção
+        // continua barrada pela guarda de período, agora dentro do resolver.
+        const targetDay = (nDay ?? pendenciaDay)!
+        guardarAgenda({ dataAbsoluta: dayPartsToIso(targetDay), periodo: nPeriod })
         const slots = await freeSlotsInPeriod(supabase, orgId, targetDay, nPeriod, nowA, apptId)
         const periodo = nPeriod === "manha" ? "manhã" : "tarde"
         messageWithContext = slots.length
@@ -760,7 +900,7 @@ export async function processMessageWithMetadata(
           : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(targetDay)}, mas não há horário livre nesse período. NÃO confirme. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h). A visita atual (${existingWhenStr}) segue mantida.`)
       } else if (nDay && !nTime && (rescheduleIntent || dayDiffers)) {
         // Story 75-245 — dia novo sem horário (com ou sem palavra-chave de remarcar).
-        cdA.visit_pending_date = dayPartsToIso(nDay)
+        guardarAgenda({ dataAbsoluta: dayPartsToIso(nDay) })
         messageWithContext = sistema(`O cliente indicou um novo dia (${formatBrtDay(nDay)}) para a visita, mas não o horário. Pergunte qual horário prefere (seg–sex 8h–18h, sáb 8h–12h). NÃO afirme nenhum horário. A visita atual (${existingWhenStr}) segue mantida até ele escolher.`)
       } else {
         // Sem pedido de mudança → reconfirma o existente.
@@ -781,23 +921,30 @@ export async function processMessageWithMetadata(
       //    Calendly) e injeta o contexto para a Nicole responder certo na MESMA mensagem.
       const cd = collectedData as Record<string, unknown>
       const now = new Date()
-      const pendingDay = typeof cd.visit_pending_date === "string" ? isoToDayParts(cd.visit_pending_date) : null
-      const pendingTime = typeof cd.visit_pending_hour === "number"
-        ? { hour: cd.visit_pending_hour as number, minute: (cd.visit_pending_minute as number | undefined) ?? 0 }
-        : null
-      // Story 75-162 — combina msg do lead → pendências → visit_availability (slot
-      // já capturado pela Nicole), para agendar mesmo quando dia/hora vieram em
-      // turnos diferentes ou só constam no visit_availability.
-      const { day, time } = resolveVisitSlotParts({
+      // Story 75-162 — combina a msg do lead com o que ficou de turnos anteriores,
+      // para agendar mesmo quando dia e hora vieram separados.
+      // Story 87-4 — a fonte herdada é UMA só (`agenda_state`), e o dia dela já é
+      // absoluto: a frase original nunca é reparseada contra o relógio de hoje.
+      const { day, time, fromMessage } = resolveVisitSlotParts({
         message,
         now,
-        pendingDay,
-        pendingTime,
-        visitAvailability: typeof cd.visit_availability === "string" ? cd.visit_availability : null,
+        agendaState,
         // Story 75-268 — aqui NÃO há visita marcada e já estamos em modo agendamento:
         // "as 10" / "Umas 14" é hora. Era o que se perdia nos dois incidentes.
         timeOptions: { bareNumberAllowed: true },
       })
+      /** Story 87-4 — persiste o fato de agenda com citação e âncora deste turno. */
+      const guardarAgenda = (partes: { dataAbsoluta?: string | null; hora?: number | null; minuto?: number | null; periodo?: DayPeriod | null }) => {
+        const st = buildAgendaState({
+          citacao: fromMessage.day || fromMessage.time ? message : (agendaState?.citacao ?? message),
+          now,
+          // Escrito por um ramo que ACABOU de perguntar o dia ou a hora.
+          fonte: "pendencia",
+          ...partes,
+        })
+        writeAgendaState(cd, st)
+        agendaState = st
+      }
 
       // Story 75-245 — período sem número ("de manhã") vira oferta de horários
       // livres; antes o parser devolvia nada e a Nicole inventava o horário.
@@ -805,9 +952,8 @@ export async function processMessageWithMetadata(
 
       if (day && time) {
         // Dia + hora completos (no turno ou combinando com o pendente) → resolve e limpa pendência.
-        delete cd.visit_pending_date
-        delete cd.visit_pending_hour
-        delete cd.visit_pending_minute
+        writeAgendaState(cd, null)
+        agendaState = null
         const { startUtc, outsideHours } = evaluateSlot(day, time, now)
         if (startUtc) {
           const { free, alternatives } = await checkSlotAvailability(supabase, orgId, startUtc)
@@ -825,7 +971,7 @@ export async function processMessageWithMetadata(
         }
       } else if (day && period) {
         // Story 75-245 — dia + período: oferece os horários LIVRES daquele período.
-        cd.visit_pending_date = dayPartsToIso(day)
+        guardarAgenda({ dataAbsoluta: dayPartsToIso(day), periodo: period })
         const slots = await freeSlotsInPeriod(supabase, orgId, day, period, now)
         const periodo = period === "manha" ? "manhã" : "tarde"
         messageWithContext = slots.length
@@ -833,12 +979,11 @@ export async function processMessageWithMetadata(
           : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(day)}, mas não há horário livre nesse período. NÃO confirme nada. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h).`)
       } else if (day && !time) {
         // Só o dia → guarda o dia e pergunta o horário.
-        cd.visit_pending_date = dayPartsToIso(day)
+        guardarAgenda({ dataAbsoluta: dayPartsToIso(day) })
         messageWithContext = sistema(`O cliente indicou o dia (${formatBrtDay(day)}) mas não o horário. Pergunte qual horário prefere (atendemos seg–sex 8h–18h, sáb 8h–12h). NÃO afirme nenhum horário.`)
       } else if (time && !day) {
         // Só a hora → guarda a hora e pergunta a data (depois confirme "tal dia às tal hora").
-        cd.visit_pending_hour = time.hour
-        cd.visit_pending_minute = time.minute
+        guardarAgenda({ hora: time.hour, minuto: time.minute })
         const horaStr = `${time.hour}h${time.minute ? String(time.minute).padStart(2, "0") : ""}`
         messageWithContext = sistema(`O cliente indicou o horário (${horaStr}) mas não o dia. Guarde esse horário, pergunte qual dia prefere e, quando ele disser, confirme reafirmando o dia e o horário. Atendemos seg–sex 8h–18h, sáb 8h–12h.`)
       } else if (period) {
@@ -921,8 +1066,28 @@ export async function processMessageWithMetadata(
   })
 
   const firstBlock = response.content[0]
-  const assistantMessage =
+  const rawAssistantMessage =
     firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+
+  // Story 75-279 — higieniza ANTES de qualquer consumidor (ver stripSystemBlocks).
+  const { text: cleanedMessage, stripped: leakedSystemBlock } =
+    stripSystemBlocks(rawAssistantMessage)
+  // Se a fala inteira era o bloco vazado, a limpeza deixa string vazia — e o
+  // webhook envia `text.body` sem guarda de vazio (a Graph API recusa). Silêncio
+  // é pior que uma frase neutra: cai numa que não compromete dia nem horário.
+  const assistantMessage = cleanedMessage.trim() ? cleanedMessage : SANITIZED_EMPTY_FALLBACK
+  if (leakedSystemBlock) {
+    emit({
+      level: "error",
+      category: "ai",
+      event_type: "NICOLE_SYSTEM_BLOCK_LEAK",
+      message: "Nicole reproduziu um bloco [SISTEMA] na resposta — removido antes do envio",
+      metadata: {
+        lead_id: conversation?.lead_id ?? null,
+        raw_message: rawAssistantMessage.slice(0, 500),
+      },
+    })
+  }
 
   // Story 75-245 — guarda anti-alucinação de horário. FAIL-OPEN: só observa e
   // loga, nunca bloqueia o envio. No incidente do lead Ailton a Nicole afirmou
@@ -931,20 +1096,41 @@ export async function processMessageWithMetadata(
   // Só roda em AFIRMAÇÃO de dia+hora único: quando ela oferece opções ("8h ou
   // 11h") o texto é ambíguo e a guarda se cala (evita falso positivo).
   if (!apptToCancel) {
-    const saidUtc = detectSlotMismatch({ assistantMessage, authorizedSlotUtc, now: new Date() })
-    if (saidUtc && authorizedSlotUtc) {
-      emit({
-        level: "error",
-        category: "ai",
-        event_type: "NICOLE_SLOT_MISMATCH",
-        message: `Nicole afirmou ${formatBrtDateTime(saidUtc)} mas o sistema autorizou ${formatBrtDateTime(authorizedSlotUtc)}`,
-        metadata: {
-          lead_id: conversation?.lead_id ?? null,
-          said_at: saidUtc.toISOString(),
-          authorized_at: authorizedSlotUtc.toISOString(),
-          assistant_message: assistantMessage.slice(0, 500),
-        },
-      })
+    if (authorizedSlotUtc) {
+      const saidUtc = detectSlotMismatch({ assistantMessage, authorizedSlotUtc, now: new Date() })
+      if (saidUtc) {
+        emit({
+          level: "error",
+          category: "ai",
+          event_type: "NICOLE_SLOT_MISMATCH",
+          message: `Nicole afirmou ${formatBrtDateTime(saidUtc)} mas o sistema autorizou ${formatBrtDateTime(authorizedSlotUtc)}`,
+          metadata: {
+            lead_id: conversation?.lead_id ?? null,
+            said_at: saidUtc.toISOString(),
+            authorized_at: authorizedSlotUtc.toISOString(),
+            assistant_message: assistantMessage.slice(0, 500),
+          },
+        })
+      }
+    } else {
+      // Story 75-279 — o sistema NÃO autorizou horário nenhum neste turno e ela
+      // confirmou mesmo assim. É o caso da Maria Oliveira: cliente sai da conversa
+      // com visita marcada na cabeça e nada na agenda. Fail-open (loga, não
+      // derruba o envio) — bloquear é decisão de produto, fora desta story.
+      const affirmedUtc = detectAffirmedSlot({ assistantMessage, now: new Date() })
+      if (affirmedUtc) {
+        emit({
+          level: "error",
+          category: "ai",
+          event_type: "NICOLE_SLOT_UNAUTHORIZED",
+          message: `Nicole afirmou ${formatBrtDateTime(affirmedUtc)} sem o sistema ter autorizado horário algum`,
+          metadata: {
+            lead_id: conversation?.lead_id ?? null,
+            said_at: affirmedUtc.toISOString(),
+            assistant_message: assistantMessage.slice(0, 500),
+          },
+        })
+      }
     }
   }
 
@@ -973,7 +1159,14 @@ export async function processMessageWithMetadata(
     /\bnome\b|\bcomo (?:posso|devo|gostaria de|prefere) (?:te )?chamar\b|\bcom quem (?:eu )?(?:falo|estou falando)\b/i.test(
       lastAssistantMsg
     )
-  const updatedData = extractCollectedData(message, collectedData, { nameExpected })
+  // Story 87-4 — `origem: "lead"` é o que autoriza a extração de agenda. A
+  // chamada de baixo, sobre a fala da Nicole, NÃO passa origem — e por isso
+  // deixa de gravar disponibilidade que ninguém disse.
+  const updatedData = extractCollectedData(message, collectedData, {
+    nameExpected,
+    origem: "lead",
+    now: nowAgenda,
+  })
 
   // If Nicole already asked about a visit date, check if the client is now confirming one.
   // extractVisitConfirmation requires a day reference AND a positive signal — not just any mention.
@@ -985,7 +1178,11 @@ export async function processMessageWithMetadata(
   }
 
   // Then extract non-name data from AI response (property mentions, etc — but NOT name)
-  const aiExtracted = extractCollectedData(assistantMessage, updatedData)
+  // Story 87-4 — `origem: "assistant"`: daqui saem nome/imóvel/quartos como sempre,
+  // mas NUNCA mais disponibilidade de visita. Esta linha é a que gravava a pergunta
+  // da própria Nicole ("qual o melhor dia, durante a semana ou sábado de manhã?")
+  // como se fosse a resposta do lead.
+  const aiExtracted = extractCollectedData(assistantMessage, updatedData, { origem: "assistant" })
   // Preserve the name from user message only (AI response might say "Nicole" which is the bot name)
   const finalData: Record<string, unknown> = { ...aiExtracted, name: updatedData.name ?? collectedData.name }
   // Preserve visit_explicitly_confirmed from user message (extractCollectedData doesn't know about it)
@@ -1171,7 +1368,6 @@ export async function processMessageWithMetadata(
             description: `Visita agendada pela Nicole.${leadPhone ? ` Telefone: ${leadPhone}.` : ""}`,
             startAt: scheduledAt,
             endAt,
-            attendeeEmail: clientEmail ?? undefined,
           })
           if (googleEventId) {
             await supabase.from("appointments").update({ google_event_id: googleEventId }).eq("id", createdAppt.id)
@@ -1232,7 +1428,6 @@ export async function processMessageWithMetadata(
               description: `Visita remarcada pela Nicole.${leadPhone ? ` Telefone: ${leadPhone}.` : ""}`,
               startAt: newStart,
               endAt: newEnd,
-              attendeeEmail: (finalData.email as string | undefined) ?? undefined,
             })
             await supabase.from("appointments").update({ google_event_id: googleEventId ?? null }).eq("id", apptToReschedule.id)
           } catch (err) {
@@ -1768,6 +1963,21 @@ export function buildPropertyDataContext(
     }
 
     parts.push(`\n${p.name} (${statusMap[p.status ?? ""] ?? p.status})`)
+
+    // Story 75-281 — empreendimento em PLANEJAMENTO fica no contexto para a Nicole
+    // RECONHECER o nome (identify-property usa esta mesma lista, pipeline.ts:539) e
+    // vincular o lead. Mas nao pode ser oferecido: normalmente ainda nao tem endereco,
+    // planta, preco nem previsao definidos.
+    if (p.status === "planning") {
+      parts.push(
+        "ATENCAO — EM PLANEJAMENTO: NAO ofereca, NAO sugira e NAO apresente este empreendimento por " +
+          "iniciativa propria. Se o lead perguntar por ele: diga que esta em planejamento, que as " +
+          "informacoes (plantas, valores, metragens e previsao de entrega) ainda NAO foram liberadas, " +
+          "registre o interesse e ofereca avisar assim que o lancamento for anunciado. NUNCA invente " +
+          "planta, preco, metragem, numero de unidades ou previsao de entrega deste empreendimento."
+      )
+    }
+
     parts.push(`Endereco: ${p.address ?? ""}${p.neighborhood ? ", " + p.neighborhood : ""} - ${p.city ?? ""}/${p.state ?? ""}`)
 
     if (p.concept) parts.push(`Conceito: ${p.concept}`)
@@ -1787,7 +1997,10 @@ export function buildPropertyDataContext(
     const availU = p.available_units ?? 0
     const isPreLaunch = p.status === "planning" || p.status === "launching"
     const pctSold = totalU > 0 ? Math.round((soldU / totalU) * 100) : 0
-    if (totalU > 0 && availU === 0) {
+    // Story 75-281: pre-lancamento com total_units preenchido mas nenhuma unidade
+    // cadastrada caia aqui e a Nicole dizia "ESGOTADO". Planejamento/pre-lancamento
+    // sem unidades nao esta esgotado — esta sem estoque cadastrado.
+    if (totalU > 0 && availU === 0 && !isPreLaunch) {
       parts.push("Estoque: ESGOTADO (sem unidades disponiveis) — ofereca lista de espera / proximos lancamentos.")
     } else if (totalU > 0 && !isPreLaunch && pctSold >= SCARCITY_SOLD_THRESHOLD) {
       parts.push(`Estoque (use com SUTILEZA para exclusividade/escassez, NUNCA como abundancia nem numero cru): ${soldU} de ${totalU} unidades ja vendidas (${pctSold}% vendido), restam apenas ${availU} disponiveis`)

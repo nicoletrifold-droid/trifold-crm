@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserPlus, Trash2, Pencil, Check, X, Search, Lock, Link2, Link2Off, Loader2, KeyRound } from "lucide-react"
 import { SenhaClienteModal } from "@web/app/dashboard/_components/senha-cliente-modal"
+import { maskCpfCnpj } from "@web/lib/validation/contato"
 
 interface Cliente {
   id: string         // vinculo_id (clientes_obras_vinculos.id)
@@ -567,7 +568,8 @@ export function ClientesTab({ obraId, clientes }: ClientesTabProps) {
                       </div>
                       {c.cpf && (
                         <p className="text-xs text-gray-500 dark:text-stone-400">
-                          CPF: {c.cpf}
+                          {/* Story 75-282: dado é armazenado só com dígitos — máscara na leitura */}
+                          CPF: {maskCpfCnpj(c.cpf)}
                         </p>
                       )}
                       {c.email && (

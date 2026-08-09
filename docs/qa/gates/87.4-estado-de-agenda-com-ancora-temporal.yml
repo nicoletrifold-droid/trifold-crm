@@ -1,0 +1,486 @@
+schema: 1
+storyId: "87-4"
+story: "docs/stories/87-4-estado-de-agenda-com-ancora-temporal.story.md"
+title: "Quality Gate — estado de agenda com âncora temporal, procedência e TTL (W1-2b)"
+epic: 87
+gate: PASS
+verdict: PASS
+review_round: 3
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-08"
+branch: "story/87-4-agenda-state-ancora-temporal (base: story/87-3-…, NÃO main — PR depende do #379)"
+supersedes: "review_round 1 (FAIL) e review_round 2 (CONCERNS), ambas 2026-08-08"
+
+status_reason_rodada_3: >
+  As duas condições fecharam, e conferi só o que prometi conferir: o diff das duas e os dois
+  vermelhos.
+  **C1 fechou na substância.** Sob a mutação M4, o teste `negotiatingSlot` agora fica VERMELHO — na
+  rodada 2 a mutação inteira dava 0 vermelhos. Rodei as DUAS variantes da mutação (`isPendencia(…)`
+  → `!!agendaState && (dia || hora)` e → `!!agendaState`) e nas duas o vermelho é o mesmo, com a
+  assertion que o @dev colou. A segunda correção que ele descobriu ao rodar (sábado 15/08 → quinta
+  13/08, porque sábado fecha ao meio-dia e 14:00 caía em `outsideHours`) é real e necessária —
+  minha própria fixture de re-gate usara sexta 14/08 justamente por isso, sem eu ter nomeado o
+  motivo. O teste ficou melhor do que eu pedi: ele também afirma a ausência de
+  `APPOINTMENT_RESCHEDULED`.
+  **C2 fechou, e no lugar certo.** O @dev consertou no lado que APAGA em vez de no caminho de
+  off-hours, o que é a decisão correta: cobre qualquer conversa que o cron enriqueça antes do
+  próximo turno, não só a que chegou de madrugada. Verifiquei os dois lados da junta com relógio
+  fixo: às **23:57 BRT** (a hora exata da Valnira) o pipeline retorna antes, o legado fica INTACTO
+  e sai ZERO evento — é o buraco que eu medi, reproduzido; e o cron agora emite, com `chaves`,
+  `score_antes`, `score_depois` e `origem_do_descarte`. Dentro do expediente sai **exatamente um**
+  recibo, o do pipeline, com o mesmo formato e sem `origem_do_descarte` — a contagem da AC8
+  continua sendo uma só e não duplica.
+  **M6 é cirúrgica de verdade:** troquei só a condição do `if` (`> 0` → `> 99`) e caem **3**, os
+  três do bloco novo, com os outros 724 verdes. A tentativa grosseira que derrubava 14 testes não
+  está no código.
+  Suíte **1864 passed | 7 expected fail (1871)**, `tsc` limpo nos dois pacotes, árvore restaurada
+  byte a byte depois das mutações. As correções de relato entraram (Divergências 5 e 6 reescritas
+  para o estado final, `pipeline.ts:805`, e a série 1781 → 1842 → 1859 → **1864**). Ele não editou
+  AC — correto: a AC3 desatualizada segue sinalizada como pendência do @po/@sm.
+  Sobra **uma imprecisão de contagem, e só isso**: a M4 corrigida dá **1** vermelho, não 2 — o de
+  `'de manhã' com MENÇÃO de dia'` não cai (com `ignorarMencao` a menção é descartada antes de
+  importar, então a condição do ramo é falsa com e sem a mutação). E a linha M4 da tabela continua
+  escrita como "1 (oferta sobre dia que o lead não repetiu)", que é a descrição do teste ERRADO,
+  contradizendo a nota logo abaixo dela. É edição de texto e não segura o merge — mas é a terceira
+  vez nesta story que uma contagem declarada não sobrevive à remedição, e isso vale como nota de
+  processo. Ver D5.
+
+status_reason_rodada_2: >
+  Os dois bloqueantes estão FECHADOS, e fechados de verdade: não aceitei o relato, refiz cada um.
+  O B1 não sobrevive a cinco mensagens neutras diferentes com estado completo e visita marcada — e
+  conferi o que o gate anterior mandava conferir, que é a ESCRITA: nenhum `APPOINTMENT_RESCHEDULED`,
+  nenhuma `activity` de `appointment_updated`, `scheduled_at` intacta. O fail-closed de `fonte` é
+  real e vai além do que o @dev declarou: além do estado legado sem a chave, valor lixo
+  ("sistema", "PENDENCIA", 1, null, {}) também cai em `mencao`. O B2 fechou com um dono só, e a
+  mutação que o reabre derruba 3 testes.
+  O achado que muda a premissa da story PROCEDE, e conferi na conversa real: a mensagem da Nicole
+  de 03/08 23:56:38 é literalmente "Qual o melhor dia pra você, durante a semana ou sábado de
+  manhã?", a Valnira responde "Semana de manhã" às 23:57:17 e o pré-fetch devolve os três sábados de
+  08/08 às 23:57:21. Não havia pendência nenhuma. Fui além do que foi pedido e reencenei os dois
+  turnos REAIS pelo `processMessage` do código novo: o turno da Nicole grava estado NENHUM
+  (`origem: assistant`) e o "Semana de manhã" seguinte cai em "indicou o período mas não o dia".
+  A Valnira é fechada pela AC2, na fonte — não pela guarda de período. A restauração de
+  `nPeriod && (nDay || pendenciaDay)` é segura e devolve as 4 ocorrências legítimas que a v1 apagava.
+  Capturei eu mesmo os quatro turnos-ouro G4–G7 do `HEAD` com o seed no formato ANTIGO (worktree em
+  51f162ce) e eles batem BYTE A BYTE com o esperado da branch, inclusive o `scheduled_at` — a
+  equivalência entre formatos com estado agora é medida, não afirmada.
+  O que não fecha são duas coisas pequenas e específicas, e nenhuma delas é defeito de
+  comportamento. (1) A nota 2 do gate anterior continua aberta: rodei a mutação M4 e ela dá ZERO
+  vermelhos na suíte inteira — a linha "M4 · 1 vermelho" da tabela de mutações da story afirma uma
+  evidência que não existe. A guarda É load-bearing (provei com outra fixture, e sem ela um "as 14"
+  MOVE uma visita real), mas nenhum teste da entrega a protege. (2) Achei um caminho em que a queda
+  de 20 pontos acontece SEM o recibo que a decisão do Gabriel exige: turno fora do horário comercial
+  retorna antes do descarte do legado, e aí quem apaga é o cron — que muda o score e NÃO emite o
+  `LEGADO_DESCARTADO`. 25 % das mensagens de lead dos últimos 30 dias chegam fora de 8h–18h.
+  Os dois consertos são de ~10 linhas cada e eu deixo a fixture medida dos dois lados. O desenho não
+  precisa ser reaberto e o restante da story está aprovado.
+
+# ═══════════════════════════════════════════════════════════════════
+# RODADA 3 — AS DUAS CONDIÇÕES DO RE-GATE
+# ═══════════════════════════════════════════════════════════════════
+condicoes_rodada_2:
+  - id: C1
+    titulo: "Fixture discriminante do `hasPendingSlot` + correção da linha M4"
+    status: FECHADA (com ressalva de contagem — ver D5)
+    diff_conferido: "packages/ai/src/chat/pipeline-agenda-state.test.ts — só a fixture do teste `negotiatingSlot`; nenhuma linha de produção tocada."
+    fixture_final: >
+      `"as 10"` → **`"as 14"`** (hora diverge da visita das 10:00) e pendência de sábado 15/08 →
+      **quinta 13/08** (sábado fecha ao meio-dia; 14:00 caía em `outsideHours` e mascarava a
+      remarcação). A segunda correção é legítima: a minha fixture de re-gate usava sexta 14/08 pelo
+      mesmo motivo, sem eu ter nomeado o porquê.
+    verificacao_independente: >
+      Mutação rodada por mim, nas DUAS leituras possíveis, `md5` conferido antes e depois:
+        (a) `hasPendingSlot = !!agendaState && (data_absoluta !== null || hora !== null)`
+        (b) `hasPendingSlot = !!agendaState`
+      Nos dois casos: **1 vermelho, e é o certo** —
+        `× 🔴 negotiatingSlot: número pelado só vale como hora quando há PENDÊNCIA nossa`
+        `AssertionError: expected '[SISTEMA: O cliente quer REMARCAR a v…' to contain 'Visita JÁ confirmada'`
+      Na rodada 2 a mesma mutação dava **0**. É exatamente a diferença que eu exigi: o teste passou
+      a discriminar a guarda que impede a classe do B1.
+    melhor_do_que_pedi: >
+      O teste também afirma `APPOINTMENT_RESCHEDULED === false` e `scheduled_at` intacta no lado da
+      menção — não só o texto do bloco. Cobre a ESCRITA, que é o que importava no B1.
+
+  - id: C2
+    titulo: "Recibo da queda de score no caminho do cron"
+    status: FECHADA
+    diff_conferido:
+      - "packages/web/src/app/api/cron/enrich-leads/route.ts — `import { logEvent }`, `LEGACY_AGENDA_KEYS` e `calculateQualificationScore` no import dinâmico, e um `if` novo de 18 linhas antes do `mapExtractedDataToLeadFields`. Nada mais mudou."
+      - "packages/web/src/app/api/cron/enrich-leads/route.test.ts — 5 casos novos."
+    decisao_de_desenho: >
+      Consertou **no lado que apaga**, não no caminho de off-hours. É a escolha certa e cobre mais
+      do que eu pedi: qualquer conversa que o cron enriqueça antes do próximo turno ganha recibo,
+      não só a que chegou de madrugada.
+    verificacao_independente_da_junta: >
+      Relógio fixo, `agent_config` com `business_hours` 08:00–18:00, `collected_data` com
+      `visit_availability` + `visit_pending_date`:
+        • **23:57 BRT** (a hora exata da Valnira) → o pipeline responde a mensagem de fora de
+          expediente e RETORNA. `collected_data` persistido continua com as duas chaves legadas,
+          `eventos = []`, e o `qualificationScore` devolvido ainda é **30** (com os 20 pontos).
+          **O buraco que eu medi, reproduzido.** Daqui em diante quem apaga é o cron — e agora ele
+          emite.
+        • **10:00 BRT** → o pipeline apaga e emite **exatamente 1** recibo:
+          `{lead_id, conversation_id, chaves:["visit_availability","visit_pending_date"],
+            score_antes:30, score_depois:10}` — sem `origem_do_descarte`.
+      Ou seja: um recibo por conversa, nunca dois. **Não duplica.**
+    event_type_unificado: >
+      Mesmo `event_type` e mesmo formato de metadata, com `origem_do_descarte: "cron_enrich_leads"`
+      só no lado do cron. A contagem da AC8 continua sendo **uma query só**; quem quiser separar as
+      esteiras filtra pelo campo extra. Estruturalmente não há dupla emissão: o cron só emite quando
+      `LEGACY_AGENDA_KEYS.filter(k => k in currentData)` não é vazio, e depois do pipeline apagar não
+      há chave legada no estado persistido (coberto pelo teste "conversa sem resíduo não emite
+      recibo nenhum").
+    mutacao_M6: >
+      Cirúrgica, conferido: troquei **só** a condição (`legadoDescartado.length > 0` → `> 99`) —
+      **3 vermelhos**, os três do bloco novo, com **724 verdes** ao redor. A tentativa grosseira que
+      derrubava 14 testes não está no código entregue.
+
+correcoes_de_relato_conferidas:
+  - "Divergência 5 reescrita: descreve o estado FINAL (`nPeriod && (nDay || pendenciaDay)` restaurado, com a `fonte` fazendo o bloqueio dentro do resolver) e cita `pipeline.ts:805`. ✅"
+  - "Divergência 6 reescrita: o XOR foi eliminado; o sinal voltou a `isPendencia(agendaState) && (dia || hora)`. ✅"
+  - "Bloco *Validações* com a série completa e o aviso de que a v1 estava desatualizada: HEAD 1781 → v1 1842 → v2 1859 → **FINAL 1864**. Medido por mim: **1864 passed | 7 expected fail (1871)**. ✅"
+  - "Nenhuma AC editada — a AC3 desatualizada segue como pendência declarada do @po/@sm. ✅ Correto: não é papel do @dev nem meu."
+
+validacoes_finais_rodada_3:
+  suite: "`npx vitest run` da raiz, sem `--reporter=basic`: **Test Files 5 failed | 152 passed (157) · Tests 1864 passed | 7 expected fail (1871)**. Os 5 são os de sempre (satori/sharp/pdf-lib ausentes) e não executam teste."
+  typecheck: "`npx tsc --noEmit -p packages/ai/tsconfig.json` → exit 0. `packages/web` → só os erros pré-existentes (react-email-editor, satori, sharp, pdf-lib, `arte-cta.test`), nenhum arquivo do diff."
+  higiene: "Árvore restaurada depois de cada mutação por backup/restore (nunca `git checkout`); `diff` contra o backup = vazio em `pipeline.ts` e no `route.ts` do cron; nenhum arquivo temporário meu sobrou."
+
+# ═══════════════════════════════════════════════════════════════════
+# BLOQUEANTES DA RODADA 1 — VERIFICADOS UM A UM
+# ═══════════════════════════════════════════════════════════════════
+blockers_rodada_1:
+  - id: B1
+    titulo: "Um 'Oi' remarcava a visita de quem está em negociação"
+    status: FECHADO
+    verificacao_independente: >
+      Harness próprio (não o do @dev), `now` fixo em 2026-08-12T13:00:00Z, visita real em
+      2026-08-14T13:00:00Z com `google_event_id`, `agenda_state` COMPLETO (`data_absoluta`
+      2026-08-15 + `hora` 10) e `fonte: "mencao"`. Cinco mensagens neutras — "Oi", "obrigada",
+      "vou pensar", "Bom dia", "Ainda estou pensando" — e para cada uma:
+        · `appointments[0].scheduled_at` = 2026-08-14T13:00:00.000Z  (INTACTA)
+        · `appointments` continua com 1 linha
+        · eventos emitidos NÃO contêm `APPOINTMENT_RESCHEDULED` nem `APPOINTMENT_CREATED`
+        · `activities` NÃO contém `appointment_updated`  ← é o aviso ao corretor
+        · o bloco [SISTEMA] não contém "REMARCAR"
+      Ou seja: o `apptToReschedule` não dispara, e com ele não disparam o `update` em
+      `appointments`, o `deleteCalendarEvent`/`pushCalendarEvent` e a notificação ao corretor.
+    guarda_e_load_bearing: >
+      Mutação M1 (remover `ignorarMencao: true` do ramo da visita marcada), rodada por mim:
+      **3 vermelhos na suíte do @dev** — exatamente os declarados (B1, `negotiatingSlot`, golden G7)
+      — e **7 vermelhos nos meus**. `AssertionError: expected '2026-08-15T13:00:00.000Z' to be
+      '2026-08-14T13:00:00.000Z'`.
+    fluxo_legitimo_preservado: >
+      O outro lado testado: `fonte: "pendencia"` + "às 10h" → REMARCA e move para
+      2026-08-15T13:00:00.000Z. A subtração não engoliu o caminho bom.
+
+  - id: B2
+    titulo: "Cron enrich-leads recalculava o score a partir de outro objeto"
+    status: FECHADO
+    verificacao_independente: >
+      O merge persistido e o objeto do score são o MESMO
+      (`mapExtractedDataToLeadFields(extraidoSemAgenda, mergedCollectedData)`), e a pergunta
+      "existe fato de agenda?" passa por `hasAgendaFact` dos dois lados.
+      Mutação M5 (voltar a `mapExtractedDataToLeadFields(enrichment.extracted_data, currentData)`):
+      **3 vermelhos**, como declarado — inclusive a invariante
+      `score gravado === calculateQualificationScore(estado persistido)` sobre 4 entradas do Haiku.
+    ressalva: "Ver N2 — existe um caminho em que o cron faz a queda de score SEM recibo."
+
+# ═══════════════════════════════════════════════════════════════════
+# O ACHADO QUE MUDA A PREMISSA — CONFERIDO NA CONVERSA REAL
+# ═══════════════════════════════════════════════════════════════════
+premissa_revista:
+  resultado: "PROCEDE — e é mais forte do que o @dev escreveu"
+  evidencia_producao: >
+    Consulta read-only a `messages` (dsopqkqjkmhytudaaolv), conversa da Valnira, 03/08:
+      23:56:38  assistant  "…Que tal vir conhecer o decorado pessoalmente? … Qual o melhor dia pra
+                            você, durante a semana ou **sábado** de manhã?"
+      23:57:17  user       "Semana de manhã"
+      23:57:21  assistant  "Tenho horários disponíveis na semana de manhã. Qual desses funciona
+                            melhor pra você, Valnira?
+                             - Sábado, 8 de agosto às 08:00
+                             - Sábado, 8 de agosto às 08:30
+                             - Sábado, 8 de agosto às 09:00"
+    O turno da Nicole é o PRIMEIRO em que se pergunta o dia. Não existia pendência. O "sábado" é
+    fala DELA, capturada em `visit_availability` — menção, não pendência. **A v1 desta story estava
+    errada nos dois sentidos**, exatamente como o @dev diz.
+  verificacao_extra_minha: >
+    Não parei na leitura da conversa: reencenei os DOIS turnos reais pelo `processMessage` do
+    código novo, com as strings copiadas de produção.
+      T1 (lead "Rua", Nicole responde a pergunta das 23:56:38)
+         → `collected_data.agenda_state` = null  e  `visit_availability` = null
+           (a fala dela não vira estado — é a AC2 agindo na FONTE)
+      T2 (lead "Semana de manhã")
+         → "[SISTEMA: O cliente indicou o período (de manhã) mas não o dia. Pergunte qual dia
+            prefere. NÃO afirme nenhum horário …]"
+    **Zero sábados.** A Valnira é fechada pela procedência (AC2), não pela guarda de período.
+  consequencia_para_a_story: >
+    A AC3, como está escrita ("Com `agenda_state.data_absoluta` num sábado e a mensagem sendo
+    'Semana de manhã', o dia herdado NÃO entra"), passou a valer só para `fonte: "mencao"`. O código
+    entregue está CERTO e a AC está desatualizada — é edição de @po/@sm, não minha. Ver D3.
+
+# ═══════════════════════════════════════════════════════════════════
+# AS TRÊS NOTAS DA RODADA 1
+# ═══════════════════════════════════════════════════════════════════
+notas_rodada_1:
+  - id: N1
+    nota: "O teste `AC3 > consequência ASSUMIDA` passava verde no HEAD e não provava nada"
+    status: FECHADA
+    evidencia: >
+      Removido, confirmado por grep. Rodei a suíte nova inteira contra o `HEAD` (worktree próprio em
+      51f162ce, `git status`: 2 untracked, 0 modificados) e reproduzi **22 failed | 11 passed (33)**
+      — o número que o @dev colou, exato. Dos 11 que passam no `HEAD`, nenhum é um "vermelho"
+      anunciado que não seja discriminado por mutação (o do B1 passa no `HEAD` porque o B1 era
+      regressão da PRÓPRIA story, não defeito do `HEAD` — quem o discrimina é a M1, que rodei).
+
+  - id: N2
+    nota: "O XOR de `hasPendingSlot` era restritivo mas não tinha teste"
+    status: 🔴 NÃO FECHADA — e a story afirma uma evidência que não existe
+    o_que_o_dev_diz: "XOR eliminado, `hasPendingSlot` voltou a `isPendencia(...)`, coberto pela mutação M4 (1 vermelho)."
+    o_que_eu_medi: >
+      Mutação M4 aplicada por mim — `hasPendingSlot = !!agendaState && (data_absoluta !== null ||
+      hora !== null)`, isto é, aceitando menção:
+        **Test Files 40 passed (40) · Tests 734 passed | 7 expected fail (741) — ZERO vermelhos.**
+      A tabela da story declara 1. O teste que deveria discriminar
+      (`negotiatingSlot: número pelado só vale como hora quando há PENDÊNCIA nossa`) usa **"as 10"
+      contra uma visita que já é às 10:00** — o número pelado herdado é IGUAL ao horário existente,
+      então `differs` é falso e o turno reconfirma nos dois mundos. É literalmente a ressalva que
+      escrevi na C2 do gate anterior: *"o teste precisa de um número pelado DIFERENTE do herdado"*.
+    a_guarda_e_real_e_eu_provei: >
+      Fixture discriminante (minha), `now` 2026-08-12T13:00:00Z, visita em 2026-08-14T13:00:00Z
+      (10:00 BRT), `agenda_state{fonte:"mencao", data_absoluta:"2026-08-15", hora:null}`,
+      mensagem do lead **"as 14"**:
+        COM a mutação  → "[SISTEMA: O cliente quer REMARCAR a visita de sexta-feira, 14 de agosto às
+                          10:00 para sexta-feira, 14 de agosto às 14:00 …]"
+                          `scheduled_at` = **2026-08-14T17:00:00.000Z**   ← visita real MOVIDA
+        SEM a mutação  → "[SISTEMA: Visita JÁ confirmada para sexta-feira, 14 de agosto às 10:00 …]"
+                          `scheduled_at` = 2026-08-14T13:00:00.000Z
+      Ou seja: a guarda impede exatamente a classe do B1, e hoje nada na entrega a protege.
+    por_que_importa: >
+      É a doutrina desta casa desde a 87-3: guarda sem teste discriminante é guarda que o próximo
+      refactor apaga sem ninguém ver — e aqui o que ela impede é mexer na visita de quem está em
+      negociação. Some-se que a tabela de mutações da story passa a conter uma linha falsa, que é o
+      tipo de lastro que a Onda 0 existe para não deixar passar.
+    o_que_fazer: "Colar a fixture acima como teste (bare number DIFERENTE do horário da visita) e corrigir a linha M4 da tabela."
+
+  - id: N3
+    nota: "A AC7 trancava menos do que anunciava (3 turnos-ouro, todos sem estado)"
+    status: FECHADA — e verificada por mim contra o `HEAD`, não por relato
+    evidencia: >
+      Não aceitei "capturados do HEAD": capturei eu. Worktree em 51f162ce, seed no formato ANTIGO,
+      mesmo `now`, mesmo harness. Os quatro blocos e os quatro efeitos batem BYTE A BYTE com o
+      esperado da branch:
+        G4  `visit_pending_date: "2026-08-15"` + "às 10h"
+            → "[SISTEMA: O cliente quer a visita em sábado, 15 de agosto às 10:00. Esse horário está
+               LIVRE. …]\n\nàs 10h"        · appt 2026-08-15T13:00:00.000Z
+        G5  `visit_pending_hour: 10` + "pode ser sábado"
+            → idem                          · appt 2026-08-15T13:00:00.000Z
+        G6  `visit_pending_date` + "de manhã"
+            → "[SISTEMA: … Horários LIVRES nesse período: 08:00 ou 08:30 ou 09:00 …]"  · 0 appts
+        G7  `visit_availability: "sábado, 15 de agosto às 10h"` + visita marcada + "Oi"
+            → "[SISTEMA: Visita JÁ confirmada para sexta-feira, 14 de agosto às 10:00 …]"
+                                            · appt 2026-08-14T13:00:00.000Z  ← o `HEAD` NÃO remarcava
+      G7 é o B1 e prova, dos dois lados, que a branch voltou a fazer o que o `HEAD` fazia.
+
+# ═══════════════════════════════════════════════════════════════════
+# AS 5 MUTAÇÕES — RODADAS POR MIM, UMA A UMA
+# ═══════════════════════════════════════════════════════════════════
+mutacoes_verificadas:
+  metodo: "backup/restore de arquivo (nunca `git checkout`), md5 conferido antes e depois de cada uma; `npx vitest run packages/ai packages/web/src/app/api/cron` da raiz."
+  resultado:
+    - id: M1
+      mutacao: "remover `ignorarMencao: true` do ramo da visita marcada"
+      declarado: 3
+      medido: "3 na suíte do @dev (B1, negotiatingSlot, golden G7) + 7 nos meus"
+      confere: true
+    - id: M2
+      mutacao: "`herancaDeDiaBloqueada = false`"
+      declarado: 3
+      medido: "3 (AC3 'Semana de manhã', visit-slot 'estado de sábado', visit-slot 'a MENÇÃO continua barrada sem hora') + 1 meu"
+      confere: true
+    - id: M3
+      mutacao: "inverter o fail-closed de `fonte`"
+      declarado: 2
+      medido: "2 (agenda-state: 'estado sem fonte é mencao' e 'valor inválido cai em mencao') + 2 meus"
+      confere: true
+    - id: M4
+      mutacao: "`hasPendingSlot` aceitar menção"
+      declarado: 1
+      medido: "**0** — 741 testes passam"
+      confere: false
+      nota: "Ver N2. A guarda é real; o teste que a protege não existe."
+    - id: M5
+      mutacao: "score do cron voltar a sair de objeto diferente do persistido"
+      declarado: 3
+      medido: 3
+      confere: true
+
+# ═══════════════════════════════════════════════════════════════════
+# ACHADO NOVO DESTA RODADA
+# ═══════════════════════════════════════════════════════════════════
+achados_novos:
+  - id: N2-cron
+    severity: MEDIUM
+    bloqueia_deploy: true
+    title: >
+      A queda de 20 pontos acontece SEM recibo quando a mensagem chega fora do horário comercial —
+      e é o recibo que a decisão do Gabriel usa para explicar a reclassificação ao comercial
+    where:
+      - "packages/ai/src/chat/pipeline.ts:485-501 (retorno antecipado de fora do expediente)"
+      - "packages/ai/src/chat/pipeline.ts:~700 (o `stripLegacyAgendaKeys` + o evento vêm DEPOIS)"
+      - "packages/web/src/app/api/cron/enrich-leads/route.ts:127 (`omitLegacyAgendaKeys(currentData)`, sem evento)"
+    mecanismo: >
+      1. Lead com resíduo escreve fora de 8h–18h. `processMessage` responde a mensagem de fora de
+         expediente e **retorna na linha 497** — antes do descarte do legado. Nenhum evento, nenhuma
+         chave apagada. Mas `updateConversationTimestamp` roda: `last_message_at` avança.
+      2. O cron `enrich-leads` (30 em 30 min, `is_ai_active = true` e `last_message_at >
+         last_enriched_at`) pega essa conversa, persiste
+         `{...omitLegacyAgendaKeys(currentData), ...}` — **apaga o legado** — e grava em `leads` o
+         `qualification_score`/`qualification_status`/`interest_level` recalculados **sem** os 20
+         pontos. **Não emite `NICOLE_AGENDA_STATE_LEGADO_DESCARTADO`.**
+      3. No turno seguinte, dentro do expediente, o `processMessage` não encontra mais chave legada
+         → `chavesLegadas.length === 0` → o evento **nunca** é emitido. O recibo se perde de vez.
+    dimensionamento_producao:
+      consultas: "read-only, `dsopqkqjkmhytudaaolv`"
+      resultado: >
+        56 estados com resíduo · **37 com `is_ai_active = true`** (são os que o cron alcança) ·
+        **39/56 já têm o cron como último escritor** · e **221 de 888 mensagens de lead dos últimos
+        30 dias (25 %) chegaram fora de 8h–18h BRT**. Ordem de grandeza: ~1 em cada 4 primeiros
+        toques cai neste caminho — dos 27 leads que atravessam o corte de 70, algo como 6 a 7
+        mudariam de faixa sem linha de auditoria.
+    por_que_importa: >
+      A decisão tomada hoje pelo Gabriel — reclassificar, porque fato falso não pontua — está
+      explicitamente condicionada a *"a queda é auditável via `score_antes`/`score_depois` no
+      `LEGADO_DESCARTADO`"*. Para um quarto da população ela não é. E é a MESMA classe do B2: o
+      mesmo cron, os mesmos 20 pontos, um andar acima — o que me faz insistir nela.
+    correcao_sugerida: >
+      A mais barata: emitir `NICOLE_AGENDA_STATE_LEGADO_DESCARTADO` também no cron, quando
+      `omitLegacyAgendaKeys` remover alguma chave, com `chaves`, `score_antes`
+      (`calculateQualificationScore(currentData)`), `score_depois`
+      (`calculateQualificationScore(mergedCollectedData)`), `lead_id` e `source: "cron/enrich-leads"`
+      — o `logEvent` já existe em `packages/web/src/lib/logger.ts` e já persiste `metadata`.
+      Alternativa (mais limpa mas mexe no fluxo): mover o descarte do legado para ANTES do retorno de
+      fora de expediente no `processMessage`. Teste obrigatório junto, com o vermelho colado.
+
+# ═══════════════════════════════════════════════════════════════════
+# CARACTERIZAÇÃO — não é defeito, mas precisa ser dito
+# ═══════════════════════════════════════════════════════════════════
+concerns:
+  - id: D1
+    severity: MEDIUM
+    title: "A guarda de período sobrevive UM turno: qualquer turno neutro promove a menção a pendência"
+    evidencia: >
+      Medido no harness, `now` 2026-08-12T13:00:00Z, sem visita marcada,
+      `agenda_state{fonte:"mencao", data_absoluta:"2026-08-15", hora:null}`:
+        · direto  "de manhã"   → "indicou o período (de manhã) mas não o dia"     ← guarda vale
+        · T1 "Oi" → o ramo `day && !time` chama `guardarAgenda(...)` e o estado gravado passa a ser
+          `{"fonte":"pendencia","data_absoluta":"2026-08-15", …}` — a citação original é preservada,
+          mas a procedência muda
+          T2 "de manhã" → "[SISTEMA: O cliente quer a visita de manhã em sábado, 15 de agosto.
+                           Horários LIVRES nesse período: 08:00 ou 08:30 ou 09:00 …]"
+    leitura: >
+      **Não é regressão**: o `HEAD` fazia exatamente o mesmo (`visit_availability` → `day` →
+      `cd.visit_pending_date`, e o `pendingDay` entrava sem guarda depois). E o dia sempre veio de
+      uma fala do LEAD, porque `extractCollectedData` só escreve com `origem: "lead"`. Mas isso
+      limita o que a AC3 entrega de verdade, e é melhor estar escrito do que ser descoberto num
+      incidente. Vigiar na janela de 24 h.
+  - id: D2
+    severity: LOW
+    title: "A reclassificação é preguiçosa, não em lote — o comercial precisa saber disso"
+    evidencia: >
+      `stripLegacyAgendaKeys` só roda no turno. Dos 56 estados com resíduo, **19 têm
+      `is_ai_active = false`** e podem ficar meses sem ser tocados: esses mantêm os 20 pontos e a
+      faixa antiga indefinidamente. A queda dos 27 chega **lead a lead**, conforme as conversas se
+      movem — não num dia. Quem explicar ao time comercial precisa dizer isso, senão a pergunta vira
+      "por que só alguns mudaram?".
+    numeros_conferidos_por_mim: >
+      Reconferi em produção os números que o @dev publicou, e batem exatamente:
+      `{"leads_residuo":56,"qualified":29,"qualified_70_89":27,"hot":16,"hot_60_79":7}`.
+  - id: D3
+    severity: LOW
+    title: "O Dev Agent Record se contradiz: as Divergências 5 e 6 descrevem a v1, que a revisão desfez"
+    itens:
+      - "Divergência 5 diz *'Corrigido para `nPeriod && nDay`'* — a revisão restaurou `nPeriod && (nDay || pendenciaDay)`. E cita `pipeline.ts:847`; no `HEAD` o ramo está na **805**."
+      - "Divergência 6 descreve o `hasPendingSlot` como **XOR** — a revisão eliminou o XOR (voltou a `isPendencia`)."
+      - "O bloco *Validações* continua dizendo `1781 → 1840`; o número medido da raiz é **1842 → 1859**."
+    acao: "Edição de texto do @dev. A story é o que sobra depois; contradição interna dela é dívida."
+  - id: D5
+    severity: LOW
+    title: "A contagem da M4 corrigida é 1, não 2 — e a linha da tabela descreve o teste errado"
+    evidencia: >
+      Rodei as duas leituras da mutação e as duas dão **1 vermelho**, o do `negotiatingSlot`. O
+      segundo que a story lista — `'de manhã' com MENÇÃO de dia não oferta sobre ela` — **não cai**:
+      com `ignorarMencao: true` a menção é descartada antes de importar, então
+      `nPeriod && (nDay || pendenciaDay)` é falso com e sem a mutação.
+      Além disso a **linha M4 da tabela de mutações continua escrita como
+      `1 (oferta sobre dia que o lead não repetiu)`** — número certo por coincidência, descrição do
+      teste errado — e contradiz a nota logo abaixo dela, que diz 2.
+    leitura: >
+      **Não segura o merge**: a substância da C1 é que a guarda passou a ter teste discriminante, e
+      passou. Mas é a **terceira vez** nesta story que uma contagem declarada não sobrevive à
+      remedição (M4 na v2, M4 na v3, e a série da suíte). Nota de processo, não defeito: contar
+      vermelhos é barato e a story é o lastro que sobra.
+    acao: "Corrigir a linha M4 da tabela para `1 (negotiatingSlot: número pelado com menção move visita real)` e ajustar o bloco de saída. Edição de texto."
+  - id: D6
+    severity: LOW
+    title: "Corrida teórica entre o pipeline e o cron poderia gerar recibo duplicado"
+    evidencia: >
+      O cron decide emitir a partir do `currentData` que leu; se o pipeline persistir o descarte
+      entre a leitura e a escrita do cron, os dois emitem para as mesmas chaves. Exige que as duas
+      passadas caiam praticamente no mesmo segundo, e o cron só pega conversa com
+      `last_message_at > last_enriched_at` (o pipeline persiste dentro da própria request).
+    leitura: "Aceito. Se a contagem da AC8 aparecer com pico esquisito na janela de 24 h, `origem_do_descarte` já permite desempatar lead a lead — o campo que o @dev acrescentou resolve o diagnóstico sem código novo."
+  - id: D4
+    severity: LOW
+    title: "AC3 desatualizada em relação ao código entregue — precisa de ratificação do @po/@sm"
+    evidencia: >
+      A AC3 manda, sem qualificar, que *o dia herdado não entre* quando o lead dá só o período. O
+      entregue aplica isso a `fonte: "mencao"` e NÃO a `fonte: "pendencia"` — e a evidência da
+      conversa real diz que o entregue está certo e a AC está errada. Eu não posso editar AC.
+      **Sem essa ratificação por escrito, o próximo leitor vai achar que a implementação diverge da
+      story.**
+
+# ═══════════════════════════════════════════════════════════════════
+aprovados_sem_ressalva:
+  - "AC1 — âncora. Vermelho reproduzido no `HEAD` na rodada 1 e mantido; o estado lido em 05/08, 12/08 e 19/08 dá o mesmo dia."
+  - "AC2 — procedência. Nilson, Bianca e Maicon; e a reencenação da conversa REAL da Valnira mostra a AC2 fechando o caso na fonte."
+  - "AC3 (menção) — guarda load-bearing por mutação (M2, 3 vermelhos), com a ressalva D1."
+  - "AC4 — os quatro seeds armados (Maria Oliveira, Edicleia ×2, Marlene) continuam sem criar `appointment`."
+  - "AC5 — TTL. Conferi de ponta a ponta que o expirado é APAGADO do `collected_data` persistido (`{\"name\":\"Ana\"}`), não só ignorado."
+  - "AC6 — nenhum leitor vivo do formato antigo fora do módulo de compatibilidade; `handoff.ts` e `lead-fields.ts` seguem como declarado; `detect-appointment.ts:71` continua morto de propósito."
+  - "AC7 — G1–G3 e G4–G7 verificados por mim contra o `HEAD`, byte a byte, incluindo os efeitos em `appointments`."
+  - "AC8 — os dois eventos existem; `LEGADO_DESCARTADO` carrega `chaves`, `lead_id`, `score_antes` e `score_depois` (medi 45 → 25, queda de exatamente 20), e o `logEvent` persiste `metadata` em `system_events`. Ressalva N2-cron."
+  - "AC8-b — os dois filtros e a saída da linha do `ENRICHMENT_PROMPT`, com o Haiku impedido de FABRICAR um `agenda_state`."
+  - "AC9 — suíte **1859 passed | 7 expected fail (1866)**, rodada da raiz sem `--reporter=basic`; os 5 arquivos que falham são os mesmos de sempre (satori/sharp/pdf-lib ausentes) e não executam teste. `tsc` de `packages/ai` limpo (exit 0); `packages/web` sem erro novo (13 linhas, todas de dependência opcional e pré-existentes)."
+  - "Nota de processo do @dev (`git checkout` que apagou mudanças não commitadas): NADA se perdeu. Conferi os 22 exports de `visit-slot.ts` um a um, o diff contra o `HEAD` é coerente com o que a story descreve, `isAmbiguousSlotText` continua ligado no ponto de ESCRITA (`qualification.ts:348`), `tsc` limpo e a suíte inteira verde. A troca para backup/restore foi a lição certa."
+  - "Árvore restaurada ao fim das mutações: `diff` contra o backup de cada um dos 4 arquivos = vazio; `git status` idêntico ao do início; a suíte volta a 1859."
+
+pendencias_fora_do_escopo_do_dev:
+  - "AC8-(prod), AC8-b-(iii) e AC10 só fecham 24 h após o deploy, com responsável nomeado (D7). Sem nome, o deploy não sai."
+  - "@po/@sm: ratificar por escrito a AC3 revista (D4) — a AC de hoje descreve um comportamento que a evidência de produção reprova."
+  - "@pm: registro escrito do W1-3a no Epic 87 e a edição A5 no Epic 88."
+  - "@devops: o PR depende do #379 (87-3)."
+
+recommendation:
+  status: "PASS — liberado para o @devops, respeitadas as pendências que não são do @dev"
+  proximo_passo: >
+    `@devops *push`. O PR **depende do #379 (87-3)** e a branch saiu da 87-3, não da `main` — as
+    duas mexem em `resolveVisitSlotParts`, então a ordem de merge importa.
+  antes_do_deploy_nao_sao_do_dev:
+    - "**Responsável nomeado (D7)** para a janela de 24 h — Marcos ou Thielly. Sem nome o deploy não sai; é a condição da AC10 e continua em aberto desde a rodada 1."
+    - "**@po/@sm:** ratificar por escrito a AC3 (D4). O código está certo e a AC não acompanhou; deixar assim faz o próximo leitor achar que a implementação divergiu."
+    - "**@po/@pm:** a decisão de reclassificar está tomada, mas o comercial precisa ouvir que a queda chega **lead a lead** (D2) — 19 dos 56 estados têm `is_ai_active = false` e mantêm os pontos até a próxima mensagem."
+    - "**@pm:** registro escrito do W1-3a no Epic 87 e a edição A5 no Epic 88."
+  na_janela_de_24h:
+    - "Query da AC8-b-(iii) (já pronta no Dev Agent Record) → esperado 0."
+    - "Contagem de `NICOLE_AGENDA_STATE_LEGADO_DESCARTADO` **agrupada por `origem_do_descarte`** — as duas esteiras devem aparecer, e o total não pode ter pico de duplicata (D6)."
+    - "D1: `mencao` promovida a `pendencia` depois de um turno neutro. Não é regressão (o `HEAD` fazia igual), mas é o comportamento a vigiar se voltar a aparecer oferta sobre dia que o lead não repetiu."
+  itens_de_texto_sem_bloqueio:
+    - "D5 — linha M4 da tabela de mutações (contagem 1, descrição do teste certo)."
+  nota_ao_dev: >
+    Fechou. E fechou do jeito difícil: você reproduziu o verde sob mutação antes de mexer, achou
+    sozinho a segunda causa (o `outsideHours` do sábado) que eu não tinha nomeado, e consertou o
+    recibo no lado que apaga em vez do lado que eu apontei — que é a correção melhor. Nas três
+    rodadas o que mudou não foi o cuidado com o código, foi o cuidado com a EVIDÊNCIA: o que ainda
+    escapa é contar os vermelhos e conferir a descrição do que caiu. É a parte barata do trabalho e
+    é a que sobra escrita na story depois que todo mundo esquecer o contexto.

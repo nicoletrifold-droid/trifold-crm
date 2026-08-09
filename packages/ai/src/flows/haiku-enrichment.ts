@@ -12,6 +12,21 @@ interface EnrichmentResult {
   extracted_data: Record<string, unknown>
 }
 
+/**
+ * Story 87-4 / AC8-b — a linha `- visit_availability: string (dia/horario
+ * mencionado)` FOI REMOVIDA desta lista, e a remoção é metade do conserto.
+ *
+ * Este prompt roda no cron `enrich-leads` a cada 30 min, sobre a conversa
+ * INTEIRA (fala do lead E fala da Nicole), e o resultado ia direto para o
+ * `collected_data` — fora do `processMessage`, sem citação, sem procedência, sem
+ * âncora, sem TTL e sem passar pela guarda `isAmbiguousSlotText`. Era a SEGUNDA
+ * linha de montagem do estado falso: dos 56 estados residuais medidos em
+ * produção em 07/08, 39 (70 %) têm este cron como último escritor.
+ *
+ * A outra metade é o filtro no merge (`omitAgendaKeys`, em
+ * `cron/enrich-leads/route.ts`): tirar só do prompt deixaria o merge aberto a um
+ * modelo que devolvesse a chave por hábito de contexto.
+ */
 const ENRICHMENT_PROMPT = `Voce e um assistente de extracao de dados. Analise a conversa abaixo entre Nicole (assistente de vendas) e um lead interessado em imoveis.
 
 Retorne um JSON com exatamente dois campos:
@@ -28,7 +43,6 @@ Campos possiveis em extracted_data:
 - garages: number
 - has_down_payment: true | false
 - source: "meta_ads" | "website" | "referral" | "walk_in"
-- visit_availability: string (dia/horario mencionado)
 - profissao: string (profissao do lead, como ele disse; ex: "professora", "empresario")
 - renda_familiar: "ate_2850" | "2850_4700" | "4700_8000" | "8000_12000" | "12000_20000" | "acima_20000" (SOMENTE se o lead falou valor/faixa de renda; mapeie o valor mencionado para a faixa em R$/mes)
 - filhos: "nenhum" | "1" | "2" | "3_mais" (quantos filhos o lead disse ter)
@@ -146,6 +160,12 @@ export function stripAlreadyFilledPerfil(
 /**
  * Maps extracted_data fields to leads table column names.
  * Returns only non-null fields that should be updated.
+ *
+ * Story 87-4 / B2 — `existingLeadData` deve ser o `collected_data` que o chamador
+ * VAI PERSISTIR, não o que ele leu do banco. O `qualification_score` é calculado
+ * a partir de `{...existingLeadData, ...extractedData}`, e se esse objeto não for
+ * o mesmo que vai para o `conversation_state` o cron e o `processMessage` passam
+ * a discordar sobre o mesmo lead — com o cron sobrescrevendo a cada 30 min.
  */
 export function mapExtractedDataToLeadFields(
   extractedData: Record<string, unknown>,

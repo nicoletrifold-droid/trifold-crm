@@ -1,0 +1,42 @@
+storyId: "nicole-nao-oferece-empreendimento-planejamento"
+title: "Nicole reconhece, mas não oferece, empreendimento em planejamento"
+verdict: PASS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-06
+branch: feat/75-281-nicole-nao-oferece-planejamento
+commit: pending-push
+
+checks:
+  code_review: PASS         # 2 mudanças cirúrgicas em buildPropertyDataContext; nenhuma assinatura alterada; comentários citam a story e o motivo
+  unit_tests: PASS          # 144 files / 1782 tests — 6 novos em property-data-context.test.ts
+  acceptance_criteria: PASS # AC1-AC7
+  regressions: PASS         # selling/delivered/sold_out inalterados (AC5 testa explicitamente); loadProperties não tocado, logo identify-property intacto
+  performance: PASS         # 2 comparações de string por empreendimento
+  security: PASS            # n/a
+  documentation: PASS       # story + gate + comentários inline
+
+acceptance_criteria_trace:
+  AC1: "planning segue no contexto — teste 'CONTINUA no contexto (nome reconhecivel)'. loadProperties intocado, então identify-property continua casando o nome."
+  AC2: "Instrução de não ofertar + o que dizer se perguntado — teste assevera 'NAO ofereca', 'ainda NAO foram liberadas', 'avisar assim que o lancamento for anunciado'."
+  AC3: "Proibição de inventar — teste assevera 'NUNCA invente' e 'previsao de entrega'."
+  AC4: "planning com total_units>0 e zero unidades não diz ESGOTADO — cai no enquadramento de lançamento."
+  AC4b: "launching idem."
+  AC5: "VIND (selling) não recebe a instrução, e segue dizendo ESGOTADO quando realmente esgota."
+  AC6: "Sem migration; nenhuma mudança de assinatura; prompt estático e agent_prompts intocados."
+  AC7: "6 testes novos."
+
+build:
+  next_build: "Compiled successfully in 16.5s"
+  tests: "vitest 144 files / 1782 tests passed"
+  type_check: "tsc --noEmit limpo em packages/ai e packages/web"
+
+concerns:
+  - "É guardrail de PROMPT, não filtro determinístico: depende do modelo obedecer a instrução. Foi escolha consciente do diretor para preservar o reconhecimento do nome — a alternativa determinística (filtrar planning em loadProperties) cegaria o identify-property."
+  - "Conferir no primeiro lead real que mencionar Solun/Japura se a Nicole segue a instrução. Se ela ofertar mesmo assim, a opção seguinte é separar catálogo ofertável de lista de reconhecimento (terceira via já mapeada)."
+  - "packages/ai não é coberto pelo eslint do projeto (arquivos ficam 'outside of base path' do config de packages/web) — lint validado apenas por tsc."
+
+files:
+  - packages/ai/src/chat/pipeline.ts
+  - packages/ai/src/chat/property-data-context.test.ts
+  - docs/stories/nicole-nao-oferece-empreendimento-planejamento.story.md

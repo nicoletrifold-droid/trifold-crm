@@ -171,6 +171,14 @@
     {
       "path": "/api/cron/aprovacoes-digest",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/meta-capi-dispatch",
+      "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/nicole-agenda-reconcile",
+      "schedule": "38 11 * * *"
     }
   ]
 }

@@ -122,9 +122,50 @@ export function facetOptions(
   })
 }
 
+/**
+ * Opções do filtro de Corretor. Separada de `facetOptions` porque o nome do
+ * corretor NÃO está na linha do lead — vem de um mapa externo — e opção sem nome
+ * resolvido é inutilizável: foi o defeito visto em prod em 04/08, onde o gestor
+ * escolhia entre um nome e seis uuid (Story 75-274).
+ *
+ * @param nomes id do corretor → nome. Faz DOIS papéis de propósito: rótulo e
+ *   régua de quem pode aparecer. Quem monta o mapa já decidiu isso (na tela:
+ *   corretor ativo na roleta, Story 75-53), então "sem nome" e "não pode
+ *   aparecer" não conseguem divergir.
+ * @param hiddenBrokerNames nomes ocultos (corretor demo etc.) — mesma convenção
+ *   de `aggregateFilteredLeads`. A peneira é por NOME, então ela só volta a
+ *   funcionar agora que o rótulo deixou de ser uuid.
+ */
+export function brokerFilterOptions(
+  rows: FacetRow[],
+  filters: AnalyticsFilters,
+  nomes: Map<string, string>,
+  hiddenBrokerNames: Set<string> = new Set()
+): FilterOption[] {
+  return facetOptions(rows, filters, "brokerId", nomes).filter(
+    (o) => nomes.has(o.value) && !hiddenBrokerNames.has(o.label.toLowerCase().trim())
+  )
+}
+
 /** Rótulo com a contagem, do jeito que vai para o `<option>`. */
 export function optionLabelComContagem(o: FilterOption): string {
   return `${o.label} (${o.count})`
+}
+
+/**
+ * A frase do aviso de cobertura, ou `null` quando TODA linha do recorte tem o
+ * dado — dimensão densa não precisa de aviso, e aviso que sempre aparece deixa
+ * de ser lido (Story 75-274, AC5).
+ *
+ * Vale para Corretor e Calor também, não só para o perfil do lead: `interest_level`
+ * está em 79,6% da base, mas dentro de um recorte a densidade muda (medido em
+ * prod: 29 de 50 num corretor). Sem a frase, a soma que não fecha parece defeito
+ * de contador em vez de dado ausente.
+ */
+export function coverageNote(cobertura: { comValor: number; total: number }): string | null {
+  if (cobertura.comValor >= cobertura.total) return null
+  const n = (v: number) => v.toLocaleString("pt-BR")
+  return `${n(cobertura.comValor)} de ${n(cobertura.total)} com o dado`
 }
 
 /**

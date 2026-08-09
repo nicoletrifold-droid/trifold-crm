@@ -190,7 +190,7 @@ local diverge de prod quando há PRs concorrentes).
 
 ## File List
 **Criados:**
-- `supabase/migrations/215_leads_qualificacao_comercial.sql` — enum `qualificacao_comercial`,
+- `supabase/migrations/217_leads_qualificacao_comercial.sql` — enum `qualificacao_comercial`,
   coluna `leads.qualificacao_comercial`, índice, tabela `qualificacao_comercial_config` (RLS +
   trigger `set_updated_at`).
 - `packages/web/src/app/api/leads/[id]/route.test.ts` — 4 testes: 403 sem `leads.qualificacao`,
@@ -290,6 +290,7 @@ Status: Draft → Ready.
 | 2026-08-04 | 0.3 | Validação PO: GO (9/10). Adicionada seção Tasks (T1-T6) ausente no draft, ligando cada task às ACs correspondentes. Nenhuma referência técnica hallucinada — conferidas contra o código real. Status Draft → Ready. | @po (Pax) |
 | 2026-08-04 | 0.4 | Implementação completa (T1-T6, modo YOLO, em worktree isolado a partir de `origin/main`): migration 215 (enum + coluna + tabela de prazos configuráveis), sub-módulo `leads.qualificacao`, gate + audit específicos no PATCH existente. Migration renumerada de 201→215 (main estava mais adiantada que a branch usada no draft). `vitest` 1675/1675, `tsc --noEmit` limpo, `eslint` limpo nos arquivos tocados, `next build` OK. Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-08-04 | 0.5 | QA: CONCERNS (ver QA Results). Removida uma linha duplicada de Change Log (artefato mecânico da v0.3) — limpeza administrativa, sem mudança de conteúdo. | @qa (Quinn) |
+| 2026-08-09 | 0.6 | Rebase na main p/ deploy: (a) conflito em `route.ts` resolvido — a main extraiu a whitelist p/ `lib/leads/patch-allowed-fields.ts` (75-273); `qualificacao_comercial` movido do array inline p/ esse módulo (`LEAD_PATCH_ALLOWED_FIELDS`), sem reintroduzir `lost_reason`; demais mudanças da 84-1 (canAccess/gate/audit/old_value) mergearam limpas. (b) Migration renumerada **215 → 217** (a main passou a ter 215_meta_capi_outbox e 216_clientes_cpf_normalizado). Checks re-rodados. | @dev (Dex) |
 
 ## QA Results
 

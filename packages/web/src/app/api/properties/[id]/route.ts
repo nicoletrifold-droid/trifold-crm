@@ -64,8 +64,8 @@ export async function PATCH(
     updateFields.state = body.state.trim().toUpperCase()
   if (body.address !== undefined) updateFields.address = body.address?.trim() || null
   if (body.neighborhood !== undefined) updateFields.neighborhood = body.neighborhood?.trim() || null
-  if (body.zip_code !== undefined)
-    updateFields.zip_code = body.zip_code?.trim() || null
+  // zip_code NÃO existe em properties (schema: migration 002). Se essa chave chegasse
+  // no body, o Postgres recusava o UPDATE inteiro. Nenhum consumidor a envia hoje.
   if (body.concept !== undefined) updateFields.concept = body.concept?.trim() || null
   if (body.description !== undefined) updateFields.description = body.description?.trim() || null
   if (body.delivery_date !== undefined) updateFields.delivery_date = body.delivery_date || null

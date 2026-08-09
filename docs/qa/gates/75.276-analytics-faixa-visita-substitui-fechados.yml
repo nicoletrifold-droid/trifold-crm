@@ -1,0 +1,93 @@
+storyId: 75-276
+title: "Aproveitamento: faixa 'Agendou/fez visita' substitui 'Fechados'"
+verdict: PASS
+reviewedAt: "2026-08-05"
+reviewer: "@qa (Quinn)"
+branch: feat/75-276-analytics-faixa-visita
+commits:
+  - a4e57a4f  # implementação
+  - HEAD      # correção do QA-001
+
+evidence:
+  tests: "1738 passed (142 arquivos) — 4 casos novos em executive.test.ts"
+  typecheck: "packages/web tsc --noEmit → 0 erros"
+  lint: "0 erros, 18 warnings (todos pré-existentes, em arquivos não tocados)"
+  monorepo_typecheck: >
+    @trifold/shared falha com TS2688 (@types/node ausente). Confirmado com `git stash`
+    que falha IDÊNTICO na árvore limpa — ambiente, não a mudança. Não bloqueia.
+  prod_validation: >
+    Funções REAIS via tsx contra dado de prod (90d, 1.663 leads): 8/8 origens fechando
+    100%; Perdidos idêntico à régua antiga (998 = 998); caso de borda do AC9 = 0.
+
+issues:
+  - id: QA-001
+    severity: medium
+    category: code
+    status: FIXED
+    description: >
+      A busca paginada de `appointments` ordenava por `lead_id`, que NÃO é único —
+      medido em prod: 8 leads têm 2+ visitas, um tem 5. `fetchAllLeads` pagina com
+      `.range()`, e ordem com empate não é determinística entre páginas: linha pulada
+      ou repetida. O efeito seria um lead com visita classificado como "em atendimento"
+      — número silenciosamente errado na tela, a classe de defeito mais cara deste
+      projeto. DORMENTE hoje (59 linhas na tabela, nunca pagina); acordaria sozinho
+      com o crescimento, sem ninguém mexer no código.
+    recommendation: "Ordenar pela PK (`id`), que é única."
+    resolution: "Corrigido: `.order(\"id\")` + comentário explicando por que não é lead_id."
+
+  - id: QA-002
+    severity: low
+    category: requirements
+    status: ACCEPTED
+    description: >
+      AC5 fala em busca "paginada/loteada ... por lead", mas o @dev implementou busca do
+      conjunto inteiro paginada, sem lote de `lead_id`. Desvio deliberado e medido (59
+      linhas na tabela; `.in()` com 300 uuid ≈ 12KB de URL). O AC é satisfeito no que
+      importa — nenhum lead perde visita por corte do PostgREST — por paginação real.
+    recommendation: "Nenhuma ação. Desvio documentado nas Dev Notes com o gatilho de revisita (~20k linhas)."
+
+verified_not_broken:
+  - >
+    RLS de `appointments`: políticas `appointments_select`/`appointments_manage` são
+    org-scoped (`org_id = user_org_id()`), sem escopo por corretor. A query nova, que
+    tirou o filtro de data e passou a ler o histórico inteiro, devolve o mesmo conjunto
+    para os 4 perfis permitidos (admin/supervisor/gerente-comercial/sdr) e NÃO amplia
+    exposição — o que ela lê, a org já lia.
+  - >
+    O card de topo de Fechamento/conversão da `/dashboard/analytics` tem o PRÓPRIO
+    `fechadoStageIds` (page.tsx:352) e segue intacto. A noção de "fechou" não desaparece
+    da tela: só as duas barras de Aproveitamento deixaram de usá-la.
+  - >
+    PDF/relatório semanal não consome `outcomeBySource`/`outcomeByBroker` — nada a
+    sincronizar (a convenção "relatório segue a tela" não se aplica aqui).
+  - >
+    Remoção da query `kanban_stages` do Promise.all: `stagesData` e `stage_id` ficaram
+    sem nenhum consumidor na rota (type-check confirma). Uma ida ao banco menos.
+
+observations:
+  - id: OBS-001
+    forWhom: Marcos
+    description: >
+      Dos 42 leads que chegaram à visita em 90d, 28 ficam no verde e 14 foram perdidos
+      depois de visitar — UM TERÇO das visitas vira Perdido. É a consequência aritmética
+      da decisão "perdido manda", que ele tomou no abstrato. A decisão continua coerente
+      (preserva o sentido da barra vermelha), mas o tamanho do efeito merece um olhar
+      dele. Inverter = trocar duas linhas na cascata.
+  - id: OBS-002
+    forWhom: Marcos
+    description: >
+      Leitura de negócio que caiu no colo da validação: walk_in converte 10,0% para
+      visita e meta_ads 0,9% (885 leads → 8 visitas). Não é escopo desta story.
+  - id: OBS-003
+    forWhom: backlog
+    description: >
+      A etapa chamada "Atendimento" tem slug=no-show no banco, com 27 leads dos últimos
+      7 dias. Qualquer métrica que leia no-show por SLUG conta esses 27 como falta de
+      comparecimento. Fora do escopo; já registrado nas Dev Notes da story.
+
+notes: >
+  O que este gate NÃO cobre: confirmação visual na tela. Marcos pediz explicitamente que
+  o trabalho seja por terminal e sem pilotar o navegador dele, então a prova foi rodar as
+  funções reais contra o banco de produção em vez de screenshot. O render da legenda com
+  o rótulo novo ("Agendou/fez visita" é mais largo que "Fechados") fica para os olhos
+  dele — se quebrar linha feio, é CSS no `Legend`, não lógica.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { normalizePhoneBR } from "@trifold/shared"
+import { cpfLookupValues, normalizeCpfCnpj } from "@web/lib/validation/contato"
 
 const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
@@ -170,13 +171,20 @@ export async function POST(request: NextRequest) {
   if (insertRow.telefone) insertRow.telefone = normalizePhoneBR(insertRow.telefone as string)
   if (insertRow.whatsapp) insertRow.whatsapp = normalizePhoneBR(insertRow.whatsapp as string)
 
-  // CPF unicidade na org (se fornecido)
+  // Story 75-282: CPF/CNPJ é ARMAZENADO só com dígitos. Gravar o valor mascarado do formulário
+  // quebrava o casamento do sync Sienge (que compara com o CPF já sanitizado da API) e o cliente
+  // duplicava a cada sync. Exibição volta a ter máscara via `maskCpfCnpj`.
+  if (insertRow.cpf) insertRow.cpf = normalizeCpfCnpj(insertRow.cpf as string)
+
+  // CPF unicidade na org (se fornecido). Compara os DOIS formatos: a base tem registros legados
+  // mascarados até a migration 216 rodar, e sem isso o mesmo CPF entra duas vezes.
   if (insertRow.cpf) {
     const { data: existing, error: cpfErr } = await supabase
       .from("clientes")
       .select("id")
       .eq("org_id", appUser.org_id)
-      .eq("cpf", insertRow.cpf)
+      .in("cpf", cpfLookupValues(insertRow.cpf as string))
+      .limit(1)
       .maybeSingle()
     if (cpfErr) {
       return NextResponse.json({ error: cpfErr.message }, { status: 500 })

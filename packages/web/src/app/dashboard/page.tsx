@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { propertyStatusBadge, propertyStatusLabel } from "@web/lib/property-status"
 import { getServerUser } from "@web/lib/auth"
 import { EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
@@ -290,19 +291,9 @@ export default async function DashboardPage() {
                   </p>
                 </div>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    property.status === "selling"
-                      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                      : property.status === "launching"
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
-                      : "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
-                  }`}
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${propertyStatusBadge(property.status)}`}
                 >
-                  {property.status === "selling"
-                    ? "Em venda"
-                    : property.status === "launching"
-                    ? "Lançamento"
-                    : property.status}
+                  {propertyStatusLabel(property.status)}
                 </span>
               </div>
               {soldPct != null && (

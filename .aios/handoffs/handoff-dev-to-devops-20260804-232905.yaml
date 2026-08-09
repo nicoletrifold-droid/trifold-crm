@@ -1,0 +1,24 @@
+handoff:
+  from_agent: dev
+  to_agent: devops
+  story_context:
+    story_id: "84-1"
+    story_path: "docs/stories/84-1-qualificacao-lead-schema-permissoes-auditoria.story.md"
+    story_status: "Ready for Review"
+    current_task: "Push do branch + criação de PR para a story 84-1"
+    branch: "worktree-84-1-qualificacao-lead-schema (git worktree isolado, partiu de origin/main — 2 commits: 954739e8 implementação + f44077db QA gate)"
+  decisions:
+    - "Gate: CONCERNS (não FAIL) — aprovado para seguir, achados são todos severidade low"
+    - "Migration 215_leads_qualificacao_comercial.sql NÃO foi aplicada em nenhum banco — aplicação é passo de deploy, precisa reconferir numeração contra o schema remoto de prod antes (lição 75-188)"
+    - "Branch nasceu de origin/main (não da branch original da sessão feat/75-229-...) porque havia uma sessão paralela usando o diretório de trabalho principal"
+  files_modified:
+    - "supabase/migrations/215_leads_qualificacao_comercial.sql (novo, NÃO aplicado)"
+    - "packages/web/src/lib/permissions-modules.ts"
+    - "packages/web/src/lib/permissions-modules.test.ts"
+    - "packages/web/src/app/api/leads/[id]/route.ts"
+    - "packages/web/src/app/api/leads/[id]/route.test.ts"
+    - "docs/stories/84-1-qualificacao-lead-schema-permissoes-auditoria.story.md"
+    - "docs/stories/epics/epic-84-qualificacao-lead.md"
+    - "docs/qa/gates/84.1-qualificacao-lead-schema-permissoes-auditoria.yml"
+  blockers: []
+  next_action: "@devops deve: renomear/criar o branch remoto com nome convencional (ex: feat/84-1-qualificacao-lead-schema), push, e abrir PR com o resumo do gate CONCERNS. Lembrar de instruir que a migration 215 precisa ser conferida contra o schema remoto de prod (numeração pode já ter avançado) antes de aplicar no deploy."

@@ -7,7 +7,12 @@ import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 // Story 75-271 — o relatório passa a respeitar os filtros da tela. Mesmo módulo
 // de filtros da página (75-270) e mesma soma em JS que ela faz no ramo filtrado.
 import { applyLeadFilters, hasAnyFilter, activeFilterKeys, EMPTY_FILTERS, FILTER_SPEC, type AnalyticsFilters } from "@web/lib/analytics/filters"
-import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
+import { aggregateFilteredLeads, type AggregableLead } from "@web/lib/analytics/aggregate-filtered"
+// Story 75-273 — paginação do PostgREST (helper da 75-269).
+import { fetchAllLeads, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
+
+/** Linha da base de ativos usada pelo agregador (Story 75-273). */
+type AggLeadRow = AggregableLead
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
 // Story 75-179: tipo da RPC + derivação de métricas centralizados (dedup tela/PDF).
 import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
@@ -176,12 +181,45 @@ export async function buildAnalyticsReportData(
     .eq("is_available", true)
   const activeBrokerIds = new Set((activeBrokersData ?? []).map(b => b.user_id as string))
 
+  // ── Story 75-278 — o comparativo tem de vir PAGINADO ─────────────────────
+  //
+  // 🔥 DEFEITO QUE ISTO CONSERTA: esta query busca as DUAS janelas de uma vez
+  // (compPrevStart → aggUntil = o dobro do período) e vivia dentro do Promise.all sem
+  // `.limit()` nem paginação. O PostgREST corta em 1000 linhas em silêncio — e como a
+  // ordem é `created_at` ASCENDENTE, as 1000 linhas eram consumidas INTEIRAMENTE pela
+  // janela anterior: a atual não recebia nenhuma linha. Resultado no PDF de 30 dias:
+  // coluna "Atual" ZERADA em todas as linhas (total, empreendimento, corretor, origem) e
+  // "Anterior" travada em exatamente 1000. Medido em prod (05/08): 1.660 linhas na janela
+  // de 30d e 1.666 na de 90d — os dois presets estouravam. O de 7 dias (193) passava, e é
+  // por isso que o cron semanal nunca mostrou o problema e ninguém tinha visto.
+  //
+  // ⚠️ ORDEM COM DESEMPATE POR `id`: paginar com `.range()` exige ordem determinística, e
+  // `created_at` NÃO é único (importação em lote grava vários leads no mesmo instante).
+  // Sem o desempate, linha pulada ou repetida entre páginas — o mesmo defeito dormente
+  // que o gate da 75-276 pegou hoje na paginação de appointments.
+  function fetchComparativeLeads(): Promise<RawLead[]> {
+    return fetchAllLeads<RawLead>(() =>
+      applyLeadFilters(
+        supabase.from("leads")
+          // Story 75-180: base ENTRADAS — TODAS as entradas da janela (sem filtro
+          // is_active/lost_reason), para o Total bater com o card Entradas.
+          .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
+          .eq("org_id", orgId)
+          .eq("segmento", "principal") // Story 75-98
+          .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
+          .order("created_at")
+          .order("id"),
+        filters
+      ) as unknown as RangeableQuery<RawLead>
+    )
+  }
+
   const [
     { data: analytics },
     { data: analyticsPrev },
     { count: lpYardenCount },
     { count: lpVindCount },
-    { data: recentLeadsRaw },
+    recentLeadsRaw,
     { data: propertiesRaw },
     { data: responseLeadsRaw },
   ] = await Promise.all([
@@ -190,17 +228,10 @@ export async function buildAnalyticsReportData(
     supabase.rpc("get_analytics_summary_ranged", { p_org_id: orgId, p_since: compPrevStart.toISOString(), p_until: compCurrStart.toISOString() }),
     applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).ilike("utm_campaign", "%LP Yarden%"), filters),
     applyLeadFilters(supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("segmento", "principal").gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()).or("utm_campaign.ilike.%LP Vind%,utm_campaign.ilike.%Página Vind%"), filters),
-    // Story 75-180: comparativo na base ENTRADAS — TODAS as entradas da janela
-    // (sem filtro is_active/lost_reason), para o Total bater com o card Entradas.
-    applyLeadFilters(
-      supabase.from("leads")
-        .select("created_at, property_interest_id, assigned_broker_id, source, broker:users!assigned_broker_id(id, name)")
-        .eq("org_id", orgId)
-        .eq("segmento", "principal") // Story 75-98
-        .gte("created_at", compPrevStart.toISOString()).lt("created_at", aggUntil.toISOString())
-        .order("created_at"),
-      filters
-    ),
+    // Story 75-278 — PAGINADO (ver `fetchComparativeLeads` abaixo). Estava aqui dentro
+    // do Promise.all sem `.limit()` nem paginação, e o teto de 1000 linhas do PostgREST
+    // zerava a coluna "Atual" do comparativo em período de 30 e 90 dias.
+    fetchComparativeLeads(),
     supabase.from("properties").select("id, name").eq("is_active", true),
     // Tempo de atendimento (Story 75-51): leads ATENDIDOS no período. Mede
     // distribuição → atendimento (primeiro_atendimento_em), igual à tela (75-47).
@@ -259,15 +290,23 @@ export async function buildAnalyticsReportData(
     // Base ATIVOS (mesma da tela no ramo filtrado): funil/corretores/origens
     // falam dos leads em atendimento. Entradas/Perdidos vêm de contagens
     // próprias abaixo, porque têm recorte diferente (Story 75-179).
-    const [stageDefsRes, ativosRes, entradasRes, prevEntradasRes, perdidosRes] = await Promise.all([
+    const [stageDefsRes, ativosRows, entradasRes, prevEntradasRes, perdidosRes] = await Promise.all([
       supabase.from("kanban_stages").select("id, name, slug, color, position").order("position"),
-      applyLeadFilters(
-        supabase.from("leads")
-          .select("stage_id, assigned_broker_id, source, property_interest_id, broker:users!assigned_broker_id(id, name)")
-          .eq("org_id", orgId).eq("segmento", "principal")
-          .eq("is_active", true).is("lost_reason", null)
-          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString()),
-        filters
+      // Story 75-273 (QA-003 da 75-271) — paginado. O recorte de ativos mede 612
+      // em TODA a base hoje, longe do teto de 1000 do PostgREST; mas o PDF aceita
+      // `range=custom` com janela arbitrária e a base cresce, e o corte do
+      // PostgREST é SILENCIOSO — o funil do PDF sairia menor que o da tela sem
+      // ninguém saber. Correto por construção custa uma linha.
+      fetchAllLeads<AggLeadRow>(() =>
+        applyLeadFilters(
+          supabase.from("leads")
+            .select("stage_id, assigned_broker_id, source, property_interest_id, broker:users!assigned_broker_id(id, name)")
+            .eq("org_id", orgId).eq("segmento", "principal")
+            .eq("is_active", true).is("lost_reason", null)
+            .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
+            .order("created_at"),
+          filters
+        ) as unknown as RangeableQuery<AggLeadRow>
       ),
       applyLeadFilters(
         supabase.from("leads").select("id", { count: "exact", head: true })
@@ -292,7 +331,7 @@ export async function buildAnalyticsReportData(
 
     const stageDefs = (stageDefsRes.data ?? []) as Array<{ id: string; name: string; slug: string | null; color: string | null; position: number | null }>
     const agg = aggregateFilteredLeads(
-      (ativosRes.data ?? []) as Parameters<typeof aggregateFilteredLeads>[0],
+      ativosRows,
       stageDefs,
       { hiddenBrokerNames: HIDDEN_BROKERS, activeBrokerIds }
     )
@@ -381,7 +420,8 @@ export async function buildAnalyticsReportData(
   // ── Week-over-week comparison ─────────────────────────────────────────────
   const propNames = new Map((propertiesRaw ?? []).map((p) => [p.id, p.name]))
 
-  const allRecent = (recentLeadsRaw ?? []) as RawLead[]
+  // Story 75-278 — já vem tipado e sempre array (fetchAllLeads), sem cast nem fallback.
+  const allRecent = recentLeadsRaw
   const currLeads = allRecent.filter((l) => new Date(l.created_at) >= compCurrStart)
   const prevLeads = allRecent.filter((l) => new Date(l.created_at) < compCurrStart)
 
@@ -447,6 +487,25 @@ export async function buildAnalyticsReportData(
       ? Math.round(brokerResponseTimes.reduce((sum, b) => sum + b.avgMinutes * b.count, 0) / tempoLeads)
       : null
 
+  // Story 75-273 (QA-004 da 75-271) — resolve o NOME de corretor e
+  // empreendimento para o cabeçalho. Antes o PDF dizia só "Corretor", e quem
+  // recebia sabia que havia filtro mas não de quem — relatório que anuncia o
+  // recorte pela metade ainda obriga a perguntar. Uma query por dimensão, e só
+  // quando ela está filtrada.
+  const nomesDeFiltro = new Map<string, string>()
+  await Promise.all([
+    (async () => {
+      if (!filters.brokerId) return
+      const { data } = await supabase.from("users").select("name").eq("id", filters.brokerId).maybeSingle()
+      if (data?.name) nomesDeFiltro.set(filters.brokerId!, data.name as string)
+    })(),
+    (async () => {
+      if (!filters.propertyId) return
+      const { data } = await supabase.from("properties").select("name").eq("id", filters.propertyId).maybeSingle()
+      if (data?.name) nomesDeFiltro.set(filters.propertyId!, data.name as string)
+    })(),
+  ])
+
   const comparisonTitle =
     period.range === "custom"
       ? "Comparativo — período atual vs período anterior"
@@ -459,7 +518,7 @@ export async function buildAnalyticsReportData(
     // Story 75-271 — sem esta linha o PDF filtrado seria indistinguível de um
     // PDF completo, e alguém compararia dois relatórios de recortes diferentes
     // achando que são o mesmo. Filtro que não se anuncia no papel é armadilha.
-    filtrosAtivos: describeActiveFilters(filters),
+    filtrosAtivos: describeActiveFilters(filters, nomesDeFiltro),
     entradas,
     entradasDelta,
     ativos,
@@ -480,12 +539,17 @@ export async function buildAnalyticsReportData(
 }
 
 /**
- * Story 75-271 — descreve os filtros ativos para o cabeçalho do PDF. Só nomes
- * de dimensão + valor bruto: resolver nome de corretor/empreendimento exigiria
- * outra query, e o objetivo aqui é AVISAR que o recorte não é o total, não
- * produzir legenda bonita. Vazio quando não há filtro (o PDF omite a linha).
+ * Story 75-271 — descreve os filtros ativos para o cabeçalho do PDF. Vazio
+ * quando não há filtro (o PDF omite a linha).
+ *
+ * Story 75-273 — corretor e empreendimento passam a sair com o NOME (resolvido
+ * por quem chama e entregue em `nomes`). Id não resolvido cai no rótulo pelado:
+ * imprimir uuid num relatório que alguém vai ler é pior que não dizer.
  */
-function describeActiveFilters(filters: AnalyticsFilters): string[] {
+function describeActiveFilters(
+  filters: AnalyticsFilters,
+  nomes: Map<string, string> = new Map()
+): string[] {
   const rotulos: Record<string, string> = {
     propertyId: "Empreendimento",
     brokerId: "Corretor",
@@ -505,7 +569,13 @@ function describeActiveFilters(filters: AnalyticsFilters): string[] {
     const rotulo = rotulos[k] ?? FILTER_SPEC[k].param
     // Id (uuid) não diz nada no papel; para essas dimensões basta anunciar que
     // há filtro. Para as de valor legível, mostra o valor.
+    // Id resolvido → mostra o nome. Não resolvido (corretor apagado, por ex.)
+    // → anuncia só a dimensão, em vez de imprimir um uuid no relatório.
     const ehId = k === "propertyId" || k === "brokerId"
-    return ehId ? rotulo : `${rotulo}: ${valor}`
+    if (ehId) {
+      const nome = valor ? nomes.get(valor) : undefined
+      return nome ? `${rotulo}: ${nome}` : rotulo
+    }
+    return `${rotulo}: ${valor}`
   })
 }
