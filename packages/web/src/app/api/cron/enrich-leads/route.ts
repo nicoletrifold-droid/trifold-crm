@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient()
   const { createAnthropicClient } = await import("@trifold/ai")
-  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel, omitAgendaKeys, omitLegacyAgendaKeys, LEGACY_AGENDA_KEYS, calculateQualificationScore } = await import("@trifold/ai")
+  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel, omitAgendaKeys, omitLegacyAgendaKeys, LEGACY_AGENDA_KEYS, calculateQualificationScore, analisarAfirmacaoDeVisita, carregarAppointmentsDoLead, classificarResumo, renderFatoDeAgenda, EVENTO_RESUMO_SEM_LASTRO } = await import("@trifold/ai")
   const anthropic = createAnthropicClient()
 
   const cutoff = new Date(Date.now() - ENRICHMENT_WINDOW_MINUTES * 60 * 1000).toISOString()
@@ -89,10 +89,25 @@ export async function GET(request: NextRequest) {
         .eq("id", conv.lead_id)
         .single()
 
+      // Story 87-7 — a verdade do banco, UMA consulta por conversa processada
+      // (máx. 20 por rodada). Nunca N+1 por mensagem.
+      //
+      // Fail-open declarado: se a consulta falhar, `appointments` é `null`, o
+      // bloco não entra no prompt e o guarda não julga — o cron grava como hoje.
+      // Bloquear resumo por falha de infraestrutura seria pior que o defeito.
+      const agora = new Date()
+      const appointmentsDoLead = await carregarAppointmentsDoLead(
+        supabase,
+        conv.lead_id,
+        agora,
+        { orgId: conv.org_id }
+      ).catch(() => null)
+
       // AC4-AC7: Call Haiku for extraction + summary
       const enrichment = await enrichLeadFromConversation(anthropic, {
         messages: messages as Array<{ role: string; content: string }>,
         currentCollectedData: currentData,
+        fatoDeAgenda: appointmentsDoLead ? renderFatoDeAgenda(appointmentsDoLead, agora) : null,
       })
 
       if (!enrichment) {
@@ -173,8 +188,69 @@ export async function GET(request: NextRequest) {
         mergedCollectedData
       )
 
-      // AC8: Always update ai_summary
-      leadPatch.ai_summary = enrichment.summary
+      // Story 87-7 — O GUARDA DE ESCRITA, NA SEGUNDA ESTEIRA.
+      //
+      // O "Always update" acabou aqui, e só para esta chave. Este cron é o
+      // escritor DOMINANTE do `ai_summary`: 209 dos 226 leads com resumo (92,5 %)
+      // têm conversa que ele já enriqueceu, e ele escreve INCONDICIONALMENTE a
+      // cada 30 min, sobre a conversa inteira — com a fala da Nicole dentro
+      // (`haiku-enrichment.ts`). Consertar só o `pipeline.ts` deixaria o defeito
+      // vivo em quase toda a população, que é o erro que a 87-4 já cometeu uma
+      // vez e teve de corrigir com a `AC8-b`.
+      //
+      // O bloqueio é CIRÚRGICO: só a chave `ai_summary` fica de fora do patch.
+      // Perfil, score e Calor seguem normalmente — o resumo congelado nunca é
+      // pior que hoje, mas um lead que para de pontuar seria.
+      let veredictoResumo: string | null = null
+      let classificacaoResumo: ReturnType<typeof classificarResumo> | null = null
+      try {
+        if (appointmentsDoLead) {
+          classificacaoResumo = classificarResumo({
+            analise: analisarAfirmacaoDeVisita(enrichment.summary, agora),
+            appointmentsDoLead,
+            now: agora,
+          })
+          veredictoResumo = classificacaoResumo.veredicto
+        }
+      } catch (err) {
+        // Fail-open: erro DENTRO do guarda grava como hoje (armadilha 4).
+        veredictoResumo = null
+        console.error(`[ENRICH_CRON] Guarda do resumo falhou (fail-open) em ${conv.id}:`, err)
+      }
+
+      // O recibo em `try` SEPARADO, de propósito: falha ao registrar o evento
+      // não pode desligar o guarda. Juntos, um erro no `logEvent` faria o resumo
+      // sem lastro ser gravado — a observabilidade derrubando a garantia.
+      if (veredictoResumo === "sem_lastro" || veredictoResumo === "indeterminado") {
+        try {
+          logEvent({
+            level: veredictoResumo === "sem_lastro" ? "warn" : "info",
+            category: "ai",
+            event_type: EVENTO_RESUMO_SEM_LASTRO,
+            message:
+              veredictoResumo === "sem_lastro"
+                ? "Resumo afirmava visita sem appointment correspondente — NAO gravado."
+                : "Resumo afirma visita sem dia identificavel — gravado (indeterminado).",
+            org_id: conv.org_id ?? undefined,
+            metadata: {
+              lead_id: conv.lead_id ?? null,
+              conversation_id: conv.id,
+              origem: "cron_enrich_leads",
+              veredicto: veredictoResumo,
+              citacao_curta: classificacaoResumo?.citacao ?? null,
+              dia_afirmado: classificacaoResumo?.diaAfirmado ?? null,
+              appointment_id_proximo: classificacaoResumo?.appointmentIdProximo ?? null,
+              divergencia_min: classificacaoResumo?.divergenciaMin ?? null,
+            },
+          })
+        } catch (err) {
+          console.error(`[ENRICH_CRON] logEvent do guarda falhou em ${conv.id}:`, err)
+        }
+      }
+
+      if (veredictoResumo !== "sem_lastro") {
+        leadPatch.ai_summary = enrichment.summary
+      }
 
       // Story 75-183 — guard "não sobrescrever humano": campo de PERFIL já preenchido
       // no lead (pelo corretor ou por extração anterior) nunca é atualizado pela IA.

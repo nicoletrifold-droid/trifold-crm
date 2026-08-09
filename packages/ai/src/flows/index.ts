@@ -34,7 +34,28 @@ export { detectAppointmentIntent } from "./detect-appointment"
 export { detectAffirmedSlot } from "./visit-slot"
 export { classificarFala, reconciliarAgenda, JANELA_MESMO_TURNO_MIN, JANELA_CLASSIFICACAO_MIN, JANELA_RELATORIO_MIN, PADROES_LIGACAO } from "./agenda-reconcile"
 export type { Balde, Descarte, ClassificacaoFala, LinhaRelatorio, RelatorioLastro, AppointmentDoLead } from "./agenda-reconcile"
-export { updateLeadMemory } from "./lead-memory"
+export { updateLeadMemory, atualizarResumoComLastro, EVENTO_RESUMO_SEM_LASTRO } from "./lead-memory"
+export type { EventoDeResumo, OrigemEscritaResumo, ResultadoEscritaResumo } from "./lead-memory"
+// Story 87-7 — o guarda de escrita do `ai_summary`. Público em `@trifold/ai`
+// porque o cron `enrich-leads` (packages/web) é o SEGUNDO escritor do mesmo
+// campo — 92,5 % da população — e tem de usar EXATAMENTE a mesma regra (AC6).
+export {
+  analisarAfirmacaoDeVisita,
+  classificarResumo,
+  renderFatoDeAgenda,
+  carregarAppointmentsDoLead,
+  citacaoCurta,
+  REGRAS_FATO_DE_AGENDA,
+  JANELA_APPOINTMENTS_DIAS,
+  LIMITE_APPOINTMENTS,
+  CITACAO_MAX,
+} from "./summary-grounding"
+export type {
+  AnaliseAfirmacaoVisita,
+  ClassificacaoResumo,
+  VeredictoResumo,
+  AppointmentDoResumo,
+} from "./summary-grounding"
 export { generatePostVisitMessage } from "./post-visit-followup"
 export { enrichLeadFromConversation, parseEnrichmentResponse, mapExtractedDataToLeadFields, PERFIL_LEAD_FIELDS, stripAlreadyFilledPerfil, stripManualInterestLevel } from "./haiku-enrichment"
 export { analyzeLeadBehavior, parseBehaviorAnalysis } from "./behavior-analysis"
