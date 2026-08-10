@@ -8,7 +8,7 @@ import { NewLeadNotification } from "./_components/new-lead-notification"
 import { BrokerPushPrompt } from "./_components/broker-push-prompt"
 import { BrokerInstallPrompt } from "./_components/broker-install-prompt"
 import { WeatherWidget } from "@web/components/weather-widget"
-import { getBrokerUnreadTotal } from "@web/lib/broker/unread-count"
+import { getBrokerNavCounts } from "@web/lib/broker/nav-counts"
 
 const ICON_SIZE = "h-[18px] w-[18px]"
 
@@ -41,66 +41,19 @@ export default async function BrokerLayout({
 
   const supabase = await createClient()
 
-  // Compromissos futuros/ativos (badge "Agenda") + total de conversas não-lidas
-  // (badge verde "Chat", Story 63-19). Queries independentes → Promise.all.
-  const [{ count: agendaCount }, chatUnread] = await Promise.all([
-    supabase
-      .from("appointments")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", user.orgId)
-      .eq("broker_id", user.id)
-      .in("status", ["scheduled", "confirmed"])
-      .gte("scheduled_at", new Date().toISOString()),
-    getBrokerUnreadTotal(supabase, user.orgId, user.id),
-  ])
-
-  // Story 75-8 — badge de novos leads distribuídos desde a última visita a "Meus Leads".
-  // Fonte: lead_distribution_log (broker_id = brokers.id; created_at > seen_at).
-  let leadsCount = 0
-  const { data: brokerRow } = await supabase
-    .from("brokers")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (brokerRow) {
-    const { data: seenRow } = await supabase
-      .from("users")
-      .select("leads_notifications_seen_at")
-      .eq("id", user.id)
-      .maybeSingle()
-    const seenAt =
-      (seenRow as { leads_notifications_seen_at: string | null } | null)
-        ?.leads_notifications_seen_at ?? "1970-01-01T00:00:00Z"
-
-    const { count } = await supabase
-      .from("lead_distribution_log")
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", user.orgId)
-      .eq("broker_id", brokerRow.id)
-      .eq("status", "distributed")
-      .gt("created_at", seenAt)
-    leadsCount = count ?? 0
-  }
-
-  // Story 75-83 — contador de leads no bolsão (pool = bolsao_em not null). RLS
-  // leads_select_bolsao (migration 128) libera o pool p/ o corretor enxergar/contar.
-  const { count: bolsaoCount } = await supabase
-    .from("leads")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", user.orgId)
-    .eq("is_active", true)
-    .not("bolsao_em", "is", null)
-    .is("assigned_broker_id", null) // Story 75-89: contar só o pool real (sem dono)
-
   // Badges: Agenda (compromissos), Chat (não-lidas, verde — Story 63-19),
   // Meus Leads (novos distribuídos — Story 75-8), Bolsão (pool — Story 75-83).
+  // Story 75-287: réguas extraídas p/ lib/broker/nav-counts (compartilhada com
+  // a rota do badge vivo — este valor server-side é só a carga inicial).
+  const counts = await getBrokerNavCounts(supabase, user.orgId, user.id)
+  const chatUnread = counts.chat
+
   const navItems: NavItem[] = NAV_ITEMS.map((item) => {
-    if (item.href === "/broker/agenda") return { ...item, badge: agendaCount ?? 0 }
+    if (item.href === "/broker/agenda") return { ...item, badge: counts.agenda }
     if (item.href === "/broker/chat")
       return { ...item, badge: chatUnread, badgeTone: "green" as const }
-    if (item.href === "/broker/leads") return { ...item, badge: leadsCount }
-    if (item.href === "/broker/bolsao") return { ...item, badge: bolsaoCount ?? 0 }
+    if (item.href === "/broker/leads") return { ...item, badge: counts.leads }
+    if (item.href === "/broker/bolsao") return { ...item, badge: counts.bolsao }
     return item
   })
 
@@ -144,6 +97,12 @@ export default async function BrokerLayout({
         userName={user.name}
         userRole={user.role}
         basePath="/broker"
+        liveBadges={[
+          { href: "/broker/agenda", endpoint: "/api/broker/nav-counts" },
+          { href: "/broker/chat", endpoint: "/api/broker/nav-counts" },
+          { href: "/broker/leads", endpoint: "/api/broker/nav-counts" },
+          { href: "/broker/bolsao", endpoint: "/api/broker/nav-counts" },
+        ]}
       />
 
       <main className="lg:pl-56">
