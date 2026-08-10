@@ -1,0 +1,307 @@
+schema: 1
+storyId: "87-8"
+story: "docs/stories/87-8-historico-passa-a-ser-a-cauda-da-conversa.story.md"
+title: "Quality Gate — o histórico passa a ser a cauda da conversa (W1-1 / CR-1, deploy 3 da Onda 1)"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-09"
+branch: "story/87-8-historico-cauda (worktree isolado /tmp/wt-87-8, base origin/main 4da198e4)"
+
+status_reason: >
+  **O código está certo, e a evidência é a mais forte que este epic produziu.** Os três vermelhos
+  declarados reproduzem exatamente — 12/20, 1/20 e 2/18 —, as duas armadilhas de harness que o @dev
+  diz ter matado eram reais e as duas correções são load-bearing (provei desligando cada uma), os
+  turnos-ouro da AC10 estão verificados contra o código do `HEAD` de verdade, o escopo é só leitura,
+  suíte 1864 → 1887, `tsc` 0/13 pré-existentes, `grep` da AC8-(iii) em 0 com baseline 2.
+  **O que não está certo é o INSTRUMENTO do risco de maior severidade.** A AC9-(ii) não consegue
+  ficar vermelha em 24 h nas suas DUAS metades, e conferi as duas contra produção: `appointments`
+  com `created_by='nicole'` são **3 em 30 dias** (último em 31/07, 9 dias atrás) e **não existe
+  contador nenhum** de bloco `[SISTEMA]` de agendamento — listei todo `event_type` emitido pelo
+  `pipeline.ts` e todo `event_type` gravado em `system_events` em 7 dias. É a mesma classe da
+  `AC10-(ii)` da 87-7, e o precedente que eu mesmo assinei ali é explícito: AC que descreve o
+  instrumento errado, e que o @dev não pode editar porque AC é do @po, fecha em **CONCERNS com
+  condição nomeada por dono**, não em PASS — senão a janela de observação roda com a régua que já se
+  provou inerte.
+  **Fui além de declarar inerte: medi retrospectivamente o que a AC9-(ii) queria medir.** Para cada
+  uma das 90 respostas cegas em 90 dias comparei o `lastAssistantMsg` que o código vê hoje (cabeça-20)
+  com o que passará a ver (cauda-20). Em 30 dias o gate de agendamento arma **menos**, não mais
+  (18 → 14): **3 turnos passam a ligar** e **7 deixam de ligar**. A previsão do @architect não se
+  sustenta na população, e a direção de risco vale **0,1 turno/dia** — uma janela de 24 h produz
+  zero, e zero não distingue "não aconteceu" de "não mede".
+  Sobram, além disso, um teste nomeado que não consegue falhar pelo motivo que nomeia (o desempate
+  por `id`, nas DUAS esteiras) e um número de dano publicado que não é nenhum dos dois oferecidos.
+  Nenhum dos três é defeito de código; os três se fecham em menos de uma hora.
+
+# ────────────────────────────────────────────────────────────────────────────
+# O que foi verificado de forma independente (não aceito por relato)
+# ────────────────────────────────────────────────────────────────────────────
+verificacoes:
+  V1_vermelho_1_deploy_A:
+    metodo: "`git show HEAD:packages/ai/src/chat/pipeline.ts` sobre o worktree, arquivo de teste intacto"
+    declarado: "12 failed | 8 passed (20)"
+    medido: "12 failed | 8 passed (20)"
+    resultado: CONFERE
+    nota: >
+      A LISTA dos 12 bate nome a nome com a colada no Dev Agent Record, e os 8 verdes são de
+      propósito (AC1 curta, AC4-i, AC4-iii-b, AC6 curta byte a byte, AC7-ii, AC10 × 3).
+
+  V2_vermelho_2_a_guarda_da_AC4:
+    metodo: "cauda aplicada, `|| jaFalouForaDaJanela` removido de `buildNoReintroContext`"
+    declarado: "1 failed | 17 passed (20)"
+    medido: "1 failed | **19** passed (20)"
+    resultado: CONFERE_NA_SUBSTANCIA
+    nota: >
+      **É o vermelho mais importante da story e ele é real:** cai exatamente um teste, a AC4-(i)
+      ("cauda-20 toda do lead, fala dela na posição 2 → bloco continua emitido"), e nenhum outro. O
+      `HEAD` não produz esse vermelho — o problema NASCE com a correção, e a guarda é a resposta.
+      Não é decorativa. O "17 passed" declarado é aritmeticamente impossível (1+17≠20); a contagem
+      de FALHAS, que é a que importa, está certa. Terceira story seguida em que uma contagem
+      declarada não sobrevive à remedição — ver nota de processo P1.
+
+  V3_vermelho_3_deploy_B:
+    metodo: "`git show HEAD:…/enrich-leads/route.ts`, teste intacto"
+    declarado: "2 failed | 16 passed (18)"
+    medido: "2 failed | 16 passed (18)"
+    resultado: CONFERE
+
+  V4_armadilha_a_o_fake_guardava_so_o_ultimo_order:
+    era_real: SIM
+    metodo: "`git show HEAD:…/__fixtures__/fake-supabase.ts` com o `pipeline.ts` da branch"
+    medido: "2 failed | 151 passed — e a AC1 passa VERDE"
+    nota: >
+      A armadilha é mais sutil do que "passaria nos dois mundos", e é pior: com o fake do `HEAD` a
+      AC1 fica **verde sem que a ordenação por `created_at` jamais tenha sido exercitada**. O fake
+      guardava só o último `.order()`, que é o `id`; como as fixtures usam `id` ZERO-PADDED
+      (`msg-01`…`msg-25`), a ordem por `id` COINCIDE com a ordem por `created_at` e o resultado é
+      idêntico. O `created_at` vira decoração. As 2 falhas restantes vêm da ausência de
+      `select(…, {count, head})`, não da ordenação. **A correção é necessária e o fake agora empilha
+      os predicados de verdade** — provado por V6: tirar o segundo `.order()` do código de produção
+      MUDA o resultado do fake.
+
+  V5_armadilha_b_o_mock_do_cron_ignorava_order_e_limit:
+    era_real: SIM
+    metodo: "`if (orders.length > 0)` → `if (false)` no builder do `route.test.ts`, semeadura mantida"
+    medido: "3 failed | 15 passed (18) — os TRÊS testes novos da AC8 caem"
+    nota: >
+      O mock honra `order`/`limit` de verdade; se parar de honrar, os três testes do deploy B ficam
+      vermelhos na hora. Correção load-bearing.
+
+  V6_desempate_por_id_NAO_TEM_TESTE_QUE_DISCRIMINE:
+    era_real: NAO_COBERTO
+    severidade: MEDIA
+    metodo: "removi `.order(\"id\", { ascending: false })` de `pipeline.ts` E de `enrich-leads/route.ts`"
+    medido: "38 passed (38) — **verde nas duas esteiras**"
+    nota: >
+      O teste chamado *"empate de created_at é desempatado por id (Armadilha 1)"* **não consegue
+      falhar pelo motivo que nomeia**: ele roda o mesmo turno duas vezes e exige que os dois batam,
+      mas o `sort` do fake é ESTÁVEL — dois runs idênticos sempre concordam, com ou sem desempate.
+      **E o desempate É load-bearing, só que por outro motivo:** sem ele o grupo empatado volta
+      INVERTIDO. Provei: acrescentando uma linha ao teste —
+      `expect(primeiro.historico).toEqual(Array.from({length:20},(_,i)=>` + "`m${i+3}`" + `))` —
+      o teste fica VERMELHO sem o `.order("id")` (recebe `…m9, m12, m11, m10, m13…`) e VERDE com
+      ele. Uma linha em cada esteira transforma um teste decorativo num teste real.
+      O do cron tem o mesmo buraco: só afirma o ÚLTIMO elemento.
+
+  V7_lastAssistantMsg_e_a_regra_de_corte:
+    resultado: CONFERE
+    nota: >
+      `isVisitSchedulingMode` (90-101) e `NICOLE_TALKED_VISIT_RE` (74-75) INTOCADOS — conferido no
+      diff. O único acréscimo de decisão é o `|| jaFalouForaDaJanela` do `buildNoReintroContext`,
+      que é MONOTÔNICO (só pode suprimir uma reapresentação, nunca provocar): não abre caminho
+      novo, alarga uma supressão que já existia. A AC2 discrimina nas duas direções — os dois
+      testes do par caem sob o `HEAD` (V1). Regra de corte da Onda 1: **respeitada**.
+      O `history` que vai para a Anthropic é projetado explicitamente (`history.map(msg => ({role,
+      content}))`, linha 1036) — o `created_at` novo do `select` **não** vaza para o payload nem
+      para o custo de token.
+
+  V8_suite_tipos_grep:
+    suite_branch: "1887 passed | 7 expected fail (1894) — rodada da RAIZ"
+    delta: "+23 = 20 (deploy A) + 3 (deploy B); 1887 − 23 = 1864, que é a referência da AC11"
+    tsc_ai: "0 erros"
+    tsc_web: "13 erros, todos pré-existentes (satori/sharp/pdf-lib), NENHUM nos arquivos tocados"
+    grep_AC8_iii: "0 (baseline no HEAD: 2) ✅"
+    arvore: "restaurada byte a byte depois das mutações — md5 conferido nos 5 arquivos"
+
+  V9_producao_somente_SELECT:
+    appointments_nicole_30d: 3
+    appointments_nicole_90d: 6
+    appointments_nicole_ultimo: "2026-07-31 01:05:32+00 (9 dias atrás)"
+    contador_de_bloco_SISTEMA: "NÃO EXISTE — nenhum event_type do pipeline registra que o modo armou"
+    system_events_NICOLE_pct: "0 all-time (o cron da 87-3 nunca rodou) — confirma o @dev e o @po"
+    CLAUDE_RESPONSE_7d: 123
+    enrich_leads_ultimo: "2026-08-09 18:30:13+00 · 27 conversas em 7 dias — o cron está VIVO"
+    nota: >
+      As duas premissas corrigidas no briefing se confirmam: o `emit` do pipeline chega ao
+      `logEvent` (123 `CLAUDE_RESPONSE` em 7 d), e o `enrich-leads` está vivo e é observável por
+      `conversations.last_enriched_at`. A AC7/`M3` nasce verificável por `select`.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Achados meus — nenhum é defeito de código
+# ────────────────────────────────────────────────────────────────────────────
+achados:
+  F1:
+    severidade: MEDIA
+    titulo: "O desempate por `id` não tem teste que discrimine, nas DUAS esteiras"
+    detalhe: "ver V6"
+    dono: "@dev"
+    custo: "uma linha em cada arquivo de teste"
+
+  F2:
+    severidade: MEDIA
+    titulo: "A régua da T0: nem 43 nem 66. São 51."
+    detalhe: >
+      O @dev está CERTO em que a leitura A (43) subconta, porque `loadConversationHistory` não
+      filtra por data: o `limit(20)` opera sobre a conversa inteira, não sobre a janela de 30 dias.
+      **Mas a leitura B (66) superconta**, e superconta de um jeito específico: ela inclui respostas
+      que aconteceram ANTES da janela, em conversas que apenas têm atividade dentro dela — atribui
+      dano velho a uma manchete de "30 dias". A leitura honesta é a terceira, e é a que o código
+      realmente descreve: `row_number()` sobre a conversa INTEIRA, contando só respostas cujo
+      próprio `created_at` está na janela.
+      Medido por mim (09/08, somente SELECT):
+        A — rn na janela, resposta na janela ........... 43 respostas em 14 conversas
+        C — rn na conversa inteira, resposta na janela .. **51 respostas em 17 conversas**  ← a certa
+        B — rn inteiro, TODAS as respostas de quem esteve ativo .. 66 em 17
+        D — 90 dias, rn inteiro, resposta na janela ..... 90 em 28  ✅ (o número da story sobrevive)
+      A correção sobre o publicado (43/47) é de **+18,6 %**, não de +53 %. Não muda decisão nenhuma;
+      muda o que fica escrito — e este epic já errou unidade/denominador quatro vezes.
+    dono: "@dev (texto do Dev Agent Record) + @sm (§1 da story)"
+
+  F3:
+    severidade: ALTA_PARA_A_JANELA_DE_OBSERVACAO
+    titulo: "A AC9-(ii) não consegue ficar vermelha em 24 h — nas duas metades"
+    detalhe: >
+      Confirmado contra produção (V9). Base ≈ 0,1 appointment/dia e ZERO contador de `[SISTEMA]`.
+      **Substituto medido, com baseline pronto:** para cada resposta cega, comparar o
+      `lastAssistantMsg` da cabeça-20 (hoje) com o da cauda-20 (depois) contra
+      `NICOLE_TALKED_VISIT_RE`:
+        | janela   | respostas cegas | arma HOJE | arma DEPOIS | passa a ligar | deixa de ligar |
+        | 30 d     | 51              | 18        | 14          | **3**         | 7              |
+        | 31-90 d  | 39              | 11        | 10          | 3             | 4              |
+      Duas consequências:
+      (a) **a previsão do @architect não se sustenta na população** — ver a cauda faz o modo
+          agendamento armar MENOS (18 → 14), não mais; o que existe é churn, 10 turnos mudando de
+          lado em 30 dias;
+      (b) **a direção de risco vale 3 em 30 dias = 0,1/dia** — a janela de 24 h renderia zero, e
+          zero não distingue "não aconteceu" de "não mede". Dimensionar por `n`, não por horas —
+          a lição que a 87-7 pagou.
+      Ressalva da minha medição, declarada: o regex em SQL é o `NICOLE_TALKED_VISIT_RE` SEM os
+      `\b` e sem a alternativa `horários livres|disponíveis`, e exercita só a perna
+      `lastAssistantMessage` de `isVisitSchedulingMode` (a única que esta story muda) — `visit_proposed`
+      e a pendência de agenda não são simulados. É ordem de grandeza, não censo.
+    dono: "@po (a AC é dele)"
+
+  F4:
+    severidade: BAIXA
+    titulo: "`truncou` dispara em conversa de EXATAMENTE 20 mensagens"
+    detalhe: >
+      `truncou = linhas.length === limit`. Numa conversa de exatamente 20 nada foi truncado, mas
+      roda a consulta `count` extra e sai um `NICOLE_HISTORY_TRUNCATED` com
+      `total_na_conversa: 20, limite: 20`. Quem consultar a `M3` precisa filtrar
+      `total_na_conversa > limite`, senão o denominador de *"0 ocorrências de cauda errada"* nasce
+      poluído. Uma linha de nota na consulta da M3 resolve; não vale mudar código de leitura agora.
+    dono: "@qa/@po — nota na M3"
+
+  F5:
+    severidade: BAIXA_BACKLOG
+    titulo: "A esteira esquecida tem uma quarta e uma quinta cabeça — no agente do CRM (Epic 52)"
+    detalhe: >
+      O `grep` da AC8-(iii) é deliberadamente escopado em dois arquivos, e a story faz bem em
+      escopar. Mas o MESMO defeito está vivo fora do escopo, nos dois lugares em que o agente do
+      CRM monta contexto para o modelo:
+        · `packages/web/src/lib/agent/context-builder.ts:1165-1170` — `v_lead_conversations`,
+          `.order("message_created_at", { ascending: true }).limit(50)` → as 50 PRIMEIRAS;
+        · `packages/web/src/app/api/agent/chat/route.ts:151-155` — `agent_chat_messages`,
+          `.order("created_at", { ascending: true }).limit(20)` → o agente lê as 20 PRIMEIRAS
+          mensagens da PRÓPRIA sessão de chat.
+      Não é trabalho desta story. É item de backlog, e nasce com o vermelho pronto.
+    dono: "@po — backlog"
+
+  F6:
+    severidade: BAIXA_CONDICIONAL
+    titulo: "Fora de expediente o evento da AC7 não sai — hoje inócuo, amanhã não"
+    detalhe: >
+      O retorno antecipado de fora-de-expediente (`pipeline.ts:500-512`) acontece ANTES de
+      `loadConversationHistory`: naquele caminho não há histórico nem evento. **Hoje é inócuo** —
+      conferi: a `agent_config` de produção tem `{"hours": {}, "always_on": true}` e
+      `business-hours.ts:41` devolve `true` sempre, então o ramo nunca dispara. Registrado porque,
+      se `always_on` for desligado algum dia, **27 das 51** respostas cegas/30 d caem em horas em
+      que o evento ficaria mudo, e o denominador da `M3` seria lido errado sem ninguém perceber.
+    dono: "nota"
+
+# ────────────────────────────────────────────────────────────────────────────
+notas_de_processo:
+  P1: >
+    **Terceira story seguida em que uma contagem declarada não sobrevive à remedição** — 87-4 (M4:
+    1 declarado, 0 real), 87-7 (M-AC1: 5 declarado, 11 real), 87-8 (vermelho 2: "1 failed | 17
+    passed (20)", real "1 failed | 19 passed (20)"). Aqui é o caso mais leve dos três: a contagem de
+    FALHAS está certa nas três mutações, e é a que decide. Mas o aritmeticamente-impossível
+    (1+17≠20) passou pelo autor — colar a saída do reporter em vez de transcrevê-la fecha essa
+    classe inteira de uma vez.
+  P2: >
+    A AC4-(iii) troca a asserção ABSOLUTA que a AC pede ("nenhuma consulta a mais") por uma
+    DIFERENCIAL (longa − curta = 1). O @dev justifica por escrito, e a diferencial de fato
+    discrimina contra o `HEAD` (ela cai em V1). O que ela não pega é uma consulta acrescentada às
+    DUAS pontas. Coberto por leitura de código — as consultas extras estão dentro de
+    `if (truncou)`, com retorno antecipado antes — e pela AC10. Aceito como está.
+
+# ────────────────────────────────────────────────────────────────────────────
+condicoes_para_PASS:
+  C1:
+    dono: "@dev"
+    custo: "~10 min"
+    o_que: >
+      Fechar o F1: acrescentar a asserção de SEQUÊNCIA COMPLETA ao teste de empate, nas duas
+      esteiras (`pipeline-historico-cauda.test.ts` e `enrich-leads/route.test.ts`). Colar o
+      vermelho: removendo `.order("id", { ascending: false })` o teste TEM de falhar. Hoje ele fica
+      verde, medido.
+  C2:
+    dono: "@po"
+    custo: "reescrita de AC, sem código"
+    o_que: >
+      Reescrever a AC9-(ii). Duas saídas, e as duas servem:
+      (a) trocar o instrumento pela régua retrospectiva do F3, que já tem baseline medido
+          (30 d: arma 18 → 14; passa a ligar 3; deixa de ligar 7) — roda-se a mesma consulta antes
+          e depois do deploy; ou
+      (b) autorizar um contador `NICOLE_VISIT_MODE_ARMED` via `emit` — é OBSERVABILIDADE, não
+          caminho de decisão, portanto não fere a regra de corte da Onda 1 (a própria story já
+          acrescenta um `emit`).
+      Em qualquer das duas, declarar o PISO: com `n < 5` a janela se estende, não se declara
+      sucesso. E manter o gatilho de rollback como está — *aumento COM `M1` subindo*, nunca o
+      aumento sozinho.
+  C3:
+    dono: "@dev"
+    custo: "~2 min, texto"
+    o_que: >
+      Corrigir a T0 do Dev Agent Record com o F2: publicar as TRÊS leituras e nomear a certa —
+      **51 respostas em 17 conversas** em 30 dias, com o método (`row_number()` sobre a conversa
+      inteira, resposta dentro da janela). Manter 90 d = 90 em 28, que sobrevive.
+
+liberacao:
+  deploy_A: >
+    **Pode sair com C1 e C3 fechados e C2 NOMEADO** — o código está certo e o risco 2 deixou de
+    estar apenas não-medido: está limitado (3 turnos/mês na direção de risco). Mantém-se tudo o que
+    a story escreveu: sozinho, 24 h, responsável nomeado (D7 — sem nome, não sai), amostragem manual
+    de 10 conversas longas (AC9-iii), `M1`/`M4` pela régua do cron da 87-3 com `?dry=1`.
+  deploy_B: >
+    Sem alteração: ≥24 h depois do A, sozinho, com a amostra de 5 leads campo a campo (AC9-v) E a
+    régua da `AC10-(ii)` da 87-7 repetida, pela razão que o @po escreveu — depois do B o `ai_summary`
+    nasce da cauda, e cauda recente tem mais fala de agendamento que o começo da conversa.
+  ordem_de_merge: >
+    `enrich-leads/route.ts` é tocado por três stories. Conferi as regiões: 87-7 em `route.ts:27,
+    89-110, 173-250` e `pipeline.ts:1565-1585`; 87-8 em `route.ts:62-69` e `pipeline.ts:201-225,
+    504-587, 627, 1620+`. **Nenhuma linha em comum** — o relato do @dev procede. A ordem
+    **87-7 → 87-8-A → 87-8-B → 87-5-A → 87-5-B** confere-se ANTES do merge.
+
+evidence:
+  arquivos_revisados:
+    - "packages/ai/src/chat/pipeline.ts"
+    - "packages/ai/src/chat/__fixtures__/fake-supabase.ts"
+    - "packages/ai/src/chat/pipeline-historico-cauda.test.ts"
+    - "packages/web/src/app/api/cron/enrich-leads/route.ts"
+    - "packages/web/src/app/api/cron/enrich-leads/route.test.ts"
+  mutacoes_executadas: 6
+  consultas_de_producao: "7, todas somente SELECT, projeto dsopqkqjkmhytudaaolv"
+  migrations: "nenhuma — a story é de leitura"

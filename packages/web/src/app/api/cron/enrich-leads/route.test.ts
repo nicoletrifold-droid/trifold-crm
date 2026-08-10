@@ -38,7 +38,20 @@ let appointmentsDoLead: Array<Record<string, unknown>> = []
 /** Story 87-7 — o prompt montado, para a asserção de AC5. */
 let promptDoHaiku = ""
 
+/**
+ * Story 87-8 (deploy B) — mensagens semeadas para exercitar a JANELA do cron.
+ *
+ * `null` = comportamento histórico deste arquivo (as duas mensagens fixas de
+ * baixo), para não mexer em nenhum teste que já existia. Quando semeado, o
+ * builder passa a aplicar `.order()` e `.limit()` DE VERDADE — um mock que os
+ * ignora não consegue distinguir cabeça de cauda e daria verde nos dois mundos,
+ * que é exatamente o defeito que este deploy existe para matar.
+ */
+let mensagensSemeadas: Array<Record<string, unknown>> | null = null
+
 function makeBuilder(table: string) {
+  const orders: Array<{ col: string; asc: boolean }> = []
+  let limitN: number | null = null
   const builder: Record<string, unknown> = {
     select: () => builder,
     eq: () => builder,
@@ -46,8 +59,14 @@ function makeBuilder(table: string) {
     gte: () => builder,
     lte: () => builder,
     or: () => builder,
-    order: () => builder,
-    limit: () => builder,
+    order: (col: string, opts?: { ascending?: boolean }) => {
+      orders.push({ col, asc: opts?.ascending ?? true })
+      return builder
+    },
+    limit: (n: number) => {
+      limitN = n
+      return builder
+    },
     update: (payload: Record<string, unknown>) => {
       updates.push({ table, payload })
       return builder
@@ -69,6 +88,22 @@ function makeBuilder(table: string) {
         return resolve({ data: appointmentsDoLead, error: null })
       }
       if (table === "messages") {
+        if (mensagensSemeadas) {
+          let out = [...mensagensSemeadas]
+          if (orders.length > 0) {
+            out.sort((a, b) => {
+              for (const { col, asc } of orders) {
+                const av = String(a[col] ?? "")
+                const bv = String(b[col] ?? "")
+                const c = asc ? av.localeCompare(bv) : bv.localeCompare(av)
+                if (c !== 0) return c
+              }
+              return 0
+            })
+          }
+          if (limitN !== null) out = out.slice(0, limitN)
+          return resolve({ data: out, error: null })
+        }
         return resolve({
           data: [
             { role: "user", content: "Quero visitar sábado às 10h" },
@@ -90,14 +125,63 @@ vi.mock("@web/lib/supabase/admin", () => ({
 // Só as chamadas de rede são dubladas — `omitAgendaKeys`, `omitLegacyAgendaKeys`
 // e o resto do pacote continuam sendo os DE VERDADE. Se o filtro fosse mockado,
 // o teste não provaria nada.
+/**
+ * Story 87-8 (deploy B) — o PROMPT literal montado por
+ * `enrichLeadFromConversation`, com a conversa dentro. É o "texto entregue ao
+ * Haiku" da AC8, sem duplicar a renderização no teste: o dublê chama a função
+ * DE VERDADE e só substitui a chamada de rede.
+ */
+let promptEntregueAoHaiku = ""
+
 vi.mock("@trifold/ai", async (importOriginal) => {
   const real = (await importOriginal()) as Record<string, unknown>
+  type Enrich = (
+    a: unknown,
+    i: {
+      messages: Array<{ role: string; content: string }>
+      currentCollectedData: unknown
+      /** Story 87-7 — o bloco `FATO DE AGENDA` vindo de `appointments`. */
+      fatoDeAgenda?: string | null
+    }
+  ) => Promise<unknown>
+  const realEnrich = real.enrichLeadFromConversation as Enrich
   return {
     ...real,
     createAnthropicClient: () => ({}),
-    enrichLeadFromConversation: async (_a: unknown, input: { fatoDeAgenda?: string | null }) => {
-      promptDoHaiku = input.fatoDeAgenda ?? ""
-      return { summary: summaryDoHaiku, extracted_data: extractedData }
+    // ── Resolução de conflito 87-7 × 87-8 (SEMÂNTICA, não textual) ───────────
+    // As duas stories mexeram neste mesmo dublê e o conflito só nascia depois do
+    // primeiro merge (cada branch estava limpa contra `main`).
+    //
+    // Base = a versão da **87-8**, que é estritamente mais rica: ela chama o
+    // `enrichLeadFromConversation` DE VERDADE e dubla só a rede. Um dublê que
+    // devolvesse o resultado pronto não provaria que a janela certa chegou ao
+    // modelo — que é a única coisa que o deploy B muda.
+    //
+    // Por cima dela, as duas coisas que a **87-7** precisava:
+    //   (a) capturar `input.fatoDeAgenda` em `promptDoHaiku` — as asserções dela
+    //       são sobre esse valor, e capturá-lo cru as mantém intactas;
+    //   (b) o `summary` devolvido sai de `summaryDoHaiku` (era `"resumo"` fixo no
+    //       lado da 87-8) — sem isso os testes do guarda da 87-7 não conseguiriam
+    //       injetar o resumo que afirma visita, e a AC1 dela ficaria sem fixture.
+    enrichLeadFromConversation: async (_anthropic: unknown, input: Parameters<Enrich>[1]) => {
+      promptDoHaiku = input.fatoDeAgenda ?? "" // (a) — 87-7
+      const anthropicFake = {
+        messages: {
+          create: async (args: { messages: Array<{ content: string }> }) => {
+            promptEntregueAoHaiku = args.messages[0]!.content // 87-8
+            return {
+              content: [
+                {
+                  type: "text",
+                  // (b) — 87-7
+                  text: JSON.stringify({ summary: summaryDoHaiku, extracted_data: extractedData }),
+                },
+              ],
+            }
+          },
+        },
+      }
+      return realEnrich(anthropicFake, input)
     },
   }
 })
@@ -127,9 +211,95 @@ beforeEach(() => {
   updates = []
   collectedDataAtual = {}
   extractedData = {}
-  summaryDoHaiku = "resumo"
-  appointmentsDoLead = []
-  promptDoHaiku = ""
+  // Resolução 87-7 × 87-8 — os resets são UNIÃO. Cada story emendou este mesmo
+  // bloco; deixar só um lado faria o estado vazar entre testes da outra.
+  mensagensSemeadas = null // 87-8
+  promptEntregueAoHaiku = "" // 87-8
+  summaryDoHaiku = "resumo" // 87-7
+  appointmentsDoLead = [] // 87-7
+  promptDoHaiku = "" // 87-7
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Story 87-8 — AC8: deploy B. A SEGUNDA esteira lê a cauda.
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("Story 87-8 / AC8 — o cron enrich-leads lê a CAUDA, não a cabeça", () => {
+  /** 25 mensagens `m1`…`m25`, `created_at` ISO crescente, `id` zero-padded. */
+  function vinteECinco(): Array<Record<string, unknown>> {
+    return Array.from({ length: 25 }, (_, i) => ({
+      id: `msg-${String(i + 1).padStart(2, "0")}`,
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `m${i + 1}`,
+      created_at: `2026-08-01T10:${String(i + 1).padStart(2, "0")}:00.000Z`,
+    }))
+  }
+
+  it("🔴 (i)(ii) com 25 mensagens, o texto entregue ao Haiku contém m6…m25", async () => {
+    mensagensSemeadas = vinteECinco()
+    await rodar()
+
+    // A conversa dentro do prompt, na ordem em que o modelo a lê.
+    const conversa = promptEntregueAoHaiku.split("Conversa:\n")[1]!
+    const linhas = conversa.trim().split("\n")
+    expect(linhas).toHaveLength(20)
+    // As PONTAS são o que discrimina — um teste que só conta 20 linhas passa
+    // verde nos dois mundos (a cabeça também tem 20).
+    // m6 é índice 5 (ímpar) → `assistant` → rotulado "Nicole" pelo renderizador.
+    expect(linhas[0]).toBe("Nicole: m6")
+    expect(linhas[linhas.length - 1]).toBe("Lead: m25")
+    expect(conversa).not.toContain(": m1\n")
+    expect(conversa).not.toContain(": m5\n")
+  })
+
+  it("conversa curta (15) segue inteira e em ordem — nada muda para ela", async () => {
+    mensagensSemeadas = vinteECinco().slice(0, 15)
+    await rodar()
+    const linhas = promptEntregueAoHaiku.split("Conversa:\n")[1]!.trim().split("\n")
+    expect(linhas).toHaveLength(15)
+    expect(linhas[0]).toBe("Lead: m1")
+    expect(linhas[14]).toBe("Lead: m15")
+  })
+
+  it("🔴 a janela sai de created_at, NÃO de id — com id descorrelacionado (como o UUID de produção)", async () => {
+    // Ver a justificativa longa em `pipeline-historico-cauda.test.ts`: com `id`
+    // zero-padded, ordenar por `id` acerta por acidente e a asserção da janela
+    // fica verde sem nunca exercitar o `created_at`. Em produção `id` é UUID.
+    mensagensSemeadas = vinteECinco().map((m, i) => ({
+      ...m,
+      id: `msg-${String(25 - i).padStart(2, "0")}`,
+    }))
+    await rodar()
+    const linhas = promptEntregueAoHaiku.split("Conversa:\n")[1]!.trim().split("\n")
+    expect(linhas).toHaveLength(20)
+    expect(linhas[0]).toBe("Nicole: m6")
+    expect(linhas[linhas.length - 1]).toBe("Lead: m25")
+  })
+
+  it("empate de created_at: o desempate por id preserva a ORDEM do grupo empatado", async () => {
+    const msgs = vinteECinco().slice(0, 22)
+    msgs[9]!.created_at = "2026-08-01T10:10:00.000Z"
+    msgs[10]!.created_at = "2026-08-01T10:10:00.000Z"
+    msgs[11]!.created_at = "2026-08-01T10:10:00.000Z"
+    mensagensSemeadas = msgs
+
+    await rodar()
+    const primeira = promptEntregueAoHaiku
+    await rodar()
+    expect(promptEntregueAoHaiku).toBe(primeira)
+
+    // 🔴 A asserção que DISCRIMINA (achado do gate). Repetir a rodada e comparar
+    // não prova nada — a leitura é determinística nos dois mundos. Sem o
+    // `.order("id")`, a consulta descendente + `.reverse()` devolve o grupo
+    // empatado INVERTIDO (…m9, m12, m11, m10, m13…).
+    // Os papéis vêm da definição da fixture (paridade do índice), não da ordem
+    // sob teste — senão a expectativa seria circular.
+    const esperado = Array.from({ length: 20 }, (_, i) => {
+      const k = i + 3
+      return `${(k - 1) % 2 === 0 ? "Lead" : "Nicole"}: m${k}`
+    })
+    expect(primeira.split("Conversa:\n")[1]!.trim().split("\n")).toEqual(esperado)
+  })
 })
 
 describe("AC8-b — o cron enrich-leads para de escrever fato de agenda", () => {

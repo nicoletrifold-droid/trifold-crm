@@ -203,11 +203,22 @@ export function resolveNotificationBrokerUserId(
  * When the conversation already has at least one assistant message, Nicole must
  * not introduce herself again. Returned string goes into `dynamicSuffix` only —
  * never into the static cached block.
+ *
+ * Story 87-8 (AC4) — `jaFalouForaDaJanela` é o segundo sinal, e ele existe por
+ * causa da cauda: numa conversa longa cuja cauda-20 é toda do lead,
+ * `history.some(role==='assistant')` dá `false` e a Nicole **voltaria a se
+ * apresentar** — regressão direta desta mesma story 59-1. Hoje são 0 conversas
+ * nessa condição (medido sobre todo o histórico), mas é estrutural.
+ *
+ * A direção é sempre RESTRITIVA: o sinal só SOMA ao `some()`, então só pode
+ * suprimir uma apresentação, nunca provocar uma. Suprimir apresentação indevida
+ * não causa dano; produzir uma causa constrangimento.
  */
 export function buildNoReintroContext(
-  history: Array<{ role: string }>
+  history: Array<{ role: string }>,
+  jaFalouForaDaJanela: boolean = false
 ): string {
-  return history.some((m) => m.role === "assistant")
+  return history.some((m) => m.role === "assistant") || jaFalouForaDaJanela
     ? "\nIMPORTANTE: Voce JA se apresentou a este lead anteriormente. NAO diga 'Sou a Nicole' ou qualquer variacao de apresentacao. Continue a conversa naturalmente, sem introducao.\n"
     : ""
 }
@@ -501,8 +512,10 @@ export async function processMessageWithMetadata(
     }
   }
 
-  // 3. Load conversation history (last 20 messages)
-  const history = await loadConversationHistory(supabase, conversationId)
+  // 3. Load conversation history — Story 87-8: a CAUDA (as 20 MAIS RECENTES),
+  //    em ordem cronológica. Era a cabeça, e nunca funcionou.
+  const historico = await loadConversationHistory(supabase, conversationId)
+  const history = historico.messages
 
   // 4. Search RAG for relevant context
   let ragContext = ""
@@ -551,6 +564,27 @@ export async function processMessageWithMetadata(
     .select("lead_id, org_id")
     .eq("id", conversationId)
     .single()
+
+  // Story 87-8 (AC7) — é a `M3` do epic: sem este evento, *"0 ocorrências de
+  // cauda errada"* seria uma promessa; com ele vira uma consulta.
+  // Sem conteúdo de mensagem e sem PII — só identificadores e timestamps (W0-2).
+  if (historico.truncou) {
+    emit({
+      level: "info",
+      category: "ai",
+      event_type: "NICOLE_HISTORY_TRUNCATED",
+      message: `Historico truncado em ${historico.messages.length} de ${historico.totalNaConversa ?? "?"} mensagens (cauda).`,
+      metadata: {
+        conversation_id: conversationId,
+        lead_id: conversation?.lead_id ?? null,
+        limite: historico.limite,
+        total_na_conversa: historico.totalNaConversa,
+        mais_antiga_carregada: historico.maisAntigaCarregada,
+        mais_recente_carregada: historico.maisRecenteCarregada,
+        ordem: "cauda",
+      },
+    })
+  }
 
   // 6.5 Get current lead summary + stage for context
   let currentSummary: string | null = null
@@ -624,7 +658,9 @@ export async function processMessageWithMetadata(
     : ""
 
   // No-reintro context — Story 59-1 (AC1, AC4, AC5)
-  const noReintroContext = buildNoReintroContext(history)
+  // Story 87-8 (AC4) — o 2º argumento é o que impede a cauda de fazer a Nicole
+  // se reapresentar quando as 20 mensagens recentes são todas do lead.
+  const noReintroContext = buildNoReintroContext(history, historico.nicoleFalouForaDaJanela)
 
   // Build the system prompt as Anthropic block array.
   //
@@ -1622,24 +1658,115 @@ async function loadConversationState(
   return data as ConversationState
 }
 
+/**
+ * Story 87-8 (`CR-1`) — o que o carregador de histórico devolve, além das
+ * mensagens. Tudo aqui só é preenchido quando a janela TRUNCOU; em conversa
+ * curta (87,5 % da população) nenhuma consulta a mais é feita.
+ */
+interface HistoricoCarregado {
+  /** A CAUDA da conversa, em ordem cronológica crescente. */
+  messages: Message[]
+  /** `rows.length === limit` — a conversa não coube na janela. */
+  truncou: boolean
+  /** O limite configurado. Explícito, e não `messages.length`: os dois são
+   *  iguais por construção quando truncou, e derivar um do outro esconderia a
+   *  mudança se o limite deixasse de ser 20 algum dia. */
+  limite: number
+  /** Total de mensagens `user+assistant` na conversa (só quando truncou). */
+  totalNaConversa: number | null
+  maisAntigaCarregada: string | null
+  maisRecenteCarregada: string | null
+  /**
+   * A Nicole já falou nesta conversa, mesmo que FORA da janela carregada.
+   *
+   * Só é consultado quando a janela truncou **e** a cauda não tem nenhuma fala
+   * dela — hoje 0 conversas em produção (medido em 08/08 sobre todo o
+   * histórico), mas estrutural. O sinal é de direção RESTRITIVA: ele só pode
+   * SUPRIMIR uma reapresentação, nunca provocar uma.
+   */
+  nicoleFalouForaDaJanela: boolean
+}
+
+/**
+ * Story 87-8 — a CAUDA, não a cabeça.
+ *
+ * O defeito: `ascending: true` + `limit(20)` devolve as 20 mensagens MAIS
+ * ANTIGAS. Em conversa longa a Nicole respondia com precisão a um contexto
+ * vencido — a Sandra disse "só posso até 400 mil" em 27/07 e ouviu isso de
+ * volta em 05/08 porque, para ela, 27/07 ERA o presente. Vivo desde `7194d9b2`
+ * (31/03/2026): nunca funcionou.
+ *
+ * A saída continua CRONOLÓGICA CRESCENTE — nenhum consumidor muda de formato,
+ * só de conteúdo.
+ */
 async function loadConversationHistory(
   supabase: SupabaseClient,
   conversationId: string,
   limit: number = 20
-): Promise<Message[]> {
+): Promise<HistoricoCarregado> {
+  const vazio: HistoricoCarregado = {
+    messages: [],
+    truncou: false,
+    limite: limit,
+    totalNaConversa: null,
+    maisAntigaCarregada: null,
+    maisRecenteCarregada: null,
+    nicoleFalouForaDaJanela: false,
+  }
+
   const { data, error } = await supabase
     .from("messages")
-    .select("role, content")
+    .select("role, content, created_at")
     .eq("conversation_id", conversationId)
     .in("role", ["user", "assistant"])
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
+    // Armadilha 1 da story: duas mensagens no mesmo milissegundo fariam a fatia
+    // de corte entrar/sair de forma não determinística e produzir teste
+    // intermitente. O desempate por `id` é arbitrário mas ESTÁVEL.
+    .order("id", { ascending: false })
     .limit(limit)
 
   if (error || !data) {
-    return []
+    return vazio
   }
 
-  return data as Message[]
+  const linhas = data as Array<Message & { created_at?: string }>
+  // Armadilha 2: `.reverse()` muta. `data` vem do driver — devolver a cópia
+  // deixa o teste honesto e evita efeito colateral no chamador.
+  const messages = [...linhas].reverse()
+  const truncou = linhas.length === limit
+
+  if (!truncou) {
+    // Caso comum (87,5 % da população): NENHUMA consulta a mais.
+    return { ...vazio, messages }
+  }
+
+  const { count } = await supabase
+    .from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", conversationId)
+    .in("role", ["user", "assistant"])
+
+  // Só quando a cauda inteira é do lead. Hoje: 0 conversas em produção.
+  let nicoleFalouForaDaJanela = false
+  if (!messages.some((m) => m.role === "assistant")) {
+    const { count: falasDela } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", conversationId)
+      .eq("role", "assistant")
+    nicoleFalouForaDaJanela = (falasDela ?? 0) > 0
+  }
+
+  return {
+    messages,
+    truncou,
+    limite: limit,
+    totalNaConversa: count ?? null,
+    maisAntigaCarregada: messages[0]?.created_at ?? null,
+    maisRecenteCarregada: messages[messages.length - 1]?.created_at ?? null,
+    nicoleFalouForaDaJanela,
+  }
 }
 
 async function loadAgentConfig(
