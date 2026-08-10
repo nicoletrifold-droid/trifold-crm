@@ -118,6 +118,37 @@ export function ConversationThread({
   // Story 75-289 (AC2) — id da mensagem em reenvio (trava só aquele botão).
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [resendError, setResendError] = useState<string | null>(null)
+  // Story 75-289 (AC4) — nova tentativa de baixar/transcrever a mídia do lead.
+  const [mediaRetryingId, setMediaRetryingId] = useState<string | null>(null)
+
+  /**
+   * Story 75-289 (AC4) — baixa de novo (ou transcreve) a mídia que o lead mandou.
+   *
+   * A mensagem do servidor é mostrada como está: ela distingue "recuperada e
+   * transcrita" de "recuperada, sem transcrição" e de "a Meta já descartou" — e essa
+   * diferença muda o que o corretor faz em seguida.
+   */
+  async function handleMediaRetry(messageId: string) {
+    setMediaRetryingId(messageId)
+    setResendError(null)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/messages/${messageId}/media-retry`, {
+        method: "POST",
+      })
+      const json = (await res.json().catch(() => null)) as
+        | { message?: string; error?: string }
+        | null
+      if (!res.ok) {
+        setResendError(json?.message ?? "Não foi possível recuperar a mídia.")
+        return
+      }
+      router.refresh()
+    } catch {
+      setResendError("Não foi possível recuperar a mídia agora. Verifique a conexão.")
+    } finally {
+      setMediaRetryingId(null)
+    }
+  }
 
   /**
    * Story 75-289 (AC2) — reenvia a mensagem que não chegou.
@@ -309,6 +340,16 @@ export function ConversationThread({
                     <MessageMedia
                       mediaType={msg.metadata?.media_type as string | undefined}
                       mediaUrl={msg.metadata?.media_url as string | undefined}
+                      downloadFailed={msg.metadata?.media_download_failed === true}
+                      transcribed={
+                        // undefined (não false) quando a marca não existe: mensagem
+                        // legada não deve ser acusada de falta de transcrição.
+                        typeof msg.metadata?.transcribed === "boolean"
+                          ? (msg.metadata.transcribed as boolean)
+                          : undefined
+                      }
+                      onRetry={() => void handleMediaRetry(msg.id)}
+                      retrying={mediaRetryingId === msg.id}
                     />
                     {/* Story 75-289 (AC2): antes TODA bolha do corretor levava um ✓
                         "Enviado", inclusive a que falhou. Agora o indicador sai do
