@@ -64,7 +64,21 @@ export async function GET(request: NextRequest) {
     const attempts = RETRY_MARKER.exec((event.processing_error as string | null) ?? "")
     const attemptCount = attempts ? parseInt(attempts[1] ?? "0", 10) : 0
 
+    // Story 75-289 (AC5): tentativas esgotadas ENCERRAM o evento.
+    // Antes bastava `continue`: o evento ficava `processed = false` e voltava a ser
+    // varrido todo ciclo. Como a query pega os 20 MAIS ANTIGOS, um punhado de
+    // eventos travados passaria a consumir o lote inteiro e bloquearia o retry de
+    // eventos novos — fila entupida pelos mortos. Marcar `processed` tira o evento
+    // da varredura; o histórico das tentativas continua legível no
+    // `processing_error` (nada é perdido em silêncio, fica auditável).
     if (attemptCount >= MAX_ATTEMPTS) {
+      await supabase
+        .from("webhook_logs")
+        .update({
+          processed: true,
+          processing_error: `${event.processing_error ?? ""} | desistiu após ${MAX_ATTEMPTS} tentativas`.trim(),
+        })
+        .eq("id", event.id)
       summary.skipped++
       continue
     }

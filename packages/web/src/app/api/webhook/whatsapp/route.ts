@@ -34,6 +34,55 @@ function getSupabaseAdmin() {
 // Story 75-85 — sobe a mídia recebida (imagem/documento) ao bucket público e grava
 // media_url na mensagem do lead (achada pelo whatsapp_message_id). DEFENSIVO: qualquer
 // falha é logada e ignorada — NUNCA quebra o fluxo de inbound/IA.
+/**
+ * Story 75-289 (AC4) — mescla um patch no `messages.metadata` da mensagem do wamid.
+ *
+ * PostgREST não faz merge de jsonb: passar `metadata: {...}` SUBSTITUI o objeto
+ * inteiro. Era assim que o `media_id` recém-gravado se perdia no update de
+ * sucesso do download. Lê-modifica-escreve mantém o que já estava lá.
+ */
+async function mergeMessageMetadata(
+  admin: SupabaseClient,
+  wamid: string,
+  patch: Record<string, unknown>,
+  columns: Record<string, unknown> = {}
+): Promise<void> {
+  try {
+    const { data: row } = await admin
+      .from("messages")
+      .select("metadata")
+      .eq("metadata->>whatsapp_message_id", wamid)
+      .maybeSingle()
+    const current = (row?.metadata as Record<string, unknown> | null) ?? {}
+    await admin
+      .from("messages")
+      .update({ ...columns, metadata: { ...current, ...patch } })
+      .eq("metadata->>whatsapp_message_id", wamid)
+  } catch (e) {
+    console.error("[75-289] mergeMessageMetadata falhou (ignorado):", e)
+  }
+}
+
+/**
+ * Story 75-289 (AC4) — registra que a mídia NÃO baixou.
+ *
+ * Antes o download vivia dentro de `if (mediaRes.ok)` sem `else`: token morto =
+ * mídia perdida sem rastro, e a bolha ficava eternamente "sem arquivo". Com o
+ * `media_id` persistido + esta marca, a UI mostra "mídia não baixada" e o
+ * download pode ser tentado de novo (a Meta retém a mídia ~30 dias).
+ */
+async function markMediaDownloadFailed(
+  admin: SupabaseClient,
+  wamid: string,
+  reason: string
+): Promise<void> {
+  console.error(`[75-289] download de mídia falhou (${reason}) — wamid ${wamid}`)
+  await mergeMessageMetadata(admin, wamid, {
+    media_download_failed: true,
+    media_download_error: reason,
+  })
+}
+
 async function persistInboundMedia(
   admin: SupabaseClient,
   buffer: ArrayBuffer,
@@ -55,14 +104,19 @@ async function persistInboundMedia(
     const { data: pub } = admin.storage.from("nicole-media").getPublicUrl(path)
     // Story 75-222: grava TAMBÉM nas colunas top-level (media_url/media_type) — a UI
     // renderiza a partir delas. metadata continua preenchido por compat (telas antigas).
-    await admin
-      .from("messages")
-      .update({
-        media_url: pub.publicUrl,
+    // Story 75-289 (AC4): via merge, para não apagar o `media_id`; e limpa a marca de
+    // falha caso este seja um download que deu certo numa segunda tentativa.
+    await mergeMessageMetadata(
+      admin,
+      wamid,
+      {
+        whatsapp_message_id: wamid,
         media_type: mediaType,
-        metadata: { whatsapp_message_id: wamid, media_type: mediaType, media_url: pub.publicUrl },
-      })
-      .eq("metadata->>whatsapp_message_id", wamid)
+        media_url: pub.publicUrl,
+        media_download_failed: false,
+      },
+      { media_url: pub.publicUrl, media_type: mediaType }
+    )
   } catch (e) {
     console.error("[75-85] persistInboundMedia erro (ignorado):", e)
   }
@@ -277,7 +331,18 @@ export async function POST(request: NextRequest) {
   // ---- Build inbound message text/media metadata ------------------------
   let text: string = ""
   let mediaBlock: MediaBlock | undefined
-  let mediaMetadata: { media_type?: string; media_url?: string } = {}
+  // Story 75-289 (AC4): `media_id` passa a ser PERSISTIDO. Em 10/08 o token morreu,
+  // o download falhou e 2 mensagens de voz de um lead em etapa SDR foram perdidas
+  // para sempre — a Meta retém a mídia ~30 dias, mas o id só existia neste payload
+  // (o metadata guardava apenas wamid + media_type, e este webhook, ao contrário do
+  // de meta_ads, não grava payload em webhook_logs). Com o id no banco, mídia que
+  // não baixou fica recuperável.
+  let mediaMetadata: {
+    media_type?: string
+    media_url?: string
+    media_id?: string
+    media_download_failed?: boolean
+  } = {}
   let isVoiceMessage = false
 
   const IMAGE_MIME_TYPES = new Set([
@@ -293,12 +358,15 @@ export async function POST(request: NextRequest) {
   } else if (msg.type === "audio" || msg.type === "voice") {
     isVoiceMessage = true
     text = "[Mensagem de voz recebida]"
-    mediaMetadata = { media_type: "voice" }
+    mediaMetadata = { media_type: "voice", media_id: msg.audio?.id ?? msg.voice?.id }
   } else if (msg.type === "image" || msg.type === "document") {
     // Story 75-85: marca o tipo já no sync → a mensagem do lead é inserida (cria a
     // bolha mesmo sem legenda). A URL (media_url) é gravada no async, após baixar e
     // subir a mídia ao bucket. (access_token só existe dentro do after().)
-    mediaMetadata = { media_type: msg.type }
+    mediaMetadata = {
+      media_type: msg.type,
+      media_id: msg.type === "image" ? msg.image?.id : msg.document?.id,
+    }
   } else {
     return NextResponse.json({ status: "ok" })
   }
@@ -564,10 +632,20 @@ export async function POST(request: NextRequest) {
               asyncMediaBlock = { type: "image", base64, mimeType }
               // Story 75-85: persiste a imagem no bucket + grava media_url na mensagem.
               await persistInboundMedia(getSupabaseAdmin(), buffer, mimeType, "image", lead.id, messageId)
+            } else {
+              // Story 75-289 (AC4): antes este ramo não existia — falha sem rastro.
+              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`)
             }
+          } else {
+            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`)
           }
         } catch (err) {
           console.error("WhatsApp image download error:", err)
+          await markMediaDownloadFailed(
+            getSupabaseAdmin(),
+            messageId,
+            err instanceof Error ? err.message : "erro desconhecido"
+          )
         }
         asyncText = msg.image?.caption || "O que voce acha desta imagem?"
       }
@@ -605,10 +683,20 @@ export async function POST(request: NextRequest) {
               // Story 75-85: persiste o anexo no bucket + grava media_url na mensagem.
               const mt = IMAGE_MIME_TYPES.has(mimeType) ? "image" : "document"
               await persistInboundMedia(getSupabaseAdmin(), buffer, mimeType, mt, lead.id, messageId)
+            } else {
+              // Story 75-289 (AC4)
+              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`)
             }
+          } else {
+            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`)
           }
         } catch (err) {
           console.error("WhatsApp document download error:", err)
+          await markMediaDownloadFailed(
+            getSupabaseAdmin(),
+            messageId,
+            err instanceof Error ? err.message : "erro desconhecido"
+          )
         }
         asyncText = asyncText || msg.document?.caption || "Recebi um documento."
       }
@@ -641,27 +729,42 @@ export async function POST(request: NextRequest) {
               // (2) transcreve (texto p/ todos + Nicole)
               transcription = await transcribeAudio(buffer, mimeType)
               // (3) atualiza a mensagem do lead: conteúdo = transcrição; metadata = voz + url
-              await getSupabaseAdmin()
-                .from("messages")
-                .update({
+              // Story 75-289 (AC4): via merge — o update direto substituía o metadata
+              // inteiro e apagava o `media_id` gravado no sync.
+              await mergeMessageMetadata(
+                getSupabaseAdmin(),
+                messageId,
+                {
+                  whatsapp_message_id: messageId,
+                  media_type: "voice",
+                  media_url: mediaUrl,
+                  transcribed: !!transcription,
+                  media_download_failed: false,
+                },
+                {
                   content: transcription || "[Mensagem de voz recebida]",
                   // Story 75-222: colunas top-level = fonte canônica p/ a UI.
                   media_url: mediaUrl,
                   media_type: "voice",
-                  metadata: {
-                    whatsapp_message_id: messageId,
-                    media_type: "voice",
-                    media_url: mediaUrl,
-                    transcribed: !!transcription,
-                  },
-                })
-                .eq("metadata->>whatsapp_message_id", messageId)
+                }
+              )
               // (4) alimenta a Nicole com a transcrição (se houve)
               if (transcription) asyncText = transcription
+            } else {
+              // Story 75-289 (AC4): era exatamente aqui que os 2 áudios de 10/08
+              // desapareciam — sem `else`, sem log, sem rastro.
+              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`)
             }
+          } else {
+            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`)
           }
         } catch (err) {
           console.error("WhatsApp audio download/transcribe error:", err)
+          await markMediaDownloadFailed(
+            getSupabaseAdmin(),
+            messageId,
+            err instanceof Error ? err.message : "erro desconhecido"
+          )
         }
       }
 

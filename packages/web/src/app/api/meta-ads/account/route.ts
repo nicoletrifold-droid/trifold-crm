@@ -7,17 +7,22 @@ export async function GET() {
 
   const { supabase, appUser } = auth
 
-  const { data, error } = await supabase
+  // Story 75-289 (AC7): a org pode ter várias contas. Antes isto pegava a criada
+  // por último — que em 10/08 era a INSTITUCIONAL/`disconnected`, enquanto quem
+  // de fato sincroniza é a VIND/`active`. A tela deve mostrar a conta que o resto
+  // do sistema usa, então a ativa vence; sem nenhuma ativa, cai na mais recente
+  // (preserva o comportamento antigo para org que nunca conectou).
+  const { data: rows, error } = await supabase
     .from('meta_ad_accounts')
     .select('meta_account_id, name, currency, access_token, status, last_synced_at')
     .eq('org_id', appUser.org_id)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   if (error) {
     return NextResponse.json({ error: 'database_error' }, { status: 500 })
   }
+
+  const data = rows?.find((r) => r.status === 'active') ?? rows?.[0] ?? null
 
   if (!data) {
     return NextResponse.json({
