@@ -32,7 +32,11 @@ export { detectAppointmentIntent } from "./detect-appointment"
 // Story 87-3 — a reconciliação fala × banco consome a `detectAffirmedSlot`; ela
 // saiu de `chat/pipeline.ts` para cá (AC7) e passa a ser pública em `@trifold/ai`.
 export { detectAffirmedSlot } from "./visit-slot"
-export { classificarFala, reconciliarAgenda, JANELA_MESMO_TURNO_MIN, JANELA_CLASSIFICACAO_MIN, JANELA_RELATORIO_MIN, PADROES_LIGACAO } from "./agenda-reconcile"
+// Story 87-6 — `diaBrt` passa a ser público: o `dedupe_key` do
+// `NICOLE_LASTRO_DIARIO` é "um por dia BRT", e a convenção de dia tem de ser
+// EXATAMENTE a do relatório. Reimplementá-la no `packages/web` criaria duas
+// definições de "dia" que divergem no fuso — e o dedupe evaporaria por 3 horas.
+export { classificarFala, reconciliarAgenda, diaBrt, JANELA_MESMO_TURNO_MIN, JANELA_CLASSIFICACAO_MIN, JANELA_RELATORIO_MIN, PADROES_LIGACAO } from "./agenda-reconcile"
 export type { Balde, Descarte, ClassificacaoFala, LinhaRelatorio, RelatorioLastro, AppointmentDoLead } from "./agenda-reconcile"
 export { updateLeadMemory, atualizarResumoComLastro, EVENTO_RESUMO_SEM_LASTRO } from "./lead-memory"
 export type { EventoDeResumo, OrigemEscritaResumo, ResultadoEscritaResumo } from "./lead-memory"

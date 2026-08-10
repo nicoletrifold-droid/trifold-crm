@@ -1,0 +1,383 @@
+schema: 1
+storyId: "87-6"
+story: "docs/stories/87-6-dedupe-atomico-lastro-diario.story.md"
+title: "Quality Gate — o recibo do lastro passa a ser confiável (hotfix do W0-5: o `await`, o `dedupe_key` e os dois índices)"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-10"
+branch: "main (trabalho do @dev não commitado)"
+
+status_reason: >
+  **O código está certo e a evidência é a mais limpa desta leva. As 9 mutações reproduzem, uma a
+  uma, na contagem E na lista de nomes.** Não conferi um único número por relato: rodei a suíte
+  inteira da raiz dez vezes (baseline + 9 mutações + 1 contraprova) e li o reporter.
+  **O item que a story pediu para eu conferir com mais rigor — a autocrítica do @dev sobre o próprio
+  fake — é verdadeiro e é load-bearing, e eu provei nos dois sentidos.** Com a guarda de geração a
+  M1 dá **6** vermelhos; removendo APENAS a guarda e mantendo a mutação, ela dá **3** — e os três
+  que ficam verdes por herança são exatamente `o RECIBO é aguardado` (o teste dedicado ao conserto),
+  `AC5 dedupe_key` e `AC5 BRT`. Removendo a guarda **sem** mutação a suíte segue 1954/1954: a guarda
+  não sustenta nenhum verde, ela só apaga verdes falsos. É a propriedade certa, e é a terceira vez
+  neste epic que um fake complacente aparece — desta vez encontrado pelo próprio autor, por contar
+  vermelho em vez de aceitar o número.
+  **Os dois índices estão em produção com o DDL que a migration versiona, conferido por mim em
+  `pg_indexes` (9 índices, nem 8 nem 10), e o código não depende de nenhum outro.** A ordem
+  índice-antes-de-código está respeitada.
+  **O que impede o PASS não é defeito de código; são três coisas que se fecham sem tocar em fonte.**
+  (1) A prova no banco da AC1-b — o `23505` e, principalmente, o **vermelho** (as duas linhas
+  passando ANTES do índice) — **não está transcrita em lugar nenhum**, e ela é irreproduzível agora
+  que o índice está de pé: é evidência que não volta. (2) A AC8 é pós-deploy e segue aberta.
+  (3) Um resíduo que a própria manchete da story torna relevante: o recibo passa a ser **muito mais**
+  confiável, não **garantido** — erro de escrita que não seja `23505` continua devolvendo HTTP 200,
+  sem recibo e sem `NICOLE_LASTRO_FALHA`, que é a mesma ambiguidade, uma camada abaixo.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Verificado de forma independente — nada aceito por relato
+# ────────────────────────────────────────────────────────────────────────────
+verificacoes:
+
+  V0_baseline:
+    metodo: "`npx vitest run` da raiz, árvore de trabalho do @dev intacta"
+    declarado: "Test Files 5 failed | 155 passed (160) · Tests 1954 passed | 7 expected fail (1961)"
+    medido:    "Test Files 5 failed | 155 passed (160) · Tests 1954 passed | 7 expected fail (1961)"
+    resultado: CONFERE
+    nota: >
+      Os 5 vermelhos são `sharp`/`satori`/`pdf-lib`, não executam teste, pré-existentes. O delta
+      +19 fecha aritmeticamente: `route.test.ts` 5 → 15 (+10) e `logger.test.ts` novo (+9).
+
+  V1_M1_o_await_do_recibo:
+    metodo: "`await logEventOnce({ level: \"info\"` → `void logEventOnce({ level: \"info\"`, suíte inteira"
+    declarado: "6 vermelhos"
+    medido:    "6 vermelhos — Tests 6 failed | 1948 passed | 7 expected fail (1961)"
+    resultado: CONFERE
+    lista_conferida_nome_a_nome:
+      - "emite o evento por caso, o recibo com o número, e o alerta nomeado"
+      - "🔴 87-6 — o RECIBO é aguardado: a resposta não sai antes da escrita completar"
+      - "🔴 87-6/AC5 — o recibo carrega `dedupe_key = lastro:{org}:{dia_brt}:{dias}d`"
+      - "🔴 87-6/AC5 — o dia da chave é BRT, não UTC (e as duas discordam às 23h)"
+      - "🔴 87-6/AC5-(iii) — a rodada retroativa `?days=60` NÃO é engolida pela diária"
+      - "🔴 87-6/AC3 — o aviso só sai para quem REIVINDICOU"
+
+  V2_A_AUTOCRITICA_DO_DEV_o_fake_contaminado:
+    porque_importa: >
+      É o achado mais fino desta leva: **o defeito que a story conserta estava contaminando o teste
+      que prova a correção.** Se a correção do fake não tivesse pegado, os 6 vermelhos da V1 seriam
+      ilusórios e o gate estaria assinando um instrumento cego. Conferi nos DOIS sentidos.
+    contraprova_1_mutacao_sem_a_guarda:
+      metodo: "M1 aplicada + a linha `if (minhaGeracao !== geracao) return { inserted: false }` REMOVIDA do fake"
+      declarado_pelo_dev: "3 vermelhos na primeira rodada, antes de consertar o fake"
+      medido: "3 vermelhos — Tests 3 failed | 1951 passed (1961)"
+      resultado: CONFERE_EXATAMENTE
+      os_tres_que_ficam_vermelhos:
+        - "emite o evento por caso, o recibo com o número, e o alerta nomeado"
+        - "🔴 87-6/AC5-(iii) — a rodada retroativa `?days=60` NÃO é engolida pela diária"
+        - "🔴 87-6/AC3 — o aviso só sai para quem REIVINDICOU"
+      os_tres_que_passavam_POR_HERANCA:
+        - "🔴 87-6 — o RECIBO é aguardado  ← o teste DEDICADO ao conserto"
+        - "🔴 87-6/AC5 — o recibo carrega `dedupe_key`"
+        - "🔴 87-6/AC5 — o dia da chave é BRT, não UTC"
+      leitura: >
+        O relato do @dev está certo em cada detalhe, inclusive em qual teste era o envergonhado: a
+        escrita órfã que o `void` deixa pendente completava depois do fim do teste e caía no array
+        do teste SEGUINTE (`completados` é reatribuído no `beforeEach`, e o `push` da órfã resolve
+        contra a variável, não contra o array antigo). O teste que existe para provar o `await`
+        ficava verde herdando o recibo perdido do vizinho.
+    contraprova_2_a_guarda_sozinha_nao_segura_nenhum_verde:
+      metodo: "guarda de geração REMOVIDA, NENHUMA mutação de código"
+      medido: "Tests 1954 passed | 7 expected fail (1961) — suíte inteira verde, idêntica ao baseline"
+      resultado: CONFERE
+      leitura: >
+        Este era o risco simétrico: uma guarda que produz vermelhos por si mesma seria um
+        instrumento novo, não uma correção. Ela não muda nada no estado verde — só remove verdes
+        falsos sob mutação. É exatamente o que se quer de um conserto de harness.
+
+  V3_M2_a_M9_as_outras_sete:
+    metodo: "cada mutação aplicada isoladamente, suíte inteira da raiz, revertida em seguida"
+    resultado: CONFEREM_TODAS
+    tabela:
+      M2_sem_tratamento_do_23505:   { declarado: 1, medido: 1, teste: "AC2 — `23505` ⇒ inserted:false e SILÊNCIO" }
+      M3_catch_que_engole_tudo:     { declarado: 2, medido: 2, testes: ["AC2/Risco 3 — 42P01 com LOGGER_FALLBACK", "AC2 — erro sem `code` não é dedupe"] }
+      M4_if_inserted_ou_true:       { declarado: 2, medido: 2, testes: ["AC3 — o aviso só sai para quem REIVINDICOU", "AC4-(i) — a segunda rodada não duplica"] }
+      M5_chave_sem_dias:            { declarado: 3, medido: 3, testes: "as três da AC5" }
+      M6_falha_sem_NICOLE_LASTRO_FALHA: { declarado: 1, medido: 1, teste: "falha de execução emite NICOLE_LASTRO_FALHA ANTES do 500" }
+      M7_source_fora_da_convencao:  { declarado: 2, medido: 2, testes: ["o `source` segue `api/cron/…`", "NICOLE_LASTRO_FALHA ANTES do 500"] }
+      M8_dia_em_UTC:                { declarado: 1, medido: 1, teste: "AC5 — o dia da chave é BRT, não UTC" }
+      M9_dry_desligado:             { declarado: 1, medido: 1, teste: "AC4-(ii) da 87-3 — ?dry=1 NÃO emite evento nem alerta" }
+
+  V4_A_FIXTURE_DAS_23H_DISCRIMINA:
+    pergunta: "a fixture de BRT distingue mesmo, ou o teste genérico já a cobre?"
+    metodo: "M8 (`diaBrt(ate)` → `ate.toISOString().slice(0, 10)`) na suíte inteira"
+    medido: "**1** vermelho, e é SÓ `AC5 — o dia da chave é BRT, não UTC (e as duas discordam às 23h)`"
+    resultado: CONFERE
+    leitura: >
+      O teste genérico do `dedupe_key` fica **verde** sob a mutação — as duas convenções concordam
+      em 21 das 24 horas e a suíte roda de dia. A fixture com relógio congelado em
+      `2026-08-11T02:00:00Z` (= 23h BRT de 10/08) é a única coisa que separa BRT de UTC nesta
+      suíte. Sem ela a AC5-(i) seria uma AC que não consegue ficar vermelha pela razão que nomeia —
+      a classe de defeito que a 87-7 e a 87-8 pagaram. O @dev acertou ao acrescentá-la e ao declarar
+      por escrito o que ela cobre.
+
+  V5_OS_INDICES_EM_PRODUCAO_x_A_MIGRATION:
+    metodo: "Management API, `dsopqkqjkmhytudaaolv`, SELECT em `pg_indexes` (somente leitura), 10/08"
+    medido_literal:
+      total_de_indices_em_system_events: 9
+      A: "CREATE UNIQUE INDEX uniq_system_events_afirmacao_sem_lastro_message ON public.system_events USING btree (((metadata ->> 'message_id'::text))) WHERE (((event_type)::text = 'NICOLE_AFIRMACAO_SEM_LASTRO'::text) AND (metadata ? 'message_id'::text))"
+      B: "CREATE UNIQUE INDEX ux_system_events_dedupe_key ON public.system_events USING btree (event_type, ((metadata ->> 'dedupe_key'::text))) WHERE ((metadata ->> 'dedupe_key'::text) IS NOT NULL)"
+    confronto_com_217_system_events_dedupe_nicole_sql:
+      nome_A: CONFERE
+      colunas_e_expressao_A: CONFERE
+      predicado_A: "CONFERE — `metadata ? 'message_id'`, não o `IS NOT NULL` que a v0.1 propunha"
+      nome_B: CONFERE
+      colunas_e_expressao_B: "CONFERE — `event_type` como COLUNA + `(metadata->>'dedupe_key')` como expressão, nesta ordem"
+      predicado_B: CONFERE
+    AC1_a_iii_a_contagem: >
+      **Fechada por construção, e a contagem é a que a AC previu.** Os dois `CREATE UNIQUE INDEX IF
+      NOT EXISTS` casam por NOME e os dois nomes já existem em `pg_indexes` — rodar o arquivo é
+      no-op demonstrável, e 9 é exatamente o número que o rodapé da migration declara como esperado
+      (7 pré-existentes + A + B). Nenhum índice redundante subiu. Não executei o DDL: minha janela
+      é somente leitura.
+    o_codigo_combina_com_o_que_esta_no_ar:
+      alerta: "a rota grava `metadata.message_id` e `event_type = NICOLE_AFIRMACAO_SEM_LASTRO` ⇒ cai no predicado de (A)"
+      recibo: "a rota grava `metadata.dedupe_key` (string não-nula) e `event_type = NICOLE_LASTRO_DIARIO` ⇒ cai no predicado de (B)"
+      dependencias_extras: "NENHUMA — o código não cita nome de índice em lugar algum; ele reage a `error.code === '23505'`, venha de qual índice vier"
+    ordem_de_deploy: >
+      **Respeitada.** Índice (B) no ar ANTES do código. Se fosse o inverso, o `await` funcionando
+      sem índice publicaria dois recibos por dia — o defeito criado pelo próprio conserto. Com (B)
+      de pé, o segundo `insert` leva `23505` e o `logEventOnce` silencia.
+
+  V6_a_inferencia_que_mudou_a_natureza_da_story:
+    metodo: "SELECT em `system_events`, produção, somente leitura"
+    linhas_lidas:
+      - "6b379ac3 · 2026-08-10 11:38:24.894956+00 · NICOLE_AFIRMACAO_SEM_LASTRO · source cron/nicole-agenda-reconcile"
+      - "b19dc5cf · 2026-08-10 11:38:46.800005+00 · NICOLE_LASTRO_DIARIO · alertas_novos=0 · lastro_pct=0"
+    resultado: A_INFERENCIA_SE_SUSTENTA
+    porque: >
+      O argumento decisivo **não é o intervalo de 22 s, é a aritmética do `alertas_novos`.** A
+      invocação que gravou o alerta calculou `novos = [Ronaldo]` ANTES de qualquer escrita, logo o
+      recibo dela diria `1`. O recibo que existe diz `0` ⇒ ele é de outra invocação, cujo `select`
+      já enxergava a linha de :24. E o `NICOLE_LASTRO_DIARIO` do código antigo é **incondicional**,
+      sem `select` e sem `if`, emitido logo depois do laço de alertas, sem nenhum I/O aguardado
+      entre os dois pontos que pudesse lançar. Não há caminho em que a primeira invocação deixe de
+      emitir recibo. **Ele não foi pulado: foi perdido.**
+    corroboracao_independente_da_nicole:
+      metodo: "contagens all-time em `system_events`, produção, 10/08"
+      FOLLOWUP_EXECUTED: "127 linhas · primeira 2026-07-11 12:00 · **última 2026-07-21 18:00**"
+      FOLLOWUP_MESSAGE_SKIPPED: "5.412 linhas · última **2026-08-10 12:01** — mesmo cron, mesma request, ainda escrevendo hoje"
+      SUPREMO_HISTORY_SYNC: "**0 linhas all-time** (nem aparece no `group by`)"
+      RESEND_NO_ENTRY_ID: "1.519 linhas, última hoje 13:33 — a ressalva honesta do @dev confere: exposição é CORRIDA, não perda garantida"
+      leitura: >
+        O recibo do `followup` parou de gravar em 21/07 enquanto o cron seguiu rodando e seus
+        eventos por-lead chegaram 5.412 vezes. Vinte dias de série, com controle interno na mesma
+        request. Isso confirma o mecanismo **sem depender de nada da Nicole** — e derruba, junto, a
+        leitura de que o vazio de 09/08 provava agendador parado.
+
+  V7_escopo_e_nao_regressao:
+    agenda_reconcile_ts: "`git diff --exit-code packages/ai/src/flows/agenda-reconcile.ts` → **exit 0, byte a byte igual**. O baseline de 12,5 % da 87-3 está intocado (AC6-iii ✅)"
+    packages_ai: "único arquivo tocado é `flows/index.ts`: +1 símbolo re-exportado (`diaBrt`) + comentário. Zero mudança de comportamento — o módulo já era importado pelo barril"
+    logEvent_intacto: "conferido contra `git show HEAD:` — `logToConsole` e `buildRow` são extração literal; mesmo prefixo, mesmos canais de console, mesma linha inserida, mesma assinatura `void`. Nenhum dos ~200 pontos de chamada muda de latência"
+    dry_nao_foi_movido: "o short-circuit continua no mesmo ponto do fluxo (contexto inalterado no diff), e a M9 prova que o teste dele está vivo"
+    grep_jaEmitidos: "0 ocorrências em `packages/web/src` ✅"
+    tsc_ai: "0 erros"
+    tsc_web: "28 linhas de erro, TODAS pré-existentes — `.next/types/validator.ts` (portal-viewer layout), `visual-editor.tsx`, `arte-*`/`fill.ts` (sharp/satori/pdf-lib). Nenhuma nos arquivos da story"
+    eslint_web: "0 errors, 3 warnings — os três são `_param` não usado em arquivo de teste, convenção já presente"
+    packages_ai_sem_eslint: "confirmado, o `lint` dele é `tsc --noEmit`"
+
+  V8_o_achado_fora_de_escopo_por_amostragem:
+    total_de_chamadas: "`grep -rn \"logEvent(\" packages/web/src/app/api --include=route.ts | wc -l` → **44** ✅"
+    amostra_conferida_linha_a_linha:
+      - "`cron/supremo-history-sync/route.ts:166` → `SUPREMO_HISTORY_SYNC`, `return` na 176, nada aguardado no meio ✅"
+      - "`cron/followup/route.ts:590` → `FOLLOWUP_EXECUTED`, `return` na 599 ✅"
+      - "`webhook/resend/route.ts:136` → `RESEND_NO_ENTRY_ID` — é mesmo um dos 12, e é mesmo o contraexemplo com 1.519 linhas ✅"
+    resultado: CONFERE
+    leitura: >
+      A amostra bate, a evidência dura bate no banco, e a ressalva ("é corrida, não perda
+      garantida") está escrita antes de eu perguntar. Não corrigido, e **está certo não corrigir**:
+      tocar 11 rotas fora do escopo, na véspera de um deploy, é como se perde a resposta para
+      "qual dos dois mudou isso?".
+
+# ────────────────────────────────────────────────────────────────────────────
+# Rastreabilidade das ACs
+# ────────────────────────────────────────────────────────────────────────────
+acs:
+  AC1-a:
+    i:   { status: PARCIAL, nota: "o índice está no ar e conferido por mim; o LOG da execução do Gabriel de 08/08 não está transcrito no Dev Agent Record, como a AC exige" }
+    ii:  { status: PASS, nota: "migration 217 é cópia literal do aplicado — nome e predicado conferidos caractere a caractere contra `pg_indexes`" }
+    iii: { status: PASS, nota: "9 índices medidos; os dois `IF NOT EXISTS` casam por nome e os nomes existem ⇒ rodar o arquivo é no-op demonstrável" }
+    iv:  { status: PASS, nota: "`supabase db push` não foi usado" }
+  AC1-b:
+    i:   { status: PASS, nota: "pré-check remedido por mim hoje: 12.055 linhas, **0** com `dedupe_key`" }
+    ii:  { status: PARCIAL, nota: "o índice existe com o DDL certo (prova determinística de que a unicidade é imposta); a mensagem `23505` do BEGIN…ROLLBACK **não está colada** em lugar nenhum" }
+    iii: { status: FALTA, nota: "🔴 o VERMELHO (as duas linhas passando ANTES do índice) não está colado — e é irreproduzível agora que o índice está de pé" }
+    iv:  { status: PASS, nota: "declarado por escrito na migration e na story" }
+  AC2:  { status: PASS, nota: "M2 (1 vermelho) e M3 (2 vermelhos) reproduzem; o teste do erro SEM `code` fecha a Armadilha 1" }
+  AC3:  { status: PASS, nota: "assertado sobre `notificarAdmins`, não sobre o Telegram; M4 dá 2 vermelhos; a 87-9 troca um corpo de função" }
+  AC4:  { status: PASS, nota: "e a honestidade sobre o que NÃO prova está escrita no topo do arquivo de teste, não só na story" }
+  AC5:
+    i:   { status: PASS, nota: "`diaBrt` importado de `@trifold/ai` com `importActual` — o teste usa a função de verdade, não uma cópia que concordaria consigo mesma" }
+    ii:  { status: PASS }
+    iii: { status: PASS, nota: "M5 (chave sem `dias`) derruba as três da AC5" }
+  AC6:
+    i:   { status: PASS, nota: "teste do R9 no lugar e vivo (M9)" }
+    ii:  { status: PASS_COM_DESVIO, nota: "o diff de CÓDIGO é exatamente o declarado + `packages/ai/src/flows/index.ts` (desvio declarado, ver abaixo). Os demais arquivos modificados na árvore são docs de epic e memórias de agente, alheios a esta story" }
+    iii: { status: PASS, nota: "`agenda-reconcile.ts` byte a byte igual, verificado por `git diff --exit-code`" }
+  AC7:  { status: PASS, nota: "1954/1961, tsc 0 nos arquivos da story nos dois pacotes, eslint 0 errors" }
+  AC8:  { status: PENDING, nota: "pós-deploy, @devops" }
+  AC9:  { status: PASS_COM_RELEITURA, nota: "decisão escrita com nome (Gage, saída 3) ANTES do prazo ✅. A REGRA DE LEITURA pré-registrada foi falsificada pelo fato — ver O5" }
+
+# ────────────────────────────────────────────────────────────────────────────
+# Achados
+# ────────────────────────────────────────────────────────────────────────────
+issues:
+
+  - id: EVID-001
+    severity: medium
+    category: requirements
+    titulo: "A prova no banco da AC1-b não está transcrita — e metade dela é irreproduzível"
+    descricao: >
+      A AC1-b-(ii) pede a mensagem `23505` colada e a AC1-b-(iii) pede o VERMELHO: as duas linhas
+      entrando sem erro ANTES do índice. A AC1-a-(i) pede o log da execução do Gabriel de 08/08.
+      **Nenhum dos três está no Dev Agent Record.** O @dev declarou corretamente que não executou
+      (janela read-only), e o Gabriel informa ter provado os dois sentidos — mas informar não é
+      colar, e o vermelho de (iii) **não volta**: com o índice de pé não há como reproduzir as duas
+      inserções passando, a não ser derrubando o índice em produção, o que ninguém vai fazer por
+      causa de um registro.
+      O que eu consigo garantir sozinho, e garanto: o índice existe, com nome, colunas e predicado
+      idênticos aos da migration. Um índice único **impõe** unicidade — isso é determinístico, não
+      precisa de experimento. O que se perde sem o registro não é a certeza técnica; é a
+      auditabilidade que esta família de stories decidiu que vale o preço.
+    recommendation: >
+      @devops/@data-engineer cola no Dev Agent Record, antes de Done: (a) o output do pré-check;
+      (b) a mensagem literal do `23505` do `BEGIN…ROLLBACK`; (c) o que foi observado ANTES do
+      índice, ainda que reconstruído de memória e **marcado como tal**. Se (c) não existir mais em
+      lugar nenhum, escrever isso — "o vermelho de AC1-b-(iii) não foi registrado e não é
+      recuperável" é um registro honesto; o silêncio não é.
+    dono: "@devops"
+
+  - id: REL-004
+    severity: medium
+    category: code
+    titulo: "`{ inserted: false }` confunde 'já existia' com 'a escrita falhou' — e a rota não tem como saber"
+    descricao: >
+      `logEventOnce` devolve o mesmo `false` para `23505` e para qualquer outro erro. O
+      `LOGGER_FALLBACK` distingue os dois **no console**, mas o chamador não. Duas consequências,
+      e a segunda toca a manchete da story:
+      **(a)** um erro transitório no insert do alerta vira alerta suprimido e contado como
+      `alertas_deduplicados` — hoje inofensivo porque o Telegram está morto, amanhã não;
+      **(b)** um erro no insert do RECIBO devolve HTTP **200**, sem recibo e **sem**
+      `NICOLE_LASTRO_FALHA` — o `catch` só cobre exceção de `reconciliarAgenda`. Ou seja: o dia
+      volta a ficar indistinguível de "o agendador não disparou", que é exatamente a ambiguidade
+      que custou quatro dias.
+      **Isto não é regressão** — antes o recibo se perdia por padrão. É **resíduo**, e é muito
+      menor: exige o banco falhar, e deixa rastro no log da Vercel. Mas "o recibo passa a ser
+      confiável" é a manchete, e a diferença entre *muito mais confiável* e *garantido* merece
+      estar escrita, não subentendida.
+    recommendation: >
+      Não mexer nesta story (mudar a assinatura agora reabriria as 9 mutações por um ganho que não
+      é do dia). Vai junto com a story dos 11 pontos expostos:
+      `logEventOnce` devolve `{ inserted, reason: "duplicate" | "error" }`, a rota soma
+      `alertas_falharam` separado de `alertas_deduplicados`, e o JSON de resposta ganha
+      `recibo_gravado: boolean`.
+    dono: "@sm (na story nova) — registrar aqui como resíduo conhecido"
+
+  - id: DOC-002
+    severity: low
+    category: docs
+    titulo: "A régua do DoD do `sendTelegramAdminAlert` mede a coisa errada — o @dev está certo"
+    descricao: >
+      O DoD pede `grep -n "sendTelegramAdminAlert" …/route.ts` ≤ 1 e o comando devolve **3**:
+      import (linha 3), comentário (48) e a chamada (56). Conferido por mim. **Há exatamente 1
+      chamada, e ela está dentro de `notificarAdmins`** — que é o que a AC3 queria garantir.
+      **Ratifico a decisão do @dev de registrar em vez de apagar o comentário para o grep fechar.**
+      Apagar prosa para satisfazer uma régua é o mecanismo exato pelo qual réguas param de medir, e
+      este epic já tem duas cicatrizes disso. A régua errou; o código não.
+    recommendation: "@po substitui no DoD por `grep -c \"await sendTelegramAdminAlert\" …/route.ts` → **1**, que é a régua que o @dev propôs e é a correta."
+    dono: "@po"
+
+  - id: SCOPE-001
+    severity: low
+    category: code
+    titulo: "Desvio da AC6-(ii): +1 export no barril de `packages/ai` — aceito"
+    descricao: >
+      `diaBrt` foi acrescentado a `flows/index.ts` (1 linha + comentário). Não está na lista de
+      arquivos da AC6-(ii). As alternativas eram reimplementar a convenção de dia BRT no
+      `packages/web` — **proibido pela AC5** e a forma exata de criar duas definições de "dia" que
+      divergem 3 h — ou um deep-import que não existe em nenhum outro lugar do `packages/web`.
+      Re-export aditivo de símbolo de módulo que o barril já importa: zero mudança de
+      comportamento, `tsc` limpo, `agenda-reconcile.ts` byte a byte igual.
+    recommendation: "Aceito como está. O desvio foi declarado antes de eu perguntar, com o raciocínio; é o comportamento certo."
+    dono: "—"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Observações que não são issues
+# ────────────────────────────────────────────────────────────────────────────
+observacoes:
+
+  O1_a_autocritica_e_o_padrao_da_casa: >
+    O @dev encontrou, sozinho, que o defeito da story estava contaminando o teste da story — e
+    encontrou porque **contou os vermelhos em vez de aceitar o número**. É a nota de processo `D5`
+    da 87-4 funcionando na mão de quem implementa, sem o gate precisar cobrar. Registro como o
+    melhor sinal desta leva: é a terceira aparição da classe "fake complacente" no epic (87-7 e
+    87-8 pagaram as duas primeiras) e a primeira em que ela morre antes do gate.
+
+  O2_a_prioridade_invertida_esta_certa: >
+    A story nasceu "evitar linha duplicada" e o que ela entrega é "não perder a linha". A inversão
+    é correta e a ordem também: sem o `await` não há linha para deduplicar; com o `await` e sem o
+    `dedupe_key`, o conserto publicaria dois números por dia. Os dois na mesma entrega é a única
+    combinação que não piora nada.
+
+  O3_o_source_e_a_correcao_de_convencao: >
+    `cron/…` → `api/cron/…`. Aparentemente cosmético, e não é: foi essa divergência que fez o
+    `like 'cron/%'` do @po devolver vazio e alimentou a conclusão de que nenhum cron grava evento.
+    Uma convenção quebrada em UM lugar produziu uma inferência errada em outro. A M7 prova que a
+    correção tem teste.
+
+  O4_NICOLE_LASTRO_FALHA_nao_tem_dedupe_key: >
+    Duas invocações que falhem produzem duas linhas de falha. Está certo assim — cada invocação
+    falhou de fato, e são fatos distintos. Registro só para que ninguém leia isso como esquecimento.
+
+  O5_a_AC9_precisa_de_um_registro_final_escrito: >
+    A regra de leitura do @devops era `1 linha ⇒ derruba minha medição dos dois projetos`. Saiu 1
+    linha, e a inferência correta é a oposta: a medição dele foi **confirmada** por outro caminho.
+    Uma regra pré-registrada que o fato falsifica é ciência funcionando — mas o desfecho tem de ser
+    **escrito por quem registrou a regra**, não deixado no corpo da implementação. Sem isso, o
+    próximo a ler a AC9 lê a regra antiga.
+
+  O6_o_dedupe_do_alerta_perdeu_o_teto_de_180_dias: >
+    O `select` removido filtrava por `created_at >= now() - 180 dias`; o índice (A) não tem recorte
+    temporal. Um `message_id` já alertado passa a ser dedupado para sempre. É o comportamento
+    desejável e o efeito prático é nulo — mas é uma diferença real entre o que saiu e o que entrou,
+    e não estava escrita em lugar nenhum.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Ações requeridas antes de Done
+# ────────────────────────────────────────────────────────────────────────────
+acoes_requeridas_antes_de_Done:
+  - "🔴 EVID-001 — @devops: transcrever no Dev Agent Record o pré-check, o `23505` literal e o vermelho de AC1-b-(iii) (ou declarar por escrito que o vermelho não foi registrado e não é recuperável)"
+  - "🔴 AC8 — @devops, depois do deploy: (i) `count(*) = count(distinct metadata->>'message_id')` em `NICOLE_AFIRMACAO_SEM_LASTRO`; (ii) nenhum `dedupe_key` com count > 1 em `NICOLE_LASTRO_DIARIO`; (iii) AC6 da 87-3 fechada por efeito com o projeto Vercel nomeado (já nomeado pelo Gage: `prj_s3ARh1fpDnzbx9ua4MYJf9iqdRhj`)"
+  - "O5 — @devops: escrever o desfecho da AC9 (a regra pré-registrada foi falsificada; a medição dos dois projetos foi CONFIRMADA por outro caminho)"
+  - "DOC-002 — @po: corrigir a régua do DoD para `grep -c \"await sendTelegramAdminAlert\"` → 1"
+  - "REL-004 + os 11 pontos expostos — @sm: abrir a story nova. Prioridade para `FOLLOWUP_EXECUTED` (parado desde 21/07, 20 dias de perda contínua com o cron rodando) e `SUPREMO_HISTORY_SYNC` (0 linhas all-time). Confirmados por mim no banco hoje"
+  - "@pm: registrar no Epic 87 que o `W0-5` ganhou hotfix e que o `R-G` diz migration 215 quando o real é 216 ⇒ 217"
+
+fechamentos_desta_story:
+  REL-001: "FECHADO para os eventos da 87-3 — o `select`-depois-`insert` saiu; a garantia é o índice único"
+  REL-002: "FECHADO para os TRÊS eventos desta rota (alerta, recibo, falha). **Aberto no projeto** — 11 outros pontos expostos, 2 comprovadamente perdendo"
+  REL-003: "FECHADO — o `select` sem `.limit()` não existe mais"
+  AC6_da_87_3: "FECHADA POR EFEITO, com ressalva: a linha `NICOLE_LASTRO_DIARIO` existe, mas a série é incompleta antes do deploy do `await`"
+
+nfr:
+  performance: { status: PASS, nota: "três inserts aguardados num cron de 0,13 alerta/dia; `maxDuration` 300 s intacto. Não é caminho quente" }
+  security:    { status: PASS, nota: "auth do `CRON_SECRET` intocada; nenhuma tabela de negócio escrita; o único write é `system_events`" }
+  reliability: { status: CONCERNS, nota: "melhora grande e mensurável; resíduo em REL-004" }
+  maintainability: { status: PASS, nota: "`notificarAdmins` deixa a 87-9 trocar um corpo de função; `logEventOnce` é a ferramenta pronta para os 11 pontos expostos" }
+
+recommendation: >
+  **Liberar para deploy.** Nada aqui pede @dev de volta: não há defeito de código, os 9 vermelhos
+  são reais e a autocrítica que os sustenta foi verificada nos dois sentidos. O CONCERNS é por
+  registro faltando (EVID-001), por uma AC pós-deploy que só o @devops fecha (AC8) e por um resíduo
+  nomeado (REL-004) que a manchete da story torna obrigatório escrever.
+  **Ordem: o índice (B) já está no ar — conferido por mim hoje —, então o código pode subir.**
+
+— Quinn, guardião da qualidade 🛡️
