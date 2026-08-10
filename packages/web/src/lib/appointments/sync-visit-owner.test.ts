@@ -10,7 +10,7 @@ vi.mock("@web/lib/broker/notify-appointment", () => ({
   notifyBrokerOfAppointment: (p: Record<string, unknown>) => notifySpy(p),
 }))
 
-const { syncFutureVisitsWithLeadOwner, formatVisitWhen } = await import("./sync-visit-owner")
+const { syncFutureVisitsWithLeadOwner, formatVisitWhen, resolveVisitBrokerOnCreate } = await import("./sync-visit-owner")
 
 const BROKER = "34260eb8-e20b-422f-aadb-1f12806adc82"
 const LEAD = "81f90ea4-5544-42a7-b7da-37a8eb834d58"
@@ -186,5 +186,43 @@ describe("formatVisitWhen (Story 75-247)", () => {
   it("formata em BRT com 'às' antes da hora", () => {
     // 2026-08-01T13:00Z = sábado 01/08 10:00 BRT (a visita do Ailton)
     expect(formatVisitWhen("2026-08-01T13:00:00.000Z")).toBe("sáb., 01/08 às 10:00")
+  })
+})
+
+describe("resolveVisitBrokerOnCreate (Story 75-288)", () => {
+  const CREATOR = "thielly-id"
+  const OWNER = "odair-id"
+
+  it("caso Matheus: sem corretor explícito e lead COM dono → visita nasce do dono, com aviso", () => {
+    expect(
+      resolveVisitBrokerOnCreate({ explicitBrokerId: null, leadOwnerId: OWNER, creatorId: CREATOR }),
+    ).toEqual({ brokerId: OWNER, notifyOwner: true })
+  })
+
+  it("dono do lead é o próprio criador → nasce dele, SEM aviso (não notificar a si mesmo)", () => {
+    expect(
+      resolveVisitBrokerOnCreate({ explicitBrokerId: null, leadOwnerId: CREATOR, creatorId: CREATOR }),
+    ).toEqual({ brokerId: CREATOR, notifyOwner: false })
+  })
+
+  it("corretor explícito no form VENCE o dono do lead (admin agendando para alguém)", () => {
+    expect(
+      resolveVisitBrokerOnCreate({ explicitBrokerId: "explicito-id", leadOwnerId: OWNER, creatorId: CREATOR }),
+    ).toEqual({ brokerId: "explicito-id", notifyOwner: false })
+  })
+
+  it("lead sem dono (ou sem lead) → comportamento original: quem criou", () => {
+    expect(
+      resolveVisitBrokerOnCreate({ explicitBrokerId: null, leadOwnerId: null, creatorId: CREATOR }),
+    ).toEqual({ brokerId: CREATOR, notifyOwner: false })
+    expect(
+      resolveVisitBrokerOnCreate({ creatorId: CREATOR }),
+    ).toEqual({ brokerId: CREATOR, notifyOwner: false })
+  })
+
+  it("broker_id vazio ('') do form não conta como explícito", () => {
+    expect(
+      resolveVisitBrokerOnCreate({ explicitBrokerId: "", leadOwnerId: OWNER, creatorId: CREATOR }),
+    ).toEqual({ brokerId: OWNER, notifyOwner: true })
   })
 })

@@ -26,16 +26,22 @@ export interface NotifyAppointmentParams {
   leadId: string
   leadName: string | null
   leadPhone: string | null
-  /** Story 75-163 — tipo do evento (default "created"). Story 75-247 add "inherited". */
-  variant?: "created" | "rescheduled" | "cancelled" | "inherited" | "moved_out"
+  /**
+   * Story 75-163 — tipo do evento (default "created"). Story 75-247 add
+   * "inherited"/"moved_out". Story 75-288 add "scheduled_by_other" (um colega
+   * agendou visita no SEU lead — ex.: SDR agenda e o lead já é do corretor).
+   */
+  variant?: "created" | "rescheduled" | "cancelled" | "inherited" | "moved_out" | "scheduled_by_other"
   /** Story 75-163 — data/hora relevante (novo horário na remarcação; horário cancelado). */
   whenStr?: string | null
+  /** Story 75-288 — quem marcou (variant "scheduled_by_other"). */
+  actorName?: string | null
 }
 
 export async function notifyBrokerOfAppointment(
   params: NotifyAppointmentParams
 ): Promise<void> {
-  const { orgId, brokerUserId, leadId, leadName, leadPhone, variant = "created", whenStr } = params
+  const { orgId, brokerUserId, leadId, leadName, leadPhone, variant = "created", whenStr, actorName } = params
 
   // AC3: no broker assigned → no notification.
   if (!brokerUserId) return
@@ -100,6 +106,13 @@ export async function notifyBrokerOfAppointment(
               // corretor precisa saber que já herdou visita marcada.
               title: "Lead novo COM visita marcada",
               body: `${leadDisplayName} já tem visita agendada${whenStr ? ` para ${whenStr}` : ""} (agendada pela Nicole).`,
+            }
+          : variant === "scheduled_by_other"
+          ? {
+              // Story 75-288 — um colega (ex.: SDR) agendou visita num lead que
+              // já é deste corretor: a visita nasce dele e ele precisa saber.
+              title: "Visita marcada no seu lead",
+              body: `${leadDisplayName} tem visita agendada${whenStr ? ` para ${whenStr}` : ""}${actorName ? ` (marcada por ${actorName})` : ""}.`,
             }
           : variant === "cancelled"
           ? {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
+import { resolveVisitBrokerOnCreate, formatVisitWhen } from "@web/lib/appointments/sync-visit-owner"
+import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 import { isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
 
@@ -241,12 +243,37 @@ export async function POST(request: Request) {
           .join("\n")
       : notesBase
 
+  // Story 75-288 — a visita nasce de quem ATENDE o lead (mesmo princípio da
+  // 75-249, aplicado na criação): sem corretor explícito no payload, um lead
+  // COM dono carimba o dono — não quem clicou em salvar. Caso Matheus (10/08):
+  // a SDR transferiu o lead e agendou em seguida; a visita nascia dela e o
+  // lembrete de WhatsApp iria pra ela. Só team house — visita IMOB tem dono
+  // próprio (imobiliária/corretor parceiro, Epic 81).
+  let leadOwnerId: string | null = null
+  let leadNameForNotify: string | null = body.client_name?.trim() || null
+  let leadPhoneForNotify: string | null = body.client_phone?.trim() || null
+  if (team === "house" && leadId && !body.broker_id) {
+    const { data: leadRow } = await supabase
+      .from("leads")
+      .select("assigned_broker_id, name, phone")
+      .eq("id", leadId)
+      .maybeSingle()
+    leadOwnerId = (leadRow?.assigned_broker_id as string | null) ?? null
+    leadNameForNotify = (leadRow?.name as string | null) ?? leadNameForNotify
+    leadPhoneForNotify = (leadRow?.phone as string | null) ?? leadPhoneForNotify
+  }
+  const { brokerId: visitBrokerId, notifyOwner } = resolveVisitBrokerOnCreate({
+    explicitBrokerId: body.broker_id ?? null,
+    leadOwnerId,
+    creatorId: appUser.id,
+  })
+
   const { data: appointment, error } = await supabase
     .from("appointments")
     .insert({
       org_id: appUser.org_id,
       lead_id: leadId,
-      broker_id: body.broker_id || appUser.id,
+      broker_id: visitBrokerId,
       property_id: body.property_id || null,
       scheduled_at: newStart.toISOString(),
       duration_minutes: duration,
@@ -296,6 +323,22 @@ export async function POST(request: Request) {
     description: `Agendamento criado para ${scheduledAt.toLocaleString("pt-BR")}`,
     metadata: { appointment_id: appointment.id },
   })
+
+  // Story 75-288 — a visita nasceu do dono do lead, que NÃO é quem criou:
+  // avisa o dono (senão ele só descobre no lembrete de véspera). Best-effort —
+  // notifyBrokerOfAppointment nunca lança.
+  if (notifyOwner && leadId) {
+    await notifyBrokerOfAppointment({
+      orgId: appUser.org_id,
+      brokerUserId: visitBrokerId,
+      leadId,
+      leadName: leadNameForNotify,
+      leadPhone: leadPhoneForNotify,
+      variant: "scheduled_by_other",
+      whenStr: formatVisitWhen(appointment.scheduled_at as string),
+      actorName: appUser.name ?? null,
+    })
+  }
 
   return NextResponse.json({ data: { ...appointment, google_event_id: googleEventId } }, { status: 201 })
 }
