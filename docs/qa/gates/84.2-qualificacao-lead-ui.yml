@@ -1,0 +1,16 @@
+schema: 1
+story: '84.2'
+gate: PASS
+status_reason: 'SEC-001 corrigido (commit e71ff435): a rota de histórico agora confirma ownership do lead via SELECT no client RLS-scoped (mesma política leads_select do GET base) antes de usar o admin client; 404 se o RLS bloquear. Teste TEST-002 adicionado e verificado (3/3 verdes). Nenhum achado novo na re-revisão.'
+reviewer: 'Quinn'
+updated: '2026-08-05T01:10:00Z'
+top_issues: []
+waiver: { active: false }
+
+history:
+  - reviewed: '2026-08-05T00:25:00Z'
+    gate: FAIL
+    reason: 'SEC-001 (high) — corretor conseguia ler histórico de leads de outros corretores via chamada direta à rota (admin client sem checar ownership do lead).'
+  - reviewed: '2026-08-05T01:10:00Z'
+    gate: PASS
+    reason: 'SEC-001 corrigido e verificado; TEST-002 adicionado.'

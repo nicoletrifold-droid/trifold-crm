@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { MANDATORY_FIELDS } from "@trifold/shared"
 import { getDaysSinceContact, getTimeAgo } from "@web/lib/time"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { QualificacaoComercialBadge } from "@web/components/ui/qualificacao-comercial-badge"
 import { WaitingBadge } from "@web/components/leads/waiting-badge"
 import { CreativeChip } from "@web/components/pipeline/creative-chip"
 import { CreativePreviewModal } from "@web/components/pipeline/creative-preview-modal"
@@ -18,6 +19,8 @@ interface LeadCardProps {
     phone: string
     qualification_score: number | null
     interest_level: string | null
+    // Story 84-2 (Epic 84) — Qualificação Comercial: aditivo, NÃO substitui qualification_score
+    qualificacao_comercial?: string | null
     property_interest_id: string | null
     assigned_broker_id: string | null
     created_at: string
@@ -174,6 +177,8 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
         {/* Property Badge + Source/Creative + Progress — flex-wrap: o rótulo
             "WhatsApp Patrocinado" é mais largo que o antigo "Click-to-Ad" */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          <QualificacaoComercialBadge value={lead.qualificacao_comercial ?? null} size="xs" />
+
           <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${badge.bg} ${badge.text}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
             {badge.label}

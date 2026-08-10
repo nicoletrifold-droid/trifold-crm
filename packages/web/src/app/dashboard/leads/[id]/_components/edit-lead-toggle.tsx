@@ -23,6 +23,7 @@ export function EditLeadToggle({ lead, properties, initialEditing = false }: Pro
           phone: lead.phone as string,
           email: lead.email as string | null,
           interest_level: lead.interest_level as string | null,
+          qualificacao_comercial: lead.qualificacao_comercial as string | null,
           property_interest_id: lead.property_interest_id as string | null,
           preferred_bedrooms: lead.preferred_bedrooms as number | null,
           preferred_floor: lead.preferred_floor as string | null,

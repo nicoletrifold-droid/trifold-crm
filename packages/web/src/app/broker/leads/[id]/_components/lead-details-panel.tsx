@@ -11,6 +11,8 @@ interface LeadEditData {
   phone: string
   email: string | null
   interest_level: string | null
+  // Story 84-2 (Epic 84) — Qualificação Comercial
+  qualificacao_comercial: string | null
   property_interest_id: string | null
   preferred_bedrooms: number | null
   preferred_floor: string | null
