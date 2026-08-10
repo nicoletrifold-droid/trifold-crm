@@ -31,12 +31,13 @@ Janela morta: **11:25 → 14:23 BRT** (~3h), fechada com a troca manual do token
 |---|---|---|
 | Menu "Iniciar atendimento" | `whatsapp_config.access_token` | erro visível na tela (o único sintoma percebido) |
 | Chat do corretor / Nicole / follow-up / lembretes | `whatsapp_config.access_token` | **mensagem aparece enviada na tela e não chega ao lead** |
+| **Áudio / imagem / documento recebidos do lead** | `whatsapp_config.access_token` | **mídia nunca baixa e é perdida para sempre** (áudio não transcreve → Nicole e corretor ficam cegos) |
 | Lead de formulário do Meta | `META_PAGE_ACCESS_TOKEN` (Vercel) | lead criado **sem nome, sem telefone, sem e-mail** |
 | Sync de anúncios / insights | `meta_ad_accounts.access_token` | `status='error'`, sync parado |
 
 **O único sintoma que chegou ao humano foi o erro do menu.** Todo o resto falhou em silêncio.
 
-### As três causas-raiz
+### As quatro causas-raiz
 
 1. **Credencial espalhada em 4 lugares** (2 tabelas + N envs do Vercel), sem dono e sem
    validade rastreada. Trocar o token é um ritual manual de arqueologia.
@@ -44,7 +45,16 @@ Janela morta: **11:25 → 14:23 BRT** (~3h), fechada com a troca manual do token
    `metadata.send_error = 'HTTP_401'` na mensagem e devolve sucesso à UI: o corretor vê o balão
    na tela e presume entregue. No incidente, 2 mensagens sumiram assim (Thielly→Cristiane,
    Odair→lead 5544 98607826) e só apareceram numa query manual.
-3. **Lead do Meta incompleto é irrecuperável.** O webhook grava
+3. **Mídia recebida é irrecuperável.** O webhook do WhatsApp baixa áudio/imagem/documento com
+   `config.access_token` dentro de `if (mediaRes.ok)` **sem `else`** — token morto = mídia
+   silenciosamente perdida. Pior: o `media_id` (`msg.audio.id`) **nunca é persistido** (o
+   `metadata` guarda só `whatsapp_message_id` + `media_type`), e o webhook do WhatsApp **não
+   grava em `webhook_logs`** como o do meta_ads. Ou seja: o payload some, e a Meta guarda a
+   mídia ~30 dias mas **não há como pedi-la de volta** sem o media id. No incidente, 2 mensagens
+   de voz de um lead em etapa SDR (5544 99892607, corretora Thielly) foram perdidas
+   definitivamente — e eram a **resposta dele à mensagem de abertura de 24h**.
+
+4. **Lead do Meta incompleto é irrecuperável.** O webhook grava
    `webhook_logs.processed = true` mesmo quando a busca na Graph API volta vazia; o cron
    `meta-leads-retry` só varre `processed = false`, então **nunca** volta nesse evento. O lead
    fica órfão para sempre (recuperado à mão no incidente).
@@ -76,19 +86,24 @@ enquanto quem sincroniza é a VIND.
 - [ ] **AC3 — credencial morta alerta o gestor.** `HTTP_401`/`code 190` no Graph gera **uma**
       notificação para admin/supervisor (coalescing por dia, não uma por mensagem), com texto
       dizendo qual credencial e onde trocar. Fonte: o mesmo ponto que hoje grava `send_error`.
-- [ ] **AC4 — lead do Meta incompleto volta a ser recuperável.** Evento cuja busca na Graph
+- [ ] **AC4 — mídia recebida deixa de ser perdida.** O `media_id` do payload passa a ser
+      persistido em `messages.metadata` (áudio, imagem e documento). Falha no download marca a
+      bolha como "mídia não baixada" com ação de **tentar de novo** (a Meta retém ~30 dias), em
+      vez de virar `media_url = null` calado. Teste: download 401 → media_id gravado + retry
+      posterior baixa e transcreve.
+- [ ] **AC5 — lead do Meta incompleto volta a ser recuperável.** Evento cuja busca na Graph
       voltou sem contato **não** é marcado `processed = true` (ou é marcado com
       `processing_error` que o retry reconhece), de modo que `meta-leads-retry` o reprocesse
       dentro da janela de `MAX_ATTEMPTS`.
-- [ ] **AC5 — `process-lead` não morre com 2 contas ativas.** A busca de `meta_ad_accounts`
+- [ ] **AC6 — `process-lead` não morre com 2 contas ativas.** A busca de `meta_ad_accounts`
       ganha ordenação estável + `.limit(1)` antes do `maybeSingle()`; teste cobre o caso de
       duas linhas `active` na mesma org.
-- [ ] **AC6 — a tela de configuração mostra a conta que sincroniza.** `GET
+- [ ] **AC7 — a tela de configuração mostra a conta que sincroniza.** `GET
       /api/meta-ads/account` prioriza a `active` em vez da mais recente.
-- [ ] **AC7 — validade do token visível.** A tela de integrações mostra o vencimento do token
+- [ ] **AC8 — validade do token visível.** A tela de integrações mostra o vencimento do token
       (via `debug_token`, campo `expires_at`; "nunca expira" quando ausente), para que a
       renovação deixe de ser descoberta pelo estrago.
-- [ ] **AC8 — testes.** Cobertura de: envio 401 → mensagem marcada não-entregue + 1
+- [ ] **AC9 — testes.** Cobertura de: envio 401 → mensagem marcada não-entregue + 1
       notificação; evento leadgen sem contato → elegível ao retry; 2 contas `active` → token
       resolvido.
 
@@ -99,7 +114,8 @@ enquanto quem sincroniza é a VIND.
 - Unificar as 4 fontes de credencial numa só (vale uma story própria; aqui só se torna
   **observável**).
 - Emitir o token permanente (feito fora do código, no Business Manager).
-- Reenvio das 2 mensagens perdidas no incidente (feito à mão pelos corretores).
+- Reenvio das 2 mensagens perdidas no incidente (feito à mão pelos corretores) e o pedido ao
+  lead 5544 99892607 para reenviar os 2 áudios (a janela de 24h dele fecha ~12:09 de 11/08).
 
 ---
 
@@ -113,7 +129,7 @@ enquanto quem sincroniza é a VIND.
   INSTITUCIONAL `disconnected`); lead órfão `bce83eee-b1c4-4d1c-8eb0-8f55a48b78cd` preenchido.
 - ✅ O token vigente já é **System User permanente** (expiração "Nunca" → `debug_token` devolve
   `expires_at: 0`), emitido no mesmo dia do incidente e aplicado em `whatsapp_config` + nas 2
-  `meta_ad_accounts`. Não há mais data-bomba. O AC7 continua valendo: a tela deve **mostrar**
+  `meta_ad_accounts`. Não há mais data-bomba. O AC8 continua valendo: a tela deve **mostrar**
   "nunca expira" em vez de o time descobrir a validade pelo estrago.
 - ⚠️ **`AC1` tem um detalhe:** o system user token **não** resolve `resolveFormName`
   (`GET /{form_id}?fields=name` → 400, pede `pages_read_engagement`), que hoje roda com o
