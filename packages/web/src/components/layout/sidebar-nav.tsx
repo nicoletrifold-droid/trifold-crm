@@ -26,11 +26,13 @@ interface SidebarNavProps {
   basePath: string
   alertCount?: number
   /**
-   * Story 75-223 (generalizado na 75-286) — badges "vivos": o layout (server)
-   * congela em navegação interna do App Router; cada entrada faz o item de
-   * `href` re-buscar a contagem em `endpoint` (JSON `{ count }`) a cada 60s,
-   * ao focar a aba e a cada mudança de rota. Falha de fetch mantém o último
-   * valor daquele item (fail-open).
+   * Story 75-223 (generalizado na 75-286/75-287) — badges "vivos": o layout
+   * (server) congela em navegação interna do App Router; cada entrada faz o
+   * item de `href` re-buscar a contagem em `endpoint` a cada 60s, ao focar a
+   * aba e a cada mudança de rota. Entradas com o MESMO endpoint compartilham
+   * UM fetch; a resposta pode ser `{ count }` (vale p/ os hrefs do endpoint)
+   * ou `{ counts: { [href]: number } }` (mapa por item, caso do /broker).
+   * Falha de fetch mantém os últimos valores daquele endpoint (fail-open).
    */
   liveBadges?: Array<{ href: string; endpoint: string }>
 }
@@ -58,21 +60,39 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
   useEffect(() => {
     if (!liveKey) return
     const entries = JSON.parse(liveKey) as Array<{ href: string; endpoint: string }>
+    // Um fetch por endpoint (75-287): hrefs que apontam pro mesmo endpoint
+    // compartilham a resposta.
+    const byEndpoint = new Map<string, string[]>()
+    for (const { href, endpoint } of entries) {
+      byEndpoint.set(endpoint, [...(byEndpoint.get(endpoint) ?? []), href])
+    }
     let cancelled = false
+    const apply = (updates: Record<string, number>) => {
+      if (cancelled || Object.keys(updates).length === 0) return
+      setLiveCounts((prev) => {
+        const changed = Object.entries(updates).some(([href, n]) => prev[href] !== n)
+        return changed ? { ...prev, ...updates } : prev
+      })
+    }
     const load = () =>
       Promise.all(
-        entries.map(async ({ href, endpoint }) => {
+        Array.from(byEndpoint, async ([endpoint, hrefs]) => {
           try {
             const res = await fetch(endpoint, { cache: "no-store" })
             if (!res.ok) return
-            const json = (await res.json()) as { count?: unknown }
-            if (!cancelled && typeof json.count === "number") {
-              setLiveCounts((prev) =>
-                prev[href] === json.count ? prev : { ...prev, [href]: json.count as number }
-              )
+            const json = (await res.json()) as { count?: unknown; counts?: unknown }
+            const updates: Record<string, number> = {}
+            if (typeof json.count === "number") {
+              for (const href of hrefs) updates[href] = json.count
+            } else if (json.counts && typeof json.counts === "object") {
+              for (const href of hrefs) {
+                const n = (json.counts as Record<string, unknown>)[href]
+                if (typeof n === "number") updates[href] = n
+              }
             }
+            apply(updates)
           } catch {
-            // fail-open: mantém o último valor conhecido daquele item
+            // fail-open: mantém os últimos valores conhecidos daquele endpoint
           }
         })
       )
