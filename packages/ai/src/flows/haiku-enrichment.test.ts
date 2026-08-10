@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest"
-import { parseEnrichmentResponse, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel } from "./haiku-enrichment"
+import { describe, it, expect, vi } from "vitest"
+import { enrichLeadFromConversation, parseEnrichmentResponse, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel } from "./haiku-enrichment"
+import { renderFatoDeAgenda } from "./summary-grounding"
 
 describe("parseEnrichmentResponse", () => {
   it("parses valid JSON response", () => {
@@ -230,5 +231,72 @@ describe("stripManualInterestLevel", () => {
     const patch2: Record<string, unknown> = { interest_level: "warm" }
     stripManualInterestLevel(patch2, { interest_level_manual: null })
     expect(patch2.interest_level).toBe("warm")
+  })
+})
+
+/**
+ * Story 87-7 / AC5-(ii) — O PROMPT MONTADO DO ESCRITOR DOMINANTE.
+ *
+ * Achado do gate (`F3`): o teste que existia no `route.test.ts` assertava sobre
+ * o **argumento** `fatoDeAgenda` — com o `enrichLeadFromConversation` dublado.
+ * Mutar `${blocoAgenda}` ou `${REGRAS_FATO_DE_AGENDA}` dentro deste arquivo
+ * dava **0 vermelhos**: a AC nomeia a string montada, e ninguém a olhava.
+ *
+ * Aqui a função é a DE VERDADE; só o cliente Anthropic é dublado, e a asserção
+ * é sobre o texto que sai para o modelo.
+ */
+describe("AC5-(ii) — o ENRICHMENT_PROMPT montado leva o bloco e as regras", () => {
+  const HOJE = new Date("2026-08-08T13:00:00Z")
+
+  function anthropicFake() {
+    return {
+      messages: {
+        create: vi.fn().mockResolvedValue({
+          content: [{ type: "text", text: '{"summary":"x","extracted_data":{}}' }],
+        }),
+      },
+    } as unknown as Parameters<typeof enrichLeadFromConversation>[0]
+  }
+
+  async function promptMontado(fatoDeAgenda: string | null) {
+    const anthropic = anthropicFake()
+    await enrichLeadFromConversation(anthropic, {
+      messages: [
+        { role: "user", content: "Quero visitar" },
+        { role: "assistant", content: "Agendei sua visita para sábado!" },
+      ],
+      currentCollectedData: {},
+      fatoDeAgenda,
+    })
+    return (anthropic.messages.create as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+      .messages[0].content as string
+  }
+
+  it("🔴 o bloco FATO DE AGENDA entra no prompt montado", async () => {
+    const bloco = renderFatoDeAgenda(
+      [{ id: "a1", scheduled_at: new Date("2026-08-05T13:30:00Z"), status: "completed" }],
+      HOJE
+    )
+    const prompt = await promptMontado(bloco)
+    expect(prompt).toContain("FATO DE AGENDA")
+    // AC11 — appointment no passado nunca vira fato em tempo presente.
+    expect(prompt).toContain("A última visita registrada foi em 05/08/2026.")
+  })
+
+  it("🔴 e as REGRAS que proíbem data relativa vão SEMPRE, com ou sem bloco", async () => {
+    // As regras vivem no `ENRICHMENT_PROMPT` (estáticas); o bloco é por lead.
+    for (const bloco of [null, "FATO DE AGENDA (fonte: tabela `appointments`):\n  NÃO HÁ VISITA AGENDADA para este lead."]) {
+      const prompt = await promptMontado(bloco)
+      expect(prompt).toContain("DATA ABSOLUTA")
+      expect(prompt).toContain("A unica fonte e o bloco FATO DE AGENDA")
+      expect(prompt).toContain("Visita que ja aconteceu se escreve no passado")
+    }
+  })
+
+  it("sem bloco, o prompt continua íntegro — o cron não quebra em lead sem consulta", async () => {
+    const prompt = await promptMontado(null)
+    expect(prompt).toContain("Dados ja coletados:")
+    expect(prompt).toContain("Conversa:")
+    expect(prompt).toContain("Nicole: Agendei sua visita para sábado!")
   })
 })

@@ -32,6 +32,11 @@ const LEAD = "lead-1"
 let collectedDataAtual: Record<string, unknown> = {}
 /** O que o Haiku devolve — inclui `visit_availability` de propósito. */
 let extractedData: Record<string, unknown> = {}
+/** Story 87-7 — o `summary` que o Haiku devolve, e os `appointments` do lead. */
+let summaryDoHaiku = "resumo"
+let appointmentsDoLead: Array<Record<string, unknown>> = []
+/** Story 87-7 — o prompt montado, para a asserção de AC5. */
+let promptDoHaiku = ""
 
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {
@@ -39,6 +44,7 @@ function makeBuilder(table: string) {
     eq: () => builder,
     in: () => builder,
     gte: () => builder,
+    lte: () => builder,
     or: () => builder,
     order: () => builder,
     limit: () => builder,
@@ -58,6 +64,9 @@ function makeBuilder(table: string) {
           data: [{ id: CONV, lead_id: LEAD, org_id: "org-1", last_message_at: "2026-08-08T10:00:00Z", last_enriched_at: null }],
           error: null,
         })
+      }
+      if (table === "appointments") {
+        return resolve({ data: appointmentsDoLead, error: null })
       }
       if (table === "messages") {
         return resolve({
@@ -86,7 +95,10 @@ vi.mock("@trifold/ai", async (importOriginal) => {
   return {
     ...real,
     createAnthropicClient: () => ({}),
-    enrichLeadFromConversation: async () => ({ summary: "resumo", extracted_data: extractedData }),
+    enrichLeadFromConversation: async (_a: unknown, input: { fatoDeAgenda?: string | null }) => {
+      promptDoHaiku = input.fatoDeAgenda ?? ""
+      return { summary: summaryDoHaiku, extracted_data: extractedData }
+    },
   }
 })
 
@@ -115,6 +127,9 @@ beforeEach(() => {
   updates = []
   collectedDataAtual = {}
   extractedData = {}
+  summaryDoHaiku = "resumo"
+  appointmentsDoLead = []
+  promptDoHaiku = ""
 })
 
 describe("AC8-b — o cron enrich-leads para de escrever fato de agenda", () => {
@@ -342,5 +357,101 @@ describe("AC8-b — a chave saiu do ENRICHMENT_PROMPT", () => {
     // E o resto da lista continua lá — a subtração é cirúrgica.
     expect(prompt).toContain("- profissao")
     expect(prompt).toContain("- renda_familiar")
+  })
+})
+
+/**
+ * Story 87-7 / AC2-(ii) — O ESCRITOR B, e ele é a MAIORIA DA POPULAÇÃO.
+ *
+ * Este cron escreve `ai_summary` INCONDICIONALMENTE a cada 30 min ("AC8: Always
+ * update ai_summary"), sobre a conversa inteira — fala da Nicole incluída. 209
+ * dos 226 leads com resumo (92,5 %) têm conversa que ele já enriqueceu.
+ * Consertar só o `pipeline.ts` deixaria o defeito vivo em quase toda a
+ * população: é literalmente o erro que a 87-4 cometeu na v1.
+ *
+ * A frase da fixture é literal de produção — Lucimara, 04/08, `appointments = 0`.
+ */
+describe("AC2-(ii) — o resumo sem lastro NÃO entra no leadPatch do cron", () => {
+  const CONTAMINADO =
+    "Marcou visita ao decorado para o dia 8 (sábado), mas precisa confirmar o horário de trabalho antes de finalizar o agendamento."
+
+  function bloqueio() {
+    const c = logEventMock.mock.calls.find(
+      (c) => (c[0] as { event_type: string }).event_type === "NICOLE_RESUMO_SEM_LASTRO_BLOQUEADO"
+    )
+    return c?.[0] as { level: string; metadata: Record<string, unknown> } | undefined
+  }
+
+  it("🔴 resumo afirma visita, lead tem ZERO appointments → `ai_summary` AUSENTE do patch", async () => {
+    summaryDoHaiku = CONTAMINADO
+    appointmentsDoLead = []
+    extractedData = { bedrooms: 2 }
+    await rodar()
+    expect(leadPatch()).not.toHaveProperty("ai_summary")
+  })
+
+  it("🔴 e o bloqueio é CIRÚRGICO: perfil e score seguem no patch", async () => {
+    // O congelado nunca é pior que hoje; um lead que para de pontuar seria.
+    summaryDoHaiku = CONTAMINADO
+    appointmentsDoLead = []
+    extractedData = { bedrooms: 3, profissao: "professora", name: "Lucimara" }
+    await rodar()
+    const p = leadPatch()
+    expect(p).not.toHaveProperty("ai_summary")
+    expect(p.preferred_bedrooms).toBe(3)
+    expect(p.profissao).toBe("professora")
+    expect(p.name).toBe("Lucimara")
+    expect(p.qualification_score).toBeTypeOf("number")
+    expect(p.interest_level).toBeTruthy()
+  })
+
+  it("o evento sai com `origem: cron_enrich_leads` — é como as duas esteiras se desempatam (AC8)", async () => {
+    summaryDoHaiku = CONTAMINADO
+    appointmentsDoLead = []
+    await rodar()
+    const ev = bloqueio()
+    expect(ev, "o bloqueio precisa ser contável").toBeTruthy()
+    expect(ev!.level).toBe("warn")
+    expect(ev!.metadata.origem).toBe("cron_enrich_leads")
+    expect(ev!.metadata.veredicto).toBe("sem_lastro")
+    expect(ev!.metadata.lead_id).toBe(LEAD)
+    expect(ev!.metadata.conversation_id).toBe(CONV)
+    expect(String(ev!.metadata.citacao_curta)).toContain("Marcou visita ao decorado")
+  })
+
+  it("AC3 — o MESMO resumo, com appointment no dia afirmado, É gravado", async () => {
+    // O guarda ancora em `new Date()` (o instante da escrita), então o relógio
+    // é fixado: sem isso o teste vira loteria de fuso perto da meia-noite UTC.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-08-08T13:00:00Z")) // sábado, 10:00 BRT
+    try {
+      summaryDoHaiku = CONTAMINADO
+      appointmentsDoLead = [
+        { id: "appt-1", lead_id: LEAD, scheduled_at: "2026-08-08T13:00:00+00", status: "scheduled" },
+      ]
+      await rodar()
+      expect(leadPatch().ai_summary).toBe(CONTAMINADO)
+      expect(bloqueio()).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("resumo sem uma palavra sobre agenda continua sendo gravado", async () => {
+    summaryDoHaiku = "Ana busca 2 suítes no Vind, andar alto. Sem objeções."
+    appointmentsDoLead = []
+    await rodar()
+    expect(leadPatch().ai_summary).toBe(summaryDoHaiku)
+    expect(bloqueio()).toBeUndefined()
+  })
+
+  it("AC5 — o cron injeta o bloco FATO DE AGENDA vindo de `appointments`", async () => {
+    appointmentsDoLead = [
+      { id: "appt-1", lead_id: LEAD, scheduled_at: "2020-01-05T13:30:00+00", status: "completed" },
+    ]
+    await rodar()
+    // AC11 — appointment no passado nunca vira fato em tempo presente.
+    expect(promptDoHaiku).toContain("FATO DE AGENDA")
+    expect(promptDoHaiku).toContain("NÃO HÁ VISITA FUTURA AGENDADA")
   })
 })

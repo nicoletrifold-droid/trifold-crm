@@ -1,0 +1,296 @@
+schema: 1
+storyId: "87-7"
+story: "docs/stories/87-7-resumo-nao-grava-a-fala-da-nicole-como-fato.story.md"
+title: "Quality Gate — o resumo deixa de gravar a fala da Nicole como fato (W1-3b, deploy 2)"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 2
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-09"
+branch: "story/87-7-resumo-sem-lastro (stacked sobre story/87-4, já mergeada)"
+supersedes: "review_round 1 (FAIL), 2026-08-09 — registro preservado ao final deste arquivo"
+
+status_reason: >
+  As três condições HIGH da rodada 1 fecharam, e fecharam com prova que eu mesmo medi — não com
+  argumento. O conserto do F1 não é afrouxamento: as quatro recuperações contra produção têm
+  **divergência de ZERO minuto** (dia e hora batendo no minuto), e a mutação que alarga o back-off
+  para ±60 dias — o caminho fácil de fazer o número subir — é **pega pela fixture da AC4**, que
+  continua exigindo `sem_lastro` para um appointment de três semanas atrás. A régua inerte foi
+  retirada por conta dele, com a decomposição feita antes de eu pedir (183 de 231 casam
+  `próxim[ao]`, **170 literalmente "Próximo passo"**), e as duas substitutas que remedi não saturam
+  em nenhuma direção. O teste do prompt montado do escritor dominante saiu de 0 para 1 em cada
+  metade, chamando a função de verdade.
+  **O código está aprovado para merge.** O que segura o CONCERNS não é dele: **a `AC10-(ii)` no
+  corpo da story ainda é a régua inerte** — o @dev não pode editar AC, e quem executar a T6 lendo a
+  AC repetiria exatamente o defeito que esta família de stories existe para não repetir. Some-se
+  uma imprecisão de contagem (`M-AC1` declarado 14; medi 13 na variante estrita e 15 na semântica
+  completa — o número depende da forma da mutação, que não está escrita) e um risco residual novo,
+  estreito e documentado (o back-off pode absolver uma segunda visita falsa que caia no MESMO
+  dia-da-semana e MESMA hora de uma visita real anterior).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. AS CONDIÇÕES DA RODADA 1
+# ─────────────────────────────────────────────────────────────────────────────
+
+condicoes:
+  - id: C1
+    de: F1
+    status: FECHADA
+    titulo: "Rollover de ano — consertado, e o conserto tem borda testada"
+    o_que_eu_medi: |
+      mutação                                                              vermelhos
+      ───────────────────────────────────────────────────────────────────  ─────────
+      M-F1   conserto revertido (sem ano-autoridade, sem back-off)             4   ← declarado 4 ✅
+      M-F1a  só a ANO-AUTORIDADE removida (back-off continua)                  1
+      M-F1b  só o BACK-OFF removido (ano continua mandando)                    3
+      M-F1c  back-off ALARGADO para ±60 dias ("afrouxar até casar")            2   ← 🔴 é pego
+      M-DIVERG  `diaAfirmado` volta a sair do literal (par contraditório)      2
+    por_que_nao_e_afrouxamento: >
+      Três provas independentes. (a) **As quatro recuperações têm `divergencia_min = 0`** — não
+      "casou dentro da janela", casou no minuto. (b) **`M-F1c` é vermelho**: alargar o back-off
+      para ±60 dias derruba a fixture da AC4 ("appointment três semanas atrás → sem_lastro"), que
+      é exatamente a borda — 21 dias não é −7d, não é −1 mês, não é −1 ano. A régua que separa
+      "recuperação" de "afrouxamento" existe e está no vermelho. (c) **`M-F1a` = 1**: o teste que
+      pina a ano-autoridade é o NEGATIVO ("texto diz 2026, appointment é de 2025 → `sem_lastro`"),
+      que é o único formato capaz de impedir que a autoridade do ano vire "casa quase sempre".
+    contra_producao: |
+      Módulo rodado por mim contra os 11 resumos REAIS + appointments reais, âncora = instante de
+      escrita, datas via `parseTimestamptz`:
+
+        DISTRIBUIÇÃO   com_lastro 6 · sem_lastro 3 · indeterminado 2      (gate R1: 2 · 7 · 2)
+
+        RECUPERADOS (os 4), com o ramo que casou e a divergência:
+          Helena   −1 ano   "sábado, 27 de junho, às 10h"  ↔ 27/06/2026 10:00 BRT   div 0
+          Marlene  −1 ano   "segunda, 3 de agosto às 16h"  ↔ 03/08/2026 16:00 BRT   div 0
+          André    −7 dias  "dia seguinte (quarta) 10h30"  ↔ 05/08/2026 10:30 BRT   div 0
+          Valnira  −7 dias  "quinta-feira às 10h"          ↔ 06/08/2026 10:00 BRT   div 0
+
+        OS 3 QUE CONTINUAM BLOQUEADOS — conferi a triagem dele um a um:
+          Juca     sábado 11h30 ↔ visita 11/07 10:00 → div 10170 min (outro sábado E outra hora) ✅
+          Miriam   8 de julho 10h ↔ visita 08/07 11:00 → div 60 min > janela de 30 ✅
+          Edicleia "amanhã (sexta 15h)" ↔ visita 07/08 15:00 → div 1440 min (classe da AC11) ✅
+    par_do_evento: >
+      `dia_afirmado` e `divergencia_min` passaram a descrever o MESMO candidato. Conferido no caso
+      Miriam: publica `2026-07-08` + `60 min` (antes: `2027-07-08` + número sem sentido). No
+      caminho `com_lastro` não há evento emitido, então o canto em que `casouEm` e
+      `candidatoMaisProximo` poderiam divergir é inobservável — não é problema.
+
+  - id: C2
+    de: F2
+    status: "FECHADA NA SUBSTÂNCIA — pendente de dono (ver D1)"
+    o_que_eu_remedi: |
+      Produção, 2026-08-09 (Management API, somente SELECT):
+        resumos ......................................... 231
+        … casam `pr(ó|o)xim[ao]` ........................ 183   (79 %)
+        … … literalmente "Próximo passo" ................ 170          ← a decomposição dele bate
+        régua velha (`relativo`) sobre os 11 ............ 11/11 (satura)
+
+        RÉGUAS NOVAS, remedidas por mim:
+          relativo_estrito ..... 2 / 11   (população: 5 / 231)   deve CAIR
+          data_absoluta ........ 6 / 11   (população: 7 / 231)   deve SUBIR
+          appts = 0 ............ 0 / 11   → gatilho de rollback, nunca prova de sucesso
+      Nenhuma das duas satura em nenhuma direção. As direções são opostas e estão declaradas — é o
+      que faltava na régua anterior.
+    credito: >
+      Ele decompôs por conta própria e escreveu a regra de método ("régua nova só entra com a
+      contagem de quantos casam por acidente ao lado"). É a correção certa do padrão, não a
+      correção do sintoma.
+
+  - id: C3
+    de: F3
+    status: FECHADA
+    o_que_eu_medi: |
+      M-F3a  `${blocoAgenda}` fora do prompt montado do Haiku ........ 1   (era 0)
+      M-F3b  `${REGRAS_FATO_DE_AGENDA}` fora do ENRICHMENT_PROMPT .... 1   (era 0)
+    analise: >
+      O teste novo em `haiku-enrichment.test.ts` chama `enrichLeadFromConversation` **de verdade** —
+      só o cliente Anthropic é dublado — e asserta sobre `mock.calls[0][0].messages[0].content`.
+      É a string montada que a AC5-(ii) nomeia, não o argumento. As camadas 1 e 2 do escritor
+      dominante (92,5 % da população) passaram a ter defesa.
+
+  - id: C4
+    de: F4
+    status: "FECHADA NO MÉTODO — 1 número não reproduz"
+    tabela: |
+      mutação      declarado (R2)   medido por mim (raiz)   veredicto
+      ───────────  ───────────────  ──────────────────────  ─────────────────────────────────
+      M-AC1              14          13 / 15                ⚠️ depende da forma (ver abaixo)
+      M-F1                4           4                     ✅
+      M-AC4               5           5                     ✅
+      M-AC11              5           5                     ✅
+      M-F3a               1           1                     ✅
+      M-F3b               1           1                     ✅
+      M-NEG               1           1                     ✅
+      M-A                 1           1                     ✅
+      M-B                 2           2                     ✅
+      M-AC5-A / -B-call   2           1 + 1                 ✅
+    m_ac1: >
+      "Trocar o detector pela semântica da `detectAffirmedSlot`" admite duas formas. Exigir dia E
+      hora **só no ramo que já achou dia** → **13**. Replicar a `detectAffirmedSlot` inteira
+      (`null` também quando não há dia, o que derruba o teste de `indeterminado`) → **15**. Ele
+      declarou 14, que não é nenhuma das duas. Não muda conclusão nenhuma — em qualquer forma os
+      testes discriminam com folga —, mas **a forma da mutação precisa estar escrita junto do
+      número**, senão a contagem não é reproduzível e volta a valer como asserção em vez de medida.
+
+  - id: C5
+    de: F5
+    status: FECHADA
+    o_que_eu_medi: "M-NEG = 1 (era 0)"
+    analise: >
+      A fixture é o par certo: *"Marcou visita ao decorado para o dia 8, **mas não confirmou** o
+      horário ainda"* — negação DEPOIS do verbo, que uma regra de frase inteira absolveria, com o
+      par negativo da Orlice ao lado. E ele aceitou por escrito que a justificativa anterior estava
+      errada (a frase da Lucimara não tem token de negação nenhum). A regra deixou de ser código
+      indefeso.
+
+  - id: C6
+    de: F8
+    status: NAO_FEITA
+    obrigatorio: false
+    texto: "Batimento positivo do guarda continua ausente: zero eventos na janela permanece ambíguo entre 'nada a bloquear' e 'não rodou'. Opcional; ver D3."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. ACHADOS NOVOS DESTA RODADA
+# ─────────────────────────────────────────────────────────────────────────────
+
+issues:
+  - id: N1
+    severity: medium
+    category: requirements
+    title: "O back-off abre uma janela ESTREITA de falso `com_lastro` — o preço declarado do fail-open"
+    medido_por_mim: |
+      Lead com visita REAL em sábado 08/08 10:00. Nicole afirma uma SEGUNDA visita que não existe:
+
+        "nova visita … para sábado às 10h"        → com_lastro  🔴  (ramo −7 dias, div 0)
+        "nova visita … para sábado às 15h"        → sem_lastro  ✅  (div 300)
+        "nova visita … para quinta-feira às 10h"  → sem_lastro  ✅  (div 2880)
+        "visita … para o dia 8 às 10h"            → com_lastro  🔴  (ramo −1 mês, div 0)
+        lead SEM appointment nenhum (caso-mãe)    → sem_lastro  ✅
+    analise: >
+      O guarda deixa de bloquear uma afirmação falsa **apenas** quando ela cai no mesmo
+      dia-da-semana E mesma hora (ou mesmo dia-do-mês E mesma hora) de uma visita real anterior.
+      Mudar a hora ou o dia já bloqueia, e o caso-mãe (lead sem appointment) é imune.
+      **É inerente e não tem conserto barato aqui:** `parseDayParts` apaga a distinção entre
+      "sábado passado" e "próximo sábado", e `visit-slot.ts` não pode ser tocada (AC7).
+      **Exposição medida:** 16 leads têm conversa com IA ativa E visita passada.
+      **O trade é claramente favorável:** o defeito da rodada 1 congelava TODO lead com visita real
+      (dano largo, ativo a cada 30 min); este atinge uma coincidência de dia+hora em 16 leads, e é
+      fail-open, que é a postura declarada da story.
+    recomendacao: >
+      Registrar como risco residual na story e como candidato a follow-up do Epic 87: usar tempo
+      verbal / preposição ("marcou … para" = futuro vs "visitou … em" = passado) para PREFERIR o
+      candidato futuro quando o texto é prospectivo. Não é desta story.
+
+  - id: N2
+    severity: low
+    category: requirements
+    title: "Terceira coluna disponível e melhor que as duas — e ela está no CHÃO hoje"
+    medido_por_mim: |
+      `data_absoluta_com_ano`:  ai_summary ~* '(de 20[0-9]{2}|[0-9]{1,2}/[0-9]{1,2}/20[0-9]{2})'
+        sobre os 11 da régua ....... 0 / 11    ← no piso; só pode SUBIR
+        na população .............. 19 / 231
+    analise: >
+      É exatamente o que a camada 1 emite ("15 de agosto de 2026", "03/08/2026") e o que a camada 2
+      manda copiar. Diferente de `data_absoluta` (6/11), ela **não pode ser satisfeita pelo estilo
+      de escrita que já existia** — nenhum dos 11 resumos atuais escreve o ano. Uma métrica no piso
+      que só sobe se o conserto funcionar é o instrumento mais limpo que esta story tem.
+    recomendacao: "Sugerir ao @po como terceira coluna da AC10-(ii)/AC11-(ii), ao lado das duas já adotadas."
+
+  - id: N3
+    severity: low
+    category: tests
+    title: "F7 continua: a ligação `onEvent: emit` do escritor A não é exercida"
+    medicao: "M-PIPE (remover `onEvent: emit` de `pipeline.ts`) → 0 vermelhos, suíte inteiramente verde"
+    analise: "Consequência aceita da Decisão Autônoma nº 5 na rodada 1. Diff de uma linha, conferido de novo neste gate: a linha está lá. Permanece LOW."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. RE-VERIFICAÇÃO DAS ACs (rodada 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+verificado:
+  suite:
+    HEAD_sem_a_story: "1864 passed | 7 expected fail — medido por mim na rodada 1"
+    rodada_2: "1910 passed | 7 expected fail (1917) — +46 sobre o HEAD, +11 sobre a rodada 1"
+    arquivos_vermelhos: "os mesmos 5 de sempre (sharp/satori/pdf-lib), erro de collect"
+    rodado: "da raiz, sem --reporter=basic; árvore restaurada e recontada depois das 17 mutações"
+  tipos:
+    packages_ai: "npx tsc --noEmit → ZERO"
+    packages_web: "16 erros, os mesmos pré-existentes, ZERO em arquivo tocado"
+  AC1: "OK — as duas frases literais; `detectAffirmedSlot` null nas duas; e o back-off NÃO as absolve (teste próprio, e M-AC1 continua derrubando 13–15)"
+  AC2: "OK — M-A = 1 (o vermelho certo, byte a byte via fake que aplica predicados) · M-B = 2"
+  AC3: "OK — e agora com a borda que faltava: data absoluta JÁ PASSADA + appointment que bate → com_lastro"
+  AC4: "OK — M-AC4 = 5; e a fixture das três semanas é o que barra o afrouxamento (M-F1c)"
+  AC5: "OK nos DOIS escritores, agora sobre a string montada (M-F3a/M-F3b = 1 + 1)"
+  AC6: "OK — grep: módulo + testes + barrel + exatamente dois consumidores"
+  AC7: "OK — `git diff HEAD` de `visit-slot.ts` + `agenda-reconcile.ts` + `agenda-reconcile.test.ts` = **0 linhas**. O baseline da 87-3 em produção segue intacto"
+  AC8: "OK — evento nos dois lados com `origem`; par `dia_afirmado`/`divergencia_min` agora coerente"
+  AC9: "OK"
+  AC10: "🔴 PENDENTE DE DONO — ver D1. A régua nova está no Dev Agent Record; o corpo da AC ainda tem a inerte"
+  AC11: "(i) OK (M-AC11 = 5) · (ii) depende da AC10 revisada"
+  T8: "OK — reconferido: md5 `180c22aeb6…30710d`, `updated_at 2026-08-08 18:58:58`, lead ainda com 0 appointments"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. CONDIÇÕES DE DEPLOY (não são do @dev)
+# ─────────────────────────────────────────────────────────────────────────────
+
+condicoes_de_deploy:
+  - id: D1
+    dono: "@po"
+    bloqueante: true
+    texto: >
+      **Trocar a régua no corpo da `AC10-(ii)` e da `AC11-(ii)`.** Hoje a AC ainda manda usar a
+      coluna `relativo`, que é inerte. A régua correta está medida e escrita no Dev Agent Record e
+      neste gate (`relativo_estrito` 2/11 deve cair · `data_absoluta` 6/11 deve subir ·
+      `appts = 0` como gatilho de rollback, nunca prova). Considerar também a `data_absoluta_com_ano`
+      (**0/11**, ver N2). **Enquanto a AC disser o que diz hoje, quem executar a T6 vai medir com o
+      instrumento errado** — é o defeito que esta família de stories existe para não repetir.
+  - id: D2
+    dono: "@devops / responsável nomeado"
+    bloqueante: true
+    texto: >
+      **Janela dimensionada por `n`, não por horas** (F6 da rodada 1, não contestado): ~3,9 conversas
+      enriquecidas/dia e 6 dos 11 régua-positivos reescritos em 7 dias ⇒ 24 h entrega n ≈ 1 e a AC
+      se declara inconclusiva pela própria regra. Observar até `n ≥ 5` régua-positivos reescritos
+      (≈ 7 dias), com os gatilhos de rollback ativos desde a hora zero.
+  - id: D3
+    dono: "@devops"
+    bloqueante: false
+    texto: >
+      **AC10-(iv) exige chamada manual:** `system_events` com `event_type like 'NICOLE_%'` = **0
+      all-time** — o cron da 87-3 nunca rodou. O endpoint aceita `?dry=1`. Escrever isso no plano de
+      deploy, ou a AC10-(iv) será "medida" contra um instrumento que não roda.
+  - id: D4
+    dono: "@devops"
+    bloqueante: true
+    texto: "`D7` continua aberto: sem responsável nomeado (Marcos ou Thielly), o deploy não sai."
+
+recommendation: >
+  **Código APROVADO para merge.** As três condições HIGH fecharam com prova medida, e o conserto do
+  F1 é recuperação legítima — quatro leads com divergência ZERO, e a borda do afrouxamento tem
+  vermelho. **O deploy (T6) fica bloqueado em D1 e D2**, que não são do @dev: com a `AC10-(ii)`
+  como está escrita, a janela de observação mediria com a régua que já provamos inerte, e com 24 h
+  não alcançaria o denominador que a própria AC exige.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. REGISTRO DA RODADA 1 (FAIL) — preservado
+# ─────────────────────────────────────────────────────────────────────────────
+
+rodada_1:
+  gate: FAIL
+  reviewed_at: "2026-08-09"
+  achados:
+    F1: "HIGH — `parseDayParts` rolava data vencida para o ano seguinte e ignorava o ano escrito; resumo CORRETO virava `sem_lastro` com `divergencia_min = 525600`. Medido em 2 de 11 resumos reais (Helena, Marlene) e reproduzido no texto que a própria camada 1 induz. **CORRIGIDO (C1).**"
+    F2: "HIGH — a AC10-(ii) com as duas colunas inertes: `appts = 0` zerada por construção pela T8, e `relativo` em 11/11 por causa do boilerplate 'Próximo passo:'. **CORRIGIDO no código e no registro (C2); pendente na AC (D1).**"
+    F3: "MEDIUM — mutar o prompt montado do escritor B dava 0 vermelhos. **CORRIGIDO (C3).**"
+    F4: "MEDIUM — contagem declarada ≠ medida (M-AC1 5→11, M-AC11 3→4). **CORRIGIDO no método (C4), com 1 número ainda não reproduzível.**"
+    F5: "MEDIUM — regra posicional da negação sem teste e com justificativa falsa. **CORRIGIDO (C5).**"
+    F6: "MEDIUM — janela de 24 h não alcança n ≥ 5. **Vira condição de deploy D2.**"
+    F7: "LOW — `onEvent: emit` não exercido. **Permanece (N3).**"
+    F8: "LOW — sem batimento positivo do guarda. **Permanece (C6, opcional).**"
+  nota: >
+    O @dev registrou que a correção de premissa sobre o `enrich-leads` estar vivo AGRAVA o F1 em vez
+    de aliviar — com o cron reescrevendo a cada 30 min, o guarda da rodada 1 congelaria todo lead
+    com visita real no texto vencido que a AC11 existe para matar, em produção, em silêncio e com
+    todas as ACs verdes. Concordo com a leitura, e ela é a razão de o F1 ter sido tratado como
+    bloqueante em vez de ressalva.

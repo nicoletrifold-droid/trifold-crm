@@ -1,10 +1,17 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODELS } from "../client/anthropic"
 import { calculateQualificationScore } from "./qualification"
+import { REGRAS_FATO_DE_AGENDA } from "./summary-grounding"
 
 interface EnrichmentInput {
   messages: Array<{ role: string; content: string }>
   currentCollectedData: Record<string, unknown>
+  /**
+   * Story 87-7 — bloco `FATO DE AGENDA` renderizado de `appointments`
+   * (`renderFatoDeAgenda`). Este prompt lê a conversa INTEIRA, fala da Nicole
+   * incluída; sem a verdade do banco ele deriva compromisso da prosa dela.
+   */
+  fatoDeAgenda?: string | null
 }
 
 interface EnrichmentResult {
@@ -58,7 +65,9 @@ REGRAS:
 - NAO invente dados — se o lead nao falou, nao inclua o campo
 - Para os campos de enum (renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, tem_pet) use EXATAMENTE um dos valores listados — nunca outro texto
 - Se o lead mencionou interesse em ambos empreendimentos, use o que ele demonstrou MAIS interesse
-- Para source, mapeie: instagram/facebook/tiktok → "meta_ads", google/youtube → "website", indicacao/amigo → "referral", placa/stand/passou na frente → "walk_in"`
+- Para source, mapeie: instagram/facebook/tiktok → "meta_ads", google/youtube → "website", indicacao/amigo → "referral", placa/stand/passou na frente → "walk_in"
+
+${REGRAS_FATO_DE_AGENDA}`
 
 /**
  * Calls Haiku to extract structured data + summary from a conversation.
@@ -72,10 +81,14 @@ export async function enrichLeadFromConversation(
     .map((m) => `${m.role === "user" ? "Lead" : "Nicole"}: ${m.content}`)
     .join("\n")
 
+  // Story 87-7 — o bloco vem ANTES da conversa de propósito: ele é a fonte
+  // autorizada, e a conversa (com a fala da Nicole dentro) é só contexto.
+  const blocoAgenda = input.fatoDeAgenda ? `\n${input.fatoDeAgenda}\n` : ""
+
   const prompt = `${ENRICHMENT_PROMPT}
 
 Dados ja coletados: ${JSON.stringify(input.currentCollectedData)}
-
+${blocoAgenda}
 Conversa:
 ${messagesText}`
 

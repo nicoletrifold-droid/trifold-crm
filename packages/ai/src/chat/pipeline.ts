@@ -25,7 +25,7 @@ import {
   checkYardenGate,
   shouldHandoff,
   generateHandoffSummary,
-  updateLeadMemory,
+  atualizarResumoComLastro,
   guardStageForAssignedLead,
   stripManualInterestLevel,
 } from "../flows"
@@ -1565,19 +1565,24 @@ export async function processMessageWithMetadata(
     const shouldRunHaiku = (msgCount ?? 0) % 5 === 0
 
     if (shouldRunHaiku) {
-      updateLeadMemory({
+      // Story 87-7 — a gravação do `ai_summary` passou INTEIRA para
+      // `atualizarResumoComLastro`: ela injeta o `FATO DE AGENDA` vindo de
+      // `appointments`, rotula a fala da Nicole como contexto (não como fato) e
+      // BARRA a escrita quando o resumo afirma visita que o banco não tem.
+      //
+      // Continua fire-and-forget e fora do caminho da resposta — o guarda
+      // decide se GRAVA, nunca o que ela FALA (`W3-3` é outra onda).
+      atualizarResumoComLastro({
+        supabase,
         anthropic,
+        leadId,
+        conversationId,
+        orgId,
         currentSummary,
         userMessage: message,
         assistantMessage,
         collectedData: finalData,
-      }).then(async (newSummary) => {
-        if (newSummary) {
-          await supabase
-            .from("leads")
-            .update({ ai_summary: newSummary })
-            .eq("id", leadId)
-        }
+        onEvent: emit,
       }).catch((err) => console.error("Lead memory update failed:", err))
     }
 
