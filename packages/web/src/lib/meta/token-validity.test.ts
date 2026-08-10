@@ -67,15 +67,23 @@ describe("fetchTokenValidity", () => {
     expect(v?.unknownReason).toContain("network down")
   })
 
-  it("o token vai URL-encoded e não aparece em nenhuma mensagem de erro", async () => {
-    const calls: string[] = []
-    const fakeFetch = vi.fn(async (url: unknown) => {
-      calls.push(String(url))
+  it("o token do INSPETOR vai no header, não na query (log de rede grava query string)", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fakeFetch = vi.fn(async (url: unknown, init?: unknown) => {
+      calls.push({ url: String(url), init: init as RequestInit })
       throw new Error("boom")
     }) as unknown as typeof fetch
 
     const v = await fetchTokenValidity("tok/com+chars", fakeFetch)
-    expect(calls[0]).toContain(encodeURIComponent("tok/com+chars"))
+
+    const { url, init } = calls[0]!
+    // `input_token` é contrato da Meta e não tem como sair da query — vai encoded.
+    expect(url).toContain(`input_token=${encodeURIComponent("tok/com+chars")}`)
+    // Mas o token do inspetor NÃO se repete na URL: só uma cópia, e no header.
+    expect(url).not.toContain("access_token=")
+    expect((init?.headers as Record<string, string>).Authorization).toBe(
+      "Bearer tok/com+chars"
+    )
     // A mensagem devolvida à tela nunca carrega o segredo.
     expect(JSON.stringify(v)).not.toContain("tok/com+chars")
   })

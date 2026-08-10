@@ -253,6 +253,33 @@ formulário só entra quando a campanha não tem nome, e na prática ela tem (`"
 
 ---
 
+## QA Results
+
+**Gate: CONCERNS** · score 82 · `docs/qa/gates/75.289-rotacao-token-meta-falha-silenciosa.yml`
+
+A review achou **três defeitos reais no código desta story**, todos corrigidos dentro do gate:
+
+| # | Sev | O quê |
+|---|---|---|
+| QA-1 | alta | O alerta usava `void promise` num route handler — em serverless a lambda pode encerrar com a escrita pendente e o e-mail **nunca sai**. O mecanismo criado para acabar com a falha silenciosa falharia em silêncio. Trocado por `after()`, a convenção que o repo já usa em 6 rotas. |
+| QA-2 | alta | O reenvio assinava com quem **clicou**, não com quem **escreveu**: supervisor reenviando a mensagem da corretora faria o lead receber a fala dela assinada com o nome dele. Agora usa `metadata.signed_as`. |
+| QA-3 | média | O token ia **duas vezes** na query string do `debug_token`. Query string é gravada por log de rede; header não. Inspetor movido para `Authorization` (validado contra a Meta com o token real). |
+
+**Por que não é PASS:** o DoD pede verificação **rodando em prod** e isso não foi feito —
+provocar um 401 real derrubaria o WhatsApp no meio do dia comercial. Nenhum teste unitário
+cobre a bolha vermelha na tela real, o e-mail chegando ao gestor, nem a bolha de mídia não
+baixada. Somado à confirmação comportamental do AC1 (aguardando lead de formulário), são as
+duas pendências operacionais.
+
+**Dívida registrada** (não bloqueia merge): a falha de envio da mensagem de **transição**
+(`role='assistant'`) continua invisível — é o mesmo buraco numa mensagem vizinha e merece story
+própria; `mergeMessageMetadata` não é atômico; a tela de integrações chama a Meta a cada render;
+o reenvio não tem rate limit.
+
+**Recomendação:** liberar para @devops.
+
+---
+
 ## Change Log
 
 | Data | Autor | Mudança |
@@ -262,3 +289,4 @@ formulário só entra quando a campanha não tem nome, e na prática ela tem (`"
 | 10/08/2026 | @sm | Áudio/imagem/documento recebidos entram na story (novo AC4, ACs renumerados). |
 | 10/08/2026 | @po | **Validação 10 pontos: GO condicional (7/10)** → lacunas corrigidas nesta mesma passagem: adicionados Valor de negócio, Dependências, Riscos e Definition of Done; estimativa revista de M (~5) para **M/L (~8)** — 9 ACs cruzam webhook, envio, notificações, 2 rotas e 1 tela; decisão do `pages_read_engagement` tomada (não regerar); **AC1 marcado como feito** (antecipado por decisão do Marcos). Status **Draft → Ready**. |
 | 10/08/2026 | @dev | **AC2–AC9 implementados.** 4 arquivos novos + 9 modificados, sem migration. Desvio consciente no AC5 (gatilho = `field_data` vazio, não `incomplete` — telefone-lixo não merece retry). Duas armadilhas corrigidas: `ok:true` com `processed=false` reprocessaria a cada 15min para sempre, e tentativas esgotadas entupiriam o lote de 20 mais antigos. AC8 revelou que o card de WhatsApp lia uma env var inexistente. 2110 testes verdes, typecheck limpo, lint 0 erros. Status **Ready → InReview**. |
+| 10/08/2026 | @qa | **Gate CONCERNS** (score 82). 3 defeitos reais encontrados e corrigidos: `void promise` em vez de `after()` (o alerta poderia nunca sair), reenvio assinando com quem clicou em vez de quem escreveu, e token duplicado na query string do `debug_token`. Re-verificado: 2110 testes verdes, typecheck limpo, lint 0 erros. Não é PASS porque a verificação **rodando em prod** (DoD) não foi cumprida. |

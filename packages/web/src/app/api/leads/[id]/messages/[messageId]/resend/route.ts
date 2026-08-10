@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
@@ -118,22 +118,27 @@ export async function POST(
     }
   }
 
+  // `content` guarda o texto ORIGINAL (75-171) — a assinatura é reaplicada aqui.
+  // CRÍTICO: assina com quem ESCREVEU (`metadata.signed_as`), não com quem clicou
+  // reenviar. No atendimento compartilhado um supervisor pode reenviar a mensagem
+  // da corretora, e o lead receberia a fala dela assinada com o nome dele.
+  const assinante = (metadata.signed_as as string | undefined) ?? appUser.name
   const dispatch = await dispatchBrokerMessage({
     phone: lead.phone as string,
-    // `content` guarda o texto ORIGINAL (75-171): a assinatura é reaplicada aqui,
-    // igual ao envio original — sem isso o lead receberia sem o nome de quem fala.
-    message: buildSignedMessage(appUser.name, msg.content as string, channel),
+    message: buildSignedMessage(assinante, msg.content as string, channel),
     conversationLastMessageAt: conversation.last_message_at as string | null,
     waCredentials,
   })
 
   if (!dispatch.sent) {
     if (isCredencialMorta({ error: dispatch.error })) {
-      void alertCredencialMorta({
-        orgId: appUser.org_id,
-        credencial: "whatsapp_config",
-        detalhe: `reenvio do corretor falhou: ${dispatch.error}`,
-      }).catch((err) => console.error("[75-289] alerta de credencial falhou:", err))
+      after(() =>
+        alertCredencialMorta({
+          orgId: appUser.org_id,
+          credencial: "whatsapp_config",
+          detalhe: `reenvio do corretor falhou: ${dispatch.error}`,
+        }).catch((err) => console.error("[75-289] alerta de credencial falhou:", err)),
+      )
     }
     // Registra a nova tentativa sem apagar o histórico: a bolha segue "não entregue".
     await admin

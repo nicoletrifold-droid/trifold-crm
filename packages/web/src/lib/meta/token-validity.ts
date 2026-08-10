@@ -84,11 +84,17 @@ export async function fetchTokenValidity(
 ): Promise<TokenValidity | null> {
   if (!accessToken) return null
   try {
+    // `input_token` só existe como query param (contrato da Meta), mas o token do
+    // INSPETOR vai no header Authorization — metade da exposição a menos em log de
+    // rede/proxy, onde query string costuma ser gravada e header não.
     const res = await fetchImpl(
       `https://graph.facebook.com/v21.0/debug_token?input_token=${encodeURIComponent(
         accessToken
-      )}&access_token=${encodeURIComponent(accessToken)}`,
-      { signal: AbortSignal.timeout(6000) }
+      )}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(6000),
+      }
     )
     const json = (await res.json()) as { data?: DebugTokenData; error?: { message?: string } }
     if (!res.ok && !json?.data) {

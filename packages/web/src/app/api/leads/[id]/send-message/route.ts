@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
@@ -295,11 +295,16 @@ export async function POST(
     // e sem await bloqueante do resultado: o alerta NUNCA pode atrasar ou derrubar o
     // caminho de envio do corretor.
     if (isCredencialMorta({ error: dispatch.error })) {
-      void alertCredencialMorta({
-        orgId: appUser.org_id,
-        credencial: "whatsapp_config",
-        detalhe: `envio do corretor falhou: ${dispatch.error}`,
-      }).catch((err) => console.error("[75-289] alerta de credencial falhou:", err))
+      // `after()` (convenção do repo — webhook/whatsapp, webhooks/meta-ads, …) e NÃO
+      // `void promise`: sem ele a lambda pode encerrar com a escrita pendente e o
+      // alerta nunca sai — a mesma falha silenciosa que esta story existe para matar.
+      after(() =>
+        alertCredencialMorta({
+          orgId: appUser.org_id,
+          credencial: "whatsapp_config",
+          detalhe: `envio do corretor falhou: ${dispatch.error}`,
+        }).catch((err) => console.error("[75-289] alerta de credencial falhou:", err)),
+      )
     }
   }
 
