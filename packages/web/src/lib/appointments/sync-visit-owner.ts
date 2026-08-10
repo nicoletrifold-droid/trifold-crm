@@ -134,6 +134,32 @@ export async function syncFutureVisitsWithLeadOwner(params: {
   }
 }
 
+/**
+ * Story 75-288 — **a visita já NASCE de quem atende o lead.**
+ *
+ * Irmã da regra acima, aplicada na criação: a 75-249 move a visita quando o
+ * lead troca de dono, mas não cobria visita criada DEPOIS da troca (caso
+ * Matheus, 10/08: Thielly transferiu pro Odair às 09:08 e agendou às 09:09 —
+ * a visita nasceu dela). Precedência:
+ *
+ * 1. `explicitBrokerId` — o form escolheu um corretor (Agenda filtrada, admin
+ *    agendando para alguém): vale o que foi pedido;
+ * 2. `leadOwnerId` — lead com dono: a visita nasce do dono;
+ * 3. `creatorId` — sem dono (ou sem lead): comportamento original.
+ *
+ * `notifyOwner` só quando a visita nasce de alguém que NÃO é o criador — o
+ * dono precisa saber que ganhou compromisso (senão só descobre no lembrete).
+ */
+export function resolveVisitBrokerOnCreate(params: {
+  explicitBrokerId?: string | null
+  leadOwnerId?: string | null
+  creatorId: string
+}): { brokerId: string; notifyOwner: boolean } {
+  const { explicitBrokerId, leadOwnerId, creatorId } = params
+  const brokerId = explicitBrokerId || leadOwnerId || creatorId
+  return { brokerId, notifyOwner: !explicitBrokerId && !!leadOwnerId && leadOwnerId !== creatorId }
+}
+
 /** "sáb., 01/08 às 10:00" — mesmo formato do aviso de visita no WhatsApp. */
 export function formatVisitWhen(scheduledAt: string): string {
   const d = new Date(scheduledAt)
