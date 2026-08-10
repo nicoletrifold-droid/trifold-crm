@@ -32,6 +32,9 @@ export const LEAD_PATCH_ALLOWED_FIELDS: string[] = [
   "qualification_status",
   "qualification_score",
   "interest_level",
+  // Story 84-1 — Qualificação Comercial: manual, independente de interest_level/
+  // qualification_status/qualification_score (que são recalculados pela Nicole).
+  "qualificacao_comercial",
   "source",
   "assigned_broker_id",
   "ai_summary",

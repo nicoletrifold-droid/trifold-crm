@@ -1,0 +1,20 @@
+schema: 1
+story: '84.1'
+gate: CONCERNS
+status_reason: 'Implementação correta e consistente com padrões existentes (interest_level, roleta_config, audit_logs, SUBMODULE_MAP); AC2 tem redação imprecisa (fala em "1 linha por org" mas a tabela nasce vazia por design, mesmo padrão lazy-create de roleta_config) e AC7 não tem teste automatizado além do grep pontual.'
+reviewer: 'Quinn'
+updated: '2026-08-04T23:20:00Z'
+top_issues:
+  - id: 'REQ-001'
+    severity: low
+    finding: 'AC2 diz "existe qualificacao_comercial_config com 1 linha por org" mas a migration não semeia nenhuma linha — a tabela nasce vazia (design intencional, igual roleta_config: linha criada via upsert só quando a 84-4 precisar). O comportamento está correto e documentado nos Dev Notes/Completion Notes, só o texto da AC ficou impreciso.'
+    suggested_action: 'Ajustar a redação da AC2 (ou anotar na própria story) para "estrutura suporta 1 linha por org via UNIQUE(org_id), defaults aplicados quando a linha é criada" — não bloqueia, é só clareza para leitura futura.'
+  - id: 'TEST-001'
+    severity: low
+    finding: 'AC7 pede confirmação "por grep e por teste" de que a Nicole não escreve em qualificacao_comercial. Só o grep foi feito — não há teste automatizado que travaria uma regressão futura se alguém adicionar o campo em chat/pipeline.ts ou haiku-enrichment.ts.'
+    suggested_action: 'Nice-to-have para story futura: teste de regressão simples checando que o leadPatch da Nicole nunca inclui a chave qualificacao_comercial. Não bloqueia esta story.'
+  - id: 'REL-001'
+    severity: low
+    finding: 'O old_value do audit é lido antes do UPDATE sem lock — em teoria, dois PATCHs concorrentes no mesmo lead podem gerar um old_value desatualizado num deles (race condition clássica de read-then-write). Padrão idêntico ao já existente para o carimbo de interest_level_manual (Story 75-237) na mesma rota — não é uma regressão introduzida por esta story, é um risco pré-existente herdado do padrão do arquivo.'
+    suggested_action: 'Aceitável para o volume de escrita esperado (edição manual, não em massa). Se virar problema real, considerar SELECT ... FOR UPDATE ou trigger de audit no banco — fora do escopo desta story.'
+waiver: { active: false }

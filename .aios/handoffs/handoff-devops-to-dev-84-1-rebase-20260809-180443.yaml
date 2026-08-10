@@ -1,0 +1,18 @@
+handoff:
+  from_agent: devops
+  to_agent: dev
+  story_context:
+    story_id: "84-1"
+    story_path: "docs/stories/84-1-qualificacao-lead-schema-permissoes-auditoria.story.md"
+    story_status: "Done-ish (PR #362), mas PR CONFLITANDO com main — precisa rebase + renumerar migration"
+    current_task: "Rebasear a 84-1 na main atual, resolver conflito em route.ts, renumerar migration 215→217, re-rodar checks"
+    branch: "feat/84-1-qualificacao-lead-schema (worktree atual)"
+  decisions:
+    - "PR #362 está CONFLITANDO (DIRTY). Conflito real em packages/web/src/app/api/leads/[id]/route.ts: a main avançou (75-267/269/273 mexeram na whitelist allowedFields, removeram lost_reason, add lost_reason_grupo, add interest_level_manual/75-237) e a 84-1 também mexeu nesse arquivo (add 'qualificacao_comercial' na allowedFields + import canAccess + gate 403 + leitura de estado atual + logAudit específico)."
+    - "COLISÃO de migration: main já tem 215_meta_capi_outbox.sql E 216_clientes_cpf_normalizado.sql. A 84-1 traz 215_leads_qualificacao_comercial.sql → RENUMERAR para 217_leads_qualificacao_comercial.sql (próximo livre)."
+    - "As mudanças da 84-1 em route.ts (o que precisa sobreviver ao rebase): (1) import { canAccess } from '@web/lib/permissions'; (2) 'qualificacao_comercial' em allowedFields; (3) gate: if (fields.qualificacao_comercial !== undefined && !(await canAccess(appUser.id, appUser.org_id, 'leads.qualificacao'))) return 403; (4) estender a leitura do estado atual (precisaEstadoAtual/atual) p/ incluir qualificacao_comercial (old_value); (5) segundo logAudit 'lead.qualificacao_comercial_updated' com metadata {old_value,new_value} — além do logAudit genérico 'lead.update'."
+    - "NÃO reintroduzir lost_reason na whitelist (a main removeu de propósito — guard-rail lib/leads/patch-allowed-fields.ts na 75-273). Preservar o estado da main e só ADICIONAR qualificacao_comercial."
+    - "Renumerar 215→217 inclui: renomear o .sql + atualizar referências textuais a '215' na story 84-1, no gate docs/qa/gates/84.1-...yml e nos Dev Notes."
+  files_modified: []
+  blockers: []
+  next_action: "@dev: 1) git fetch origin; 2) git merge origin/main (ou rebase) e resolver o conflito em route.ts preservando o estado da main + reaplicando as 5 mudanças da 84-1 listadas acima; 3) git mv da migration 215→217 + atualizar refs textuais; 4) pnpm install; 5) checks (vitest, tsc com NODE_OPTIONS=--max-old-space-size=8192, eslint nos arquivos tocados); 6) commit; avisar @devops p/ push (atualiza o PR #362). NÃO aplicar migration em banco (é passo separado, prod, com PAT do usuário). Depois disso a 84-1 fica MERGEABLE."
