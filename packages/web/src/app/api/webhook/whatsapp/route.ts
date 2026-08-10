@@ -24,6 +24,10 @@ import { transcribeAudio } from "@web/lib/transcription/transcribe"
 import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 import { sendWhatsAppTypingIndicator } from "@web/lib/whatsapp/send-typing-indicator"
 import { calculateTypingDelay } from "@web/lib/whatsapp/typing-delay"
+import {
+  alertCredencialMorta,
+  isCredencialMorta,
+} from "@web/lib/meta/alert-credencial-morta"
 
 export const maxDuration = 60
 
@@ -74,13 +78,23 @@ async function mergeMessageMetadata(
 async function markMediaDownloadFailed(
   admin: SupabaseClient,
   wamid: string,
-  reason: string
+  reason: string,
+  orgId?: string
 ): Promise<void> {
   console.error(`[75-289] download de mídia falhou (${reason}) — wamid ${wamid}`)
   await mergeMessageMetadata(admin, wamid, {
     media_download_failed: true,
     media_download_error: reason,
   })
+  // Story 75-289 (AC3): 401 aqui é a MESMA credencial que o envio usa. Avisa o
+  // gestor (1x/dia, coalescido) — foi este caminho que perdeu 2 áudios em 10/08.
+  if (orgId && isCredencialMorta({ error: reason })) {
+    await alertCredencialMorta({
+      orgId,
+      credencial: "whatsapp_config",
+      detalhe: `download de mídia recebida falhou: ${reason}`,
+    })
+  }
 }
 
 async function persistInboundMedia(
@@ -634,17 +648,18 @@ export async function POST(request: NextRequest) {
               await persistInboundMedia(getSupabaseAdmin(), buffer, mimeType, "image", lead.id, messageId)
             } else {
               // Story 75-289 (AC4): antes este ramo não existia — falha sem rastro.
-              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`)
+              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`, orgId)
             }
           } else {
-            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`)
+            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`, orgId)
           }
         } catch (err) {
           console.error("WhatsApp image download error:", err)
           await markMediaDownloadFailed(
             getSupabaseAdmin(),
             messageId,
-            err instanceof Error ? err.message : "erro desconhecido"
+            err instanceof Error ? err.message : "erro desconhecido",
+            orgId
           )
         }
         asyncText = msg.image?.caption || "O que voce acha desta imagem?"
@@ -685,17 +700,18 @@ export async function POST(request: NextRequest) {
               await persistInboundMedia(getSupabaseAdmin(), buffer, mimeType, mt, lead.id, messageId)
             } else {
               // Story 75-289 (AC4)
-              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`)
+              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`, orgId)
             }
           } else {
-            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`)
+            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`, orgId)
           }
         } catch (err) {
           console.error("WhatsApp document download error:", err)
           await markMediaDownloadFailed(
             getSupabaseAdmin(),
             messageId,
-            err instanceof Error ? err.message : "erro desconhecido"
+            err instanceof Error ? err.message : "erro desconhecido",
+            orgId
           )
         }
         asyncText = asyncText || msg.document?.caption || "Recebi um documento."
@@ -753,17 +769,18 @@ export async function POST(request: NextRequest) {
             } else {
               // Story 75-289 (AC4): era exatamente aqui que os 2 áudios de 10/08
               // desapareciam — sem `else`, sem log, sem rastro.
-              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`)
+              await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `arquivo HTTP ${fileRes.status}`, orgId)
             }
           } else {
-            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`)
+            await markMediaDownloadFailed(getSupabaseAdmin(), messageId, `graph HTTP ${mediaRes.status}`, orgId)
           }
         } catch (err) {
           console.error("WhatsApp audio download/transcribe error:", err)
           await markMediaDownloadFailed(
             getSupabaseAdmin(),
             messageId,
-            err instanceof Error ? err.message : "erro desconhecido"
+            err instanceof Error ? err.message : "erro desconhecido",
+            orgId
           )
         }
       }

@@ -1,7 +1,7 @@
 # Story 75-289 — Token da Meta expira e o CRM falha calado (rotação + alerta)
 
 **Story ID:** 75-289
-**Epic:** 75 (CRM Trifold) · **Status:** Ready · **Estimativa:** M/L (~8 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** M/L (~8 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Tipo:** bug fix + hardening (nasceu do incidente de 10/08/2026)
@@ -84,30 +84,30 @@ enquanto quem sincroniza é a VIND.
       `env pull` — variável `sensitive` devolve string vazia no pull mesmo quando correta.
       ⏳ Confirmação comportamental (próximo lead de formulário entrar com nome/telefone)
       pendente no fechamento da story.
-- [ ] **AC2 — falha de envio deixa de ser silenciosa.** Quando o envio ao Graph falha, a UI do
+- [x] **AC2 — falha de envio deixa de ser silenciosa.** Quando o envio ao Graph falha, a UI do
       corretor **não** mostra a mensagem como entregue: balão marcado como "não entregue" com
       ação de reenviar. O `send_error` já gravado passa a ser lido pela tela (sem coluna nova).
-- [ ] **AC3 — credencial morta alerta o gestor.** `HTTP_401`/`code 190` no Graph gera **uma**
+- [x] **AC3 — credencial morta alerta o gestor.** `HTTP_401`/`code 190` no Graph gera **uma**
       notificação para admin/supervisor (coalescing por dia, não uma por mensagem), com texto
       dizendo qual credencial e onde trocar. Fonte: o mesmo ponto que hoje grava `send_error`.
-- [ ] **AC4 — mídia recebida deixa de ser perdida.** O `media_id` do payload passa a ser
+- [x] **AC4 — mídia recebida deixa de ser perdida.** O `media_id` do payload passa a ser
       persistido em `messages.metadata` (áudio, imagem e documento). Falha no download marca a
       bolha como "mídia não baixada" com ação de **tentar de novo** (a Meta retém ~30 dias), em
       vez de virar `media_url = null` calado. Teste: download 401 → media_id gravado + retry
       posterior baixa e transcreve.
-- [ ] **AC5 — lead do Meta incompleto volta a ser recuperável.** Evento cuja busca na Graph
+- [x] **AC5 — lead do Meta incompleto volta a ser recuperável.** Evento cuja busca na Graph
       voltou sem contato **não** é marcado `processed = true` (ou é marcado com
       `processing_error` que o retry reconhece), de modo que `meta-leads-retry` o reprocesse
       dentro da janela de `MAX_ATTEMPTS`.
-- [ ] **AC6 — `process-lead` não morre com 2 contas ativas.** A busca de `meta_ad_accounts`
+- [x] **AC6 — `process-lead` não morre com 2 contas ativas.** A busca de `meta_ad_accounts`
       ganha ordenação estável + `.limit(1)` antes do `maybeSingle()`; teste cobre o caso de
       duas linhas `active` na mesma org.
-- [ ] **AC7 — a tela de configuração mostra a conta que sincroniza.** `GET
+- [x] **AC7 — a tela de configuração mostra a conta que sincroniza.** `GET
       /api/meta-ads/account` prioriza a `active` em vez da mais recente.
-- [ ] **AC8 — validade do token visível.** A tela de integrações mostra o vencimento do token
+- [x] **AC8 — validade do token visível.** A tela de integrações mostra o vencimento do token
       (via `debug_token`, campo `expires_at`; "nunca expira" quando ausente), para que a
       renovação deixe de ser descoberta pelo estrago.
-- [ ] **AC9 — testes.** Cobertura de: envio 401 → mensagem marcada não-entregue + 1
+- [x] **AC9 — testes.** Cobertura de: envio 401 → mensagem marcada não-entregue + 1
       notificação; evento leadgen sem contato → elegível ao retry; 2 contas `active` → token
       resolvido.
 
@@ -205,6 +205,54 @@ formulário só entra quando a campanha não tem nome, e na prática ela tem (`"
 
 ---
 
+## File List
+
+**Novos**
+- `packages/web/src/lib/meta/alert-credencial-morta.ts` (AC3) + `.test.ts`
+- `packages/web/src/lib/meta/token-validity.ts` (AC8) + `.test.ts`
+- `packages/web/src/app/broker/leads/[id]/_components/delivery-status.ts` (AC2) + `.test.ts`
+- `packages/web/src/app/api/leads/[id]/messages/[messageId]/resend/route.ts` (AC2)
+
+**Modificados**
+- `packages/web/src/app/api/webhook/whatsapp/route.ts` (AC4 + AC3) — persiste `media_id`;
+  `mergeMessageMetadata` (jsonb não mescla); `markMediaDownloadFailed` nos 3 caminhos
+- `packages/web/src/lib/meta/process-lead.ts` (AC5 + AC6)
+- `packages/web/src/app/api/cron/meta-leads-retry/route.ts` (AC5)
+- `packages/web/src/app/api/leads/[id]/send-message/route.ts` (AC3)
+- `packages/web/src/app/api/meta-ads/account/route.ts` (AC7)
+- `packages/web/src/app/dashboard/configuracoes/integracoes/page.tsx` (AC8)
+- `packages/web/src/app/broker/leads/[id]/_components/conversation-thread.tsx` (AC2)
+- `packages/web/src/lib/meta/process-lead.test.ts`,
+  `packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts` (AC9)
+
+**Sem migration.** O coalescing reusa `logEventOnce` + o índice único da migration 218
+(Story 87-6); o contador de tentativas continua vivendo em `webhook_logs.processing_error`.
+
+### Notas do @dev
+
+- **`vitest` 168 arquivos / 2110 testes verdes; `tsc --noEmit` limpo; `eslint` 0 erros**
+  (24 warnings, todos pré-existentes ou do mesmo padrão `_params` já aceito em
+  `logger.test.ts`).
+- **Desvio consciente do texto do AC5:** o gatilho do retry é `field_data` **vazio**, não
+  `incomplete`. `incomplete` também é true quando o formulário veio com telefone-lixo
+  (75-215/75-216) — ali o retry é inútil, a Graph devolveria o mesmo lixo e só queimaria
+  tentativas. Os 3 testes daquelas stories provaram isso na prática (quebraram na primeira
+  versão).
+- **Duas armadilhas encontradas durante a implementação**, ambas cobertas por teste:
+  1. Devolver `ok:true` com `processed=false` faria o cron reprocessar o evento **a cada 15min
+     para sempre** (ele só conta tentativa no ramo `!ok`). Daí o `ok:false` deliberado.
+  2. Tentativas esgotadas precisavam **encerrar** o evento: a query pega os 20 mais antigos, e
+     eventos travados passariam a consumir o lote inteiro, bloqueando retries novos.
+- **AC8 achou um bug adjacente não previsto:** o card de WhatsApp lia
+  `process.env.WHATSAPP_ACCESS_TOKEN`, que **não existe no Vercel** — a tela dizia "Inativo"
+  com o WhatsApp funcionando (e diria "Ativo" com a credencial morta). Agora lê
+  `whatsapp_config` (a fonte real).
+- ⏳ **Pendente para o gate:** verificação com a coisa **rodando em prod** (item do DoD) e a
+  confirmação comportamental do AC1 (próximo lead de formulário). Nada disso é coberto por
+  teste unitário.
+
+---
+
 ## Change Log
 
 | Data | Autor | Mudança |
@@ -213,3 +261,4 @@ formulário só entra quando a campanha não tem nome, e na prática ela tem (`"
 | 10/08/2026 | @sm | Token permanente emitido; registrado o gap do `resolveFormName`. |
 | 10/08/2026 | @sm | Áudio/imagem/documento recebidos entram na story (novo AC4, ACs renumerados). |
 | 10/08/2026 | @po | **Validação 10 pontos: GO condicional (7/10)** → lacunas corrigidas nesta mesma passagem: adicionados Valor de negócio, Dependências, Riscos e Definition of Done; estimativa revista de M (~5) para **M/L (~8)** — 9 ACs cruzam webhook, envio, notificações, 2 rotas e 1 tela; decisão do `pages_read_engagement` tomada (não regerar); **AC1 marcado como feito** (antecipado por decisão do Marcos). Status **Draft → Ready**. |
+| 10/08/2026 | @dev | **AC2–AC9 implementados.** 4 arquivos novos + 9 modificados, sem migration. Desvio consciente no AC5 (gatilho = `field_data` vazio, não `incomplete` — telefone-lixo não merece retry). Duas armadilhas corrigidas: `ok:true` com `processed=false` reprocessaria a cada 15min para sempre, e tentativas esgotadas entupiriam o lote de 20 mais antigos. AC8 revelou que o card de WhatsApp lia uma env var inexistente. 2110 testes verdes, typecheck limpo, lint 0 erros. Status **Ready → InReview**. |

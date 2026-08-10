@@ -13,6 +13,10 @@ import {
   buildSignedMessage,
   senderFirstName,
 } from "@web/lib/broker/message-signature"
+import {
+  alertCredencialMorta,
+  isCredencialMorta,
+} from "@web/lib/meta/alert-credencial-morta"
 
 const MAX_MESSAGE_LENGTH = 4096 // Limite do WhatsApp
 
@@ -286,6 +290,17 @@ export async function POST(
   }
   if (!dispatch.sent) {
     metadata.send_error = dispatch.error ?? "SEND_FAILED"
+    // Story 75-289 (AC3): 401/code 190 = credencial morta, não "erro do lead".
+    // Avisa admin/supervisor no máximo 1x por dia (coalescing no banco). Best-effort
+    // e sem await bloqueante do resultado: o alerta NUNCA pode atrasar ou derrubar o
+    // caminho de envio do corretor.
+    if (isCredencialMorta({ error: dispatch.error })) {
+      void alertCredencialMorta({
+        orgId: appUser.org_id,
+        credencial: "whatsapp_config",
+        detalhe: `envio do corretor falhou: ${dispatch.error}`,
+      }).catch((err) => console.error("[75-289] alerta de credencial falhou:", err))
+    }
   }
 
   const { data: inserted, error: insertErr } = await db

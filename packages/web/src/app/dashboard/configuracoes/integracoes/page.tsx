@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
+import { createAdminClient } from "@web/lib/supabase/admin"
+import { fetchTokenValidity } from "@web/lib/meta/token-validity"
 import { GoogleIntegrationCard } from "./google-integration-card"
 
 function StatusBadge({ active }: { active: boolean }) {
@@ -73,10 +75,29 @@ export default async function IntegracoesPage() {
 
   const metaAdsStatus = metaAccount?.status ?? null
 
+  // Story 75-289 (AC8) — a fonte da verdade do WhatsApp é `whatsapp_config` no
+  // BANCO, não uma env var. Este card lia `process.env.WHATSAPP_ACCESS_TOKEN`, que
+  // nem existe no Vercel: mostrava "Inativo" com o WhatsApp funcionando, e mostraria
+  // "Ativo" com a credencial morta. Tela que não reflete a realidade não serve de
+  // alarme — e o alarme é justamente o que faltou em 10/08.
+  const admin = createAdminClient()
+  const { data: waConfig } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token, waba_id, updated_at")
+    .eq("org_id", user.orgId)
+    .eq("status", "active")
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
+
+  const whatsappPhoneNumberId = (waConfig?.phone_number_id as string | null) ?? null
+  const whatsappConfigured = !!waConfig?.access_token
+  // Consulta a Meta sobre a validade. Falha de rede NÃO é reportada como token
+  // inválido (o helper distingue os dois estados).
+  const tokenValidity = await fetchTokenValidity(waConfig?.access_token as string | null)
+
   // Check environment variable status
   const metaAppSecretConfigured = !!process.env.META_APP_SECRET
-  const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
-  const whatsappConfigured = !!process.env.WHATSAPP_ACCESS_TOKEN
   const telegramBotUsername = process.env.TELEGRAM_BOT_USERNAME || null
   const telegramConfigured = !!process.env.TELEGRAM_BOT_TOKEN
 
@@ -159,11 +180,43 @@ export default async function IntegracoesPage() {
             label="Phone Number ID"
             value={whatsappPhoneNumberId || "Não configurado"}
           />
+          {/* Story 75-289 (AC8): a credencial vem de whatsapp_config (banco) e a
+              validade vem da própria Meta — um token de 60 dias é indistinguível de
+              um permanente até o dia em que derruba o CRM. */}
           <ConfigField
-            label="WHATSAPP_ACCESS_TOKEN"
-            value={whatsappConfigured ? "Configurado" : "Não configurado"}
+            label="Credencial (whatsapp_config)"
+            value={whatsappConfigured ? "Configurada no banco" : "Não configurada"}
           />
+          <ConfigField
+            label="Validade do token"
+            value={
+              tokenValidity
+                ? tokenValidity.unknownReason
+                  ? `${tokenValidity.label} (${tokenValidity.unknownReason})`
+                  : tokenValidity.label
+                : "Sem credencial para verificar"
+            }
+          />
+          {tokenValidity?.tokenType && (
+            <ConfigField label="Tipo do token" value={tokenValidity.tokenType} />
+          )}
         </div>
+        {tokenValidity && !tokenValidity.valid && !tokenValidity.unknownReason && (
+          <p
+            role="alert"
+            className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300"
+          >
+            A Meta está recusando esta credencial. Enquanto não for trocada em
+            <code className="mx-1">whatsapp_config.access_token</code>, mensagens do corretor
+            aparecem enviadas na tela e não chegam ao lead, e áudios recebidos são perdidos.
+          </p>
+        )}
+        {tokenValidity?.valid && !tokenValidity.neverExpires && (
+          <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            Este token tem prazo. Prefira um System User token com expiração
+            &quot;Nunca&quot; — token com validade derruba o WhatsApp no dia em que vence.
+          </p>
+        )}
       </div>
 
       {/* Telegram */}
