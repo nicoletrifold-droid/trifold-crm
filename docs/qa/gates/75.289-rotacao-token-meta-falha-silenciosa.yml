@@ -1,0 +1,130 @@
+schema: 1
+story: "75.289"
+storyId: "75.289"
+title: "Token da Meta expira e o CRM falha calado (rotação + alerta)"
+epic: 75
+gate: CONCERNS
+verdict: CONCERNS
+status_reason: >
+  Os 9 ACs estão implementados e a suíte inteira está verde (168 arquivos / 2110
+  testes, typecheck limpo, eslint 0 erros). A review encontrou TRÊS defeitos reais
+  no código do @dev, todos corrigidos dentro do gate e re-verificados. O veredito
+  não é PASS porque o item de DoD "verificado rodando em prod" NÃO foi cumprido:
+  nenhum dos comportamentos-chave (bolha "não entregue" na tela real, e-mail de
+  credencial morta chegando ao gestor, mídia marcada como não baixada) foi exercido
+  contra produção — provocar um 401 real derrubaria o WhatsApp no meio do dia
+  comercial. A confirmação comportamental do AC1 também segue pendente, aguardando
+  o próximo lead de formulário do Meta.
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-08-10"
+updated: "2026-08-10T19:00:00Z"
+quality_score: 82
+waiver: { active: false }
+
+ac_traceability:
+  - ac: 1
+    note: "env 9TBM9A9WalW2cN3b atualizada + redeploy trifold-630nguvb9 READY; gravação provada pelo updatedAt da API (env pull mente em var sensitive). Confirmação comportamental PENDENTE."
+  - ac: 2
+    note: "resolveDeliveryStatus (puro, 6 testes) + bolha lê send_error + endpoint de reenvio que reaproveita a MESMA linha de messages"
+  - ac: 3
+    note: "alertCredencialMorta com coalescing credencial+dia via logEventOnce/índice 218; 8 testes, incluindo os 2 formatos de 401 e a distinção 403/429"
+  - ac: 4
+    note: "media_id persistido nos 3 caminhos + markMediaDownloadFailed + mergeMessageMetadata; 3 testes no route.test.ts do webhook"
+  - ac: 5
+    note: "gatilho = field_data vazio (desvio consciente do texto do AC, justificado); ok:false deliberado p/ o cron contar tentativa; 4 testes"
+  - ac: 6
+    note: "order+limit(1) antes do maybeSingle com nullsFirst:false; teste com 2 contas active"
+  - ac: 7
+    note: "prioriza status='active' em JS em vez de truque de ordenação alfabética"
+  - ac: 8
+    note: "interpretDebugToken + fetchTokenValidity (9 testes); distingue inválido de não-verificável"
+  - ac: 9
+    note: "2110 testes verdes; 26 novos nesta story"
+
+# Defeitos encontrados PELA review, no código desta própria story, e corrigidos.
+findings_fixed:
+  - id: QA-1
+    severity: high
+    category: correctness
+    file: "packages/web/src/app/api/leads/[id]/send-message/route.ts"
+    summary: >
+      O alerta de credencial morta era disparado com `void promise` num route
+      handler. Em serverless a lambda pode encerrar com a escrita pendente e o
+      e-mail nunca sai — ou seja, o mecanismo criado para acabar com a falha
+      silenciosa falharia em silêncio. O repo já tem convenção para isso: `after()`
+      do next/server, usado em 6 rotas (webhook/whatsapp, webhooks/meta-ads,
+      webhooks/sienge, webhooks/landing-page, admin/email-blasts, login/actions).
+      A própria Story 87-6 documenta essa classe de bug.
+    fix: "trocado por after(() => alertCredencialMorta(...)) nas duas rotas"
+  - id: QA-2
+    severity: high
+    category: correctness
+    file: "packages/web/src/app/api/leads/[id]/messages/[messageId]/resend/route.ts"
+    summary: >
+      O reenvio assinava a mensagem com `appUser.name` — quem CLICOU — e não com
+      quem escreveu. No atendimento compartilhado (75-165/75-171) um supervisor
+      reenviando a mensagem da corretora faria o lead receber a fala dela assinada
+      com o nome dele. `metadata.signed_as` já guardava o remetente correto.
+    fix: "assina com metadata.signed_as, com fallback para appUser.name"
+  - id: QA-3
+    severity: medium
+    category: security
+    file: "packages/web/src/lib/meta/token-validity.ts"
+    summary: >
+      O token ia DUAS vezes na query string do debug_token (input_token e
+      access_token). Query string é gravada por log de rede/proxy; header não.
+    fix: >
+      inspetor movido para o header Authorization (verificado contra a Meta com o
+      token real: is_valid true, expires_at 0). `input_token` permanece na query
+      por ser contrato da Meta. Teste atualizado para travar o novo formato.
+
+# Riscos aceitos / dívida registrada — nada aqui bloqueia merge.
+concerns:
+  - id: C-1
+    severity: high
+    summary: >
+      NÃO verificado rodando em prod (item do DoD). Testes unitários não cobrem:
+      a bolha vermelha aparecendo na tela real do corretor, o e-mail chegando ao
+      gestor, e a bolha de mídia não baixada. Recomendação: exercer em prod com um
+      401 CONTROLADO (ex.: apontar temporariamente uma cópia do fluxo para um token
+      inválido) FORA do horário comercial, ou aceitar a verificação no próximo
+      incidente real.
+  - id: C-2
+    severity: medium
+    summary: >
+      A falha de envio da mensagem de TRANSIÇÃO (75-51-2) grava send_error com
+      role='assistant'. O resolveDeliveryStatus devolve 'none' para assistant, então
+      essa falha específica continua invisível. Fora do escopo desta story (o AC2
+      fala da mensagem do corretor), mas é o mesmo buraco numa mensagem vizinha.
+  - id: C-3
+    severity: low
+    summary: >
+      mergeMessageMetadata faz read-modify-write sem lock: dois updates concorrentes
+      no MESMO wamid podem se sobrescrever. Risco baixo (os 3 caminhos de mídia são
+      mutuamente exclusivos por tipo de mensagem), mas não é atômico.
+  - id: C-4
+    severity: low
+    summary: >
+      A tela de integrações chama a Meta a cada render (timeout 6s, sem cache).
+      É tela de configuração, tráfego baixo — aceitável, mas se virar lenta, cachear.
+  - id: C-5
+    severity: low
+    summary: >
+      O endpoint de reenvio não tem rate limit: um corretor pode clicar em sequência.
+      Cada clique é 1 chamada ao Graph; sem risco de duplicar mensagem no banco
+      (atualiza a mesma linha), mas pode gerar envios repetidos ao lead se todos
+      derem certo em paralelo.
+
+quality_checks:
+  code_review: "PASS (após QA-1/QA-2/QA-3). Reusa convenções: helper puro + teste (bubble-styles), after() para pós-resposta, logEventOnce p/ dedupe, scripts/vercel-env-set.sh."
+  unit_tests: "PASS — 168 arquivos, 2110 testes, 26 novos. Testes cobrem as 2 armadilhas de loop/fila que o @dev encontrou."
+  acceptance_criteria: "PASS — 9/9 implementados; AC5 com desvio consciente documentado e justificado."
+  no_regressions: "PASS — nenhum teste pré-existente quebrado. 3 testes tiveram fixture atualizada (75-215/216/AC3-idem): mudança de semântica esperada, e a garantia real (não duplicar lead) segue coberta."
+  performance: "CONCERNS (C-4) — 1 chamada externa no render da tela de configuração."
+  security: "PASS (após QA-3). Sem token em log/teste/story; gate de acesso do resend valida que a mensagem pertence à conversa do lead (evita reenvio cruzado); tela gateada por canAccess."
+  documentation: "PASS — story com File List, Notas do @dev, riscos e decisão do @po; comentários explicam o PORQUÊ nos pontos não óbvios."
+
+recommendation: >
+  Liberar para @devops (PR). Registrar C-1 como verificação operacional pendente e
+  C-2 como candidato a story própria — é o mesmo defeito de falha silenciosa numa
+  mensagem vizinha, e vai voltar a morder.

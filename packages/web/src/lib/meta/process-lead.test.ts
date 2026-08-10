@@ -119,13 +119,100 @@ describe("processMetaLead", () => {
     expect(activity.description).toContain("recuperado")
   })
 
-  it("AC3 idempotência: leadgen_id já tem lead → não cria de novo, marca processed", async () => {
-    queues.leads = [{ data: { id: "lead-77" }, error: null }]
+  it("AC3 idempotência: leadgen_id já tem lead COM contato → não cria de novo, marca processed", async () => {
+    // 75-289: a fixture ganha telefone. O critério de "já processado" passou a ser
+    // "existe E tem contato" — lead sem contato é justamente o que precisa voltar.
+    queues.leads = [{ data: { id: "lead-77", phone: "+5544999990000" }, error: null }]
 
     const result = await processMetaLead("111", value, entry, "log-1")
 
     expect(result).toMatchObject({ ok: true, leadId: "lead-77", deduped: true })
     expect(calls.filter((c) => c.table === "leads" && c.insert)).toHaveLength(0)
+    expect(updatesTo("webhook_logs")).toContainEqual(expect.objectContaining({ processed: true }))
+  })
+
+  // ---- Story 75-289 (AC5) — lead do Meta incompleto volta a ser recuperável ----
+
+  it("75-289 AC5: field_data vazio → NÃO marca processed e devolve ok:false (o cron conta tentativa)", async () => {
+    // Assinatura exata do incidente de 10/08: a Graph API não devolveu os campos
+    // porque o META_PAGE_ACCESS_TOKEN estava morto.
+    const semCampos = { leadgen_id: "111", form_id: "form-1", field_data: [] }
+    // sem telefone utilizável não há lookup por telefone: idem → insert direto
+    queues.leads = [
+      { data: null, error: null },
+      { data: { id: "lead-new" }, error: null },
+    ]
+
+    const result = await processMetaLead("111", semCampos, entry, "log-1")
+
+    // ok:false é intencional: é o que faz o cron incrementar `retry N/3` em vez de
+    // reprocessar o mesmo evento a cada 15min para sempre.
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("empty_field_data")
+    expect(result.leadId).toBe("lead-new") // o lead FOI criado, só está incompleto
+
+    const logUpdates = updatesTo("webhook_logs")
+    expect(logUpdates).not.toContainEqual(expect.objectContaining({ processed: true }))
+    expect(logUpdates).toContainEqual(
+      expect.objectContaining({ processing_error: expect.stringContaining("empty_field_data") }),
+    )
+  })
+
+  it("75-289 AC5: lead existente SEM contato é enriquecido (UPDATE), nunca duplicado", async () => {
+    queues.leads = [
+      // idempotência por leadgen_id: existe, mas nasceu sem nome/telefone/e-mail
+      { data: { id: "lead-orfao", name: null, phone: "", email: null }, error: null },
+      { data: null, error: null }, // update
+    ]
+
+    const result = await processMetaLead("111", value, entry, "log-1")
+
+    expect(result.ok).toBe(true)
+    expect(result.deduped).toBeUndefined() // não encerrou como duplicado
+    // A garantia que importa continua: nenhum INSERT em leads.
+    expect(calls.filter((c) => c.table === "leads" && c.insert)).toHaveLength(0)
+
+    const leadUpdate = updatesTo("leads")[0]
+    expect(leadUpdate).toMatchObject({
+      name: "João Teste",
+      phone: "+5544999990000",
+      email: "joao@x.com",
+    })
+    expect(updatesTo("webhook_logs")).toContainEqual(expect.objectContaining({ processed: true }))
+  })
+
+  it("75-289 AC5: enriquecimento NUNCA sobrescreve contato já preenchido", async () => {
+    queues.leads = [
+      { data: { id: "lead-x", name: "Nome Do Corretor", phone: "+5544911112222", email: null }, error: null },
+      { data: null, error: null },
+    ]
+
+    // Lead tem contato → o guard de idempotência encerra antes de qualquer update
+    // de contato. Garante que o caminho novo não toca em lead completo.
+    const result = await processMetaLead("111", value, entry, "log-1")
+
+    expect(result).toMatchObject({ ok: true, deduped: true })
+    const leadUpdates = updatesTo("leads")
+    expect(leadUpdates).toHaveLength(0)
+  })
+
+  it("75-289 AC5: telefone-lixo NÃO vira retry (field_data veio; a Graph devolveria o mesmo lixo)", async () => {
+    const lixo = {
+      leadgen_id: "111",
+      form_id: "form-1",
+      field_data: [{ name: "phone_number", values: ["não tenho whatsapp"] }],
+    }
+    // idem → insert direto (telefone-lixo não gera lookup por telefone)
+    queues.leads = [
+      { data: null, error: null },
+      { data: { id: "lead-pobre" }, error: null },
+    ]
+
+    const result = await processMetaLead("111", lixo, entry, "log-1")
+
+    // incomplete=true (sem telefone utilizável e sem e-mail), MAS field_data veio:
+    // é uma submissão real e pobre, não falha de credencial. Encerra normalmente.
+    expect(result.ok).toBe(true)
     expect(updatesTo("webhook_logs")).toContainEqual(expect.objectContaining({ processed: true }))
   })
 

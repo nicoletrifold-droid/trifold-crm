@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check } from "lucide-react"
+import { Check, AlertTriangle, RotateCw } from "lucide-react"
 import { BrokerMessageInput, type OptimisticMessage } from "./broker-message-input"
 import { getBubbleStyle, resolveBubbleLabel } from "./bubble-styles"
+import { resolveDeliveryStatus } from "./delivery-status"
 import { WindowStatusBadge } from "./window-status-badge"
 import { AiStatusBanner } from "./ai-status-banner"
 import { ChatScrollArea } from "./chat-scroll-area"
@@ -114,6 +115,39 @@ export function ConversationThread({
   const [localLastMessageAt, setLocalLastMessageAt] = useState<Date | null>(
     lastMessageAt
   )
+  // Story 75-289 (AC2) — id da mensagem em reenvio (trava só aquele botão).
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendError, setResendError] = useState<string | null>(null)
+
+  /**
+   * Story 75-289 (AC2) — reenvia a mensagem que não chegou.
+   *
+   * O endpoint atualiza a MESMA linha em `messages` (não cria bolha nova), então
+   * um `router.refresh()` basta para o indicador de falha desaparecer.
+   */
+  async function handleResend(messageId: string) {
+    setResendingId(messageId)
+    setResendError(null)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/messages/${messageId}/resend`, {
+        method: "POST",
+      })
+      const json = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) {
+        setResendError(
+          json?.error === "WHATSAPP_WINDOW_CLOSED"
+            ? "A janela de 24h fechou — use uma mensagem de abertura."
+            : "O reenvio falhou de novo. A credencial do WhatsApp pode estar fora."
+        )
+        return
+      }
+      router.refresh()
+    } catch {
+      setResendError("Não foi possível reenviar agora. Verifique a conexão.")
+    } finally {
+      setResendingId(null)
+    }
+  }
 
   // Story 63-11 — quando o prop `messages` muda (após `router.refresh()`),
   // remove de `realtimeMessages` o que já foi incorporado pelo servidor. Evita
@@ -276,17 +310,54 @@ export function ConversationThread({
                       mediaType={msg.metadata?.media_type as string | undefined}
                       mediaUrl={msg.metadata?.media_url as string | undefined}
                     />
-                    <div className="mt-1 flex items-center justify-end gap-1">
-                      <span className="text-[10px] text-stone-500 dark:text-stone-400">
-                        {time}
-                      </span>
-                      {msg.role === "broker" && (
-                        <Check
-                          className="h-3 w-3 text-stone-500 dark:text-stone-400"
-                          aria-label="Enviado"
-                        />
-                      )}
-                    </div>
+                    {/* Story 75-289 (AC2): antes TODA bolha do corretor levava um ✓
+                        "Enviado", inclusive a que falhou. Agora o indicador sai do
+                        `send_error` que já era gravado e ninguém lia. */}
+                    {(() => {
+                      const delivery = resolveDeliveryStatus(msg)
+                      return (
+                        <div className="mt-1 flex items-center justify-end gap-1">
+                          {delivery.state === "failed" || delivery.state === "window_closed" ? (
+                            <>
+                              <AlertTriangle
+                                className="h-3 w-3 text-red-600 dark:text-red-400"
+                                aria-hidden="true"
+                              />
+                              <span
+                                className="text-[10px] font-medium text-red-600 dark:text-red-400"
+                                title={delivery.hint}
+                              >
+                                {delivery.label}
+                              </span>
+                              {delivery.canResend && (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleResend(msg.id)}
+                                  disabled={resendingId === msg.id}
+                                  className="ml-1 inline-flex items-center gap-0.5 rounded px-1 text-[10px] font-medium text-red-700 underline underline-offset-2 hover:text-red-900 disabled:opacity-50 dark:text-red-300 dark:hover:text-red-200"
+                                  aria-label="Reenviar mensagem"
+                                >
+                                  <RotateCw
+                                    className={`h-2.5 w-2.5 ${resendingId === msg.id ? "animate-spin" : ""}`}
+                                    aria-hidden="true"
+                                  />
+                                  {resendingId === msg.id ? "Reenviando…" : "Reenviar"}
+                                </button>
+                              )}
+                            </>
+                          ) : null}
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                            {time}
+                          </span>
+                          {delivery.state === "sent" && (
+                            <Check
+                              className="h-3 w-3 text-stone-500 dark:text-stone-400"
+                              aria-label="Enviado"
+                            />
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               )
@@ -296,6 +367,16 @@ export function ConversationThread({
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem ainda.</p>
+        </div>
+      )}
+
+      {/* Story 75-289 (AC2): o reenvio que falha de novo também não pode calar. */}
+      {resendError && (
+        <div
+          role="alert"
+          className="mx-5 mb-2 shrink-0 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300"
+        >
+          {resendError}
         </div>
       )}
 

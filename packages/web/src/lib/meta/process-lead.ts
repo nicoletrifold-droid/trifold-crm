@@ -36,6 +36,29 @@ export interface ProcessMetaLeadResult {
   error?: string
 }
 
+/** Story 75-289 (AC5) — lead existente, nas colunas que dizem se ele tem contato. */
+type ExistingLead = {
+  id: string
+  name?: string | null
+  phone?: string | null
+  email?: string | null
+  utm_campaign: string | null
+  property_interest_id: string | null
+  finalidade: string | null
+}
+
+/**
+ * Story 75-289 (AC5) — "tem contato utilizável?".
+ *
+ * `leads.phone` é NOT NULL, então lead sem telefone chega aqui como string vazia
+ * (não null) — daí o `.trim()`. Um lead sem telefone E sem e-mail é inacionável:
+ * o corretor não tem como falar com ele. Esse é o estado que o retry deve tentar
+ * consertar em vez de dar como processado.
+ */
+export function leadHasContact(lead: { phone?: string | null; email?: string | null }): boolean {
+  return !!lead.phone?.trim() || !!lead.email?.trim()
+}
+
 // Story 75-114 — deriva a Finalidade (moradia/investimento/ambos) a partir da resposta do
 // form do Meta sobre o objetivo da aquisição. Detecta o campo pelo nome (objetivo/finalidade/
 // aquisição) e, na dúvida, varre as respostas por palavras-chave fortes. Retorna null se nada bater.
@@ -106,14 +129,20 @@ export async function processMetaLead(
 
     // Story 75-214 (AC3): idempotência — evento duplicado do Meta / retry de evento
     // cujo lead já foi criado nunca gera lead duplicado.
+    // Story 75-289 (AC5): mas "já existe" NÃO pode encerrar quando o lead nasceu
+    // SEM CONTATO. Em 10/08 o token da Página morreu, a Graph API devolveu
+    // field_data vazio, o lead entrou sem nome/telefone/e-mail — e este guard
+    // fazia o retry apenas remarcar `processed`, deixando o lead órfão para
+    // sempre. Lead incompleto agora SEGUE o fluxo para ser enriquecido; lead com
+    // contato continua encerrando aqui (idempotência preservada).
     const { data: existingByLeadgen } = await supabase
       .from("leads")
-      .select("id")
+      .select("id, name, phone, email, utm_campaign, property_interest_id, finalidade")
       .eq("org_id", orgId)
       .eq("metadata->>leadgen_id", leadgenId)
       .maybeSingle()
 
-    if (existingByLeadgen) {
+    if (existingByLeadgen && leadHasContact(existingByLeadgen)) {
       await markProcessed(orgId, "already_processed: lead já existia para este leadgen_id")
       return { ok: true, leadId: existingByLeadgen.id, deduped: true }
     }
@@ -172,24 +201,21 @@ export async function processMetaLead(
     // Story 75-215: busca por phone_normalized (é nele que vive o unique
     // idx_leads_org_phone_normalized_unique) — o phone cru do Meta quase nunca
     // bate com o formato armazenado, e o insert colidia no índice.
-    type ExistingLead = {
-      id: string
-      utm_campaign: string | null
-      property_interest_id: string | null
-      finalidade: string | null
-    }
     const findByPhone = async (): Promise<ExistingLead | null> => {
       if (!hasUsablePhone || !phoneNormalized) return null
       const { data } = await supabase
         .from("leads")
-        .select("id, utm_campaign, property_interest_id, finalidade")
+        .select("id, name, phone, email, utm_campaign, property_interest_id, finalidade")
         .eq("phone_normalized", phoneNormalized)
         .eq("org_id", orgId)
         .maybeSingle()
       return (data as ExistingLead | null) ?? null
     }
 
-    const existing = await findByPhone()
+    // Story 75-289 (AC5): o lead incompleto encontrado pelo leadgen_id é o alvo do
+    // enriquecimento. Sem telefone utilizável o findByPhone não acha nada — é
+    // justamente o caso do lead que nasceu sem contato.
+    const existing = (existingByLeadgen as ExistingLead | null) ?? (await findByPhone())
     let leadId: string | null = existing?.id ?? null
 
     // Story 75-44: detectar empreendimento no texto resolvido (campanha/anúncio/
@@ -245,6 +271,13 @@ export async function processMetaLead(
           ...(target.finalidade === null && derivedFinalidade
             ? { finalidade: derivedFinalidade }
             : {}),
+          // Story 75-289 (AC5): preenche o CONTATO que faltava. Só entra quando o
+          // alvo está vazio e a Graph API agora devolveu valor — nunca sobrescreve
+          // dado existente (mesma regra dos campos acima). É isto que recupera o
+          // lead que nasceu sem nome/telefone porque o token da Página tinha morrido.
+          ...(!target.name?.trim() && name ? { name } : {}),
+          ...(!target.phone?.trim() && hasUsablePhone && phone ? { phone } : {}),
+          ...(!target.email?.trim() && email ? { email } : {}),
         })
         .eq("id", target.id)
 
@@ -340,6 +373,28 @@ export async function processMetaLead(
         ...(backdateTo ? { recovered: true } : {}),
       },
     })
+
+    // Story 75-289 (AC5): `field_data` VAZIO significa que nunca recebemos o
+    // formulário — a busca na Graph API falhou (foi o token da Página morto em
+    // 10/08). Esse caso merece retry.
+    //
+    // Deliberadamente NÃO usa `incomplete` aqui: `incomplete` também é true quando
+    // o form veio com telefone-lixo e sem e-mail (75-215/75-216), e nesse caso o
+    // retry é inútil — a Graph devolveria o mesmo lixo e só queimaria tentativas.
+    //
+    // Devolve `ok: false` DE PROPÓSITO, mesmo tendo criado/atualizado o lead: o cron
+    // só incrementa o contador de tentativas no ramo `!result.ok`. Com `ok: true` e
+    // `processed = false` o evento seria reprocessado a cada 15min PARA SEMPRE.
+    // Assim ele tenta MAX_ATTEMPTS vezes e desiste. O webhook ignora o retorno
+    // (roda em `after()`), então nada regride do lado da entrada.
+    if (fieldData.length === 0) {
+      return {
+        ...(await fail(
+          `empty_field_data: lead ${leadId} sem os campos do formulário — Graph API não devolveu field_data (credencial morta?)`,
+        )),
+        leadId: leadId ?? undefined,
+      }
+    }
 
     await markProcessed(orgId)
     return { ok: true, leadId: leadId ?? undefined }
@@ -478,11 +533,19 @@ async function syncAdOnDemand(
 
     if (existing) return
 
+    // Story 75-289 (AC6): a org PODE ter mais de uma conta `active` (aconteceu em
+    // 10/08 ao religar VIND + INSTITUCIONAL). Sem `limit(1)` o PostgREST devolve
+    // PGRST116 em duas linhas, `data` vem null e a atribuição de criativo morria
+    // CALADA no `return` abaixo — mesma classe do PGRST116 da 75-282.
+    // `nullsFirst: false` porque updated_at é nullable e em DESC o NULL viria
+    // primeiro, fazendo o limit(1) escolher a linha vazia (gotcha conhecido).
     const { data: account } = await supabase
       .from("meta_ad_accounts")
       .select("id, access_token")
       .eq("org_id", orgId)
       .eq("status", "active")
+      .order("updated_at", { ascending: false, nullsFirst: false })
+      .limit(1)
       .maybeSingle()
 
     if (!account?.access_token) return

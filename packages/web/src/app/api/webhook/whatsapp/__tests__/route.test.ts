@@ -753,6 +753,66 @@ describe("WhatsApp webhook — Story 21.1", () => {
     expect(userMsg!.metadata.whatsapp_message_id).toBe("wamid.IMG-ASYNC")
   })
 
+  // ---- Story 75-289 (AC4) — mídia recebida deixa de ser perdida ----------
+
+  it("75-289 AC4 — media_id é PERSISTIDO no sync (sem ele a mídia é irrecuperável)", async () => {
+    const { POST } = await import("../route")
+    // Sem mockMediaFetch: o download não resolve, exatamente como em 10/08.
+    fetchMock.mockImplementation((async () => ({ ok: false, status: 401, json: async () => ({}) })) as never)
+
+    const res = await POST(
+      signedRequest(
+        buildImagePayload({ from: "+5544999689446", wamid: "wamid.MID", imageId: "IMG-MID" }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await flushAsync()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    // É este id que permite pedir a mídia de volta (a Meta retém ~30 dias).
+    expect(userMsg!.metadata.media_id).toBe("IMG-MID")
+  })
+
+  it("75-289 AC4 — download 401: marca media_download_failed em vez de sumir calado", async () => {
+    const { POST } = await import("../route")
+    fetchMock.mockImplementation((async () => ({ ok: false, status: 401, json: async () => ({}) })) as never)
+
+    await POST(
+      signedRequest(
+        buildImagePayload({ from: "+5544999689446", wamid: "wamid.F401", imageId: "IMG-F401" }),
+        APP_SECRET
+      )
+    )
+    await flushAsync()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg!.media_url).toBeNull() // não baixou
+    expect(userMsg!.metadata.media_download_failed).toBe(true)
+    expect(String(userMsg!.metadata.media_download_error)).toContain("401")
+    // e o id continua lá para a nova tentativa
+    expect(userMsg!.metadata.media_id).toBe("IMG-F401")
+  })
+
+  it("75-289 AC4 — download OK: media_id sobrevive ao update de sucesso (metadata é MESCLADO)", async () => {
+    const { POST } = await import("../route")
+    mockMediaFetch("IMG-OK")
+
+    await POST(
+      signedRequest(
+        buildImagePayload({ from: "+5544999689446", wamid: "wamid.MOK", imageId: "IMG-OK" }),
+        APP_SECRET
+      )
+    )
+    await flushAsync()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg!.media_url).toMatch(/^https:\/\/storage\.test\//)
+    // Antes o update substituía o metadata inteiro e apagava o media_id.
+    expect(userMsg!.metadata.media_id).toBe("IMG-OK")
+    expect(userMsg!.metadata.media_download_failed).toBe(false)
+  })
+
   it("75-222 — texto puro: colunas de mídia ficam NULL (não polui mensagens sem mídia)", async () => {
     const { POST } = await import("../route")
 
