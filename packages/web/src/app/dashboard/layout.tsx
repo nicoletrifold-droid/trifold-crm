@@ -3,6 +3,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getUserPermissions, podeVerMenuConfig } from "@web/lib/permissions"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
+import { getUpcomingAppointmentsCount } from "@web/lib/agenda/appointments-count"
 import { redirect } from "next/navigation"
 import { SidebarNav } from "@web/components/layout/sidebar-nav"
 import { WeatherWidget } from "@web/components/weather-widget"
@@ -173,16 +174,10 @@ export default async function DashboardLayout({
       : [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }]
 
   // Compromissos futuros e ativos da org — alimenta o badge do menu "Agenda".
-  // Escopo org-wide (todos os corretores), coerente com a página /dashboard/agenda.
+  // Story 75-286: regra extraída p/ lib/agenda/appointments-count
+  // (compartilhada com a rota do badge vivo).
   const agendaCount = permissions["agenda"]
-    ? (
-        await supabase
-          .from("appointments")
-          .select("id", { count: "exact", head: true })
-          .eq("org_id", user.orgId)
-          .in("status", ["scheduled", "confirmed"])
-          .gte("scheduled_at", new Date().toISOString())
-      ).count ?? 0
+    ? await getUpcomingAppointmentsCount(supabase, user.orgId)
     : 0
 
   // Story 75-86 — badge do menu "Chat": nº de conversas de relacionamento com
@@ -310,11 +305,14 @@ export default async function DashboardLayout({
         userRole={user.role}
         basePath="/dashboard"
         alertCount={alertCount ?? 0}
-        liveBadge={
-          permissions["chat"]
-            ? { href: "/dashboard/chat", endpoint: "/api/chat/unread-count" }
-            : undefined
-        }
+        liveBadges={[
+          ...(permissions["chat"]
+            ? [{ href: "/dashboard/chat", endpoint: "/api/chat/unread-count" }]
+            : []),
+          ...(permissions["agenda"]
+            ? [{ href: "/dashboard/agenda", endpoint: "/api/agenda/appointments-count" }]
+            : []),
+        ]}
       />
 
       {/* Main content area */}

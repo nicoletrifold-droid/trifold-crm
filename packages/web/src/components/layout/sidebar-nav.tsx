@@ -26,12 +26,13 @@ interface SidebarNavProps {
   basePath: string
   alertCount?: number
   /**
-   * Story 75-223 — badge "vivo": o layout (server) congela em navegação
-   * interna do App Router; este prop faz o item de `href` re-buscar a
-   * contagem em `endpoint` (JSON `{ count }`) a cada 60s, ao focar a aba e a
-   * cada mudança de rota. Falha de fetch mantém o último valor (fail-open).
+   * Story 75-223 (generalizado na 75-286) — badges "vivos": o layout (server)
+   * congela em navegação interna do App Router; cada entrada faz o item de
+   * `href` re-buscar a contagem em `endpoint` (JSON `{ count }`) a cada 60s,
+   * ao focar a aba e a cada mudança de rota. Falha de fetch mantém o último
+   * valor daquele item (fail-open).
    */
-  liveBadge?: { href: string; endpoint: string }
+  liveBadges?: Array<{ href: string; endpoint: string }>
 }
 
 /** Classe de background do badge numérico conforme `badgeTone`. */
@@ -39,32 +40,42 @@ function badgeBg(item: NavItem): string {
   return item.badgeTone === "green" ? "bg-green-700" : "bg-orange-500"
 }
 
-export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadge }: SidebarNavProps) {
+export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadges }: SidebarNavProps) {
   const pathname = usePathname()
   // Story 63-18 — bottom sheet "Mais" (mobile).
   const [moreOpen, setMoreOpen] = useState(false)
   const sheetRef = useRef<HTMLDivElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Story 75-223 — contagem viva do item apontado por `liveBadge`. Enquanto
-  // null, vale o valor server-side do item (sem flash). O efeito depende do
-  // pathname de propósito: cada navegação refaz o fetch na hora (é o gatilho
-  // que zera o badge logo após abrir uma conversa) e reinicia o intervalo.
-  const [liveCount, setLiveCount] = useState<number | null>(null)
-  const liveEndpoint = liveBadge?.endpoint
+  // Story 75-223/75-286 — contagens vivas dos itens de `liveBadges`. Enquanto
+  // um href não tem valor no mapa, vale o valor server-side do item (sem
+  // flash). O efeito depende do pathname de propósito: cada navegação refaz
+  // os fetches na hora (é o gatilho que zera o badge logo após abrir uma
+  // conversa) e reinicia o intervalo. A serialização em `liveKey` mantém a
+  // dependência estável (o array vem de um server component).
+  const [liveCounts, setLiveCounts] = useState<Record<string, number>>({})
+  const liveKey = liveBadges?.length ? JSON.stringify(liveBadges) : ""
   useEffect(() => {
-    if (!liveEndpoint) return
+    if (!liveKey) return
+    const entries = JSON.parse(liveKey) as Array<{ href: string; endpoint: string }>
     let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(liveEndpoint, { cache: "no-store" })
-        if (!res.ok) return
-        const json = (await res.json()) as { count?: unknown }
-        if (!cancelled && typeof json.count === "number") setLiveCount(json.count)
-      } catch {
-        // fail-open: mantém o último valor conhecido
-      }
-    }
+    const load = () =>
+      Promise.all(
+        entries.map(async ({ href, endpoint }) => {
+          try {
+            const res = await fetch(endpoint, { cache: "no-store" })
+            if (!res.ok) return
+            const json = (await res.json()) as { count?: unknown }
+            if (!cancelled && typeof json.count === "number") {
+              setLiveCounts((prev) =>
+                prev[href] === json.count ? prev : { ...prev, [href]: json.count as number }
+              )
+            }
+          } catch {
+            // fail-open: mantém o último valor conhecido daquele item
+          }
+        })
+      )
     void load()
     const interval = setInterval(() => void load(), 60_000)
     const onVisible = () => {
@@ -78,10 +89,10 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("focus", onVisible)
     }
-  }, [liveEndpoint, pathname])
+  }, [liveKey, pathname])
 
   const badgeCount = (item: NavItem): number | undefined =>
-    liveBadge && item.href === liveBadge.href && liveCount != null ? liveCount : item.badge
+    liveCounts[item.href] ?? item.badge
 
   const isActive = (href: string) => {
     if (href === basePath) return pathname === basePath
