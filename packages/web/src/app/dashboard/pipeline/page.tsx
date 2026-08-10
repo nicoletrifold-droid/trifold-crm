@@ -6,6 +6,7 @@ import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/ka
 import { fetchCreativesForLeads, resolveCreativeForLead, canSeeCreatives } from "@web/lib/pipeline/fetch-creatives"
 import { computeWaitingMinutes, AGUARDANDO_STAGE_ID } from "@web/lib/sla/waiting"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
+import { parseQualificacao, QUALIFICACAO_VALUES, QUALIFICACAO_LABELS } from "@web/lib/leads/qualificacao"
 import Link from "next/link"
 
 const PAGE_SIZE = 50
@@ -116,6 +117,14 @@ export default async function PipelinePage({
 
       if (filters.property_id) {
         query = query.eq("property_interest_id", filters.property_id)
+      }
+      // Story 84-6 (Epic 84) — Qualificação Comercial (server-side, como o calor na lista;
+      // NÃO JS-side como o score, p/ a contagem por etapa ser exata). "none" = ainda sem valor.
+      const qualificacaoFiltro = parseQualificacao(filters.qualificacao)
+      if (qualificacaoFiltro === "none") {
+        query = query.is("qualificacao_comercial", null)
+      } else if (qualificacaoFiltro) {
+        query = query.eq("qualificacao_comercial", qualificacaoFiltro)
       }
       if (filters.broker_id === "none") {
         query = query.is("assigned_broker_id", null)
@@ -320,6 +329,23 @@ export default async function PipelinePage({
             </select>
           </div>
 
+          {/* Story 84-6 (Epic 84) — Qualificação Comercial (manual), combinável com os demais. */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
+              Qualificação
+            </label>
+            <select
+              name="qualificacao"
+              defaultValue={filters.qualificacao ?? ""}
+              className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+            >
+              <option value="">Todas</option>
+              {QUALIFICACAO_VALUES.map((v) => (
+                <option key={v} value={v}>{QUALIFICACAO_LABELS[v]}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-stone-400">
               Etapa
@@ -365,7 +391,7 @@ export default async function PipelinePage({
         </form>
 
         <div className="mt-3 flex gap-2">
-          {(filters.property_id || filters.broker_id || filters.score || filters.campaign_id || filters.q || filters.stage || filters.date_from || filters.date_to || filters.sem_contato) && (
+          {(filters.property_id || filters.broker_id || filters.score || filters.qualificacao || filters.campaign_id || filters.q || filters.stage || filters.date_from || filters.date_to || filters.sem_contato) && (
             <a
               href="/dashboard/pipeline"
               className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -393,6 +419,7 @@ export default async function PipelinePage({
           campaign_id: filters.campaign_id ?? null,
           score: filters.score ?? null,
           sem_contato: filters.sem_contato ?? null,
+          qualificacao: filters.qualificacao ?? null,
         }}
       />
     </div>

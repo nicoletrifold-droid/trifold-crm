@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { MessageCircle } from "lucide-react"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { QualificacaoComercialBadge } from "@web/components/ui/qualificacao-comercial-badge"
 import { whatsAppState } from "@web/lib/leads/whatsapp"
 import { CALOR_LABELS, type CalorValue } from "@web/lib/leads/calor"
 import { ReativarLeadButton } from "@web/components/leads/reativar-lead-button"
@@ -26,6 +27,8 @@ type Lead = {
   qualification_score: number | null
   /** Story 75-237 — Calor do Lead (percepção do corretor): cold|warm|hot|null. */
   interest_level?: string | null
+  /** Story 84-6 (Epic 84) — Qualificação Comercial (manual): bom|regular|ruim|invalido|null. */
+  qualificacao_comercial?: string | null
   updated_at: string | null
   source: string | null
   /** Story 75-160 — comprovado por conversa/canal de WhatsApp (vence o formato do número). */
@@ -128,6 +131,8 @@ export function LeadsBulkTable({
             {/* Story 75-206: Último contato antes do Score (mais relevante à análise) */}
             <th className="px-6 py-3">Último contato</th>
             <th className="px-6 py-3">Calor</th>
+            {/* Story 84-6 (Epic 84) — Qualificação Comercial (manual), ao lado do Calor. */}
+            <th className="px-6 py-3">Qualificação</th>
             <th className="px-6 py-3">Score</th>
             {view === "perdidos" && canReactivate && <th className="px-6 py-3"></th>}
           </tr>
@@ -241,6 +246,14 @@ export function LeadsBulkTable({
                   )}
                 </td>
                 <td className="px-6 py-4">
+                  {/* Story 84-6 (Epic 84) — badge reusado da 84-2; null → traço (não polui). */}
+                  {lead.qualificacao_comercial ? (
+                    <QualificacaoComercialBadge value={lead.qualificacao_comercial} />
+                  ) : (
+                    <span className="text-sm text-gray-400 dark:text-stone-500">-</span>
+                  )}
+                </td>
+                <td className="px-6 py-4">
                   {lead.qualification_score != null ? (
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -273,7 +286,7 @@ export function LeadsBulkTable({
           {leads.length === 0 && (
             <tr>
               <td
-                colSpan={view === "perdidos" && canReactivate ? 11 : 10}
+                colSpan={view === "perdidos" && canReactivate ? 12 : 11}
                 className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
               >
                 Nenhum lead encontrado.

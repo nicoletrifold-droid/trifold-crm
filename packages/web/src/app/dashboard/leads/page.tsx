@@ -92,7 +92,7 @@ export default async function LeadsPage({
     .from("leads")
     .select(
       `
-      id, name, phone, email, qualification_score, interest_level, updated_at, source, lost_reason, channel,
+      id, name, phone, email, qualification_score, interest_level, qualificacao_comercial, updated_at, source, lost_reason, channel,
       stage:kanban_stages(id, name, color),
       property_interest:properties!property_interest_id(id, name),
       broker:users!assigned_broker_id(id, name)
@@ -387,6 +387,8 @@ export default async function LeadsPage({
                 qualification_score: lead.qualification_score ?? null,
                 // Story 75-237 — calor na lista (o campo já vinha no SELECT).
                 interest_level: (lead as unknown as Record<string, unknown>).interest_level as string | null,
+                // Story 84-6 (Epic 84) — Qualificação Comercial na lista.
+                qualificacao_comercial: (lead as unknown as Record<string, unknown>).qualificacao_comercial as string | null,
                 updated_at: lead.updated_at ?? null,
                 source: (lead as unknown as Record<string, unknown>).source as string | null,
                 // Story 75-160 — WhatsApp comprovado por conversa OU canal de aquisição.

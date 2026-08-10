@@ -1,0 +1,12 @@
+schema: 1
+story: '84.6'
+gate: CONCERNS
+status_reason: 'Filtro no Pipeline (incl. load-more) e coluna na lista implementados corretamente, com reuso do helper/badge da 84-2 e filtro server-side seguro (RLS-scoped, sem injeção). Um achado cosmético: a coluna nova "Qualificação" na tabela de Leads não atualizou o colSpan da linha de estado vazio (ficou 11/10, deveria ser 12/11) — só afeta a mensagem "Nenhum lead encontrado".'
+reviewer: 'Quinn'
+updated: '2026-08-07T16:25:00Z'
+top_issues:
+  - id: 'UI-001'
+    severity: low
+    finding: 'leads-bulk-table.tsx:289 — a 84-6 adicionou a coluna "Qualificação" (agora 11 colunas base, 12 com a ação de perdidos), mas o colSpan da linha de estado vazio continua `view === "perdidos" && canReactivate ? 11 : 10`. Ficou defasado em 1: a célula "Nenhum lead encontrado" abrange uma coluna a menos que o total. Impacto puramente cosmético e só visível quando a lista está vazia (a mensagem não alcança a última coluna). Não afeta dados, filtro nem a coluna em si.'
+    suggested_action: 'Atualizar o colSpan para `view === "perdidos" && canReactivate ? 12 : 11` (uma linha). Fix trivial; recomendo antes do push.'
+waiver: { active: false }

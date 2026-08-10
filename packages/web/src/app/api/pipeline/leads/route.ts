@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { fetchCreativesForLeads, resolveCreativeForLead, canSeeCreatives } from "@web/lib/pipeline/fetch-creatives"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
+import { parseQualificacao } from "@web/lib/leads/qualificacao"
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
 
 // Story 50-2 (Epic 50): inclui `metadata` para resolver ad_id e attach creative server-side
-const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level,
+const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_level, qualificacao_comercial,
        property_interest_id, assigned_broker_id, created_at, updated_at, last_contact_at,
        ai_summary, source, utm_campaign, utm_content, metadata,
        properties:property_interest_id(name),
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
   const campaignId = searchParams.get("campaign_id")
   const score = searchParams.get("score")
   const semContato = searchParams.get("sem_contato")
+  const qualificacao = parseQualificacao(searchParams.get("qualificacao"))
 
   if (!stageId) {
     return NextResponse.json({ error: "MISSING_STAGE_ID" }, { status: 400 })
@@ -102,6 +104,12 @@ export async function GET(req: NextRequest) {
   }
   if (campaignLeadIds && campaignLeadIds.length > 0) {
     query = query.in("id", campaignLeadIds)
+  }
+  // Story 84-6 (Epic 84) — Qualificação Comercial (server-side, paridade com page.tsx).
+  if (qualificacao === "none") {
+    query = query.is("qualificacao_comercial", null)
+  } else if (qualificacao) {
+    query = query.eq("qualificacao_comercial", qualificacao)
   }
   // Story 75-115 — filtro "dias sem contato" (last_contact_at), paridade com page.tsx.
   if (semContato) {
