@@ -1,7 +1,7 @@
 # Story 75-289 — Token da Meta expira e o CRM falha calado (rotação + alerta)
 
 **Story ID:** 75-289
-**Epic:** 75 (CRM Trifold) · **Status:** Draft · **Estimativa:** M (~5 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Ready · **Estimativa:** M/L (~8 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Tipo:** bug fix + hardening (nasceu do incidente de 10/08/2026)
@@ -76,10 +76,14 @@ enquanto quem sincroniza é a VIND.
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — `META_PAGE_ACCESS_TOKEN` rotacionado em produção.** Vercel (Production) recebe o
-      System User token vigente + redeploy para aplicar. Validação: um lead de formulário novo
-      entra **com nome e telefone** (ou `POST` no webhook de teste seguido de conferência do
-      `metadata.incomplete = false`).
+- [x] **AC1 — `META_PAGE_ACCESS_TOKEN` rotacionado em produção.** ✅ **FEITO 10/08 antecipado
+      fora do ciclo** (decisão Marcos): env `9TBM9A9WalW2cN3b` (production, `type=sensitive`)
+      atualizada via `scripts/vercel-env-set.sh` (PATCH, nunca `env add` via pipe) +
+      `vercel redeploy` → `trifold-630nguvb9` READY, aliased em `crm.trifold.eng.br`.
+      Gravação confirmada pelo `updatedAt` da API (17/06 → 10/08 15:06), **não** pelo
+      `env pull` — variável `sensitive` devolve string vazia no pull mesmo quando correta.
+      ⏳ Confirmação comportamental (próximo lead de formulário entrar com nome/telefone)
+      pendente no fechamento da story.
 - [ ] **AC2 — falha de envio deixa de ser silenciosa.** Quando o envio ao Graph falha, a UI do
       corretor **não** mostra a mensagem como entregue: balão marcado como "não entregue" com
       ação de reenviar. O `send_error` já gravado passa a ser lido pela tela (sem coluna nova).
@@ -109,6 +113,68 @@ enquanto quem sincroniza é a VIND.
 
 ---
 
+## Valor de negócio
+
+O incidente custou, em ~3h e **sem ninguém perceber**: 2 mensagens de corretor que o lead nunca
+recebeu (uma delas em negociação de valor), 2 mensagens de voz perdidas para sempre — que eram a
+**resposta de um lead em etapa SDR à mensagem de abertura de 24h** —, 1 lead pago de formulário
+sem nenhum contato, e o sync de anúncios parado. O único sintoma que chegou a um humano foi um
+erro de tela num botão.
+
+O valor aqui não é "trocar token": é **deixar de descobrir queda de credencial pelo prejuízo**.
+Enquanto o CRM falha calado, cada rotação de credencial futura repete a conta acima — e a
+rotação vai acontecer de novo (troca de senha, saída de pessoa, revisão de app pela Meta).
+
+---
+
+## Dependências
+
+- **Nenhuma story bloqueante.** AC1 já está cumprido (token permanente emitido e aplicado).
+- **Credencial:** depende do System User token permanente (`expires_at: 0`) já vigente — não
+  exige nova ida ao Business Manager, **exceto** se o @dev optar pelo `pages_read_engagement`
+  (ver Riscos).
+- **Toca código de:** `webhook/whatsapp/route.ts` (mídia), `lib/broker/dispatch-broker-message.ts`
+  + UI do chat (AC2), `lib/notificacoes.ts` (AC3), `lib/meta/process-lead.ts` (AC5/AC6),
+  `api/meta-ads/account/route.ts` (AC7), tela de integrações (AC8).
+- **Convenções a respeitar:** notificação com coalescing (ver `project-notificacoes-portal`);
+  dedup de notificação **deve** incluir `userId`; nenhum token em log.
+
+---
+
+## Riscos
+
+| Risco | Impacto | Mitigação |
+|---|---|---|
+| **AC2 toca o caminho de envio do corretor** — o mais quente do CRM | Regressão aqui cala o chat inteiro | Não alterar a ordem gravar↔enviar; só **ler** o `send_error` já persistido na UI. Teste de não-regressão no envio OK. |
+| **AC3 pode virar spam** — um 401 gera N mensagens falhando | Gestor recebe dezenas de notificações e passa a ignorar | Coalescing por dia **por credencial**, não por mensagem (AC3 já exige) |
+| **AC5 muda `processed`** — se marcar `false` errado, o retry reprocessa lead bom | Lead duplicado ou automação disparada semanas depois | A política de idade da 75-215 já existe (`<6h` completo, `≥6h` sem automations) — **reusar**, não reinventar |
+| **AC6 é bug dormente** — hoje só 1 conta está `active` | Corrigir sem teste dá falsa confiança | Teste **obrigatório** com 2 linhas `active` na mesma org |
+| `pages_read_engagement` exigiria **regerar o token** | Nova rotação = novo risco de queda | **Decisão @po: NÃO regerar** (ver abaixo) |
+
+---
+
+## Decisões do @po
+
+**`resolveFormName` — aceitar a degradação, NÃO regerar o token.** O fallback de nome de
+formulário só entra quando a campanha não tem nome, e na prática ela tem (`"[LEADS. 05.07.26
+[VIND]"` resolveu 200 no teste). O ganho é marginal e o custo é uma nova rotação de credencial
+— exatamente a operação que causou este incidente. **Revisitar se** aparecerem leads com
+`utm_campaign` nulo no analytics; aí sim vale o escopo extra.
+
+---
+
+## Definition of Done
+
+- Os 9 ACs marcados, com o AC1 fechado **pela confirmação comportamental** (lead de formulário
+  entrando com nome e telefone), não só pela gravação da env.
+- `vitest` + `typecheck` + `lint` verdes.
+- Gate do @qa em PASS ou CONCERNS documentado.
+- Verificado **rodando em prod** (não só em teste): um envio que falha aparece como não-entregue
+  na tela do corretor, e uma credencial morta gera exatamente 1 notificação.
+- Nenhum token em código, teste, log ou neste arquivo.
+
+---
+
 ## Fora de escopo
 
 - Unificar as 4 fontes de credencial numa só (vale uma story própria; aqui só se torna
@@ -135,5 +201,15 @@ enquanto quem sincroniza é a VIND.
   (`GET /{form_id}?fields=name` → 400, pede `pages_read_engagement`), que hoje roda com o
   `META_PAGE_ACCESS_TOKEN` de Página. Leadgen, `resolveCampaignName`, criativo (Epic 50) e
   insights funcionam todos com ele — só o *fallback* de `utm_campaign` (usado quando a campanha
-  não tem nome) degrada. Duas saídas: aceitar a degradação, ou regerar o token incluindo o
-  escopo `pages_read_engagement`. Decidir no @po.
+  não tem nome) degrada. **Resolvido em "Decisões do @po": aceitar a degradação.**
+
+---
+
+## Change Log
+
+| Data | Autor | Mudança |
+|---|---|---|
+| 10/08/2026 | @sm | Story criada a partir do incidente do dia; 3 causas-raiz + bug adjacente. |
+| 10/08/2026 | @sm | Token permanente emitido; registrado o gap do `resolveFormName`. |
+| 10/08/2026 | @sm | Áudio/imagem/documento recebidos entram na story (novo AC4, ACs renumerados). |
+| 10/08/2026 | @po | **Validação 10 pontos: GO condicional (7/10)** → lacunas corrigidas nesta mesma passagem: adicionados Valor de negócio, Dependências, Riscos e Definition of Done; estimativa revista de M (~5) para **M/L (~8)** — 9 ACs cruzam webhook, envio, notificações, 2 rotas e 1 tela; decisão do `pages_read_engagement` tomada (não regerar); **AC1 marcado como feito** (antecipado por decisão do Marcos). Status **Draft → Ready**. |
