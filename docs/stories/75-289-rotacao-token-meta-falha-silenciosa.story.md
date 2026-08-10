@@ -111,5 +111,13 @@ enquanto quem sincroniza é a VIND.
 - Já aplicado em prod durante o incidente (fora desta story, sem migration):
   `whatsapp_config.access_token` e `meta_ad_accounts.access_token` (VIND `active`,
   INSTITUCIONAL `disconnected`); lead órfão `bce83eee-b1c4-4d1c-8eb0-8f55a48b78cd` preenchido.
-- O token vigente é System User e **expira em 09/10/2026** — se o permanente ("Nunca") não
-  entrar antes, esta story vira incidente de novo na mesma data.
+- ✅ O token vigente já é **System User permanente** (expiração "Nunca" → `debug_token` devolve
+  `expires_at: 0`), emitido no mesmo dia do incidente e aplicado em `whatsapp_config` + nas 2
+  `meta_ad_accounts`. Não há mais data-bomba. O AC7 continua valendo: a tela deve **mostrar**
+  "nunca expira" em vez de o time descobrir a validade pelo estrago.
+- ⚠️ **`AC1` tem um detalhe:** o system user token **não** resolve `resolveFormName`
+  (`GET /{form_id}?fields=name` → 400, pede `pages_read_engagement`), que hoje roda com o
+  `META_PAGE_ACCESS_TOKEN` de Página. Leadgen, `resolveCampaignName`, criativo (Epic 50) e
+  insights funcionam todos com ele — só o *fallback* de `utm_campaign` (usado quando a campanha
+  não tem nome) degrada. Duas saídas: aceitar a degradação, ou regerar o token incluindo o
+  escopo `pages_read_engagement`. Decidir no @po.
