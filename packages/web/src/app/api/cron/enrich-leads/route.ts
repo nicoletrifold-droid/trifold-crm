@@ -60,13 +60,32 @@ export async function GET(request: NextRequest) {
   for (const conv of conversations) {
     try {
       // AC3: Load last 20 messages
-      const { data: messages } = await supabase
+      //
+      // Story 87-8 (deploy B) — até aqui este comentário AFIRMAVA O CONTRÁRIO do
+      // que o código fazia: `ascending: true` + `limit(20)` pega as 20 mensagens
+      // MAIS ANTIGAS. Ou seja, `ai_summary`, `collected_data`, o score, o Calor e
+      // os campos de perfil de toda conversa longa eram extraídos do COMEÇO da
+      // conversa. Não era só a Nicole respondendo ao passado: o CRM inteiro
+      // acreditava no passado.
+      //
+      // É a MESMA linha de `loadConversationHistory` (`pipeline.ts`), e é a
+      // terceira story seguida em que esta esteira foi a esquecida (87-4: último
+      // escritor de 70 % dos estados residuais; 87-7: toca 92,5 % dos resumos).
+      //
+      // A ordem de leitura é decrescente e o array é revertido logo abaixo — a
+      // entrega ao Haiku continua CRONOLÓGICA. O 2º `.order("id")` é desempate
+      // determinístico para `created_at` repetido (mesmo milissegundo), senão a
+      // fatia de corte oscila e o teste fica intermitente.
+      const { data: messagesDesc } = await supabase
         .from("messages")
         .select("role, content")
         .eq("conversation_id", conv.id)
         .in("role", ["user", "assistant"])
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(20)
+
+      const messages = messagesDesc ? [...messagesDesc].reverse() : null
 
       if (!messages || messages.length < 2) {
         results.skipped++

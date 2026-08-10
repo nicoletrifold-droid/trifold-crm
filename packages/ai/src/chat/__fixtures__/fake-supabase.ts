@@ -16,6 +16,13 @@ export type Row = Record<string, unknown>
 
 type Pred = (r: Row) => boolean
 
+/** Story 87-8 — o `count` do PostgREST vem ao lado de `data`/`error`. */
+export interface FakeResult {
+  data: unknown
+  error: { message: string } | null
+  count?: number
+}
+
 let idSeq = 0
 const nextId = () => `fake-${++idSeq}`
 
@@ -37,7 +44,7 @@ function parseOr(expr: string): Pred {
   return (r) => preds.some((p) => p(r))
 }
 
-class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string } | null }> {
+class FakeQuery implements PromiseLike<FakeResult> {
   private preds: Pred[] = []
   private mode: "select" | "insert" | "update" | "upsert" = "select"
   private payload: Row[] = []
@@ -45,8 +52,19 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
   private wantSingle = false
   private wantMaybe = false
   private limitN: number | null = null
-  private orderCol: string | null = null
-  private orderAsc = true
+  /**
+   * Story 87-8 — LISTA, não campo único. O PostgREST encadeia `.order()`:
+   * `.order("created_at",…).order("id",…)` é `ORDER BY created_at, id`. O fake
+   * guardava só o último, então o desempate por `id` da Armadilha 1 APAGARIA a
+   * ordenação por `created_at` e o teste da cauda passaria verde por acidente —
+   * ordenando por `id`, que nas fixtures é justamente `m1…m25` (lexicográfico:
+   * `m1 < m10 < m2`). Um fake que ignora o segundo critério dá confiança falsa,
+   * que é o defeito que este arquivo existe para não repetir.
+   */
+  private orders: Array<{ col: string; asc: boolean }> = []
+  /** Story 87-8 — `select("*", { count: "exact", head: true })` da AC4/AC7. */
+  private wantCount = false
+  private headOnly = false
 
   constructor(
     private readonly store: Map<string, Row[]>,
@@ -59,8 +77,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
     return this.store.get(this.table)!
   }
 
-  select(_cols?: string, _opts?: unknown) {
+  select(_cols?: string, _opts?: { count?: "exact" | "planned" | "estimated"; head?: boolean }) {
     if (this.mode === "select") this.mode = "select"
+    if (_opts?.count) this.wantCount = true
+    if (_opts?.head) this.headOnly = true
     return this
   }
   eq(col: string, val: unknown) {
@@ -100,8 +120,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
     return this
   }
   order(col: string, opts?: { ascending?: boolean }) {
-    this.orderCol = col
-    this.orderAsc = opts?.ascending ?? true
+    this.orders.push({ col, asc: opts?.ascending ?? true })
     return this
   }
   limit(n: number) {
@@ -137,7 +156,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
     return this.rows().filter((r) => this.preds.every((p) => p(r)))
   }
 
-  private run(): { data: unknown; error: { message: string } | null } {
+  private run(): FakeResult {
     this.log.push(`${this.mode}:${this.table}`)
 
     if (this.mode === "insert") {
@@ -166,19 +185,27 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
     }
 
     let out = this.matching()
-    if (this.orderCol) {
-      const col = this.orderCol
+    // Story 87-8 — o `count` é do conjunto FILTRADO, antes do `limit` (é assim
+    // no PostgREST). Capturado aqui de propósito: depois do slice ele contaria
+    // a janela, não a conversa, e a AC7 publicaria `total_na_conversa: 20`.
+    const total = out.length
+    if (this.orders.length > 0) {
       out = [...out].sort((a, b) => {
-        const av = String(a[col] ?? "")
-        const bv = String(b[col] ?? "")
-        return this.orderAsc ? av.localeCompare(bv) : bv.localeCompare(av)
+        for (const { col, asc } of this.orders) {
+          const av = String(a[col] ?? "")
+          const bv = String(b[col] ?? "")
+          const c = asc ? av.localeCompare(bv) : bv.localeCompare(av)
+          if (c !== 0) return c
+        }
+        return 0
       })
     }
     if (this.limitN !== null) out = out.slice(0, this.limitN)
-    return this.shape(out)
+    if (this.headOnly) return { data: null, error: null, count: total }
+    return { ...this.shape(out), ...(this.wantCount ? { count: total } : {}) }
   }
 
-  private shape(rows: Row[]): { data: unknown; error: { message: string } | null } {
+  private shape(rows: Row[]): FakeResult {
     if (this.wantSingle) {
       // PostgREST devolve ERRO quando .single() não encontra linha — o código de
       // produção depende disso para cair nos defaults.
@@ -189,8 +216,8 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
     return { data: rows, error: null }
   }
 
-  then<R1 = { data: unknown; error: { message: string } | null }, R2 = never>(
-    onfulfilled?: ((v: { data: unknown; error: { message: string } | null }) => R1 | PromiseLike<R1>) | null,
+  then<R1 = FakeResult, R2 = never>(
+    onfulfilled?: ((v: FakeResult) => R1 | PromiseLike<R1>) | null,
     onrejected?: ((reason: unknown) => R2 | PromiseLike<R2>) | null
   ): PromiseLike<R1 | R2> {
     return Promise.resolve(this.run()).then(onfulfilled, onrejected)
@@ -199,7 +226,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: { message: string
 
 export interface FakeSupabase {
   from(table: string): FakeQuery
-  rpc(name: string, args?: unknown): Promise<{ data: unknown; error: { message: string } | null }>
+  rpc(name: string, args?: unknown): Promise<FakeResult>
   /** Estado final das tabelas — para asserção depois do turno. */
   table(name: string): Row[]
   /** Sequência de operações executadas ("insert:appointments", …). */
