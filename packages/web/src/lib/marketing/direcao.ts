@@ -91,7 +91,10 @@ export const DIRECAO_CHIP_GROUPS: DirecaoChipGroup[] = [
     key: "estilo",
     label: "Estilo",
     chips: [
-      { key: "foto_real", label: "Foto real", fragmento: "estética de fotografia real, sem cara de render" },
+      // 75-295: a 1ª versão ("sem cara de render") fez o modelo LARGAR os renders
+      // do Kit e inventar um prédio genérico. Estética muda o tratamento, nunca
+      // a permissão de abandonar a referência real.
+      { key: "foto_real", label: "Foto real", fragmento: "tratamento de fotografia realista (luz e textura naturais), partindo das fotos e renders reais do Kit" },
       { key: "lifestyle", label: "Lifestyle", fragmento: "estética lifestyle, cotidiano aspiracional" },
       { key: "render", label: "Render", fragmento: "estética de render arquitetônico de alto padrão" },
     ],

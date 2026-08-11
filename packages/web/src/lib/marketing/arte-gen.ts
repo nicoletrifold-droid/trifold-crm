@@ -55,6 +55,12 @@ export interface ArtePromptInput {
    * prompt e composição divergem em silêncio (AC6).
    */
   fracaoReservada?: number | null
+  /**
+   * Story 75-295 — TRUE quando há foto/render de fachada entre as referências:
+   * o prompt vira imperativo ("o edifício é EXATAMENTE o da referência").
+   * A regra genérica de não inventar fachada continua para os demais casos.
+   */
+  temReferenciaFachada?: boolean
 }
 
 const FORMATO_ARTE: Record<Exclude<MarketingPostFormato, "reel">, string> = {
@@ -88,6 +94,14 @@ export function buildArtePrompt(input: ArtePromptInput): string {
   lines.push(
     "REGRAS: todo texto na arte em português do Brasil PERFEITO, sem erros de grafia; composição limpa com hierarquia clara e respiro; fotos de referência (quando houver) são a base visual — não distorcer arquitetura nem inventar fachadas diferentes das fotos."
   )
+  // Story 75-295 — com referência de fachada presente, a regra vira imperativa:
+  // a Lídia inventou uma torre genérica num anúncio do Vind e a frase branda
+  // acima não segurou sozinha.
+  if (input.temReferenciaFachada) {
+    lines.push(
+      "O EDIFÍCIO retratado deve ser EXATAMENTE o das imagens de referência — mesma arquitetura, mesmas proporções, mesma fachada. É PROIBIDO criar outro prédio, torre genérica ou variação 'parecida'."
+    )
+  }
   lines.push("")
   // 75-246: o logo passou a ser COMPOSTO por cima (arte-logo.ts). O modelo não
   // desenha mais logo nenhum — desvio de forma/kerning era inevitável — e tem

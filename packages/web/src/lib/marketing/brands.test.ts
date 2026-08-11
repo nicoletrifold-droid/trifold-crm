@@ -321,3 +321,54 @@ describe("arquivosCitadosNoTexto (AC1/AC3)", () => {
     ])
   })
 })
+
+// ─── Story 75-295 — rede de segurança: prédio inventado ─────────────────────
+import { garantirFachadaNaCena, referenciasDeFachada } from "./brands"
+
+describe("referenciasDeFachada (75-295)", () => {
+  const assets = [
+    { tipo: "logo", label: null, file_name: "logo.png" },
+    { tipo: "elemento", label: "Fachada noite", file_name: "VIND_RENDER_NOITE.png" },
+    { tipo: "foto", label: null, file_name: "piscina.jpg" },
+    { tipo: "fonte", label: null, file_name: "Font.ttf" },
+  ]
+
+  it("prioriza o que se declara fachada por nome/label", () => {
+    expect(referenciasDeFachada(assets)).toEqual(["VIND_RENDER_NOITE.png"])
+  })
+
+  it("sem 'fachada' declarada, cai para as fotos; fonte nunca entra", () => {
+    const semFachada = assets.filter((a) => a.label !== "Fachada noite")
+    expect(referenciasDeFachada(semFachada)).toEqual(["piscina.jpg"])
+  })
+
+  it("kit sem fachada nem foto = vazio", () => {
+    expect(referenciasDeFachada([{ tipo: "logo", label: null, file_name: "logo.png" }])).toEqual([])
+  })
+})
+
+describe("garantirFachadaNaCena (75-295)", () => {
+  const assets = [
+    { tipo: "foto", label: "Fachada", file_name: "fachada-vind.jpg" },
+    { tipo: "logo", label: null, file_name: "logo.png" },
+  ]
+
+  it("cena com prédio sem referência de fachada → força as do Kit, NA FRENTE", () => {
+    expect(garantirFachadaNaCena("obra do edifício ao entardecer, torre em destaque", ["logo.png"], assets)).toEqual([
+      "fachada-vind.jpg",
+      "logo.png",
+    ])
+  })
+
+  it("cena sem prédio → lista intocada", () => {
+    expect(garantirFachadaNaCena("família na piscina ao pôr do sol", [], assets)).toEqual([])
+  })
+
+  it("referência de fachada já presente → não duplica", () => {
+    expect(garantirFachadaNaCena("fachada iluminada", ["fachada-vind.jpg"], assets)).toEqual(["fachada-vind.jpg"])
+  })
+
+  it("kit sem fachada disponível → lista intocada (o prompt cuida da cena)", () => {
+    expect(garantirFachadaNaCena("prédio ao entardecer", [], [{ tipo: "logo", label: null, file_name: "logo.png" }])).toEqual([])
+  })
+})

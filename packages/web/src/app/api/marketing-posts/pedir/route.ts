@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { marketingGuard } from "@web/lib/marketing/guard"
-import { arquivosCitadosNoTexto, resolvePaletaDoPost, scopeBrandsForPost } from "@web/lib/marketing/brands"
+import { arquivosCitadosNoTexto, garantirFachadaNaCena, resolvePaletaDoPost, scopeBrandsForPost } from "@web/lib/marketing/brands"
 import { gerarArtesParaPost, montarPatchDeArtes, type ArteSpec } from "@web/lib/marketing/arte-service"
 import { buildPostPreview, quantasArtes } from "@web/lib/marketing/post-preview"
 import { MARKETING_POST_FORMATOS, type MarketingPostFormato, MARKETING_POST_SELECT } from "@web/lib/marketing/posts"
@@ -268,7 +268,10 @@ export async function POST(req: NextRequest) {
         // A tela 1 usa a união com os arquivos que o HUMANO citou (75-250); as
         // demais usam o que o Sonnet citou para aquela tela — cada geração tem
         // seu próprio teto de 7MB de referência.
-        arquivosKit: i === 0 ? arquivosArte : a.arquivos_kit,
+        // Story 75-295 — rede de segurança: cena que mostra o prédio SEM
+        // referência de fachada ganha as do Kit forçadas (prédio inventado num
+        // anúncio do empreendimento é o defeito mais grave deste fluxo).
+        arquivosKit: garantirFachadaNaCena(a.descricao, i === 0 ? arquivosArte : a.arquivos_kit, assets),
         cta: a.cta,
         // Story 75-256 — o texto da faixa vem do Sonnet e é composto por código
         titulo: a.titulo,

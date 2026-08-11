@@ -362,3 +362,48 @@ export function arquivosCitadosNoTexto(
   }
   return out
 }
+
+// ─── Story 75-295 — rede de segurança: prédio inventado ─────────────────────
+// A Lídia inventou uma torre genérica num anúncio do Vind (o pedido de "foto
+// real" a fez largar os renders do Kit). Além da regra no prompt, o SERVIDOR
+// garante: cena que mostra prédio + Kit com fachada disponível ⇒ a fachada
+// entra como referência FORÇADA, na frente (o teto de bytes corta o excedente).
+
+const CENA_COM_PREDIO_RE = /pr[eé]dio|edif[ií]cio|torre|fachada|obra|empreendimento/i
+
+interface AssetParaFachada {
+  tipo: string
+  label: string | null
+  file_name: string
+}
+
+/**
+ * PURA. As referências de fachada do Kit escopado: primeiro as que se declaram
+ * fachada pelo nome/label; sem nenhuma, caem para as fotos (`tipo='foto'`).
+ * Fonte (`tipo='fonte'`) nunca entra.
+ */
+export function referenciasDeFachada(assets: AssetParaFachada[]): string[] {
+  const imagens = assets.filter((a) => a.tipo !== "fonte")
+  const porNome = imagens
+    .filter((a) => /fachada/i.test(`${a.file_name} ${a.label ?? ""}`))
+    .map((a) => a.file_name)
+  if (porNome.length > 0) return porNome
+  return imagens.filter((a) => a.tipo === "foto").map((a) => a.file_name)
+}
+
+/**
+ * PURA. Se a descrição da cena mostra o prédio e nenhuma referência de fachada
+ * foi incluída, força as do Kit (na frente). Cena sem prédio, Kit sem fachada
+ * ou referência já presente ⇒ lista intocada.
+ */
+export function garantirFachadaNaCena(
+  descricao: string,
+  arquivosKit: string[],
+  assets: AssetParaFachada[]
+): string[] {
+  if (!CENA_COM_PREDIO_RE.test(descricao)) return arquivosKit
+  const fachadas = referenciasDeFachada(assets)
+  if (fachadas.length === 0) return arquivosKit
+  if (arquivosKit.some((f) => fachadas.includes(f))) return arquivosKit
+  return [...fachadas, ...arquivosKit]
+}

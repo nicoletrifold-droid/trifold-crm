@@ -235,6 +235,12 @@ export async function gerarArteParaPost(
         }).fracaoReservada
       : null
 
+    // Story 75-295 — referência de fachada efetivamente BAIXADA (foto do Kit ou
+    // arquivo com "fachada" no nome) deixa o prompt imperativo sobre o edifício.
+    const temReferenciaFachada = candidatos.some(
+      (c) => arquivosUsados.includes(c.file_name) && (c.tipo === "foto" || /fachada/i.test(c.file_name))
+    )
+
     const prompt = buildArtePrompt({
       descricao: input.descricao,
       formato: input.formato,
@@ -243,6 +249,7 @@ export async function gerarArteParaPost(
       fontes,
       ajuste: input.ajuste ?? null,
       fracaoReservada,
+      temReferenciaFachada,
     })
 
     // 4. Geração + upload

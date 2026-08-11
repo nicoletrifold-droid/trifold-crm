@@ -158,6 +158,13 @@ describe("POST /api/marketing-posts/pedir — tráfego pago", () => {
     expect(typeof aiInput?.objetivoInstrucao).toBe("string")
   })
 
+  it("75-295: cena com prédio SEM chip → rede força a fachada do Kit mesmo assim", async () => {
+    kitAssets = [{ brand_id: "b-inst", tipo: "foto", label: "Fachada", file_name: "fachada-vind.jpg" }]
+    await call(PAGO) // descricao do fixture: "fachada ao pôr do sol"
+    const spec = artesSpecs[0] as { arquivosKit: string[] }
+    expect(spec.arquivosKit).toContain("fachada-vind.jpg")
+  })
+
   it("chip fachada_real força as fotos do Kit como referência da tela 1", async () => {
     kitAssets = [
       { brand_id: "b-inst", tipo: "foto", label: "Fachada", file_name: "fachada-vind.jpg" },
