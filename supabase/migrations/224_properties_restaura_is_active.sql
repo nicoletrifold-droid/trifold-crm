@@ -2,10 +2,17 @@
 -- Story 87-13 — PASSO 4: devolve Japura e Solum ao CRM, fechando a dívida do
 -- paliativo de 10/08.
 --
--- 🔴 NÃO APLICAR JUNTO COM A 220. Esta migration é o QUARTO passo de uma ordem
+-- PREFIXO: 224. Nasceu como 221 e foi renumerado junto com o par (220 → 223,
+-- 221 → 224) pelo @devops em 11/08/2026, momentos antes do merge: a `main` levou
+-- o 220 com `220_marketing_posts_trafego_pago.sql` (Story 75-294, PR #394). O
+-- histórico completo das quatro rodadas está no cabeçalho da 223. Renumerar é
+-- cosmético — produção versiona por timestamp, não pelo prefixo `NNN_`. Esta
+-- migration, diferente da 223, **ainda NÃO foi aplicada** (é o passo 4).
+--
+-- 🔴 NÃO APLICAR JUNTO COM A 223. Esta migration é o QUARTO passo de uma ordem
 -- de quatro, e só sai DEPOIS da janela de observação de 24 h:
 --
---   1. migration 220  →  2. deploy do código  →  3. janela de 24 h  →  4. AQUI
+--   1. migration 223  →  2. deploy do código  →  3. janela de 24 h  →  4. AQUI
 --
 -- Por que ela vem depois da janela, e não junto: nas primeiras 24 h o rollback é
 -- "reverter o PR", sem tocar em nenhum dado, porque Japura e Solum continuam
@@ -29,7 +36,7 @@
 -- exatamente a função para a qual eles foram cadastrados (Story 75-281).
 --
 -- Depois desta migration os dois voltam a existir no CRM e continuam FORA da boca
--- da Nicole — agora pelo campo certo (`nicole_enabled = false`, da 220). Dois
+-- da Nicole — agora pelo campo certo (`nicole_enabled = false`, da 223). Dois
 -- conceitos, dois campos.
 --
 -- POR QUE POR `id`, E NÃO POR `slug`
@@ -63,18 +70,18 @@ begin
 
   get diagnostics afetadas = row_count;
 
-  -- A mesma guarda da 220, e pela mesma razão: uma restauração que afeta 1 ou 0
+  -- A mesma guarda da 223, e pela mesma razão: uma restauração que afeta 1 ou 0
   -- linhas sem avisar seria lida como "nada a restaurar".
   if afetadas <> 2 then
     raise exception
-      'Story 87-13 / migration 221: a restauração esperava afetar EXATAMENTE 2 linhas, afetou %. '
+      'Story 87-13 / migration 224: a restauração esperava afetar EXATAMENTE 2 linhas, afetou %. '
       'Confira os ids contra `select id, name, slug from properties order by created_at, name`.', afetadas;
   end if;
 end $$;
 
 -- Guarda de segurança: esta migration NÃO pode ligar a Nicole em ninguém. Se o
 -- `nicole_enabled` dos dois não estiver `false` neste ponto, alguma coisa entre a
--- 220 e aqui mexeu no switch — e restaurar o `is_active` os poria de volta no
+-- 223 e aqui mexeu no switch — e restaurar o `is_active` os poria de volta no
 -- contexto. Aborta em vez de fazer isso em silêncio.
 do $$
 declare
@@ -88,7 +95,7 @@ begin
 
   if ligados <> 0 then
     raise exception
-      'Story 87-13 / migration 221: % dos dois empreendimentos está(ão) com nicole_enabled = true. '
+      'Story 87-13 / migration 224: % dos dois empreendimentos está(ão) com nicole_enabled = true. '
       'Restaurar o is_active agora os devolveria ao contexto da Nicole. Abortado.', ligados;
   end if;
 end $$;

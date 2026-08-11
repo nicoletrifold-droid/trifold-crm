@@ -1863,7 +1863,7 @@ export async function loadProperties(
 
   if (error || !data) {
     // ⚠️ FALHA MUDA: coluna inexistente ⇒ erro do PostgREST ⇒ "nenhum
-    // empreendimento", sem log e sem exceção. É por isso que a migration 220 é
+    // empreendimento", sem log e sem exceção. É por isso que a migration 223 é
     // pré-requisito do deploy, e não por costume (Risco 1 da story).
     return []
   }

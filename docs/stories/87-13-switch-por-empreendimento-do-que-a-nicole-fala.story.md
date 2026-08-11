@@ -9,7 +9,7 @@
 **Criada por:** @sm (River) em 2026-08-10
 **Formato:** **Subtração no lado da Nicole** (um filtro que remove empreendimento do contexto) **+
 um controle novo no painel admin.** Os dois eixos estão separados no §7 — leia antes de classificar.
-**Executor:** @dev (código, UI, migration 220) · @data-engineer (migration 221 — restauração de dado
+**Executor:** @dev (código, UI, migration 223) · @data-engineer (migration 224 — restauração de dado
 em produção, R-B) · validação em produção: @qa + Marcos (D7)
 **Esforço:** **S** (código) / **M** (teste + as duas migrations em ordem)
 **Risco:** **Baixo de regressão na Nicole** (provável byte a byte — ver AC3) / **Médio no painel**
@@ -214,7 +214,7 @@ opostas medindo eixos diferentes. Então, separado:
 | parte da story | é caminho de decisão novo **da Nicole**? | onda |
 |---|---|---|
 | filtro `.eq("nicole_enabled", true)` em `loadProperties` | **Não.** Um `.eq` a mais na cláusula que já existe. **Subtração pura**: remove itens de uma lista. Nenhum `if` novo no caminho da resposta | cabe na Onda 1 ✔ |
-| migrations 220/221 (campo + backfill + restauração do `is_active`) | **Não.** Dado | cabe ✔ |
+| migrations 223/224 (campo + backfill + restauração do `is_active`) | **Não.** Dado | cabe ✔ |
 | toggle no painel + badge na lista | **Não.** Superfície de admin | cabe ✔ |
 | **bloqueio ao ligar sem mínimos (AC6–AC8)** | **Não da Nicole — mas É comportamento novo**, em superfície de admin, e a story não vai fingir que não é | cabe, **e está desenhado como bloco separável** — ver abaixo |
 
@@ -274,10 +274,10 @@ para acabar com isso. O backfill é a decisão do Gabriel de 10/08, escrita, com
 > `00000000-0000-0000-0004-000000000002 · Yarden`. Batem também com o
 > `metadata->>'property_id'` dos 126 eventos `PROPERTY_IDENTIFIED` all-time.
 >
-> 🔴 **E a mesma disciplina precisa valer para a 221, onde ela NÃO está.** A migration 221 e o SQL
+> 🔴 **E a mesma disciplina precisa valer para a 224, onde ela NÃO está.** A migration 224 e o SQL
 > do critério de rollback usam `where slug in ('japura','solun')`. Slug não é fórmula, mas é o
 > identificador que o **Achado nº 1 desta própria story** propõe corrigir (`solun` → `solum`). Se
-> alguém corrigir o slug, a 221 e o rollback afetam **0 linhas, em silêncio** — o mesmo modo de
+> alguém corrigir o slug, a 224 e o rollback afetam **0 linhas, em silêncio** — o mesmo modo de
 > falha mudo que a story inteira existe para atacar. **Usar `id`**, medidos em 11/08:
 >
 > ```sql
@@ -287,7 +287,7 @@ para acabar com isso. O backfill é a decisão do Gabriel de 10/08, escrita, com
 > '5694ecf1-eb53-4d9e-bb82-4c06f0b19690'
 > ```
 >
-> E a guarda de **"exatamente 2 linhas"** vale para a 221 também, não só para a 220.
+> E a guarda de **"exatamente 2 linhas"** vale para a 224 também, não só para a 223.
 
 ### 3. O filtro — uma linha, no lugar em que os três consumidores compartilham a lista
 
@@ -528,10 +528,10 @@ duas direções, um `loadProperties` que devolvesse `[]` sempre passaria na meta
 
 | # | passo | quem | estado da Nicole | rollback nesta etapa |
 |---|---|---|---|---|
-| **1** | **Migration 220** — `add column` + backfill nomeado (Vind/Yarden `true`) | @dev / @data-engineer | **inalterado** (os dois seguem `is_active=false`) | `drop column` — **e só enquanto o passo 2 não subiu** (ver nota) |
+| **1** | **Migration 223** — `add column` + backfill nomeado (Vind/Yarden `true`) | @dev / @data-engineer | **inalterado** (os dois seguem `is_active=false`) | `drop column` — **e só enquanto o passo 2 não subiu** (ver nota) |
 | **2** | **Deploy do código** (filtro + UI + rota + testes) | @dev → @devops | **inalterado** — provável byte a byte (AC3) | **reverter o PR, e só** |
 | **3** | **Janela de observação de 24 h** | @qa + Marcos | — | idem |
-| **4** | **Migration 221** — `is_active = true` nos dois, restaurando o CRM | @data-engineer (R-B, backup existente) | reverter o PR **+ desfazer a 221** | — |
+| **4** | **Migration 224** — `is_active = true` nos dois, restaurando o CRM | @data-engineer (R-B, backup existente) | reverter o PR **+ desfazer a 224** | — |
 
 > ⚠️ **@po, 11/08 — fronteira do rollback do passo 1, que faltava.** `drop column` só é rollback
 > **antes** do passo 2. Com o código no ar, derrubar a coluna reproduz **exatamente** a catástrofe
@@ -539,13 +539,13 @@ duas direções, um `loadProperties` que devolvesse `[]` sempre passaria na meta
 > `if (error || !data) return []` ⇒ a Nicole perde **todos** os empreendimentos, sem log. Depois do
 > passo 2, o rollback é **reverter o PR primeiro, a coluna depois (ou nunca — ela é inerte)**.
 
-> **Por que a 221 vem depois da janela, e não junto:** nas primeiras 24 h o rollback é *reverter o
+> **Por que a 224 vem depois da janela, e não junto:** nas primeiras 24 h o rollback é *reverter o
 > PR*, sem tocar em nenhum dado — porque os dois continuam desligados pelo paliativo, que ainda
-> segura. Depois da 221, um rollback de código **os traz de volta ao contexto**, e por isso a
+> segura. Depois da 224, um rollback de código **os traz de volta ao contexto**, e por isso a
 > instrução de desfazê-la fica escrita no critério de rollback. Um passo de ordem que custa 24 h e
 > compra um rollback limpo.
 
-**Migrations — 🔴 CORRIGIDO PELO @po EM 11/08: são a 220 e a 221, não a 218 e a 219.**
+**Migrations — 🔴 CORRIGIDO PELO @po EM 11/08: são a 223 e a 224, não a 218 e a 219.**
 Conferido por mim em `supabase/migrations/` na `main` de 11/08 (três stories já colidiram neste
 mesmo ponto, então a conferência é minha, não herdada):
 
@@ -559,14 +559,14 @@ mesmo ponto, então a conferência é minha, não herdada):
 219  ← REIVINDICADO pela 87-1 (`Ready`), que o crava por escrito na linha 285 e no DoD (">= 219")
 ```
 
-⇒ **220** (`add column` + backfill) e **221** (restauração do `is_active`). `git log --all` não tem
-nenhum arquivo `219_`, `220_` nem `221_` em branch nenhuma — o 219 está reservado, não escrito.
+⇒ **223** (`add column` + backfill) e **224** (restauração do `is_active`). `git log --all` não tem
+nenhum arquivo `219_`, `223_` nem `224_` em branch nenhuma — o 219 está reservado, não escrito.
 
 > **Nota de mecanismo, para este ponto parar de doer:** o prefixo `NNN_` é convenção **só do
 > repositório**. Em produção, `supabase_migrations.schema_migrations` versiona por **timestamp**
 > (maior valor hoje: `20260710171933`, medido em 11/08) — não há colisão do lado do banco. A
 > colisão é 100% de arquivo, e é por isso que ela reaparece toda vez que duas stories ficam em
-> `Ready` ao mesmo tempo. **Regra operacional:** o @dev crava 220/221 agora; o **@devops reconfere e
+> `Ready` ao mesmo tempo. **Regra operacional:** o @dev crava 223/224 agora; o **@devops reconfere e
 > renumera na abertura do PR**, como já fez na 87-6 e na 84-1, registrando a razão no cabeçalho do
 > arquivo. O **R-G** do epic ainda diz **215** e está desatualizado.
 
@@ -585,7 +585,7 @@ Aplicar **arquivo inteiro num único POST** pela Management API (`db push` proib
 > AC abaixo com 🔴 traz a mutação exigida; nenhuma vale sem ela.
 
 **AC1 — 🔴 O campo existe, o default é DESLIGADO, e o backfill é de exatamente dois.**
-*Verifica-se, contra produção, depois da migration 220:*
+*Verifica-se, contra produção, depois da migration 223:*
 ```sql
 select name, slug, is_active, nicole_enabled from properties order by created_at, name;
 --                                          ⬆ 🔴 o desempate por `name` é OBRIGATÓRIO — ver nota
@@ -612,7 +612,7 @@ select column_default, is_nullable from information_schema.columns
 
 - (i) a migration **falha** se o `UPDATE` do backfill não afetar exatamente **2** linhas — colar o
   bloco de guarda;
-- (ii) **vermelho:** rodar a 220 num banco de teste com um 5º empreendimento e conferir que ele
+- (ii) **vermelho:** rodar a 223 num banco de teste com um 5º empreendimento e conferir que ele
   nasce `false` **sem** aparecer no backfill.
 
 **AC2 — 🔴 Cadastrar não liga. Provado pela API, não pela tela.**
@@ -662,7 +662,7 @@ seedando `properties` com os 4 e rodando `processMessage`:
 > **404, não 422**: a linha nem é alcançada pela validação. Quem fosse conferir esta AC contra
 > produção no gate leria o 404 como defeito da implementação. **Correção, e ela não muda o desenho,
 > só o método:** a AC6 é verificada em **teste de rota, com fixture `is_active: true`** (que é o que
-> a T5 já manda fazer) — **nunca** por chamada ad-hoc a produção antes do passo 4. Depois da 221, a
+> a T5 já manda fazer) — **nunca** por chamada ad-hoc a produção antes do passo 4. Depois da 224, a
 > conferência em produção passa a ser possível e é bem-vinda, mas é bônus, não a régua.
 
 - (i) `PATCH /api/properties/{japura}` com `{ nicole_enabled: true }` ⇒ **HTTP 422**, corpo com
@@ -699,14 +699,14 @@ como aviso** — e um aviso **nunca** bloqueia.
   `.eq("is_active", true)` (`dashboard/properties/page.tsx:15`), então enquanto Japurá e Solum
   estiverem soft-deletados **eles não aparecem nessa lista** — a AC original ("nos 4") era
   impossível de satisfazer no passo em que estava colocada. Verificar **nos 2 visíveis no passo 2**;
-  a conferência "nos 4" é a **AC9-(i)**, depois da 221, e não se duplica aqui;
+  a conferência "nos 4" é a **AC9-(i)**, depois da 224, e não se duplica aqui;
 - na tela de edição, tentar ligar um bloqueado ⇒ a lista `missing` da AC6 é renderizada item a item,
   **não** um "erro ao salvar" genérico;
 - **nenhuma AC desta story é "existe no painel"** — todas as três acima são verificadas contra a
   resposta HTTP, que é o efeito. *(Regra da §10 do epic.)*
 
 **AC9 — 🔴 A restauração do paliativo, e ela é o fecho da dívida.**
-Depois da migration 221 (passo 4):
+Depois da migration 224 (passo 4):
 ```sql
 select name, slug, is_active, nicole_enabled from properties
  where id in ('fcbd2a01-7c59-48b0-8e88-f5a68f4970cd',   -- Japura
@@ -719,7 +719,7 @@ desta story e pode ser corrigido a qualquer momento — uma SQL de verificação
 devolveria **0 linhas em silêncio** e seria lida como "nada a restaurar".*
 - (i) os dois **voltam** à lista `/dashboard/properties` e aos seletores de empreendimento das telas
   de lead — conferido nas telas, não só no banco;
-- (ii) o contexto da Nicole **continua sem eles** — reexecutar a AC3 **depois** da 221 e colar o
+- (ii) o contexto da Nicole **continua sem eles** — reexecutar a AC3 **depois** da 224 e colar o
   diff vazio de novo. *É a prova de que o switch, e não o soft delete, é quem está segurando;*
 - (iii) o backup `scratchpad/BACKUP-properties-104357.json` é conferido contra o estado final
   (`id`, `name`, `slug` idênticos).
@@ -782,7 +782,7 @@ devolveria **0 linhas em silêncio** e seria lida como "nada a restaurar".*
       `is_active`; (c) `PROPERTY_IDENTIFIED` por nome, all-time; (d) turnos e menções na janela de
       exposição. **Se algum divergir do que está escrito aqui, publicar OS DOIS com o método** — não
       sobrescrever o meu.
-- [x] **T1** — `supabase/migrations/220_properties_nicole_enabled.sql`: `add column` + backfill por
+- [x] **T1** — `supabase/migrations/223_properties_nicole_enabled.sql`: `add column` + backfill por
       `id` + guarda de "exatamente 2 linhas". **Conferir o prefixo na hora** (o 219 está reservado
       pela 87-1; o @devops reconfere na abertura do PR). Aplicar por Management API, arquivo inteiro
       num POST.
@@ -796,7 +796,7 @@ devolveria **0 linhas em silêncio** e seria lida como "nada a restaurar".*
 - [x] **T6** — as mutações da AC1-(ii), AC2-(ii), AC3, AC4-(iv), AC5-(iv), AC6-(v) e AC7, cada uma
       com a **forma escrita** e a **saída bruta colada**; árvore restaurada e `md5` conferido.
 - [x] **T7** — AC10 e o plano da janela (AC11), com responsável nomeado, **antes** do merge.
-- [~] **T8** — **depois** da janela: `supabase/migrations/221_properties_restaura_is_active.sql`
+- [~] **T8** — **depois** da janela: `supabase/migrations/224_properties_restaura_is_active.sql`
       (@data-engineer, R-B), **por `id` e com guarda de 2 linhas** + reexecutar a AC3 e a AC9.
 - [x] **T9** — **condições 1 e 2 do gate CONCERNS (11/08)**: os dois números do registro corrigidos
       (`C1` o `md5` de `properties/[id]/route.ts`, `C2` o tamanho do golden) e o `C3` fechado com
@@ -834,7 +834,7 @@ devolveria **0 linhas em silêncio** e seria lida como "nada a restaurar".*
 ### Armadilhas
 
 1. **`loadProperties` falha para o lado MUDO.** `if (error || !data) return []` ⇒ coluna inexistente
-   vira "nenhum empreendimento", **sem log e sem exceção**. É por isso que a migration 220 vem
+   vira "nenhum empreendimento", **sem log e sem exceção**. É por isso que a migration 223 vem
    antes do deploy, e não porque seja o costume.
 2. **`is_active` ≠ "visível para a Nicole".** É o soft delete. Não empilhar mais significado nele —
    foi empilhar significado que produziu esta story.
@@ -863,7 +863,7 @@ devolveria **0 linhas em silêncio** e seria lida como "nada a restaurar".*
 | **`87-5`** (`Ready`) | Toca `loadConversationHistory` e `Message.role` em `pipeline.ts`. Mesma situação |
 | **`87-2`** (`Draft`) | Campos mortos do painel. Esta story **acrescenta** uma superfície de painel — e a acrescenta **já provada**, que é o padrão que a `87-2` quer estabelecer |
 | **`87-0`** (em prod) | Dona do `config-surfaces.test.ts`. Esta story **acrescenta** entrada e **não altera** o `ORFAS_CONHECIDAS` (continua 5, com asserção explícita em `:372`). ⚠️ **Mas ALTERA o desenho, ao contrário do que esta linha dizia** (@po, 11/08): a prova `comportamental` da AC5 exige um **terceiro membro** na união `Prova` (`:129-140`), um **terceiro ramo** em `executarProva` (`:317-321`) e tornar a execução **assíncrona** (`loadProperties` é `async`). ~15 linhas, no arquivo do qual a 87-0 é dona — ver §7 do Desenho |
-| **`87-1`** (`Ready`) | **Reivindica a migration `219`** (linha 285 e DoD). Esta story vai para **220/221**. Sem interseção de arquivo — a 87-1 é `agent_prompts` |
+| **`87-1`** (`Ready`) | **Reivindica a migration `219`** (linha 285 e DoD). Esta story vai para **223/224**. Sem interseção de arquivo — a 87-1 é `agent_prompts` |
 
 ---
 
@@ -942,8 +942,8 @@ do Desenho explica por que não entrou aqui.
 
 | # | Risco | Sev | Mitigação |
 |---|---|---|---|
-| 1 | **Deploy fora de ordem** ⇒ `loadProperties` devolve `[]` e a Nicole perde **todos** os empreendimentos, em silêncio | **Alta** | Ordem de 4 passos escrita e numerada; a migration 220 é **pré-requisito** do deploy; a falha é muda (`pipeline.ts:1847`), então a AC4-(iii) tem controle positivo obrigatório |
-| 2 | Rollback **depois** da 221 traz os dois de volta ao contexto | **Média** | A 221 só sai depois da janela verde; o critério de rollback manda desfazê-la junto, e está escrito |
+| 1 | **Deploy fora de ordem** ⇒ `loadProperties` devolve `[]` e a Nicole perde **todos** os empreendimentos, em silêncio | **Alta** | Ordem de 4 passos escrita e numerada; a migration 223 é **pré-requisito** do deploy; a falha é muda (`pipeline.ts:1847`), então a AC4-(iii) tem controle positivo obrigatório |
+| 2 | Rollback **depois** da 224 traz os dois de volta ao contexto | **Média** | A 224 só sai depois da janela verde; o critério de rollback manda desfazê-la junto, e está escrito |
 | 3 | Desligado ⇒ ela também não **reconhece** o nome (supera parcialmente a 75-281) | **Média** | Consequência **declarada** e fixada como intenção na AC4-(ii), não descoberta depois. Medido: 0 leads vinculados, 0 `PROPERTY_IDENTIFIED` all-time nos dois. Modo de falha = silêncio, não afirmação falsa |
 | 4 | Os mínimos bloquearem um ligamento legítimo (pré-lançamento sem `total_units`) | **Média** | `B2` marcado como o discutível dos dois, com a recomendação escrita de virar aviso se o @po recusar. **Desligar nunca é bloqueado** (AC6-iii) |
 | 5 | Alguém pedir uma flag de override do bloqueio | **Baixa, mas cara** | Recusada por escrito no §6, com a razão. O conserto é mudar a constante única |
@@ -953,11 +953,11 @@ do Desenho explica por que não entrou aqui.
 
 ## Critério de rollback — escrito ANTES do deploy
 
-**Nas primeiras 24 h (antes da migration 221):** reverter o PR. **Só isso** — nenhum dado é tocado,
+**Nas primeiras 24 h (antes da migration 224):** reverter o PR. **Só isso** — nenhum dado é tocado,
 porque Japurá e Solum continuam `is_active = false` e o paliativo ainda segura.
 ⚠️ **Não dropar a coluna** — ver a fronteira do rollback do passo 1, na tabela de deploy.
 
-**Depois da migration 221:** reverter o PR **E** executar, **por `id`**:
+**Depois da migration 224:** reverter o PR **E** executar, **por `id`**:
 
 ```sql
 update properties set is_active = false
@@ -997,9 +997,9 @@ sem avisar — dentro de uma story que existe justamente por causa de um efeito 
 - [x] Os **6 testes da 75-281** verdes, sem edição
 - [x] Suíte da **raiz inteira** com delta explicado; `tsc` 0 em `packages/ai`
 - [~] A ordem de 4 passos respeitada, com a data/hora de cada um registrada
-- [~] Migration **220** e **221** aplicadas por Management API (arquivo inteiro num POST), com o
+- [~] Migration **223** e **224** aplicadas por Management API (arquivo inteiro num POST), com o
       retorno colado — **prefixo reconferido em `supabase/migrations/` no momento do PR**
-- [ ] AC3 reexecutada **depois** da 221, com diff vazio colado
+- [ ] AC3 reexecutada **depois** da 224, com diff vazio colado
 - [x] Plano da janela (AC11) escrito com responsável nomeado **antes** do merge
 - [x] Os 7 achados colaterais entregues ao @po/@pm — **nenhum corrigido aqui** *(@po 11/08:
       recebidos e registrados em `docs/backlog.md`; o nº 7 vai ao @pm como item de roadmap)*
@@ -1035,7 +1035,7 @@ roadmap**, que é a divergência que o próprio epic registra ter acumulado por 
 
 **Dois ajustes de manutenção no mesmo commit, se o @pm concordar:**
 - **`R-G`** ainda diz *"migration 215"*. O real em 11/08 é **218 aplicada, 219 reservado pela 87-1,
-  220/221 desta story**. É a terceira story seguida que precisa corrigir isso no próprio corpo.
+  223/224 desta story**. É a terceira story seguida que precisa corrigir isso no próprio corpo.
 - **Achado nº 7** do @sm (inventário das ~17 colunas de `properties` que o runtime da Nicole lê,
   com **`description` e `differentials` já medidas como órfãs**) é item novo, e é a **4ª fonte de
   enumeração** que falta ao `config-surfaces.test.ts`. Registrado por mim em `docs/backlog.md`.
@@ -1140,12 +1140,12 @@ Nenhuma muda uma decisão.
 
 | # | passo | quando | quem | estado |
 |---|---|---|---|---|
-| **1** | **Migration 220** (`add column` + backfill nomeado) | **2026-08-11 13:13 UTC** | @dev | ✅ **APLICADA EM PRODUÇÃO** |
+| **1** | **Migration 223** (`add column` + backfill nomeado) | **2026-08-11 13:13 UTC** | @dev | ✅ **APLICADA EM PRODUÇÃO** |
 | **2** | Deploy do código | — | @devops | ⏳ pendente (PR não aberto — @dev não abre PR) |
 | **3** | Janela de 24 h | — | @qa + **Marcos** | ⏳ pendente |
-| **4** | **Migration 221** (restaura `is_active`) | — | @data-engineer | ⏳ **arquivo pronto e validado no dev; NÃO aplicada** |
+| **4** | **Migration 224** (restaura `is_active`) | — | @data-engineer | ⏳ **arquivo pronto e validado no dev; NÃO aplicada** |
 
-> 🔴 **@devops/@qa, leiam antes de qualquer coisa:** a **220 já está em produção** e o código **não**.
+> 🔴 **@devops/@qa, leiam antes de qualquer coisa:** a **223 já está em produção** e o código **não**.
 > Essa é a ordem certa e a coluna é **inerte** enquanto o código não sobe (nada a lê). Mas a
 > recíproca é catastrófica: **se o PR for revertido depois do deploy, NÃO derrubem a coluna** — com
 > o código no ar, `.eq("nicole_enabled", true)` contra coluna inexistente cai em
@@ -1153,7 +1153,7 @@ Nenhuma muda uma decisão.
 
 ---
 
-### AC1 — o campo, o default e o backfill (contra **produção**, depois da 220)
+### AC1 — o campo, o default e o backfill (contra **produção**, depois da 223)
 
 ```
 $ ./sbq.sh dsopqkqjkmhytudaaolv  # POST único, arquivo inteiro, Management API
@@ -1171,7 +1171,7 @@ select column_default, is_nullable from information_schema.columns
 → [{"column_default":"false","is_nullable":"NO"}]
 ```
 ✅ Formato idêntico ao da coluna `is_active` (que devolve `true` · `NO`), como o @po previu. E a AC
-**nasceu vermelha de verdade**: antes da 220 a consulta ao `information_schema` devolvia só a linha
+**nasceu vermelha de verdade**: antes da 223 a consulta ao `information_schema` devolvia só a linha
 do `is_active`, colada no meu T0.
 
 **AC1-(ii) — o quinto empreendimento nasce `false` e fica fora do backfill.** Rodado no **projeto de
@@ -1190,7 +1190,7 @@ tabela inteira, não a linha). Semeei os 4 reais + um `Quinto Teste 87-13`, `sta
 **AC1-(i) — 🔴 a guarda de "exatamente 2 linhas".** Mutação: troquei o `id` do Yarden por um
 inexistente (`…-00000000BEEF`) e reapliquei o arquivo no dev. Saída bruta:
 ```
-ERROR: P0001: Story 87-13 / migration 220: o backfill esperava afetar EXATAMENTE 2 linhas, afetou 1.
+ERROR: P0001: Story 87-13 / migration 223: o backfill esperava afetar EXATAMENTE 2 linhas, afetou 1.
 Confira os ids contra `select id, name, slug from properties order by created_at, name` antes de
 reaplicar.
 CONTEXT: PL/pgSQL function inline_code_block line 17 at RAISE
@@ -1203,11 +1203,11 @@ A transação aborta inteira — conferido: nada foi gravado.
 
 A primeira versão do `nicole-enabled.test.ts` deu **7/7 verdes contra o `pipeline.ts` SEM o filtro**.
 O motivo não é o teste ser frouxo — é o cadastro: o paliativo de 10/08 pôs Japura e Solum em
-`is_active = false`, e o backfill da 220 os deixa em `nicole_enabled = false`. **Os dois campos
+`is_active = false`, e o backfill da 223 os deixa em `nicole_enabled = false`. **Os dois campos
 concordam em todas as quatro linhas de produção**, então qualquer fixture com o estado de hoje passa
 verde com o `is_active` sozinho segurando, e o teste não sabe dizer a diferença.
 
-**A régua que discrimina é o estado PÓS-221** (`is_active = true` + `nicole_enabled = false`), que é
+**A régua que discrimina é o estado PÓS-224** (`is_active = true` + `nicole_enabled = false`), que é
 exatamente quando o switch passa a ser o único responsável. Está implementada como
 `cadastroPos221()` e usada em todas as provas que precisam morder — o que também **antecipa a
 AC9-(ii) para teste**, meses antes de alguém poder rodá-la em produção.
@@ -1226,12 +1226,12 @@ réplica escrita à mão: uma réplica provaria a réplica. A proveniência fico
 (`AIOS_87_13_REGRAVAR_GOLDEN=1`).
 
 - ✅ estado de hoje ⇒ `["Vind Residence","Yarden"]`, string **idêntica** ao golden (diff vazio);
-- ✅ estado **pós-221** (`is_active = true` nos quatro) ⇒ **ainda idêntica** ao golden;
-- 🔴 **vermelho, forma da mutação:** `japura.nicole_enabled = true` no estado pós-221 ⇒ a igualdade
+- ✅ estado **pós-224** (`is_active = true` nos quatro) ⇒ **ainda idêntica** ao golden;
+- 🔴 **vermelho, forma da mutação:** `japura.nicole_enabled = true` no estado pós-224 ⇒ a igualdade
   cai e a string ganha `Japura (Em planejamento)` + `ATENCAO — EM PLANEJAMENTO` (o bloco da 75-281).
   Fixado como teste permanente, não só colado aqui.
 
-⏳ **Falta a reexecução depois da 221 em produção (AC9-ii).** O teste já cobre a forma; a conferência
+⏳ **Falta a reexecução depois da 224 em produção (AC9-ii).** O teste já cobre a forma; a conferência
 contra o dado real é do passo 4.
 
 ---
@@ -1244,7 +1244,7 @@ delete não tinha um único caso que o provasse.
 
 **Por que isso é desta story, e não dívida alheia que se empurra:** o buraco é anterior — mas é esta
 story que **separa formalmente os dois conceitos** (`is_active` = existe no CRM; `nicole_enabled` = a
-IA fala dele) e grava a separação no `comment on column` da 220. A partir daqui são duas linhas
+IA fala dele) e grava a separação no `comment on column` da 223. A partir daqui são duas linhas
 vizinhas, no mesmo `.eq` encadeado, que parecem redundantes — e só uma tinha teste. Deixar metade do
 par guardada é a assimetria que produz regressão silenciosa: quem simplificar `loadProperties` no
 próximo refactor apaga a linha sem guarda, e **um empreendimento de fato excluído volta ao contexto
@@ -1282,7 +1282,7 @@ AssertionError: expected [ 'Vind Residence', 'Yarden', …(1) ] to deeply equal
 > mutação **M1** (remover `.eq("nicole_enabled", true)`) os dois casos novos ficam **verdes**, e a
 > contagem da AC4 **continua exatamente 4** — remedida agora com o par novo na suíte:
 > ```
->  × AC3 > continua igual ao golden DEPOIS da 221, com os dois de volta a is_active=true
+>  × AC3 > continua igual ao golden DEPOIS da 224, com os dois de volta a is_active=true
 >  × AC4 > (i) o `system` enviado à Anthropic não contém Japura nem Solum
 >  × AC4 > (ii) 'quero saber do Japurá' NÃO identifica nada
 >  × config-surfaces > properties.nicole_enabled → chat/pipeline.ts — loadProperties
@@ -1305,7 +1305,7 @@ está **fora da regra de corte da Onda 1**, e é backlog do @po.
 ### AC4 — o turno inteiro, três consumidores
 
 `processMessage` de ponta a ponta com `createFakeSupabase` + `fakeAnthropic`, seedado com os 4 no
-estado pós-221.
+estado pós-224.
 
 - (i) o `system` enviado à Anthropic **não contém** `Japura` nem `Solum`, e **contém**
   `Vind Residence` com > 1.000 chars (controle no mesmo caso: sem ele, um `system` vazio passaria);
@@ -1323,7 +1323,7 @@ estado pós-221.
 
 🔴 **Vermelho — forma:** apagar a linha `.eq("nicole_enabled", true)` de `loadProperties`.
 ```
- × AC3 > continua igual ao golden DEPOIS da 221, com os dois de volta a is_active=true
+ × AC3 > continua igual ao golden DEPOIS da 224, com os dois de volta a is_active=true
  × AC4 > (i) o `system` enviado à Anthropic não contém Japura nem Solum
  × AC4 > (ii) 'quero saber do Japurá' NÃO identifica nada — consequência declarada do §3
  × config-surfaces > properties.nicole_enabled → chat/pipeline.ts — loadProperties
@@ -1367,7 +1367,7 @@ AssertionError: properties.nicole_enabled não tem consumidor no runtime.
 Fixtures com **`is_active: true` nos dois** (correção C2 do @po): antes do passo 4, um `PATCH` sobre
 o Japura em produção devolve **404**, porque tanto o `GET` (`:20`) quanto o `UPDATE` do `PATCH`
 (`:96`) carregam `.eq("is_active", true)`. A régua é o teste de rota; a conferência em produção só
-passa a ser possível depois da 221.
+passa a ser possível depois da 224.
 
 - **AC2** — `POST` com `nicole_enabled: true` no corpo ⇒ o campo **não chega ao INSERT**.
   🔴 **vermelho:** acrescentar `nicole_enabled: body.nicole_enabled` ao INSERT ⇒
@@ -1484,7 +1484,7 @@ seguem intactas, e nenhuma dívida nova foi criada.
 
 ---
 
-### Migration 221 — pronta, validada, **NÃO aplicada**
+### Migration 224 — pronta, validada, **NÃO aplicada**
 
 O arquivo existe e foi rodado de ponta a ponta **no projeto de dev**, nas duas direções:
 - caminho feliz ⇒ Japura e Solum voltam a `is_active = true` **mantendo `nicole_enabled = false`;
@@ -1492,7 +1492,7 @@ O arquivo existe e foi rodado de ponta a ponta **no projeto de dev**, nas duas d
   `nicole_enabled = true` no momento de restaurar, ela **aborta**, porque devolver o `is_active`
   nesse estado os poria de volta no contexto da Nicole. Saída bruta:
   ```
-  ERROR: P0001: Story 87-13 / migration 221: 1 dos dois empreendimentos está(ão) com
+  ERROR: P0001: Story 87-13 / migration 224: 1 dos dois empreendimentos está(ão) com
   nicole_enabled = true. Restaurar o is_active agora os devolveria ao contexto da Nicole. Abortado.
   ```
   Conferido que o aborto é **transacional**: o `UPDATE` do bloco anterior foi revertido.
@@ -1528,14 +1528,14 @@ veredito, sempre.**
 | item | dono | por quê |
 |---|---|---|
 | Abrir o PR e fazer o deploy (passo 2) | **@devops** | @dev não faz push nem PR |
-| Reconferir o prefixo `220`/`221` na abertura do PR | **@devops** | a 87-1 (PR #391) reivindica o 219 e pode mergear antes |
+| Reconferir o prefixo `223`/`224` na abertura do PR | **@devops** | a 87-1 (PR #391) reivindica o 219 e pode mergear antes |
 | Janela de 24 h (passo 3), AC11 | **@qa + Marcos** | depende do deploy |
-| Aplicar a **221** (passo 4) | **@data-engineer** | R-B, restauração de dado em produção |
-| **AC9** (i/ii/iii) e a reexecução da AC3 em produção | **@qa** | só possível depois da 221 |
+| Aplicar a **224** (passo 4) | **@data-engineer** | R-B, restauração de dado em produção |
+| **AC9** (i/ii/iii) e a reexecução da AC3 em produção | **@qa** | só possível depois da 224 |
 | Conferência visual do badge e do toggle na tela | **@qa** | `next build` passa; a leitura da tela é do gate |
 
 ⚠️ **Nada de "consertar" o slug `solun` nesta story** (Achado nº 1) — e, se alguém o corrigir antes
-do passo 4, a **221 continua funcionando**, porque casa por `id`.
+do passo 4, a **224 continua funcionando**, porque casa por `id`.
 
 ### Debug Log References
 
@@ -1549,12 +1549,12 @@ chamada à Anthropic. Ambas viraram comentário no teste, não só correção.
 
 | arquivo | o quê |
 |---|---|
-| `supabase/migrations/220_properties_nicole_enabled.sql` | `add column nicole_enabled boolean not null default false` + backfill por `id` + guarda de 2 linhas. **✅ APLICADA EM PRODUÇÃO em 11/08 13:13 UTC** |
-| `supabase/migrations/221_properties_restaura_is_active.sql` | restaura `is_active` de Japura/Solum, por `id`, com guarda de 2 linhas **e** guarda de aborto se o switch estiver ligado. **⏳ NÃO aplicada — passo 4, do @data-engineer** |
+| `supabase/migrations/223_properties_nicole_enabled.sql` | `add column nicole_enabled boolean not null default false` + backfill por `id` + guarda de 2 linhas. **✅ APLICADA EM PRODUÇÃO em 11/08 13:13 UTC** |
+| `supabase/migrations/224_properties_restaura_is_active.sql` | restaura `is_active` de Japura/Solum, por `id`, com guarda de 2 linhas **e** guarda de aborto se o switch estiver ligado. **⏳ NÃO aplicada — passo 4, do @data-engineer** |
 | `packages/web/src/lib/nicole-minimos.ts` | a **constante única** dos mínimos (`B1` bloqueia; `B2`, `A1`–`A3` avisam) + `avaliarMinimosNicole` (pura) + `carregarCadastroNicole` (leitura) |
 | `packages/ai/src/chat/__fixtures__/properties-producao.ts` | os 4 empreendimentos **reais**, colados do banco em 11/08, na forma que o PostgREST devolve. Compartilhada por AC3 e AC4 |
 | `packages/ai/src/chat/__fixtures__/contexto-nicole-head-87-13.txt` | o **golden** da AC3 (**2.035 bytes** — remedido, `C2` do gate), gerado pelo `loadProperties` de produção **antes** do filtro existir |
-| `packages/ai/src/chat/nicole-enabled.test.ts` | AC3 (byte a byte, + o estado pós-221), AC4 (turno inteiro) e o par do **`C3`** (o soft delete continua segurando) — **9 casos** |
+| `packages/ai/src/chat/nicole-enabled.test.ts` | AC3 (byte a byte, + o estado pós-224), AC4 (turno inteiro) e o par do **`C3`** (o soft delete continua segurando) — **9 casos** |
 | `packages/web/src/app/api/properties/nicole-enabled.test.ts` | AC2, AC6 e AC7 — 14 casos |
 
 **Modificados (6)**
@@ -1619,10 +1619,10 @@ gravado depois do filtro (circular) não sobreviveria a isso.
 |---|---|---|
 | (a) papel/mínimos só quando o valor **muda** | `const muda = true` | 2 vermelhos — `expected 403 to be 200` e `expected 422 to be 200`. É literalmente a regressão contra os 3 usuários de `obras`/`gerente-relacionamento` |
 | (b) não-booleano ⇒ **400** | guarda de tipo removida | teste cai (`expected 200 to be 400`); e com **sonda própria**: `PATCH { nicole_enabled: "true" }` ⇒ **`status=200 nicole_enabled_final=false`** — a Nicole é desligada em silêncio, com resposta de sucesso. A guarda é load-bearing |
-| (c) guarda de aborto da 221 | estado envenenado no **dev** | aborta com a mensagem colada — **e `is_active` dos dois continuou `false`**. O `UPDATE` do primeiro `do $$` foi revertido: é transacional de fato. A guarda de 2 linhas da 221 também aborta e também reverte. Caminho feliz devolve a saída exata da AC9 |
+| (c) guarda de aborto da 224 | estado envenenado no **dev** | aborta com a mensagem colada — **e `is_active` dos dois continuou `false`**. O `UPDATE` do primeiro `do $$` foi revertido: é transacional de fato. A guarda de 2 linhas da 224 também aborta e também reverte. Caminho feliz devolve a saída exata da AC9 |
 
 **5. Produção, medida por mim.** As 4 linhas idênticas às coladas; `nicole_enabled` com
-`column_default = false`, `is_nullable = NO`, `boolean`. **A 221 não foi aplicada.** A coluna é
+`column_default = false`, `is_nullable = NO`, `boolean`. **A 224 não foi aplicada.** A coluna é
 inerte e o deploy do passo 2 é seguro.
 Divergência publicada, sem sobrescrever ninguém: leads do Vind **713** (@sm) × **721** (@po) ×
 **722** (@dev) × **723** (@qa, 11/08) — drift de +1, mesma leitura.
@@ -1658,17 +1658,17 @@ registrar como backlog com a razão escrita — **@dev + @po**.
 
 **Depois do deploy** — (3) conferência visual do badge e do toggle, com print: é a única prova
 possível da AC8 (**@qa**); (4) janela de 24 h com o `n` observado registrado junto do veredito, e
-`n < 5` ⇒ **inconclusivo**, nunca "sem regressão" (**@qa + Marcos**); (5) 221 e reexecução da AC3 em
+`n < 5` ⇒ **inconclusivo**, nunca "sem regressão" (**@qa + Marcos**); (5) 224 e reexecução da AC3 em
 produção (**@data-engineer + @qa**).
 
 ### ⚠️ Avisos que este gate carrega adiante
 
-- 🔴 **A 220 está em produção e o código não.** Ordem certa, coluna inerte. Mas **se o PR for
+- 🔴 **A 223 está em produção e o código não.** Ordem certa, coluna inerte. Mas **se o PR for
   revertido depois do deploy, NÃO DERRUBAR A COLUNA** — com o código no ar isso cai em
   `if (error || !data) return []` e a Nicole perde **todos** os empreendimentos, sem log.
-- A **221 não foi aplicada**. Depois dela, rollback de código exige o `update … is_active = false`
+- A **224 não foi aplicada**. Depois dela, rollback de código exige o `update … is_active = false`
   por `id` junto.
-- Prefixo **220/221** a reconferir na abertura do PR — a **87-1 (PR #391) reivindica o 219** e segue
+- Prefixo **223/224** a reconferir na abertura do PR — a **87-1 (PR #391) reivindica o 219** e segue
   aberta (**@devops**).
 - O gatilho pelo **Yarden** continua falsificado pelo baseline. Instrumento vivo é o **Vind** (104
   `PROPERTY_IDENTIFIED` all-time, remedido hoje).
@@ -1713,7 +1713,7 @@ não medi.
 ### C3 — a decisão, e a mutação medida
 
 **Fechei nesta story, e não é por ser barato.** O buraco é anterior — mas é **esta** story que separa
-os dois conceitos e grava a separação no `comment on column` da 220. Deixar metade do par guardada é
+os dois conceitos e grava a separação no `comment on column` da 223. Deixar metade do par guardada é
 a assimetria que produz regressão silenciosa: quem simplificar `loadProperties` apaga a linha sem
 teste, e **um empreendimento de fato excluído volta ao contexto da Nicole sem nada reclamar**.
 
@@ -1747,7 +1747,8 @@ no Change Log. Nada em `packages/ai/src/chat/` além do arquivo de teste desta s
 
 | Data | Versão | Descrição | Autor |
 |---|---|---|---|
-| 2026-08-11 | v1.1 | **Condições 1 e 2 do gate CONCERNS fechadas — três itens, e só eles.** **`C3` (média) fechado COM CÓDIGO**, não com backlog: dois casos novos no `nicole-enabled.test.ts` (describe `C3`) com uma **quinta linha** `is_active: false` + `nicole_enabled: true` — o estado exato que o `DELETE /api/properties/[id]` produz hoje — mais o controle-espelho que a restaura. **Mutação medida, não declarada:** **M2** (remover `.eq("is_active", true)`) passa de **0 para 1 vermelho** — `Tests 1 failed | 2175 passed | 7 expected fail (2183)`, com o diff do array colado; e **M1** (remover `.eq("nicole_enabled", true)`) foi **remedida com o par novo na suíte e continua em exatamente 4** — `Tests 4 failed | 2172 passed | 7 expected fail (2183)`. Os dois casos usam `cadastro()` (estado de **hoje**) e **não** `cadastroPos221()`, de propósito: a única linha que discrimina passa a ser a sentinela, onde os dois campos **discordam**, e a régua fica de **um eixo só** — cai na M2, verde na M1. Um caso que caísse nas duas mediria "existe algum filtro", não **qual** linha alguém apagou. Razão de fechar aqui e não empurrar: o buraco é anterior, mas é **esta** story que separa os dois conceitos e grava a separação no `comment on column` da 220 — deixar metade do par sem guarda é a assimetria que devolve um empreendimento **excluído** ao contexto da Nicole sem um teste reclamar. **`C1` (baixa) corrigido, e a hipótese benigna FALSIFICADA:** `properties/[id]/route.ts` = **`ba8ffb3ae5f6788ec101ed13716909f9`** (terceira medição independente, igual às duas do @qa); o `712ac34e…` publicado estava errado, e em vez de herdar a explicação plausível eu **reconstruí** o estado *"antes da correção do comentário de `:41`"* e medi: **`45bad7f9113aea14d22fbaa2b08a4d22`** — **não é** o número declarado. Fica escrito que aquele `md5` **não corresponde a nenhum estado reconstruível**, e portanto que a frase "restaurada byte a byte" não estava verificável para o arquivo que carregou o vermelho da AC6-(v). **`C2` (baixa) corrigido:** golden = **2.035 bytes** (`wc -c`), nos dois lugares. **`C6` corrigido de graça:** o diff de `pipeline.ts` fecha em **1867**. **`C4` NÃO corrigido** — `softDelete` passar a escrever o switch é comportamento novo, fora da regra de corte da Onda 1; backlog do @po. **`C5` NÃO "coberto"** — as duas verificações de tela exigem sessão e o código não está no ar; não inventei teste para fingir cobertura, fica com o @qa no passo 3. **Baseline remedido, não estimado:** **2.174 → 2.176 passed**, `7 → 7 expected fail (2.183)`, **173 arquivos** (nenhum arquivo novo); `npx turbo type-check lint --force` **13/13, 0 errors** (24 warnings, todos pré-existentes, **zero** em arquivo tocado — conferido por grep) e `npx turbo build --force` **5/5**. `pipeline.ts` **intocado** (`md5 44b957fa…` idêntico antes e depois das duas mutações), `buildPropertyDataContext` e os 6 testes da 75-281 seguem com 0 linhas de diff. **Nenhum DDL em lugar nenhum nesta rodada** — a 221 continua **não aplicada**. **Sem push e sem PR** (@devops). | @dev (Dex) |
-| 2026-08-11 | v1.0 | **Implementada. `Ready` → `Ready for Review`.** Branch `story/87-13-switch-nicole-por-empreendimento`, de `origin/main` em `f885b06a` (**não** em cima da 87-1/PR #391, que segue aberto). **T0 remedido contra produção**, com as consultas coladas: os 47 call sites (39/5/2/1) e a janela de exposição (65 turnos · 15 conversas · 0 menções) **batem exatamente** com o @sm e o @po; **três divergências publicadas com os três números** — leads do Vind 713 (@sm) × 721 (@po) × **722** (@dev), `PROPERTY_IDENTIFIED` do Vind 103 × 104 × **104**, mensagens `assistant` all-time 1.250 (@po) × **1.251**; e a medição por dia **confirma a correção C3 do @po** (Yarden em zero desde 07/08, com tráfego em 4 dias — o gatilho original estaria disparado sem deploy). **Passo 1 da ordem de deploy EXECUTADO: migration 220 aplicada em produção em 11/08 13:13 UTC**, por Management API, arquivo inteiro num POST; AC1 conferida contra produção (`column_default = false` · `is_nullable = NO`, idêntico ao formato do `is_active`) e a AC1-(ii) rodada **no projeto de dev `xnxvygyfyyyzwhiuoehz`** com um 5º empreendimento `selling` que **nasceu `false` e ficou fora do backfill** — nenhum DDL experimental em produção. **🔴 O achado que mudou o desenho dos testes:** a primeira versão do `nicole-enabled.test.ts` deu **7/7 verdes contra o `pipeline.ts` SEM o filtro**, porque `is_active` e `nicole_enabled` são **colineares** nas quatro linhas de produção (o paliativo desligou os mesmos dois que o backfill deixa desligados) — a régua que discrimina é o estado **pós-221** (`is_active = true` + `nicole_enabled = false`), implementado como `cadastroPos221()` e usado em todas as provas que precisam morder, o que **antecipa a AC9-(ii) para teste**. Duas armadilhas a mais, documentadas no próprio teste: `processMessage` **não grava `system_events`** (emite por callback — ler a tabela devolveria `[]` sempre) e o turno faz **duas** chamadas à Anthropic, a segunda **sem `system`** (capturar a última zerava a string). **7 mutações aplicadas, rodadas, lidas e revertidas com `md5` conferido**, cada uma com a forma escrita e a saída bruta colada — incluindo a da AC5-(iv), que devolve **literalmente** `properties.nicole_enabled não tem consumidor no runtime.`, e a da AC4-(iv), em que **(iii) passou** como a AC exige. **AC5 alterou mesmo o desenho do `config-surfaces.test.ts`**, como o @po avisou: 3º membro na união, 3º ramo e **assincronia** — e a assincronia não é detalhe, um `executarProva` síncrono devolveria a Promise e `expect(ok).toBe(true)` daria **verde automático**; `ORFAS_CONHECIDAS` segue em **5**. **Suíte da raiz com baseline MEDIDO** (`git stash` de `packages/`, `status` conferido idêntico depois do `pop`): **2.152 → 2.174 passed**, `7 → 7 expected fail`, **+22 testes** explicados um a um. `turbo type-check lint --force` **13/13, 0 errors** (os 24 warnings são pré-existentes e nenhum em arquivo tocado; `packages/ai` não tem eslint); `turbo build --force` **5/5**. **`git diff` = 0 linhas** em `identify-property.ts`, `qualification.ts`, `agenda-state.ts` e `visit-slot.ts`, e `buildPropertyDataContext` intocada — os **6 testes da 75-281** passam sem edição. **Três decisões que a story não previa, todas justificadas:** (1) o papel e os mínimos só são exigidos quando o valor **muda de verdade**, e a tela só envia o campo quando ele muda — sem isso, os **3 usuários de `obras`/`gerente-relacionamento`** levariam **403 ao salvar qualquer coisa**, uma regressão silenciosa contra exatamente as pessoas que a decisão 2 do @po nomeia; (2) o campo entra no `updateFields` de forma **idempotente**, senão um PATCH só com o valor atual cairia em 400; (3) o `A2` ganhou uma **lista literal** de placeholders de endereço — julgamento de conteúdo, permitido **só** porque `A2` avisa e nunca bloqueia, e sem ele o aviso jamais dispararia no único caso real (`address = "A definir"` nos dois). **Uma regressão pega pela suíte e corrigida como fixture:** `pipeline-historico-cauda.test.ts` (AC5 da 87-8) enumerava os critérios de `loadProperties` e faltava o terceiro — `nicole_enabled: true` nas 2 linhas, **zero mudança de asserção**. **Migration 221 escrita e validada de ponta a ponta no dev, mas NÃO aplicada** (é o passo 4): casa por `id`, tem guarda de 2 linhas **e** uma **guarda de aborto que eu acrescentei** — se qualquer um dos dois estiver com `nicole_enabled = true` na hora de restaurar, ela aborta, porque devolver o `is_active` nesse estado os poria de volta no contexto; conferido que o aborto é **transacional**. **Plano da janela (AC11) escrito antes do merge, com Marcos (D7) nomeado**, o Vind como único instrumento vivo, o Yarden fora da contagem, o controle negativo rotulado como **saturado** (0 em 1.251) e o piso de `n < 5` com o denominador medido (mediana 11/dia, faixa 2–38; **3 dos 11 dias cairiam abaixo**). **Pendentes, com dono:** PR e deploy (@devops, que também reconfere o prefixo 220/221), janela de 24 h (@qa + Marcos), migration 221 (@data-engineer), **AC9 e a reexecução da AC3 em produção** (@qa, só possível depois da 221) e a conferência visual do badge/toggle (@qa). ⚠️ **A 220 já está em produção e o código não — essa é a ordem certa e a coluna é inerte; mas se o PR for revertido depois do deploy, NÃO derrubar a coluna:** com o código no ar isso reproduz a catástrofe muda do Risco 1. | @dev (Dex) |
-| 2026-08-11 | v0.2 | **Validada pelo @po (Pax) — GO, 10/10 após emendas. `Draft` → `Ready`.** Parecer: `docs/qa/po-validation-87-13.md`. **As 4 decisões estão fechadas:** (1) `B2` (`total_units > 0`) **rebaixado a AVISO**, `B1` continua bloqueando — o mecanismo de bloqueio (servidor, fail-closed, sem override) fica inteiro; o `B2` sai porque tem **poder discriminante zero** sobre o cadastro real (nenhuma linha falha `B2` e passa `B1`) e porque sua ausência produz **omissão, não mentira** — li os 4 ramos de estoque em `pipeline.ts:2128-2143` e com `total_units` nulo **nenhum ramo emite**, que é o critério com que a própria story classificou `A1`/`A2` como aviso; (2) papel = **`IMOVEIS_CREATE_ROLES`**, aceito, com a correção de que `IMOVEIS_EDIT_ROLES` tem **4** papéis e não 3 (inclui `gerente-relacionamento`, não nomeado em lugar nenhum) — custo medido: 3 pessoas ativas perdem, 9 mantêm; (3) **AC6–AC8 FICAM** na Onda 1 — a regra de corte é sobre caminho de decisão *da Nicole*, e isto é validação de servidor em rota de admin; (4) pedido do `W1-8` ao @pm **registrado com a linha da tabela já preenchida**. **10 correções obrigatórias aplicadas, todas medidas contra `main`/produção em 11/08:** 🔴 **migrations 218/219 → 220/221** (o 217 foi consumido pela 84-1 e o **218 pela 87-6, mergeada em 10/08 — `24932de3`**; o **219 está reivindicado pela 87-1**, `Ready`, linha 285 — `git log --all` não tem 219/220/221 em branch nenhuma; anotado que o prefixo `NNN_` é convenção só de repo, pois prod versiona por timestamp, e é por isso que a colisão reincide); 🔴 **AC6-(i) e AC8 não eram verificáveis no passo em que estavam** — `GET` (`:20`) e o `UPDATE` do `PATCH` (`:96`) carregam `.eq("is_active", true)`, então um PATCH em Japurá devolve **404, não 422**, até o passo 4, e `/dashboard/properties` mostra **2, não 4**; 🔴 **o gatilho de rollback nº 2 já está disparado hoje, sem deploy** — `PROPERTY_IDENTIFIED` do **Yarden** está em zero desde 07/08 com tráfego em 4 dias; o instrumento vivo é o **Vind** (não-zero em 14 dos últimos 15 dias); 🔴 **AC11 itens 1 e 2 são réguas saturadas** (0 menções em **1.250** mensagens `assistant` all-time; os dois ausentes de `PROPERTY_IDENTIFIED` all-time; e o paliativo já os tirou do contexto) — continuam em 0 quer a story suba ou não, e foram reordenados/rotulados como controle negativo, com o denominador de tráfego medido (mediana 11 turnos/dia, faixa 2–38; **3 dos últimos 11 dias cairiam abaixo do piso de n<5**); 🔴 **AC1 era não-determinística** — Japurá e Solum têm `created_at` idêntico ao microssegundo, e a story os lista em ordens opostas em dois lugares ⇒ `order by created_at, name`; 🔴 **migration 221 e SQL de rollback passam a casar por `id`, não por `slug`** — o slug `solun` é o Achado nº 1 da própria story e, se corrigido, o rollback afeta 0 linhas em silêncio (ids medidos e colados); **fronteira do rollback do passo 1** — `drop column` só vale antes do deploy, depois reproduz a catástrofe muda do Risco 1; **AC5 altera sim o desenho do `config-surfaces.test.ts`** (3º membro na união `Prova`, 3º ramo em `executarProva`, e execução assíncrona) — a linha das Fronteiras que negava isso foi corrigida; **Dev Notes**: o `fake-supabase` **não** tem "slot `properties: []`" (a palavra não aparece no arquivo) — o seed é um mapa genérico por tabela; **AC7** ganhou asserção de comprimento e o vermelho que fixa a decisão 1. **Confirmado por medição, e vale dizer o que passou:** os dois `id` do backfill estão **corretos**; a AC2 se sustenta por construção (o `INSERT` do `POST` tem lista explícita, sem o campo); os 6 testes da 75-281 existem; `ORFAS_CONHECIDAS` está em 5 com asserção explícita; os 47 call sites de `from("properties")` conferem; nenhum escritor de `properties` ressuscita `is_active`. **Divergências publicadas com os dois números** (@sm 10/08 × @po 11/08): leads do Vind **713 × 721**; `PROPERTY_IDENTIFIED` do Vind **103 × 104**. | @po (Pax) |
+| 2026-08-11 | v1.2 | **Renumeração `220` → `223` e `221` → `224`, e a fixture desacoplada do número da migration. Nenhuma linha de SQL, e nada reaplicado no banco.** (@devops, momentos antes do merge.) **Quarta rodada de colisão de prefixo em uma semana:** o @dev cravou 220/221 com a `main` em `f885b06a`; na abertura do PR o 219 já tinha ido para `219_fvs_fundacao.sql` (PR #392) — 220/221 seguiam livres e quem renumerou foi o #391, para 222; horas depois a `main` levou **o 220** com `220_marketing_posts_trafego_pago.sql` (Story 75-294, PR #394). Com o 222 já da 87-1 (mergeada, `06c54b34`), o par foi para **223/224**, adjacente, deixando um vão inofensivo no 221 (já existe um no 207). 🔴 **O que torna esta classe de colisão perigosa não é o conflito — é a ausência dele:** os nomes de arquivo diferem, então o git mergeia **limpo** e a `main` ficaria com **dois arquivos `220_`**, sem conflito e sem aviso. Provado com `git merge-tree` **antes** de mergear; o PR seguia `MERGEABLE` o tempo todo. **`MERGEABLE` não é sinal de que o prefixo está livre**, e foi por isso que o merge parou em vez de seguir. 🔵 **Renumerar é cosmético, inclusive com a 223 já aplicada em produção** (11/08 13:13 UTC): o prefixo `NNN_` é convenção **do repositório** e produção versiona por **timestamp** (`supabase_migrations.schema_migrations`) — é justamente por isso que a colisão reincide, porque **nenhuma conferência no banco jamais vai pegá-la**. **A fixture `cadastroPos221` virou `cadastroComIsActiveRestaurado`**: o nome agora descreve o **estado**, não o arquivo que o produz — um identificador acoplado a número de migration quebra a cada renumeração, e a regra que fica é *em prosa o número pode ficar; em identificador, não*. 🔬 **A renomeação foi PROVADA cosmética, não declarada:** reexecutei as duas mutações do gate depois dela — remover `.eq("nicole_enabled", true)` ⇒ **4 vermelhos**, os mesmos quatro nomes do V1; remover `.eq("is_active", true)` ⇒ **1 vermelho**, o caso do C3. Exatamente o esperado, logo o instrumento central da story está intacto. Árvore restaurada e conferida (`md5` de `pipeline.ts` = `9c51a5881da7f403db6ace80e2c312c1` antes e depois das duas). Revalidado: **2.176 passed | 7 expected fail (2.183)** em 173 arquivos, `turbo type-check lint --force` **13/13, 0 errors**, `turbo build --force` **5/5**. **153 substituições** de número em 8 arquivos (story, gate, parecer do @po, as duas migrations, `nicole-enabled.test.ts` ×2 e o comentário do `pipeline.ts`), cada ocorrência classificada antes como referência a migration — nenhuma era número de linha. | @devops (Gage) |
+| 2026-08-11 | v1.1 | **Condições 1 e 2 do gate CONCERNS fechadas — três itens, e só eles.** **`C3` (média) fechado COM CÓDIGO**, não com backlog: dois casos novos no `nicole-enabled.test.ts` (describe `C3`) com uma **quinta linha** `is_active: false` + `nicole_enabled: true` — o estado exato que o `DELETE /api/properties/[id]` produz hoje — mais o controle-espelho que a restaura. **Mutação medida, não declarada:** **M2** (remover `.eq("is_active", true)`) passa de **0 para 1 vermelho** — `Tests 1 failed | 2175 passed | 7 expected fail (2183)`, com o diff do array colado; e **M1** (remover `.eq("nicole_enabled", true)`) foi **remedida com o par novo na suíte e continua em exatamente 4** — `Tests 4 failed | 2172 passed | 7 expected fail (2183)`. Os dois casos usam `cadastro()` (estado de **hoje**) e **não** `cadastroPos221()`, de propósito: a única linha que discrimina passa a ser a sentinela, onde os dois campos **discordam**, e a régua fica de **um eixo só** — cai na M2, verde na M1. Um caso que caísse nas duas mediria "existe algum filtro", não **qual** linha alguém apagou. Razão de fechar aqui e não empurrar: o buraco é anterior, mas é **esta** story que separa os dois conceitos e grava a separação no `comment on column` da 223 — deixar metade do par sem guarda é a assimetria que devolve um empreendimento **excluído** ao contexto da Nicole sem um teste reclamar. **`C1` (baixa) corrigido, e a hipótese benigna FALSIFICADA:** `properties/[id]/route.ts` = **`ba8ffb3ae5f6788ec101ed13716909f9`** (terceira medição independente, igual às duas do @qa); o `712ac34e…` publicado estava errado, e em vez de herdar a explicação plausível eu **reconstruí** o estado *"antes da correção do comentário de `:41`"* e medi: **`45bad7f9113aea14d22fbaa2b08a4d22`** — **não é** o número declarado. Fica escrito que aquele `md5` **não corresponde a nenhum estado reconstruível**, e portanto que a frase "restaurada byte a byte" não estava verificável para o arquivo que carregou o vermelho da AC6-(v). **`C2` (baixa) corrigido:** golden = **2.035 bytes** (`wc -c`), nos dois lugares. **`C6` corrigido de graça:** o diff de `pipeline.ts` fecha em **1867**. **`C4` NÃO corrigido** — `softDelete` passar a escrever o switch é comportamento novo, fora da regra de corte da Onda 1; backlog do @po. **`C5` NÃO "coberto"** — as duas verificações de tela exigem sessão e o código não está no ar; não inventei teste para fingir cobertura, fica com o @qa no passo 3. **Baseline remedido, não estimado:** **2.174 → 2.176 passed**, `7 → 7 expected fail (2.183)`, **173 arquivos** (nenhum arquivo novo); `npx turbo type-check lint --force` **13/13, 0 errors** (24 warnings, todos pré-existentes, **zero** em arquivo tocado — conferido por grep) e `npx turbo build --force` **5/5**. `pipeline.ts` **intocado** (`md5 44b957fa…` idêntico antes e depois das duas mutações), `buildPropertyDataContext` e os 6 testes da 75-281 seguem com 0 linhas de diff. **Nenhum DDL em lugar nenhum nesta rodada** — a 224 continua **não aplicada**. **Sem push e sem PR** (@devops). | @dev (Dex) |
+| 2026-08-11 | v1.0 | **Implementada. `Ready` → `Ready for Review`.** Branch `story/87-13-switch-nicole-por-empreendimento`, de `origin/main` em `f885b06a` (**não** em cima da 87-1/PR #391, que segue aberto). **T0 remedido contra produção**, com as consultas coladas: os 47 call sites (39/5/2/1) e a janela de exposição (65 turnos · 15 conversas · 0 menções) **batem exatamente** com o @sm e o @po; **três divergências publicadas com os três números** — leads do Vind 713 (@sm) × 721 (@po) × **722** (@dev), `PROPERTY_IDENTIFIED` do Vind 103 × 104 × **104**, mensagens `assistant` all-time 1.250 (@po) × **1.251**; e a medição por dia **confirma a correção C3 do @po** (Yarden em zero desde 07/08, com tráfego em 4 dias — o gatilho original estaria disparado sem deploy). **Passo 1 da ordem de deploy EXECUTADO: migration 223 aplicada em produção em 11/08 13:13 UTC**, por Management API, arquivo inteiro num POST; AC1 conferida contra produção (`column_default = false` · `is_nullable = NO`, idêntico ao formato do `is_active`) e a AC1-(ii) rodada **no projeto de dev `xnxvygyfyyyzwhiuoehz`** com um 5º empreendimento `selling` que **nasceu `false` e ficou fora do backfill** — nenhum DDL experimental em produção. **🔴 O achado que mudou o desenho dos testes:** a primeira versão do `nicole-enabled.test.ts` deu **7/7 verdes contra o `pipeline.ts` SEM o filtro**, porque `is_active` e `nicole_enabled` são **colineares** nas quatro linhas de produção (o paliativo desligou os mesmos dois que o backfill deixa desligados) — a régua que discrimina é o estado **pós-224** (`is_active = true` + `nicole_enabled = false`), implementado como `cadastroPos221()` e usado em todas as provas que precisam morder, o que **antecipa a AC9-(ii) para teste**. Duas armadilhas a mais, documentadas no próprio teste: `processMessage` **não grava `system_events`** (emite por callback — ler a tabela devolveria `[]` sempre) e o turno faz **duas** chamadas à Anthropic, a segunda **sem `system`** (capturar a última zerava a string). **7 mutações aplicadas, rodadas, lidas e revertidas com `md5` conferido**, cada uma com a forma escrita e a saída bruta colada — incluindo a da AC5-(iv), que devolve **literalmente** `properties.nicole_enabled não tem consumidor no runtime.`, e a da AC4-(iv), em que **(iii) passou** como a AC exige. **AC5 alterou mesmo o desenho do `config-surfaces.test.ts`**, como o @po avisou: 3º membro na união, 3º ramo e **assincronia** — e a assincronia não é detalhe, um `executarProva` síncrono devolveria a Promise e `expect(ok).toBe(true)` daria **verde automático**; `ORFAS_CONHECIDAS` segue em **5**. **Suíte da raiz com baseline MEDIDO** (`git stash` de `packages/`, `status` conferido idêntico depois do `pop`): **2.152 → 2.174 passed**, `7 → 7 expected fail`, **+22 testes** explicados um a um. `turbo type-check lint --force` **13/13, 0 errors** (os 24 warnings são pré-existentes e nenhum em arquivo tocado; `packages/ai` não tem eslint); `turbo build --force` **5/5**. **`git diff` = 0 linhas** em `identify-property.ts`, `qualification.ts`, `agenda-state.ts` e `visit-slot.ts`, e `buildPropertyDataContext` intocada — os **6 testes da 75-281** passam sem edição. **Três decisões que a story não previa, todas justificadas:** (1) o papel e os mínimos só são exigidos quando o valor **muda de verdade**, e a tela só envia o campo quando ele muda — sem isso, os **3 usuários de `obras`/`gerente-relacionamento`** levariam **403 ao salvar qualquer coisa**, uma regressão silenciosa contra exatamente as pessoas que a decisão 2 do @po nomeia; (2) o campo entra no `updateFields` de forma **idempotente**, senão um PATCH só com o valor atual cairia em 400; (3) o `A2` ganhou uma **lista literal** de placeholders de endereço — julgamento de conteúdo, permitido **só** porque `A2` avisa e nunca bloqueia, e sem ele o aviso jamais dispararia no único caso real (`address = "A definir"` nos dois). **Uma regressão pega pela suíte e corrigida como fixture:** `pipeline-historico-cauda.test.ts` (AC5 da 87-8) enumerava os critérios de `loadProperties` e faltava o terceiro — `nicole_enabled: true` nas 2 linhas, **zero mudança de asserção**. **Migration 224 escrita e validada de ponta a ponta no dev, mas NÃO aplicada** (é o passo 4): casa por `id`, tem guarda de 2 linhas **e** uma **guarda de aborto que eu acrescentei** — se qualquer um dos dois estiver com `nicole_enabled = true` na hora de restaurar, ela aborta, porque devolver o `is_active` nesse estado os poria de volta no contexto; conferido que o aborto é **transacional**. **Plano da janela (AC11) escrito antes do merge, com Marcos (D7) nomeado**, o Vind como único instrumento vivo, o Yarden fora da contagem, o controle negativo rotulado como **saturado** (0 em 1.251) e o piso de `n < 5` com o denominador medido (mediana 11/dia, faixa 2–38; **3 dos 11 dias cairiam abaixo**). **Pendentes, com dono:** PR e deploy (@devops, que também reconfere o prefixo 223/224), janela de 24 h (@qa + Marcos), migration 224 (@data-engineer), **AC9 e a reexecução da AC3 em produção** (@qa, só possível depois da 224) e a conferência visual do badge/toggle (@qa). ⚠️ **A 223 já está em produção e o código não — essa é a ordem certa e a coluna é inerte; mas se o PR for revertido depois do deploy, NÃO derrubar a coluna:** com o código no ar isso reproduz a catástrofe muda do Risco 1. | @dev (Dex) |
+| 2026-08-11 | v0.2 | **Validada pelo @po (Pax) — GO, 10/10 após emendas. `Draft` → `Ready`.** Parecer: `docs/qa/po-validation-87-13.md`. **As 4 decisões estão fechadas:** (1) `B2` (`total_units > 0`) **rebaixado a AVISO**, `B1` continua bloqueando — o mecanismo de bloqueio (servidor, fail-closed, sem override) fica inteiro; o `B2` sai porque tem **poder discriminante zero** sobre o cadastro real (nenhuma linha falha `B2` e passa `B1`) e porque sua ausência produz **omissão, não mentira** — li os 4 ramos de estoque em `pipeline.ts:2128-2143` e com `total_units` nulo **nenhum ramo emite**, que é o critério com que a própria story classificou `A1`/`A2` como aviso; (2) papel = **`IMOVEIS_CREATE_ROLES`**, aceito, com a correção de que `IMOVEIS_EDIT_ROLES` tem **4** papéis e não 3 (inclui `gerente-relacionamento`, não nomeado em lugar nenhum) — custo medido: 3 pessoas ativas perdem, 9 mantêm; (3) **AC6–AC8 FICAM** na Onda 1 — a regra de corte é sobre caminho de decisão *da Nicole*, e isto é validação de servidor em rota de admin; (4) pedido do `W1-8` ao @pm **registrado com a linha da tabela já preenchida**. **10 correções obrigatórias aplicadas, todas medidas contra `main`/produção em 11/08:** 🔴 **migrations 218/219 → 223/224** (o 217 foi consumido pela 84-1 e o **218 pela 87-6, mergeada em 10/08 — `24932de3`**; o **219 está reivindicado pela 87-1**, `Ready`, linha 285 — `git log --all` não tem 219/223/224 em branch nenhuma; anotado que o prefixo `NNN_` é convenção só de repo, pois prod versiona por timestamp, e é por isso que a colisão reincide); 🔴 **AC6-(i) e AC8 não eram verificáveis no passo em que estavam** — `GET` (`:20`) e o `UPDATE` do `PATCH` (`:96`) carregam `.eq("is_active", true)`, então um PATCH em Japurá devolve **404, não 422**, até o passo 4, e `/dashboard/properties` mostra **2, não 4**; 🔴 **o gatilho de rollback nº 2 já está disparado hoje, sem deploy** — `PROPERTY_IDENTIFIED` do **Yarden** está em zero desde 07/08 com tráfego em 4 dias; o instrumento vivo é o **Vind** (não-zero em 14 dos últimos 15 dias); 🔴 **AC11 itens 1 e 2 são réguas saturadas** (0 menções em **1.250** mensagens `assistant` all-time; os dois ausentes de `PROPERTY_IDENTIFIED` all-time; e o paliativo já os tirou do contexto) — continuam em 0 quer a story suba ou não, e foram reordenados/rotulados como controle negativo, com o denominador de tráfego medido (mediana 11 turnos/dia, faixa 2–38; **3 dos últimos 11 dias cairiam abaixo do piso de n<5**); 🔴 **AC1 era não-determinística** — Japurá e Solum têm `created_at` idêntico ao microssegundo, e a story os lista em ordens opostas em dois lugares ⇒ `order by created_at, name`; 🔴 **migration 224 e SQL de rollback passam a casar por `id`, não por `slug`** — o slug `solun` é o Achado nº 1 da própria story e, se corrigido, o rollback afeta 0 linhas em silêncio (ids medidos e colados); **fronteira do rollback do passo 1** — `drop column` só vale antes do deploy, depois reproduz a catástrofe muda do Risco 1; **AC5 altera sim o desenho do `config-surfaces.test.ts`** (3º membro na união `Prova`, 3º ramo em `executarProva`, e execução assíncrona) — a linha das Fronteiras que negava isso foi corrigida; **Dev Notes**: o `fake-supabase` **não** tem "slot `properties: []`" (a palavra não aparece no arquivo) — o seed é um mapa genérico por tabela; **AC7** ganhou asserção de comprimento e o vermelho que fixa a decisão 1. **Confirmado por medição, e vale dizer o que passou:** os dois `id` do backfill estão **corretos**; a AC2 se sustenta por construção (o `INSERT` do `POST` tem lista explícita, sem o campo); os 6 testes da 75-281 existem; `ORFAS_CONHECIDAS` está em 5 com asserção explícita; os 47 call sites de `from("properties")` conferem; nenhum escritor de `properties` ressuscita `is_active`. **Divergências publicadas com os dois números** (@sm 10/08 × @po 11/08): leads do Vind **713 × 721**; `PROPERTY_IDENTIFIED` do Vind **103 × 104**. | @po (Pax) |
 | 2026-08-10 | v0.1 | Criação. Switch `properties.nicole_enabled`, **default DESLIGADO**, filtro em `loadProperties`, migração do paliativo `is_active=false` de volta para o campo certo em 4 passos ordenados. Tudo medido contra produção em 10/08: 4 empreendimentos com contagens, **47 call sites de `from("properties")` — 39 SELECT com `is_active`**, `PROPERTY_IDENTIFIED` all-time (Vind 103 · Yarden 22 · os outros **ausentes**), exposição de **65 turnos em 15 conversas** com **0 menções**. **Premissa do briefing CORRIGIDA:** a entrada dos dois no contexto **foi** autorizada — pela Story 75-281 (PR #371, em `HEAD`), decisão categórica por `status='planning'` cuja guarda é **instrução em prompt**; o que falta é granularidade e um default seguro. **Recomendação sobre bloquear × avisar: BLOQUEAR**, no servidor, com mínimos **estruturais** (contagem, nunca conteúdo) e sem override — bloco AC6–AC8 **separável**. Campo entra no `config-surfaces.test.ts` com prova **comportamental** e vermelho exigido. 7 achados colaterais registrados, nenhum corrigido. | @sm (River) |

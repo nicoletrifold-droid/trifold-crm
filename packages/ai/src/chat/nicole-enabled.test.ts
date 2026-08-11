@@ -53,21 +53,28 @@ function cadastro(mutar?: (linhas: Row[]) => void): Row[] {
 }
 
 /**
- * 🔴 O ESTADO QUE DISCRIMINA — produção depois da migration 221 (passo 4).
+ * 🔴 O ESTADO QUE DISCRIMINA — produção depois da migration 224 (passo 4).
  *
  * No estado de HOJE, `is_active` e `nicole_enabled` são COLINEARES na fixture: o
- * paliativo de 10/08 pôs Japura e Solum em `is_active = false`, e o backfill da 220
+ * paliativo de 10/08 pôs Japura e Solum em `is_active = false`, e o backfill da 223
  * os deixa em `nicole_enabled = false`. Um teste seedado com o estado de hoje passa
  * VERDE mesmo sem a linha `.eq("nicole_enabled", true)` — é o `is_active` segurando,
  * e o teste não saberia dizer a diferença. Foi assim que a primeira versão deste
  * arquivo deu 7/7 verdes contra o `pipeline.ts` sem o filtro.
  *
- * Depois da 221 os dois campos DISCORDAM (`is_active = true`, `nicole_enabled =
+ * Depois da 224 os dois campos DISCORDAM (`is_active = true`, `nicole_enabled =
  * false`) — e é só aí que o switch é o único responsável por segurá-los. Este é o
  * estado usado nas provas que precisam morder, e é literalmente a AC9-(ii)
  * antecipada para teste.
+ *
+ * ⚠️ O NOME DESCREVE O ESTADO, NÃO A MIGRATION QUE O PRODUZ. Esta fixture já se
+ * chamou `cadastroPos221`, e o número mudou (221 → 224) por colisão de prefixo —
+ * a terceira só nesta semana. Um identificador que carrega número de migration
+ * quebra toda vez que alguém renumera, e renumeração é rotina aqui: o prefixo
+ * `NNN_` é convenção do repositório e quem chega primeiro na `main` fica com o
+ * número. **Em prosa e comentário o número pode ficar; em identificador, não.**
  */
-function cadastroPos221(mutar?: (linhas: Row[]) => void): Row[] {
+function cadastroComIsActiveRestaurado(mutar?: (linhas: Row[]) => void): Row[] {
   return cadastro((linhas) => {
     for (const l of linhas) l.is_active = true
     mutar?.(linhas)
@@ -88,7 +95,7 @@ function cadastroPos221(mutar?: (linhas: Row[]) => void): Row[] {
  * comportamento do `HEAD`. Não é uma reimplementação da query escrita à mão: uma
  * réplica provaria a réplica.
  *
- * ⚠️ Reexecutar DEPOIS da migration 221 (AC9-ii). É isso que prova que quem segura
+ * ⚠️ Reexecutar DEPOIS da migration 224 (AC9-ii). É isso que prova que quem segura
  * os dois é o SWITCH, e não o soft delete.
  */
 describe("AC3 — o contexto da Nicole não muda um byte (cadastro real de produção)", () => {
@@ -112,8 +119,8 @@ describe("AC3 — o contexto da Nicole não muda um byte (cadastro real de produ
    * 🔴 AC9-(ii) antecipada — a prova de que quem segura é o SWITCH, não o soft delete.
    * Este caso é VERMELHO sem a linha `.eq("nicole_enabled", true)`.
    */
-  it("continua igual ao golden DEPOIS da 221, com os dois de volta a is_active=true", async () => {
-    const fake = createFakeSupabase({ properties: cadastroPos221() })
+  it("continua igual ao golden DEPOIS da 224, com os dois de volta a is_active=true", async () => {
+    const fake = createFakeSupabase({ properties: cadastroComIsActiveRestaurado() })
     const props = await loadProperties(fake as unknown as SupabaseClient, ORG_PRODUCAO)
     const contexto = buildPropertyDataContext(props, null)
 
@@ -130,7 +137,7 @@ describe("AC3 — o contexto da Nicole não muda um byte (cadastro real de produ
    */
   it("controle negativo: ligar o Japura QUEBRA a igualdade (e traz o bloco da 75-281)", async () => {
     const fake = createFakeSupabase({
-      properties: cadastroPos221((linhas) => {
+      properties: cadastroComIsActiveRestaurado((linhas) => {
         linhas.find((l) => l.id === JAPURA.id)!.nicole_enabled = true
       }),
     })
@@ -165,7 +172,7 @@ describe("AC3 — o contexto da Nicole não muda um byte (cadastro real de produ
  *
  * Por que isso importa NESTA story e não é dívida alheia: é ela que separa os dois
  * conceitos (`is_active` = existe no CRM; `nicole_enabled` = a IA fala dele) e grava
- * a separação no `comment on column` da 220. A partir daqui são duas linhas que
+ * a separação no `comment on column` da 223. A partir daqui são duas linhas que
  * parecem redundantes no mesmo `.eq` encadeado — deixar metade do par sem guarda é
  * a assimetria que produz regressão silenciosa no próximo refactor.
  *
@@ -192,7 +199,7 @@ describe("C3 — o soft delete continua segurando (is_active e nicole_enabled s�
   /**
    * 🔴 Este caso é VERMELHO sem a linha `.eq("is_active", true)`.
    *
-   * Usa `cadastro()` — o estado de HOJE — e não `cadastroPos221()`, e a escolha é
+   * Usa `cadastro()` — o estado de HOJE — e não `cadastroComIsActiveRestaurado()`, e a escolha é
    * o desenho do instrumento: aqui a colinearidade das quatro linhas de produção
    * não atrapalha (Japura e Solum saem por QUALQUER um dos dois critérios), e a
    * ÚNICA linha que discrimina é a sentinela, onde os dois campos DISCORDAM. O
@@ -305,9 +312,9 @@ type Evento = { event_type: string; metadata?: Record<string, unknown> }
 
 async function rodarTurno(
   mensagem: string,
-  // 🔴 O estado PÓS-221 é o que discrimina: com `is_active` colinear a
+  // 🔴 O estado PÓS-224 é o que discrimina: com `is_active` colinear a
   // `nicole_enabled`, (i) e (ii) passariam verdes sem o filtro existir.
-  linhas: Row[] = cadastroPos221()
+  linhas: Row[] = cadastroComIsActiveRestaurado()
 ): Promise<{ fake: FakeSupabase; system: string; eventos: Evento[] }> {
   const captura: TurnoAnthropic = { systemEnviado: "" }
   const eventos: Evento[] = []
@@ -366,7 +373,7 @@ describe("AC4 — o filtro atua nos três consumidores do turno", () => {
     // `identifyProperty` simplesmente não saber casar o nome "Japura".
     const { system, eventos } = await rodarTurno(
       "quero saber do Japura",
-      cadastroPos221((linhas) => {
+      cadastroComIsActiveRestaurado((linhas) => {
         linhas.find((l) => l.id === JAPURA.id)!.nicole_enabled = true
       })
     )

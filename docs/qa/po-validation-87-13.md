@@ -138,7 +138,7 @@ seguida a corrigir isso), e o **Achado nº 7** precisa de item próprio.
 
 ## 2. As 10 correções obrigatórias — todas medidas, todas aplicadas
 
-### C1 🔴 Migrations **218/219 → 220/221**
+### C1 🔴 Migrations **218/219 → 223/224**
 
 Conferi eu mesmo, como pedido. `supabase/migrations/` na `main` de 11/08:
 
@@ -149,14 +149,14 @@ Conferi eu mesmo, como pedido. `supabase/migrations/` na `main` de 11/08:
 ```
 
 A story dizia *"o maior prefixo local é 217"*. Era verdade quando ela foi escrita e deixou de ser
-**na mesma noite**. ⇒ **220** e **221**. `git log --all` não tem nenhum arquivo `219_`, `220_` nem
-`221_` em branch alguma — o 219 está reservado, não escrito.
+**na mesma noite**. ⇒ **223** e **224**. `git log --all` não tem nenhum arquivo `219_`, `223_` nem
+`224_` em branch alguma — o 219 está reservado, não escrito.
 
 **Nota de mecanismo, para isto parar de doer.** O prefixo `NNN_` é convenção **só do repositório**:
 em produção, `supabase_migrations.schema_migrations` versiona por **timestamp** (maior valor hoje:
 `20260710171933`). Não há colisão do lado do banco — ela é 100% de arquivo, e é por isso que
 reaparece toda vez que duas stories ficam em `Ready` ao mesmo tempo. Regra operacional escrita na
-story: o @dev crava 220/221 agora, o **@devops reconfere e renumera na abertura do PR**, como já fez
+story: o @dev crava 223/224 agora, o **@devops reconfere e renumera na abertura do PR**, como já fez
 na 87-6 e na 84-1.
 
 ### C2 🔴 AC6-(i) e AC8 não eram verificáveis no passo em que estavam
@@ -169,7 +169,7 @@ leria o 404 como defeito da implementação.
 
 Mesma coisa na AC8: `/dashboard/properties` filtra `.eq("is_active", true)`
 (`page.tsx:15`), então o badge "nos 4" é **impossível** no passo 2 — são **2**. A conferência dos 4
-já existe e é a **AC9-(i)**, depois da 221.
+já existe e é a **AC9-(i)**, depois da 224.
 
 Correções: AC6 é verificada em **teste de rota com fixture `is_active: true`** (que é o que a T5 já
 manda), nunca por chamada ad-hoc a produção antes do passo 4; AC8 verifica os 2 visíveis e delega
@@ -225,15 +225,15 @@ antes). Um gate honesto acusaria vermelho por ordenação. ⇒ `order by created
 `is_nullable = 'NO'` — o formato esperado da AC1 está certo. E `nicole_enabled` **não existe** em
 `information_schema.columns`, logo a AC nasce vermelha de verdade.
 
-### C6 🔴 Migration 221 e SQL de rollback passam a casar por **`id`**
+### C6 🔴 Migration 224 e SQL de rollback passam a casar por **`id`**
 
-A story exige backfill "por `id` nomeado, nunca fórmula" na 220 — e usa `where slug in
-('japura','solun')` na 221 e no rollback. Slug não é fórmula, mas é o identificador que o **Achado
-nº 1 da própria story propõe corrigir** (`solun` → `solum`). Se alguém corrigir o slug, a 221 e o
+A story exige backfill "por `id` nomeado, nunca fórmula" na 223 — e usa `where slug in
+('japura','solun')` na 224 e no rollback. Slug não é fórmula, mas é o identificador que o **Achado
+nº 1 da própria story propõe corrigir** (`solun` → `solum`). Se alguém corrigir o slug, a 224 e o
 rollback afetam **0 linhas, em silêncio** — o mesmo modo de falha mudo que a story inteira existe
 para atacar. ids medidos e colados na story:
 Japura `fcbd2a01-7c59-48b0-8e88-f5a68f4970cd` · Solum `5694ecf1-eb53-4d9e-bb82-4c06f0b19690`.
-E a guarda de "exatamente 2 linhas" passa a valer para a 221 também.
+E a guarda de "exatamente 2 linhas" passa a valer para a 224 também.
 
 ### C7 Fronteira do rollback do passo 1
 
@@ -332,12 +332,12 @@ que devolve 404 onde o gate espera 422 — o tipo de vermelho falso que consome 
 
 Porque estava certo e medido, e vale dizer explicitamente para ninguém "otimizar" depois:
 
-- **A ordem `220 → deploy → janela 24 h → 221`**, com as duas formas de quebrar escritas. É o miolo.
+- **A ordem `223 → deploy → janela 24 h → 224`**, com as duas formas de quebrar escritas. É o miolo.
 - **A AC3 byte a byte**, e a razão de ela ser possível: o paliativo já pôs os dois fora, então o
-  contexto tem de ser idêntico antes e depois. **E a reexecução depois da 221** — que é o que prova
+  contexto tem de ser idêntico antes e depois. **E a reexecução depois da 224** — que é o que prova
   que quem segura é o switch, e não o soft delete.
 - **O backfill por `id` nomeado, nunca `where status='selling'`.** Fórmula recria o defeito no
-  próximo cadastro. Estendi a mesma regra para a 221 e para o rollback (C6).
+  próximo cadastro. Estendi a mesma regra para a 224 e para o rollback (C6).
 - **A consequência declarada** de que desligado ⇒ ela também não reconhece o nome, fixada como
   intenção na AC4-(ii) e não descoberta depois.
 - **A recusa da flag de override**, com a razão escrita.
@@ -349,7 +349,7 @@ Porque estava certo e medido, e vale dizer explicitamente para ninguém "otimiza
 
 **Para o @pm:**
 1. Criar o item **`W1-8`** na tabela da Onda 1 do epic 87 — linha proposta pronta na story.
-2. Corrigir o **`R-G`** (diz "migration 215"; o real é 218 aplicada · 219 reservado · 220/221 desta
+2. Corrigir o **`R-G`** (diz "migration 215"; o real é 218 aplicada · 219 reservado · 223/224 desta
    story).
 3. Abrir item de roadmap para o **Achado nº 7** (inventário das ~17 colunas de `properties` lidas
    pelo runtime; `description` e `differentials` já medidas como órfãs — 4ª fonte de enumeração do

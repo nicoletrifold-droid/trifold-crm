@@ -12,7 +12,7 @@
  * eles devolve **404, não 422**: a linha nem é alcançada pela validação. Quem
  * fosse conferir a AC6 por chamada ad-hoc a produção antes do passo 4 leria o 404
  * como defeito da implementação. A régua é o teste de rota; a conferência em
- * produção só passa a ser possível depois da 221, e é bônus.
+ * produção só passa a ser possível depois da 224, e é bônus.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { createFakeSupabase, type FakeSupabase, type Row } from "@trifold/ai/src/chat/__fixtures__/fake-supabase"

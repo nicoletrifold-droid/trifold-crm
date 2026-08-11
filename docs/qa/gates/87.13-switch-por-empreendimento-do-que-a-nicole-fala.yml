@@ -18,7 +18,7 @@ status_reason: >
   pela AC5-(iv). As três decisões que o @dev tomou fora da story têm, cada uma, um vermelho próprio
   que eu reproduzi — e a mais preocupante das três (o não-booleano) eu instrumentei com sonda
   própria: sem a guarda, `nicole_enabled: "true"` devolve **200** e grava **false**, desligando a
-  Nicole em silêncio. A guarda de aborto da 221 é **transacional de verdade**: provei no projeto de
+  Nicole em silêncio. A guarda de aborto da 224 é **transacional de verdade**: provei no projeto de
   dev `xnxvygyfyyyzwhiuoehz`, envenenando o estado e conferindo que o `UPDATE` do bloco anterior foi
   revertido — nenhum DDL experimental em produção. Suíte **2174 passed / 7 expected fail** e
   `turbo type-check lint --force` **13/13, 0 errors** batem exatamente.
@@ -45,7 +45,7 @@ verificacoes:
     medido: "Test Files 2 failed | 171 passed (173) · Tests **4 failed | 2170 passed | 7 expected fail (2181)**"
     resultado: CONFERE
     os_quatro_vermelhos:
-      - "AC3 > continua igual ao golden DEPOIS da 221, com os dois de volta a is_active=true — `expected [ 'Vind Residence', 'Yarden', …(2) ] to deeply equal [ 'Vind Residence', 'Yarden' ]`"
+      - "AC3 > continua igual ao golden DEPOIS da 224, com os dois de volta a is_active=true — `expected [ 'Vind Residence', 'Yarden', …(2) ] to deeply equal [ 'Vind Residence', 'Yarden' ]`"
       - "AC4 > (i) o `system` enviado à Anthropic não contém Japura nem Solum — `expected 'IDIOMA: Responda EXCLUSIVAMENTE em po…' not to contain 'Japura'`"
       - "AC4 > (ii) 'quero saber do Japurá' NÃO identifica nada — `expected [ { level: 'info', …(4) } ] to have a length of +0 but got 1`"
       - "config-surfaces > properties.nicole_enabled → chat/pipeline.ts — loadProperties"
@@ -115,12 +115,12 @@ verificacoes:
     onde: "projeto de DEV `xnxvygyfyyyzwhiuoehz` — nenhum DDL experimental em produção (regra do gate da 87-1)"
     montagem: >
       Semeei as 4 linhas reais (mesmos `id` de produção) num `public.properties` que estava vazio e
-      sem a coluna; apliquei a **220 inteira num único POST** pela Management API ⇒ coluna criada e
+      sem a coluna; apliquei a **223 inteira num único POST** pela Management API ⇒ coluna criada e
       backfill correto (Vind/Yarden `true`, Japura/Solum `false`).
     teste_1_aborto_com_estado_envenenado:
       preparo: "Japura ⇒ `nicole_enabled = true`; os dois seguem `is_active = false`"
       saida_bruta: >
-        ERROR: P0001: Story 87-13 / migration 221: 1 dos dois empreendimentos está(ão) com
+        ERROR: P0001: Story 87-13 / migration 224: 1 dos dois empreendimentos está(ão) com
         nicole_enabled = true. Restaurar o is_active agora os devolveria ao contexto da Nicole.
         Abortado. / CONTEXT: PL/pgSQL function inline_code_block line 12 at RAISE
       prova_da_transacionalidade: >
@@ -235,7 +235,7 @@ issues:
     porque_importa_NESTA_story: >
       O buraco é anterior à story — mas é **esta** story que separa formalmente os dois conceitos
       (`is_active` = existe no CRM; `nicole_enabled` = a IA fala dele), e o `comment on column` da
-      220 grava essa separação no banco. A partir daqui, quem refatorar `loadProperties` tem duas
+      223 grava essa separação no banco. A partir daqui, quem refatorar `loadProperties` tem duas
       linhas que parecem redundantes e só uma delas tem teste. A que não tem é a que segura o
       empreendimento **excluído**.
     recomendacao: >
@@ -252,7 +252,7 @@ issues:
     medido: "`api-utils.ts:29-49` só escreve `is_active: false`; a coluna nova não é tocada por nenhum dos 3 writers de `properties`"
     leitura: >
       Hoje é inofensivo: a linha do `is_active` em `loadProperties` segura. Mas a story acabou de
-      criar o precedente de **restaurar** `is_active` (é o que a 221 faz) — e ela precisou de uma
+      criar o precedente de **restaurar** `is_active` (é o que a 224 faz) — e ela precisou de uma
       guarda de aborto exatamente porque restaurar com o switch ligado devolve o empreendimento ao
       contexto. Fora da migration, não existe guarda nenhuma: qualquer futura tela de "desfazer
       exclusão" reintroduz o empreendimento **falando**.
@@ -295,13 +295,13 @@ issues:
 acs:
   AC1: { estado: VERDE, como: "conferido por mim contra produção — 4 linhas + `column_default=false`/`is_nullable=NO`; AC1-(i) e (ii) reproduzidos no projeto de dev" }
   AC2: { estado: VERDE, como: "teste de rota; o campo não existe no INSERT — verificado no diff do `POST`" }
-  AC3: { estado: VERDE, como: "byte a byte contra golden cuja proveniência eu provei por mutação (V3); reexecução pós-221 em produção continua pendente (AC9-ii)" }
+  AC3: { estado: VERDE, como: "byte a byte contra golden cuja proveniência eu provei por mutação (V3); reexecução pós-224 em produção continua pendente (AC9-ii)" }
   AC4: { estado: VERDE, como: "3 dos 4 vermelhos da mutação M1 são desta AC; controle positivo passou como exigido" }
   AC5: { estado: VERDE, como: "mensagem literal reproduzida; `ORFAS_CONHECIDAS` segue em 5 com `toHaveLength(5)` intacto (`:460`)" }
   AC6: { estado: VERDE, como: "14 casos de rota; V5 e V6 reproduzem dois dos vermelhos; `missing: ['tipologias']` como lista exata" }
   AC7: { estado: VERDE, como: "`MINIMOS_BLOQUEANTES` com `toHaveLength(1)`; B2 e A1 na mesma estrutura como aviso" }
   AC8: { estado: NAO_VERIFICADA, como: "ver C5 — código correto por leitura, sem prova automatizada e sem conferência visual possível hoje" }
-  AC9: { estado: PENDENTE, como: "depende do passo 4 (migration 221). Provada em DEV nas três direções (V7), inclusive a saída exata que a AC espera" }
+  AC9: { estado: PENDENTE, como: "depende do passo 4 (migration 224). Provada em DEV nas três direções (V7), inclusive a saída exata que a AC espera" }
   AC10: { estado: VERDE, como: "2174/7 e 13/13 reproduzidos por mim; escopo e zero-diff conferidos (V9, V10)" }
   AC11: { estado: PENDENTE, como: "plano escrito, Marcos (D7) nomeado, instrumento correto (Vind) e piso com denominador. Roda no passo 3" }
 
@@ -326,7 +326,7 @@ condicoes:
       dono: "@qa + Marcos (D7)"
   passo_4:
     - id: 5
-      item: "Aplicar a 221 e reexecutar a AC3 em produção (AC9-ii), colando o diff vazio."
+      item: "Aplicar a 224 e reexecutar a AC3 em produção (AC9-ii), colando o diff vazio."
       dono: "@data-engineer + @qa"
   fora_da_story:
     - id: 6
@@ -340,7 +340,7 @@ avisos:
   - id: A1
     peso: critico
     texto: >
-      🔴 **A migration 220 JÁ ESTÁ EM PRODUÇÃO e o código NÃO** — confirmado por mim (a coluna
+      🔴 **A migration 223 JÁ ESTÁ EM PRODUÇÃO e o código NÃO** — confirmado por mim (a coluna
       existe, com `default false`, e as 4 linhas estão no estado do backfill). Essa é a ordem certa
       e a coluna é **inerte** enquanto nada a lê. Mas se o PR for revertido depois do deploy,
       **NÃO DERRUBAR A COLUNA**: com o código no ar, `.eq(\"nicole_enabled\", true)` contra coluna
@@ -349,15 +349,52 @@ avisos:
   - id: A2
     peso: alto
     texto: >
-      A **221 não foi aplicada** (verificado: os dois seguem `is_active = false`). Ela é o passo 4 e
+      A **224 não foi aplicada** (verificado: os dois seguem `is_active = false`). Ela é o passo 4 e
       só sai depois da janela verde. Depois dela, um rollback de código **traz os dois de volta ao
       contexto** — o `update … set is_active = false` por `id` tem de rodar junto, como está escrito
       no critério de rollback.
   - id: A3
     peso: medio
     texto: >
-      Prefixo `220`/`221` a reconferir na abertura do PR (@devops): a **87-1 (PR #391) reivindica o
+      Prefixo `223`/`224` a reconferir na abertura do PR (@devops): a **87-1 (PR #391) reivindica o
       219 e segue aberta**. A colisão é 100% de arquivo — produção versiona por timestamp.
+  - id: A5
+    peso: alto
+    origem: "@devops (Gage), 11/08 — reconferência do A3 no momento do merge"
+    texto: >
+      🔴 **RENUMERADO 220 → 223 e 221 → 224, e o A3 acima subestimou o problema.** O 219 foi
+      consumido pela `main` (`219_fvs_fundacao.sql`, PR #392) e depois **o 220 também**
+      (`220_marketing_posts_trafego_pago.sql`, Story 75-294, PR #394), horas antes do merge. O 222
+      ficou com a 87-1 (mergeada, `06c54b34`), então o par foi para 223/224 — adjacente, com um vão
+      inofensivo no 221. **O perigo não era o conflito, era a AUSÊNCIA dele:** os nomes de arquivo
+      diferem, o git mergeia limpo e a `main` ficaria com **dois arquivos `220_`**, sem aviso
+      nenhum. `git merge-tree` mostrou; o PR seguia `MERGEABLE` o tempo todo. **`MERGEABLE` não é
+      sinal de prefixo livre.** Renumerar é cosmético e **nada foi reaplicado no banco** — a coluna
+      está em produção desde 11/08 13:13 UTC.
+      ⚠️ **Uma ressalva honesta sobre "o SQL não mudou": mudaram TRÊS strings.** Conferi as linhas
+      não-comentário das duas migrations e o único delta são as mensagens de `raise exception`, que
+      citam o próprio número — uma na 223, duas na 224. Nenhum DDL, nenhum DML, nenhuma lógica.
+      **Consequência prática para o passo 4:** a saída bruta colada em `V7` deste gate diz
+      `Story 87-13 / migration 221: …`, e o que o @data-engineer vai ver na tela agora é
+      `… / migration 224: …`. **A guarda de aborto é a mesma** — só o rótulo mudou. Registrado
+      aqui para que a divergência entre a evidência colada e a saída real não seja lida como
+      alteração de comportamento. Na 223 a troca é inerte de qualquer forma: ela já rodou e não
+      roda de novo.
+  - id: A6
+    peso: medio
+    origem: "@devops (Gage), 11/08"
+    texto: >
+      **A fixture `cadastroPos221` virou `cadastroComIsActiveRestaurado`** — o nome passou a
+      descrever o ESTADO, não a migration que o produz. Um identificador que carrega número de
+      migration quebra a cada renumeração, e foram quatro rodadas nesta semana. Regra que fica:
+      **em prosa e comentário o número pode ficar; em identificador, não.**
+      🔬 **A renomeação foi PROVADA cosmética pelas duas mutações deste gate, reexecutadas por mim
+      depois dela:** remover `.eq("nicole_enabled", true)` ⇒ **4 vermelhos** (os mesmos quatro
+      nomes do V1); remover `.eq("is_active", true)` ⇒ **1 vermelho** (o caso do C3). Batem
+      exatamente com o esperado, logo o instrumento central da story está intacto. Árvore
+      restaurada e conferida: `md5` de `pipeline.ts` = `9c51a5881da7f403db6ace80e2c312c1` antes e
+      depois das duas mutações. Baseline final: **2.176 passed | 7 expected fail (2.183)**,
+      `type-check lint` **13/13 0 errors**, `build` **5/5**.
   - id: A4
     peso: medio
     texto: >
@@ -373,7 +410,7 @@ evidencias:
     - "M3 — `const muda = true` na rota ⇒ 2 vermelhos, incl. `403 to be 200` (V5)"
     - "M4 — remover a guarda de tipo do `nicole_enabled` ⇒ 1 vermelho + sonda própria mostrando `200`/`false` (V6)"
   arvore_apos_as_mutacoes: "restaurada; diff stat e os 4 `md5` idênticos aos de antes"
-  banco_de_dev: "220 e 221 aplicadas e revertidas em `xnxvygyfyyyzwhiuoehz`; limpo ao final (0 linhas, coluna derrubada)"
+  banco_de_dev: "223 e 224 aplicadas e revertidas em `xnxvygyfyyyzwhiuoehz`; limpo ao final (0 linhas, coluna derrubada)"
   banco_de_producao: "somente SELECT. Nenhum DDL, nenhum UPDATE."
 
 recomendacao_de_deploy: >

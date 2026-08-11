@@ -1,28 +1,33 @@
 -- ============================================================================
 -- Story 87-13 — um switch POR EMPREENDIMENTO decide se a Nicole pode falar dele.
 --
--- PREFIXO: 220. Conferido em `supabase/migrations/` na `main` (f885b06a) em
--- 11/08/2026: o maior prefixo aplicado é o 218 (Story 87-6, PR #383, `24932de3`);
--- o 219 está REIVINDICADO pela Story 87-1 (PR #391, aberto, não mergeado). O
--- prefixo `NNN_` é convenção só do repositório — em produção,
--- `supabase_migrations.schema_migrations` versiona por timestamp e não colide.
+-- PREFIXO: 223. Nasceu como 220 e foi RENUMERADO pelo @devops em 11/08/2026,
+-- momentos antes do merge. O par foi junto: 220 → 223 e 221 → 224.
 --
--- ✅ RECONFERIDO PELO @devops NA ABERTURA DO PR (11/08/2026, `origin/main` em
---    `72439220`) — 220 e 221 SEGUEM LIVRES, mantidos, sem renumeração.
---    `git log --all` não devolve nenhum arquivo `220_` nem `221_` em branch
---    alguma, e nenhum dos PRs abertos os reivindica.
---    Mudou uma coisa desde a conferência do @dev: o **219 foi consumido pela
---    `main`** por `219_fvs_fundacao.sql` (Story 75-293, PR #392, `72439220`,
---    mergeado 11/08 10:11 -03) — ou seja, o 219 NÃO era mais do 87-1. Quem
---    colidia era o **PR #391**; ele foi renumerado para **222** (commit
---    `a4d14ee4`), e não esta story.
+-- HISTÓRICO DO NÚMERO (quatro rodadas em uma semana, e vale registrar por quê)
+-- ---------------------------------------------------------------------------
+--   • O @dev cravou 220/221 com a `main` em `f885b06a`: o 218 era o maior
+--     aplicado (Story 87-6, PR #383) e o 219 estava reivindicado pela 87-1.
+--   • Na abertura do PR #393 o 219 já tinha sido consumido pela `main`
+--     (`219_fvs_fundacao.sql`, Story 75-293, PR #392) — 220/221 seguiam livres,
+--     então nada mudou aqui; quem renumerou foi o #391, para 222.
+--   • Horas depois, ainda antes do merge, a `main` levou o 220 com
+--     `220_marketing_posts_trafego_pago.sql` (Story 75-294, PR #394). Daí este
+--     223/224: o 222 ficou com a 87-1 (já mergeada) e o par seguiu adjacente,
+--     deixando um vão inofensivo no 221 (já existe um no 207).
 --
--- 🔵 E RENUMERAR, SE FOSSE PRECISO, SERIA COSMÉTICO — INCLUSIVE AQUI, COM A 220
---    JÁ APLICADA EM PRODUÇÃO. (Correção de uma frase anterior deste cabeçalho,
---    que dizia o contrário e criava medo à toa.) Vale o que a seção acima já
---    diz: o prefixo `NNN_` é convenção **do repositório**; produção versiona por
---    **timestamp** (`supabase_migrations.schema_migrations`). Trocar o nome do
---    arquivo **não exige tocar no banco** e **nada é reaplicado**. É exatamente
+-- 🔴 O QUE TORNA ESTA COLISÃO PERIGOSA NÃO É O CONFLITO — É A AUSÊNCIA DELE.
+--    `220_properties_nicole_enabled.sql` e `220_marketing_posts_trafego_pago.sql`
+--    são nomes DIFERENTES: o git mergeia limpo, sem conflito e sem aviso, e a
+--    `main` fica com dois arquivos `220_`. Foi `git merge-tree` que mostrou isso;
+--    o PR seguia `MERGEABLE` o tempo todo. **`MERGEABLE` não é sinal de que o
+--    prefixo está livre.**
+--
+-- 🔵 RENUMERAR É COSMÉTICO — INCLUSIVE AQUI, COM A MIGRATION JÁ APLICADA EM
+--    PRODUÇÃO (11/08 13:13 UTC). O prefixo `NNN_` é convenção **do repositório**;
+--    produção versiona por **timestamp**
+--    (`supabase_migrations.schema_migrations`). Trocar o nome do arquivo **não
+--    exige tocar no banco** e **NADA É REAPLICADO**. É exatamente
 --    por isso que esta colisão reincide toda semana: **nenhuma conferência no
 --    banco pega, porque lá o conflito não existe.** O que o número quebra é a
 --    ordenação por nome de arquivo e a leitura humana — só isso, e só no repo.
@@ -53,7 +58,7 @@
 --
 -- ORDEM DE DEPLOY — ESTA MIGRATION É PRÉ-REQUISITO DO CÓDIGO
 -- ----------------------------------------------------------
---   1. 220 (aqui)  →  2. deploy do código  →  3. janela de 24 h  →  4. 221
+--   1. 223 (aqui)  →  2. deploy do código  →  3. janela de 24 h  →  4. 224
 -- Código antes da migration ⇒ `.eq("nicole_enabled", true)` contra coluna
 -- inexistente ⇒ erro do PostgREST ⇒ `if (error || !data) return []`
 -- (pipeline.ts) ⇒ a Nicole perde o contexto de TODOS os empreendimentos, em
@@ -106,7 +111,7 @@ begin
   -- mesmo modo de falha mudo que esta story existe para atacar.
   if afetadas <> 2 then
     raise exception
-      'Story 87-13 / migration 220: o backfill esperava afetar EXATAMENTE 2 linhas, afetou %. '
+      'Story 87-13 / migration 223: o backfill esperava afetar EXATAMENTE 2 linhas, afetou %. '
       'Confira os ids contra `select id, name, slug from properties order by created_at, name` '
       'antes de reaplicar.', afetadas;
   end if;
