@@ -1542,10 +1542,79 @@ Banco de dev limpo depois (linhas removidas, coluna derrubada lá).
 > que **ambos saíram do build antigo**; o que ele **não** prova é que os dois estão no **mesmo
 > commit** — para isso seria preciso o token da segunda conta, que o @devops não tem (SAML).
 >
-> ⚠️ **Rollback continua sendo REVERTER O PR.** Não derrubar a coluna `nicole_enabled`: com o
-> código no ar, `loadProperties` cai em `if (error || !data) return []` e a Nicole perde **todos**
-> os empreendimentos, em silêncio. E a **migration 224 NÃO deve ser aplicada agora** — é o passo 4,
-> do @data-engineer, só depois desta janela fechar verde.
+> ⚠️ **Não derrubar a coluna `nicole_enabled`:** com o código no ar, `loadProperties` cai em
+> `if (error || !data) return []` e a Nicole perde **todos** os empreendimentos, em silêncio.
+>
+> ## 🔴 INCIDENTE — o passo 4 aconteceu FORA DE ORDEM, às 18:57:35Z. O procedimento de rollback desta story mudou.
+>
+> **Medido em produção pelo @devops depois do deploy:** Japura e Solum estão com
+> `is_active = true`, `updated_at = 2026-08-11T18:57:35.302133Z` — **idêntico ao microssegundo nas
+> duas linhas**, o que é um comando único, não duas edições de tela. Às 13:13 UTC, depois da 223,
+> os dois estavam `false`. **Ou seja: o efeito da 224 já ocorreu — dez minutos ANTES do deploy do
+> código (19:07:43Z).**
+>
+> **Essa é exatamente a ordem que esta story proíbe.** Entre `18:57:35Z` e `19:07:43Z` o
+> `is_active` era a única guarda e ela foi removida, com o filtro ainda não no ar: **dez minutos
+> sem guarda nenhuma.**
+>
+> **Dano: zero, e conferido linha a linha, não presumido.** Na janela houve **7 mensagens — 4
+> `broker` e 3 `user`, zero `assistant`** e **zero** menções a `japur`/`solum`/`solun`. A razão é
+> melhor que sorte pura: as três conversas ativas estavam em **modo corretor** (handoff), com a
+> Nicole pausada. Mas a rede de segurança não estava lá, e isso é margem que não tínhamos.
+>
+> ### 🔴 A CONSEQUÊNCIA QUE MUDA O PLANO: o rollback escrito nesta story está OBSOLETO
+>
+> A story diz que *"nas primeiras 24 h o rollback é reverter o PR, sem tocar em nenhum dado —
+> porque os dois continuam desligados pelo paliativo, que ainda segura"*. **Essa premissa é falsa
+> desde 18:57:35Z.** O paliativo não segura mais:
+>
+> | | `is_active` | `nicole_enabled` | filtro no ar | Japura/Solum no contexto? |
+> |---|---|---|---|---|
+> | **hoje** | `true` | `false` | **sim** | **não** ✅ (só o switch segura) |
+> | **se reverter só o PR** | `true` | `false` | **não** | 🔴 **SIM — voltam a falar** |
+>
+> **ROLLBACK CORRIGIDO — reverter o PR NÃO BASTA.** Tem de vir acompanhado, na mesma janela, do
+> SQL de rollback que já está escrito no cabeçalho da 224:
+> ```sql
+> update public.properties set is_active = false
+>  where id in ('fcbd2a01-7c59-48b0-8e88-f5a68f4970cd',   -- Japura
+>               '5694ecf1-eb53-4d9e-bb82-4c06f0b19690');  -- Solum
+> -- conferir: exatamente 2 linhas afetadas
+> ```
+>
+> ### O que isso faz com a janela
+>
+> **Melhora o instrumento e piora a rede.** O estado atual (`is_active = true` +
+> `nicole_enabled = false`) é literalmente o que a fixture `cadastroComIsActiveRestaurado()` modela
+> — então a janela passa a testar **o switch de verdade**, sem a colinearidade que enganou a
+> primeira versão dos testes. Em compensação, **não há mais segunda barreira** nem reversão
+> automática.
+>
+> ### Migration 224 — o que o @data-engineer precisa saber
+>
+> **Não reaplicar às cegas.** O efeito já está no banco. Se ela for rodada, o `UPDATE` casa as
+> mesmas 2 linhas e a guarda de aborto passa (os dois seguem `nicole_enabled = false`), então é
+> inócuo — mas ninguém deve executá-la achando que está fazendo o passo 4, porque **o passo 4 já
+> foi feito**, por quem não sabemos.
+>
+> ### Autoria: NÃO determinada, e o que foi descartado
+>
+> **Não foi o @devops.** Nesta sessão não executei uma única instrução SQL contra projeto nenhum;
+> o único comando meu que fala com o Supabase de produção foi `npm run prompts:check`, que é
+> `.select()` em `agent_prompts` (`dump-agent-prompts.ts:119`) — outra tabela, e somente leitura.
+> Às 18:57:35Z eu estava no laço de espera do build do Vercel (`gh pr checks` + `sleep`), entre o
+> push do `c231a5c2` (18:44:38Z) e o merge do #393 (19:05:16Z).
+>
+> Também descartado: **nenhum caminho de aplicação escreve `is_active = true` em `properties`** —
+> varri os 47 call sites; o único `is_active: true` é o **INSERT** do `POST /api/properties`. E
+> não há `system_events` no instante.
+>
+> **O que impede a apuração daqui:** `properties` não tem trilha de auditoria (só o trigger
+> `set_updated_at`, `002_property_schema.sql:227`); o PostgREST expõe apenas `public`, então não
+> dá para ler `supabase_migrations.schema_migrations`; e o PAT da Management API está expirado.
+> **Quem tiver acesso ao log de queries do Postgres no painel do Supabase fecha isso em um
+> minuto** — é o único lugar onde o autor do `UPDATE` das 18:57:35.302133Z está registrado.
+
 
 
 **Responsável nomeado: Marcos (D7).** Sem nome, não sai. Início: no deploy do passo 2. Duração

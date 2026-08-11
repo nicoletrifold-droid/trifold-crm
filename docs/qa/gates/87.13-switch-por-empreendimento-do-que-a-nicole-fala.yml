@@ -358,6 +358,54 @@ avisos:
     texto: >
       Prefixo `223`/`224` a reconferir na abertura do PR (@devops): a **87-1 (PR #391) reivindica o
       219 e segue aberta**. A colisão é 100% de arquivo — produção versiona por timestamp.
+  - id: A7
+    peso: critico
+    origem: "@devops (Gage), 11/08 — medição de produção depois do deploy"
+    texto: >
+      🔴 **O PASSO 4 ACONTECEU FORA DE ORDEM, e o critério de rollback desta story ficou OBSOLETO.**
+      Japura e Solum estão com `is_active = true` desde `2026-08-11T18:57:35.302133Z` — idêntico ao
+      microssegundo nas duas linhas, logo um comando único. O deploy do código foi `19:07:43Z`:
+      **dez minutos em que o `is_active` (única guarda até o filtro subir) já tinha sido removido e
+      o filtro ainda não existia.** Dano **zero, conferido**: 7 mensagens na janela, 4 `broker` e 3
+      `user`, **zero `assistant`** e zero menções — as conversas ativas estavam em modo corretor,
+      com a Nicole pausada.
+      🔴 **O QUE MUDA:** a story afirma que nas primeiras 24 h "o rollback é reverter o PR, sem
+      tocar em nenhum dado, porque o paliativo ainda segura". **O paliativo não segura mais.** Com
+      `is_active = true`, reverter só o PR remove o filtro e **devolve os dois ao contexto da
+      Nicole**. O rollback agora é **reverter o PR + rodar o `update … set is_active = false` por
+      `id`** que está no cabeçalho da 224, na mesma janela. Sem isso, o rollback vira o defeito.
+      **Efeito colateral bom:** o estado atual é exatamente o que `cadastroComIsActiveRestaurado()`
+      modela, então a janela passa a exercitar o switch **sem** a colinearidade — o instrumento
+      melhorou; a rede de segurança é que sumiu.
+      **Migration 224:** não reaplicar às cegas — o efeito já está no banco. Rodá-la seria inócuo
+      (as 2 linhas casam, a guarda de aborto passa), mas ninguém deve executá-la achando que está
+      fazendo o passo 4, porque ele já foi feito.
+  - id: A8
+    peso: alto
+    origem: "@devops (Gage), 11/08"
+    texto: >
+      **Autoria do `UPDATE` das 18:57:35Z: NÃO determinada.** Descartado que tenha sido o @devops —
+      nesta sessão não executei uma única instrução SQL contra projeto nenhum, e o único comando que
+      tocou o Supabase de produção foi `npm run prompts:check`, que é `.select()` em `agent_prompts`
+      (`dump-agent-prompts.ts:119`), outra tabela e somente leitura; no instante eu estava no laço de
+      espera do build do Vercel. Descartado também que tenha vindo da aplicação: **nenhum caminho de
+      código escreve `is_active = true` em `properties`** (os 47 call sites varridos; o único
+      `is_active: true` é o INSERT do `POST`), e não há `system_events` no instante.
+      **O que impede fechar a apuração:** `properties` não tem trilha de auditoria (só o trigger
+      `set_updated_at`, `002_property_schema.sql:227`), o PostgREST expõe apenas `public` — logo
+      `supabase_migrations.schema_migrations` é inalcançável — e o PAT da Management API está
+      expirado. **O log de queries do Postgres, no painel do Supabase, resolve em um minuto para
+      quem tiver o acesso.** Fica aberto, com dono a definir.
+  - id: A9
+    peso: medio
+    origem: "@devops (Gage), 11/08"
+    texto: >
+      **Item para o backlog, e é a lição estrutural deste incidente:** `properties` é hoje uma
+      tabela que governa o que a IA fala com lead pago e **não tem histórico de quem mudou o quê**.
+      A Story 87-1 acabou de construir exatamente esse mecanismo para `agent_prompts` (tabela de
+      versões + trigger `AFTER UPDATE`, `SECURITY DEFINER`, que nunca aborta o `UPDATE`) — e foi a
+      ausência dele aqui que tornou esta apuração impossível a partir do repositório. O padrão está
+      pronto e é reaproveitável.
   - id: A5
     peso: alto
     origem: "@devops (Gage), 11/08 — reconferência do A3 no momento do merge"
