@@ -23,6 +23,8 @@ interface VisitFeedbackHistoryModalProps {
   /** Visita passada sem feedback: habilita registrar uma NOVA sem sair do modal. */
   pendingAppointmentId?: string | null
   onClose: () => void
+  /** Registrou por dentro do modal — quem hospeda precisa atualizar o estado. */
+  onRegistered?: () => void
 }
 
 function formatVisitDate(iso: string | null): string {
@@ -37,6 +39,7 @@ export function VisitFeedbackHistoryModal({
   leadName,
   pendingAppointmentId,
   onClose,
+  onRegistered,
 }: VisitFeedbackHistoryModalProps) {
   const router = useRouter()
   const [entries, setEntries] = useState<VisitFeedbackEntry[] | null>(null)
@@ -94,6 +97,7 @@ export function VisitFeedbackHistoryModal({
               onSuccess={() => {
                 onClose()
                 router.refresh()
+                onRegistered?.()
               }}
               onCancel={() => setRegistering(false)}
             />

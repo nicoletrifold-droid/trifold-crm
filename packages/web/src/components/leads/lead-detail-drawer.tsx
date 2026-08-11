@@ -219,6 +219,12 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   // Story 75-193 — lead em "Visitou" sem agendamento (ou só no-show/cancelado):
   // porta retroativa. null = ainda carregando (não mostra nada até saber).
   const [leadHasFeedback, setLeadHasFeedback] = useState<boolean | null>(null)
+  // Story 75-290 — as duas queries acima resolvem em tempos diferentes; sem isto
+  // a porta do header pisca de "Registrar" para "Feedback". Guarda o leadId (e
+  // não um boolean) para trocar de lead invalidar sozinho, sem setState
+  // síncrono dentro do effect.
+  const [feedbackStateFor, setFeedbackStateFor] = useState<string | null>(null)
+  const feedbackStateLoaded = feedbackStateFor === leadId
   // Story 75-267 — abertura enviada pelo drawer: mantém o menu montado (estado
   // de sucesso + CTA "Ver conversa") mesmo depois do reload dos dados — o
   // estado vive no componente, não deriva de prop (gotcha 75-228).
@@ -251,7 +257,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
 
   useEffect(() => {
     let cancelled = false
-    supabase
+    const pendingQuery = supabase
       .from("appointments")
       .select("id, status, feedback:visit_feedback(id)")
       .eq("lead_id", leadId)
@@ -267,7 +273,7 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         })
         setPendingFeedbackAptId((pending?.id as string | undefined) ?? null)
       })
-    supabase
+    const hasFeedbackQuery = supabase
       .from("visit_feedback")
       .select("id")
       .eq("lead_id", leadId)
@@ -276,6 +282,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
         if (cancelled) return
         setLeadHasFeedback((data ?? []).length > 0)
       })
+    // Story 75-290 — a porta do header só decide o rótulo com as DUAS respostas.
+    Promise.all([pendingQuery, hasFeedbackQuery]).then(() => {
+      if (!cancelled) setFeedbackStateFor(leadId)
+    })
     return () => { cancelled = true }
   }, [leadId, supabase])
 
@@ -535,13 +545,21 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           {/* Story 75-290 — porta FIXA de feedback de visita: as portas de escrita
               somem depois do envio, então com o feedback registrado só sobrava o
               Histórico inteiro. Estado vem do state que o drawer já calcula. */}
-          {lead && leadHasFeedback !== null && (
+          {lead && feedbackStateLoaded && leadHasFeedback !== null && (
             <VisitFeedbackEntryButton
               leadId={lead.id}
               leadName={lead.name ?? undefined}
               pendingAppointmentId={pendingFeedbackAptId}
               hasFeedback={leadHasFeedback}
               canRegisterRetro={!pendingFeedbackAptId && lead.stage?.id === STAGE_IDS.visitou}
+              compact
+              // Sem isto o botão congela no rótulo antigo: router.refresh() não
+              // mexe no state deste client component (mesmo motivo dos onSuccess
+              // dos botões do corpo, 75-186/193).
+              onRegistered={() => {
+                setPendingFeedbackAptId(null)
+                setLeadHasFeedback(true)
+              }}
             />
           )}
           <Link

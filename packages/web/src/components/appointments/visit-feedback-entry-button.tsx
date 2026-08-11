@@ -23,6 +23,14 @@ interface VisitFeedbackEntryButtonProps {
   hasFeedback: boolean
   /** Lead em "Visitou" sem agendamento nenhum: porta retroativa (75-193). */
   canRegisterRetro?: boolean
+  /** Rótulo curto — o header do drawer tem 448px e já carrega 3 controles. */
+  compact?: boolean
+  /**
+   * Feedback registrado por AQUI. Quem hospeda o botão mantém o estado, então
+   * precisa saber: sem isso o botão fica congelado no rótulo antigo (o
+   * `router.refresh()` re-renderiza server components, não o state do drawer).
+   */
+  onRegistered?: () => void
   className?: string
 }
 
@@ -32,6 +40,8 @@ export function VisitFeedbackEntryButton({
   pendingAppointmentId,
   hasFeedback,
   canRegisterRetro = false,
+  compact = false,
+  onRegistered,
   className,
 }: VisitFeedbackEntryButtonProps) {
   const [open, setOpen] = useState(false)
@@ -43,12 +53,21 @@ export function VisitFeedbackEntryButton({
   // Lead que nunca visitou não ganha botão morto no header.
   if (door === "hidden") return null
 
+  // Curto no drawer (448px, já com "Editar Lead" + "Ver completo" + fechar),
+  // inteiro nas páginas do lead, onde o header é largo. O `title` sempre diz a
+  // frase completa.
   const label =
     door === "read"
-      ? "Feedback da visita"
+      ? compact
+        ? "Feedback"
+        : "Feedback da visita"
       : door === "write-pending"
-        ? "Registrar feedback"
-        : "Registrar visita"
+        ? compact
+          ? "Registrar"
+          : "Registrar feedback"
+        : compact
+          ? "Registrar"
+          : "Registrar visita"
 
   const tone =
     door === "read"
@@ -67,12 +86,13 @@ export function VisitFeedbackEntryButton({
       </button>
 
       {open &&
-        (hasFeedback ? (
+        (door === "read" ? (
           <VisitFeedbackHistoryModal
             leadId={leadId}
             leadName={leadName}
             pendingAppointmentId={pendingAppointmentId}
             onClose={() => setOpen(false)}
+            onRegistered={onRegistered}
           />
         ) : (
           <VisitFeedbackModal
@@ -84,6 +104,7 @@ export function VisitFeedbackEntryButton({
             onSuccess={() => {
               setOpen(false)
               router.refresh()
+              onRegistered?.()
             }}
           />
         ))}

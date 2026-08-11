@@ -174,6 +174,50 @@ rota server-side que faça as duas queries e case em memória. Decisão do Marco
 - `packages/web/src/app/broker/leads/[id]/page.tsx` (idem)
 - `docs/stories/75-290-feedback-visita-leitura.story.md`
 
+## QA Results (@qa)
+
+**Gate: CONCERNS** — código e testes em ordem; a única pendência é que **nada foi visto rodando**.
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | OK após 3 correções (abaixo) |
+| 2. Testes | 170 arquivos / **2142 verdes** (7 expected fail pré-existentes); 28 novos |
+| 3. AC atendidas | 9/9 no código; AC9 com desvio de ferramenta documentado |
+| 4. Regressões | Suíte inteira verde · `next build` OK · lint de volta à baseline (0 erros / 24 avisos) |
+| 5. Performance | Leitura é lazy: 3 queries **só** ao abrir o modal; header não paga request |
+| 6. Segurança | GET com `requireAuth` + matriz do POST + `org_id` explícito no filtro do lead (admin client passa por cima da RLS). Anônimo 401, outra org 404, corretor não-dono 403 — os três com teste |
+| 7. Documentação | Story com desvios e gotchas registrados |
+
+### 3 defeitos encontrados no gate e corrigidos
+
+1. **[medium — funcional] O botão congelava depois de escrever.** O drawer é client
+   component com estado próprio, e o botão novo só chamava `router.refresh()` — que
+   re-renderiza server components e **não** toca em `pendingFeedbackAptId`/`leadHasFeedback`.
+   Efeito: registrar o feedback pela porta nova e o botão seguir dizendo "Registrar" até
+   fechar e reabrir o lead. Os botões antigos do corpo já tratavam isso via `onSuccess`; o
+   novo não. Fix: prop `onRegistered` (também repassada por dentro do modal de leitura), com o
+   drawer zerando o pendente e marcando `hasFeedback`.
+2. **[low — layout] Header do drawer estourava.** O painel é `max-w-md` (448px) e já carrega
+   "Editar Lead" + "Ver completo" + fechar. Fix: prop `compact` → no drawer o rótulo é
+   **"Feedback"**; nas páginas do lead, onde o header é largo, continua "Feedback da visita".
+   O `title` sempre traz a frase inteira, e o container ganhou `flex-wrap` como rede.
+3. **[low — UX] Rótulo piscando.** As duas queries do drawer resolvem em tempos diferentes:
+   a porta podia nascer "Registrar" e virar "Feedback" meio segundo depois. Fix: a porta só
+   renderiza com as DUAS respostas. Cuidado extra: a primeira versão do fix usou `setState`
+   síncrono dentro do effect (**erro** de lint, cascading renders) — virou um token com o
+   `leadId`, que invalida sozinho na troca de lead.
+
+### O que o gate NÃO prova (pendência consciente, herdada para o smoke)
+
+- Nada rodando: o modal abrindo, o header em tela estreita e o **tema escuro**.
+- `INTEREST_LEVEL_COLORS` (`lib/constants.ts`) não tem variante `dark:` — as pílulas de
+  interesse ficam claras no tema escuro. **Não é regressão**: é exatamente o que o
+  `lead-detail-drawer` já faz hoje com o mesmo mapa. Corrigir mexeria no mapa compartilhado,
+  fora do escopo desta story.
+- A **"Registrar outra visita"** do modo leitura é uma adição do @dev fora do texto da AC
+  (única porta possível para a 2ª visita de um lead que já tem feedback). Sem regra nova, mas
+  precisa do aval do Marcos.
+
 ## Change Log
 
 - 2026-08-11 — @sm: story criada a partir do pedido do Marcos (3 decisões travadas com ele:
@@ -184,3 +228,9 @@ rota server-side que faça as duas queries e case em memória. Decisão do Marco
   lado); (2) AC4 — GET virou **lazy** (só ao abrir o modal) e o estado do botão passa a vir do
   host, que já calcula a régua — evita um request novo por lead aberto e evita uma TERCEIRA
   cópia da mesma régua no código.
+- 2026-08-11 — @dev: implementada (2 commits). Desvios: GET usa admin client + a matriz do POST
+  (régua única, `canAccessFeedback` extraída e reusada pelos dois); AC9 sem teste de componente
+  (projeto não tem jsdom) → decisão extraída para `visitFeedbackDoor()` e testada sem DOM.
+- 2026-08-11 — @qa: **gate CONCERNS**. 3 defeitos achados e corrigidos (botão congelado após
+  escrever; header estourando em 448px; rótulo piscando — com um erro de lint no meio do fix).
+  Pendência: nada visto rodando + aval do Marcos sobre a "Registrar outra visita".
