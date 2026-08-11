@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { imobGuard } from "@web/lib/imob/guard"
-
-// Etapa "Aguardando atendimento" (stage novo) — padrão de entrada.
-const AGUARDANDO_STAGE_ID = "00000000-0000-0000-0001-000000000001"
+import { STAGE_IDS } from "@trifold/shared"
 
 // POST /api/imob/leads — cria um lead MANUAL do mundo IMOB (segmento='imob'). Story 75-99.
 // Nunca entra na roleta/campanha (Fase 1 exclui segmento imob).
@@ -27,7 +25,7 @@ export async function POST(req: NextRequest) {
       phone,
       email: body?.email?.trim() || null,
       channel: "manual",
-      stage_id: AGUARDANDO_STAGE_ID,
+      stage_id: STAGE_IDS.novo, // "Aguardando atendimento" — etapa de entrada
       property_interest_id: body?.property_interest_id || null,
       ai_summary: body?.observacao?.trim() || null,
       // Auto-atribui ao criador (perfil 'imob' não é admin/supervisor, então sem

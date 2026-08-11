@@ -2,10 +2,13 @@ import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { canAccess } from "@web/lib/permissions"
+import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
 import { ImobTabs } from "../_components/imob-tabs"
 import { ImobLeadsManager, type ImobLead } from "./_components/imob-leads-manager"
 
 // Story 75-99 — Leads do mundo IMOB (segmento='imob'). Só quem tem acesso ao módulo IMOB.
+// Story 75-297 — views "Em atendimento" / "Perdidos" (mesma régua da house: perdido = ETAPA
+// em PERDIDO_STAGE_IDS), com reativação na view de perdidos.
 export const dynamic = "force-dynamic"
 
 type RawLead = {
@@ -20,22 +23,43 @@ function one<T>(v: T | T[] | null): T | null {
   return Array.isArray(v) ? (v[0] ?? null) : v
 }
 
-export default async function ImobLeadsPage() {
+export default async function ImobLeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>
+}) {
   const user = await getServerUser()
   if (!(await canAccess(user.id, user.orgId, "imob"))) {
     redirect("/dashboard")
   }
 
+  const params = await searchParams
+  const view = params.view === "perdidos" ? "perdidos" : "ativos"
+  const perdidosFilter = `(${PERDIDO_STAGE_IDS.join(",")})`
+
   const admin = createAdminClient()
-  const [{ data: leadsData }, { data: propsData }, { data: usersData }] = await Promise.all([
-    admin
-      .from("leads")
-      .select("id, name, phone, email, ai_summary, created_at, assigned_broker_id, stage:kanban_stages!stage_id(name, color), properties:property_interest_id(name), responsavel:assigned_broker_id(name)")
-      .eq("org_id", user.orgId)
-      .eq("segmento", "imob")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(500),
+
+  // Base das queries de leads do IMOB (lista da view atual + contagem de cada view).
+  const baseLeads = () =>
+    admin.from("leads").select("id", { count: "exact", head: true })
+      .eq("org_id", user.orgId).eq("segmento", "imob").eq("is_active", true)
+
+  let leadsQuery = admin
+    .from("leads")
+    .select("id, name, phone, email, ai_summary, created_at, assigned_broker_id, stage:kanban_stages!stage_id(name, color), properties:property_interest_id(name), responsavel:assigned_broker_id(name)")
+    .eq("org_id", user.orgId)
+    .eq("segmento", "imob")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(500)
+  leadsQuery = view === "perdidos"
+    ? leadsQuery.in("stage_id", PERDIDO_STAGE_IDS)
+    : leadsQuery.not("stage_id", "in", perdidosFilter)
+
+  const [{ data: leadsData }, { count: ativosCount }, { count: perdidosCount }, { data: propsData }, { data: usersData }] = await Promise.all([
+    leadsQuery,
+    baseLeads().not("stage_id", "in", perdidosFilter),
+    baseLeads().in("stage_id", PERDIDO_STAGE_IDS),
     admin.from("properties").select("id, name").eq("org_id", user.orgId).eq("is_active", true).order("name"),
     // Responsáveis possíveis: qualquer usuário interno ativo (exceto cliente do portal).
     admin.from("users").select("id, name").eq("org_id", user.orgId).eq("is_active", true).neq("role", "cliente").order("name"),
@@ -68,7 +92,13 @@ export default async function ImobLeadsPage() {
         </p>
       </div>
       <ImobTabs />
-      <ImobLeadsManager initial={leads} properties={properties} users={users} />
+      <ImobLeadsManager
+        initial={leads}
+        properties={properties}
+        users={users}
+        view={view}
+        counts={{ ativos: ativosCount ?? 0, perdidos: perdidosCount ?? 0 }}
+      />
     </div>
   )
 }
