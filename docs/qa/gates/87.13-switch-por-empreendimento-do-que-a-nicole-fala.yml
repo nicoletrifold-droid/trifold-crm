@@ -396,6 +396,17 @@ avisos:
       `supabase_migrations.schema_migrations` é inalcançável — e o PAT da Management API está
       expirado. **O log de queries do Postgres, no painel do Supabase, resolve em um minuto para
       quem tiver o acesso.** Fica aberto, com dono a definir.
+      ✅ **RESOLVIDO em 11/08 ~20:30Z — apuração encerrada, não vasculhar o log do Postgres.**
+      O `UPDATE` das 18:57:35Z foi executado pela sessão Claude do MARCOS (Management API com o
+      PAT `claude-cli` de `~/.config/supabase/pat`, que não está expirado — por isso um comando
+      único idêntico ao microssegundo). Contexto: o Marcos abriu chamado com print da Daiana
+      (perfil imob) sem ver Solum/Japura em `/dashboard/properties` e pediu para "habilitar e
+      deixar vincular leads". Aquela sessão diagnosticou `is_active = false` como causa, conferiu
+      que o guardrail de prompt da 75-281 (PR #371) estava mergeado e reativou — **sem saber da
+      87-13**, que ainda não estava na `main` (o merge 687d4607 é das 19:04Z; o fetch daquela
+      sessão era anterior). Foi coincidência de causa, não de mecanismo: o mesmo defeito
+      (`is_active` empilhando dois significados) chegou por dois caminhos no mesmo dia. A
+      colisão de 10 minutos com a guarda removida foi real e o dano zero já está medido no A7.
   - id: A9
     peso: medio
     origem: "@devops (Gage), 11/08"
