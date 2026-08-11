@@ -6,7 +6,7 @@ import { isUuid } from "@web/lib/uuid"
 import { LeadDetailsPanel } from "./_components/lead-details-panel"
 import { ConversationThread } from "./_components/conversation-thread"
 import { markLeadConversationsRead } from "./_actions/mark-read"
-import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
+import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-feedback-entry-button"
 // Story 82-3 — Análise IA para o corretor (painel compartilhado com o /dashboard)
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 
@@ -125,16 +125,17 @@ export default async function BrokerLeadDetailPage({
   // Story 75-193 — porta retroativa: lead em "Visitou" sem agendamento pendente
   // e sem nenhum feedback registrado (visita combinada por fora / no-show que
   // compareceu depois) ganha o botão de registrar retroativamente.
+  // Story 75-290 — `hasFeedback` deixa de ser condicional: a porta do header
+  // também LÊ o que já foi registrado, então precisa saber disso sempre.
   const { STAGE_IDS } = await import("@trifold/shared")
-  let showRetroVisit = false
-  if (!pendingFeedbackApt && lead.stage_id === STAGE_IDS.visitou) {
-    const { data: existingFb } = await supabase
-      .from("visit_feedback")
-      .select("id")
-      .eq("lead_id", id)
-      .limit(1)
-    showRetroVisit = (existingFb ?? []).length === 0
-  }
+  const { data: existingFb } = await supabase
+    .from("visit_feedback")
+    .select("id")
+    .eq("lead_id", id)
+    .limit(1)
+  const hasVisitFeedback = (existingFb ?? []).length > 0
+  const showRetroVisit =
+    !pendingFeedbackApt && lead.stage_id === STAGE_IDS.visitou && !hasVisitFeedback
 
   // Story 82-3 — staleness da Análise IA (última mensagem/activity/agendamento).
   const lastMsgCreatedAt =
@@ -209,21 +210,16 @@ export default async function BrokerLeadDetailPage({
               Score: {lead.qualification_score}
             </span>
           )}
-          {/* Story 75-185 (porta 1) — feedback da visita direto da página do lead */}
-          {pendingFeedbackApt && (
-            <VisitFeedbackButton
-              appointmentId={pendingFeedbackApt.id as string}
-              title="Feedback da visita"
-              subtitle={(lead.name as string | null) ?? undefined}
-            />
-          )}
-          {showRetroVisit && (
-            <VisitFeedbackButton
-              leadId={lead.id as string}
-              title="Registrar visita"
-              subtitle={(lead.name as string | null) ?? undefined}
-            />
-          )}
+          {/* Story 75-185 (porta 1) — feedback da visita direto da página do lead.
+              Story 75-290: os dois botões de escrita viraram UMA porta que também
+              LÊ o feedback já registrado (antes ele só existia no Histórico). */}
+          <VisitFeedbackEntryButton
+            leadId={lead.id as string}
+            leadName={(lead.name as string | null) ?? undefined}
+            pendingAppointmentId={(pendingFeedbackApt?.id as string | undefined) ?? null}
+            hasFeedback={hasVisitFeedback}
+            canRegisterRetro={showRetroVisit}
+          />
           {/*
             Story 63-7 — detalhes/edição do lead movidos para slide-over,
             acionado pelo botão ⋯ no header, fora do caminho de resposta do chat.

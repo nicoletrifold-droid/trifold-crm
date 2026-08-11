@@ -6,7 +6,7 @@ import { isUuid } from "@web/lib/uuid"
 // Story 82-2 — aba "Análise IA" (substitui o Resumo IA; painel compartilhado c/ /broker)
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
-import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
+import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-feedback-entry-button"
 import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS, formatLeadPerfil } from "@web/lib/leads/enrich"
 // Story 75-155 — reuso do componente de conversa do corretor para dar PARIDADE de
 // ENVIO na aba "Conversa" do /dashboard (admin/supervisor/gerente-comercial).
@@ -221,16 +221,17 @@ export default async function LeadDetailPage({
   // Story 75-193 — porta retroativa: lead em "Visitou" sem agendamento pendente
   // e sem nenhum feedback registrado (visita combinada por fora / no-show que
   // compareceu depois) ganha o botão de registrar retroativamente.
+  // Story 75-290 — `hasFeedback` deixa de ser condicional: a porta do header
+  // também LÊ o que já foi registrado, então precisa saber disso sempre.
   const { STAGE_IDS } = await import("@trifold/shared")
-  let showRetroVisit = false
-  if (!pendingFeedbackApt && lead.stage_id === STAGE_IDS.visitou) {
-    const { data: existingFb } = await supabase
-      .from("visit_feedback")
-      .select("id")
-      .eq("lead_id", id)
-      .limit(1)
-    showRetroVisit = (existingFb ?? []).length === 0
-  }
+  const { data: existingFb } = await supabase
+    .from("visit_feedback")
+    .select("id")
+    .eq("lead_id", id)
+    .limit(1)
+  const hasVisitFeedback = (existingFb ?? []).length > 0
+  const showRetroVisit =
+    !pendingFeedbackApt && lead.stage_id === STAGE_IDS.visitou && !hasVisitFeedback
 
   // Story 82-2 — staleness da Análise IA: última movimentação conhecida do lead
   // (mensagem, activity ou agendamento) comparada com behavior_analyzed_at.
@@ -281,21 +282,16 @@ export default async function LeadDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Story 75-186 — feedback da visita direto da página do lead (dashboard) */}
-            {pendingFeedbackApt && (
-              <VisitFeedbackButton
-                appointmentId={pendingFeedbackApt.id as string}
-                title="Feedback da visita"
-                subtitle={(lead.name as string | null) ?? undefined}
-              />
-            )}
-            {showRetroVisit && (
-              <VisitFeedbackButton
-                leadId={lead.id as string}
-                title="Registrar visita"
-                subtitle={(lead.name as string | null) ?? undefined}
-              />
-            )}
+            {/* Story 75-186 — feedback da visita direto da página do lead (dashboard).
+                Story 75-290: os dois botões de escrita viraram UMA porta que também
+                LÊ o feedback já registrado (antes ele só existia no Histórico). */}
+            <VisitFeedbackEntryButton
+              leadId={lead.id as string}
+              leadName={(lead.name as string | null) ?? undefined}
+              pendingAppointmentId={(pendingFeedbackApt?.id as string | undefined) ?? null}
+              hasFeedback={hasVisitFeedback}
+              canRegisterRetro={showRetroVisit}
+            />
             {stage && (
               <span
                 className="rounded-full px-3 py-1 text-xs font-medium"

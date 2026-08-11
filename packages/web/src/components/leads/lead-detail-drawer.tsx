@@ -19,6 +19,7 @@ import { canShowOpeningMenu } from "@web/lib/whatsapp/opening-roles"
 import { neverHadConversation } from "@web/lib/broker/conversation-state"
 import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-styles"
 import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
+import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-feedback-entry-button"
 import { STAGE_IDS } from "@trifold/shared"
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -530,7 +531,19 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Story 75-290 — porta FIXA de feedback de visita: as portas de escrita
+              somem depois do envio, então com o feedback registrado só sobrava o
+              Histórico inteiro. Estado vem do state que o drawer já calcula. */}
+          {lead && leadHasFeedback !== null && (
+            <VisitFeedbackEntryButton
+              leadId={lead.id}
+              leadName={lead.name ?? undefined}
+              pendingAppointmentId={pendingFeedbackAptId}
+              hasFeedback={leadHasFeedback}
+              canRegisterRetro={!pendingFeedbackAptId && lead.stage?.id === STAGE_IDS.visitou}
+            />
+          )}
           <Link
             href={`${leadBasePath}/${leadId}?edit=1`}
             className="rounded-md bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"

@@ -2,10 +2,112 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { requireAuth } from "@web/lib/api-auth"
 import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
+import { buildVisitFeedbackList } from "@web/lib/appointments/visit-feedback-read"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 
 /** Mesma matriz do /api/appointments/[id]/feedback (75-185). */
 const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
+
+interface LeadForFeedbackAccess {
+  assigned_broker_id: string | null
+  segmento: string | null
+}
+
+/**
+ * Quem registra feedback também pode ler (Story 75-290): a régua é a MESMA do
+ * POST — admin/supervisor/gerente-comercial/sdr sempre; corretor só no lead
+ * dele; perfil imob/consultoria em lead do mundo IMOB (75-201).
+ */
+function canAccessFeedback(
+  appUser: { id: string; role: string },
+  lead: LeadForFeedbackAccess
+): boolean {
+  if (FEEDBACK_ADMIN_ROLES.includes(appUser.role)) return true
+  if (lead.assigned_broker_id === appUser.id) return true
+  return ["imob", "consultoria"].includes(appUser.role) && lead.segmento === "imob"
+}
+
+/**
+ * GET /api/leads/[id]/visit-feedback — Story 75-290
+ *
+ * LEITURA do que já foi registrado. Chamada só quando o modal abre (lazy): o
+ * estado do botão vem de quem o hospeda, que já calcula a régua "visita passada
+ * sem feedback".
+ *
+ * O autor NÃO está em visit_feedback (a coluna broker_id referencia brokers(id),
+ * não users(id)) — vem da activity `visit_completed` por metadata->>'feedback_id'
+ * (75-203). Sem FK, nenhum embed PostgREST resolve: são 3 queries + casamento em
+ * memória no visit-feedback-read.
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { appUser } = auth
+
+    const supabase = createAdminClient()
+
+    // org_id no filtro: o admin client passa por cima da RLS.
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id, assigned_broker_id, segmento")
+      .eq("id", id)
+      .eq("org_id", appUser.org_id)
+      .maybeSingle()
+
+    if (!lead) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+    }
+    if (!canAccessFeedback(appUser, lead as LeadForFeedbackAccess)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const { data: feedbacks, error: feedbackError } = await supabase
+      .from("visit_feedback")
+      .select("id, visited_at, created_at, feedback, interest_after, next_steps")
+      .eq("lead_id", id)
+
+    if (feedbackError) {
+      return NextResponse.json({ error: feedbackError.message }, { status: 500 })
+    }
+    if (!feedbacks || feedbacks.length === 0) {
+      return NextResponse.json({ feedbacks: [] })
+    }
+
+    // Só `visit_completed`: a activity followup_post_visit da Nicole carrega o
+    // MESMO feedback_id e user_id nulo (visit-feedback-core).
+    const { data: activities } = await supabase
+      .from("activities")
+      .select("user_id, metadata")
+      .eq("lead_id", id)
+      .eq("type", "visit_completed")
+
+    const authorIds = [
+      ...new Set((activities ?? []).map((a) => a.user_id).filter((v): v is string => !!v)),
+    ]
+    const userNames: Record<string, string | null> = {}
+    if (authorIds.length > 0) {
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, name")
+        .in("id", authorIds)
+      for (const user of users ?? []) {
+        userNames[user.id as string] = (user.name as string | null) ?? null
+      }
+    }
+
+    return NextResponse.json({
+      feedbacks: buildVisitFeedbackList(feedbacks, activities ?? [], userNames),
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal server error"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
 
 /**
  * POST /api/leads/[id]/visit-feedback — Story 75-193
@@ -71,13 +173,8 @@ export async function POST(
 
     // Permissão: admin/supervisor/gerente-comercial sempre; corretor só dono do
     // lead; perfil imob/consultoria em lead do mundo IMOB (Story 75-201).
-    const isImobLead =
-      ["imob", "consultoria"].includes(appUser.role) && lead.segmento === "imob"
-    if (
-      !FEEDBACK_ADMIN_ROLES.includes(appUser.role) &&
-      lead.assigned_broker_id !== appUser.id &&
-      !isImobLead
-    ) {
+    // Story 75-290: mesma régua do GET, uma única fonte (canAccessFeedback).
+    if (!canAccessFeedback(appUser, lead as LeadForFeedbackAccess)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
