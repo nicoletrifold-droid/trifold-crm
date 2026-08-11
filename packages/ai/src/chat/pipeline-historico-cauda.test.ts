@@ -497,13 +497,21 @@ describe("AC7 — NICOLE_HISTORY_TRUNCATED reporta a cauda", () => {
 // AC5 — identificação de imóvel por contexto muda de INSUMO
 // ────────────────────────────────────────────────────────────────────────────
 
-// `loadProperties` filtra por `org_id` e `is_active` — sem os dois campos o
-// fake devolve [] e o teste passaria verde sem nunca ter identificado nada.
+// `loadProperties` filtra por `org_id`, `is_active` e — desde a Story 87-13 —
+// `nicole_enabled`. Sem os TRÊS campos o fake devolve [] e o teste passaria verde
+// sem nunca ter identificado nada.
+//
+// Story 87-13 — `nicole_enabled: true` aqui não é ruído de fixture: `is_active` é
+// o soft delete ("existe no CRM") e `nicole_enabled` é o switch ("a IA fala
+// dele"). Este teste é sobre a Nicole IDENTIFICAR o empreendimento, então os dois
+// precisam estar ligados para ela. Foi este teste que acusou o filtro novo — e é
+// o comportamento correto.
 const PROPRIEDADES: Row[] = [
   {
     id: "prop-vind",
     org_id: ORG,
     is_active: true,
+    nicole_enabled: true,
     name: "Vind Residence",
     slug: "vind-residence",
     status: "lancamento",
@@ -514,6 +522,7 @@ const PROPRIEDADES: Row[] = [
     id: "prop-origem",
     org_id: ORG,
     is_active: true,
+    nicole_enabled: true,
     name: "Origem Home Club",
     slug: "origem-home-club",
     status: "lancamento",

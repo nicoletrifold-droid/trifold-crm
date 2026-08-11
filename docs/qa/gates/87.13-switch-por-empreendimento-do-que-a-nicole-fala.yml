@@ -1,0 +1,383 @@
+schema: 1
+storyId: "87-13"
+story: "docs/stories/87-13-switch-por-empreendimento-do-que-a-nicole-fala.story.md"
+title: "Quality Gate — um switch por empreendimento decide se a Nicole pode falar dele (W1-8, Onda 1)"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-11"
+branch: "story/87-13-switch-nicole-por-empreendimento (de origin/main em f885b06a; nada commitado)"
+po_validation: "docs/qa/po-validation-87-13.md (GO 10/10 após emendas)"
+
+status_reason: >
+  **O instrumento morde, e eu o mordi por conta própria.** Removi a linha
+  `.eq("nicole_enabled", true)` de `loadProperties` e a suíte da raiz devolveu **4 vermelhos**,
+  nome a nome idênticos aos colados no Dev Agent Record, incluindo a mensagem **literal** exigida
+  pela AC5-(iv). As três decisões que o @dev tomou fora da story têm, cada uma, um vermelho próprio
+  que eu reproduzi — e a mais preocupante das três (o não-booleano) eu instrumentei com sonda
+  própria: sem a guarda, `nicole_enabled: "true"` devolve **200** e grava **false**, desligando a
+  Nicole em silêncio. A guarda de aborto da 221 é **transacional de verdade**: provei no projeto de
+  dev `xnxvygyfyyyzwhiuoehz`, envenenando o estado e conferindo que o `UPDATE` do bloco anterior foi
+  revertido — nenhum DDL experimental em produção. Suíte **2174 passed / 7 expected fail** e
+  `turbo type-check lint --force` **13/13, 0 errors** batem exatamente.
+  **A saída para a colinearidade resolve de verdade, e não a empurra.** Em `cadastroPos221()` os
+  quatro ficam `is_active = true`, o que reduz o `is_active` a poder discriminante **zero** e deixa
+  o `nicole_enabled` como único critério capaz de excluir alguém. Contei os que NÃO caem sob a
+  mutação e os três são corretos que não caiam: o golden de não-regressão (por definição tem de
+  ficar verde) e os dois controles-espelho, que a AC declara passantes nas duas direções.
+  **O que sobra não derruba nada, mas não é nada.** Dois números do Dev Agent Record não batem — um
+  `md5` e o tamanho do golden. Existe um **buraco de cobertura simétrico** que esta própria story
+  abriu ao separar os dois conceitos: remover `.eq("is_active", true)` de `loadProperties` deixa a
+  suíte **2174/2174 verde**, zero vermelho. E a **AC8 não tem prova nenhuma** — nem teste, nem
+  conferência visual, que não é possível hoje porque o código não está no ar. Nada disso é defeito
+  de código; os dois primeiros se fecham em minutos, e a AC8 é condição pós-deploy com dono.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Verificado de forma independente — reproduzido, não aceito por relato
+# ────────────────────────────────────────────────────────────────────────────
+verificacoes:
+
+  V1_mutacao_central_M1:
+    forma: "remover a linha 1862 (`.eq(\"nicole_enabled\", true)`) de `loadProperties`; `npx vitest run` da RAIZ"
+    declarado: "4 failed | 17 passed | 5 expected fail (recorte do @dev, por arquivo)"
+    medido: "Test Files 2 failed | 171 passed (173) · Tests **4 failed | 2170 passed | 7 expected fail (2181)**"
+    resultado: CONFERE
+    os_quatro_vermelhos:
+      - "AC3 > continua igual ao golden DEPOIS da 221, com os dois de volta a is_active=true — `expected [ 'Vind Residence', 'Yarden', …(2) ] to deeply equal [ 'Vind Residence', 'Yarden' ]`"
+      - "AC4 > (i) o `system` enviado à Anthropic não contém Japura nem Solum — `expected 'IDIOMA: Responda EXCLUSIVAMENTE em po…' not to contain 'Japura'`"
+      - "AC4 > (ii) 'quero saber do Japurá' NÃO identifica nada — `expected [ { level: 'info', …(4) } ] to have a length of +0 but got 1`"
+      - "config-surfaces > properties.nicole_enabled → chat/pipeline.ts — loadProperties"
+    ac5_iv_mensagem_literal: >
+      `AssertionError: properties.nicole_enabled não tem consumidor no runtime.` — colada pelo
+      reporter, palavra por palavra como a AC exige. É o vermelho que separa "registrei o campo"
+      de "provei o campo", e ele existe.
+    controle_positivo: "AC4-(iii) 'quero saber do Vind' PASSOU sob a mutação, exatamente como a AC4-(iv) manda."
+
+  V2_auditoria_da_saida_para_a_colinearidade:
+    pergunta: "`cadastroPos221()` resolve a colinearidade ou só a empurra?"
+    resultado: RESOLVE
+    razao: >
+      `cadastroPos221()` põe `is_active = true` nas QUATRO linhas. Nesse estado o `is_active` tem
+      poder discriminante **zero** — não pode excluir ninguém — e o único critério capaz de tirar
+      Japura e Solum da lista é o `nicole_enabled`. Não é a colinearidade deslocada para outro par
+      de campos: é a variável de confusão anulada por construção.
+    os_tres_que_nao_caem_sob_M1_e_por_que_esta_certo:
+      - "AC3 > 'bate byte a byte com o golden do HEAD' — usa `cadastro()` (estado colinear de hoje) DE PROPÓSITO: é o caso de NÃO-REGRESSÃO. Um caso de não-regressão que ficasse vermelho ao remover a linha estaria provando o contrário do que se propõe."
+      - "AC3 > 'controle negativo: ligar o Japura QUEBRA a igualdade' — controle, verde nas duas direções por desenho."
+      - "AC4 > 'com o Japura LIGADO, o mesmo turno passa a identificá-lo' — espelho de (ii), idem."
+    conclusao: "Nenhum teste que a story afirma que morde deixou de morder. A contagem de 4 é a certa, e não há um quinto que devesse ter caído."
+
+  V3_proveniencia_do_golden:
+    metodo: >
+      A alegação é que o golden foi gerado pelo `loadProperties` de produção ANTES de a linha do
+      filtro existir. Provei sem confiar no relato: sob a mutação M1 a query de `loadProperties`
+      tem exatamente a semântica do `HEAD`, e o caso "bate byte a byte com o golden do HEAD" ficou
+      **VERDE**. Um golden gravado depois do filtro (circular) não sobreviveria a isso.
+    resultado: CONFERE
+
+  V4_mutacao_complementar_M2_que_ninguem_pediu:
+    forma: "remover `.eq(\"is_active\", true)` de `loadProperties` (a OUTRA linha do par)"
+    medido: "**Test Files 173 passed (173) · Tests 2174 passed | 7 expected fail (2181)** — ZERO vermelho"
+    resultado: BURACO_DE_COBERTURA
+    leitura: >
+      A suíte não tem um único caso que segure o soft delete em `loadProperties`. Não é regressão
+      introduzida por esta story (o buraco é anterior), mas é **esta** a story que estabelece que
+      `is_active` e `nicole_enabled` são conceitos independentes — e o único guardião desse
+      acoplamento passa a ser uma linha que nada protege. Ver C3 e C4.
+
+  V5_decisao_a_papel_e_minimos_so_quando_o_valor_muda:
+    forma: "`const muda = (atual).nicole_enabled !== desejado` → `const muda = true`"
+    medido: "2 failed | 12 passed (14) — `AssertionError: expected 403 to be 200` e `expected 422 to be 200`"
+    resultado: CONFERE
+    leitura: >
+      O `403 to be 200` é literalmente a regressão que o @dev descreve: sem a regra, um usuário de
+      `obras`/`gerente-relacionamento` (3 pessoas ativas, medidas pelo @po) levaria 403 ao salvar
+      QUALQUER coisa, porque a tela monta o body inteiro. A decisão está fixada como intenção, com
+      vermelho próprio, e não como omissão.
+
+  V6_decisao_b_nao_booleano_devolve_400:
+    forma: "remover o bloco `if (typeof body.nicole_enabled !== \"boolean\") … 400` da rota"
+    medido_pelo_teste: "1 failed | 13 passed (14) — `AssertionError: expected 200 to be 400`"
+    medido_por_sonda_propria: >
+      O teste aborta na primeira asserção, então instrumentei o efeito com uma sonda temporária
+      (criada, rodada e apagada): `PATCH { nicole_enabled: \"true\" }` sobre um empreendimento
+      LIGADO ⇒ **`status=200 nicole_enabled_final=false`**.
+    resultado: CONFERE
+    leitura: >
+      Confirmado empiricamente que o modo de falha é **mudo**: a string `\"true\"` é coagida a
+      `false` por `=== true`, a rota devolve **200 de sucesso** e a Nicole é **desligada sem que
+      ninguém peça**, na superfície que esta story existe para tornar deliberada. A guarda é
+      load-bearing e o 400 é o comportamento certo.
+
+  V7_decisao_c_guarda_de_aborto_da_221_e_transacional:
+    onde: "projeto de DEV `xnxvygyfyyyzwhiuoehz` — nenhum DDL experimental em produção (regra do gate da 87-1)"
+    montagem: >
+      Semeei as 4 linhas reais (mesmos `id` de produção) num `public.properties` que estava vazio e
+      sem a coluna; apliquei a **220 inteira num único POST** pela Management API ⇒ coluna criada e
+      backfill correto (Vind/Yarden `true`, Japura/Solum `false`).
+    teste_1_aborto_com_estado_envenenado:
+      preparo: "Japura ⇒ `nicole_enabled = true`; os dois seguem `is_active = false`"
+      saida_bruta: >
+        ERROR: P0001: Story 87-13 / migration 221: 1 dos dois empreendimentos está(ão) com
+        nicole_enabled = true. Restaurar o is_active agora os devolveria ao contexto da Nicole.
+        Abortado. / CONTEXT: PL/pgSQL function inline_code_block line 12 at RAISE
+      prova_da_transacionalidade: >
+        🔴 **O ponto.** O `UPDATE` que restaura o `is_active` está no PRIMEIRO bloco `do $$`, e a
+        guarda no SEGUNDO — o `UPDATE` roda ANTES da checagem. Conferido depois do aborto:
+        `Japura is_active=false · Solum is_active=false`. O `UPDATE` foi **revertido**. É
+        transacional de fato, não por afirmação.
+      resultado: CONFERE
+    teste_2_guarda_de_duas_linhas_da_221:
+      forma: "trocar o `id` do Solum por um inexistente e reaplicar"
+      saida_bruta: "ERROR: P0001: … a restauração esperava afetar EXATAMENTE 2 linhas, afetou 1."
+      pos_aborto: "Japura `is_active` continua `false` — a linha que casou também foi revertida"
+      resultado: CONFERE
+    teste_3_caminho_feliz:
+      medido: "Japura `japura true false` · Solum `solun true false` — exatamente a saída esperada pela AC9"
+      resultado: CONFERE
+    limpeza: "linhas removidas, coluna derrubada, org de teste removida — dev voltou a `linhas=0 · coluna=0`"
+
+  V8_producao_estado_real:
+    metodo: "Management API, somente SELECT, contra `dsopqkqjkmhytudaaolv`"
+    ac1_linhas: >
+      `[{Vind Residence, vind-residence, is_active:true, nicole_enabled:true},
+        {Yarden, yarden, true, true}, {Japura, japura, false, false},
+        {Solum, solun, false, false}]` — idêntico ao colado.
+    ac1_metadados: "`nicole_enabled`: `column_default = false` · `is_nullable = NO` · `data_type = boolean` — e `is_active` devolve `true`/`NO`, o formato de comparação que a AC pede."
+    migration_221: "**NÃO aplicada** — confirmado pelos dois `is_active = false`."
+    consequencia: "A coluna existe e é INERTE (nada a lê). O deploy do passo 2 é seguro; a ordem está certa."
+    contagens_remedidas:
+      - "Vind: 7 mídias · 1 tipologia · **723** leads · 104 PROPERTY_IDENTIFIED"
+      - "Yarden: 5 · 2 · 68 · 22"
+      - "Japura e Solum: 0 · 0 · 0 · 0"
+    divergencia_publicada: >
+      leads do Vind: **713** (@sm 10/08) × **721** (@po 11/08) × **722** (@dev 11/08) × **723**
+      (@qa 11/08). Drift natural de +1 sobre o @dev, mesma leitura. Nenhuma decisão muda.
+
+  V9_escopo_declarado:
+    zero_linhas_conferido: >
+      `git diff --numstat` = vazio em `packages/ai/src/flows/identify-property.ts`,
+      `flows/qualification.ts`, `flows/agenda-state.ts`, `flows/visit-slot.ts` **e**
+      `chat/property-data-context.test.ts`. (Nota: os três últimos vivem em `flows/`, não em
+      `chat/` como o Dev Notes sugere em dois pontos — conferi nos caminhos reais, não nos citados.)
+    pipeline_ts: >
+      **4 hunks**, todos dentro de `loadProperties`: `+1830,13` · `+1856,2` · `+1859,4` ·
+      `+1865,3`. `buildPropertyDataContext` começa em **2099** e tem **0 linhas de diff**.
+    testes_75_281: "**6** `it()` no `describe` da 75-281 (`:107`), **sem uma linha de edição**, e passam."
+    resultado: CONFERE
+
+  V10_suite_tipos_e_build:
+    suite_raiz: "`npx vitest run` ⇒ **Test Files 173 passed · Tests 2174 passed | 7 expected fail (2181)** — bate exatamente com o declarado"
+    type_check_lint: "`npx turbo type-check lint --force` ⇒ **13 successful, 13 total · 0 errors** · 24 warnings"
+    warnings_em_arquivo_tocado: "**zero** — grep dos caminhos da File List na saída do lint devolve nada"
+    packages_ai: "sem eslint; o `lint` é `tsc --noEmit`, e passou (correto não escrever AC de lint lá)"
+    arvore_restaurada: "diff stat final idêntico ao inicial (7 arquivos, 279 inserções, 13 remoções) e `md5` de 4/4 iguais aos de antes das minhas 4 mutações"
+    resultado: CONFERE
+
+  V11_rls_o_risco_que_fixture_nenhuma_enxerga:
+    pergunta: >
+      `carregarCadastroNicole` conta `typologies` e `agent_media_assets` **pelo cliente do usuário**,
+      sob RLS. Se alguma policy negasse a leitura, o `count` voltaria 0 e o `B1` (fail-closed)
+      bloquearia TODO MUNDO de ligar — um fail-closed que vira fail-closed-para-sempre, invisível
+      no teste porque `createFakeSupabase` não tem RLS.
+    medido: >
+      `typologies_select`: `EXISTS (select 1 from properties p where p.id = typologies.property_id
+      and p.org_id = user_org_id())` · `ama_select`: `org_id = user_org_id()`. Ambas SELECT, sem
+      restrição de papel. Admin e supervisor da mesma org leem normalmente.
+    resultado: PASSA
+    nota: "Fica registrado porque a próxima régua estrutural que ler outra tabela pode não ter a mesma sorte."
+
+# ────────────────────────────────────────────────────────────────────────────
+# Achados — o que não confere, e o peso de cada um
+# ────────────────────────────────────────────────────────────────────────────
+issues:
+
+  - id: C1
+    severity: low
+    category: evidence
+    titulo: "Um dos quatro `md5` do Dev Agent Record não bate com o arquivo em disco"
+    declarado: "`packages/web/src/app/api/properties/[id]/route.ts` = `712ac34e4e2c0832e0d97d9769aece07`"
+    medido: "`ba8ffb3ae5f6788ec101ed13716909f9`"
+    metodo: >
+      Medido ANTES de eu aplicar qualquer mutação e novamente DEPOIS de restaurar — o mesmo valor
+      nas duas vezes. Os outros três batem exatamente (`pipeline.ts` `44b957fa…`,
+      `properties/route.ts` `968404e7…`, `nicole-minimos.ts` `d8c3b43a…`).
+    o_que_isso_NAO_significa: >
+      Não há resíduo de mutação no arquivo. Li os 201 linhas inteiras e as quatro guardas estão
+      vivas — e eu derrubei cada uma para provar (V5, V6, e a AC6-(v)/AC7 pelos testes). A suíte
+      está verde no estado atual. A hipótese benigna é uma edição cosmética posterior ao cálculo
+      (o Change Log fala em corrigir o comentário de `:41`, enquanto o corpo da story dizia `:37`).
+    o_que_significa: >
+      Para o **único arquivo que carregou o vermelho da AC6-(v)**, a afirmação "árvore restaurada
+      byte a byte, `md5` conferido depois de cada mutação" **não é verificável**. Numa story cuja
+      tese é o número medido, o registro precisa fechar com o disco.
+    recomendacao: "Recalcular e corrigir o valor no Dev Agent Record. Dois minutos."
+
+  - id: C2
+    severity: low
+    category: evidence
+    titulo: "O tamanho do golden da AC3 não bate"
+    declarado: "1.869 bytes"
+    medido: "**2.035** (bytes = chars = 2.035, 21 linhas — `wc -c`, `wc -m` e `len()` em Python concordam)"
+    o_que_isso_NAO_significa: >
+      A proveniência do golden **está provada**, por outro caminho: sob a mutação M1 (semântica de
+      query idêntica à do `HEAD`) o caso byte-a-byte fica verde (V3). O golden é o comportamento do
+      `HEAD`, não uma gravação circular.
+    recomendacao: "Corrigir o número. É o segundo do registro que não fecha (ver C1)."
+
+  - id: C3
+    severity: medium
+    category: tests
+    titulo: "Nenhum teste segura o `.eq(\"is_active\", true)` de `loadProperties` — a suíte fica 100% verde sem ele"
+    medido: "mutação M2: **2174 passed | 7 expected fail**, zero vermelho (V4)"
+    porque_importa_NESTA_story: >
+      O buraco é anterior à story — mas é **esta** story que separa formalmente os dois conceitos
+      (`is_active` = existe no CRM; `nicole_enabled` = a IA fala dele), e o `comment on column` da
+      220 grava essa separação no banco. A partir daqui, quem refatorar `loadProperties` tem duas
+      linhas que parecem redundantes e só uma delas tem teste. A que não tem é a que segura o
+      empreendimento **excluído**.
+    recomendacao: >
+      Um `it()` a mais no `nicole-enabled.test.ts` com uma quinta linha
+      (`is_active: false, nicole_enabled: true` — o estado exato que o `DELETE /api/properties/[id]`
+      produz hoje) afirmando que ela **não** aparece. Uma fixture e uma asserção; simétrico ao que
+      a story já fez do outro lado.
+    dono: "@dev, nesta story (é barato) ou item de backlog se o @po preferir não reabrir"
+
+  - id: C4
+    severity: low
+    category: requirements
+    titulo: "`softDelete` não desliga `nicole_enabled` — excluir um empreendimento deixa o switch ligado"
+    medido: "`api-utils.ts:29-49` só escreve `is_active: false`; a coluna nova não é tocada por nenhum dos 3 writers de `properties`"
+    leitura: >
+      Hoje é inofensivo: a linha do `is_active` em `loadProperties` segura. Mas a story acabou de
+      criar o precedente de **restaurar** `is_active` (é o que a 221 faz) — e ela precisou de uma
+      guarda de aborto exatamente porque restaurar com o switch ligado devolve o empreendimento ao
+      contexto. Fora da migration, não existe guarda nenhuma: qualquer futura tela de "desfazer
+      exclusão" reintroduz o empreendimento **falando**.
+    recomendacao: "Item de backlog (P3): `softDelete` de `properties` zera `nicole_enabled` junto, ou o documento de arquitetura do Achado nº 5 registra o acoplamento explicitamente. NÃO corrigir aqui."
+    dono: "@po/@pm — backlog"
+
+  - id: C5
+    severity: medium
+    category: requirements
+    titulo: "A AC8 não tem prova nenhuma — nem teste automatizado, nem conferência visual"
+    detalhe: >
+      A story escreve que *"nenhuma AC desta story é 'existe no painel' — todas as três acima são
+      verificadas contra a resposta HTTP"*. **Duas das três não são resposta HTTP:** o badge da
+      lista é render de server component (`dashboard/properties/page.tsx`) e a renderização da lista
+      `faltando` é estado de client component (`edit/page.tsx`). Não há teste de render para nenhum
+      dos dois, e a File List não cria nenhum.
+    o_que_eu_pude_verificar: >
+      Por leitura, o código está **correto**: o `select` da lista inclui `nicole_enabled`, o ternário
+      emite "Nicole: ligada"/"Nicole: desligada", o `colSpan` foi de 6 para 7, o toggle tem o rótulo
+      e a legenda que a story pede, o `faltando` do 422 é renderizado item a item num `<ul>` (não um
+      "erro ao salvar" genérico) e o campo só entra no body quando difere de `nicoleEnabledOriginal`.
+      `turbo build --force` passa 5/5.
+    o_que_eu_NAO_pude_verificar: >
+      **A tela.** O código não está deployado (passo 2 pendente) e as duas páginas exigem sessão
+      autenticada. Não vou escrever que conferi o que não conferi. **Não é verificável agora.**
+    recomendacao: "Conferência visual obrigatória na janela do passo 3, com print, por @qa; e considerar um teste de render do badge para que a AC8 pare de depender de olho humano."
+    dono: "@qa, pós-deploy"
+
+  - id: C6
+    severity: low
+    category: evidence
+    titulo: "Off-by-one no intervalo declarado do diff de `pipeline.ts`"
+    declarado: "\"os quatro hunks estão todos entre as linhas 1830 e 1866\""
+    medido: "o último hunk é `+1865,3` ⇒ o intervalo real termina em **1867**"
+    leitura: "Cosmético. Registro só porque o intervalo é a régua de corte declarada da story, e uma régua com um byte de folga não é régua."
+
+# ────────────────────────────────────────────────────────────────────────────
+# Rastreabilidade das ACs
+# ────────────────────────────────────────────────────────────────────────────
+acs:
+  AC1: { estado: VERDE, como: "conferido por mim contra produção — 4 linhas + `column_default=false`/`is_nullable=NO`; AC1-(i) e (ii) reproduzidos no projeto de dev" }
+  AC2: { estado: VERDE, como: "teste de rota; o campo não existe no INSERT — verificado no diff do `POST`" }
+  AC3: { estado: VERDE, como: "byte a byte contra golden cuja proveniência eu provei por mutação (V3); reexecução pós-221 em produção continua pendente (AC9-ii)" }
+  AC4: { estado: VERDE, como: "3 dos 4 vermelhos da mutação M1 são desta AC; controle positivo passou como exigido" }
+  AC5: { estado: VERDE, como: "mensagem literal reproduzida; `ORFAS_CONHECIDAS` segue em 5 com `toHaveLength(5)` intacto (`:460`)" }
+  AC6: { estado: VERDE, como: "14 casos de rota; V5 e V6 reproduzem dois dos vermelhos; `missing: ['tipologias']` como lista exata" }
+  AC7: { estado: VERDE, como: "`MINIMOS_BLOQUEANTES` com `toHaveLength(1)`; B2 e A1 na mesma estrutura como aviso" }
+  AC8: { estado: NAO_VERIFICADA, como: "ver C5 — código correto por leitura, sem prova automatizada e sem conferência visual possível hoje" }
+  AC9: { estado: PENDENTE, como: "depende do passo 4 (migration 221). Provada em DEV nas três direções (V7), inclusive a saída exata que a AC espera" }
+  AC10: { estado: VERDE, como: "2174/7 e 13/13 reproduzidos por mim; escopo e zero-diff conferidos (V9, V10)" }
+  AC11: { estado: PENDENTE, como: "plano escrito, Marcos (D7) nomeado, instrumento correto (Vind) e piso com denominador. Roda no passo 3" }
+
+# ────────────────────────────────────────────────────────────────────────────
+# Condições para o PASS
+# ────────────────────────────────────────────────────────────────────────────
+condicoes:
+  antes_do_merge:
+    - id: 1
+      item: "Corrigir os dois números do Dev Agent Record: o `md5` de `properties/[id]/route.ts` (C1) e o tamanho do golden (C2)."
+      dono: "@dev"
+      custo: "minutos"
+    - id: 2
+      item: "Decidir sobre o C3 — o caso que segura o `is_active` em `loadProperties`. Incluir aqui (uma fixture + um `it`) ou registrar como backlog com a razão escrita."
+      dono: "@dev + @po"
+  pos_deploy_passo_3:
+    - id: 3
+      item: "Conferência visual do badge na lista e do toggle/lista `faltando` na edição, com print — é a única prova possível da AC8 (C5)."
+      dono: "@qa"
+    - id: 4
+      item: "Janela de 24 h da AC11 com o `n` observado registrado junto do veredito; se `n < 5`, estender e escrever **inconclusivo**."
+      dono: "@qa + Marcos (D7)"
+  passo_4:
+    - id: 5
+      item: "Aplicar a 221 e reexecutar a AC3 em produção (AC9-ii), colando o diff vazio."
+      dono: "@data-engineer + @qa"
+  fora_da_story:
+    - id: 6
+      item: "Backlog P3 — o acoplamento `softDelete` × `nicole_enabled` (C4)."
+      dono: "@po"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Avisos operacionais que este gate carrega adiante
+# ────────────────────────────────────────────────────────────────────────────
+avisos:
+  - id: A1
+    peso: critico
+    texto: >
+      🔴 **A migration 220 JÁ ESTÁ EM PRODUÇÃO e o código NÃO** — confirmado por mim (a coluna
+      existe, com `default false`, e as 4 linhas estão no estado do backfill). Essa é a ordem certa
+      e a coluna é **inerte** enquanto nada a lê. Mas se o PR for revertido depois do deploy,
+      **NÃO DERRUBAR A COLUNA**: com o código no ar, `.eq(\"nicole_enabled\", true)` contra coluna
+      inexistente cai em `if (error || !data) return []` (`pipeline.ts:1868`) e a Nicole perde
+      **TODOS** os empreendimentos, sem log e sem exceção. Rollback = reverter o PR, e só.
+  - id: A2
+    peso: alto
+    texto: >
+      A **221 não foi aplicada** (verificado: os dois seguem `is_active = false`). Ela é o passo 4 e
+      só sai depois da janela verde. Depois dela, um rollback de código **traz os dois de volta ao
+      contexto** — o `update … set is_active = false` por `id` tem de rodar junto, como está escrito
+      no critério de rollback.
+  - id: A3
+    peso: medio
+    texto: >
+      Prefixo `220`/`221` a reconferir na abertura do PR (@devops): a **87-1 (PR #391) reivindica o
+      219 e segue aberta**. A colisão é 100% de arquivo — produção versiona por timestamp.
+  - id: A4
+    peso: medio
+    texto: >
+      O gatilho de rollback pelo **Yarden** continua falsificado pelo baseline (zero desde 07/08,
+      com tráfego). O instrumento vivo é o **Vind** — remedido por mim hoje: 104 `PROPERTY_IDENTIFIED`
+      all-time. Usar só o Vind como número; o Yarden é leitura dirigida.
+
+evidencias:
+  mutacoes_aplicadas_por_mim: 4
+  mutacoes_lista:
+    - "M1 — remover `.eq(\"nicole_enabled\", true)` de `loadProperties` ⇒ 4 vermelhos (V1)"
+    - "M2 — remover `.eq(\"is_active\", true)` de `loadProperties` ⇒ **zero** vermelho (V4, achado C3)"
+    - "M3 — `const muda = true` na rota ⇒ 2 vermelhos, incl. `403 to be 200` (V5)"
+    - "M4 — remover a guarda de tipo do `nicole_enabled` ⇒ 1 vermelho + sonda própria mostrando `200`/`false` (V6)"
+  arvore_apos_as_mutacoes: "restaurada; diff stat e os 4 `md5` idênticos aos de antes"
+  banco_de_dev: "220 e 221 aplicadas e revertidas em `xnxvygyfyyyzwhiuoehz`; limpo ao final (0 linhas, coluna derrubada)"
+  banco_de_producao: "somente SELECT. Nenhum DDL, nenhum UPDATE."
+
+recomendacao_de_deploy: >
+  **Pode seguir para o passo 2** (PR + deploy), com as condições 1 e 2 fechadas antes do merge. A
+  coluna está em produção, o filtro está provado, o contexto da Nicole não muda um byte hoje, e a
+  ordem de 4 passos está correta e verificada. O que falta verificar (AC8, AC9, AC11) **só é
+  verificável depois do deploy** — e está com dono e data.
