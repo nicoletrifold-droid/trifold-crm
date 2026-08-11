@@ -39,12 +39,17 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
   if (!obra) return NextResponse.json({ error: "Obra não encontrada" }, { status: 404 })
 
-  const { data, error } = await admin.from("fvs_locais").insert(rows).select("*")
+  // upsert + ignoreDuplicates: re-colar a planilha com locais já cadastrados NÃO
+  // derruba o lote — os repetidos são ignorados e só os novos entram (fix do @qa).
+  const { data, error } = await admin
+    .from("fvs_locais")
+    .upsert(rows, { onConflict: "obra_id,nome", ignoreDuplicates: true })
+    .select("*")
   if (error) {
     if (error.code === "23505") {
       return NextResponse.json({ error: "Já existe um local com esse nome nesta obra" }, { status: 409 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json({ locais: data })
+  return NextResponse.json({ locais: data ?? [], ignorados: rows.length - (data?.length ?? 0) })
 }

@@ -22,8 +22,9 @@ vi.mock("@web/lib/permissions", () => ({
 
 let obraRow: Record<string, unknown> | null = { id: "obra-1" }
 let insertError: { code?: string; message: string } | null = null
-/** Linhas passadas ao .insert() — para checar org_id/tipo aplicados ao lote. */
+/** Linhas passadas ao .upsert() — para checar org_id/tipo aplicados ao lote. */
 let inserted: Record<string, unknown>[] = []
+let upsertOpts: Record<string, unknown> | null = null
 
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -32,8 +33,9 @@ vi.mock("@web/lib/supabase/admin", () => ({
         select: () => b,
         eq: () => b,
         maybeSingle: async () => ({ data: table === "obras" ? obraRow : null, error: null }),
-        insert: (rows: Record<string, unknown>[]) => {
+        upsert: (rows: Record<string, unknown>[], opts: Record<string, unknown>) => {
           inserted = rows
+          upsertOpts = opts
           return {
             select: async () => (insertError ? { data: null, error: insertError } : { data: rows, error: null }),
           }
@@ -68,6 +70,7 @@ beforeEach(() => {
   obraRow = { id: "obra-1" }
   insertError = null
   inserted = []
+  upsertOpts = null
 })
 
 describe("POST /api/fvs/locais", () => {
@@ -112,7 +115,13 @@ describe("POST /api/fvs/locais", () => {
     expect(json.locais).toHaveLength(2)
   })
 
-  it("nome repetido na obra (unique 23505) → 409", async () => {
+  it("re-colar a planilha é inofensivo: upsert ignora duplicados em vez de derrubar o lote", async () => {
+    const res = await call(LOTE)
+    expect(res.status).toBe(200)
+    expect(upsertOpts).toMatchObject({ onConflict: "obra_id,nome", ignoreDuplicates: true })
+  })
+
+  it("conflito residual (23505) → 409, não 500", async () => {
     insertError = { code: "23505", message: "duplicate key" }
     expect((await call(LOTE)).status).toBe(409)
   })

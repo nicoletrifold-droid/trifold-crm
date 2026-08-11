@@ -159,6 +159,38 @@ offline · acesso de empreiteiro · integração Sienge.
 - `packages/web/src/app/dashboard/layout.tsx` (NAV_ITEM_FVS + mapa rota→módulo + spread)
 - `docs/stories/75-293-fvs-fundacao-cadastros.story.md`
 
+## QA Results (@qa)
+
+**Gate: CONCERNS** — código, segurança e testes em ordem; pendências conscientes abaixo.
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | OK após 1 correção. Nota: o agente `/code-review` travou (600s sem progresso) — review feito manualmente sobre o diff completo, linha a linha |
+| 2. Testes | 2183 verdes (31 do módulo FVS) |
+| 3. AC atendidas | 8/8 no código; AC1 com a conferência de numeração adiada para o apply (@devops) |
+| 4. Regressões | Suíte inteira verde · `next build` OK · lint na baseline (0 erros; 0 avisos nos arquivos novos) |
+| 5. Performance | Páginas com 2-3 queries; serviços monta em memória (evita cartesiano de embed duplo); landing com counts `head:true` |
+| 6. Segurança | 8 rotas atrás do `fvsGuard` (401/403 com teste) · `org_id` explícito em toda query · páginas com redirect server-side · rotas privadas (fora de `isPublicRoute`) |
+| 7. Documentação | Story com desvios, gotchas e este gate |
+
+### Defeito encontrado no gate e corrigido
+
+1. **[medium — UX/dados] Criação em lote não era idempotente.** Re-colar a planilha com
+   metade dos locais já cadastrados → INSERT atômico batia no unique `(obra_id, nome)` →
+   **409 e zero locais entravam**. Exatamente o gesto que o Jonathan vai fazer no primeiro dia.
+   Fix: `upsert` com `ignoreDuplicates` — repetidos (inclusive dentro do próprio lote) são
+   ignorados, só os novos entram; resposta traz `ignorados` para a UI evoluir depois.
+
+### Pendências conscientes (herdadas para o smoke pós-deploy)
+
+- **Nada visto rodando**: as 4 telas no navegador, tema escuro, colar a planilha de verdade.
+- **[low] POST de ficha com falha no insert dos itens** deixa o serviço momentaneamente sem
+  ficha ativa (a anterior foi desativada e a nova removida no cleanup). Recuperável salvando
+  de novo; reordenar criaria corrida com o índice parcial — aceito e documentado.
+- Smoke pós-deploy: `curl` anônimo em `/api/fvs/locais` = 401 · menu "Vistorias" visível para
+  admin/supervisor/obras e invisível para corretor · criar 1 local, 1 serviço com ficha e 1
+  equipe em prod.
+
 ## Change Log
 
 - 2026-08-11 — @sm: story criada a partir do desenho v1 de 06/08 (etapa 1 de 5). Definições
@@ -174,3 +206,6 @@ offline · acesso de empreiteiro · integração Sienge.
   (30 novos), type-check OK, `next build` OK, lint 0 erros / 0 avisos nos arquivos novos.
   Desvios documentados em Dev Notes (POST de locais sempre lote; 1-ativa garantida por índice
   parcial; itens sem coluna `ativo`; sem DELETE de ficha). Ready → **InReview**.
+- 2026-08-11 — @qa: **gate CONCERNS**. 1 defeito achado e corrigido (lote não idempotente →
+  upsert + ignoreDuplicates; re-colar a planilha passa a ser inofensivo). Agente /code-review
+  travou; review manual do diff completo no lugar. Pendência: nada visto rodando (smoke).
