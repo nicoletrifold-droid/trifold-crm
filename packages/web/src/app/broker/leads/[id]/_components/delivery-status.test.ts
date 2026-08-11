@@ -66,3 +66,58 @@ describe("resolveDeliveryStatus", () => {
     }
   })
 })
+
+/**
+ * Story 75-291 — a dívida C-2 da 75-289: mensagem AUTOMÁTICA que não chegou.
+ * Dois formatos já gravados no banco: `send_error` (transição) e `sent: false`
+ * (follow-up/pós-visita do cron).
+ */
+describe("resolveDeliveryStatus — mensagens automáticas (75-291)", () => {
+  it("transição que falhou aparece como não entregue E pode ser reenviada", () => {
+    const s = resolveDeliveryStatus({
+      role: "assistant",
+      metadata: { is_transition: true, send_error: "HTTP_401" },
+    })
+    expect(s.state).toBe("failed")
+    expect(s.label).toBe("Não entregue")
+    expect(s.canResend).toBe(true)
+  })
+
+  it("transição fora da janela de 24h cai em window_closed, sem reenviar", () => {
+    const s = resolveDeliveryStatus({
+      role: "assistant",
+      metadata: { is_transition: true, send_error: "WHATSAPP_WINDOW_CLOSED" },
+    })
+    expect(s.state).toBe("window_closed")
+    expect(s.canResend).toBe(false)
+  })
+
+  it("transição ENTREGUE continua muda — não ganha ✓ novo na bolha da Nicole", () => {
+    expect(
+      resolveDeliveryStatus({ role: "assistant", metadata: { is_transition: true, sent_via: "whatsapp" } }).state
+    ).toBe("none")
+  })
+
+  it("follow-up da Nicole com sent:false aparece, mas NÃO oferece reenviar", () => {
+    const s = resolveDeliveryStatus({
+      role: "assistant",
+      metadata: { source: "followup_cron", channel: "whatsapp", sent: false },
+    })
+    expect(s.state).toBe("failed")
+    expect(s.label).toBe("Não entregue")
+    expect(s.canResend).toBe(false)
+    expect(s.hint).toContain("Nicole")
+  })
+
+  it("pós-visita com sent:true, e mensagem antiga sem a chave, seguem mudas", () => {
+    expect(
+      resolveDeliveryStatus({ role: "assistant", metadata: { source: "post_visit_followup", sent: true } }).state
+    ).toBe("none")
+    expect(resolveDeliveryStatus({ role: "assistant", metadata: { source: "post_visit_followup" } }).state).toBe("none")
+    expect(resolveDeliveryStatus({ role: "assistant", metadata: null }).state).toBe("none")
+  })
+
+  it("lead (user) com sent:false não é falha nossa — segue mudo", () => {
+    expect(resolveDeliveryStatus({ role: "user", metadata: { sent: false } }).state).toBe("none")
+  })
+})

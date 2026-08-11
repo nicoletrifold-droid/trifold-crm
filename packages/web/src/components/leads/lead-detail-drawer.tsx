@@ -521,8 +521,12 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   return (
     <>
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-900">
-        <div className="min-w-0 flex-1">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-stone-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-900">
+        {/* Story 75-292 — o nome PRECISA de um piso. Com `flex-1` sozinho ele
+            cedia toda a largura para os 4 controles e virava "S.." em 448px: em
+            flexbox quem tem flex-1 encolhe primeiro, e o flex-wrap do vizinho
+            nunca dispara enquanto houver alguém disposto a encolher até zero. */}
+        <div className="min-w-[7rem] flex-1">
           {loading ? (
             <div className="h-6 w-40 animate-pulse rounded bg-stone-200 dark:bg-stone-800" />
           ) : (
@@ -534,6 +538,9 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               <Link
                 href={`${leadBasePath}/${leadId}?edit=1`}
                 title="Editar lead"
+                // Story 75-292: virou a ÚNICA porta de edição no drawer (o botão
+                // com texto saiu), então ganha nome acessível explícito.
+                aria-label="Editar lead"
                 className="shrink-0 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-orange-500 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-orange-400"
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -562,25 +569,27 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               }}
             />
           )}
-          <Link
-            href={`${leadBasePath}/${leadId}?edit=1`}
-            className="rounded-md bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-          >
-            Editar Lead
-          </Link>
+          {/* Story 75-292 — o botão "Editar Lead" saiu (decisão do Marcos, 11/08):
+              ele apontava para o MESMO `?edit=1` do lápis ao lado do nome, então
+              custava ~90px do header para repetir uma função que já existia. Com
+              448px de painel, esse era o espaço que faltava para o nome do lead. */}
           <Link
             href={`${leadBasePath}/${leadId}`}
             className="rounded-md bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-100 transition-colors dark:bg-orange-500/15 dark:text-orange-300 dark:hover:bg-orange-500/20"
           >
             Ver completo
           </Link>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
+        {/* Story 75-292 — o fechar fica FORA do grupo que quebra linha: como ele
+            é o último, seria o primeiro a descer sozinho para a 2ª linha. Preso
+            aqui, ele continua no canto e quem quebra são os botões de ação. */}
+        <button
+          onClick={onClose}
+          aria-label="Fechar"
+          className="shrink-0 rounded-md p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {loading ? (

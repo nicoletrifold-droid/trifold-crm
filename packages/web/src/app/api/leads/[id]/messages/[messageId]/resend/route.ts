@@ -89,12 +89,17 @@ export async function POST(
   }
 
   const metadata = (msg.metadata as Record<string, unknown> | null) ?? {}
-  if (msg.role !== "broker" || typeof metadata.send_error !== "string") {
+  // Story 75-291 — a mensagem de TRANSIÇÃO (51-2, `role='assistant'`) também é
+  // reenviável: ela nasce de uma ação do corretor e o texto é da hora. Segue de
+  // fora o follow-up automático da Nicole (texto de dias atrás, chegaria fora de
+  // contexto) — e ele nem grava `send_error`, marca `sent: false`.
+  const isTransition = msg.role === "assistant" && metadata.is_transition === true
+  if ((msg.role !== "broker" && !isTransition) || typeof metadata.send_error !== "string") {
     return NextResponse.json(
       {
         success: false,
         error: "NOT_RESENDABLE",
-        message: "Só mensagens do corretor que falharam podem ser reenviadas.",
+        message: "Só mensagens do corretor (ou a de transição) que falharam podem ser reenviadas.",
       },
       { status: 409 }
     )
@@ -122,10 +127,16 @@ export async function POST(
   // CRÍTICO: assina com quem ESCREVEU (`metadata.signed_as`), não com quem clicou
   // reenviar. No atendimento compartilhado um supervisor pode reenviar a mensagem
   // da corretora, e o lead receberia a fala dela assinada com o nome dele.
+  //
+  // Story 75-291: a transição é a exceção — ela sai SEM assinatura no envio
+  // original (`send-message`), então assiná-la aqui entregaria ao lead um texto
+  // diferente do que o CRM mostra na conversa.
   const assinante = (metadata.signed_as as string | undefined) ?? appUser.name
   const dispatch = await dispatchBrokerMessage({
     phone: lead.phone as string,
-    message: buildSignedMessage(assinante, msg.content as string, channel),
+    message: isTransition
+      ? (msg.content as string)
+      : buildSignedMessage(assinante, msg.content as string, channel),
     conversationLastMessageAt: conversation.last_message_at as string | null,
     waCredentials,
   })

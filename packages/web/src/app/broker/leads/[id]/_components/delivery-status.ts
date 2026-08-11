@@ -42,13 +42,35 @@ export function resolveDeliveryStatus(msg: {
   role: string
   metadata?: Record<string, unknown> | null
 }): DeliveryStatus {
-  if (msg.role !== "broker") {
-    return { state: "none", label: "", hint: "", canResend: false }
+  const NONE: DeliveryStatus = { state: "none", label: "", hint: "", canResend: false }
+
+  // Story 75-291 — a dívida C-2 da 75-289: mensagem AUTOMÁTICA que não chegou
+  // também precisa aparecer. O sinal já existe no banco, em dois formatos:
+  //   · transição (51-2)      → metadata.send_error (string)   [send-message:225]
+  //   · follow-up/pós-visita  → metadata.sent === false        [cron/followup]
+  const isTransition = msg.role === "assistant" && msg.metadata?.is_transition === true
+  const nicoleFailed = msg.role === "assistant" && msg.metadata?.sent === false
+
+  // Follow-up da Nicole: mostra, mas NÃO oferece reenviar — o texto é automático
+  // e de dias atrás; reenviado hoje chegaria fora de contexto.
+  if (nicoleFailed && !isTransition) {
+    return {
+      state: "failed",
+      label: "Não entregue",
+      hint: "A Nicole não conseguiu entregar esta mensagem automática ao lead.",
+      canResend: false,
+    }
+  }
+
+  if (msg.role !== "broker" && !isTransition) {
+    return NONE
   }
 
   const sendError = msg.metadata?.send_error
   if (typeof sendError !== "string" || !sendError.trim()) {
-    return { state: "sent", label: "", hint: "Enviado", canResend: false }
+    // Transição que deu certo continua MUDA: o ✓ "Enviado" é do corretor, e
+    // carimbá-lo na bolha da Nicole seria um indicador novo que ninguém pediu.
+    return isTransition ? NONE : { state: "sent", label: "", hint: "Enviado", canResend: false }
   }
 
   // Janela de 24h fechada é um caso à parte: reenviar o mesmo texto livre NÃO vai
