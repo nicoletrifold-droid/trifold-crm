@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Users, X } from "lucide-react"
+import Link from "next/link"
+import { Plus, RotateCcw, Users, X } from "lucide-react"
 import { LeadDetailDrawer } from "@web/components/leads/lead-detail-drawer"
 
 export type ImobLead = {
@@ -28,7 +29,19 @@ const labelCls = "block text-xs font-medium text-gray-500 dark:text-stone-400"
 
 const EMPTY = { name: "", phone: "", email: "", property_interest_id: "", observacao: "" }
 
-export function ImobLeadsManager({ initial, properties, users }: { initial: ImobLead[]; properties: Property[]; users: OrgUser[] }) {
+export function ImobLeadsManager({
+  initial,
+  properties,
+  users,
+  view,
+  counts,
+}: {
+  initial: ImobLead[]
+  properties: Property[]
+  users: OrgUser[]
+  view: "ativos" | "perdidos"
+  counts: { ativos: number; perdidos: number }
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ ...EMPTY })
@@ -37,6 +50,47 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
   const [assigningId, setAssigningId] = useState<string | null>(null)
   // Lead aberto no drawer completo (mesmo componente do pipeline: Tarefas, Histórico, Transferir…).
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  // Story 75-297 — reativação de lead perdido (modal responsável + motivo).
+  const [reativarLead, setReativarLead] = useState<ImobLead | null>(null)
+  const [reativarBrokerId, setReativarBrokerId] = useState("")
+  const [reativarMotivo, setReativarMotivo] = useState("")
+  const [reativando, setReativando] = useState(false)
+  const [reativarError, setReativarError] = useState<string | null>(null)
+
+  function openReativar(lead: ImobLead) {
+    setReativarLead(lead)
+    setReativarBrokerId(lead.assigned_broker_id ?? "")
+    setReativarMotivo("")
+    setReativarError(null)
+  }
+
+  function closeReativar() {
+    if (reativando) return
+    setReativarLead(null)
+  }
+
+  async function submitReativar() {
+    if (!reativarLead) return
+    setReativarError(null)
+    if (!reativarBrokerId) { setReativarError("Selecione o responsável."); return }
+    if (!reativarMotivo.trim()) { setReativarError("O motivo é obrigatório."); return }
+    setReativando(true)
+    try {
+      const res = await fetch(`/api/imob/leads/${reativarLead.id}/reativar`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ broker_id: reativarBrokerId, motivo: reativarMotivo.trim() }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) { setReativarError(body.error ?? "Falha ao reativar."); return }
+      setReativarLead(null)
+      router.refresh()
+    } catch {
+      setReativarError("Erro de conexão.")
+    } finally {
+      setReativando(false)
+    }
+  }
 
   function set<K extends keyof typeof EMPTY>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })) }
 
@@ -74,9 +128,26 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
     }
   }
 
+  const isPerdidos = view === "perdidos"
+  const subTabCls = (active: boolean) =>
+    `rounded-md px-3 py-1.5 text-sm font-medium ${
+      active
+        ? "bg-stone-200 text-stone-900 dark:bg-stone-700 dark:text-white"
+        : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+    }`
+
   return (
     <div className="min-h-0 flex-1">
-      <div className="mb-3 flex items-center justify-end">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        {/* Story 75-297 — views: perdido = ETAPA (mesma régua da house). */}
+        <div className="flex items-center gap-1 rounded-lg bg-stone-100 p-1 dark:bg-stone-900">
+          <Link href="/dashboard/imob/leads" className={subTabCls(!isPerdidos)}>
+            Em atendimento ({counts.ativos})
+          </Link>
+          <Link href="/dashboard/imob/leads?view=perdidos" className={subTabCls(isPerdidos)}>
+            Perdidos ({counts.perdidos})
+          </Link>
+        </div>
         <button
           onClick={() => { setForm({ ...EMPTY }); setError(null); setOpen(true) }}
           className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
@@ -88,7 +159,9 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
       {initial.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-stone-300 py-16 text-center dark:border-stone-700">
           <Users className="h-9 w-9 text-stone-400 dark:text-stone-500" />
-          <p className="text-sm text-stone-500 dark:text-stone-400">Nenhum lead do IMOB ainda.</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            {isPerdidos ? "Nenhum lead perdido no IMOB." : "Nenhum lead do IMOB ainda."}
+          </p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-800">
@@ -100,6 +173,7 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
                 <th className="px-3 py-2 font-medium">Empreendimento</th>
                 <th className="px-3 py-2 font-medium">Etapa</th>
                 <th className="px-3 py-2 font-medium">Responsável</th>
+                {isPerdidos && <th className="px-3 py-2 font-medium"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
@@ -139,6 +213,17 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
                       ))}
                     </select>
                   </td>
+                  {isPerdidos && (
+                    <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => openReativar(l)}
+                        title="Reativar lead"
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700/50 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" /> Reativar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -185,6 +270,66 @@ export function ImobLeadsManager({ initial, properties, users }: { initial: Imob
               <button onClick={() => setOpen(false)} className="rounded-md border border-stone-300 px-4 py-1.5 text-sm text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800">Cancelar</button>
               <button onClick={save} disabled={saving} className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-60">
                 {saving ? "Salvando…" : "Criar lead"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Story 75-297 — modal de reativação (view Perdidos): responsável + motivo. */}
+      {reativarLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeReativar}>
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Reativar lead</h3>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              {reativarLead.name ?? "O lead"} volta para &quot;Aguardando atendimento&quot; com o
+              responsável escolhido.
+            </p>
+
+            <label className="mt-4 block text-xs font-medium text-stone-600 dark:text-stone-300">
+              Responsável <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={reativarBrokerId}
+              onChange={(e) => setReativarBrokerId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+            >
+              <option value="">Selecione o responsável…</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+
+            <label className="mt-4 block text-xs font-medium text-stone-600 dark:text-stone-300">
+              Motivo da reativação <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={reativarMotivo}
+              onChange={(e) => setReativarMotivo(e.target.value)}
+              rows={3}
+              placeholder="Ex.: cliente retornou o contato pedindo nova proposta."
+              className="mt-1 w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E8856A] focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-white"
+            />
+
+            {reativarError && <p className="mt-2 text-xs text-red-500">{reativarError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={closeReativar}
+                disabled={reativando}
+                className="rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100 disabled:opacity-50 dark:text-stone-300 dark:hover:bg-stone-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void submitReativar()}
+                disabled={reativando}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {reativando ? "Reativando…" : "Reativar"}
               </button>
             </div>
           </div>
