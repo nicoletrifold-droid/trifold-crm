@@ -538,6 +538,9 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               <Link
                 href={`${leadBasePath}/${leadId}?edit=1`}
                 title="Editar lead"
+                // Story 75-292: virou a ÚNICA porta de edição no drawer (o botão
+                // com texto saiu), então ganha nome acessível explícito.
+                aria-label="Editar lead"
                 className="shrink-0 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-orange-500 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-orange-400"
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -566,12 +569,10 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               }}
             />
           )}
-          <Link
-            href={`${leadBasePath}/${leadId}?edit=1`}
-            className="rounded-md bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-          >
-            Editar Lead
-          </Link>
+          {/* Story 75-292 — o botão "Editar Lead" saiu (decisão do Marcos, 11/08):
+              ele apontava para o MESMO `?edit=1` do lápis ao lado do nome, então
+              custava ~90px do header para repetir uma função que já existia. Com
+              448px de painel, esse era o espaço que faltava para o nome do lead. */}
           <Link
             href={`${leadBasePath}/${leadId}`}
             className="rounded-md bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-100 transition-colors dark:bg-orange-500/15 dark:text-orange-300 dark:hover:bg-orange-500/20"
