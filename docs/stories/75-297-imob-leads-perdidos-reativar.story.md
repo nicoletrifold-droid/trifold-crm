@@ -1,7 +1,7 @@
 # Story 75-297 — IMOB: aba "Perdidos" + reativar lead
 
 **Story ID:** 75-297
-**Epic:** 75 (CRM Trifold) · **Status:** InReview · **Estimativa:** M (~3 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done · **Estimativa:** M (~3 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Tipo:** feature (paridade com a house no mundo IMOB)
@@ -109,7 +109,7 @@ tela do broker; qualquer coisa do funil principal.
 - [x] Testes de rota do reativar (7 casos: 403 guard, 400 sem motivo/responsável/inválido,
       404 não-imob, 422 não-perdido, sucesso com update+activity+audit)
 - [x] lint + typecheck + suíte + `next build`
-- [ ] Smoke pós-deploy: logar como Daiana, ver Talita/Valmir na aba Perdidos e reativar um
+- [x] Smoke pós-deploy: validado pelo Marcos em 11/08 ("deu tudo certo")
 
 ## Dev Notes
 
@@ -163,3 +163,5 @@ conferir Talita/Valmir na aba "Perdidos (2)", reativar um com motivo e vê-lo vo
 - 2026-08-11 — @sm: criada a partir do pedido do Marcos (print da Daiana em
   `/dashboard/imob/leads` mostrando Não Qualificado misturado nos ativos, sem caminho de volta).
 - 2026-08-11 — @po: validada (GO 10/10) — Draft → Ready.
+- 2026-08-11 — @dev/@qa/@devops: implementada, gate CONCERNS, PR #397 mergeado + deploy prod OK.
+- 2026-08-11 — @devops: smoke visual confirmado pelo Marcos — InReview → Done.
