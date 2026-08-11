@@ -48,6 +48,14 @@ export interface MarketingPostRequestInput {
   assets: Array<{ marca: string; tipo: string; label: string | null; file_name: string }>
   /** Referência de "hoje" (ISO) */
   now: string
+  /**
+   * Story 75-294 — destino TRÁFEGO PAGO: além do post, a Lídia devolve a copy
+   * de anúncio (ad_primary_text ≤125 / ad_headline ≤27) coerente com o
+   * objetivo. Ausente/organico = comportamento atual, intocado.
+   */
+  destino?: "organico" | "pago"
+  /** Instrução do objetivo do anúncio (texto pronto, montado pelo chamador) */
+  objetivoInstrucao?: string | null
 }
 
 export interface MarketingPostRequestResult {
@@ -75,6 +83,12 @@ export interface MarketingPostRequestResult {
     titulo: string | null
     subtitulo: string | null
   }> | null
+  /**
+   * Story 75-294 — copy de anúncio (só quando destino=pago; senão null).
+   * Limites (125/27) são reforçados pelo chamador (enforceAdLimit).
+   */
+  ad_primary_text: string | null
+  ad_headline: string | null
   /** @deprecated use `artes[0]` — mantido para não quebrar chamadas existentes */
   arte: {
     /** Descrição visual da CENA (75-256: sem texto — o texto é titulo/subtitulo) */
@@ -175,9 +189,21 @@ export async function generateMarketingPostFromRequest(
 ): Promise<MarketingPostRequestResult | null> {
   const nowStamp = new Date(input.now).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
 
+  // Story 75-294 — bloco de tráfego pago: pede a copy de anúncio junto.
+  const pagoBlock =
+    input.destino === "pago"
+      ? `
+
+DESTINO: ANUNCIO DE TRAFEGO PAGO (Meta Ads), nao post organico. ${input.objetivoInstrucao ?? ""}
+Alem dos campos usuais, devolva no MESMO JSON:
+  "ad_primary_text": texto principal do anuncio, ate 125 caracteres, gancho forte + argumento central (sem hashtags),
+  "ad_headline": titulo do anuncio, ate 27 caracteres, direto.
+A "copy" continua sendo a legenda/descricao completa. A arte de anuncio precisa parar o scroll em menos de 1 segundo: UMA ideia visual central, contraste forte, zero poluicao.`
+      : ""
+
   const prompt = `${REQUEST_PROMPT_HEADER}
 
-${FORMATO_INSTRUCTIONS[input.formato]}
+${FORMATO_INSTRUCTIONS[input.formato]}${pagoBlock}
 
 DATA ATUAL: ${nowStamp}
 CANAL: ${input.canal}
@@ -280,6 +306,10 @@ export function parseMarketingPostRequest(
       justificativa: p.justificativa.trim(),
       scheduled_for: scheduledFor,
       arte,
+      // Story 75-294 — tolerante: ausentes (destino orgânico, resposta antiga
+      // em cache) viram null; o teto exato é reforçado no chamador.
+      ad_primary_text: str(p.ad_primary_text) ? p.ad_primary_text.trim() : null,
+      ad_headline: str(p.ad_headline) ? p.ad_headline.trim() : null,
     }
   } catch {
     return null

@@ -40,7 +40,10 @@ const TIPO_LABEL: Record<PostPreview["tipo"], string> = {
 export function PostPreviewModal({ copy, formato, roteiro, arteUrl, artes, onClose }: Props) {
   // Story 75-255 — cada tela tem a SUA arte. O mapa por ordem é a fonte; arteUrl
   // continua servindo a tela 1 para post legado (antes da migração 208).
-  const porOrdem = new Map<number, string>((artes ?? []).map((a) => [a.ordem, a.url]))
+  // 75-294 (@qa): com o trio de proporções do tráfego pago existem VÁRIAS artes
+  // na mesma ordem — a PRIMEIRA vence (4:5, a mesma régua do espelho arte_url).
+  const porOrdem = new Map<number, string>()
+  for (const a of artes ?? []) if (!porOrdem.has(a.ordem)) porOrdem.set(a.ordem, a.url)
   if (arteUrl && !porOrdem.has(1)) porOrdem.set(1, arteUrl)
 
   const preview = buildPostPreview({ copy, formato, roteiro, temArteGerada: porOrdem.size > 0 })

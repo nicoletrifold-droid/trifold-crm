@@ -17,12 +17,28 @@ const VALID = {
   arte: null,
   // Story 75-255 — o resultado ganhou a lista `artes`; `arte` segue como artes[0].
   artes: null,
+  // Story 75-294 — ad copy (só destino=pago; resposta sem os campos = null).
+  ad_primary_text: null,
+  ad_headline: null,
 }
 
 describe("parseMarketingPostRequest", () => {
   it("aceita JSON válido (estático)", () => {
     const r = parseMarketingPostRequest(JSON.stringify(VALID), "estatico")
     expect(r).toEqual(VALID)
+  })
+
+  // Story 75-294 — ad copy do modo tráfego pago
+  it("ad_primary_text/ad_headline passam quando presentes; ausentes viram null", () => {
+    const r = parseMarketingPostRequest(
+      JSON.stringify({ ...VALID, ad_primary_text: " Texto do anúncio ", ad_headline: "Título" }),
+      "estatico"
+    )
+    expect(r?.ad_primary_text).toBe("Texto do anúncio")
+    expect(r?.ad_headline).toBe("Título")
+    const sem = parseMarketingPostRequest(JSON.stringify(VALID), "estatico")
+    expect(sem?.ad_primary_text).toBeNull()
+    expect(sem?.ad_headline).toBeNull()
   })
 
   it("reel SEM roteiro é entrega incompleta → null (não enfileira)", () => {

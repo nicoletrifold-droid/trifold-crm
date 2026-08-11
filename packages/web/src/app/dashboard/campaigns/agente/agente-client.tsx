@@ -4,6 +4,18 @@ import React, { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import MarcasSection from "./marcas-section"
 import { FORMATO_LABELS, MARKETING_POST_FORMATOS, type MarketingPostFormato } from "@web/lib/marketing/posts"
+import {
+  AD_HEADLINE_MAX,
+  AD_OBJETIVO_LABELS,
+  AD_OBJETIVOS,
+  AD_PRIMARY_MAX,
+  AD_RATIO_LABELS,
+  AD_RATIOS,
+  DIRECAO_CHIP_GROUPS,
+  type AdObjetivo,
+  type AdRatio,
+  type PostDestino,
+} from "@web/lib/marketing/direcao"
 import { PostPreviewModal } from "./_components/post-preview-modal"
 import { buildPostPreview, nomeDaUnidade, quantasArtes, tipoDePreview } from "@web/lib/marketing/post-preview"
 
@@ -20,12 +32,18 @@ interface MarketingPost {
   copy: string
   roteiro: string | null
   arte_url: string | null
-  /** Story 75-255 — uma arte por tela; arte_url espelha a de ordem 1. */
-  artes: Array<{ ordem: number; url: string; descricao?: string | null; cta?: string | null }> | null
+  /** Story 75-255 — uma arte por tela; arte_url espelha a de ordem 1.
+   *  Story 75-294 — `ratio` presente = peça de tráfego pago (1:1/4:5/9:16). */
+  artes: Array<{ ordem: number; url: string; descricao?: string | null; cta?: string | null; ratio?: AdRatio | null }> | null
   scheduled_for: string | null
   status: "sugerido" | "aprovado" | "rejeitado" | "publicado"
   justificativa: string | null
   origem: "agente" | "humano"
+  /** Story 75-294 — tráfego pago */
+  destino?: PostDestino | null
+  objetivo?: AdObjetivo | null
+  ad_primary_text?: string | null
+  ad_headline?: string | null
   created_at: string
   updated_at: string
   properties: { name: string } | { name: string }[] | null
@@ -142,7 +160,12 @@ function ArtesDoPost({
   arteUrl: string | null
   formato: MarketingPostFormato | null
 }) {
-  const lista = (artes ?? []).filter((a) => a.url).sort((a, b) => a.ordem - b.ordem)
+  // Story 75-294 — peça de tráfego pago: dentro da mesma ordem, 4:5 primeiro
+  // (mesma régua do espelho arte_url no servidor).
+  const ratioIdx = (r?: AdRatio | null) => (r ? ["4:5", "1:1", "9:16"].indexOf(r) : -1)
+  const lista = (artes ?? [])
+    .filter((a) => a.url)
+    .sort((a, b) => a.ordem - b.ordem || ratioIdx(a.ratio) - ratioIdx(b.ratio))
 
   // Post legado/manual: sem `artes`, mas com `arte_url`. Mantém o de sempre.
   if (lista.length === 0) {
@@ -157,10 +180,11 @@ function ArtesDoPost({
     <div className="mt-3 flex flex-wrap items-start gap-3">
       {lista.map((a) => (
         <ArtePreview
-          key={`${a.ordem}-${a.url}`}
+          key={`${a.ordem}-${a.ratio ?? ""}-${a.url}`}
           url={a.url}
-          // Peça única não precisa de rótulo; 2+ precisa, senão não se sabe qual é qual.
-          rotulo={unica || !nome ? null : `${nome} ${a.ordem}`}
+          // Tráfego pago: o rótulo é a PROPORÇÃO (é assim que se sobe no Meta).
+          // Orgânico: peça única sem rótulo; 2+ ganha "Tela/Card N" como antes.
+          rotulo={a.ratio ? AD_RATIO_LABELS[a.ratio] : unica || !nome ? null : `${nome} ${a.ordem}`}
         />
       ))}
     </div>
@@ -191,6 +215,11 @@ interface PedidoFormValues {
   formato: MarketingPostFormato
   canal: "instagram" | "facebook"
   scheduled_for: string
+  // Story 75-294 — tráfego pago + chips de direção
+  destino: PostDestino
+  objetivo: AdObjetivo
+  proporcoes: AdRatio[]
+  chips: Record<string, string>
 }
 
 const EMPTY_PEDIDO: PedidoFormValues = {
@@ -200,6 +229,10 @@ const EMPTY_PEDIDO: PedidoFormValues = {
   formato: "estatico",
   canal: "instagram",
   scheduled_for: "",
+  destino: "organico",
+  objetivo: "leads",
+  proporcoes: [...AD_RATIOS],
+  chips: {},
 }
 
 function PedirLidiaModal({
@@ -219,10 +252,97 @@ function PedirLidiaModal({
   onClose: () => void
 }) {
   const [values, setValues] = useState<PedidoFormValues>(EMPTY_PEDIDO)
+  // Story 75-294 — "✨ Melhorar meu pedido" (com Desfazer de 1 nível, fail-open)
+  const [melhorando, setMelhorando] = useState(false)
+  const [pedidoAnterior, setPedidoAnterior] = useState<string | null>(null)
+  const [melhorarAviso, setMelhorarAviso] = useState<string | null>(null)
+  // Story 75-294 — o chip "Fachada real" só habilita se o Kit ESCOPADO tem foto
+  const [brandsInfo, setBrandsInfo] = useState<Array<{ tipo: string; property_id: string | null; temFoto: boolean }> | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void fetch("/api/marketing-brands")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { brands?: Array<{ tipo: string; property_id: string | null; assets?: Array<{ tipo: string }> }> } | null) => {
+        if (!alive || !json?.brands) return
+        setBrandsInfo(
+          json.brands.map((b) => ({
+            tipo: b.tipo,
+            property_id: b.property_id,
+            temFoto: (b.assets ?? []).some((a) => a.tipo === "foto"),
+          }))
+        )
+      })
+      .catch(() => {
+        /* sem info de Kit: chips que precisam de foto ficam desabilitados */
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Mesma régua de escopo do servidor: institucional + a marca DO empreendimento.
+  const kitTemFachada = (brandsInfo ?? []).some(
+    (b) =>
+      b.temFoto &&
+      (b.tipo === "institucional" || (values.empreendimento_id !== "" && b.property_id === values.empreendimento_id))
+  )
+
+  function toggleChip(groupKey: string, chipKey: string) {
+    setValues((v) => {
+      const chips = { ...v.chips }
+      if (chips[groupKey] === chipKey) delete chips[groupKey]
+      else chips[groupKey] = chipKey
+      return { ...v, chips }
+    })
+  }
+
+  function toggleRatio(r: AdRatio) {
+    setValues((v) => {
+      const has = v.proporcoes.includes(r)
+      // mínimo 1 proporção marcada
+      if (has && v.proporcoes.length === 1) return v
+      return { ...v, proporcoes: has ? v.proporcoes.filter((x) => x !== r) : [...v.proporcoes, r] }
+    })
+  }
+
+  async function melhorarPedido() {
+    if (values.pedido.trim().length < 10 || melhorando) return
+    setMelhorando(true)
+    setMelhorarAviso(null)
+    try {
+      const res = await fetch("/api/marketing-posts/melhorar-pedido", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pedido: values.pedido,
+          empreendimento_id: values.empreendimento_id || null,
+          destino: values.destino,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as { pedido?: string; error?: string } | null
+      if (!res.ok || !json?.pedido) {
+        // FAIL-OPEN — o texto original fica como está
+        setMelhorarAviso(json?.error ?? "Não consegui melhorar agora — seu texto ficou como estava.")
+        return
+      }
+      setPedidoAnterior(values.pedido)
+      setValues((v) => ({ ...v, pedido: json.pedido! }))
+    } catch {
+      setMelhorarAviso("Não consegui melhorar agora — seu texto ficou como estava.")
+    } finally {
+      setMelhorando(false)
+    }
+  }
 
   const inputClass =
     "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-orange-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
   const labelClass = "block text-xs font-medium text-gray-600 mb-1 dark:text-stone-400"
+  const chipBase =
+    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+  const chipOff =
+    "border-gray-300 text-gray-600 hover:border-orange-400 dark:border-stone-700 dark:text-stone-300 dark:hover:border-orange-500"
+  const chipOn = "border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-300"
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -234,31 +354,142 @@ function PedirLidiaModal({
         </p>
 
         <div className="mt-4 space-y-3">
+          {/* Story 75-294 — destino é a PRIMEIRA decisão: muda o resto do form */}
+          <div role="group" aria-label="Destino" className="flex gap-2">
+            {(["organico", "pago"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={values.destino === d}
+                onClick={() => setValues((v) => ({ ...v, destino: d, formato: d === "pago" ? "estatico" : v.formato }))}
+                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  values.destino === d
+                    ? "border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-300"
+                    : "border-gray-300 text-gray-600 hover:border-orange-400 dark:border-stone-700 dark:text-stone-300"
+                }`}
+              >
+                {d === "organico" ? "Orgânico" : "Tráfego pago"}
+              </button>
+            ))}
+          </div>
+
           <div>
-            <label className={labelClass}>O que você quer? *</label>
+            <div className="flex items-center justify-between">
+              <label className={labelClass}>O que você quer? *</label>
+              <div className="mb-1 flex items-center gap-2">
+                {pedidoAnterior !== null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValues((v) => ({ ...v, pedido: pedidoAnterior }))
+                      setPedidoAnterior(null)
+                    }}
+                    className="text-[11px] text-gray-400 underline underline-offset-2 hover:text-gray-600 dark:text-stone-500 dark:hover:text-stone-300"
+                  >
+                    Desfazer
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void melhorarPedido()}
+                  disabled={melhorando || values.pedido.trim().length < 10}
+                  className="rounded-md border border-orange-300 px-2 py-0.5 text-[11px] font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-40 dark:border-orange-500/40 dark:text-orange-300 dark:hover:bg-orange-500/10"
+                  title="A Lídia reescreve seu texto como um briefing completo (dá pra desfazer)"
+                >
+                  {melhorando ? "Melhorando…" : "✨ Melhorar"}
+                </button>
+              </div>
+            </div>
             <textarea
               value={values.pedido}
               onChange={(e) => setValues((v) => ({ ...v, pedido: e.target.value }))}
               rows={4}
               maxLength={2000}
               className={inputClass}
-              placeholder={'Ex.: "Story pra investidor batendo na entrega em abril de 2027, com CTA de agendar visita. Usa a foto da fachada."'}
+              placeholder={
+                values.destino === "pago"
+                  ? 'Ex.: "Anúncio pra investidor batendo na entrega em abril de 2027, focado em agendar visita."'
+                  : 'Ex.: "Story pra investidor batendo na entrega em abril de 2027, com CTA de agendar visita. Usa a foto da fachada."'
+              }
               autoFocus
             />
+            {melhorarAviso && <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{melhorarAviso}</p>}
           </div>
 
-          {/* Story 75-241 — direção VISUAL vai verbatim ao motor de imagem
-              (reel não gera arte, então o campo some) */}
+          {/* Story 75-294 — direção de arte por CHIPS (fonte única em lib/marketing/direcao)
+              + detalhes livres. Reel não gera arte, então a seção some (regra 75-241). */}
           {values.formato !== "reel" && (
             <div>
-              <label className={labelClass}>Direção da arte (opcional)</label>
+              <label className={labelClass}>Direção da arte (opcional — toque para escolher)</label>
+              <div className="space-y-1.5">
+                {DIRECAO_CHIP_GROUPS.map((g) => (
+                  <div key={g.key} role="group" aria-label={g.label} className="flex flex-wrap items-center gap-1.5">
+                    <span className="w-14 flex-none text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-stone-500">
+                      {g.label}
+                    </span>
+                    {g.chips.map((c) => {
+                      const bloqueado = !!c.precisaFachada && !kitTemFachada
+                      return (
+                        <button
+                          key={c.key}
+                          type="button"
+                          aria-pressed={values.chips[g.key] === c.key}
+                          disabled={bloqueado}
+                          title={bloqueado ? "Adicione uma foto ao Kit da marca para usar" : c.fragmento}
+                          onClick={() => toggleChip(g.key, c.key)}
+                          className={`${chipBase} ${values.chips[g.key] === c.key ? chipOn : chipOff}`}
+                        >
+                          {c.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
               <input
                 value={values.direcao_arte}
                 onChange={(e) => setValues((v) => ({ ...v, direcao_arte: e.target.value }))}
-                maxLength={500}
-                className={inputClass}
-                placeholder={'Ex.: "pôr do sol atrás do prédio", "luz de manhã, tons quentes", "fundo minimalista"'}
+                maxLength={400}
+                className={`${inputClass} mt-2`}
+                placeholder="Detalhes extras (texto livre) — ex.: destacar a piscina da cobertura"
               />
+            </div>
+          )}
+
+          {values.destino === "pago" && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Objetivo do anúncio</label>
+                <div role="group" aria-label="Objetivo do anúncio" className="flex flex-wrap gap-1.5">
+                  {AD_OBJETIVOS.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      aria-pressed={values.objetivo === o}
+                      onClick={() => setValues((v) => ({ ...v, objetivo: o }))}
+                      className={`${chipBase} ${values.objetivo === o ? chipOn : chipOff}`}
+                    >
+                      {AD_OBJETIVO_LABELS[o]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Proporções (posicionamentos do Meta)</label>
+                <div role="group" aria-label="Proporções" className="flex flex-wrap gap-1.5">
+                  {AD_RATIOS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      aria-pressed={values.proporcoes.includes(r)}
+                      onClick={() => toggleRatio(r)}
+                      className={`${chipBase} ${values.proporcoes.includes(r) ? chipOn : chipOff}`}
+                    >
+                      {AD_RATIO_LABELS[r]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -276,29 +507,33 @@ function PedirLidiaModal({
                 ))}
               </select>
             </div>
-            <div>
-              <label className={labelClass}>Formato</label>
-              <select
-                value={values.formato}
-                onChange={(e) => setValues((v) => ({ ...v, formato: e.target.value as MarketingPostFormato }))}
-                className={inputClass}
-              >
-                {MARKETING_POST_FORMATOS.map((f) => (
-                  <option key={f} value={f}>{f === "reel" ? "Reel (roteiro + legenda)" : FORMATO_LABELS[f]}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Canal</label>
-              <select
-                value={values.canal}
-                onChange={(e) => setValues((v) => ({ ...v, canal: e.target.value as "instagram" | "facebook" }))}
-                className={inputClass}
-              >
-                <option value="instagram">Instagram</option>
-                <option value="facebook">Facebook</option>
-              </select>
-            </div>
+            {values.destino === "organico" && (
+              <div>
+                <label className={labelClass}>Formato</label>
+                <select
+                  value={values.formato}
+                  onChange={(e) => setValues((v) => ({ ...v, formato: e.target.value as MarketingPostFormato }))}
+                  className={inputClass}
+                >
+                  {MARKETING_POST_FORMATOS.map((f) => (
+                    <option key={f} value={f}>{f === "reel" ? "Reel (roteiro + legenda)" : FORMATO_LABELS[f]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {values.destino === "organico" && (
+              <div>
+                <label className={labelClass}>Canal</label>
+                <select
+                  value={values.canal}
+                  onChange={(e) => setValues((v) => ({ ...v, canal: e.target.value as "instagram" | "facebook" }))}
+                  className={inputClass}
+                >
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                </select>
+              </div>
+            )}
             <div>
               <label className={labelClass}>Data (opcional)</label>
               <input
@@ -340,7 +575,11 @@ function PedirLidiaModal({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {generating ? "Criando…" : "Criar com a Lídia"}
+              {generating
+                ? values.destino === "pago"
+                  ? `Criando ${values.proporcoes.length} proporç${values.proporcoes.length === 1 ? "ão" : "ões"}…`
+                  : "Criando…"
+                : "Criar com a Lídia"}
             </button>
           </div>
         </div>
@@ -596,6 +835,36 @@ function telasDoPost(post: MarketingPost): number[] {
   return Array.from({ length: quantas }, (_, i) => i + 1)
 }
 
+/** Story 75-294 — linha de copy de anúncio: texto + contador + copiar. */
+function AdCopyRow({ label, text, max }: { label: string; text: string; max: number }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-stone-500">
+          {label}{" "}
+          <span className={text.length > max ? "text-red-500" : ""}>
+            {text.length}/{max}
+          </span>
+        </span>
+        <p className="text-xs text-gray-800 dark:text-stone-200">{text}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+          })
+        }}
+        className="flex-none rounded-md border border-gray-300 px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+      >
+        {copied ? "Copiado ✓" : "Copiar"}
+      </button>
+    </div>
+  )
+}
+
 function PostCard({
   post,
   actions,
@@ -623,6 +892,11 @@ function PostCard({
         {post.formato && (
           <span className="inline-flex rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
             {FORMATO_LABELS[post.formato] ?? post.formato}
+          </span>
+        )}
+        {post.destino === "pago" && (
+          <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+            Tráfego pago{post.objetivo ? ` · ${AD_OBJETIVO_LABELS[post.objetivo]}` : ""}
           </span>
         )}
         {prop && (
@@ -658,8 +932,23 @@ function PostCard({
         </div>
       )}
 
+      {/* Story 75-294 — copy do anúncio pronta pra colar no Ads Manager */}
+      {(post.ad_primary_text || post.ad_headline) && (
+        <div className="mt-3 space-y-2 rounded-md bg-gray-50 p-3 dark:bg-stone-800/60">
+          {post.ad_primary_text && (
+            <AdCopyRow label="Primary text" text={post.ad_primary_text} max={AD_PRIMARY_MAX} />
+          )}
+          {post.ad_headline && <AdCopyRow label="Headline" text={post.ad_headline} max={AD_HEADLINE_MAX} />}
+        </div>
+      )}
+
       <ArtesDoPost artes={post.artes} arteUrl={post.arte_url} formato={post.formato} />
 
+      {post.destino === "pago" && post.origem === "agente" && (
+        <p className="mt-2 text-[11px] text-gray-400 dark:text-stone-500">
+          ⚠️ Arte gerada por IA — marque a declaração de IA ao subir o anúncio no Meta.
+        </p>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <button
@@ -774,10 +1063,16 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
         body: JSON.stringify({
           pedido: values.pedido,
           direcao_arte: values.direcao_arte.trim() || null,
+          chips: Object.keys(values.chips).length > 0 ? values.chips : null,
           empreendimento_id: values.empreendimento_id || null,
           formato: values.formato,
           canal: values.canal,
           scheduled_for: values.scheduled_for || null,
+          // Story 75-294 — tráfego pago (organico não manda campos de pago)
+          destino: values.destino,
+          ...(values.destino === "pago"
+            ? { objetivo: values.objetivo, proporcoes: values.proporcoes }
+            : {}),
         }),
       })
       const json = (await res.json().catch(() => null)) as { error?: string } | null

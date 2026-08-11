@@ -77,6 +77,11 @@ export interface GerarArteParaPostInput {
    */
   titulo?: string | null
   subtitulo?: string | null
+  /**
+   * Story 75-294 — proporção EXPLÍCITA (tráfego pago gera 1:1/4:5/9:16 da mesma
+   * arte). Ausente = comportamento atual: aspectRatioForFormato(formato).
+   */
+  ratio?: "9:16" | "4:5" | "1:1" | null
 }
 
 export interface GerarArteParaPostResult {
@@ -134,7 +139,7 @@ export async function gerarArteParaPost(
     console.warn("[arte-service] VERTEX_API_KEY ausente — post segue sem arte")
     return null
   }
-  const aspectRatio = aspectRatioForFormato(input.formato)
+  const aspectRatio = input.ratio ?? aspectRatioForFormato(input.formato)
   if (!aspectRatio) return null // reel não gera imagem
 
   try {
@@ -387,7 +392,12 @@ export interface ArteGerada {
   /** Story 75-256 — persistidos para o "Refazer arte" recompor igual */
   titulo?: string | null
   subtitulo?: string | null
+  /** Story 75-294 — proporção da peça (pago). Ausente = arte legado (formato mandou). */
+  ratio?: "9:16" | "4:5" | "1:1" | null
 }
+
+/** Ordem de exibição/espelho das proporções: 4:5 (feed) primeiro. */
+const RATIO_ORDER: Record<string, number> = { "4:5": 0, "1:1": 1, "9:16": 2 }
 
 /**
  * Gera N artes, uma por spec. SEQUENCIAL de propósito: cada geração leva ~15s e
@@ -399,35 +409,50 @@ export interface ArteGerada {
  */
 export async function gerarArtesParaPost(
   admin: SupabaseClient,
-  base: Omit<GerarArteParaPostInput, "descricao" | "arquivosKit" | "cta">,
+  base: Omit<GerarArteParaPostInput, "descricao" | "arquivosKit" | "cta" | "ratio"> & {
+    /**
+     * Story 75-294 — TRÁFEGO PAGO: gerar cada spec nestas proporções (a mesma
+     * arte em 1:1/4:5/9:16). Ausente/null = comportamento atual (1 geração por
+     * spec, na proporção do formato). Fail-open POR PROPORÇÃO: a que falha é
+     * pulada e as outras seguem (AC4 — falha parcial não descarta o que deu certo).
+     */
+    ratios?: Array<"9:16" | "4:5" | "1:1"> | null
+  },
   specs: ArteSpec[]
 ): Promise<ArteGerada[]> {
+  const { ratios, ...baseInput } = base
+  const alvos: Array<"9:16" | "4:5" | "1:1" | null> = ratios && ratios.length > 0 ? ratios : [null]
   const out: ArteGerada[] = []
   for (const spec of specs) {
-    try {
-      const r = await gerarArteParaPost(admin, {
-        ...base,
-        descricao: spec.descricao,
-        arquivosKit: spec.arquivosKit,
-        cta: spec.cta,
-        titulo: spec.titulo ?? null,
-        subtitulo: spec.subtitulo ?? null,
-      })
-      if (!r) {
-        console.warn(`[arte-service] tela ${spec.ordem}: motor não devolveu imagem — segue sem ela`)
-        continue
+    for (const ratio of alvos) {
+      const rotulo = `tela ${spec.ordem}${ratio ? ` (${ratio})` : ""}`
+      try {
+        const r = await gerarArteParaPost(admin, {
+          ...baseInput,
+          descricao: spec.descricao,
+          arquivosKit: spec.arquivosKit,
+          cta: spec.cta,
+          titulo: spec.titulo ?? null,
+          subtitulo: spec.subtitulo ?? null,
+          ratio,
+        })
+        if (!r) {
+          console.warn(`[arte-service] ${rotulo}: motor não devolveu imagem — segue sem ela`)
+          continue
+        }
+        out.push({
+          ordem: spec.ordem,
+          url: r.arteUrl,
+          descricao: spec.descricao,
+          cta: spec.cta,
+          arquivosUsados: r.arquivosUsados,
+          titulo: spec.titulo ?? null,
+          subtitulo: spec.subtitulo ?? null,
+          ratio,
+        })
+      } catch (err) {
+        console.error(`[arte-service] ${rotulo} falhou — as outras seguem:`, err)
       }
-      out.push({
-        ordem: spec.ordem,
-        url: r.arteUrl,
-        descricao: spec.descricao,
-        cta: spec.cta,
-        arquivosUsados: r.arquivosUsados,
-        titulo: spec.titulo ?? null,
-        subtitulo: spec.subtitulo ?? null,
-      })
-    } catch (err) {
-      console.error(`[arte-service] tela ${spec.ordem} falhou — as outras seguem:`, err)
     }
   }
   return out
@@ -447,7 +472,12 @@ export function montarPatchDeArtes(artes: ArteGerada[]): {
   arte_descricao: string | null
   arte_cta: string | null
 } {
-  const ordenadas = [...artes].sort((a, b) => a.ordem - b.ordem)
+  // 75-294: dentro da mesma ordem, 4:5 (feed) vem primeiro — é o espelho de
+  // arte_url que o card/preview legado mostram. Artes sem ratio ficam na frente
+  // (comportamento anterior intocado).
+  const ordenadas = [...artes].sort(
+    (a, b) => a.ordem - b.ordem || (a.ratio ? RATIO_ORDER[a.ratio] ?? 9 : -1) - (b.ratio ? RATIO_ORDER[b.ratio] ?? 9 : -1)
+  )
   const primeira = ordenadas[0] ?? null
   return {
     artes: ordenadas,
