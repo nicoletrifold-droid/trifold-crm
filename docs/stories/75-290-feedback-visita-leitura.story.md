@@ -234,3 +234,5 @@ rota server-side que faça as duas queries e case em memória. Decisão do Marco
 - 2026-08-11 — @qa: **gate CONCERNS**. 3 defeitos achados e corrigidos (botão congelado após
   escrever; header estourando em 448px; rótulo piscando — com um erro de lint no meio do fix).
   Pendência: nada visto rodando + aval do Marcos sobre a "Registrar outra visita".
+- 2026-08-11 — Marcos: **aprovou** a "Registrar outra visita" no modo leitura (a adição do @dev
+  fora do texto da AC). Fica como está.
