@@ -120,19 +120,21 @@ export interface CtaBox {
 }
 
 /**
- * PURA (AC5): a pílula do CTA fica na faixa IMEDIATAMENTE ACIMA da faixa do
- * logo, com respiro entre as duas. Largura é fração da arte, centralizada.
+ * PURA (AC5, redesenhada na 75-296): a pílula do CTA mora DENTRO da banda do
+ * logo — à ESQUERDA (margem 8%), verticalmente centralizada, com o logo à
+ * direita. Antes ela era um andar próprio acima da banda, e a pilha completa
+ * (título+subtítulo+CTA+logo) comia ~40% do 1:1.
  */
 export function ctaBox(aspectRatio: ArteAspectRatio, width: number, height: number): CtaBox {
   const logo = logoBox(aspectRatio, width, height)
-  const h = Math.round(height * 0.05)
-  const w = Math.round(width * (aspectRatio === "9:16" ? 0.72 : 0.66))
-  const respiro = Math.round(height * 0.013)
+  const h = Math.min(Math.round(height * 0.05), Math.round(logo.bandHeight * 0.62))
+  const w = Math.round(width * 0.46)
+  const margem = Math.round(width * 0.08)
   return {
     width: w,
     height: h,
-    left: Math.round((width - w) / 2),
-    top: logo.bandTop - respiro - h,
+    left: margem,
+    top: logo.bandTop + Math.round((logo.bandHeight - h) / 2),
   }
 }
 

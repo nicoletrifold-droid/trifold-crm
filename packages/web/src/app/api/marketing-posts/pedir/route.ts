@@ -236,7 +236,9 @@ export async function POST(req: NextRequest) {
         arte_arquivos: result.arte ? arquivosArte : null,
         // Story 75-248 — CTA em coluna PRÓPRIA, nunca dentro da arte_descricao:
         // aquela string vai no prompt e o modelo é proibido de desenhar CTA.
-        arte_cta: result.artes?.[0]?.cta ?? null,
+        // 75-296: pago não compõe CTA na arte (o botão do anúncio é do Meta) —
+        // null aqui mantém o "Refazer arte" coerente com a peça original.
+        arte_cta: destino === "pago" ? null : result.artes?.[0]?.cta ?? null,
         scheduled_for: humanDate ?? result.scheduled_for,
         justificativa: result.justificativa,
         status: "sugerido",
@@ -272,10 +274,13 @@ export async function POST(req: NextRequest) {
         // referência de fachada ganha as do Kit forçadas (prédio inventado num
         // anúncio do empreendimento é o defeito mais grave deste fluxo).
         arquivosKit: garantirFachadaNaCena(a.descricao, i === 0 ? arquivosArte : a.arquivos_kit, assets),
-        cta: a.cta,
+        // Story 75-296 — arte de PAGO é enxuta: sem CTA composto (o botão do
+        // anúncio é do Meta) e sem subtítulo (o detalhe vive no primary text).
+        // Imagem + título curto + logo; a faixa cai de ~40% para ~25% no 1:1.
+        cta: destino === "pago" ? null : a.cta,
         // Story 75-256 — o texto da faixa vem do Sonnet e é composto por código
         titulo: a.titulo,
-        subtitulo: a.subtitulo,
+        subtitulo: destino === "pago" ? null : a.subtitulo,
       }))
 
       const geradas = await gerarArtesParaPost(

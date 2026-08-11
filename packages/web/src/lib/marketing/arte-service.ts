@@ -336,7 +336,8 @@ export async function gerarArteParaPost(
         if (!logo) {
           console.warn(`[arte-service] logo ${logoAsset.file_name} não baixou/mime recusado — arte sem logo`)
         } else {
-          arteBuffer = await composeLogo(arteBuffer, logo.buf, logo.mime, aspectRatio)
+          // 75-296: com CTA na peça, a pílula ocupa a esquerda da banda — logo à direita.
+          arteBuffer = await composeLogo(arteBuffer, logo.buf, logo.mime, aspectRatio, input.cta?.trim() ? "direita" : "centro")
         }
       }
     } catch (logoErr) {
