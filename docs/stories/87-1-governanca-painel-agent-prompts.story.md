@@ -268,7 +268,7 @@ mesmo dia**, e o responsável é quem editou.
 
 - [x] **0.** *(acrescentada pelo @dev — Risco 5, antes de tudo)* `--write` do snapshot e
   reconciliação da dívida: os 3 slugs divergentes zeraram. → **pré-requisito da AC6**
-- [x] **1.** **(@dev)** Migration `219`: tabela `agent_prompt_versions` + trigger em
+- [x] **1.** **(@dev)** Migration `222`: tabela `agent_prompt_versions` + trigger em
   `agent_prompts`. Aplicada por Management API. → **AC1**
 - [x] **2.** **(@dev)** Motivo obrigatório na server action (com mensagem visível) e no `PUT`. → **AC2**
 - [x] **3.** **(@dev)** Gate de bootstrap em `seed-prompts.ts` **e** no bloco de `agent_prompts` de
@@ -291,10 +291,19 @@ mesmo dia**, e o responsável é quem editou.
 
 - 🔴 **Prefixo de migration — o número da story está VELHO.** O draft dizia 215; hoje existem
   `216_clientes_cpf_normalizado.sql`, `217_leads_qualificacao_comercial.sql` e
-  `218_system_events_dedupe_nicole.sql`. **O próximo livre é `219`** — e mesmo isso precisa ser
+  `218_system_events_dedupe_nicole.sql`. O próximo livre **era** `219` — e mesmo isso precisava ser
   reconferido no momento de criar (`218` foi renumerado de `217` hoje; há duas migrations não
   commitadas em voo). Aplicar por **Supabase Management API**, arquivo inteiro num POST —
   `supabase db push` é proibido neste projeto (R-G do epic).
+  > ⚠️ **E a reconferência pegou: o número final é `222`, não `219`.** O `219` foi consumido pela
+  > `main` em 11/08 10:11 -03 por `219_fvs_fundacao.sql` (Story 75-293, PR #392) **depois** que
+  > este arquivo nasceu, e `220`/`221` estão com a Story 87-13 (PR #393). Renumerado pelo @devops
+  > na revisão do PR #391. **Quem chega primeiro na `main` fica com o número; o PR aberto
+  > renumera.** É a quarta vez neste epic — e a razão de reincidir é estrutural: o prefixo `NNN_`
+  > é convenção **só do repositório**, porque produção versiona por **timestamp**
+  > (`supabase_migrations.schema_migrations`). **Nenhuma conferência no banco vai pegar esta
+  > colisão, porque lá ela não existe.** O que o número quebra é a ordenação por nome de arquivo
+  > no repo e a leitura humana — e é só isso que se está consertando aqui.
 - 🔴 **Nome do trigger — já existe um `set_updated_at` nesta tabela.**
   `001_base_schema.sql:295`: `CREATE TRIGGER set_updated_at BEFORE UPDATE ON agent_prompts`.
   O trigger novo precisa de outro nome (ex.: `agent_prompts_versionar`) e deve ser **AFTER UPDATE**,
@@ -377,7 +386,11 @@ mesmo dia**, e o responsável é quem editou.
 
 - [x] **AC1–AC7** verificadas, com output colado nas que exigem execução (ver Dev Agent Record)
 - [x] Migration aplicada em produção por Management API, prefixo conferido no momento
-      (**219** — `216`/`217`/`218` já ocupados, `219` livre, conferido em 11/08 antes de criar)
+      (era **219** — `216`/`217`/`218` já ocupados, `219` livre, conferido em 11/08 antes de criar)
+- [x] Prefixo **reconferido na abertura/revisão do PR** e renumerado `219` → **`222`** (@devops,
+      11/08): o `219` foi consumido pela `main` no mesmo dia (`219_fvs_fundacao.sql`, PR #392) e
+      `220`/`221` são da 87-13 (PR #393). **Nada reaplicado no banco** — o prefixo é convenção de
+      repositório, produção versiona por timestamp
 - [x] Snapshot reconciliado (`--write`) **no mesmo PR**, antes da AC6 subir — Risco 5
       ⚠️ **commit pendente com o @devops** (o @dev não faz commit nesta casa); o snapshot está
       no working tree e precisa entrar no MESMO PR do código da AC6
@@ -424,7 +437,7 @@ nulo, autor `system`) — provado abaixo.
 
 ### AC1 — toda escrita deixa rastro, por qualquer caminho ✅
 
-Migration `219` aplicada por Management API (arquivo inteiro num POST, HTTP 201). Objetos
+Migration `222` aplicada por Management API (arquivo inteiro num POST, HTTP 201). Objetos
 conferidos em produção: trigger `agent_prompts_versionar` **AFTER** UPDATE convivendo com o
 `set_updated_at` **BEFORE** que já existia; tabela sem NOT NULL-sem-default e **sem FK**; RLS
 ligada com policy de SELECT admin-only; `anon` sem grant nenhum; `authenticated` só SELECT.
@@ -703,7 +716,7 @@ repositório não tem `@testing-library`). São 3 testes, e o primeiro barra a r
 
 **REL-001 — o histórico sumia justo quando importa.** A leitura saiu de `page.tsx` para
 `@web/lib/agent-prompt-versions` e o teto virou **do banco e por slug**: uma consulta por
-slug com `limit(5)`, coberta pelo índice `(org_id, slug, created_at DESC)` que a 219 já
+slug com `limit(5)`, coberta pelo índice `(org_id, slug, created_at DESC)` que a 222 já
 criou para esta leitura. O payload da página não cresce — nenhuma consulta traz mais linhas
 do que a tela mostra, que era o motivo do teto original.
 
@@ -754,7 +767,7 @@ $ npm run prompts:check             → ✅ agent_prompts == snapshot (7 slugs) 
 
 | arquivo | o quê |
 |---|---|
-| `supabase/migrations/219_agent_prompts_historico_versoes.sql` | tabela + trigger + coluna do motivo + RLS (**aplicada em prod**) |
+| `supabase/migrations/222_agent_prompts_historico_versoes.sql` | tabela + trigger + coluna do motivo + RLS (**aplicada em prod**; renumerada de `219` — ver Change Log de 11/08) |
 | `packages/web/src/lib/agent-prompts.ts` | validações puras (motivo/conteúdo), compartilhadas pelas 2 superfícies e pela UI |
 | `packages/web/src/lib/agent-prompt-versions.ts` | 🆕 leitura do histórico **5 por slug** (REL-001) + o rótulo de motivo ausente (REQ-001) |
 | `packages/web/src/lib/agent-prompt-versions.test.ts` | 🆕 10 testes: distribuição desigual com controle do algoritmo antigo, forma da consulta e a regra do rótulo |
@@ -787,7 +800,7 @@ $ npm run prompts:check             → ✅ agent_prompts == snapshot (7 slugs) 
    `.txt` + `manifest.json` vão no mesmo commit do código da AC6.
 1. **O snapshot (`_production/*`) tem de ir no MESMO commit/PR do código da AC6** — se ficar de
    fora, o selo nasce vermelho em 3 slugs e a AC6 morre no dia 1 (Risco 5).
-2. A **migration 219 já está aplicada em produção**; o arquivo sobe para versionar o que já está
+2. A **migration 222 já está aplicada em produção**; o arquivo sobe para versionar o que já está
    no ar (mesmo padrão da 218).
 3. Nada a fazer na Vercel: sem env nova, sem cron novo.
 
@@ -796,7 +809,7 @@ $ npm run prompts:check             → ✅ agent_prompts == snapshot (7 slugs) 
 **Revisado por:** @qa (Quinn, Test Architect) · **Data:** 2026-08-11
 **Método:** reprodução do zero. Nada aceito por relato. Introspecção **somente-leitura** em
 produção (`dsopqkqjkmhytudaaolv`); **toda** escrita de teste e **toda** mutação no projeto
-Supabase isolado de dev (`xnxvygyfyyyzwhiuoehz`), onde apliquei a migration `219` a partir do
+Supabase isolado de dev (`xnxvygyfyyyzwhiuoehz`), onde apliquei a migration `222` a partir do
 arquivo do working tree e limpei depois. Cenários de seed contra URL morta (`127.0.0.1:1`).
 **Produção não recebeu uma escrita sequer minha** — os 7 `updated_at` e os 7 `md5(content)`
 lidos no início e no fim da revisão são idênticos.
@@ -868,7 +881,7 @@ Não é formalidade — está **medido**: contra o manifest de `HEAD` o selo dá
 
 Conferência após o merge: `npm run prompts:check` tem de sair **0** com os 7 slugs.
 
-A migration `219` **já está em produção** (conferida objeto a objeto: trigger, função, tabela, índice, RLS, grants); o arquivo sobe para versionar o que já está no ar, mesmo padrão da `218`. Nada a fazer na Vercel.
+A migration `222` **já está em produção** (conferida objeto a objeto: trigger, função, tabela, índice, RLS, grants); o arquivo sobe para versionar o que já está no ar, mesmo padrão da `218`. Nada a fazer na Vercel. **O arquivo foi renumerado de `219` para `222` em 11/08** (colisão superveniente com `219_fvs_fundacao.sql`, PR #392) — renumerar é cosmético, produção versiona por timestamp e **nada deve ser reaplicado**.
 
 ---
 
@@ -877,6 +890,7 @@ A migration `219` **já está em produção** (conferida objeto a objeto: trigge
 | data | quem | o que |
 |---|---|---|
 | 2026-08-05 | @sm | Story criada a partir da AC5-A da 87-0, no corte aprovado pelo Gabriel. Incorpora a correção **C4** do @po (as 3 superfícies de escrita; o painel usa server action, não a rota PUT; histórico por trigger porque o `visit-scheduling` foi editado por fora das três). |
-| 2026-08-11 | @dev (Dex) | **Implementada — `Ready` → `Ready for Review`.** D2 decidida e escrita antes de codar (opção (a), coluna `last_change_reason`), com uma guarda que a story não previa: o motivo só é creditado quando **muda no próprio `UPDATE`**, senão um `UPDATE` por SQL cru herdaria o motivo da última edição do painel e o histórico passaria a *mentir*. Ordem cumprida: `--write` do snapshot **primeiro** (Risco 5 — os 3 divergentes zeraram), migration `219` aplicada por Management API depois, código por último. Risco 1 **medido, não declarado**: forcei o `INSERT` de histórico a falhar com um `CHECK (false)` e confirmei que o `UPDATE` do prompt gravou assim mesmo (e que a perda de histórico é detectável pela descontinuidade `new_content` → `previous_content`). AC1 provada por SQL cru **sem motivo** (autor `system`, motivo nulo). AC4 exercitada em produção no slug **órfão** `off-hours` — escolhido para não expor a Nicole nem durante o teste — com rollback byte a byte e `--check` verde. Descoberto de passagem e corrigido: `update` sem linha afetada **não é erro** no PostgREST, então "negado pela RLS" parecia "salvo". Efeito colateral registrado: o `--write` quitou metade da dívida medida pelo `contradiction.test.ts` da 87-0 (snapshot: 4 → **0** contradições; constantes do código: seguem devendo 2), e o `it.fails` do lado do snapshot virou guarda de regressão — exatamente o comportamento que aquele teste foi escrito para forçar. |
-| 2026-08-11 | @dev (Dex) | **Correções do gate CONCERNS — três itens, nada além.** **REQ-001:** a tela afirmava procedência falsa. A guarda contra herança de motivo (validada pelo @qa) **não foi tocada**; mudou a cópia, e agora ela decide pelo que a **linha sabe** — com autor identificado (`author_auth_id`/`author_user_id`) escreve "motivo não registrado nesta edição"; sem nenhum dos dois, "sem motivo — escrita sem autor identificado". Não adotei a redação única sugerida pelo gate porque ela apagaria o sinal do **Risco 4** (a fuga do painel tem de ficar visível): o segundo rótulo mantém o sinal dizendo só um fato da linha, sem afirmar o caminho da escrita. A frase virou função pura testável (`rotuloDeMotivoAusente`), já que componente aqui não é testável (TEST-001). **REL-001:** a leitura do histórico saiu de `page.tsx` para `@web/lib/agent-prompt-versions` e o teto passou a ser **do banco e por slug** (uma consulta por slug, `limit(5)`, sobre o índice `(org_id, slug, created_at DESC)` que a 219 já tinha). O teste monta a distribuição **desigual** (40 edições num slug, uma antiga em cada um dos outros seis) e roda o algoritmo **antigo como controle** no mesmo banco falso: antigo perde 6 dos 7 slugs, novo não perde nenhum. Vermelho medido por mutação, não declarado: o algoritmo antigo derruba 3 testes, o rótulo antigo derruba os outros 3. **DOC-001:** `npm run prompts:write` rodado — `off-hours.updated_at` deixou de dizer `10/08 13:50:52` e passou a dizer `11/08 11:10:24.31699`, que é o banco; só metadata mudou (o `prompts:check` estava e continua verde). Fora de escopo, por instrução: `TEST-001`, `REQ-002`, `MNT-001` e a guarda "só credita quando muda". **Restrição nova acatada: nenhum DDL emitido em lugar nenhum nesta passada** — só leitura de produção pelo `dump-agent-prompts` e testes em memória. Revalidado: `vitest` 172 arquivos/2167 passed, `turbo type-check lint --force` 13/13 com 0 erros, `next build` OK, `prompts:check` EXIT=0. |
-| 2026-08-10 | @po (Pax) | **Validada — GO condicionado (7/10) · `Draft` → `Ready`.** Sete medições contra produção anexadas (§Medições). **Emendas aplicadas por mim:** (1) **AC6 nova** — selo de divergência painel × repositório, a única AC que teria tornado visível o erro "Yarden Residence" sem CI; (2) **AC7 nova** — dono e gatilho do `--check` (`npm run prompts:check` + gate do @qa), porque o script funciona e ninguém roda (M7); (3) **AC2-b nova** — gate de bootstrap nos scripts de seed, incluindo a **4ª superfície de escrita, `scripts/run-seed.ts` / `npm run seed`, que não estava em nenhuma story e grava `[placeholder]` nos 7 slugs** (M5); (4) tabela de superfícies corrigida de 3 → **5**, e removida a afirmação falsa de que a AC12 da 87-0 já neutralizou `seed-prompts.ts` (M6: o arquivo não tem gate nenhum); (5) **AC4** ganhou passo obrigatório de revisar o conteúdo antes de restaurar — hoje o snapshot commitado reintroduziria o cabeçalho `### YARDEN RESIDENCE` e os fatos removidos pela Tarefa 2 (M2); (6) **AC5** ganhou baseline numérico de `updated_at`; (7) **Risco 1 remitigado** — "trigger não valida" não impede o rollback do `UPDATE` quando o `INSERT` de histórico falha: exigidos `EXCEPTION WHEN OTHERS` + `SECURITY DEFINER`; (8) **Riscos 4 e 5 novos** (fricção empurra edição para fora do painel; selo que nasce vermelho vira ruído); (9) Dev Notes: prefixo de migration **215 → 219**, colisão do nome `set_updated_at` (001:295), RLS é a **098** e não a 096, mecanismo de transporte do motivo até o trigger, e `findRepoRoot()` quebra na Vercel (importar o `manifest.json` estaticamente); (10) acrescentados `Tarefas`, `Dev Agent Record`, `QA Results`, tamanho **M**, e a ressalva "o texto chega ≠ ela obedece" (caso Ronaldo, 09/08). Dependência de 87-0 reclassificada: Tarefa 1 entregue, Tarefa 2 feita à mão em prod e não devolvida ao repo — **não bloqueia**. |
+| 2026-08-11 | @dev (Dex) | **Implementada — `Ready` → `Ready for Review`.** D2 decidida e escrita antes de codar (opção (a), coluna `last_change_reason`), com uma guarda que a story não previa: o motivo só é creditado quando **muda no próprio `UPDATE`**, senão um `UPDATE` por SQL cru herdaria o motivo da última edição do painel e o histórico passaria a *mentir*. Ordem cumprida: `--write` do snapshot **primeiro** (Risco 5 — os 3 divergentes zeraram), migration `222` (então numerada `219` — ver a linha do @devops de 11/08) aplicada por Management API depois, código por último. Risco 1 **medido, não declarado**: forcei o `INSERT` de histórico a falhar com um `CHECK (false)` e confirmei que o `UPDATE` do prompt gravou assim mesmo (e que a perda de histórico é detectável pela descontinuidade `new_content` → `previous_content`). AC1 provada por SQL cru **sem motivo** (autor `system`, motivo nulo). AC4 exercitada em produção no slug **órfão** `off-hours` — escolhido para não expor a Nicole nem durante o teste — com rollback byte a byte e `--check` verde. Descoberto de passagem e corrigido: `update` sem linha afetada **não é erro** no PostgREST, então "negado pela RLS" parecia "salvo". Efeito colateral registrado: o `--write` quitou metade da dívida medida pelo `contradiction.test.ts` da 87-0 (snapshot: 4 → **0** contradições; constantes do código: seguem devendo 2), e o `it.fails` do lado do snapshot virou guarda de regressão — exatamente o comportamento que aquele teste foi escrito para forçar. |
+| 2026-08-11 | @devops (Gage) | **Renumeração de migration `219` → `222`, na revisão do PR #391. Só o número; nenhuma linha de SQL, de código ou de teste mudou.** **Colisão superveniente, não erro de quem escreveu:** o `219` estava livre quando o arquivo nasceu e foi consumido pela `main` em 11/08 às 10:11 -03 por `219_fvs_fundacao.sql` (Story 75-293, PR #392); `220`/`221` estão com a Story 87-13 (PR #393), logo o próximo livre é o **`222`** — conferido contra `origin/main` (`72439220`) **e** contra os 8 PRs abertos, não só contra a `main`. Quem chega primeiro na `main` fica com o número; o PR aberto renumera. **Nada foi tocado no banco, e não havia o que tocar:** o prefixo `NNN_` é convenção **só do repositório** — produção versiona por **timestamp** (`supabase_migrations.schema_migrations`), e é justamente por isso que esta colisão reincide toda semana: **nenhuma conferência no banco vai pegá-la, porque lá ela não existe.** O que o número quebra é a ordenação por nome de arquivo no repo e a leitura humana. A migration **continua aplicada em produção** e **não deve ser reaplicada**. **Aparições secundárias corrigidas — 12, além do nome do arquivo:** cabeçalho do `.sql` (com o motivo registrado), 4 no gate `87.1-*.yml` (incluindo a seção `migration` do bloco de deploy), 6 na story (Tarefa 1, Dev Notes do prefixo, DoD, Dev Agent Record, nota do índice, File List, seção de deploy) e 1 no parecer do @po (`D4`). As entradas de Change Log do @dev e do @po **não foram reescritas** — são declarações datadas e atribuídas; o identificador ficou correto e o número antigo ficou visível ao lado, em vez de a história ser apagada. Revalidado **nesta branch**, depois da renumeração: `npx vitest run` **173 arquivos / 2.177 passed / 6 expected fail (2.183)** e `npx turbo type-check lint --force` **13/13, 0 errors** (24 warnings pré-existentes) — nenhuma referência ficou pendurada, como era de esperar de uma mudança que só toca nome de arquivo e markdown. ⚠️ **Esse baseline não é o que a entrada anterior do @dev registrou** (`172 arquivos / 2.167 passed`): a diferença é anterior à renumeração e não foi produzida por ela — fica anotada aqui em vez de silenciada, e quem reconciliar os dois números é o @qa na próxima rodada. |
+| 2026-08-11 | @dev (Dex) | **Correções do gate CONCERNS — três itens, nada além.** **REQ-001:** a tela afirmava procedência falsa. A guarda contra herança de motivo (validada pelo @qa) **não foi tocada**; mudou a cópia, e agora ela decide pelo que a **linha sabe** — com autor identificado (`author_auth_id`/`author_user_id`) escreve "motivo não registrado nesta edição"; sem nenhum dos dois, "sem motivo — escrita sem autor identificado". Não adotei a redação única sugerida pelo gate porque ela apagaria o sinal do **Risco 4** (a fuga do painel tem de ficar visível): o segundo rótulo mantém o sinal dizendo só um fato da linha, sem afirmar o caminho da escrita. A frase virou função pura testável (`rotuloDeMotivoAusente`), já que componente aqui não é testável (TEST-001). **REL-001:** a leitura do histórico saiu de `page.tsx` para `@web/lib/agent-prompt-versions` e o teto passou a ser **do banco e por slug** (uma consulta por slug, `limit(5)`, sobre o índice `(org_id, slug, created_at DESC)` que a 222 — então `219` — já tinha). O teste monta a distribuição **desigual** (40 edições num slug, uma antiga em cada um dos outros seis) e roda o algoritmo **antigo como controle** no mesmo banco falso: antigo perde 6 dos 7 slugs, novo não perde nenhum. Vermelho medido por mutação, não declarado: o algoritmo antigo derruba 3 testes, o rótulo antigo derruba os outros 3. **DOC-001:** `npm run prompts:write` rodado — `off-hours.updated_at` deixou de dizer `10/08 13:50:52` e passou a dizer `11/08 11:10:24.31699`, que é o banco; só metadata mudou (o `prompts:check` estava e continua verde). Fora de escopo, por instrução: `TEST-001`, `REQ-002`, `MNT-001` e a guarda "só credita quando muda". **Restrição nova acatada: nenhum DDL emitido em lugar nenhum nesta passada** — só leitura de produção pelo `dump-agent-prompts` e testes em memória. Revalidado: `vitest` 172 arquivos/2167 passed, `turbo type-check lint --force` 13/13 com 0 erros, `next build` OK, `prompts:check` EXIT=0. |
+| 2026-08-10 | @po (Pax) | **Validada — GO condicionado (7/10) · `Draft` → `Ready`.** Sete medições contra produção anexadas (§Medições). **Emendas aplicadas por mim:** (1) **AC6 nova** — selo de divergência painel × repositório, a única AC que teria tornado visível o erro "Yarden Residence" sem CI; (2) **AC7 nova** — dono e gatilho do `--check` (`npm run prompts:check` + gate do @qa), porque o script funciona e ninguém roda (M7); (3) **AC2-b nova** — gate de bootstrap nos scripts de seed, incluindo a **4ª superfície de escrita, `scripts/run-seed.ts` / `npm run seed`, que não estava em nenhuma story e grava `[placeholder]` nos 7 slugs** (M5); (4) tabela de superfícies corrigida de 3 → **5**, e removida a afirmação falsa de que a AC12 da 87-0 já neutralizou `seed-prompts.ts` (M6: o arquivo não tem gate nenhum); (5) **AC4** ganhou passo obrigatório de revisar o conteúdo antes de restaurar — hoje o snapshot commitado reintroduziria o cabeçalho `### YARDEN RESIDENCE` e os fatos removidos pela Tarefa 2 (M2); (6) **AC5** ganhou baseline numérico de `updated_at`; (7) **Risco 1 remitigado** — "trigger não valida" não impede o rollback do `UPDATE` quando o `INSERT` de histórico falha: exigidos `EXCEPTION WHEN OTHERS` + `SECURITY DEFINER`; (8) **Riscos 4 e 5 novos** (fricção empurra edição para fora do painel; selo que nasce vermelho vira ruído); (9) Dev Notes: prefixo de migration **215 → 219** (renumerado depois para **222** pelo @devops em 11/08, colisão superveniente), colisão do nome `set_updated_at` (001:295), RLS é a **098** e não a 096, mecanismo de transporte do motivo até o trigger, e `findRepoRoot()` quebra na Vercel (importar o `manifest.json` estaticamente); (10) acrescentados `Tarefas`, `Dev Agent Record`, `QA Results`, tamanho **M**, e a ressalva "o texto chega ≠ ela obedece" (caso Ronaldo, 09/08). Dependência de 87-0 reclassificada: Tarefa 1 entregue, Tarefa 2 feita à mão em prod e não devolvida ao repo — **não bloqueia**. |

@@ -14,7 +14,7 @@ updated: '2026-08-11T12:35:00Z'
 metodo: >-
   Nada foi aceito por relato. Objetos de produção conferidos por introspecção somente-leitura
   (Management API). Toda escrita de teste e toda mutação foram feitas no projeto Supabase
-  ISOLADO de dev (xnxvygyfyyyzwhiuoehz), onde a migration 219 foi aplicada a partir do arquivo
+  ISOLADO de dev (xnxvygyfyyyzwhiuoehz), onde a migration 222 foi aplicada a partir do arquivo
   do working tree e depois limpa. Os cenários de seed rodaram contra URL morta (127.0.0.1:1),
   nunca contra produção — conferido antes e depois: os 7 updated_at de produção estão idênticos
   ao início desta revisão.
@@ -44,7 +44,7 @@ verificacoes:
       postgres, search_path fixo; tabela com PK como ÚNICA constraint (nenhum CHECK
       fantasma do experimento), sem FK, nenhuma coluna NOT NULL sem default; RLS ligada,
       policy SELECT admin+org; `anon` sem grant nenhum, `authenticated` só SELECT.
-      A função em produção é byte a byte a do arquivo: apliquei a migration 219 no projeto
+      A função em produção é byte a byte a do arquivo: apliquei a migration 222 no projeto
       de dev e o md5 de pg_get_functiondef bateu com o de produção (afd37cd694f5…).
   - ac: AC1
     item: 'fail-safe do trigger (Risco 1) — provado por MUTAÇÃO, em dois sentidos'
@@ -255,7 +255,7 @@ top_issues:
     suggested_action: >-
       Para o resto do Epic 87: prova de trigger/DDL no projeto de dev
       (xnxvygyfyyyzwhiuoehz), produção só para a conferência somente-leitura. Demonstrado
-      viável nesta revisão — a 219 aplica limpa lá, o schema de apoio existe, e eu rodei
+      viável nesta revisão — a 222 aplica limpa lá, o schema de apoio existe, e eu rodei
       quatro mutações e limpei tudo depois.
   - id: 'TEST-001'
     severity: low
@@ -288,9 +288,14 @@ condicao_de_deploy:
     divergentes; contra o manifest do working tree dá 0.
   como_conferir_depois_do_merge: 'npm run prompts:check → tem de sair 0 e imprimir os 7 slugs'
   migration: >-
-    A 219 JÁ está aplicada em produção (conferida objeto a objeto). O arquivo sobe para
+    A 222 JÁ está aplicada em produção (conferida objeto a objeto). O arquivo sobe para
     versionar o que já está no ar, mesmo padrão da 218. Nada a fazer na Vercel: sem env
-    nova, sem cron novo.
+    nova, sem cron novo. ⚠️ RENUMERADA de 219 para 222 pelo @devops em 11/08, na revisão
+    do PR: colisão superveniente — o 219 foi consumido pela `main` por
+    `219_fvs_fundacao.sql` (Story 75-293, PR #392) depois que este gate foi escrito, e
+    220/221 estão com a Story 87-13 (PR #393). Renumerar é COSMÉTICO e não toca o banco:
+    produção versiona por timestamp, não pelo prefixo `NNN_`, que é convenção só do
+    repositório. NÃO REAPLICAR — os objetos já estão em produção e não mudaram.
 
 producao_intocada_por_esta_revisao:
   conferido: true

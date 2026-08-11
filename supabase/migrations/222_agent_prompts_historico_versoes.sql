@@ -1,5 +1,21 @@
--- 219_agent_prompts_historico_versoes.sql
+-- 222_agent_prompts_historico_versoes.sql
 -- Story 87-1 — governança do painel: quem mudou o prompt, quando, por quê, e como voltar.
+--
+-- PREFIXO: era 219 até 11/08/2026, renumerado para 222 pelo @devops na revisão do PR #391.
+-- ------------------------------------------------------------------------------------
+-- Colisão SUPERVENIENTE, não erro de quem escreveu: o 219 estava livre quando este arquivo
+-- nasceu e foi consumido pela `main` em 11/08 10:11 -03 por `219_fvs_fundacao.sql`
+-- (Story 75-293, PR #392). Quem chega primeiro na `main` fica com o número; o PR aberto
+-- renumera. 220 e 221 estão com a Story 87-13 (PR #393), logo o próximo livre é 222 —
+-- conferido contra `origin/main` (`72439220`) e contra todos os PRs abertos.
+--
+-- 🔵 RENUMERAR NÃO EXIGE TOCAR NO BANCO, E NÃO HÁ RISCO EM PRODUÇÃO. O prefixo `NNN_` é
+-- convenção SÓ DO REPOSITÓRIO: em produção, `supabase_migrations.schema_migrations`
+-- versiona por TIMESTAMP. É exatamente por isso que esta colisão reincide toda semana —
+-- nenhuma conferência no banco jamais vai pegá-la, porque lá o conflito não existe. O que
+-- o número quebra é a ordenação por nome de arquivo no repo e a leitura humana, e isso
+-- basta para arrumar antes do merge. Esta migration JÁ ESTÁ APLICADA EM PRODUÇÃO (objetos
+-- conferidos um a um); o arquivo sobe para versionar o que já está no ar. NÃO REAPLICAR.
 --
 -- POR QUE EXISTE
 -- --------------
