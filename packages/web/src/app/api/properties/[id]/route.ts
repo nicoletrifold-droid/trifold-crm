@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
 import { softDelete } from "@web/lib/api-utils"
 import { IMOVEIS_EDIT_ROLES, IMOVEIS_CREATE_ROLES } from "@web/lib/permissions-imoveis"
+import { avaliarMinimosNicole, carregarCadastroNicole } from "@web/lib/nicole-minimos"
 
 export async function GET(
   _req: NextRequest,
@@ -38,7 +39,9 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  // Editar empreendimento: admin/supervisor/obras (fonte única).
+  // Editar empreendimento: admin/supervisor/obras/gerente-relacionamento (fonte
+  // única). Story 87-13 — o comentário dizia "admin/supervisor/obras" e estava
+  // errado desde a 72-1: `IMOVEIS_EDIT_ROLES` tem QUATRO papéis.
   const forbidden = requireRole(appUser, [...IMOVEIS_EDIT_ROLES])
   if (forbidden) return forbidden
 
@@ -81,6 +84,78 @@ export async function PATCH(
   if (body.faq !== undefined) updateFields.faq = body.faq
   if (body.restrictions !== undefined) updateFields.restrictions = body.restrictions
   if (body.video_tour_url !== undefined) updateFields.video_tour_url = body.video_tour_url?.trim() || null
+
+  // ── Story 87-13 — o switch do que a Nicole pode falar ──────────────────────
+  // Ele NÃO é mais um campo da allowlist acima, e por três razões que são o
+  // miolo da story:
+  //  (1) papel próprio: decidir o que a IA diz a um lead pago não é atribuição
+  //      do perfil de obras nem do de gerente-relacionamento;
+  //  (2) LIGAR exige mínimos de cadastro, no servidor, fail-closed;
+  //  (3) as duas checagens valem só quando o valor MUDA de verdade — quem edita
+  //      outros campos da tela não pode ser barrado por reenviar o valor atual.
+  if (body.nicole_enabled !== undefined) {
+    // Falhar ALTO em vez de coagir. Um `"true"` (string) coagido por
+    // `=== true` viraria `false` e DESLIGARIA a Nicole em silêncio — mudança de
+    // estado não pedida, na superfície que esta story existe para tornar
+    // deliberada.
+    if (typeof body.nicole_enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "nicole_enabled must be a boolean" },
+        { status: 400 }
+      )
+    }
+    const desejado = body.nicole_enabled === true
+
+    const { data: atual } = await supabase
+      .from("properties")
+      .select("nicole_enabled")
+      .eq("id", id)
+      .eq("org_id", appUser.org_id)
+      .eq("is_active", true)
+      .single()
+
+    if (!atual) {
+      return NextResponse.json({ error: "Property not found" }, { status: 404 })
+    }
+
+    const muda = (atual as { nicole_enabled: boolean }).nicole_enabled !== desejado
+
+    if (muda) {
+      // Papel: `IMOVEIS_CREATE_ROLES` (admin/supervisor) — a mesma constante que
+      // já governa criar e excluir. Usa constante existente, não inventa papel.
+      const forbiddenNicole = requireRole(appUser, [...IMOVEIS_CREATE_ROLES])
+      if (forbiddenNicole) return forbiddenNicole
+
+      // DESLIGAR nunca é bloqueado, em qualquer estado de cadastro. É a válvula:
+      // nada que este código faça pode impedir alguém de calar a Nicole sobre um
+      // empreendimento.
+      if (desejado) {
+        const cadastro = await carregarCadastroNicole(supabase, id, appUser.org_id)
+        if (!cadastro) {
+          return NextResponse.json({ error: "Property not found" }, { status: 404 })
+        }
+
+        const veredito = avaliarMinimosNicole(cadastro)
+        if (veredito.missing.length > 0) {
+          return NextResponse.json(
+            {
+              error:
+                "Não dá para ligar a Nicole neste empreendimento: o cadastro não tem o mínimo.",
+              missing: veredito.missing,
+              faltando: veredito.rotulosFaltantes,
+              avisos: veredito.avisos,
+            },
+            { status: 422 }
+          )
+        }
+      }
+    }
+
+    // Idempotente de propósito: mesmo quando não muda, o campo entra no UPDATE.
+    // Se ele só entrasse na mudança, um PATCH que enviasse APENAS o valor atual
+    // cairia no "No fields to update" (400) abaixo.
+    updateFields.nicole_enabled = desejado
+  }
 
   if (Object.keys(updateFields).length === 0) {
     return NextResponse.json(

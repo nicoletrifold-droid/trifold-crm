@@ -11,7 +11,7 @@ export default async function PropertiesPage() {
 
   const { data: properties } = await supabase
     .from("properties")
-    .select("id, name, slug, status, address, city, state, total_units, delivery_date, is_active")
+    .select("id, name, slug, status, address, city, state, total_units, delivery_date, is_active, nicole_enabled")
     .eq("is_active", true)
     .order("created_at", { ascending: false })
 
@@ -39,6 +39,10 @@ export default async function PropertiesPage() {
             <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-stone-800/50 dark:text-stone-400">
               <th className="px-6 py-3">Nome</th>
               <th className="px-6 py-3">Status</th>
+              {/* Story 87-13 — sem esta coluna, o estado do switch só é visível
+                  abrindo empreendimento por empreendimento, e um controle que não
+                  se vê é um controle que ninguém confere. */}
+              <th className="px-6 py-3">Nicole</th>
               <th className="px-6 py-3">Cidade</th>
               <th className="px-6 py-3">Unidades</th>
               <th className="px-6 py-3">Entrega</th>
@@ -56,6 +60,17 @@ export default async function PropertiesPage() {
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${propertyStatusBadge(p.status)}`}
                   >
                     {propertyStatusLabel(p.status)}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      p.nicole_enabled
+                        ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                        : "bg-gray-100 text-gray-600 dark:bg-stone-800 dark:text-stone-400"
+                    }`}
+                  >
+                    {p.nicole_enabled ? "Nicole: ligada" : "Nicole: desligada"}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
@@ -85,7 +100,7 @@ export default async function PropertiesPage() {
             {(!properties || properties.length === 0) && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                 >
                   Nenhum empreendimento cadastrado.

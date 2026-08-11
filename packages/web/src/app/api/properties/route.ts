@@ -79,6 +79,11 @@ export async function POST(request: Request) {
       units_per_floor: body.units_per_floor ?? null,
       org_id: appUser.org_id,
       is_active: true,
+      // 🔴 Story 87-13 — `nicole_enabled` NÃO entra aqui, e a ausência é a
+      // feature: NÃO DÁ PARA NASCER LIGADO. A coluna tem `default false` e
+      // ligar é um ato separado, com o cadastro já existindo, sob
+      // `IMOVEIS_CREATE_ROLES` e sob os mínimos do `PATCH`. A tese da story é
+      // "cadastrar não basta" — acrescentar o campo a este INSERT a desfaz.
     })
     .select()
     .single()

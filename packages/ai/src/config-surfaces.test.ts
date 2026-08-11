@@ -48,7 +48,9 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { buildSystemPrompt, type DbPromptOverrides } from "./prompts"
 import { findRepoRoot, readSnapshotManifest } from "./prompts/snapshot"
-import { resolveOffHoursResponse } from "./chat/pipeline"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveOffHoursResponse, loadProperties } from "./chat/pipeline"
+import { createFakeSupabase } from "./chat/__fixtures__/fake-supabase"
 import { generateHandoffSummary } from "./flows/handoff"
 
 const debtCase = process.env.AIOS_87_0_SEM_MARCADORES === "1" ? it : it.fails
@@ -136,6 +138,17 @@ type Prova =
       /** O campo precisa ser lido do objeto de config resolvido (`agentConfig.x`) em runtime. */
       tipo: "leitura-estrutural"
       campo: string
+    }
+  | {
+      /**
+       * Story 87-13 — TERCEIRO membro. Para superfícies que não são texto nem
+       * campo de `agent_config`: a prova roda a função DE PRODUÇÃO contra o
+       * `createFakeSupabase` (que aplica os predicados de verdade) e afirma o
+       * comportamento nas DUAS direções. É a prova mais forte das três, e a única
+       * possível para um campo cujo efeito é *remover um item de uma lista*.
+       */
+      tipo: "comportamental"
+      executar: () => Promise<{ ok: boolean; detalhe: string }>
     }
 
 type Superficie = {
@@ -246,7 +259,75 @@ const SUPERFICIES: Superficie[] = [
     consumidoEm: "chat/pipeline.ts — bloco de fora do horário",
     prova: { tipo: "leitura-estrutural", campo: "business_hours" },
   },
+
+  // ── properties (Story 87-13) ──────────────────────────────────────────────
+  // O switch por empreendimento do que a Nicole pode falar. Entra AQUI porque o
+  // risco nomeado da story é exatamente o que este arquivo existe para impedir:
+  // um controle novo no painel que o admin liga, salva, vê "salvo com sucesso" —
+  // e que o runtime ignora. Prova COMPORTAMENTAL, com controle negativo.
+  {
+    id: "properties.nicole_enabled",
+    editadoEm: "painel /dashboard/properties/[id]/edit + PATCH /api/properties/[id]",
+    consumidoEm: "chat/pipeline.ts — loadProperties",
+    prova: { tipo: "comportamental", executar: provaNicoleEnabled },
+  },
 ]
+
+/**
+ * Chama o `loadProperties` DE PRODUÇÃO (exportado pela Story 87-13 para este fim,
+ * como `buildPropertyDataContext` e `resolveOffHoursResponse` já eram) contra o
+ * `createFakeSupabase`, com dois empreendimentos sentinela: um ligado e um
+ * desligado.
+ *
+ * AS DUAS DIREÇÕES SÃO OBRIGATÓRIAS. Sem o controle positivo, um `loadProperties`
+ * que devolvesse `[]` sempre — que é o modo de falha MUDO do
+ * `if (error || !data) return []` — passaria na metade "o desligado não aparece".
+ * É a disciplina que salvou a AC2 da 87-8.
+ */
+async function provaNicoleEnabled(): Promise<{ ok: boolean; detalhe: string }> {
+  const org = "org-sentinela-87-13"
+  const fake = createFakeSupabase({
+    properties: [
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        org_id: org,
+        name: "Sentinela LIGADA",
+        slug: "sentinela-ligada",
+        status: "selling",
+        is_active: true,
+        nicole_enabled: true,
+        typologies: [],
+        units: [],
+      },
+      {
+        id: "22222222-2222-2222-2222-222222222222",
+        org_id: org,
+        name: "Sentinela DESLIGADA",
+        slug: "sentinela-desligada",
+        status: "selling",
+        is_active: true, // ← NÃO é soft delete: o único critério é o switch
+        nicole_enabled: false,
+        typologies: [],
+        units: [],
+      },
+    ],
+  })
+
+  const nomes = (await loadProperties(fake as unknown as SupabaseClient, org)).map((p) => p.name)
+  const ligadaAparece = nomes.includes("Sentinela LIGADA")
+  const desligadaSumiu = !nomes.includes("Sentinela DESLIGADA")
+
+  return {
+    ok: ligadaAparece && desligadaSumiu,
+    detalhe:
+      ligadaAparece && desligadaSumiu
+        ? "loadProperties devolveu a ligada e omitiu a desligada"
+        : `loadProperties devolveu [${nomes.join(", ")}] — ` +
+          (!ligadaAparece
+            ? "a LIGADA não veio (a lista pode estar vazia: falha muda do `return []`)"
+            : "a DESLIGADA veio junto: o campo é editável e o runtime o ignora"),
+  }
+}
 
 /**
  * Inventário da dívida, com nome e sobrenome. Precisa bater com `consumidoEm: null`
@@ -315,10 +396,16 @@ function provaEstrutural(superficie: Superficie): { ok: boolean; detalhe: string
   }
 }
 
-function executarProva(superficie: Superficie): { ok: boolean; detalhe: string } {
-  return superficie.prova.tipo === "sentinela"
-    ? provaSentinela(superficie)
-    : provaEstrutural(superficie)
+/**
+ * Story 87-13 — passou a ser ASSÍNCRONA. A prova comportamental chama
+ * `loadProperties`, que é `async`; um `executarProva` síncrono devolveria a
+ * Promise e `expect(ok).toBe(true)` avaliaria um objeto truthy — verde automático,
+ * que é o modo de falha que este arquivo inteiro existe para impedir.
+ */
+async function executarProva(superficie: Superficie): Promise<{ ok: boolean; detalhe: string }> {
+  if (superficie.prova.tipo === "sentinela") return provaSentinela(superficie)
+  if (superficie.prova.tipo === "leitura-estrutural") return provaEstrutural(superficie)
+  return superficie.prova.executar()
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -327,8 +414,8 @@ describe("nada de configuração sem consumidor (Story 87-0)", () => {
   describe("toda superfície editável chega ao runtime", () => {
     for (const superficie of SUPERFICIES) {
       const orfa = superficie.consumidoEm === null
-      const executar = () => {
-        const { ok, detalhe } = executarProva(superficie)
+      const executar = async () => {
+        const { ok, detalhe } = await executarProva(superficie)
         expect(
           ok,
           `${superficie.id} não tem consumidor no runtime.\n` +

@@ -1827,7 +1827,19 @@ async function loadAgentConfig(
   }
 }
 
-async function loadProperties(
+/**
+ * A lista de empreendimentos que a Nicole pode usar NESTE turno.
+ *
+ * Story 87-13 — exportada para que `config-surfaces.test.ts` prove, contra o
+ * `loadProperties` DE PRODUÇÃO, que `properties.nicole_enabled` chega ao runtime.
+ * Uma prova que reimplementasse a query provaria a reimplementação, não o campo.
+ *
+ * Alimenta TRÊS consumidores no mesmo turno (`:537-556`, `:625`): `identifyProperty`
+ * (reconhecimento do nome), `checkYardenGate` e `buildPropertyDataContext` (o texto
+ * que vai ao contexto). Filtrar aqui, na origem, é o que mantém os três coerentes:
+ * não existe estado em que ela reconheça um empreendimento sobre o qual não pode falar.
+ */
+export async function loadProperties(
   supabase: SupabaseClient,
   orgId: string
 ): Promise<Property[]> {
@@ -1841,9 +1853,18 @@ async function loadProperties(
       units(status)
     `)
     .eq("org_id", orgId)
+    // `is_active` é o SOFT DELETE da tabela (`api-utils.ts:29-49`), não "visível
+    // para a Nicole". Ele responde "não foi excluído" — nada mais.
     .eq("is_active", true)
+    // Story 87-13 — e ESTE responde "alguém decidiu que ela pode falar dele".
+    // Sem esta linha, cadastrar um empreendimento bastava para pô-lo na boca dela
+    // no mesmo turno. Default da coluna: `false`. Cadastrar não liga.
+    .eq("nicole_enabled", true)
 
   if (error || !data) {
+    // ⚠️ FALHA MUDA: coluna inexistente ⇒ erro do PostgREST ⇒ "nenhum
+    // empreendimento", sem log e sem exceção. É por isso que a migration 223 é
+    // pré-requisito do deploy, e não por costume (Risco 1 da story).
     return []
   }
 
