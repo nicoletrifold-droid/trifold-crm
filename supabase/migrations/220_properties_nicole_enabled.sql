@@ -8,15 +8,24 @@
 -- `supabase_migrations.schema_migrations` versiona por timestamp e não colide.
 --
 -- ✅ RECONFERIDO PELO @devops NA ABERTURA DO PR (11/08/2026, `origin/main` em
---    `72439220`) — 220 e 221 SEGUEM LIVRES, mantidos. **Sem renumeração**, e ela
---    não seria trivial: a 220 já foi APLICADA EM PRODUÇÃO com este nome.
+--    `72439220`) — 220 e 221 SEGUEM LIVRES, mantidos, sem renumeração.
+--    `git log --all` não devolve nenhum arquivo `220_` nem `221_` em branch
+--    alguma, e nenhum dos PRs abertos os reivindica.
 --    Mudou uma coisa desde a conferência do @dev: o **219 foi consumido pela
 --    `main`** por `219_fvs_fundacao.sql` (Story 75-293, PR #392, `72439220`,
---    mergeado 11/08 10:11 -03) — ou seja, o 219 NÃO é mais do 87-1. Quem colide
---    agora é o **PR #391**, que traz `219_agent_prompts_historico_versoes.sql`
---    para um prefixo já ocupado; é o #391 que precisa renumerar (222+), não esta
---    story. `git log --all` não devolve nenhum arquivo `220_` nem `221_` em
---    branch alguma.
+--    mergeado 11/08 10:11 -03) — ou seja, o 219 NÃO era mais do 87-1. Quem
+--    colidia era o **PR #391**; ele foi renumerado para **222** (commit
+--    `a4d14ee4`), e não esta story.
+--
+-- 🔵 E RENUMERAR, SE FOSSE PRECISO, SERIA COSMÉTICO — INCLUSIVE AQUI, COM A 220
+--    JÁ APLICADA EM PRODUÇÃO. (Correção de uma frase anterior deste cabeçalho,
+--    que dizia o contrário e criava medo à toa.) Vale o que a seção acima já
+--    diz: o prefixo `NNN_` é convenção **do repositório**; produção versiona por
+--    **timestamp** (`supabase_migrations.schema_migrations`). Trocar o nome do
+--    arquivo **não exige tocar no banco** e **nada é reaplicado**. É exatamente
+--    por isso que esta colisão reincide toda semana: **nenhuma conferência no
+--    banco pega, porque lá o conflito não existe.** O que o número quebra é a
+--    ordenação por nome de arquivo e a leitura humana — só isso, e só no repo.
 --
 -- O DEFEITO
 -- ---------
