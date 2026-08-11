@@ -521,8 +521,12 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   return (
     <>
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-900">
-        <div className="min-w-0 flex-1">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-stone-200 bg-white px-5 py-4 dark:border-stone-800 dark:bg-stone-900">
+        {/* Story 75-292 — o nome PRECISA de um piso. Com `flex-1` sozinho ele
+            cedia toda a largura para os 4 controles e virava "S.." em 448px: em
+            flexbox quem tem flex-1 encolhe primeiro, e o flex-wrap do vizinho
+            nunca dispara enquanto houver alguém disposto a encolher até zero. */}
+        <div className="min-w-[7rem] flex-1">
           {loading ? (
             <div className="h-6 w-40 animate-pulse rounded bg-stone-200 dark:bg-stone-800" />
           ) : (
@@ -574,13 +578,17 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
           >
             Ver completo
           </Link>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
+        {/* Story 75-292 — o fechar fica FORA do grupo que quebra linha: como ele
+            é o último, seria o primeiro a descer sozinho para a 2ª linha. Preso
+            aqui, ele continua no canto e quem quebra são os botões de ação. */}
+        <button
+          onClick={onClose}
+          aria-label="Fechar"
+          className="shrink-0 rounded-md p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition-colors dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {loading ? (
