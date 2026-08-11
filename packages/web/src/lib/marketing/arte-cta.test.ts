@@ -84,19 +84,23 @@ describe("pickTextColor (AC4)", () => {
   })
 })
 
-describe("ctaBox (AC5)", () => {
-  it("fica ACIMA da faixa do logo, com respiro, sem invadir (o bug da 75-246)", () => {
+describe("ctaBox (AC5 — redesenhada na 75-296: pílula DENTRO da banda do logo)", () => {
+  it("mora dentro da banda do logo, à esquerda, sem alcançar a área do logo à direita", () => {
     for (const [ar, w, h] of [["9:16", 768, 1376], ["4:5", 1080, 1350], ["1:1", 1080, 1080]] as const) {
       const cta = ctaBox(ar, w, h)
       const logo = logoBox(ar, w, h)
-      expect(cta.top + cta.height).toBeLessThan(logo.bandTop) // não encosta
-      expect(cta.left).toBe(Math.round((w - cta.width) / 2)) // centralizado
-      expect(cta.top).toBeGreaterThan(0)
+      expect(cta.top).toBeGreaterThanOrEqual(logo.bandTop) // dentro da banda
+      expect(cta.top + cta.height).toBeLessThanOrEqual(logo.bandTop + logo.bandHeight)
+      expect(cta.left).toBe(Math.round(w * 0.08)) // à esquerda, margem 8%
+      // não invade a área do logo (alinhado à direita, margem 8%)
+      const logoLeftMin = w - Math.round(w * 0.08) - logo.maxWidth
+      expect(cta.left + cta.width).toBeLessThan(logoLeftMin)
     }
   })
 
-  it("no story a pílula é mais larga que no feed", () => {
-    expect(ctaBox("9:16", 1080, 1920).width).toBeGreaterThan(ctaBox("1:1", 1080, 1080).width)
+  it("largura é fração única (46%) — story e feed proporcionais", () => {
+    expect(ctaBox("9:16", 1080, 1920).width).toBe(ctaBox("1:1", 1080, 1080).width)
+    expect(ctaBox("1:1", 1080, 1080).width).toBe(Math.round(1080 * 0.46))
   })
 })
 
@@ -183,14 +187,17 @@ describe("renderCtaPill / composeCta", () => {
     expect([m.width, m.height, m.format]).toEqual([768, 1376, "png"])
   })
 
-  it("a faixa do LOGO fica intacta — o CTA não invade (bug medido na 75-246)", async () => {
+  it("75-296: o CTA pinta a METADE ESQUERDA da banda; a direita (área do logo) fica intacta", async () => {
     const out = await composeCta(await arteFake(768, 1376), "Arraste e agende sua visita", "9:16", "#8FE6A7", fontePadrao())
     const logo = logoBox("9:16", 768, 1376)
-    const [r, g, b] = await brilhoDaRegiao(out, { left: 0, top: logo.bandTop, width: 768, height: logo.bandHeight })
-    // fundo #101010 = 16,16,16 — se o CTA tivesse invadido, subiria
-    expect(r!).toBeCloseTo(16, 0)
-    expect(g!).toBeCloseTo(16, 0)
-    expect(b!).toBeCloseTo(16, 0)
+    // esquerda da banda: a pílula clara sobe o brilho
+    const esq = await brilhoDaRegiao(out, { left: 0, top: logo.bandTop, width: 384, height: logo.bandHeight })
+    expect(esq[1]!).toBeGreaterThan(30)
+    // direita da banda (casa do logo): fundo #101010 intacto
+    const dir = await brilhoDaRegiao(out, { left: 500, top: logo.bandTop, width: 268, height: logo.bandHeight })
+    expect(dir[0]!).toBeCloseTo(16, 0)
+    expect(dir[1]!).toBeCloseTo(16, 0)
+    expect(dir[2]!).toBeCloseTo(16, 0)
   })
 
   // Ressalva (a) do @po: o caminho de FALHA importa mais que antes, porque agora

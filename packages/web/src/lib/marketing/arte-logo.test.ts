@@ -143,3 +143,15 @@ describe("LOGO_MIME_ALLOWLIST", () => {
     expect(LOGO_MIME_ALLOWLIST).toContain("image/png")
   })
 })
+
+// 75-296 — com CTA na banda, o logo alinha à direita (margem 8%)
+describe("logoPosition — alinhamento (75-296)", () => {
+  it("direita: encosta na margem de 8%; centro: comportamento de sempre", () => {
+    const box = logoBox("1:1", 1080, 1080)
+    const dir = logoPosition(box, 200, 80, 1080, "direita")
+    expect(dir.left).toBe(1080 - Math.round(1080 * 0.08) - 200)
+    const centro = logoPosition(box, 200, 80, 1080)
+    expect(centro.left).toBe(Math.round((1080 - 200) / 2))
+    expect(dir.top).toBe(centro.top)
+  })
+})

@@ -64,10 +64,19 @@ describe("faixaLayout (AC1)", () => {
     expect(l.subtituloBox).toBeNull()
   })
 
-  it("com CTA a faixa é MAIS ALTA — a pílula precisa caber dentro dela", () => {
+  it("75-296: CTA não é mais um andar — com ou sem CTA a faixa tem a MESMA altura", () => {
     const semCta = faixaLayout("9:16", 1080, 1920, { temSubtitulo: true, temCta: false })
     const comCta = faixaLayout("9:16", 1080, 1920, { temSubtitulo: true, temCta: true })
-    expect(comCta.faixaHeight).toBeGreaterThan(semCta.faixaHeight)
+    expect(comCta.faixaHeight).toBe(semCta.faixaHeight)
+  })
+
+  it("75-296 (AC4): frações-alvo — pago 1:1 (só título) ≤26%; orgânico completo 1:1 ≤31%; pago 9:16 ≤19%", () => {
+    const pago11 = faixaLayout("1:1", 1080, 1080, { temSubtitulo: false, temCta: false })
+    expect(pago11.fracaoReservada).toBeLessThanOrEqual(0.26)
+    const organico11 = faixaLayout("1:1", 1080, 1080, { temSubtitulo: true, temCta: true })
+    expect(organico11.fracaoReservada).toBeLessThanOrEqual(0.31)
+    const pago916 = faixaLayout("9:16", 1080, 1920, { temSubtitulo: false, temCta: false })
+    expect(pago916.fracaoReservada).toBeLessThanOrEqual(0.19)
   })
 
   /**
@@ -87,12 +96,15 @@ describe("faixaLayout (AC1)", () => {
     }
   })
 
-  it("o logo fica abaixo da pílula, e tudo dentro da faixa", () => {
+  it("75-296: a pílula mora DENTRO da banda do logo, e o texto empilha acima dela", () => {
     for (const { ar, w, h } of FORMATOS) {
       const l = faixaLayout(ar, w, h, { temSubtitulo: true, temCta: true })
       const pill = ctaBox(ar, w, h)
       const logo = logoBox(ar, w, h)
-      expect(pill.top + pill.height).toBeLessThanOrEqual(logo.bandTop)
+      expect(pill.top).toBeGreaterThanOrEqual(logo.bandTop)
+      expect(pill.top + pill.height).toBeLessThanOrEqual(logo.bandTop + logo.bandHeight)
+      // o texto (subtítulo) termina antes da banda começar
+      expect(l.subtituloBox!.top + l.subtituloBox!.height).toBeLessThanOrEqual(logo.bandTop)
       expect(l.faixaTop).toBeLessThan(l.tituloBox.top)
       expect(logo.bandTop).toBeGreaterThan(l.faixaTop)
     }

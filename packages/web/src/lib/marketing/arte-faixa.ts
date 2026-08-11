@@ -19,7 +19,7 @@
 import satori from "satori"
 import sharp from "sharp"
 
-import { ctaBox, hexToRgb, luminancia, pickTextColor, saturacao } from "@web/lib/marketing/arte-cta"
+import { hexToRgb, luminancia, pickTextColor, saturacao } from "@web/lib/marketing/arte-cta"
 import { logoBox, type ArteAspectRatio } from "@web/lib/marketing/arte-logo"
 
 /** Piso de legibilidade da faixa, em px. Mesma lição da 75-248: caixa de 2px
@@ -45,9 +45,12 @@ export const MAX_SUBTITULO_CHARS = 60
 const PILHA: Record<ArteAspectRatio, { titulo: number; subtitulo: number; respiro: number }> = {
   "9:16": { titulo: 0.07, subtitulo: 0.038, respiro: 0.009 },
   // Formatos quadrados têm menos altura total, então o texto precisa de fração
-  // maior para manter o mesmo corpo de fonte aparente.
-  "4:5": { titulo: 0.1, subtitulo: 0.058, respiro: 0.015 },
-  "1:1": { titulo: 0.11, subtitulo: 0.062, respiro: 0.016 },
+  // maior para manter o corpo aparente — mas a 1ª régua (0.1/0.11) fazia a faixa
+  // comer ~40% da peça no 1:1 (75-296, "olha o tamanho da tarja"). A imagem é o
+  // que para o scroll; o título continua maior que o do 9:16 em fração, só não
+  // engole mais a arte.
+  "4:5": { titulo: 0.085, subtitulo: 0.05, respiro: 0.015 },
+  "1:1": { titulo: 0.09, subtitulo: 0.052, respiro: 0.016 },
 }
 
 export interface TextoBox {
@@ -88,11 +91,10 @@ export function faixaLayout(
   const hTitulo = Math.round(height * p.titulo)
   const hSub = opts.temSubtitulo ? Math.round(height * p.subtitulo) : 0
 
-  // Onde o TEXTO tem de terminar: no topo do que vier abaixo dele. Perguntamos
-  // aos donos daquelas geometrias em vez de recalcular (ver comentário da PILHA).
-  const baseTexto = opts.temCta
-    ? ctaBox(aspectRatio, width, height).top
-    : logoBox(aspectRatio, width, height).bandTop
+  // 75-296: o CTA deixou de ser um ANDAR da pilha — ele mora DENTRO da banda do
+  // logo (ctaBox), à esquerda, com o logo à direita. O texto empilha direto
+  // sobre a banda: um andar e um respiro a menos em toda peça com CTA.
+  const baseTexto = logoBox(aspectRatio, width, height).bandTop
 
   // Empilha para CIMA a partir dessa base.
   const subTop = opts.temSubtitulo ? baseTexto - respiro - hSub : baseTexto - respiro

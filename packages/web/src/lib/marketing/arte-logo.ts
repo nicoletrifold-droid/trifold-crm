@@ -58,15 +58,24 @@ export function logoBox(aspectRatio: ArteAspectRatio, width: number, height: num
   }
 }
 
-/** PURA (AC5): centraliza o logo já redimensionado dentro da faixa. */
+/**
+ * PURA (AC5): posiciona o logo já redimensionado dentro da faixa.
+ * 75-296: com CTA na peça, a pílula ocupa a esquerda da banda — o logo vai
+ * para a DIREITA (margem 8%, espelhando a do CTA). Sem CTA, centralizado.
+ */
 export function logoPosition(
   box: LogoBox,
   logoWidth: number,
   logoHeight: number,
-  artWidth: number
+  artWidth: number,
+  alinhamento: "centro" | "direita" = "centro"
 ): { left: number; top: number } {
+  const margem = Math.round(artWidth * 0.08)
   return {
-    left: Math.max(0, Math.round((artWidth - logoWidth) / 2)),
+    left:
+      alinhamento === "direita"
+        ? Math.max(0, artWidth - margem - logoWidth)
+        : Math.max(0, Math.round((artWidth - logoWidth) / 2)),
     top: Math.max(0, Math.round(box.bandTop + (box.bandHeight - logoHeight) / 2)),
   }
 }
@@ -100,7 +109,8 @@ export async function composeLogo(
   arte: Buffer,
   logo: Buffer,
   logoMime: string,
-  aspectRatio: ArteAspectRatio
+  aspectRatio: ArteAspectRatio,
+  alinhamento: "centro" | "direita" = "centro"
 ): Promise<Buffer> {
   const meta = await sharp(arte).metadata()
   if (!meta.width || !meta.height) throw new Error("arte sem dimensões legíveis")
@@ -115,6 +125,6 @@ export async function composeLogo(
     .png() // preserva alfa do logo
     .toBuffer({ resolveWithObject: true })
 
-  const { left, top } = logoPosition(box, resized.info.width, resized.info.height, meta.width)
+  const { left, top } = logoPosition(box, resized.info.width, resized.info.height, meta.width, alinhamento)
   return sharp(arte).composite([{ input: resized.data, left, top }]).toBuffer()
 }

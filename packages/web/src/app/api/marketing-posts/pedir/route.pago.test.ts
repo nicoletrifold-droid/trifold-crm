@@ -158,6 +158,19 @@ describe("POST /api/marketing-posts/pedir — tráfego pago", () => {
     expect(typeof aiInput?.objetivoInstrucao).toBe("string")
   })
 
+  it("75-296: arte de pago é enxuta — specs sem CTA e sem subtítulo; arte_cta null no post", async () => {
+    aiResult = {
+      ...AI_OK,
+      artes: [{ ...AI_OK.artes[0], subtitulo: "Entrega contratual: abril de 2027" }],
+    }
+    await call(PAGO)
+    expect(artesSpecs[0]).toMatchObject({ cta: null, subtitulo: null, titulo: "T" })
+    expect(insertedRow?.arte_cta).toBeNull()
+    // orgânico continua compondo CTA e subtítulo
+    await call({ pedido: "post normal", formato: "estatico", canal: "instagram" })
+    expect(artesSpecs[0]).toMatchObject({ cta: "Agende sua visita" })
+  })
+
   it("75-295: cena com prédio SEM chip → rede força a fachada do Kit mesmo assim", async () => {
     kitAssets = [{ brand_id: "b-inst", tipo: "foto", label: "Fachada", file_name: "fachada-vind.jpg" }]
     await call(PAGO) // descricao do fixture: "fachada ao pôr do sol"
