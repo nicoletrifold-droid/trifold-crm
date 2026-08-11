@@ -19,7 +19,7 @@ export type MarketingPostCanal = (typeof MARKETING_POST_CANAIS)[number]
  * que uma coluna nova (aqui `artes`) fica esquecida em um deles.
  */
 export const MARKETING_POST_SELECT =
-  "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, artes, scheduled_for, status, justificativa, origem, created_by, created_at, updated_at, properties:empreendimento_id(name)"
+  "id, org_id, empreendimento_id, canal, formato, pedido, copy, roteiro, arte_url, artes, scheduled_for, status, justificativa, origem, destino, objetivo, ad_primary_text, ad_headline, created_by, created_at, updated_at, properties:empreendimento_id(name)"
 
 export const MARKETING_POST_FORMATOS = ["estatico", "reel", "story", "carrossel"] as const
 export type MarketingPostFormato = (typeof MARKETING_POST_FORMATOS)[number]
@@ -71,6 +71,8 @@ export interface MarketingPostInput {
     /** Story 75-256 — texto composto na faixa; persistido p/ o Refazer recompor igual */
     titulo?: string | null
     subtitulo?: string | null
+    /** Story 75-294 — proporção da peça de tráfego pago; ausente = arte legado */
+    ratio?: "9:16" | "4:5" | "1:1" | null
   }> | null
   scheduled_for: string | null
 }

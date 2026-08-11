@@ -5,6 +5,17 @@ import { gerarArtesParaPost, montarPatchDeArtes, type ArteSpec } from "@web/lib/
 import { buildPostPreview, quantasArtes } from "@web/lib/marketing/post-preview"
 import { MARKETING_POST_FORMATOS, type MarketingPostFormato, MARKETING_POST_SELECT } from "@web/lib/marketing/posts"
 import {
+  AD_OBJETIVOS,
+  AD_OBJETIVO_INSTRUCAO,
+  AD_HEADLINE_MAX,
+  AD_PRIMARY_MAX,
+  chipsValidos,
+  composeDirecao,
+  enforceAdLimit,
+  ratiosDoPedido,
+  type AdObjetivo,
+} from "@web/lib/marketing/direcao"
+import {
   createAnthropicClient,
   generateMarketingPostFromRequest,
   type BrandKnowledge,
@@ -34,6 +45,11 @@ export async function POST(req: NextRequest) {
     canal?: string
     empreendimento_id?: string | null
     scheduled_for?: string | null
+    // Story 75-294 — tráfego pago
+    destino?: string
+    objetivo?: string
+    proporcoes?: unknown
+    chips?: unknown
   } | null
 
   const pedido = typeof body?.pedido === "string" ? body.pedido.trim() : ""
@@ -41,21 +57,45 @@ export async function POST(req: NextRequest) {
   if (pedido.length > MAX_PEDIDO_CHARS) {
     return NextResponse.json({ error: `Pedido muito longo (máx. ${MAX_PEDIDO_CHARS} caracteres)` }, { status: 400 })
   }
-  const direcaoArte = typeof body?.direcao_arte === "string" ? body.direcao_arte.trim() : ""
-  if (direcaoArte.length > MAX_DIRECAO_CHARS) {
+  const direcaoArteLivre = typeof body?.direcao_arte === "string" ? body.direcao_arte.trim() : ""
+  if (direcaoArteLivre.length > MAX_DIRECAO_CHARS) {
     return NextResponse.json({ error: `Direção da arte muito longa (máx. ${MAX_DIRECAO_CHARS} caracteres)` }, { status: 400 })
   }
-  if (!MARKETING_POST_FORMATOS.includes(body?.formato as MarketingPostFormato)) {
+  // Story 75-294 — chips de direção: compostos NO SERVIDOR a partir do mapa
+  // único (chip desconhecido é ignorado; só o texto livre é do humano).
+  if (!chipsValidos(body?.chips)) {
+    return NextResponse.json({ error: "chips inválidos" }, { status: 400 })
+  }
+  const direcaoArte = composeDirecao(body?.chips ?? null, direcaoArteLivre)
+
+  // Story 75-294 — destino: 'pago' liga o modo anúncio. Campo ausente/organico
+  // = fluxo atual intocado; valor fora da lista = 400.
+  if (body?.destino !== undefined && body.destino !== "organico" && body.destino !== "pago") {
+    return NextResponse.json({ error: "destino deve ser 'organico' ou 'pago'" }, { status: 400 })
+  }
+  const destino = (body?.destino ?? "organico") as "organico" | "pago"
+  let objetivo: AdObjetivo | null = null
+  if (destino === "pago") {
+    if (body?.objetivo !== undefined && !AD_OBJETIVOS.includes(body.objetivo as AdObjetivo)) {
+      return NextResponse.json({ error: "objetivo deve ser leads, visita ou reconhecimento" }, { status: 400 })
+    }
+    objetivo = (body?.objetivo as AdObjetivo | undefined) ?? "leads"
+  }
+  const ratios = ratiosDoPedido(destino, Array.isArray(body?.proporcoes) ? (body.proporcoes as string[]) : null)
+
+  // Pago é sempre arte estática de anúncio; o form nem mostra formato.
+  if (destino !== "pago" && !MARKETING_POST_FORMATOS.includes(body?.formato as MarketingPostFormato)) {
     return NextResponse.json({ error: "formato deve ser estatico, reel, story ou carrossel" }, { status: 400 })
   }
-  const formato = body!.formato as MarketingPostFormato
+  const formato = destino === "pago" ? "estatico" : (body!.formato as MarketingPostFormato)
   // QA 75-241 #3 — reel não gera arte: direção digitada antes de trocar o
   // formato (campo some da tela, state fica) não pode virar instrução fantasma.
   const direcaoEfetiva = formato === "reel" ? "" : direcaoArte
-  if (body?.canal !== "instagram" && body?.canal !== "facebook") {
+  // Pago: canal é implícito (Meta — FB+IG); persistimos 'instagram' (CHECK da mig 193).
+  if (destino !== "pago" && body?.canal !== "instagram" && body?.canal !== "facebook") {
     return NextResponse.json({ error: "canal deve ser 'instagram' ou 'facebook'" }, { status: 400 })
   }
-  const canal = body.canal
+  const canal = destino === "pago" ? (body?.canal === "facebook" ? "facebook" : "instagram") : (body!.canal as "instagram" | "facebook")
 
   let empreendimentoId: string | null = null
   if (body?.empreendimento_id) {
@@ -129,6 +169,9 @@ export async function POST(req: NextRequest) {
       paleta: resolvePaletaDoPost(brands),
       assets,
       now: new Date().toISOString(),
+      // Story 75-294 — modo anúncio: o Sonnet devolve também a ad copy.
+      destino,
+      objetivoInstrucao: objetivo ? AD_OBJETIVO_INSTRUCAO[objetivo] : null,
     })
 
     if (!result) {
@@ -139,10 +182,18 @@ export async function POST(req: NextRequest) {
     // do código. O Sonnet viu os 6 renders do Vind, o Marcos citou dois, e ele
     // devolveu lista vazia: a fachada virou invenção do modelo. Os forçados vêm
     // PRIMEIRO (risco 1 da story: o teto de bytes descarta o excedente).
-    const citadosPeloHumano = arquivosCitadosNoTexto(
+    // Story 75-294 (AC3) — chip "Fachada real": as fotos do Kit escopado entram
+    // como referência FORÇADA, mesmo sem o humano citar o file_name (jurídico:
+    // IA não inventa fachada — a base tem de ser a foto real).
+    const fotosForcadas =
+      (body?.chips as Record<string, string> | null | undefined)?.cenario === "fachada_real"
+        ? assets.filter((a) => a.tipo === "foto").map((a) => a.file_name)
+        : []
+    const citadosNoTexto = arquivosCitadosNoTexto(
       `${pedido}\n${direcaoEfetiva ?? ""}`,
       assets.map((a) => a.file_name)
     )
+    const citadosPeloHumano = [...new Set([...fotosForcadas, ...citadosNoTexto])]
     const arquivosArte = result.arte
       ? [...citadosPeloHumano, ...result.arte.arquivos_kit.filter((f) => !citadosPeloHumano.includes(f))]
       : []
@@ -190,6 +241,12 @@ export async function POST(req: NextRequest) {
         justificativa: result.justificativa,
         status: "sugerido",
         origem: "agente",
+        // Story 75-294 — tráfego pago: destino/objetivo + ad copy com o teto do
+        // Meta reforçado no servidor (corte na fronteira de palavra, com "…").
+        destino,
+        objetivo,
+        ad_primary_text: destino === "pago" ? enforceAdLimit(result.ad_primary_text, AD_PRIMARY_MAX) : null,
+        ad_headline: destino === "pago" ? enforceAdLimit(result.ad_headline, AD_HEADLINE_MAX) : null,
         created_by: appUser.id,
       })
       .select(POST_SELECT)
@@ -229,6 +286,9 @@ export async function POST(req: NextRequest) {
           // sistema"): override consciente, NÃO passa pelo filtro de diretrizes.
           // A publicação continua 100% humana (fila de aprovação).
           ajuste: direcaoEfetiva || null,
+          // Story 75-294 — pago: a MESMA arte nas proporções pedidas (fail-open
+          // por proporção; a parcial que falhar aparece no card via Refazer).
+          ratios,
         },
         specs
       )

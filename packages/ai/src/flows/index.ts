@@ -68,6 +68,8 @@ export { reviewOutgoingMessage, parseMessageReview, isReviewEligible } from "./m
 export type { MessageReviewResult } from "./message-review"
 export { generateMarketingSuggestions, parseMarketingSuggestions } from "./marketing-suggestions"
 export { generateMarketingPostFromRequest, parseMarketingPostRequest } from "./marketing-post-request"
+export { improveMarketingRequest } from "./marketing-request-improve"
+export type { ImproveMarketingRequestInput } from "./marketing-request-improve"
 export type { MarketingPostRequestInput, MarketingPostRequestResult, MarketingPostFormato } from "./marketing-post-request"
 export type {
   MarketingSuggestionsInput,
