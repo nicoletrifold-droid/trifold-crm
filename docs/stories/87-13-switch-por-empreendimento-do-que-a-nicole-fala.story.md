@@ -1504,6 +1504,50 @@ Banco de dev limpo depois (linhas removidas, coluna derrubada lá).
 
 ### AC11 — plano da janela de observação (escrito **antes** do merge)
 
+> ## 🟢 MARCO ZERO DA JANELA — registrado pelo @devops
+>
+> | | |
+> |---|---|
+> | **Merge do PR #393** | `2026-08-11T19:05:14Z` — squash `687d4607` |
+> | **🔴 Deploy vivo em produção (T0 da janela)** | **`2026-08-11T19:07:43Z`** |
+> | **Janela de 24 h fecha em** | **`2026-08-12T19:07:43Z`** |
+>
+> **T0 é o deploy, não o merge** — a janela mede comportamento da Nicole, e antes do deploy o
+> código não estava no ar. O instante é **limitado por medição, não estimado**: às `19:07:21Z` os
+> dois domínios ainda serviam o build antigo e às `19:07:43Z` já serviam o novo, então a virada
+> caiu no intervalo `(19:07:21, 19:07:43]`. Adotei o **limite superior** de propósito: é o
+> conservador, porque garante que nenhum evento contado veio do código velho.
+>
+> **Consulta da AC11-1, já com o T0 preenchido:**
+> ```sql
+> select count(*) from system_events
+>  where event_type = 'PROPERTY_IDENTIFIED'
+>    and metadata->>'property_id' = '00000000-0000-0000-0004-000000000001'  -- Vind
+>    and created_at > '2026-08-11 19:07:43+00';
+> ```
+> **Piso: `n < 5` turnos ⇒ estende a janela e escreve INCONCLUSIVO** — nunca "sem regressão".
+> Registrar o `n` observado junto do veredito, sempre.
+>
+> **Como os dois domínios foram conferidos** (método sem credencial, porque o token do @devops não
+> alcança a segunda conta): `data-dpl-id` extraído do HTML de `/login` nos dois, antes e depois.
+>
+> | domínio | antes | depois |
+> |---|---|---|
+> | `trifold-crm.vercel.app` | `dpl_DZJzGmrFxmYWQ8Np6SgoEUU859yW` | `dpl_R8zaAiANEbMCc1q7ugiwAVZpKaEg` |
+> | `crm.trifold.eng.br` | `dpl_DB8krr9itWVZPGJc3uyqKCXXeCV2` | `dpl_8PE1M2mmTxgfQXFhitreQ2kL2G35` |
+>
+> **Os dois viraram, na mesma janela de 22 s.** ⚠️ E os `dpl_` **continuam diferentes entre si** —
+> antes e depois. É a arquitetura de **dois projetos Vercel** conhecida, não um defeito deste
+> deploy: cada domínio é servido por um projeto próprio, com id próprio. O que este método prova é
+> que **ambos saíram do build antigo**; o que ele **não** prova é que os dois estão no **mesmo
+> commit** — para isso seria preciso o token da segunda conta, que o @devops não tem (SAML).
+>
+> ⚠️ **Rollback continua sendo REVERTER O PR.** Não derrubar a coluna `nicole_enabled`: com o
+> código no ar, `loadProperties` cai em `if (error || !data) return []` e a Nicole perde **todos**
+> os empreendimentos, em silêncio. E a **migration 224 NÃO deve ser aplicada agora** — é o passo 4,
+> do @data-engineer, só depois desta janela fechar verde.
+
+
 **Responsável nomeado: Marcos (D7).** Sem nome, não sai. Início: no deploy do passo 2. Duração
 mínima: 24 h.
 
