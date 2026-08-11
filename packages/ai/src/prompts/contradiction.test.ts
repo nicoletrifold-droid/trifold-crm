@@ -23,6 +23,27 @@
  * frases o marcador `it.fails` PASSA A FALHAR, obrigando quem fechar a Tarefa 2 a
  * remover o marcador. É o oposto de um `skip`, que apodreceria em silêncio.
  *
+ * 📌 O DIA CHEGOU — metade dele, em 2026-08-11 (Story 87-1, @dev).
+ * O marcador funcionou exatamente como projetado: ao regravar o snapshot com o que está
+ * em PRODUÇÃO (`--write`, primeira tarefa da 87-1 por causa do Risco 5), o `it.fails` do
+ * lado do snapshot passou a falhar por SUCESSO. Medido:
+ *
+ *   • `_production/*.txt` → **0 contradições**. A Tarefa 2 da 87-0 (feita à mão em prod em
+ *     06/08) mais as edições `stand de vendas` → `sede da Trifold` (10/08) limparam as 4
+ *     ocorrências que este arquivo fotografara: guardrails ×2, property-presentation ×1,
+ *     system-personality ×1. O caso virou `it` — de fotografia de dívida a **guarda de
+ *     regressão**: se "stand" voltar ao banco, isto fica vermelho.
+ *   • CONSTANTES do código → **continua devendo 2** (`GUARDRAILS_PROMPT` linhas 20 e 85).
+ *     Segue como `debtCase`. Corrigi-las está FORA do escopo da 87-1 (é edição de prompt,
+ *     não de processo) e não é urgente pelo mesmo motivo de sempre: enquanto houver linha
+ *     ativa com conteúdo em `agent_prompts`, a constante NUNCA é lida
+ *     (`prompts/index.ts:84-88`). Ela só entra em cena num bootstrap.
+ *   • neutralizadas por negação no snapshot: 2 → **3**. A terceira é
+ *     `property-presentation:36` ("NUNCA passe o endereco da obra para visita. Sempre
+ *     direcione para a sede."), que a reconciliação de 06/08 ACRESCENTOU. É guardrail
+ *     corretivo, não contradição — mas o número está pinado de propósito: se ele subir
+ *     sem alguém saber por quê, a regra de negação virou tapete.
+ *
  * Para ver o vermelho de verdade (a dívida real, sem marcadores):
  *   AIOS_87_0_SEM_MARCADORES=1 npx vitest run packages/ai/src/prompts/contradiction.test.ts
  */
@@ -182,13 +203,13 @@ describe("contradição sede × stand (Story 87-0, Tarefa 4)", () => {
     expect(fontes.length).toBeGreaterThanOrEqual(7)
   })
 
-  debtCase(
-    "[DÍVIDA — Tarefa 2] nenhum override de produção propõe a obra/stand como local de visita",
-    () => {
-      const achados = acharContradicoes(snapshotComoFontes())
-      expect(achados, relatorio(achados)).toEqual([])
-    }
-  )
+  // [DÍVIDA QUITADA em 2026-08-11 — Story 87-1] Era `debtCase`. Passou a `it` porque o
+  // snapshot regravado de produção não tem mais nenhuma ocorrência. Daqui em diante isto
+  // é guarda de REGRESSÃO: se alguém reintroduzir "stand" pelo painel, fica vermelho.
+  it("nenhum override de produção propõe a obra/stand como local de visita", () => {
+    const achados = acharContradicoes(snapshotComoFontes())
+    expect(achados, relatorio(achados)).toEqual([])
+  })
 
   debtCase(
     "[DÍVIDA — Tarefa 2] nenhuma constante de fallback propõe a obra/stand como local de visita",
@@ -209,16 +230,17 @@ describe("contradição sede × stand (Story 87-0, Tarefa 4)", () => {
       return Object.fromEntries(Object.entries(mapa).filter(([, n]) => n > 0))
     }
 
-    expect(porFonte(snapshotComoFontes())).toEqual({
-      "_production/guardrails.txt": 2,
-      "_production/property-presentation.txt": 1,
-      "_production/system-personality.txt": 1,
-    })
+    // 2026-08-11 (Story 87-1): era `{ guardrails: 2, property-presentation: 1,
+    // system-personality: 1 }`. Zerou quando o snapshot passou a descrever a produção
+    // reconciliada. Lado do banco: LIMPO.
+    expect(porFonte(snapshotComoFontes())).toEqual({})
 
     // O `visit-scheduling` foi reconciliado em 05/08 e é o MODELO — 0 ocorrências.
     // Se ele aparecer aqui, houve regressão (Risco 2 da story).
     expect(porFonte(snapshotComoFontes())["_production/visit-scheduling.txt"]).toBeUndefined()
 
+    // Lado do código: INALTERADO. É o fallback de bootstrap, e só é lido quando não há
+    // linha ativa com conteúdo em agent_prompts (`prompts/index.ts:84-88`).
     expect(porFonte(CONSTANTES_DO_CODIGO)).toEqual({
       // guardrails.ts:23 ("o memorial fica disponivel la no stand de vendas") e :88.
       "código: GUARDRAILS_PROMPT": 2,
@@ -227,10 +249,11 @@ describe("contradição sede × stand (Story 87-0, Tarefa 4)", () => {
 
   it("a regra de negação está neutralizando exatamente os guardrails corretivos (e nada mais)", () => {
     // Se este número subir sem alguém saber por quê, a regra de negação virou tapete.
-    // Hoje: snapshot = guardrails.txt linhas 46 e 48;
-    //       código   = guardrails.ts (2 linhas) + property-presentation.ts ("NUNCA passe o
-    //                  endereco da obra para visita. Sempre direcione para a sede.").
-    expect(neutralizadasPorNegacao(snapshotComoFontes())).toBe(2)
+    // Hoje: snapshot = guardrails.txt linhas 46 e 48 + property-presentation.txt:36
+    //                  ("NUNCA passe o endereco da obra para visita...", acrescentada pela
+    //                  reconciliação de 06/08 — por isso 3, e não os 2 de 05/08);
+    //       código   = guardrails.ts (2 linhas) + property-presentation.ts (a mesma frase).
+    expect(neutralizadasPorNegacao(snapshotComoFontes())).toBe(3)
     expect(neutralizadasPorNegacao(CONSTANTES_DO_CODIGO)).toBe(3)
   })
 })

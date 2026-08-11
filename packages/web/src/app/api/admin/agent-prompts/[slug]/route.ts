@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireRole } from "@web/lib/api-auth"
-
-const MIN_CONTENT_LENGTH = 10
+import { validateChangeReason, validatePromptContent } from "@web/lib/agent-prompts"
 
 /**
  * GET /api/admin/agent-prompts/[slug]
@@ -42,6 +41,13 @@ export async function GET(
  * PUT /api/admin/agent-prompts/[slug]
  * Atualiza apenas o `content` de um prompt existente. Admin-only (Story 53-2).
  * Não cria nem deleta slugs (operação de seed/infra).
+ *
+ * Story 87-1 · AC2 — passa a EXIGIR `motivo` e a responder 400 sem ele. Esta rota é a
+ * superfície nº 2 (uso programático/integrações); o painel não passa por aqui, ele usa a
+ * server action de `configuracoes/personalidade/actions.ts`. As duas compartilham as
+ * mesmas validações (`@web/lib/agent-prompts`) para não divergirem com o tempo.
+ * O `motivo` vai para `last_change_reason` no MESMO update, e o trigger
+ * `agent_prompts_versionar` (migration 219) o copia para o histórico.
  */
 export async function PUT(
   request: NextRequest,
@@ -63,20 +69,21 @@ export async function PUT(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const content = (body as { content?: unknown } | null)?.content
+  const payload = body as { content?: unknown; motivo?: unknown } | null
 
-  if (typeof content !== "string" || content.trim().length < MIN_CONTENT_LENGTH) {
-    return NextResponse.json(
-      {
-        error: `Campo 'content' é obrigatório e deve ter ao menos ${MIN_CONTENT_LENGTH} caracteres.`,
-      },
-      { status: 400 }
-    )
+  const conteudo = validatePromptContent(payload?.content)
+  if (!conteudo.ok) {
+    return NextResponse.json({ error: conteudo.error }, { status: 400 })
+  }
+
+  const motivo = validateChangeReason(payload?.motivo)
+  if (!motivo.ok) {
+    return NextResponse.json({ error: motivo.error }, { status: 400 })
   }
 
   const { data: prompt, error } = await supabase
     .from("agent_prompts")
-    .update({ content })
+    .update({ content: conteudo.value, last_change_reason: motivo.value })
     .eq("org_id", appUser.org_id)
     .eq("slug", slug)
     .select("id, slug, name, type, content, is_active")

@@ -1,0 +1,303 @@
+schema: 1
+story: '87.1'
+story_title: 'Governança do painel: quem mudou o prompt, quando, por quê, e como voltar'
+gate: CONCERNS
+status_reason: >-
+  As 8 ACs (AC1–AC7 + AC2-b) foram reproduzidas do zero e nenhuma falhou; o mecanismo à
+  prova de falha do trigger foi provado por mutação (com a guarda o prompt grava, sem a
+  guarda o UPDATE aborta). Restam dois achados médios que não bloqueiam: a tela rotula
+  como "escrita fora do painel" uma edição feita PELO painel quando o motivo se repete, e
+  o histórico da tela pode ficar cego justamente durante um incidente.
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-08-11T12:35:00Z'
+
+metodo: >-
+  Nada foi aceito por relato. Objetos de produção conferidos por introspecção somente-leitura
+  (Management API). Toda escrita de teste e toda mutação foram feitas no projeto Supabase
+  ISOLADO de dev (xnxvygyfyyyzwhiuoehz), onde a migration 219 foi aplicada a partir do arquivo
+  do working tree e depois limpa. Os cenários de seed rodaram contra URL morta (127.0.0.1:1),
+  nunca contra produção — conferido antes e depois: os 7 updated_at de produção estão idênticos
+  ao início desta revisão.
+
+# ---------------------------------------------------------------------------
+# AC7-(ii): output do gate permanente do Epic 87, anexado como a AC exige
+# ---------------------------------------------------------------------------
+prompts_check:
+  comando: 'npm run prompts:check'
+  exit_code: 0
+  output: '✅ agent_prompts == snapshot (7 slugs, org 00000000-0000-0000-0000-000000000001)'
+  quando: '2026-08-11, contra dsopqkqjkmhytudaaolv'
+  nao_e_inerte: >-
+    Provado que o comando discrimina, e não apenas que sai verde: apontado para um banco de
+    dev com os 7 slugs do snapshot e UM termo trocado em guardrails ("sede da Trifold" →
+    "stand de vendas"), saiu exit 1 nomeando o slug e a linha 20.
+
+# ---------------------------------------------------------------------------
+# Verificações — o que eu executei, não o que a story afirma
+# ---------------------------------------------------------------------------
+verificacoes:
+  - ac: AC1
+    veredito: PASS
+    evidencia: >-
+      Produção: trigger `agent_prompts_versionar` AFTER UPDATE convivendo com o
+      `set_updated_at` BEFORE (001:295), nomes distintos; função SECURITY DEFINER, owner
+      postgres, search_path fixo; tabela com PK como ÚNICA constraint (nenhum CHECK
+      fantasma do experimento), sem FK, nenhuma coluna NOT NULL sem default; RLS ligada,
+      policy SELECT admin+org; `anon` sem grant nenhum, `authenticated` só SELECT.
+      A função em produção é byte a byte a do arquivo: apliquei a migration 219 no projeto
+      de dev e o md5 de pg_get_functiondef bateu com o de produção (afd37cd694f5…).
+  - ac: AC1
+    item: 'fail-safe do trigger (Risco 1) — provado por MUTAÇÃO, em dois sentidos'
+    veredito: PASS
+    evidencia: >-
+      (a) Falha injetada no INSERT de histórico por um BEFORE INSERT que levanta exceção
+      (mecanismo diferente do CHECK usado pelo @dev, de propósito): o UPDATE do prompt
+      GRAVOU e o histórico não cresceu.
+      (b) MESMA falha, com o bloco `EXCEPTION WHEN OTHERS` removido da função: o UPDATE
+      ABORTOU com erro e o content ficou no valor anterior. A guarda é o que carrega o
+      peso — o teste fica vermelho quando ela some.
+  - ac: AC1
+    item: 'o pedido de "testar com RLS negando" — NÃO é reproduzível, e isso é um resultado'
+    veredito: 'N/A (registrado, não preenchido)'
+    evidencia: >-
+      Liguei FORCE ROW LEVEL SECURITY em agent_prompt_versions (não há policy de INSERT) e
+      o trigger inseriu assim mesmo. Motivo: SECURITY DEFINER roda como o owner `postgres`,
+      que tem rolbypassrls = true neste projeto. Ou seja, RLS não consegue negar este
+      INSERT — a falha por RLS é estruturalmente impossível, o que é mais forte que uma
+      guarda. A prova equivalente é a mutação (a)/(b) acima.
+  - ac: AC1
+    item: 'SECURITY DEFINER é load-bearing — provado por mutação'
+    veredito: PASS
+    evidencia: >-
+      Troquei SECURITY DEFINER por INVOKER e rodei um UPDATE como `authenticated` com JWT
+      de admin: o prompt gravou e o histórico NÃO cresceu — em silêncio, porque a guarda
+      engole o "permission denied" (authenticated só tem SELECT). Sem SECURITY DEFINER,
+      TODA edição pelo painel perderia histórico sem ninguém perceber.
+  - ac: AC1
+    item: 'o autor humano chega ao histórico — a prova que faltava'
+    veredito: PASS
+    evidencia: >-
+      Em produção só existem 4 linhas, todas com author_label = system: nada nesta story
+      provava que o caminho do autor identificado funciona, que é a pergunta que a story
+      existe para responder. Simulei no dev uma sessão `authenticated` de admin
+      (request.jwt.claims + SET ROLE) e o UPDATE gravou
+      author_label = "Fulana Admin QA", author_auth_id e author_user_id preenchidos e o
+      motivo creditado. O caminho funciona.
+  - ac: AC2
+    veredito: PASS
+    evidencia: >-
+      Server action com estado de retorno em TODOS os caminhos de rejeição (slug, conteúdo,
+      motivo, não-admin, erro do PostgREST, zero linhas), consumida por `useActionState` no
+      Client Component com role="alert"/role="status". PUT exige motivo e responde 400.
+      Nenhum caller da rota no repositório — a quebra de contrato não atinge ninguém.
+      14 testes unitários; provei que discriminam por mutação: anular o mínimo de
+      caracteres derruba exatamente o teste do motivo-álibi; tirar a normalização do selo
+      derruba exatamente o teste de CRLF.
+  - ac: AC2
+    item: '"update sem linha afetada não é erro no PostgREST" — o @dev diz ter fechado; conferido'
+    veredito: PASS
+    evidencia: >-
+      Reproduzi a negação no dev com JWT de um usuário NÃO-admin da mesma org: o
+      `UPDATE ... RETURNING slug` devolveu 0 linhas e NENHUM erro, e o content ficou
+      intacto. É exatamente o que o supabase-js entrega como `{ data: null, error: null }`.
+      A checagem `if (!data)` de actions.ts é o que impede isso de aparecer como "salvo".
+  - ac: AC2-b
+    veredito: PASS
+    evidencia: >-
+      Executado com NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:1 (nunca produção):
+      (i) `npx tsx scripts/seed-prompts.ts` → EXIT 1, mensagem do gate, zero write (o gate
+      roda antes até do createClient);
+      (ii) `npx tsx scripts/run-seed.ts` → "Seeding agent prompts... PULADO (gate AC2-b)",
+      nenhuma tentativa de write, e o RESTO do seed segue (users e "Seed complete!" saem
+      uma vez só — a extração de seedUsers() preservou o comportamento);
+      (iii) com SEED_AGENT_PROMPTS_BOOTSTRAP=1 e com --bootstrap, ambos passam do gate;
+      (iv) o gate NÃO é liberado por env vazia, "0" nem "false";
+      (v) o gotcha documentado é real: `npm run seed -- --bootstrap` continua BLOQUEADO,
+      porque o npm anexa o argumento ao fim da cadeia. Falha para o lado seguro.
+      Os 7 updated_at de produção estão idênticos ao início da revisão.
+  - ac: AC3
+    veredito: PASS
+    evidencia: >-
+      Camada de dados conferida por papel no dev: admin da org enxerga o histórico,
+      não-admin enxerga 0 linhas (RLS), `anon` apanha antes da RLS com "permission denied"
+      (o REVOKE). A tela mostra data, autor, motivo, primeira linha divergente e o
+      conteúdo anterior inteiro; motivo ausente aparece em âmbar. O filtro is_active=true
+      saiu da listagem — os 7 aparecem. Ver REL-001 abaixo, que é sobre a QUERY, não a UI.
+  - ac: AC4
+    veredito: PASS
+    evidencia: >-
+      Runbook tem o Passo 2 obrigatório de LER o alvo antes de escrever, com checklist
+      (nome de empreendimento, fato de cadastro, empreendimento fora de venda) e a regra de
+      alvo correta (histórico primeiro; snapshot só com o check verde). O exercício colado
+      confere com o que eu li direto do banco: 4 linhas, md5 do content de off-hours hoje =
+      a6f042a0582d112527c932acd35570a0 = md5 do `previous_content` da PRIMEIRA linha do
+      histórico, que é o estado anterior à implementação. Rollback byte a byte, confirmado.
+  - ac: AC5
+    veredito: PASS
+    evidencia: >-
+      Rodado por mim, do zero, depois de `pnpm install --frozen-lockfile`:
+      `npx vitest run` → 171 arquivos, 2157 passed | 6 expected fail;
+      `npx turbo lint type-check --force` → 13 tarefas, 0 em cache, todas OK, 0 erros de
+      lint e 24 warnings (todos pré-existentes, nenhum em arquivo desta story);
+      `npx next build` → exit 0.
+      Nomenclatura correta: `packages/ai` não tem eslint — o `lint` dele é `tsc --noEmit`,
+      e o @dev reportou isso certo.
+      updated_at × baseline do @po: 6 de 7 idênticos ao microssegundo. O 7º (off-hours)
+      moveu-se para 2026-08-11 11:10:24.31699 com 4 linhas de histórico explicando cada
+      escrita e content byte a byte igual ao baseline. O critério literal da AC é
+      contraditório com AC1+AC4 (que EXIGEM um UPDATE por SQL cru e um rollback
+      exercitado); a cláusula de desempate da própria AC — "se algum divergir sem uma linha
+      de histórico explicando, a AC5 falhou" — está satisfeita.
+  - ac: AC6
+    veredito: PASS
+    evidencia: >-
+      (i) Reproduzido por um QUARTO caminho, independente do script e do selo: sha256 do
+      content normalizado calculado DENTRO do Postgres (normalize NFC + CRLF→LF + btrim) e
+      comparado com o manifest de HEAD → exatamente 3 divergentes, e são os 3 da M1
+      (guardrails, property-presentation, system-personality).
+      (ii) O mesmo cálculo contra o manifest do working tree → 0 de 7. `prompts:check` verde.
+      (iii) O selo é recalculado a cada render e a action chama revalidatePath; a mensagem
+      de sucesso já avisa o admin que o slug ficou divergente.
+  - ac: AC6
+    item: 'D6 / Vercel — o selo não pode tocar filesystem em runtime'
+    veredito: PASS
+    evidencia: >-
+      Prova direta, não "o build passou": rodei `promptParity` com cwd=/ (a árvore do repo
+      inacessível) e ele respondeu certo — em paridade e divergente. A mutação confirma que
+      a guarda é load-bearing: `readSnapshotManifest()` chamado do mesmo cwd LANÇA
+      ("Nao encontrei a raiz do repo subindo a partir de /").
+      E no artefato do build: o sha do manifest está embutido no chunk de servidor, e a
+      string de erro de `findRepoRoot` só sobrevive no .map — ou seja, a função foi
+      eliminada do bundle de runtime.
+  - ac: AC7
+    veredito: PASS
+    evidencia: >-
+      `prompts:check` e `prompts:write` existem no package.json; item de gate permanente no
+      DoD; runbook fecha com a regra do --write + commit no mesmo dia. Output anexado acima
+      (bloco `prompts_check`), como a AC-(ii) exige.
+  - ac: 'efeito colateral no contradiction.test.ts (87-0)'
+    veredito: PASS
+    evidencia: >-
+      Nenhuma régua foi afrouxada: `debtCase` virou `it` (mais estrito) e a contagem pinada
+      do snapshot foi de 3 fontes para {} (mais estrito). O 2 → 3 de "neutralizadas por
+      negação" corresponde a uma frase real e verificada
+      (_production/property-presentation.txt:36, "NUNCA passe o endereco da obra para
+      visita"), que é guardrail corretivo.
+      Provei que a guarda convertida não é decorativa: acrescentei "podemos te receber no
+      stand de vendas" a um .txt do snapshot e DOIS testes ficaram vermelhos; restaurei o
+      arquivo byte a byte (md5 conferido) e voltaram ao verde.
+
+# ---------------------------------------------------------------------------
+top_issues:
+  - id: 'REQ-001'
+    severity: medium
+    finding: >-
+      Dois motivos IDÊNTICOS seguidos: o segundo é gravado com change_reason NULL — e a
+      tela renderiza NULL como "sem motivo (escrita fora do painel)". Reproduzido no dev
+      (UPDATE v4 e v5 com o mesmo texto de motivo: o segundo saiu null). O @dev documentou
+      e aceitou o "erra para menos"; o que não foi considerado é que o rótulo AFIRMA uma
+      procedência FALSA — a escrita veio do painel, com autor identificado e com motivo
+      dado. Na superfície 2 (o PUT, feito para integrações) é pior que esporádico: uma
+      integração que mande sempre o mesmo `motivo` terá TODAS as escritas depois da
+      primeira rotuladas assim.
+    suggested_action: >-
+      Barato e suficiente: trocar a cópia para "motivo não registrado nesta edição" (uma
+      linha em prompt-editor.tsx). Fechamento completo, se valer o custo: fazer a aplicação
+      escrever um valor inerentemente distinto (prefixo de timestamp) e o trigger separá-lo
+      ao creditar — some o buraco em vez de rotulá-lo.
+  - id: 'REL-001'
+    severity: medium
+    finding: >-
+      O histórico da tela pode ficar cego exatamente durante um incidente. page.tsx lê as
+      35 linhas mais recentes DE TODOS OS SLUGS juntos e só depois separa 5 por slug. Como
+      7 × 5 = 35, a promessa "últimas 5 por slug" só vale se as edições estiverem
+      perfeitamente distribuídas. Numa noite de correções repetidas em um slug — o cenário
+      literal da AC3, "às 23h de um sábado" — os outros 6 mostram "Sem histórico ainda",
+      que se lê como "ninguém nunca editou isto", não como "truncado".
+    suggested_action: >-
+      Uma consulta por slug (7 queries baratas; o índice (org_id, slug, created_at DESC) já
+      existe) ou uma RPC com window function. Enquanto não, no mínimo distinguir na tela
+      "sem histórico" de "não coube no teto".
+  - id: 'REQ-002'
+    severity: low
+    finding: >-
+      AC1 diz "toda escrita deixa rastro"; o que subiu cobre UPDATE. O trigger é AFTER
+      UPDATE apenas: um DELETE apaga um slug sem deixar linha nenhuma (a policy
+      agent_prompts_manage é FOR ALL, e o service_role sempre pode), e o INSERT que o
+      recriasse também não deixaria. O upsert dos seeds sobre linha existente É UPDATE e
+      está coberto; um delete-e-semeia não está. Confirmei no dev que o INSERT inicial de
+      um slug não gera linha de histórico.
+    suggested_action: >-
+      Backlog: braço AFTER DELETE (~6 linhas, mesma função protegida). Não é regressão —
+      antes não havia rastro nenhum.
+  - id: 'DOC-001'
+    severity: low
+    finding: >-
+      O manifest.json que vai ser commitado tem um updated_at falso. Foi capturado em
+      2026-08-11T11:04:12, ANTES do exercício de rollback da AC4, e registra
+      off-hours.updated_at = 2026-08-10T13:50:52 enquanto o banco diz 2026-08-11T11:10:24.
+      A paridade não é afetada (o --check compara sha), mas a M4 do próprio parecer do @po
+      mostrou que é justamente este campo que preservou a última pista física do mistério
+      de 04/08.
+    suggested_action: >-
+      Rodar `npm run prompts:write` uma vez antes do commit. O conteúdo não muda (a
+      paridade já está verde); só a metadata passa a ser verdadeira.
+  - id: 'MNT-001'
+    severity: low
+    finding: >-
+      A story sobre governança foi implementada com DDL não auditado em produção: para
+      provar o Risco 1 o @dev aplicou ALTER TABLE agent_prompt_versions ADD CONSTRAINT
+      tmp_87_1_forca_falha CHECK (false) na tabela de PRODUÇÃO. Enquanto o constraint
+      existiu, qualquer edição real pelo painel ou pela API — em qualquer dos 7 slugs, não
+      só no órfão off-hours — teria perdido a linha de histórico em silêncio. Está
+      revertido (conferi: agent_prompt_versions tem só a PK). A escolha do slug órfão para
+      as escritas de conteúdo foi bom julgamento; o DDL não teve o mesmo cuidado de escopo.
+    suggested_action: >-
+      Para o resto do Epic 87: prova de trigger/DDL no projeto de dev
+      (xnxvygyfyyyzwhiuoehz), produção só para a conferência somente-leitura. Demonstrado
+      viável nesta revisão — a 219 aplica limpa lá, o schema de apoio existe, e eu rodei
+      quatro mutações e limpei tudo depois.
+  - id: 'TEST-001'
+    severity: low
+    finding: >-
+      A parte da AC2 que diz "a tela mostra o porquê" NÃO foi verificada em navegador — nem
+      por mim nem pelo @dev. Este repositório não tem @testing-library, então não existe
+      teste de componente possível, e eu não dirigi o painel com sessão de admin. Registro
+      como não verificado em vez de preencher: o que está provado é que a action devolve
+      estado em todo caminho de rejeição, que o Client Component consome por useActionState
+      e renderiza role="alert"/role="status", e que os validadores têm teste. Falta a prova
+      da renderização.
+    suggested_action: >-
+      Uma passada manual pelo painel no primeiro deploy (salvar sem motivo e conferir a
+      mensagem vermelha) fecha isso em 30 segundos. Ou registrar no backlog a adição de
+      testing-library, que hoje falta ao repositório inteiro.
+
+# ---------------------------------------------------------------------------
+# CARIMBO DE ORDEM DE DEPLOY — condição bloqueante para o @devops
+# ---------------------------------------------------------------------------
+condicao_de_deploy:
+  bloqueante: true
+  regra: >-
+    O snapshot reconciliado — packages/ai/src/prompts/_production/{guardrails,
+    property-presentation,system-personality}.txt + manifest.json — TEM de ir no MESMO
+    commit/PR do código da AC6 (agent-prompts-parity.ts, page.tsx, prompt-editor.tsx).
+  por_que: >-
+    Risco 5 da story. Se o selo subir sem os .txt reconciliados, ele nasce ⚠️ em 3 de 7
+    slugs e a AC6 morre no dia 1 — é o mesmo padrão de "critério que nasce vermelho" que o
+    @po pegou na 87-13. Medido nesta revisão: contra o manifest de HEAD dá exatamente 3
+    divergentes; contra o manifest do working tree dá 0.
+  como_conferir_depois_do_merge: 'npm run prompts:check → tem de sair 0 e imprimir os 7 slugs'
+  migration: >-
+    A 219 JÁ está aplicada em produção (conferida objeto a objeto). O arquivo sobe para
+    versionar o que já está no ar, mesmo padrão da 218. Nada a fazer na Vercel: sem env
+    nova, sem cron novo.
+
+producao_intocada_por_esta_revisao:
+  conferido: true
+  detalhe: >-
+    Os 7 updated_at e os 7 md5 de content lidos no início e no fim da revisão são idênticos.
+    Nenhuma escrita minha em dsopqkqjkmhytudaaolv — só SELECT e introspecção de catálogo.
+    Todo experimento correu em xnxvygyfyyyzwhiuoehz e foi desfeito (0 prompts, 0 versões,
+    0 usuários, 0 orgs de sandbox ao final; função restaurada, md5 igual ao de produção).
+
+waiver: { active: false }

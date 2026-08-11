@@ -1,6 +1,26 @@
+/**
+ * Seed do repositório (`npm run seed`).
+ *
+ * ⚠️ Story 87-1 · AC2-b — o bloco de `agent_prompts` deste script é BOOTSTRAP-ONLY e
+ * está atrás de um gate. Ele fazia `upsert` dos 7 slugs com `"[placeholder — Story 3.x]"`:
+ * com `.env.local` apontando para produção (o padrão desta casa, por CLAUDE.md), um
+ * `npm run seed` distraído deixava a Nicole SEM PROMPT NENHUM. É a pior das cinco
+ * superfícies de escrita mapeadas na Story 87-1 — e não estava em nenhuma story até 10/08.
+ *
+ * Para fazer o bootstrap de propósito:  SEED_AGENT_PROMPTS_BOOTSTRAP=1 npm run seed
+ * (use a ENV, não `--bootstrap`: o npm anexa os args ao fim da cadeia de comandos e a
+ * flag nunca chega até aqui.)
+ *
+ * 🔻 O RESTO DESTE SCRIPT CONTINUA SEM GATE, e continua perigoso contra produção — fora
+ * do escopo da 87-1, registrado aqui para não virar surpresa: ele faz upsert de
+ * `agent_config` (incluindo `personality_prompt`, `greeting_message`,
+ * `out_of_hours_message` e `business_hours`), dos 8 estágios do kanban, e CRIA usuários
+ * de auth com senha fixa. O destino dos campos de `agent_config` é decidido na Story 87-2.
+ */
 import { createClient } from "@supabase/supabase-js"
 import { readFileSync } from "fs"
 import { join } from "path"
+import { bootstrapLiberado, mensagemDoGate } from "./agent-prompts-bootstrap-gate"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -68,6 +88,27 @@ async function seed() {
   if (configError) console.error("Config error:", configError.message)
   else console.log("  OK")
 
+  // AC2-b: sem gate, NENHUM write em agent_prompts acontece. O resto do seed segue —
+  // bloquear o seed inteiro por causa deste bloco só faria alguém comentar a checagem.
+  if (!bootstrapLiberado()) {
+    console.log("\n" + mensagemDoGate("scripts/run-seed.ts (bloco agent_prompts)") + "\n")
+    console.log("Seeding agent prompts... PULADO (gate AC2-b). Seguindo com o resto do seed.\n")
+  } else {
+    await seedAgentPrompts()
+  }
+
+  // Create auth users
+  console.log("\nSeeding users...")
+  await seedUsers()
+
+  console.log("\nSeed complete!")
+}
+
+/**
+ * ⚠️ BOOTSTRAP-ONLY (Story 87-1 · AC2-b). Grava `[placeholder — Story 3.x]` nos 7 slugs:
+ * chamar isto contra produção deixa a Nicole sem prompt. Só roda sob o gate.
+ */
+async function seedAgentPrompts() {
   console.log("Seeding agent prompts...")
   const prompts = [
     { slug: "system-personality",    name: "Personalidade Nicole",            type: "system",        content: "[placeholder — Story 3.1]" },
@@ -86,9 +127,9 @@ async function seed() {
     if (error) console.error(`  Prompt ${prompt.slug}: ${error.message}`)
     else console.log(`  ${prompt.name} OK`)
   }
+}
 
-  // Create auth users
-  console.log("\nSeeding users...")
+async function seedUsers() {
   const usersToCreate = [
     { email: "alexandre@trifold.com.br", name: "Alexandre Guimaraes Nicolau", role: "admin" },
     { email: "lucas@trifold.com.br",     name: "Lucas Supervisor",            role: "supervisor" },
@@ -134,8 +175,6 @@ async function seed() {
     if (userError) console.error(`    DB error: ${userError.message}`)
     else console.log(`    ${user.name} (${user.role}) OK`)
   }
-
-  console.log("\nSeed complete!")
 }
 
 seed().catch(console.error)

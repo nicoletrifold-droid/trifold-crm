@@ -1,4 +1,23 @@
+/**
+ * ⚠️ BOOTSTRAP-ONLY — Story 87-1 · AC2-b.
+ *
+ * Este script faz `upsert` dos 7 slugs de `agent_prompts` a partir das CONSTANTES do
+ * código. Desde a decisão D-87-0-a (05/08/2026) o painel admin é a fonte da verdade dos
+ * prompts da Nicole e o código é apenas fallback de bootstrap — então rodar isto contra
+ * produção APAGA o texto que está no ar e o substitui por uma versão que pode estar meses
+ * atrasada. Com `.env.local` apontando para produção (o padrão desta casa), é um incidente.
+ *
+ * Por isso ele agora exige um gate explícito:
+ *
+ *   SEED_AGENT_PROMPTS_BOOTSTRAP=1 npx tsx scripts/seed-prompts.ts
+ *   npx tsx scripts/seed-prompts.ts --bootstrap
+ *
+ * Para conferir/atualizar o espelho do repositório use `npm run prompts:check` e
+ * `npx tsx scripts/dump-agent-prompts.ts --write`. Para voltar atrás num prompt, o
+ * runbook `docs/runbooks/87-1-rollback-agent-prompts.md` — NUNCA este script.
+ */
 import { createClient } from "@supabase/supabase-js"
+import { bootstrapLiberado, mensagemDoGate } from "./agent-prompts-bootstrap-gate"
 import {
   PERSONALITY_PROMPT,
   GUARDRAILS_PROMPT,
@@ -9,6 +28,13 @@ import {
   OFF_HOURS_PROMPT,
   buildSystemPromptText,
 } from "../packages/ai/src/prompts"
+
+// AC2-b: o gate roda ANTES de qualquer coisa — antes até do createClient, para que a
+// mensagem seja sobre o bloqueio e não sobre uma credencial faltando.
+if (!bootstrapLiberado()) {
+  console.error(mensagemDoGate("scripts/seed-prompts.ts"))
+  process.exit(1)
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
