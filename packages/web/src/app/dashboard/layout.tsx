@@ -21,6 +21,7 @@ import {
   Mail,
   Settings,
   Shield,
+  ClipboardCheck,
   HardHat,
   Inbox,
   Gift,
@@ -56,6 +57,7 @@ const NAV_ITEMS_BASE = [
 
 const NAV_ITEM_OBRAS = { href: "/dashboard/obras", label: "Obras", icon: <HardHat className={ICON_SIZE} /> }
 const NAV_ITEM_LANCAMENTOS = { href: "/dashboard/lancamentos", label: "Lançamentos", icon: <Rocket className={ICON_SIZE} /> }
+const NAV_ITEM_FVS = { href: "/dashboard/fvs", label: "Vistorias", icon: <ClipboardCheck className={ICON_SIZE} /> }
 const NAV_ITEM_BRINDES = { href: "/dashboard/brindes", label: "Brindes", icon: <Gift className={ICON_SIZE} /> }
 const NAV_ITEM_MENSAGENS = { href: "/dashboard/mensagens", label: "Mensagens", icon: <Inbox className={ICON_SIZE} /> }
 const NAV_ITEM_CHAT = { href: "/dashboard/chat", label: "Chat", icon: <MessageSquare className={ICON_SIZE} /> }
@@ -81,6 +83,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard/analytics": "analytics",
   "/dashboard/campaigns": "campanhas",
   "/dashboard/obras": "obras",
+  "/dashboard/fvs": "fvs",
   "/dashboard/lancamentos": "lancamentos",
   "/dashboard/brindes": "brindes",
   "/dashboard/mensagens": "mensagens",
@@ -270,6 +273,8 @@ export default async function DashboardLayout({
       ? [{ ...NAV_ITEM_OBRAS, badge: aprovacoesPendentesCount ?? 0 }]
       : []),
     ...(showPortalViewer ? [portalViewerItem] : []),
+    // FVS (Story 75-293) — Vistorias logo abaixo de Obras, gated pela matriz de Perfil.
+    ...(permissions["fvs"] ? [NAV_ITEM_FVS] : []),
     // Épico Lançamentos — item logo abaixo de Obras, gated pela matriz de Perfil de Acesso.
     ...(permissions["lancamentos"] ? [NAV_ITEM_LANCAMENTOS] : []),
     ...(permissions["brindes"] ? [NAV_ITEM_BRINDES] : []),

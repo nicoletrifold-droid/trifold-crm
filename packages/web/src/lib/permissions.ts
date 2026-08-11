@@ -89,6 +89,7 @@ function getHardcodedPermissions(role: string): Record<string, boolean> {
         obras: true,
         brindes: true,
         chamados: true,
+        fvs: true, // Story 75-293 — espelha o seed da migration 219
       }
 
     // Gerente de Relacionamento (Story 75-41): privilégios da obras + módulo Chat (76-4).
