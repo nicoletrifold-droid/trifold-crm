@@ -10,6 +10,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ClipboardList } from "lucide-react"
+import { visitFeedbackDoor } from "@web/lib/appointments/visit-feedback-read"
 import { VisitFeedbackModal } from "./visit-feedback-form"
 import { VisitFeedbackHistoryModal } from "./visit-feedback-history"
 
@@ -36,18 +37,23 @@ export function VisitFeedbackEntryButton({
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
+  // A decisão vive no núcleo puro (visitFeedbackDoor), testada sem DOM.
+  const door = visitFeedbackDoor({ hasFeedback, pendingAppointmentId, canRegisterRetro })
+
   // Lead que nunca visitou não ganha botão morto no header.
-  if (!hasFeedback && !pendingAppointmentId && !canRegisterRetro) return null
+  if (door === "hidden") return null
 
-  const label = hasFeedback
-    ? "Feedback da visita"
-    : pendingAppointmentId
-      ? "Registrar feedback"
-      : "Registrar visita"
+  const label =
+    door === "read"
+      ? "Feedback da visita"
+      : door === "write-pending"
+        ? "Registrar feedback"
+        : "Registrar visita"
 
-  const tone = hasFeedback
-    ? "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-    : "bg-orange-600 text-white hover:bg-orange-700"
+  const tone =
+    door === "read"
+      ? "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+      : "bg-orange-600 text-white hover:bg-orange-700"
 
   return (
     <>

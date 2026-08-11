@@ -8,8 +8,32 @@ import {
   authorIdByFeedback,
   buildVisitFeedbackList,
   feedbackIdFromActivity,
+  visitFeedbackDoor,
   type VisitFeedbackRecord,
 } from "./visit-feedback-read"
+
+describe("visitFeedbackDoor — os 3 estados do botão + o estado invisível", () => {
+  it("lead com feedback → leitura (mesmo com visita pendente: o modal oferece registrar por dentro)", () => {
+    expect(visitFeedbackDoor({ hasFeedback: true })).toBe("read")
+    expect(visitFeedbackDoor({ hasFeedback: true, pendingAppointmentId: "A1" })).toBe("read")
+    expect(visitFeedbackDoor({ hasFeedback: true, canRegisterRetro: true })).toBe("read")
+  })
+
+  it("sem feedback + visita passada pendente → escrita pelo agendamento", () => {
+    expect(visitFeedbackDoor({ hasFeedback: false, pendingAppointmentId: "A1" })).toBe("write-pending")
+  })
+
+  it("sem feedback, sem pendente, em Visitou → escrita retroativa", () => {
+    expect(visitFeedbackDoor({ hasFeedback: false, canRegisterRetro: true })).toBe("write-retro")
+  })
+
+  it("lead que nunca visitou → nenhum botão no header", () => {
+    expect(visitFeedbackDoor({ hasFeedback: false })).toBe("hidden")
+    expect(
+      visitFeedbackDoor({ hasFeedback: false, pendingAppointmentId: null, canRegisterRetro: false })
+    ).toBe("hidden")
+  })
+})
 
 function fb(over: Partial<VisitFeedbackRecord> & { id: string }): VisitFeedbackRecord {
   return {

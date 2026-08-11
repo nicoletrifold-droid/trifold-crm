@@ -14,6 +14,29 @@
  *    nulo põe uma visita sem data no topo, fingindo ser a mais recente.
  */
 
+/**
+ * Estado da porta única do header (Story 75-290). Mora aqui, e não no
+ * componente, para poder ser testado sem DOM — o projeto não tem
+ * @testing-library/jsdom.
+ *
+ * `hidden` importa tanto quanto os outros: lead que nunca visitou não ganha
+ * botão morto no header.
+ */
+export type VisitFeedbackDoor = "read" | "write-pending" | "write-retro" | "hidden"
+
+export function visitFeedbackDoor(state: {
+  hasFeedback: boolean
+  pendingAppointmentId?: string | null
+  canRegisterRetro?: boolean
+}): VisitFeedbackDoor {
+  // Ler vem primeiro: com feedback registrado, a leitura é o caminho — e o
+  // modal ainda oferece registrar a visita pendente por dentro.
+  if (state.hasFeedback) return "read"
+  if (state.pendingAppointmentId) return "write-pending"
+  if (state.canRegisterRetro) return "write-retro"
+  return "hidden"
+}
+
 export interface VisitFeedbackRecord {
   id: string
   visited_at: string | null

@@ -64,29 +64,29 @@ rota server-side que faça as duas queries e case em memória. Decisão do Marco
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — porta fixa no header do drawer.** `lead-detail-drawer.tsx:533`, ao lado de
+- [x] **AC1 — porta fixa no header do drawer.** `lead-detail-drawer.tsx:533`, ao lado de
       "Editar Lead": botão nos 3 estados da tabela acima; **ausente** quando o lead nunca visitou
       (header não ganha botão morto). Header não pode estourar em largura estreita (wrap ou
       rótulo curto) — ver [[feedback-tailwind-ordem-utilitarios]].
-- [ ] **AC2 — modo leitura mostra a visita inteira.** Uma entrada por visita, **mais recente
+- [x] **AC2 — modo leitura mostra a visita inteira.** Uma entrada por visita, **mais recente
       primeiro**: data da visita, interesse em PT com cor, relato (`feedback`), próximos passos
       (`next_steps`, preservando as quebras de linha do form) e **quem registrou**. Rótulos/cores
       reusam `INTEREST_LEVEL_LABELS`/`INTEREST_LEVEL_COLORS` de `lib/constants.ts` — nenhum mapa
       novo (ver [[feedback-consultar-fonte-nao-duplicar-constante]]).
-- [ ] **AC3 — autor resolvido, sem inventar.** Autor = `users.name` da activity
+- [x] **AC3 — autor resolvido, sem inventar.** Autor = `users.name` da activity
       `type='visit_completed'` cujo `metadata->>'feedback_id'` casa com o feedback. Feedback **sem**
       activity casada (registros pré-75-203, ou activity com `user_id` nulo) mostra `Sistema` —
       nunca um nome errado, nunca quebra.
-- [ ] **AC4 — rota `GET /api/leads/[id]/visit-feedback`** (mesmo arquivo do POST):
+- [x] **AC4 — rota `GET /api/leads/[id]/visit-feedback`** (mesmo arquivo do POST):
       `requireAuth`, cliente **user-scoped** (a RLS do lead decide quem lê; sem service role),
       anônimo = **401**, lead de outra org = vazio/404. Devolve `{ feedbacks: [...] }`.
       **Chamada LAZY — só ao abrir o modal.** O estado do botão NÃO vem da rota: vem de quem
       hospeda o botão, que já calcula a régua hoje (`pendingFeedbackAptId`/`leadHasFeedback` no
       drawer; `pendingFeedbackApt`/`showRetroVisit` server-side nas páginas do lead). Resultado:
       **zero request novo** enquanto ninguém clica.
-- [ ] **AC5 — escrita não muda em nada.** O modo escrita chama o `VisitFeedbackForm` existente
+- [x] **AC5 — escrita não muda em nada.** O modo escrita chama o `VisitFeedbackForm` existente
       (`appointmentId` ou `leadId`); zero regra de negócio nova, zero mudança nos endpoints POST.
-- [ ] **AC6 — mesma porta nos headers das páginas do lead:** `/dashboard/leads/[id]:283` e
+- [x] **AC6 — mesma porta nos headers das páginas do lead:** `/dashboard/leads/[id]:283` e
       `/broker/leads/[id]:213`, mesmo componente, mesmos 3 estados. Nessas duas páginas o
       componente **SUBSTITUI** os dois `VisitFeedbackButton` que já vivem naquele header — ele é
       superconjunto deles (mesmos dois caminhos de escrita + leitura). O estado continua vindo do
@@ -94,13 +94,13 @@ rota server-side que faça as duas queries e case em memória. Decisão do Marco
       _(Correção do @po: manter os antigos ali colocaria dois botões idênticos lado a lado na
       MESMA linha — a decisão "mantém os dois" do Marcos foi sobre o drawer, onde header e corpo
       são regiões diferentes.)_
-- [ ] **AC7 — nada regride.** No **drawer**, os 2 botões do corpo (ao lado de "Conversar no
+- [x] **AC7 — nada regride.** No **drawer**, os 2 botões do corpo (ao lado de "Conversar no
       WhatsApp") ficam como estão — decisão explícita do Marcos (redundância aceita a troco de
       risco zero). Nas outras portas de escrita (agenda, kanban, `/broker/agenda/[id]/feedback`)
       nada muda, e nenhum endpoint POST é tocado.
-- [ ] **AC8 — tema.** `/dashboard` e `/broker` com variantes `dark:` (ver
+- [x] **AC8 — tema.** `/dashboard` e `/broker` com variantes `dark:` (ver
       [[feedback-theme-convention]]); o modal segue o padrão visual do `VisitFeedbackModal`.
-- [ ] **AC9 — testes (vitest).** Rota GET: ordenação por visita, casamento autor×feedback,
+- [x] **AC9 — testes (vitest).** Rota GET: ordenação por visita, casamento autor×feedback,
       fallback `Sistema`, `pendingAppointmentId` correto (agendamento passado sem feedback), 401
       anônimo. Componente: os 3 estados + o estado "não renderiza".
 
@@ -152,6 +152,13 @@ rota server-side que faça as duas queries e case em memória. Decisão do Marco
    **symlinkados** para os da main — mesmo commit de `package.json`, nada disso é commitado.
 4. **Baseline de lint:** 0 erros / 26 avisos, **nenhum** nos arquivos novos (os do
    `lead-detail-drawer` são pré-existentes: `isCTWA`, `handleAddNote`).
+5. **AC9, parte "componente":** o projeto **não tem** `@testing-library`/jsdom — zero testes de
+   componente hoje. Em vez de introduzir infra de teste por conta própria (decisão que não é do
+   @dev), extraí a DECISÃO do botão para `visitFeedbackDoor()` no núcleo puro e testei os **4**
+   estados (os 3 visíveis + `hidden`) sem DOM. O que segue sem teste automatizado é só a
+   renderização em si — daí o smoke visual continuar aberto.
+6. **Onde ficou o risco não coberto:** nada foi visto rodando. O que os testes NÃO provam:
+   o modal abrindo, o header não estourando em tela estreita, e o tema escuro.
 
 ## File List
 
