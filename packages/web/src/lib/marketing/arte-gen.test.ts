@@ -207,3 +207,31 @@ describe("selectArteReferencias", () => {
     expect(r.map((x) => x.file_name)).toEqual(["trifold.png", "pomba.png"])
   })
 })
+
+// Story 75-295 — prompt imperativo quando há referência de fachada
+describe("buildArtePrompt — fachada (75-295)", () => {
+  it("com temReferenciaFachada, exige o edifício EXATO da referência", () => {
+    const p = buildArtePrompt({
+      descricao: "obra ao entardecer",
+      formato: "estatico",
+      marca: "Vind",
+      cores: [],
+      fontes: [],
+      temReferenciaFachada: true,
+    })
+    expect(p).toContain("EXATAMENTE o das imagens de referência")
+    expect(p).toContain("PROIBIDO criar outro prédio")
+  })
+
+  it("sem a flag, mantém só a regra branda de sempre", () => {
+    const p = buildArtePrompt({
+      descricao: "obra ao entardecer",
+      formato: "estatico",
+      marca: "Vind",
+      cores: [],
+      fontes: [],
+    })
+    expect(p).not.toContain("PROIBIDO criar outro prédio")
+    expect(p).toContain("não distorcer arquitetura nem inventar fachadas")
+  })
+})
