@@ -151,6 +151,37 @@ Ads no card + "variações do vencedor") · publicação direta via Graph API ·
 - `docs/architecture/lidia-pedir-v2-trafego-pago-spec.md` (spec @ux)
 - `docs/stories/75-294-lidia-pedir-v2-trafego-pago.story.md`
 
+## QA Results (@qa)
+
+**Gate: CONCERNS** — código, segurança e testes em ordem; nada visto rodando (pendência
+consciente, como na 75-293).
+
+| Check | Resultado |
+|---|---|
+| 1. Code review | Manual, diff completo (agente /code-review segue instável hoje). 1 defeito achado e corrigido |
+| 2. Testes | 660 verdes nos pacotes tocados · suíte completa 2209 |
+| 3. AC atendidas | 10/10 no código; AC4 "Refazer por proporção" com desvio documentado (Refazer atual regenera o conjunto) |
+| 4. Regressões | Orgânico coberto por teste dedicado (não manda ratios, campos pago nulos); suíte inteira verde; `next build` OK |
+| 5. Performance | Pago = specs×ratios sequencial (1×3 ≈ 45-75s, folgado nos 300s); modal busca brands 1× ao abrir |
+| 6. Segurança | `marketingGuard` nas 2 rotas (401/403 testados); chips compostos só do mapa do servidor (payload adulterado não injeta prompt via chip); validações 400 testadas |
+| 7. Documentação | Spec @ux + story com desvios e gotchas |
+
+### Defeito encontrado no gate e corrigido
+
+1. **[low — consistência] Preview × espelho divergiam no trio.** `post-preview-modal.tsx:43`
+   montava `Map` por ordem e a ÚLTIMA arte vencia — com 3 proporções na mesma ordem, o preview
+   mostrava a 9:16 enquanto o card/espelho usam a 4:5. Fix: primeira ocorrência vence (mesma
+   régua do `montarPatchDeArtes`).
+
+### Pendências conscientes (smoke pós-deploy)
+
+- Nada visto rodando: modal v2 (chips, ✨ Melhorar com Desfazer), card pago, geração REAL do
+  trio no Vertex (custo: 3 gerações por pedido) e o tema escuro.
+- Smoke: pedido pago de teste no Vind → conferir 3 miniaturas rotuladas + ad copy ≤125/27 +
+  aviso de IA · curl anônimo em `/api/marketing-posts/melhorar-pedido` = 401.
+- Migration 220 em prod ANTES do deploy servir tráfego (o INSERT com `destino` falha sem a
+  coluna — aplicar na janela do merge).
+
 ## Change Log
 
 - 2026-08-11 — @ux (Uma): spec escrita a partir da pesquisa de mercado e do código atual
@@ -169,3 +200,6 @@ Ads no card + "variações do vencedor") · publicação direta via Graph API ·
   type-check, build (rota melhorar-pedido gerada) e lint na baseline. Desvios em Dev Notes
   (Refazer por proporção ficou de fora — o Refazer atual regenera o conjunto). Ready →
   **InReview**.
+- 2026-08-11 — @qa: **gate CONCERNS**. 1 defeito corrigido (preview mostrava a 9:16 no lugar
+  da 4:5 no trio — primeira ocorrência passou a vencer). Ordem do deploy: migration 220
+  primeiro. Pendência: nada visto rodando (smoke).
