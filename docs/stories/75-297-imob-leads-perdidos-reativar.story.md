@@ -135,7 +135,28 @@ tela do broker; qualquer coisa do funil principal.
 
 ## QA Results (@qa)
 
-_(pendente)_
+**Gate: CONCERNS** — código aprovado; a parte visual (sub-abas/modal) só o olho valida
+(projeto sem jsdom — [[feedback-projeto-sem-teste-de-componente]]).
+
+| Check | Resultado |
+|---|---|
+| Suíte | 178 arquivos / 2229 verdes (+7 novos da rota) |
+| Typecheck / lint / build | limpos (lint = baseline 0 erros / 24 avisos) · `next build` OK |
+| AC1/AC2 | queries com `in`/`not.in` `PERDIDO_STAGE_IDS` importado da fonte única; contagens nas sub-abas |
+| AC3 | modal exige responsável+motivo; update = stage novo + lost_reason/grupo null (testado) |
+| AC4 | testado: 403 sem módulo, 404 segmento≠imob, 422 não-perdido, 400 responsável inválido |
+| AC5 | activity `lead_reactivated` (metadata com motivo/from/to/previous_lost_reason) + audit `lead.reactivate` (testados) |
+| AC6 | nenhum arquivo da house tocado; endpoint house intacto |
+
+**Observações (aceitas):**
+1. Lead IMOB com `stage_id` NULL não apareceria em nenhuma das views (`not.in` não casa NULL) —
+   mesmo comportamento da house desde a 75-129, e a criação IMOB sempre carimba etapa. Paridade
+   consciente, não regressão.
+2. O botão "Novo lead" segue visível na view Perdidos (o lead novo nasce em ativos) — inócuo.
+
+**Pendência herdada para o smoke pós-deploy:** como Daiana, abrir `/dashboard/imob/leads`,
+conferir Talita/Valmir na aba "Perdidos (2)", reativar um com motivo e vê-lo voltar para
+"Em atendimento" como "Aguardando atendimento".
 
 ## Change Log
 
