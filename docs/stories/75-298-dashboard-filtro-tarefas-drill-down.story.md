@@ -567,9 +567,107 @@ DoD ✅ · alinhamento ⚠️ (Epic 75 não tem arquivo de épico; coerência af
 4. Paginar o fetch de `lead_tasks` do `/broker/leads` (mesmo teto de 1000; resolvido de
    graça se o T2/T4 compartilharem o caminho de fetch).
 
-## QA Results (@qa)
+## QA Results (@qa — Quinn, 2026-08-12)
 
-_(pendente)_
+**Gate: CONCERNS** → `docs/qa/gates/75.298-dashboard-filtro-tarefas-drill-down.yml`
+Quality score **88** · review round 1 · branch `feat/75-298-dashboard-tarefas-drill-down` @ `6f5a642b`
+(diff revisado com `git diff main...HEAD`, árvore limpa).
+
+**Não achei defeito.** O veredito não é PASS por dois motivos, nenhum bloqueante: o **T5**
+segue aberto (ninguém carregou a tela — depende de deploy) e a story cria um **caminho de erro
+novo** numa tela que não tem `error.tsx` (C-1).
+
+### Gates rodados por mim (não confiei no relato)
+
+| Gate | Resultado |
+|---|---|
+| `npx vitest run …/task-buckets.test.ts` | 17 passed |
+| `npx vitest run` (suíte inteira) | 183 arquivos · 2295 passed \| 6 expected fail |
+| `packages/web: npx tsc --noEmit` | exit 0 — o `turbo type-check` estava **FULL TURBO** (cache), forcei |
+| `packages/web: npx eslint` | **0 errors**, 24 warnings — todas pré-existentes |
+| `packages/web: npx next build` | exit 0 |
+
+⚠️ `turbo … --force` **não** serve nesta máquina: quebra antes do web, em
+`@trifold/shared#build` → `TS2688 Cannot find type definition file for 'node'`
+(`packages/shared/node_modules` não existe aqui). Ambiente local, pré-existente, alheio à
+story — o diff só toca `packages/web`. Contornei rodando `tsc`/`eslint` direto no pacote.
+
+Verificação do warning de lint: `isAdmin` não usado existe na `main` (`git show main:…` linha
+82) e o diff não toca a linha. Nenhum aviso novo.
+
+### AC2 e AC3 — reproduzidos por mim em PROD (só SELECTs, Management API)
+
+Não reusei o SQL do @dev; escrevi o meu e comparei contra a RPC **real**:
+
+| filtro | RPC `get_broker_dashboard_counts(org, NULL)` | minha réplica do filtro da lista |
+|---|---|---|
+| `atrasadas` | 49 | **49** ✅ |
+| `para-hoje` | 28 | **28** ✅ |
+| `futuras` | 167 | **167** ✅ |
+| `sem-tarefas` | 291 | **291** ✅ |
+
+Base total 557 = 266 com tarefa + 291 sem ✅ · 272 tarefas abertas · 270 `lead_id` distintos ·
+24 com `due_at IS NULL` — batem com as Dev Notes.
+
+**AC3 (smoke):** Cassia Panerari `em_atrasadas=true`, `tarefas_abertas=1` · Denise Duarte
+`em_atrasadas=false`, `tarefas_abertas=0`. Confirma o diagnóstico do incidente de 11/08.
+
+**Integridade que eu decidi conferir por conta própria:** das 272 tarefas abertas, **0** com
+`org_id` nulo, **0** com `org_id` diferente do lead, **0** órfãs; `lead_tasks.org_id` é NOT NULL
+e `id` é uuid PK — o que valida de uma vez o `.eq("org_id", …)` do app, a guarda
+`.is("id", null)` (nunca casa) e o `.order("id")` do `.range()` (coluna ÚNICA).
+
+### Traceabilidade dos ACs
+
+AC1 ✅ · AC2 ✅ dados (tela = T5) · AC3 ✅ dados (clique = T5) · AC4 ✅ (hidden input 408 +
+`buildPageHref` 78-83 + `lead-filters.tsx:81` conferido no arquivo + `view=perdidos` ignora) ·
+AC5 ✅ (ramo novo é `else if` no meio, fetch todo dentro de `if (taskFilter)`; broker: rótulos
+comparados string a string) · AC6 ✅ (5 casos exigidos presentes nominalmente + fronteiras) ·
+AC7 ✅.
+
+### Riscos que o lead pediu para olhar
+
+1. **`sem-tarefas` / URL de ~10 KB** — sondei o gateway de prod eu mesmo (uuids sintéticos,
+   apikey inválida): **401 até 1000 uuids / 37.076 B**, isto é, a requisição é recebida e
+   roteada mesmo com 37 KB. O transporte não rejeita por tamanho; o 400 acima de ~640 vem de
+   camada que PARSEIA → falha **ruidosa**, nunca corte silencioso. Premissa dos 8 KB: morta.
+2. **Contadores das abas globais** — confirmado por desenho: `ativosCount`/`perdidosCount`
+   (linhas 303-308) são queries próprias sem os filtros. Só `totalCount` reage. Correto.
+3. **`criados=hoje` + `tasks=`** — o `gte("created_at", …)` continua aplicado e a régua de
+   ETAPA do `tasks` vence. Inalcançável pela UI (cada card linka 1 param). Decisão aceita.
+4. **Erro no fetch propaga** → ver **C-1** abaixo: é real, e o problema não é a escolha (barulho
+   > número mentiroso, está certo), é a ausência de boundary.
+5. **`/broker/leads` refactor puro** — confirmado linha a linha. Único desvio: `due_at`
+   não-parseável não cai mais em "futuras" (inalcançável com `timestamptz`). Os 4 rótulos são
+   idênticos; o chip dark-hardcoded do broker ficou como estava. O fetch de `lead_tasks` do
+   broker continua condicionado ao `tasks` CRU (linha 76), como antes — nada mudou ali.
+
+### Julgamento sobre o T0 (não escalar ao @po) — **CORRETA**
+
+O gatilho "ids > ~6 KB → RPC dedicada" nascia de um número **presumido**, não medido — o caso
+clássico de [[feedback-anotacao-backlog-e-hipotese]]. O @dev mediu o teto real com HTTP contra
+prod **antes** de codar, e a medição derrubou a premissa que criava o gatilho; minha sonda
+independente confirma. Escalar teria custado um ciclo e, pior, uma migration + RPC de
+manutenção perpétua contra um risco inexistente ([[feedback-nao-quebrar-o-que-funciona]]).
+Mediu, documentou método e números na story, e registrou o gatilho REAL (~500 leads com tarefa
+aberta) como follow-up. É o oposto de pular o @po por pressa.
+
+### Concerns (nenhum bloqueia)
+
+| id | sev | onde | o que |
+|---|---|---|---|
+| **C-1** | medium | `dashboard/leads/page.tsx:249-256` | `fetchAllLeads` **lança**, e não existe `error.tsx` **em nenhum lugar** de `packages/web/src/app` (nem `global-error.tsx`) → falha transitória em modo `tasks=` troca a lista do gerente pela tela de erro genérica do Next. → follow-up `app/dashboard/error.tsx` (dívida do diretório, revelada pela story). |
+| **C-2** | low | `dashboard/leads/page.tsx:236-289` | o gatilho de "cair na RPC" comenta só o `sem-tarefas`; o `.in("id", …)` de atrasadas/para-hoje/futuras tem o MESMO teto de URL. Hoje o maior é `futuras` (~167), folga real. Disparar pelo MAIOR dos dois conjuntos quando o follow-up for escrito. |
+| **C-3** | low | mig `209:334-352` × `page.tsx:258-263` | a RPC junta `lead_tasks` **sem** filtrar `lt.org_id`; o app filtra. Medido: 0 divergências, `org_id` NOT NULL, 1 org em prod. Informativo — se surgir 2ª org, revisar os dois lados juntos. |
+| **C-4** | low | `broker/leads/page.tsx:274` | vazio da lista ainda testa `tasks` cru → `?tasks=lixo` renderiza "Nenhum lead com undefined.". **Idêntico à main**, logo preservá-lo é o certo para o T4; é só uma linha órfã do refactor. |
+| **C-5** | low | — | **T5 aberto**: conferir os 4 filtros na tela e o clique num lead de `atrasadas`, começando por `?tasks=sem-tarefas` (URL mais longa). Ler card e lista no MESMO instante — o número anda (66 em 11/08 → 49 hoje). |
+
+### Recomendação
+
+**Liberar para @devops (PR).** Registrar C-1 como follow-up próprio e cumprir o T5 no primeiro
+acesso pós-deploy.
+
+— Quinn, guardião da qualidade 🛡️
 
 ## Change Log
 
