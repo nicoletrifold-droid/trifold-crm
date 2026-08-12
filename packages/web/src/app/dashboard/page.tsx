@@ -2,9 +2,16 @@ import { createClient } from "@web/lib/supabase/server"
 import { propertyStatusBadge, propertyStatusLabel } from "@web/lib/property-status"
 import { getServerUser } from "@web/lib/auth"
 import { EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
+import type { TaskFilterValue } from "@web/lib/leads/task-buckets"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
 import Link from "next/link"
 import { AlertCircle, Calendar, CheckCircle2, Filter, Users, UserX } from "lucide-react"
+
+// Story 75-298 — drill-down dos cards de tarefas: cada card abre a lista JÁ filtrada
+// pelo mesmo critério que produziu o número (antes todos caíam em /dashboard/leads sem
+// filtro, e o gerente não tinha como saber quais leads compunham o total). Tipado por
+// `TaskFilterValue` para que um typo no valor quebre o type-check, não a tela.
+const tasksHref = (filter: TaskFilterValue) => `/dashboard/leads?tasks=${filter}`
 
 type StageCountRow = { stage_id: string; total: number | string }
 type Counts = {
@@ -117,10 +124,10 @@ export default async function DashboardPage() {
               {[
                 { label: "Novos\nDisponíveis", value: gerenteCounts.novos, color: "orange", icon: <Users className="h-5 w-5 text-orange-500" />, href: "/dashboard/leads" },
                 { label: "Já\nTrabalhados", value: gerenteCounts.trabalhados, color: "neutral", icon: <Users className="h-5 w-5 text-gray-400 dark:text-stone-500" />, href: "/dashboard/leads" },
-                { label: "Total\nSem Tarefas", value: gerenteCounts.sem_tarefas, color: "red", icon: <UserX className="h-5 w-5 text-red-500" />, href: "/dashboard/leads", alert: gerenteCounts.sem_tarefas > 0 },
-                { label: "Tarefas\nAtrasadas", value: gerenteCounts.atrasadas, color: "red", icon: <AlertCircle className="h-5 w-5 text-red-500" />, href: "/dashboard/leads", alert: gerenteCounts.atrasadas > 0 },
-                { label: "Tarefas\nPara Hoje", value: gerenteCounts.para_hoje, color: "amber", icon: <Calendar className="h-5 w-5 text-amber-500" />, href: "/dashboard/leads" },
-                { label: "Tarefas\nFuturas", value: gerenteCounts.futuras, color: "emerald", icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, href: "/dashboard/leads" },
+                { label: "Total\nSem Tarefas", value: gerenteCounts.sem_tarefas, color: "red", icon: <UserX className="h-5 w-5 text-red-500" />, href: tasksHref("sem-tarefas"), alert: gerenteCounts.sem_tarefas > 0 },
+                { label: "Tarefas\nAtrasadas", value: gerenteCounts.atrasadas, color: "red", icon: <AlertCircle className="h-5 w-5 text-red-500" />, href: tasksHref("atrasadas"), alert: gerenteCounts.atrasadas > 0 },
+                { label: "Tarefas\nPara Hoje", value: gerenteCounts.para_hoje, color: "amber", icon: <Calendar className="h-5 w-5 text-amber-500" />, href: tasksHref("para-hoje") },
+                { label: "Tarefas\nFuturas", value: gerenteCounts.futuras, color: "emerald", icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, href: tasksHref("futuras") },
               ].map(({ label, value, color, icon, href, alert }) => (
                 <Link
                   key={label}

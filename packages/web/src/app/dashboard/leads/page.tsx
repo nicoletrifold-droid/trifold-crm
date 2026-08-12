@@ -13,6 +13,15 @@ import { LeadsBulkTable } from "@web/components/leads/leads-bulk-table"
 import { PERDIDO_STAGE_IDS, ACERVO_STAGE_IDS, EM_ATENDIMENTO_EXCLUDED_IDS } from "@web/lib/leads/stage-filters"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 import { SOURCE_LABELS } from "@web/lib/constants"
+import {
+  TASK_FILTER_LABELS,
+  bucketByTaskDue,
+  parseTaskFilter,
+  taskBucketBoundaries,
+  taskFilterLeadIds,
+  type PendingTask,
+} from "@web/lib/leads/task-buckets"
+import { fetchAllLeads } from "@web/lib/analytics/fetch-all-leads"
 
 // Opções do filtro de Origem — ordem de exibição. Rótulos vêm de SOURCE_LABELS.
 const SOURCE_FILTER_KEYS = [
@@ -44,6 +53,7 @@ type LeadsSearchParams = {
   criados?: string
   date_from?: string
   date_to?: string
+  tasks?: string
 }
 
 // Paginação preserva TODOS os filtros. Recebe o objeto de params (não uma fila de
@@ -65,6 +75,12 @@ function buildPageHref(targetPage: number, params: LeadsSearchParams, view: stri
   if (calorParam) p.set("calor", calorParam)
   const qualificacaoParam = parseQualificacao(params.qualificacao)
   if (qualificacaoParam) p.set("qualificacao", qualificacaoParam)
+  // Story 75-298 — o filtro de tarefas sobrevive à troca de página. Em `view=perdidos`
+  // ele é ignorado (critérios opostos), então também não entra no link.
+  if (view !== "perdidos") {
+    const tasksParam = parseTaskFilter(params.tasks)
+    if (tasksParam) p.set("tasks", tasksParam)
+  }
   return `?${p.toString()}`
 }
 
@@ -85,6 +101,11 @@ export default async function LeadsPage({
   // Story 75-151 — modo "Leads hoje" (clique no card do dashboard): lista TODOS os leads do dia
   // comercial, sem excluir perdidos/não qualificados/acervo, p/ o total bater com o card.
   const isCriadosHoje = params.criados === "hoje"
+  // Story 75-298 — drill-down dos cards de tarefas do dashboard do gerente.
+  // Valor fora da whitelist é ignorado (padrão de `calor`/`qualificacao`). Em
+  // `view=perdidos` o filtro é IGNORADO: a RPC dos cards exclui perdidos por etapa,
+  // então os dois critérios são opostos (nem filtro, nem chip).
+  const taskFilter = view === "perdidos" ? null : parseTaskFilter(params.tasks)
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
   const offset = (page - 1) * PAGE_SIZE
 
@@ -110,9 +131,18 @@ export default async function LeadsPage({
 
   // Filtro por view: ativos exclui stages de perdido, perdidos só inclui.
   // Story 75-151: no modo "criados=hoje" NÃO excluímos etapas (mostra tudo do dia → bate com o card).
+  // Story 75-298: no modo `tasks=` a lista ESPELHA o critério da RPC dos cards
+  // (`get_broker_dashboard_counts`, mig 209:313-359) — exclui só PERDIDO_STAGE_IDS
+  // (o ACERVO conta, e está dentro do número do card) e exige `lost_reason IS NULL`.
+  // Sem este ramo o número da lista fica MENOR que o do card. Precede `criados=hoje`
+  // porque é o critério que tem de bater com um card.
   if (view === "perdidos") {
     query = query.in("stage_id", PERDIDO_STAGE_IDS)
     countQuery = countQuery.in("stage_id", PERDIDO_STAGE_IDS)
+  } else if (taskFilter) {
+    const excluded = `(${PERDIDO_STAGE_IDS.join(",")})`
+    query = query.not("stage_id", "in", excluded).is("lost_reason", null)
+    countQuery = countQuery.not("stage_id", "in", excluded).is("lost_reason", null)
   } else if (!isCriadosHoje) {
     const excluded = `(${EM_ATENDIMENTO_EXCLUDED_IDS.join(",")})`
     query = query.not("stage_id", "in", excluded)
@@ -201,6 +231,62 @@ export default async function LeadsPage({
     const to = `${params.date_to}T23:59:59-03:00`
     query = query.lte("created_at", to)
     countQuery = countQuery.lte("created_at", to)
+  }
+
+  // ── Story 75-298 — filtro por tarefas (drill-down dos cards) ─────────────────
+  // Filtro SERVER-SIDE por ids: aplicado em `query` E `countQuery` para a paginação
+  // e o `totalCount` continuarem coerentes.
+  //
+  // O fetch tem de vir ANTES do `.range()`/`Promise.all` (o filtro precisa estar na
+  // query antes dela rodar), logo é um round-trip serial — só quando `tasks=` está
+  // ativo. PAGINADO via `fetchAllLeads`: o PostgREST corta em 1000 linhas EM SILÊNCIO
+  // e um corte aqui faria o número da lista divergir do card sem erro nenhum
+  // (mesma armadilha das stories 75-269/75-273 e 75-278). `.order("id")` porque
+  // `.range()` só é estável sobre coluna ÚNICA (`lead_tasks.id` é a PK).
+  //
+  // Espelho da bucketização de `/broker/leads/page.tsx` (mesmo helper). NÃO filtra
+  // por `assigned_to`: tarefa criada pelo corretor grava `assigned_to = NULL`
+  // (Story 75-42). RLS de `lead_tasks` é `org_id = user_org_id()` (mig 053), então o
+  // client de sessão do gerente já lê a org inteira.
+  if (taskFilter) {
+    const pendingTasks = await fetchAllLeads<PendingTask>(() =>
+      supabase
+        .from("lead_tasks")
+        .select("lead_id, due_at")
+        .eq("org_id", user.orgId)
+        .is("completed_at", null)
+        .order("id")
+    )
+
+    const buckets = bucketByTaskDue(pendingTasks, taskBucketBoundaries())
+    const includeIds = taskFilterLeadIds(buckets, taskFilter)
+
+    if (includeIds) {
+      // atrasadas / para-hoje / futuras → inclusão.
+      if (includeIds.size === 0) {
+        // Guarda de lista vazia: `.in("id", [])` gera `id=in.()`, que é SQL inválido.
+        // `id IS NULL` é válido e nunca casa (a PK é NOT NULL) → lista vazia honesta.
+        query = query.is("id", null)
+        countQuery = countQuery.is("id", null)
+      } else {
+        const ids = [...includeIds]
+        query = query.in("id", ids)
+        countQuery = countQuery.in("id", ids)
+      }
+    } else if (buckets.comTarefa.size > 0) {
+      // sem-tarefas → EXCLUSÃO de quem tem tarefa aberta (com ou sem `due_at`,
+      // igual ao `NOT EXISTS` da RPC). Conjunto vazio = ninguém a excluir → sem filtro
+      // (`.not("id","in","()")` seria SQL inválido).
+      //
+      // Tamanho de URL medido em prod em 12/08 (T0): 266 ids em escopo ≈ 9,9 KB, e o
+      // gateway do Supabase aceitou até ~600 uuids (≈ 22 KB) devolvendo 200 — 700
+      // (≈ 26 KB) já dá 400. Sobra ~2,3× de folga; acima disso a falha é RUIDOSA
+      // (400 do PostgREST), não silenciosa. Se o volume dobrar, a saída é uma RPC
+      // dedicada, nunca paginação client-side.
+      const excludeIds = `(${[...buckets.comTarefa].join(",")})`
+      query = query.not("id", "in", excludeIds)
+      countQuery = countQuery.not("id", "in", excludeIds)
+    }
   }
 
   query = query.range(offset, offset + PAGE_SIZE - 1)
@@ -317,6 +403,9 @@ export default async function LeadsPage({
             date_from: params.date_from,
             date_to: params.date_to,
             criados: isCriadosHoje ? "hoje" : undefined,
+            // Story 75-298 — sem este hidden, buscar por nome DENTRO do filtro de
+            // tarefas apagava o filtro calado (o mesmo bug do QA da 75-236).
+            tasks: taskFilter ?? undefined,
           }).map(([name, value]) =>
             value ? <input key={name} type="hidden" name={name} value={value} /> : null
           )}
@@ -356,11 +445,32 @@ export default async function LeadsPage({
         />
       </div>
 
+      {/* Story 75-298 — chip do filtro de tarefas ativo, com × que remove SÓ o `tasks`
+          (preservando os demais filtros). Par claro/escuro obrigatório em /dashboard:
+          copiar o markup do /broker verbatim seria regressão no tema claro. */}
+      {taskFilter && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-500/20 dark:text-orange-400">
+            {TASK_FILTER_LABELS[taskFilter]}
+            <Link
+              href={buildPageHref(1, { ...params, tasks: undefined }, view)}
+              className="ml-1 text-orange-700/60 hover:text-orange-900 dark:text-orange-400/60 dark:hover:text-orange-300"
+              aria-label="Remover filtro de tarefas"
+            >
+              ×
+            </Link>
+          </span>
+        </div>
+      )}
+
       {/* Story 75-129 — total de resultados do filtro (sempre visível) */}
       {/* Story 75-151 — no modo "Leads hoje", quebra por situação p/ explicar o total do card */}
       <p className="text-sm text-stone-500 dark:text-stone-400">
         <span className="font-semibold text-stone-900 dark:text-stone-100">{totalCount}</span>{" "}
         {isCriadosHoje ? (totalCount === 1 ? "lead hoje" : "leads hoje") : (totalCount === 1 ? "lead" : "leads")}
+        {/* Story 75-298 — deixa explícito na linha-resumo QUAL filtro produziu o número
+            (é este total que tem de bater com o card do dashboard). */}
+        {taskFilter && <>{" · "}{TASK_FILTER_LABELS[taskFilter].toLowerCase()}</>}
         {isCriadosHoje && perdidosHojeCount + acervoHojeCount > 0 && (
           <>
             {" · "}{emAtendimentoHojeCount} em atendimento
