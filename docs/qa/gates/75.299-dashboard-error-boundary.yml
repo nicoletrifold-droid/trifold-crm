@@ -1,0 +1,406 @@
+schema: 1
+story: "75.299"
+storyId: "75-299"
+title: "Error boundary das áreas logadas (`app/dashboard/error.tsx` + `app/broker/error.tsx`)"
+epic: 75
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 1
+reviewer: "Quinn (@qa)"
+reviewedAt: "2026-08-12"
+updated: "2026-08-12T16:40:00Z"
+branch: "feat/75-299-dashboard-error-boundary @ 31416f23 (de main @ db0a8572; árvore limpa)"
+po_validation: "seção 'Validação do @po (Pax…)' na própria story — GO 9/10"
+origin: "follow-up C-1 (medium) do gate da 75-298 — docs/qa/gates/75.298-dashboard-filtro-tarefas-drill-down.yml"
+quality_score: 92
+waiver: { active: false }
+
+status_reason: >
+  Não achei defeito funcional. Rodei os 4 gates eu mesmo, sem confiar no relato: suíte
+  184 arquivos / 2299 passed | 6 expected fail (exit 0) com as 4 linhas do
+  `error-retry.test.ts` na saída verbose (o `include` não filtrou), `tsc --noEmit` exit 0
+  direto no pacote `web`, `eslint .` = 0 errors / 24 warnings TODAS pré-existentes e
+  nenhuma em arquivo desta story, `next build` exit 0. Conferi as 4 afirmações
+  load-bearing na FONTE, não no relato: o runtime passa `reset` E `unstable_retry` ao
+  componente do usuário (`error-boundary.js:84-88`), `unstable_retry` é
+  `refresh()` + `reset()` (`:20-25`), o doc do pacote diz "In most cases, you should use
+  unstable_retry() instead" e registra a prop em `v16.2.0` (`error.md:121,157,329`), e o
+  `vitest.config.ts` de fato só inclui `*.test.ts`. `git diff main...HEAD --diff-filter=MD`
+  = VAZIO — zero arquivo existente tocado, como a story promete, e zero resíduo da falha
+  forçada da T4. Fechei sozinho a lacuna da AC5 com evidência estrutural do build (ver
+  ac_traceability AC5). O veredito não é PASS por três achados `low`, nenhum bloqueante:
+  contraste do `digest`/`message` abaixo do AA (medido, não sentido), a prop `title` sem
+  consumidor, e a T6 (pós-deploy) ainda aberta — mesmo padrão do C-5 da 75-298.
+
+ac_traceability:
+  - ac: 1
+    status: PASS
+    note: >
+      `components/ui/error-fallback.tsx` — `"use client"`, `role="alert"` na raiz,
+      título pt-BR "Erro ao carregar esta tela.", `Código: {digest}` guardado por
+      `{error.digest && …}`, botão "Tentar novamente" disparando `onRetry`, e
+      `console.error(scope, error.message, error.digest)` dentro de `useEffect`.
+      Zero `setState` em effect. Export nomeado, igual aos 4 irmãos do diretório
+      (`message-text`, `source-badge`, `scrollable-x`, `qualificacao-comercial-badge`) —
+      não há barrel a atualizar.
+  - ac: 2
+    status: PASS
+    note: >
+      `app/dashboard/error.tsx` tipa `error: Error & { digest?: string }` e a fonte do
+      retry é `unstable_retry` (via `pickRetry`), não `reset`. Verifiquei a premissa na
+      FONTE do runtime instalado, não no doc: `node_modules/next/dist/esm/client/
+      components/error-boundary.js:20-25` → `unstable_retry = () => startTransition(() =>
+      { this.context?.refresh(); this.reset() })`, e `:84-88` passa `reset` e
+      `unstable_retry` ao `errorComponent`. `reset = () => this.setState({error:null})`,
+      sem `refresh` — ou seja o desvio do direcionamento original do lead ("botão chamando
+      reset()") está tecnicamente correto para o caso de uso (falha transitória de fetch).
+  - ac: 2b
+    status: PASS
+    note: >
+      `lib/ui/error-retry.ts` — `pickRetry({unstable_retry, reset})` puro, uma expressão,
+      `typeof … === "function"` (mais forte que truthiness). `unstable_retry?: () => void`
+      opcional nos DOIS arquivos de rota → é o nosso tipo que obriga o fallback. Teste em
+      `.test.ts` (correto) com 4 casos: prop presente, `undefined` explícito, prop ausente,
+      e identidade de referência preservada. Re-conferi a premissa que sustenta o AC:
+      `.next/types/validator.ts` do build DESTA branch → `grep -c error` = 0. O `tsc` verde
+      realmente não prova a existência da prop.
+  - ac: 3
+    status: PASS
+    note: >
+      Zero `min-h-screen` e zero cor de fundo de página no componente — conferido linha a
+      linha. O cartão é `rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1
+      dark:ring-stone-800`, byte a byte o de `dashboard/loading.tsx:19,27`. Estruturalmente
+      o boundary só pode substituir o `{children}` (o `error.tsx` do segmento não envolve o
+      `layout.tsx` do próprio segmento — `error.md:96`), logo sidebar/header sobrevivem por
+      construção. Runtime confirmado pelo @dev na T4: 29 links `nav a[href^="/dashboard"]`
+      renderizados junto ao fallback, zero `<table>`.
+  - ac: 4
+    status: PASS
+    note: >
+      Método do @dev julgado VÁLIDO (ver method_review abaixo). A prova que separa
+      `unstable_retry` de `reset` não é a lista reaparecendo — isso o Fast Refresh também
+      faria — é o SERVIDOR ter renderizado de novo (`tentativa nº 1` → clique →
+      `tentativa nº 2`) sem nenhum arquivo salvo entre as duas observações, com
+      `window.__t4Marker` sobrevivendo (prova de ausência de reload) e a falha
+      auto-extinguível por contador de módulo, exatamente como o @po exigiu. Isso casa
+      1:1 com o `this.context?.refresh()` que eu li na fonte do runtime. Falha forçada
+      revertida: `grep -rn "boom75299|falha for|__t4Marker" packages/*/src` → vazio, e
+      `git diff main...HEAD --diff-filter=MD` → vazio.
+  - ac: 5
+    status: PASS (com evidência que EU acrescentei)
+    note: >
+      O @dev declarou honestamente que não viu o boundary do `/broker` renderizando —
+      `broker/layout.tsx:38-39` faz `if (user.role !== "broker") redirect("/dashboard")`,
+      e a conta seed disponível é `admin`; confirmei o guard no código. NÃO exigi um
+      corretor ativo (justificativa em method_review). Em vez disso fechei a lacuna com
+      evidência estrutural do build desta branch, que prova o WIRING (a única parte que o
+      código idêntico não provava): inspecionei os bundles de servidor e o
+      `app/broker/error.tsx` compilado é carregado por `.next/server/app/broker/leads/
+      page.js` e `.next/server/app/broker/page.js` (1 ocorrência de
+      `packages_web_src_app_broker_error_tsx_…`, 0 de `..._dashboard_error_tsx_…`),
+      enquanto `dashboard/leads/page.js` e `dashboard/page.js` carregam o do dashboard e
+      0 do broker; `cliente/page.js` e `login/page.js` carregam NENHUM dos dois (zero
+      vazamento de escopo). Somando: Next reconheceu o arquivo como errorComponent da
+      árvore `/broker`, o componente renderizado é o MESMO `ErrorFallback` já observado em
+      runtime sob `/dashboard`, o shell é idêntico (conferido por mim, abaixo) e as props
+      tipadas são as mesmas. O que resta sem observação é apenas a pintura, e ela não tem
+      nenhuma entrada específica do `/broker`.
+  - ac: 6
+    status: PASS
+    note: >
+      Gates rodados por MIM (ver evidence.gates_run_by_qa). `git diff main...HEAD
+      --diff-filter=MD` VAZIO → nenhum arquivo de página/layout/lib modificado ou removido;
+      6 adições, das quais 1 é a story. Zero migration, zero endpoint, zero env var, zero
+      dependência nova (`lucide-react` já é usado no `SidebarNav` de ambas as áreas).
+      Toda cor tem par claro+`dark:` — auditei as 8 declarações do componente uma por uma.
+      A única classe só-dark é `dark:ring-1 dark:ring-stone-800`, e é cópia literal do
+      `loading.tsx` (é um realce que só existe no escuro, não uma cor sem par).
+  - ac: 7
+    status: PASS
+    note: >
+      (a) `global-error.tsx` fora de escopo → `dashboard/error.tsx:23-24`; (b) o boundary
+      não cobre o `layout.tsx` do próprio segmento → `:20-25` e `broker/error.tsx:16-17`;
+      (c) `message` genérica em prod + `digest` como elo com o log → `:26-28` e comentário
+      no `error-fallback.tsx:72-73`; (e) event handler / async pós-render, com o exemplo
+      real do `broker-push-prompt.tsx:22` → `broker/error.tsx:17-19`. (d) route handlers /
+      PDF não cobertos está na story mas NÃO no código — a AC diz "a story **ou** o código",
+      então a AC está cumprida; a afirmação do item 7 do DoD ("estão no código … não só na
+      story") é que ficou um passo à frente do fato (DOC-001).
+
+quality_checks:
+  code_review: >
+    PASS. IDS honesto: `grep` por `ErrorFallback|error-fallback|pickRetry|unstable_retry`
+    dá zero no repo, e os 2 `error.tsx` do `/cliente` são inline, tela-cheia e dark-only —
+    o CREATE do componente-base se sustenta, e o padrão de LINGUAGEM deles foi preservado
+    ("Tentar novamente", `console.error` em effect, `digest` visível). Reuso de verdade e
+    não de discurso: as classes do cartão são idênticas às de `dashboard/loading.tsx:19,27`
+    e as do botão idênticas às de `dashboard/offline/page.tsx:26-31` — comparei string a
+    string, nenhuma cor inventada ([[feedback-consultar-fonte-nao-duplicar-constante]]).
+    A separação em 3 camadas (base visual / decisão pura / 2 arquivos de rota de 6 linhas)
+    é o desenho certo: o `unstable_` fica confinado a UM ponto de mudança. Comentários
+    explicam o PORQUÊ nos 4 pontos não óbvios e citam arquivo:linha verificáveis — todos
+    os que eu checei conferem. Um detalhe de estilo, não issue: `onClick={onRetry}` passa
+    o evento de clique como 1º argumento; `reset` e `unstable_retry` são arrows sem
+    parâmetro no runtime, então é inofensivo (e é o que os 2 arquivos do `/cliente` já
+    fazem), embora o doc mostre `onClick={() => unstable_retry()}`.
+  unit_tests: >
+    PASS. Suíte inteira rodada por mim: 184 arquivos, 2299 passed | 6 expected fail
+    (2305), exit 0 — os 6 "expected fail" são a linha de base pré-existente. O ponto que a
+    story mais temia está PROVADO na saída `--reporter=verbose`, não presumido: 4 linhas
+    `✓ packages/web/src/lib/ui/error-retry.test.ts > pickRetry > …`. Contagem coerente com
+    a base (183+1 arquivo, 2295+4 testes). Ausência de teste de componente é correta e
+    declarada: sem jsdom/happy-dom/`@testing-library` no repo
+    ([[feedback-projeto-sem-teste-de-componente]]) — e o time NÃO fabricou helper puro para
+    a parte visual, extraiu só a decisão que existe de fato.
+  acceptance_criteria: >
+    PASS nas 8 (AC1, AC2, AC2b, AC3-AC7). A única lacuna declarada (AC5 sem runtime) foi
+    fechada por mim com evidência de wiring no build, não dispensada.
+  no_regressions: >
+    PASS, e o risco nº 1 de adicionar um error boundary foi verificado explicitamente:
+    `error.tsx` novo poderia ENGOLIR os sinais de navegação que o app lança de propósito.
+    Não engole — `error-boundary.js:31-36` faz `if (isNextRouterError(error)) throw error`
+    em `getDerivedStateFromError`, e `is-next-router-error.js` cobre `isRedirectError`
+    (o `redirect()` dos guards de layout/página) e `isHTTPAccessFallbackError`
+    (`notFound()`/`forbidden()`/`unauthorized()`). Logo `redirect()` e `notFound()` seguem
+    funcionando exatamente como antes. Fora disso: zero arquivo existente tocado
+    (`--diff-filter=MD` vazio), zero teste pré-existente alterado, eslint na linha de base
+    exata de 24 warnings, `next build` exit 0 e o fluxo feliz reconferido pelo @dev em 4
+    rotas (o boundary não renderiza enquanto nada lança — é o comportamento do mecanismo).
+  performance: >
+    PASS. Custo medido, não estimado: o chunk SSR de cada boundary tem ~1,1 KB
+    (`packages_web_src_app_{dashboard,broker}_error_tsx_….js` = 1.148 e 1.133 bytes) e o
+    único import externo é `AlertTriangle` do `lucide-react`, pacote que já entra em toda
+    página de `/dashboard` e `/broker` pelos ícones do `SidebarNav` — não há dependência
+    nova a carregar. Zero query, zero round-trip, zero trabalho no fluxo feliz.
+  security: >
+    PASS. Zero `dangerouslySetInnerHTML`, zero `process.env`, zero segredo/chave/token nos
+    4 arquivos de produção (grep feito). Nenhuma rota nova → nada de `isPublicRoute` ou RLS
+    a conferir; nenhuma escrita, nenhuma query. O texto exibido é o que o próprio Next já
+    entrega ao cliente: em erro de Server Component a `message` é redigida pelo framework
+    em produção (`error.md:111`) e sobra o `digest`; em erro de Client Component a mensagem
+    é real, mas trata-se de código que já está público no bundle. Esta story não expõe nada
+    que o framework não expusesse — e o `digest`, que é o dado sensível-por-correlação, é um
+    hash opaco, não um identificador de negócio.
+  documentation: >
+    PASS. Story com File List, 4 decisões autônomas rotuladas, IDS protocol, self-critique
+    com bugs previstos e o que foi feito, e — o que mais vale — 3 achados de infra
+    pré-existentes registrados para o @qa/@devops em vez de escondidos. Os limites do AC7
+    estão no código, com a ressalva do DOC-001. A ressalva da AC5 foi ESCRITA pelo @dev
+    antes de eu perguntar; é o comportamento que eu quero ver num Dev Agent Record.
+
+# Julgamento explícito dos 3 pontos que o @dev pediu.
+dev_questions_ruled:
+  - id: Q1
+    question: "AC5 sem evidência de runtime no /broker. Exigir mais ou aceitar?"
+    verdict: ACEITO — sem exigir observação de runtime, mas eu acrescentei evidência
+    rationale: >
+      O que se pagaria para "ver com os próprios olhos" seria ativar (`is_active=true`) a
+      seed `corretor@trifold.com.br` ou criar um corretor — ou seja **DML em produção**
+      para satisfazer um checkbox, criando um usuário que a roleta e as contagens de lead
+      passariam a considerar. Isso é caro e arriscado de verdade
+      ([[feedback-nao-quebrar-o-que-funciona]]) contra um ganho quase nulo, porque o
+      raciocínio "código idêntico" tinha exatamente UM elo fraco — se o Next reconheceu o
+      arquivo como boundary do segmento `/broker` — e esse elo não precisa de navegador
+      para ser verificado. Verifiquei-o no artefato de build: os bundles de `/broker/**`
+      carregam o chunk do `app/broker/error.tsx` e nenhum outro; os de `/dashboard/**`
+      carregam o do dashboard; `/cliente` e `/login` não carregam nenhum. Com o wiring
+      provado, o componente é o MESMO que já foi visto renderizando em runtime sob
+      `/dashboard`, e o shell é idêntico — eu mesmo comparei `broker/layout.tsx:87,108-109`
+      com `dashboard/layout.tsx:305,324-326`: `min-h-screen bg-stone-50 dark:bg-stone-950`
+      e `<main className="lg:pl-56">` + `mx-auto max-w-6xl px-4 py-6 pb-24 lg:px-8 lg:py-8
+      lg:pb-8`, iguais. Não sobra hipótese com risco material. Fica como follow-up de
+      OPERAÇÃO: no primeiro erro real de um corretor, o `digest` da tela tem de casar com
+      o `console.error` do log da Vercel — que é a mesma observação reativa que a story já
+      previu no risco nº 3.
+  - id: Q2a
+    question: "Desvio da AC1: deps `[error, scope]` em vez de `[error]`."
+    verdict: CORRETO — sem issue
+    rationale: >
+      A AC1 pede o COMPORTAMENTO "1 log por erro, não por render", e ele é preservado
+      integralmente: `scope` é literal fixo (`"[dashboard/error]"` / `"[broker/error]"`) no
+      arquivo de rota, então nunca muda entre renders e nunca re-dispara o effect. Omiti-lo
+      abriria warning `react-hooks/exhaustive-deps` e estouraria a linha de base de 24 —
+      isto é, cumprir a AC1 ao pé da letra violaria a AC6. O @dev escolheu a leitura certa
+      da regra e documentou no arquivo (`error-fallback.tsx:48-51`). Confirmei o efeito
+      colateral zero no lint que rodei: 24 warnings, nenhuma em arquivo desta story.
+  - id: Q2b
+    question: "Desvio de cor: `digest` em `dark:text-stone-500`, não `stone-600`."
+    verdict: DIREÇÃO CORRETA, mas parou um degrau antes — vira UX-001 (low)
+    rationale: >
+      Não julguei por gosto, medi. Paleta oklch do Tailwind v4, contraste WCAG sobre o
+      fundo do cartão `stone-900`: `stone-600` = **2,29:1** (falha até para texto grande),
+      `stone-500` = **3,64:1**. O @dev estava certo e a percepção dele na tela era um fato,
+      não uma impressão: a troca melhorou o contraste em ~59%, e num elemento que a própria
+      story declara load-bearing (o suporte LÊ o `digest` para casar com o log — mitigação
+      do risco nº 2). Mas `text-xs` é texto normal para a WCAG, o mínimo AA é 4,5:1 e
+      3,64:1 ainda não chega. O degrau que falta é gratuito: `dark:text-stone-400` dá
+      **6,76:1**, é o token que o próprio componente já usa no parágrafo imediatamente
+      acima (`text-gray-500 dark:text-stone-400` = 4,84 / 6,76 — ambos AA), então não
+      inventa cor nem foge do padrão da casa. Ou seja: aceito o desvio, e recomendo
+      completá-lo. Ver UX-001.
+  - id: Q2c
+    question: "`error.message` exibido no fallback."
+    verdict: CORRETO — sem issue de desenho (a cor dele entra no UX-001)
+    rationale: >
+      Três razões, e nenhuma é "porque dá". (1) É o padrão dos 2 arquivos do `/cliente`, a
+      referência de linguagem que a story mandou preservar. (2) O texto ÚTIL em pt-BR não
+      depende dele — está no `<h2>` e no parágrafo fixos —, e o bloco é guardado por
+      `{error.message && …}`, então em produção, quando o Next redige a mensagem de Server
+      Component, a UI não fica com um vazio esquisito nem promete detalhe que não tem.
+      (3) Em dev é justamente o que faz o boundary não esconder bug (risco nº 2). Não é
+      vazamento: erro de Client Component já é código público. O único reparo é de
+      contraste — `text-gray-400` sobre branco dá **2,60:1**, a pior medição do componente
+      e pior que a do `digest` que motivou o ajuste. Mesma cura do UX-001.
+  - id: Q3
+    question: "Validade do método da T4 (Playwright headless próprio + magic link da seed admin) e das evidências."
+    verdict: VÁLIDO — método e evidências aceitos
+    rationale: >
+      O método está certo em três eixos. (a) Canal: terminal e headless próprio, não o
+      Chrome do Marcos ([[feedback-terminal-nao-navegador]]); magic link de uso único via
+      Auth admin API, sem trocar senha e sem escrever dado de negócio — o mínimo necessário
+      para ter sessão, e não havia alternativa, porque `packages/web/.env.development` de
+      fato não existe (conferi) e a seed de corretor está inativa. (b) Desenho do
+      experimento: é o ponto que salva o teste. A falha auto-extinguível por contador de
+      MÓDULO garante que o único evento entre as duas observações é o clique — sem ela,
+      "editar o arquivo e clicar" faria o Fast Refresh remontar a árvore e daria falso PASS
+      até com `reset()`, exatamente a armadilha que o @po previu. (c) Evidências
+      DISCRIMINANTES, não confirmatórias: a lista voltar é evidência fraca (Fast Refresh
+      também produziria); `window.__t4Marker` sobrevivendo mata a hipótese "recarregou a
+      página"; e o `tentativa nº 1` → clique → `tentativa nº 2` no log do SERVIDOR mata a
+      hipótese "foi só `reset()`", porque `reset` não provoca render no servidor. Essa
+      terceira evidência casa 1:1 com o `this.context?.refresh()` que eu li na fonte do
+      runtime — o mecanismo e a observação concordam por caminhos independentes. Também
+      cheguei sozinho na negativa que o teste precisava: a página genérica do Next
+      (`/Application error: a .*-side exception/`) NÃO casou. Aceito.
+
+# Nada aqui bloqueia merge.
+concerns:
+  - id: UX-001
+    severity: low
+    category: accessibility
+    file: "packages/web/src/components/ui/error-fallback.tsx:81,90"
+    summary: >
+      As duas linhas secundárias do cartão ficam abaixo do mínimo AA (4,5:1) para texto
+      normal — e `text-xs` é texto normal para a WCAG. Medido na paleta oklch do Tailwind
+      v4: `error.message` = `text-gray-400` sobre branco **2,60:1** e
+      `dark:text-stone-500` sobre `stone-900` **3,64:1**; `digest` = `text-gray-500` sobre
+      branco 4,84:1 (OK) e `dark:text-stone-500` **3,64:1**. O ajuste do @dev
+      (`stone-600` → `stone-500`) foi na direção certa e ganhou ~59% (2,29 → 3,64), só não
+      chegou ao mínimo. Pesa porque o `digest` é exatamente o que o suporte precisa LER
+      para casar com o `console.error` da Vercel — é a mitigação do risco nº 2 da story.
+    recommendation: >
+      Usar em ambas as linhas o mesmo par que o parágrafo logo acima já usa:
+      `text-gray-500 dark:text-stone-400` (4,84:1 / 6,76:1 — AA nos dois temas). Zero cor
+      nova, zero fuga do padrão da casa. Vale de carona quando o arquivo reabrir; se o
+      follow-up do `/cliente` unificar os 3 boundaries, corrigir lá de uma vez (o
+      `text-stone-600` do `/cliente` sobre `stone-950` é ainda pior).
+  - id: MNT-001
+    severity: low
+    category: maintainability
+    file: "packages/web/src/components/ui/error-fallback.tsx:39-41"
+    summary: >
+      A prop `title?: string` não tem NENHUM consumidor: os dois arquivos de rota usam o
+      default. A T3 dizia "idem (só o texto/`scope` muda)" e o texto não mudou — o que na
+      prática é a decisão melhor (a frase genérica serve às duas áreas), mas deixa um ponto
+      de extensão morto hoje.
+    recommendation: >
+      Manter é defensável — o follow-up do `/cliente` provavelmente vai querer variar o
+      título. Só não deixar virar prop órfã permanente: se o follow-up do `/cliente` for
+      descartado, remover a prop.
+  - id: DOC-001
+    severity: low
+    category: docs
+    file: "docs/stories/75-299-dashboard-error-boundary.story.md (story-dod-checklist, item 7)"
+    summary: >
+      O item 7 do DoD afirma que "os limites do AC7 (a-e) estão **no código**, nos
+      comentários … não só na story". Conferi os 4 arquivos: (a), (b), (c) e (e) estão
+      mesmo nos comentários; o (d) — os outros consumidores de `fetchAllLeads` (os 2 route
+      handlers de analytics e o PDF do `analytics-report-data.ts`) não ganham nada com esta
+      story — só existe na story. A AC7 pede "a story **ou** o código", então a AC está
+      cumprida; a afirmação do DoD é que ficou um passo à frente do fato.
+    recommendation: >
+      Informativo. Se o comentário do `dashboard/error.tsx` for reaberto, acrescentar uma
+      linha ao bloco (3): "route handler falha em 500/JSON — boundary não entra".
+  - id: REQ-001
+    severity: low
+    category: requirements
+    summary: >
+      T6 aberta por desenho: conferir pós-deploy que `/dashboard`, `/dashboard/leads` e
+      `/broker/leads` seguem idênticos no fluxo feliz. É o mesmo padrão do C-5 da 75-298 —
+      não bloqueia o PR, mas fica registrado para não sumir. ⛔ Não provocar erro em prod
+      para "testar o boundary": a única diferença dev↔prod aqui é a redação da `message`
+      pelo Next, que é comportamento de framework, e o preço seria uma tela quebrada para
+      um corretor ou gerente real.
+    recommendation: >
+      Exercer no primeiro acesso pós-deploy. E a observação legítima em prod é REATIVA:
+      quando um erro real acontecer, conferir que o `Código: {digest}` da tela casa com o
+      `console.error` no log da Vercel — é o que fecha o risco nº 2 de verdade.
+
+# Achados de infra do @dev — confirmados por mim, e são PRÉ-EXISTENTES (não desta story).
+infra_findings_confirmed:
+  - id: INFRA-1
+    confirmed: true
+    note: >
+      Confirmado e RELEVANTE para todo gate futuro: `turbo type-check|lint` mascara
+      `@trifold/shared#build` quebrado (TS2688, `@types/node` ausente em
+      `packages/shared/node_modules`). É a mesma nota que eu registrei na 75-298. Rodei
+      `npx tsc --noEmit -p packages/web/tsconfig.json` e `npx eslint .` direto no pacote
+      `web` — exit 0 e 24 warnings. Nada a ver com esta story (o diff não toca
+      `packages/shared`), mas o @devops deveria rodar `pnpm install` nesse pacote.
+  - id: INFRA-2
+    confirmed: true
+    note: >
+      Confirmado na prática: com `.next/dev` presente de um dev server morto, o `tsc`
+      acusa TS1005 em artefatos gerados. `rm -rf packages/web/.next/dev` antes do
+      typecheck e exit 0. Não é código nosso.
+  - id: INFRA-3
+    confirmed: true
+    note: >
+      `console.error` 2× em dev é o double-invoke de effects do React (StrictMode em
+      desenvolvimento), não `setState` em effect nem log duplicado. Li o `useEffect`: uma
+      única chamada, deps estáveis. Em produção é 1×. NÃO é bug.
+
+evidence:
+  gates_run_by_qa:
+    - "npx vitest run --reporter=verbose → 184 arquivos, 2299 passed | 6 expected fail (2305), exit 0"
+    - "…e as 4 linhas `✓ …/lib/ui/error-retry.test.ts > pickRetry > …` presentes na saída (o `include` não filtrou)"
+    - "packages/web: rm -rf .next/dev && npx tsc --noEmit -p tsconfig.json → exit 0"
+    - "packages/web: npx eslint . → 24 problems (0 errors, 24 warnings) — linha de base idêntica, nenhuma nos 5 arquivos novos"
+    - "packages/web: npx next build → exit 0"
+  source_claims_verified_by_qa:
+    - "error-boundary.js:84-88 — o runtime passa `error`, `reset` E `unstable_retry` ao errorComponent"
+    - "error-boundary.js:16-25 — `reset` = setState(error:null); `unstable_retry` = startTransition(refresh() + reset()) → o re-fetch é real"
+    - "error-boundary.js:31-36 + is-next-router-error.js — `redirect()` e `notFound()` são RE-LANÇADOS: o boundary novo não engole sinal de navegação"
+    - "error.md:121 / :157 / :329 — unstable_retry re-busca · 'use unstable_retry() instead' · prop added em v16.2.0"
+    - "packages/web/package.json — next 16.2.2, react 19.2.4, lucide-react ^1.7.0 (já usado no SidebarNav)"
+    - "vitest.config.ts:12-16 — include só `**/*.test.ts`: a armadilha do `.test.tsx` é real e foi evitada"
+    - "packages/web/.next/types/validator.ts (build DESTA branch) — grep -c error = 0: o tsc não valida props de error.tsx"
+    - "dashboard/loading.tsx:19,27 e offline/page.tsx:26-31 — classes copiadas são idênticas"
+    - "broker/layout.tsx:87,108-109 == dashboard/layout.tsx:305,324-326 — shell idêntico, comparado por mim"
+    - "broker/layout.tsx:38-39 — `if (user.role !== 'broker') redirect('/dashboard')`: a impossibilidade relatada pelo @dev é real"
+  ac5_wiring_evidence_by_qa:
+    - ".next/server/app/broker/leads/page.js → 1× chunk `app_broker_error_tsx`, 0× `app_dashboard_error_tsx`"
+    - ".next/server/app/broker/page.js → 1× broker, 0× dashboard"
+    - ".next/server/app/dashboard/leads/page.js e /dashboard/page.js → 1× dashboard, 0× broker"
+    - ".next/server/app/cliente/page.js e /login/page.js → 0× dos dois (nenhum vazamento de escopo)"
+  regression_evidence_by_qa:
+    - "git diff main...HEAD --diff-filter=MD → VAZIO (nenhum arquivo existente modificado ou removido)"
+    - "git diff main...HEAD --name-status → 6× A (5 arquivos de código novos + a story)"
+    - "grep -rn 'boom75299|falha for|__t4Marker' packages/{web,ai,shared}/src → vazio (falha forçada da T4 revertida)"
+    - "grep dangerouslySetInnerHTML|process.env|KEY|TOKEN|SUPABASE nos 4 arquivos de produção → vazio"
+    - "chunk SSR de cada boundary ≈ 1,1 KB; nenhuma dependência nova"
+  contrast_measured_by_qa: >
+    Paleta oklch do Tailwind v4, contraste WCAG calculado (não estimado a olho):
+    h2 17,75 / 16,04 · parágrafo 4,84 / 6,76 · `digest` 4,84 / **3,64** ·
+    `error.message` **2,60** / **3,64** · (`stone-600` rejeitado pelo @dev = **2,29**,
+    confirmando que a decisão dele foi acerto medível) · `stone-400` sugerido = 6,76 ·
+    ícone `amber-500` sobre branco 2,15 mas é `aria-hidden` e decorativo, logo isento.
+
+recommendation: >
+  Liberar para @devops (PR). Nenhum item bloqueia. Levar UX-001 de carona na próxima
+  abertura do arquivo — ou, melhor, no follow-up que unifica os boundaries do `/cliente`,
+  que tem o mesmo defeito pior. Cumprir a T6 no primeiro acesso pós-deploy, sem provocar
+  erro em prod. Registrar como follow-up de OPERAÇÃO (não desta story): no primeiro erro
+  real, conferir que o `digest` da tela casa com o `console.error` no log da Vercel.
+  Para o @devops, fora do escopo desta story: `pnpm install` em `packages/shared` para
+  destravar o `turbo type-check|lint --force` (INFRA-1).

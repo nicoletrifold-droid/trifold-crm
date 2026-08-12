@@ -629,7 +629,118 @@ debug esquecido · nenhum código comentado, nenhum TODO solto, nenhum import n�
 
 ## QA Results
 
-_(preencher pelo @qa)_
+### Review Date: 2026-08-12 · Reviewed By: Quinn (@qa, Test Architect) · Round 1
+
+**Veredito: CONCERNS · quality score 92 · nada bloqueia o PR.**
+Branch `feat/75-299-dashboard-error-boundary` @ `31416f23` (de `main` @ `db0a8572`).
+
+Não achei defeito funcional. Rodei os 4 gates eu mesmo (sem confiar no relato) e conferi as
+afirmações load-bearing **na fonte**, não no Dev Agent Record. O veredito não é PASS por 3
+achados `low` — contraste abaixo do AA em 2 linhas do cartão (**medido**, não sentido), prop
+`title` sem consumidor, e a T6 (pós-deploy) ainda aberta, mesmo padrão do C-5 da 75-298.
+
+#### Gates rodados por mim
+
+| gate | comando | resultado |
+|---|---|---|
+| suíte | `npx vitest run --reporter=verbose` | **184 arquivos · 2299 passed \| 6 expected fail · exit 0** |
+| teste do AC2b rodou de fato | `grep error-retry.test.ts` na saída | **4 linhas `✓ … > pickRetry > …`** — o `include` não filtrou |
+| typecheck | `rm -rf .next/dev && npx tsc --noEmit -p packages/web/tsconfig.json` | **exit 0** |
+| lint | `npx eslint .` em `packages/web` | **24 problems (0 errors, 24 warnings)** — base idêntica, **nenhuma** nos 5 arquivos novos |
+| build | `npx next build` em `packages/web` | **exit 0** |
+| regressão | `git diff main...HEAD --diff-filter=MD` | **VAZIO** — zero arquivo existente modificado/removido |
+| resíduo da T4 | `grep -rn "boom75299\|falha for\|__t4Marker" packages/{web,ai,shared}/src` | **vazio** — falha forçada revertida |
+
+#### AC × veredito
+
+AC1 **PASS** · AC2 **PASS** · AC2b **PASS** · AC3 **PASS** · AC4 **PASS** · AC5 **PASS (com
+evidência que eu acrescentei)** · AC6 **PASS** · AC7 **PASS** (ver DOC-001).
+Rastreabilidade item a item no gate file.
+
+#### O que eu verifiquei na FONTE (não no relato)
+
+- `error-boundary.js:16-25` — `reset` = `setState({error:null})`; `unstable_retry` =
+  `startTransition(refresh() + reset())`. **O re-fetch é real**, e o desvio do
+  direcionamento original do lead ("botão chamando `reset()`") está tecnicamente correto.
+- `error-boundary.js:84-88` — o runtime passa `error`, `reset` **e** `unstable_retry`.
+- 🔑 `error-boundary.js:31-36` + `is-next-router-error.js` — **`redirect()` e `notFound()`
+  são RE-LANÇADOS** pelo `getDerivedStateFromError`. Era o risco nº 1 de adicionar um
+  boundary (engolir sinal de navegação) e ele **não existe**. Nenhum dos dois lados da story
+  levantou isso; eu levantei e verifiquei.
+- `error.md:121/157/329` · `validator.ts` do build desta branch (`grep -c error` = **0**) ·
+  `vitest.config.ts:12-16` · `loading.tsx:19,27` e `offline/page.tsx:26-31` (classes
+  idênticas) · `broker/layout.tsx:87,108-109` **==** `dashboard/layout.tsx:305,324-326`.
+
+#### Os 3 pontos que o @dev pediu para julgar
+
+1. **AC5 sem runtime → ACEITO, e eu fechei a lacuna.** Não exigi observação de runtime: o
+   preço seria **DML em prod** (ativar a seed `corretor@trifold.com.br`) para satisfazer um
+   checkbox, criando um corretor que a roleta passaria a considerar. Confirmei que a
+   impossibilidade é real (`broker/layout.tsx:38-39` redireciona quem não é `broker`; não
+   existe `packages/web/.env.development`). O argumento "código idêntico" tinha **um** elo
+   fraco — se o Next reconheceu o arquivo como boundary do segmento `/broker` — e esse elo
+   não precisa de navegador: nos bundles de servidor deste build, `/broker/leads/page.js` e
+   `/broker/page.js` carregam o chunk de `app/broker/error.tsx` e **0×** o do dashboard;
+   `/dashboard/**` carregam o do dashboard e **0×** o do broker; `/cliente` e `/login`,
+   **nenhum dos dois**. Wiring provado + componente já visto renderizando sob `/dashboard`
+   + shell idêntico = não sobra hipótese com risco material.
+2. **Os 3 desvios.** (a) deps `[error, scope]` — **CORRETO, sem issue**: cumprir a AC1 ao
+   pé da letra violaria a AC6 (warning novo de `exhaustive-deps`), e o comportamento pedido
+   ("1 log por erro") é preservado porque `scope` é literal fixo. (b) `digest` em
+   `stone-500` — **direção certa, parou um degrau antes → UX-001 (low)**: medi na paleta
+   oklch do Tailwind v4, `stone-600` sobre `stone-900` = **2,29:1** e `stone-500` =
+   **3,64:1**, ou seja a percepção do @dev na tela era **fato** (+59%), mas `text-xs` é
+   texto normal para a WCAG e o mínimo AA é 4,5:1. O degrau que falta é grátis:
+   `dark:text-stone-400` = **6,76:1**, e é o token que o parágrafo logo acima já usa.
+   (c) `error.message` exibido — **CORRETO**: é o padrão dos 2 arquivos do `/cliente`, é
+   guardado por `{error.message && …}` (some quando o Next redige em prod), o texto útil em
+   pt-BR não depende dele, e não é vazamento (erro de client component já é código público).
+   Só a **cor** dele entra no UX-001 — `text-gray-400` sobre branco é **2,60:1**, a pior
+   medição do componente, pior que a do `digest` que motivou o ajuste.
+3. **Método da T4 → VÁLIDO.** Certo nos 3 eixos: canal (terminal + headless próprio, magic
+   link de uso único, zero escrita de dado de negócio — [[feedback-terminal-nao-navegador]]);
+   desenho do experimento (a falha auto-extinguível por contador de **módulo** garante que
+   o único evento entre as duas observações é o clique — sem ela o Fast Refresh daria falso
+   PASS até com `reset()`); e **evidências discriminantes, não confirmatórias**: a lista
+   voltar é evidência fraca, `window.__t4Marker` sobrevivendo mata "recarregou", e
+   `tentativa nº 1` → clique → `tentativa nº 2` **no log do servidor** mata "foi só
+   `reset()`" — porque `reset` não provoca render no servidor. Essa evidência casa 1:1 com
+   o `this.context?.refresh()` que eu li na fonte: mecanismo e observação concordam por
+   caminhos independentes. Aceito.
+
+#### Achados (todos `low`, nenhum bloqueia)
+
+| id | sev | arquivo:linha | achado |
+|---|---|---|---|
+| UX-001 | low | `components/ui/error-fallback.tsx:81,90` | `error.message` 2,60:1 (claro) / 3,64:1 (escuro) e `digest` 3,64:1 (escuro) — abaixo do AA 4,5:1. Cura: `text-gray-500 dark:text-stone-400` (4,84 / 6,76) nas duas linhas, token que o componente já usa |
+| MNT-001 | low | `components/ui/error-fallback.tsx:39-41` | prop `title?: string` sem nenhum consumidor (ambas as rotas usam o default) — ponto de extensão morto hoje; defensável se o follow-up do `/cliente` acontecer |
+| DOC-001 | low | esta story, `story-dod-checklist` item 7 | o item afirma que os limites AC7 (a-e) estão **no código**; (a)(b)(c)(e) estão, mas **(d)** (route handlers/PDF) só está na story. A AC7 pede "story **ou** código" → **AC cumprida**; o texto do DoD é que ficou à frente do fato |
+| REQ-001 | low | — | **T6 aberta** (fluxo feliz pós-deploy). Não bloqueia. ⛔ Não provocar erro em prod |
+
+#### Elogios (o que quero ver de novo)
+
+- A **ressalva da AC5 foi escrita pelo @dev antes de eu perguntar**, e os 3 achados de
+  infra foram **registrados em vez de escondidos** (confirmei os 3: `turbo` mascarando
+  `@trifold/shared#build`; `.next/dev` corrompido; `console.error` 2× = double-invoke do
+  React em dev, **não** bug).
+- A story **derrubou duas mitigações imaginárias antes de escrever código** (o `tsc` não
+  valida props de `error.tsx`; `.test.tsx` nunca roda) e transformou cada uma em desenho
+  verificável — `pickRetry` com fallback + teste em `.test.ts` provado na saída.
+- REUSE de verdade e não de discurso: comparei as classes do cartão e do botão string a
+  string com as fontes citadas. Nenhuma cor inventada.
+
+#### Gate Status
+
+Gate: **CONCERNS** → `docs/qa/gates/75.299-dashboard-error-boundary.yml`
+
+**Recomendação:** liberar para **@devops** (PR). UX-001 de carona na próxima abertura do
+arquivo — ou no follow-up que unifica os boundaries do `/cliente`, que tem o mesmo defeito
+pior (`text-stone-600` sobre `stone-950`). Follow-up de **operação** (não desta story): no
+primeiro erro real em prod, conferir que o `Código: {digest}` da tela casa com o
+`console.error` no log da Vercel — é o que fecha o risco nº 2 de verdade. Para o @devops,
+fora do escopo: `pnpm install` em `packages/shared` (INFRA-1).
+
+— Quinn, guardião da qualidade 🛡️
 
 ## Story Draft Checklist (@sm — `story-draft-checklist.md`, rodado antes de entregar)
 
