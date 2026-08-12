@@ -14,13 +14,16 @@ import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 import { TaskDateFilter } from "./_components/task-date-filter"
 import { taskDateRange, taskDateLabel } from "@web/lib/broker/task-date-range"
 import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
-
-const TASK_LABELS: Record<string, string> = {
-  atrasadas: "Tarefas atrasadas",
-  "para-hoje": "Tarefas para hoje",
-  futuras: "Tarefas futuras",
-  "sem-tarefas": "Sem tarefas",
-}
+// Story 75-298 — a bucketização por vencimento e os rótulos do chip saíram daqui para
+// `lib/leads/task-buckets` e são compartilhados com `/dashboard/leads?tasks=`
+// (o drill-down dos cards do gerente). Refactor puro: mesma régua, mesmos rótulos.
+import {
+  TASK_FILTER_LABELS,
+  bucketByTaskDue,
+  parseTaskFilter,
+  taskBucketBoundaries,
+  taskFilterLeadIds,
+} from "@web/lib/leads/task-buckets"
 
 const FILTER_LABELS: Record<string, string> = {
   trabalhados: "Leads já trabalhados",
@@ -37,8 +40,11 @@ export default async function BrokerLeadsPage({
   const search = q?.trim().toLowerCase() ?? ""
   const tdRange = taskDateRange(td, tdfrom, tdto)
 
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-  const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+  const taskFilter = parseTaskFilter(tasks)
+  const taskLabel = taskFilter ? TASK_FILTER_LABELS[taskFilter] : undefined
+  // Fronteiras do dia no fuso do SERVIDOR (America/Sao_Paulo desde a 75-33) — mesmo
+  // cálculo de antes, agora no helper compartilhado.
+  const { todayStart, tomorrowStart } = taskBucketBoundaries()
 
   const [{ data: leads }, { data: pendingTasks }, { data: properties }, { data: stages }] =
     await Promise.all([
@@ -91,27 +97,12 @@ export default async function BrokerLeadsPage({
   // Story 75-91: cálculo extraído p/ helper compartilhado (lib/sla/waiting), reusado no kanban do dashboard.
   const waitingByLead = await computeWaitingMinutes(createAdminClient(), user.orgId, aguardandoIds)
 
-  // Build sets for task-based filtering
-  const taskLeadIds = (() => {
-    if (!tasks || !pendingTasks) return null
-    const withOverdue = new Set<string>()
-    const withToday = new Set<string>()
-    const withFuture = new Set<string>()
-    const withAnyTask = new Set<string>()
-    for (const t of pendingTasks) {
-      withAnyTask.add(t.lead_id)
-      if (!t.due_at) continue
-      const d = new Date(t.due_at)
-      if (d < todayStart) withOverdue.add(t.lead_id)
-      else if (d < tomorrowStart) withToday.add(t.lead_id)
-      else withFuture.add(t.lead_id)
-    }
-    if (tasks === "atrasadas") return withOverdue
-    if (tasks === "para-hoje") return withToday
-    if (tasks === "futuras") return withFuture
-    if (tasks === "sem-tarefas") return null // handled by exclusion
-    return null
-  })()
+  // Build sets for task-based filtering. `sem-tarefas` devolve null de propósito:
+  // é exclusão (tratada no `filtered` abaixo), não inclusão.
+  const taskLeadIds =
+    taskFilter && pendingTasks
+      ? taskFilterLeadIds(bucketByTaskDue(pendingTasks, { todayStart, tomorrowStart }), taskFilter)
+      : null
 
   // Leads com tarefa pendente vencendo no intervalo selecionado (filtro "Data da Tarefa")
   const taskDateLeadIds = (() => {
@@ -138,7 +129,7 @@ export default async function BrokerLeadsPage({
     if (daysAgo && (lead.updated_at as string) >= daysAgo) return false
     if (filter === "trabalhados" && lead.stage_id === AGUARDANDO_STAGE_ID) return false
     // Task filters
-    if (tasks === "sem-tarefas") {
+    if (taskFilter === "sem-tarefas") {
       const hasTask = (pendingTasks ?? []).some((t) => t.lead_id === (lead.id as string))
       if (hasTask) return false
     } else if (taskLeadIds) {
@@ -234,7 +225,7 @@ export default async function BrokerLeadsPage({
       </div>
 
       {/* Chip de filtro por tarefa ativo */}
-      {(tasks && TASK_LABELS[tasks]) || (filter && FILTER_LABELS[filter]) || tdLabel ? (
+      {taskLabel || (filter && FILTER_LABELS[filter]) || tdLabel ? (
         <div className="flex flex-wrap items-center gap-2">
           {tdLabel && (
             <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
@@ -248,9 +239,9 @@ export default async function BrokerLeadsPage({
               </Link>
             </span>
           )}
-          {tasks && TASK_LABELS[tasks] && (
+          {taskLabel && (
             <span className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-400">
-              {TASK_LABELS[tasks]}
+              {taskLabel}
               <Link
                 href={clearTasksUrl}
                 className="ml-1 text-orange-400/60 hover:text-orange-300"
@@ -281,7 +272,7 @@ export default async function BrokerLeadsPage({
             {search
               ? `Nenhum lead encontrado para "${q}".`
               : tasks
-              ? `Nenhum lead com ${TASK_LABELS[tasks]?.toLowerCase()}.`
+              ? `Nenhum lead com ${taskLabel?.toLowerCase()}.`
               : filter
               ? `Nenhum lead com filtro "${FILTER_LABELS[filter]?.toLowerCase()}".`
               : "Você não tem leads designados. Novos leads serão atribuídos pelo supervisor."}
