@@ -1,7 +1,7 @@
 # Story 75-298 — Dashboard do gerente: drill-down dos cards de tarefas (filtro `tasks=` em /dashboard/leads)
 
 **Story ID:** 75-298
-**Epic:** 75 (CRM Trifold) · **Status:** Ready for Review · **Estimativa:** S/M (~3 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done · **Estimativa:** S/M (~3 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Tipo:** fix de UX/consistência (número do card sem lista correspondente)
@@ -208,11 +208,13 @@ gerente já conhece → **fora do escopo**, registrar como follow-up se o @po qu
   escopo, ver Escopo.)
 - [x] T4 (AC5) — `/broker/leads/page.tsx:95-114`: substituir a bucketização inline pelo helper.
   **Refactor puro: zero mudança de comportamento** (o fuso já estava correto).
-- [ ] T5 (AC2, AC7) — Validação em prod pós-deploy: card vs lista para os 4 filtros
+- [x] T5 (AC2, AC7) — Validação em prod pós-deploy: card vs lista para os 4 filtros
   (leitura SQL da RPC no mesmo instante), + smoke do AC3 com um lead real.
-  → **PENDENTE (depende de deploy).** A equivalência já foi provada no nível SQL contra prod
-  em 12/08 (RPC real × filtro da lista, 4/4 batendo) — ver Dev Notes. Falta a conferência
-  visual na tela depois do deploy.
+  → **CUMPRIDO 12/08 (prints do Marcos, logado como o gerente Joabe):** card e lista batendo
+  no mesmo instante em `sem-tarefas` **292/292**, `atrasadas` **49/49**, `para-hoje` **28/28**;
+  chip com × e rótulo no `totalCount` corretos; abas globais conforme Decisão #7. O número
+  andou de 11/08 (66) para 12/08 (49) com card e lista JUNTOS — comportamento esperado.
+  `futuras` (167) não foi printado (mesmo mecanismo; equivalência SQL 167/167 já provada).
 
 ## Dev Notes
 
@@ -686,3 +688,13 @@ acesso pós-deploy.
   a RPC dedicada NÃO foi necessária. AC2 provado em SQL contra prod antes do deploy: RPC ×
   lista batem 4/4 (49/28/167/291). Gates: 2295 testes ✅ · type-check ✅ · lint 0 erros ✅ ·
   build de produção ✅.
+- 2026-08-12 — @qa (Quinn): gate **CONCERNS não-bloqueante** (score 88, 7/7 ACs, zero defeito
+  de código). Verificação independente em prod (SQL próprio) 4/4. Gate em
+  `docs/qa/gates/75.298-dashboard-filtro-tarefas-drill-down.yml`. Decisão do @dev no T0
+  julgada CORRETA. Follow-up principal: `app/dashboard/error.tsx` (o app não tem nenhum
+  error boundary).
+- 2026-08-12 — @devops (Gage): **PR #400** mesclado na main via squash (`db0a8572`); deploy
+  Vercel Ready em 2min; smoke sem navegador OK (todas as rotas `?tasks=` → 307 login, zero
+  5xx). Branch apagada.
+- 2026-08-12 — lead: **T5 cumprido** com prints do Marcos (292/292, 49/49, 28/28, chip e
+  rótulo OK). Status **Ready for Review → Done**.
