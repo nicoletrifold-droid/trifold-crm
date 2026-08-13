@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ObraCreateModal } from "./_components/obra-create-modal"
@@ -70,7 +70,10 @@ export default async function ObrasPage() {
   // "Obras" no menu lateral (obra_upload_aprovacoes, status='pendente'), mas
   // agrupadas por obra_id para que cada linha mostre a sua fatia. Só admin/
   // supervisor aprovam, então só eles veem a coluna (igual ao gate do menu).
-  const canApprove = user.role === "admin" || user.role === "supervisor"
+  // 75-308: coluna/badges de pendências seguem a capability de aprovar uploads;
+  // reativar obra arquivada é capability própria.
+  const canApprove = await can(user.id, user.orgId, "obras.aprovar_uploads")
+  const canReativar = await can(user.id, user.orgId, "obras.reativar")
   const pendentesPorObra: Record<string, number> = {}
   if (canApprove) {
     const { data: pendentes } = await supabase
@@ -205,7 +208,7 @@ export default async function ObrasPage() {
                   {formatDeliveryDate(obra.expected_delivery_date)}
                 </td>
                 <td className="px-6 py-4 text-right">
-                  {user.role === "admin" ? (
+                  {canReativar ? (
                     <ObraReativarButton obraId={obra.id} obraName={obra.name} />
                   ) : null}
                 </td>

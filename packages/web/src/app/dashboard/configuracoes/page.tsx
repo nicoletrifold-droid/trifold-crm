@@ -1,4 +1,5 @@
 import { getServerUser } from "@web/lib/auth"
+import { can } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import Link from "next/link"
 import { NotificationToggle } from "@web/components/notification-toggle"
@@ -88,7 +89,8 @@ export default async function ConfiguracoesPage() {
     : CONFIG_CARDS
 
   // Story 75-210: preferência de e-mail de aprovação — só quem recebe (admin/supervisor).
-  const isAprovador = user.role === "admin" || user.role === "supervisor"
+  // 75-308: elegibilidade ao e-mail de aprovação é a capability própria.
+  const isAprovador = await can(user.id, user.orgId, "obras.receber_email_aprovacao")
   let aprovacaoEmailEnabled = true
   if (isAprovador) {
     const supabase = await createClient()

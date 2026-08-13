@@ -116,23 +116,28 @@ export const CAPABILITIES = [
   { key: "dashboard.ver_equipe", label: "Blocos de equipe", description: "Blocos “Leads da Equipe” e “Funil da Equipe” no dashboard. (UX por role — não migra p/ capability; ver 75-305.)", seed: [GC, SDR] },
 
   // ── Obras ────────────────────────────────────────────────────────────────
-  { key: "obras.criar", label: "Criar obra", description: "Cadastrar nova obra.", seed: [A, S, OBR, GR] },
-  { key: "obras.editar", label: "Editar obra", description: "Editar dados da obra.", seed: [A, S, OBR, GR] },
-  { key: "obras.apagar", label: "Excluir obra", description: "Excluir a obra.", seed: [A] },
-  { key: "obras.reativar", label: "Reativar obra", description: "Restaurar obra arquivada.", seed: [A] },
-  { key: "obras.fases_gerenciar", label: "Gerenciar fases", description: "Criar/editar/excluir fases do cronograma.", seed: [A, S, OBR, GR] },
-  { key: "obras.fotos_enviar", label: "Enviar fotos", description: "Upload de fotos (obras/gerente-relacionamento entram na fila de aprovação — regra de fluxo).", seed: [A, S, OBR, GR] },
-  { key: "obras.fotos_apagar", label: "Apagar foto/documento direto", description: "Exclusão direta, sem passar pela fila de aprovação.", seed: [A, S] },
+  // enforced na 75-308 (F3-7): todas as rotas/telas de Obras decidem por can().
+  // obras.ver é NOVA (mig 227): os GETs hoje exigem A/S/OBR/GR — o módulo `obras`
+  // ligado NÃO basta (consultoria tem o módulo ON em prod e segue bloqueada; a RLS
+  // também a bloquearia — liberar é decisão p/ F4, com o Marcos).
+  { key: "obras.ver", label: "Ver obras", description: "Listar e abrir obras, fases, documentos e mensagens (leitura).", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.criar", label: "Criar obra", description: "Cadastrar nova obra.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.editar", label: "Editar obra", description: "Editar dados da obra.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.apagar", label: "Excluir obra", description: "Excluir a obra.", seed: [A], enforced: true },
+  { key: "obras.reativar", label: "Reativar obra", description: "Restaurar obra arquivada.", seed: [A], enforced: true },
+  { key: "obras.fases_gerenciar", label: "Gerenciar fases", description: "Criar/editar/excluir fases do cronograma.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.fotos_enviar", label: "Gerenciar fotos", description: "Enviar, editar e excluir fotos pela API (obras/gerente-relacionamento entram na fila de aprovação — regra de fluxo; a exclusão DIRETA pela tela é a ação separada abaixo).", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.fotos_apagar", label: "Apagar foto/documento direto", description: "Exclusão direta, sem passar pela fila de aprovação.", seed: [A, S], enforced: true },
   { key: "obras.solicitar_exclusao", label: "Solicitar exclusão de foto", description: "Pedir exclusão via fila de aprovação.", seed: [OBR, GR] },
-  { key: "obras.documentos_gerenciar", label: "Gerenciar documentos", description: "Upload, edição e download de documentos da obra.", seed: [A, S, OBR, GR] },
-  { key: "obras.documentos_assinar", label: "Assinar documentos", description: "Disparar assinatura eletrônica (Clicksign).", seed: [A, S, OBR, GR] },
-  { key: "obras.aprovar_uploads", label: "Aprovar uploads", description: "Fila de aprovações: ver, aprovar, rejeitar (+ badge no menu).", seed: [A, S] },
-  { key: "obras.mensagens_enviar", label: "Chat da obra", description: "Ler e enviar mensagens no chat da obra com o cliente.", seed: [A, S, OBR, GR, COR] },
-  { key: "obras.clientes_vincular", label: "Vincular clientes", description: "Vincular/desvincular cliente da obra.", seed: [A, S, OBR, GR] },
-  { key: "obras.distrato", label: "Registrar distrato", description: "Registrar distrato de vínculo.", seed: [A] },
-  { key: "obras.sienge_gerenciar", label: "Integração Sienge", description: "Vincular, sincronizar e reconciliar com o Sienge.", seed: [A, S] },
-  { key: "obras.vincular_imovel", label: "Vincular imóvel", description: "Vincular empreendimento (imóvel) à obra.", seed: [A, S] },
-  { key: "obras.receber_email_aprovacao", label: "Receber e-mail de aprovação", description: "Elegível ao toggle pessoal de e-mails de aprovação pendente.", seed: [A, S] },
+  { key: "obras.documentos_gerenciar", label: "Gerenciar documentos", description: "Upload, edição e download de documentos da obra.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.documentos_assinar", label: "Assinar documentos", description: "Disparar assinatura eletrônica (Clicksign).", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.aprovar_uploads", label: "Aprovar uploads", description: "Fila de aprovações: ver, aprovar, rejeitar (+ badge no menu).", seed: [A, S], enforced: true },
+  { key: "obras.mensagens_enviar", label: "Chat da obra", description: "Ler e enviar mensagens no chat da obra com o cliente.", seed: [A, S, OBR, GR, COR], enforced: true },
+  { key: "obras.clientes_vincular", label: "Vincular clientes", description: "Vincular/desvincular cliente da obra.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "obras.distrato", label: "Registrar distrato", description: "Registrar distrato de vínculo.", seed: [A], enforced: true },
+  { key: "obras.sienge_gerenciar", label: "Integração Sienge", description: "Vincular, sincronizar e reconciliar com o Sienge.", seed: [A, S], enforced: true },
+  { key: "obras.vincular_imovel", label: "Vincular imóvel", description: "Vincular empreendimento (imóvel) à obra.", seed: [A, S], enforced: true },
+  { key: "obras.receber_email_aprovacao", label: "Receber e-mail de aprovação", description: "Elegível ao toggle pessoal de e-mails de aprovação pendente.", seed: [A, S], enforced: true },
 
   // ── Clientes (portal) — grupo virtual ────────────────────────────────────
   { key: "clientes.gerenciar", label: "Gerenciar clientes", description: "Criar/editar cliente do portal, vincular obras, buscar.", seed: [A, S, OBR, GR] },
@@ -217,7 +222,7 @@ export const CAPABILITIES = [
   { key: "sistema.auditoria_ver", label: "Auditoria e logs", description: "Audit logs, exportação, eventos do sistema e logs de webhook.", seed: [A] },
   { key: "sistema.emails_gerenciar", label: "Gerenciar e-mails", description: "Config SMTP, templates, automações e logs de e-mail.", seed: [A] },
   { key: "sistema.emails_disparar", label: "Disparar e-mails", description: "Blast em massa e envio rápido.", seed: [A] },
-  { key: "sistema.manutencao", label: "Manutenção", description: "Backfills e ferramentas de manutenção.", seed: [A] },
+  { key: "sistema.manutencao", label: "Manutenção", description: "Backfills e ferramentas de manutenção.", seed: [A], enforced: true },
   { key: "alertas.followup_ver", label: "Follow-ups da equipe", description: "Ver follow-ups pendentes de toda a equipe.", seed: [A, S] },
 ] as const satisfies readonly CapabilityDef[]
 

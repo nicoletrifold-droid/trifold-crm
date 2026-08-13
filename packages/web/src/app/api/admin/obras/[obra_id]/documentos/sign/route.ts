@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const MAX_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 
 // POST — gera uma signed upload URL para o bucket privado "obra-docs".
@@ -23,7 +22,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.documentos_assinar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

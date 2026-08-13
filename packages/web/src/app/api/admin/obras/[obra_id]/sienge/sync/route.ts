@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { syncObraClientes } from "@web/lib/integrations/sienge/sync"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
 
 export async function POST(
   _req: NextRequest,
@@ -12,7 +11,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "obras.sienge_gerenciar")
   if (roleError) return roleError
 
   const { obra_id } = await params

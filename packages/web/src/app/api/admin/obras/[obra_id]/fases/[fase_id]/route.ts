@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const ALLOWED_STATUS = ["pendente", "a_iniciar", "em_andamento", "pausada", "concluida"]
 
 export async function PATCH(
@@ -12,7 +11,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.fases_gerenciar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -109,7 +108,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.fases_gerenciar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

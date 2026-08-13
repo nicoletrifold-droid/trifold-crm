@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
-const ALLOWED_ROLES = ["admin"]
 
 /**
  * Story 20.9 (AC 10/11) — Reversão manual da flag `distrato` de um vínculo.
@@ -17,7 +16,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "obras.distrato")
   if (roleError) return roleError
 
   const { obra_id, vinculo_id } = await params

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
+import { can } from "@web/lib/permissions"
 import { logAudit } from "@web/lib/audit"
 import { sendEmail } from "@web/lib/email"
 import { notifyClientes } from "@web/lib/notificacoes"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
 
 // DELETE — o AUTOR desfaz o próprio envio enquanto pendente (ou dispensa um
 // rejeitado da tela antes do purge de 7 dias). Admin/supervisor também podem.
@@ -35,7 +35,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const isGestor = ALLOWED_ROLES.includes(appUser.role)
+  const isGestor = await can(appUser.id, appUser.org_id, "obras.aprovar_uploads")
   const isAutor = aprovacao.enviado_por === appUser.id
   if (!isGestor && !isAutor) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -107,7 +107,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.aprovar_uploads")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

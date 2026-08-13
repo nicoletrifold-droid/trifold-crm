@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
 import { notificarAdminsNovoUpload } from "@web/lib/obras/aprovacao-notifications"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 
 export async function POST(
@@ -15,7 +14,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.fotos_enviar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

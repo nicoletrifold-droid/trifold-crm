@@ -111,8 +111,9 @@ export default async function DashboardLayout({
 
   // Contagens de alertas, mensagens e aprovações pendentes de obras — só consulta
   // o banco se os módulos correspondentes estiverem acessíveis.
+  // 75-308: badge de aprovações pendentes segue a capability de aprovar.
   const isAdminOrSupervisorObras =
-    permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
+    permissions["obras"] && (await can(user.id, user.orgId, "obras.aprovar_uploads"))
 
   // 75-304: o badge do Suporte conta TODOS os tickets p/ quem tem a capability
   // chamados.ver_todos (antes: nome de role hardcoded).
