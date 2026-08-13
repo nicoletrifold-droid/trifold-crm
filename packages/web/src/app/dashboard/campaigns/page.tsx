@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { can } from "@web/lib/permissions"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
@@ -97,7 +98,8 @@ export default async function CampaignsPage() {
         </Link>
       </div>
 
-      <CampaignsTabs showAgente={user.role === "admin" || user.role === "supervisor" || user.role === "social-media"} />
+      {/* 75-301: aba do agente segue a capability do marketingGuard (matriz/exceções) */}
+      <CampaignsTabs showAgente={await can(user.id, user.orgId, "marketing.gerenciar")} />
 
       {(!campaigns || campaigns.length === 0) ? (
         <div className="flex flex-col items-center justify-center rounded-lg bg-white p-12 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">

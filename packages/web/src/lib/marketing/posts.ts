@@ -1,8 +1,10 @@
 // Story 75-219 — Aba "Agente" (marketing): regras puras dos posts da fila de
 // aprovação. Sem imports server-side de propósito — testável em unidade.
 
-// Story 75-233: social-media = operadora do marketing — mesmo poder dentro da aba Lídia.
-export const MARKETING_POST_ROLES = ["admin", "supervisor", "social-media"] as const
+// Story 75-301 (Perfis de Acesso 2.0): o gate da aba deixou de ser lista de
+// roles e virou a capability `marketing.gerenciar` (lib/capabilities.ts) — o
+// seed dela espelha os 3 roles que a antiga MARKETING_POST_ROLES listava
+// (admin/supervisor/social-media, Story 75-233). Gate real: marketingGuard.
 
 export const MARKETING_POST_STATUSES = ["sugerido", "aprovado", "rejeitado", "publicado"] as const
 export type MarketingPostStatus = (typeof MARKETING_POST_STATUSES)[number]

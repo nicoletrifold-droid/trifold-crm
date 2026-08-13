@@ -3,9 +3,17 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { ALL_MODULES, MODULE_LABELS, SUBMODULE_MAP } from "@web/lib/permissions-modules"
+import { VIRTUAL_GROUP_LABELS, enforcedCapabilitiesByGroup } from "@web/lib/capabilities"
 import { getUserExceptions, getUserPermissions, setUserException, removeUserException } from "@web/lib/permissions-exceptions-actions"
 
 type Exception = { module: string; can_access: boolean }
+
+// Story 75-301 — ações (capabilities) com gate real, por grupo. Exceção de ação
+// vence o perfil pela MESMA resolução das telas (canAccess dotted, F1).
+const CAPS_BY_GROUP = enforcedCapabilitiesByGroup()
+const VIRTUAL_CAP_GROUPS = Object.keys(CAPS_BY_GROUP).filter(
+  (g) => !(ALL_MODULES as readonly string[]).includes(g)
+)
 
 export function UserEditModal({
   userId,
@@ -329,7 +337,9 @@ export function UserEditModal({
                           const exc = getException(mod)
                           const base = basePerms[mod] ?? false
                           const submodules = SUBMODULE_MAP[mod]
-                          const hasSubmodules = submodules !== undefined
+                          const moduleCaps = CAPS_BY_GROUP[mod] ?? []
+                          const hasSubmodules =
+                            submodules !== undefined || moduleCaps.length > 0
                           const isExpanded = expandedModules.has(mod)
 
                           const rows = [
@@ -406,7 +416,7 @@ export function UserEditModal({
                             </tr>,
                           ]
 
-                          if (hasSubmodules && isExpanded) {
+                          if (submodules !== undefined && isExpanded) {
                             for (const [subKey, subLabel] of Object.entries(submodules)) {
                               const subExc = getException(subKey)
                               // Herdado do módulo pai quando não há exceção explícita no sub-módulo.
@@ -469,6 +479,60 @@ export function UserEditModal({
                             }
                           }
 
+                          // Story 75-301 — AÇÕES (capabilities enforced) do módulo
+                          if (moduleCaps.length > 0 && isExpanded) {
+                            for (const cap of moduleCaps) {
+                              const capExc = getException(cap.key)
+                              // Linha do seed (F1) quando existe; senão herda o módulo.
+                              const capBase = basePerms[cap.key] ?? base
+                              rows.push(
+                                <CapabilityExceptionRow
+                                  key={cap.key}
+                                  capKey={cap.key}
+                                  capLabel={cap.label}
+                                  inheritedBase={capBase}
+                                  exception={capExc}
+                                  onSet={handleSetException}
+                                  onRemove={handleRemoveException}
+                                />
+                              )
+                            }
+                          }
+
+                          return rows
+                        })}
+
+                        {/* Story 75-301 — grupos de ações SEM módulo na sidebar */}
+                        {VIRTUAL_CAP_GROUPS.flatMap((group) => {
+                          const rows = [
+                            <tr key={group} className="text-xs">
+                              <td
+                                colSpan={4}
+                                className="pb-1 pt-3 font-semibold uppercase tracking-wider text-gray-400 dark:text-stone-500"
+                              >
+                                {VIRTUAL_GROUP_LABELS[
+                                  group as keyof typeof VIRTUAL_GROUP_LABELS
+                                ] ?? group}{" "}
+                                <span className="font-normal normal-case">
+                                  (grupo de ações)
+                                </span>
+                              </td>
+                            </tr>,
+                          ]
+                          for (const cap of CAPS_BY_GROUP[group] ?? []) {
+                            const capExc = getException(cap.key)
+                            rows.push(
+                              <CapabilityExceptionRow
+                                key={cap.key}
+                                capKey={cap.key}
+                                capLabel={cap.label}
+                                inheritedBase={basePerms[cap.key] ?? false}
+                                exception={capExc}
+                                onSet={handleSetException}
+                                onRemove={handleRemoveException}
+                              />
+                            )
+                          }
                           return rows
                         })}
                       </tbody>
@@ -521,5 +585,86 @@ export function UserEditModal({
         </div>
       )}
     </>
+  )
+}
+
+// ============================================================================
+// Story 75-301 — linha de AÇÃO (capability enforced) na aba Exceções.
+// Mesmos 3 estados das telas: herdar / forçar / bloquear (a resolução da F1
+// já honra a exceção: canAccess dotted checa a chave exata primeiro).
+// ============================================================================
+
+function CapabilityExceptionRow({
+  capKey,
+  capLabel,
+  inheritedBase,
+  exception,
+  onSet,
+  onRemove,
+}: {
+  capKey: string
+  capLabel: string
+  inheritedBase: boolean
+  exception: Exception | undefined
+  onSet: (module: string, canAccess: boolean) => void
+  onRemove: (module: string) => void
+}) {
+  return (
+    <tr className="bg-orange-50/40 text-xs dark:bg-orange-500/[0.05]">
+      <td className="py-2 pl-8 pr-4 text-gray-600 dark:text-stone-400">
+        <span className="mr-1 text-orange-300 dark:text-orange-500/50">↳</span>
+        {capLabel}{" "}
+        <span className="rounded bg-orange-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-600 dark:bg-orange-500/15 dark:text-orange-300">
+          ação
+        </span>
+      </td>
+      <td className="py-2 pr-4 text-gray-400 dark:text-stone-500">
+        {inheritedBase ? "✓ Acesso" : "✗ Sem acesso"}
+      </td>
+      <td className="py-2 pr-4">
+        {exception ? (
+          exception.can_access ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
+              + Acesso forçado
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-300">
+              − Acesso bloqueado
+            </span>
+          )
+        ) : (
+          <span className="text-gray-400 dark:text-stone-500">Herdado do perfil</span>
+        )}
+      </td>
+      <td className="py-2">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onSet(capKey, true)}
+            disabled={exception?.can_access === true}
+            className="rounded px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-green-400 dark:hover:bg-green-500/10"
+            title="Forçar acesso"
+          >
+            + Forçar
+          </button>
+          <button
+            onClick={() => onSet(capKey, false)}
+            disabled={exception?.can_access === false}
+            className="rounded px-1.5 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-500/10"
+            title="Bloquear acesso"
+          >
+            − Bloquear
+          </button>
+          {exception && (
+            <button
+              onClick={() => onRemove(capKey)}
+              className="rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-stone-500 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+              title="Remover exceção"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   )
 }

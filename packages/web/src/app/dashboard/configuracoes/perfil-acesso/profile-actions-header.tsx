@@ -7,13 +7,19 @@ import { CreateRoleModal } from "./create-role-modal"
 interface ProfileActionsHeaderProps {
   orgId: string
   existingColors: string[]
+  /** 75-301 — perfis existentes que podem servir de origem para clone. */
+  cloneOptions: { id: string; label: string }[]
 }
 
 /**
  * Wrapper Client Component que renderiza o botão "+ Novo Perfil" e gerencia
  * o estado do `CreateRoleModal`. Mantém `page.tsx` como Server Component puro.
  */
-export function ProfileActionsHeader({ orgId, existingColors }: ProfileActionsHeaderProps) {
+export function ProfileActionsHeader({
+  orgId,
+  existingColors,
+  cloneOptions,
+}: ProfileActionsHeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
@@ -36,6 +42,7 @@ export function ProfileActionsHeader({ orgId, existingColors }: ProfileActionsHe
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         existingColors={existingColors}
+        cloneOptions={cloneOptions}
       />
     </>
   )

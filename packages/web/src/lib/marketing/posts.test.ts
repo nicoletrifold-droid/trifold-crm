@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest"
 import {
-  MARKETING_POST_ROLES,
   canTransitionMarketingPost,
   isMarketingPostEditable,
   validateMarketingPostInput,
 } from "./posts"
+import { CAPABILITY_SEED } from "@web/lib/capabilities"
 
 describe("canTransitionMarketingPost — matriz de transições (Story 75-219)", () => {
   it("permite sugerido → aprovado e sugerido → rejeitado", () => {
@@ -44,11 +44,14 @@ describe("isMarketingPostEditable", () => {
   })
 })
 
-describe("MARKETING_POST_ROLES — gate da aba (AC2 + 75-233)", () => {
-  it("admin, supervisor e social-media têm acesso; demais não", () => {
-    expect([...MARKETING_POST_ROLES]).toEqual(["admin", "supervisor", "social-media"])
+describe("gate da aba — capability marketing.gerenciar (AC2 + 75-233 + 75-301)", () => {
+  // 75-301: o contrato mudou de constante de roles para o SEED da capability —
+  // este teste congela o espelho (diff seed × gate antigo = idênticos).
+  it("seed espelha os 3 roles da antiga MARKETING_POST_ROLES; demais fora", () => {
+    const seed = [...CAPABILITY_SEED["marketing.gerenciar"]]
+    expect(seed.sort()).toEqual(["admin", "social-media", "supervisor"])
     for (const role of ["broker", "gerente-comercial", "sdr", "obras", "imob"]) {
-      expect((MARKETING_POST_ROLES as readonly string[]).includes(role)).toBe(false)
+      expect((seed as string[]).includes(role)).toBe(false)
     }
   })
 })
