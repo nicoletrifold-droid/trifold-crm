@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth } from "@web/lib/api-auth"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 import { isValidEmail, isValidPhoneBR, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // Story 75-146 — POST /api/pasta-links: gera um link de auto-cadastro por imobiliária.
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!isPastaManager(appUser.role)) {
+  if (!(await canManagePastas(appUser.id, appUser.org_id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

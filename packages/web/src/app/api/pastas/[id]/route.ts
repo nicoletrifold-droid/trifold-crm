@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 
 // DELETE /api/pastas/[id] — exclui a pasta (admin/supervisor/gerente-comercial/imob).
 // Remove os arquivos do bucket privado (`pastas/{id}/…`) e a linha (cascade nos docs).
@@ -13,7 +13,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!isPastaManager(appUser.role)) {
+  if (!(await canManagePastas(appUser.id, appUser.org_id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

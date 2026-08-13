@@ -1,8 +1,18 @@
-// Story 75-105 — Perfis que gerenciam o módulo Pastas (ver/criar/anexar/deletar).
-// admin, supervisor, gerente-comercial e imob (o mundo IMOB lida com interessados do
-// pré-lançamento). O perfil revisor dedicado ("Deferido") continua futuro.
-export const PASTA_MANAGER_ROLES = ["admin", "supervisor", "gerente-comercial", "imob"] as const
+// Story 75-105 — gate do módulo Pastas.
+// Story 75-302 (Perfis de Acesso 2.0, F3-1): a lista hardcoded
+// PASTA_MANAGER_ROLES (admin/supervisor/gerente-comercial/imob) virou a
+// capability `pastas.gerenciar` — o seed da mig 225 espelha exatamente aqueles
+// 4 roles (diff conferido), matriz e exceções passam a valer, e o módulo
+// LIGADO passa a valer para roles customizados via herança (caso Silmara /
+// auxadministrativo — mudança INTENCIONAL aprovada pelo Marcos em 13/08).
+// O perfil revisor dedicado ("Deferido") continua futuro.
 
-export function isPastaManager(role: string): boolean {
-  return (PASTA_MANAGER_ROLES as readonly string[]).includes(role)
+import { can } from "@web/lib/permissions"
+
+/** Gate único do módulo Pastas (rotas, páginas e imobiliariasGuard). */
+export async function canManagePastas(
+  userId: string,
+  orgId: string
+): Promise<boolean> {
+  return can(userId, orgId, "pastas.gerenciar")
 }

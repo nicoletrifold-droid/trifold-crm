@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 import { sendDocumentForSignature } from "@web/lib/clicksign/client"
 
 // Story 75-120 — POST: envia um documento da pasta para assinatura via Clicksign.
@@ -30,7 +30,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!isPastaManager(appUser.role)) {
+  if (!(await canManagePastas(appUser.id, appUser.org_id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

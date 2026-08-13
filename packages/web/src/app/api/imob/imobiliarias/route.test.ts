@@ -9,6 +9,7 @@ vi.mock("server-only", () => ({}))
 
 let role = "admin"
 let imobAccess = true
+let pastasAccess = true // 75-302: ramo "gestor de Pastas" virou can("pastas.gerenciar")
 
 vi.mock("@web/lib/api-auth", () => ({
   requireAuth: async () => ({
@@ -18,6 +19,7 @@ vi.mock("@web/lib/api-auth", () => ({
 
 vi.mock("@web/lib/permissions", () => ({
   canAccess: async () => imobAccess,
+  can: async () => pastasAccess,
 }))
 
 const listData = [{ id: "i-1", nome: "Imob A", cnpj: null, cidade: "Londrina", estado: "PR", status: "ativo" }]
@@ -39,6 +41,7 @@ import { GET } from "./route"
 beforeEach(() => {
   role = "admin"
   imobAccess = true
+  pastasAccess = true
 })
 
 describe("GET /api/imob/imobiliarias (guard compartilhado — Story 75-148)", () => {
@@ -52,7 +55,7 @@ describe("GET /api/imob/imobiliarias (guard compartilhado — Story 75-148)", ()
 
   it("gestor de Pastas SEM acesso ao IMOB → lista (base compartilhada)", async () => {
     imobAccess = false
-    role = "supervisor" // isPastaManager = true
+    pastasAccess = true // gestor de Pastas via capability (75-302)
     const res = await GET()
     expect(res.status).toBe(200)
     const json = await res.json()
@@ -61,6 +64,7 @@ describe("GET /api/imob/imobiliarias (guard compartilhado — Story 75-148)", ()
 
   it("corretor (sem IMOB e sem Pastas) → 403", async () => {
     imobAccess = false
+    pastasAccess = false
     role = "corretor"
     const res = await GET()
     expect(res.status).toBe(403)

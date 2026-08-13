@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { canAccess } from "@web/lib/permissions"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 
 // Story 75-88 / 75-93 — guard das rotas do módulo IMOB: autenticado + acesso ao módulo "imob"
 // pela matriz de Perfil de Acesso (Story 75-93 — antes era role fixo admin/supervisor).
@@ -32,9 +32,13 @@ export async function imobiliariasGuard() {
   const auth = await requireAuth()
   if (auth.error) return { error: auth.error as Response }
 
+  // 75-302: o ramo "gestor de Pastas" virou a capability `pastas.gerenciar`
+  // (mesma pergunta das rotas/páginas de Pastas). Acoplamento DE NEGÓCIO da
+  // 75-148 preservado: quem gerencia Pastas gerencia imobiliárias — inclusive
+  // a tela dashboard/pastas/imobiliarias, que consome estas APIs.
   const allowed =
     (await canAccess(auth.appUser.id, auth.appUser.org_id, "imob")) ||
-    isPastaManager(auth.appUser.role)
+    (await canManagePastas(auth.appUser.id, auth.appUser.org_id))
   if (!allowed) {
     return {
       error: NextResponse.json({ error: "Sem acesso ao cadastro de imobiliárias" }, { status: 403 }) as unknown as Response,

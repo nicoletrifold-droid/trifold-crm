@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 
 // Story 75-120 — GET: signed URL (1h) para o PDF ASSINADO de um envelope
 // (bucket privado `pastas`, path salvo pelo webhook em signed_storage_path).
@@ -15,7 +15,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!isPastaManager(appUser.role)) {
+  if (!(await canManagePastas(appUser.id, appUser.org_id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
