@@ -19,7 +19,8 @@ interface ChamadoCardProps {
     admin_response?: string | null
     responded_at?: string | null
   }
-  isAdmin?: boolean
+  /** 75-304: era isAdmin — os únicos usos são os botões de responder/reabrir */
+  canRespond?: boolean
   onStatusChange?: (id: string, updates: { status: string; admin_response?: string | null }) => void
   showReporter?: boolean
 }
@@ -35,7 +36,7 @@ function formatDate(dateStr: string): string {
   })
 }
 
-export function ChamadoCard({ chamado, isAdmin = false, onStatusChange, showReporter = false }: ChamadoCardProps) {
+export function ChamadoCard({ chamado, canRespond = false, onStatusChange, showReporter = false }: ChamadoCardProps) {
   const router = useRouter()
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -147,7 +148,7 @@ export function ChamadoCard({ chamado, isAdmin = false, onStatusChange, showRepo
         </div>
 
         {/* Ações do admin */}
-        {isAdmin && chamado.status !== "resolvido" && (
+        {canRespond && chamado.status !== "resolvido" && (
           <div className="border-t border-stone-100 px-4 py-2 dark:border-stone-800">
             {!expanded ? (
               <div className="flex gap-2">
@@ -200,7 +201,7 @@ export function ChamadoCard({ chamado, isAdmin = false, onStatusChange, showRepo
         )}
 
         {/* Reabrir (se resolvido) */}
-        {isAdmin && chamado.status === "resolvido" && (
+        {canRespond && chamado.status === "resolvido" && (
           <div className="border-t border-stone-100 px-4 py-2 dark:border-stone-800">
             <button
               onClick={handleReabrir}

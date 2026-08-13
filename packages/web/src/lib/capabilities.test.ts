@@ -181,6 +181,8 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
       "campanhas.meta_sincronizar",
       "campanhas.meta_acionar",
       "campanhas.meta_ver",
+      "chamados.ver_todos",
+      "chamados.responder",
     ])
   })
 
@@ -203,7 +205,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["campanhas", "marketing", "pastas"])
+    expect(Object.keys(byGroup).sort()).toEqual(["campanhas", "chamados", "marketing", "pastas"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -290,5 +292,12 @@ describe("75-303 — Campanhas & Meta Ads (espelho dos 5 seeds)", () => {
     expect([...CAPABILITY_SEED["campanhas.meta_sincronizar"]]).toEqual(["admin"])
     expect([...CAPABILITY_SEED["campanhas.meta_acionar"]]).toEqual(["admin"])
     expect([...CAPABILITY_SEED["campanhas.meta_ver"]]).toEqual(["admin"])
+  })
+})
+
+describe("75-304 — Chamados (espelho dos 2 seeds)", () => {
+  it("ver_todos e responder = admin+supervisor (as antigas checagens inline)", () => {
+    expect([...CAPABILITY_SEED["chamados.ver_todos"]].sort()).toEqual(["admin", "supervisor"])
+    expect([...CAPABILITY_SEED["chamados.responder"]].sort()).toEqual(["admin", "supervisor"])
   })
 })

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import { MessageSquarePlus } from "lucide-react"
 import { ChamadoForm } from "./_components/chamado-form"
@@ -28,7 +28,10 @@ export default async function ChamadosPage() {
   }
 
   const supabase = await createClient()
-  const isAdmin = user.role === "admin" || user.role === "supervisor"
+  // 75-304: ver_todos (lista/título/marker) e responder (botões do card) são
+  // capabilities distintas — mesma dupla admin/supervisor no seed, separáveis na matriz.
+  const isAdmin = await can(user.id, user.orgId, "chamados.ver_todos")
+  const canRespond = await can(user.id, user.orgId, "chamados.responder")
 
   let query = supabase
     .from("chamados")
@@ -97,6 +100,7 @@ export default async function ChamadosPage() {
           <ChamadosClientWrapper
             initialChamados={allChamados}
             isAdmin={isAdmin}
+            canRespond={canRespond}
           />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 export async function PATCH(
   request: NextRequest,
@@ -9,10 +9,9 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const isAdmin = appUser.role === "admin" || appUser.role === "supervisor"
-  if (!isAdmin) {
-    return NextResponse.json({ error: "Sem permissão" }, { status: 403 })
-  }
+  // 75-304: responder/mudar status é a capability chamados.responder
+  const forbidden = await requireCapability(appUser, "chamados.responder")
+  if (forbidden) return forbidden
 
   const { id } = await params
   const body = await request.json() as {
