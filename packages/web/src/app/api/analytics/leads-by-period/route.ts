@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 // Story 75-269 — paginação do PostgREST compartilhada com /analytics/executive.
 import { fetchAllLeads } from "@web/lib/analytics/fetch-all-leads"
 import { SEM_ORIGEM_KEY } from "@web/lib/analytics/sources-presentes"
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial", "sdr"])
+  const roleError = await requireCapability(appUser, "analytics.executivo")
   if (roleError) return roleError
 
   const sp = request.nextUrl.searchParams

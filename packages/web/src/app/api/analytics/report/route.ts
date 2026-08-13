@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { buildAnalyticsReportData } from "@web/lib/analytics-report-data"
 import { resolvePeriod } from "@web/lib/analytics/period"
 // Story 75-271 — MESMO parser da tela: é o que faz o PDF concordar com ela.
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = await requireCapability(appUser, "analytics.geral")
   if (roleError) return roleError
 
   // Story 75-31/75-69: o PDF sob demanda segue o período da tela (range/from/to

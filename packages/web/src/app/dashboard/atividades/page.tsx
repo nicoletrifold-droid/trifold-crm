@@ -1,5 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
+import { can } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
@@ -19,11 +20,10 @@ const typeLabels: Record<string, string> = {
   broker_assigned: "Corretor atribuído",
 }
 
-const ALLOWED_ROLES = ["admin", "supervisor", "gerente-comercial"]
-
 export default async function AtividadesPage() {
   const user = await getServerUser()
-  if (!ALLOWED_ROLES.includes(user.role)) redirect("/dashboard")
+  // 75-305: a página segue a capability atividades.ver (antes: lista de roles).
+  if (!(await can(user.id, user.orgId, "atividades.ver"))) redirect("/dashboard")
   const supabase = await createClient()
 
   const { data: activities } = await supabase

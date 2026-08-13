@@ -106,10 +106,13 @@ export const CAPABILITIES = [
   { key: "agenda.feedback_visita", label: "Feedback de visita de terceiros", description: "Registrar visita/feedback em compromisso de outra pessoa.", seed: [A, S, GC, SDR] },
 
   // ── Analytics · Atividades · Dashboard ───────────────────────────────────
-  { key: "analytics.geral", label: "Analytics completo", description: "Métricas gerais, origens, relatório PDF e analytics de campanhas.", seed: [A, S] },
-  { key: "analytics.executivo", label: "Visão executiva", description: "Painel executivo e leads por período.", seed: [A, S, GC, SDR] },
-  { key: "atividades.ver", label: "Ver atividades", description: "Página de atividades da equipe.", seed: [A, S, GC] },
-  { key: "dashboard.ver_equipe", label: "Blocos de equipe", description: "Blocos “Leads da Equipe” e “Funil da Equipe” no dashboard.", seed: [GC, SDR] },
+  // enforced na 75-305 (F3-4): as 6 rotas de analytics decidem por can().
+  { key: "analytics.geral", label: "Analytics completo", description: "Métricas gerais, origens, relatório PDF e analytics de campanhas.", seed: [A, S], enforced: true },
+  { key: "analytics.executivo", label: "Visão executiva", description: "Painel executivo e leads por período.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "atividades.ver", label: "Ver atividades", description: "Página de atividades da equipe.", seed: [A, S, GC], enforced: true },
+  // ⚠️ 75-305: NÃO migra para can() — é COMPOSIÇÃO DE UX por role (admin/supervisor
+  // têm dashboard próprio e ficariam elegíveis pelo bypass de admin). Reavaliar na F5.
+  { key: "dashboard.ver_equipe", label: "Blocos de equipe", description: "Blocos “Leads da Equipe” e “Funil da Equipe” no dashboard. (UX por role — não migra p/ capability; ver 75-305.)", seed: [GC, SDR] },
 
   // ── Obras ────────────────────────────────────────────────────────────────
   { key: "obras.criar", label: "Criar obra", description: "Cadastrar nova obra.", seed: [A, S, OBR, GR] },

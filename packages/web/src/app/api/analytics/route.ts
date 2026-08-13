@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 // Story 30.1: shape do retorno da RPC public.get_analytics_summary(uuid, timestamptz)
 // bigints (count, total_leads, new_leads) podem chegar como string — castar via Number().
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   const { supabase, appUser } = auth
 
   // Only admin/supervisor can access analytics
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = await requireCapability(appUser, "analytics.geral")
   if (roleError) return roleError
 
   const searchParams = request.nextUrl.searchParams
