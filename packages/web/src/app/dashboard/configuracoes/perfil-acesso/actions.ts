@@ -25,7 +25,13 @@ export async function updatePermission(
 
 export async function createRole(
   orgId: string,
-  data: { name: string; label: string; color: string }
+  data: {
+    name: string
+    label: string
+    color: string
+    /** 75-301 — clonar permissões (módulos, telas e ações) de um perfil da org. */
+    cloneFromRoleId?: string
+  }
 ): Promise<{ success: boolean; role?: OrgRole; error?: string }> {
   return createRoleImpl(orgId, data)
 }

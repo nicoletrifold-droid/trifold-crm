@@ -18,7 +18,18 @@ import { ProfileActionsHeader } from "./profile-actions-header"
 async function ProfileActionsHeaderWithColors({ orgId }: { orgId: string }) {
   const roles = await getOrgRoles(orgId)
   const existingColors = roles.map((r) => r.color).filter(Boolean)
-  return <ProfileActionsHeader orgId={orgId} existingColors={existingColors} />
+  // 75-301 — opções de clone: só roles REAIS da org (o fallback SYSTEM_ROLES
+  // usa ids "system-*" sem linhas em role_permissions — nada para clonar).
+  const cloneOptions = roles
+    .filter((r) => !r.id.startsWith("system-"))
+    .map((r) => ({ id: r.id, label: r.label }))
+  return (
+    <ProfileActionsHeader
+      orgId={orgId}
+      existingColors={existingColors}
+      cloneOptions={cloneOptions}
+    />
+  )
 }
 
 /**

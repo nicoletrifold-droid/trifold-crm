@@ -51,6 +51,13 @@ export interface CapabilityDef {
   description: string
   /** Espelho dia 1: roles que HOJE têm a ação (inventário 13/08). */
   seed: readonly RoleName[]
+  /**
+   * Story 75-301 — `true` SOMENTE quando o gate real no código já decide por
+   * `can()` (regra anti-"botão que mente" do épico). Capability sem `enforced`
+   * NÃO aparece em nenhuma UI (matriz/exceções). Cada story F3 liga o flag das
+   * capabilities que migrar — nunca antes do gate.
+   */
+  enforced?: true
 }
 
 const A = "admin" as const
@@ -144,7 +151,8 @@ export const CAPABILITIES = [
   // ── Pastas · IMOB · Marketing ────────────────────────────────────────────
   { key: "pastas.gerenciar", label: "Gerenciar pastas", description: "Pastas de pré-lançamento: criar, editar, documentos, links públicos, termos e assinaturas.", seed: [A, S, GC, IMB] },
   { key: "imob.imobiliarias_gerenciar", label: "Gerenciar imobiliárias", description: "CRUD de imobiliárias parceiras.", seed: [A, S, GC, IMB] },
-  { key: "marketing.gerenciar", label: "Marketing (Lídia)", description: "Posts, artes, pedidos, marcas e assets do agente de marketing.", seed: [A, S, SM] },
+  // enforced na 75-301 (piloto): marketingGuard + telas de campanhas decidem por can().
+  { key: "marketing.gerenciar", label: "Gerenciar marketing (Lídia)", description: "Posts, artes, pedidos, marcas e assets do agente de marketing.", seed: [A, S, SM], enforced: true },
 
   // ── Campanhas & Meta Ads ─────────────────────────────────────────────────
   { key: "campanhas.gerenciar", label: "Gerenciar campanhas", description: "Criar/editar/ativar/pausar campanhas e imagens.", seed: [A, S] },
@@ -217,6 +225,78 @@ export const CAPABILITY_SEED = Object.fromEntries(
 /** Grupo (prefixo antes do ponto) de uma capability — derivado, nunca digitado 2×. */
 export function capabilityGroup(key: string): string {
   return key.slice(0, key.indexOf("."))
+}
+
+/** Capabilities com gate real no código — as ÚNICAS que aparecem em UI (75-301). */
+// O `as const satisfies` estreita cada entrada ao seu literal (sem `enforced`
+// nas que não o declaram) — o cast devolve a visão uniforme de CapabilityDef.
+export const ENFORCED_CAPABILITIES = (CAPABILITIES as readonly CapabilityDef[]).filter(
+  (c) => c.enforced === true
+)
+
+/** Ações enforced agrupadas pelo prefixo (módulo real ou grupo virtual). */
+export function enforcedCapabilitiesByGroup(): Record<string, CapabilityDef[]> {
+  const out: Record<string, CapabilityDef[]> = {}
+  for (const cap of ENFORCED_CAPABILITIES) {
+    const group = capabilityGroup(cap.key)
+    ;(out[group] ??= []).push(cap)
+  }
+  return out
+}
+
+/**
+ * Labels de exibição dos GRUPOS VIRTUAIS na matriz/exceções (grupos que não são
+ * módulo da sidebar). Grupo virtual só é renderizado quando tem ≥1 capability
+ * enforced — invariante testada exige label para esses casos.
+ */
+export const VIRTUAL_GROUP_LABELS: Record<(typeof VIRTUAL_GROUPS)[number], string> = {
+  agente: "Agente de Marketing (chat)",
+  clientes: "Clientes (portal)",
+  marketing: "Marketing (Lídia)",
+  nicole: "Nicole",
+  perfis: "Perfis de Acesso",
+  portal: "Portal do Cliente",
+  usuarios: "Usuários",
+}
+
+/**
+ * 🔴 Descoberta do T6 da 75-301: para ADMIN, `getUserPermissions` devolvia
+ * `fullMatrix()` (só módulos de ALL_MODULES) — grupos VIRTUAIS ficavam fora e
+ * a herança do pai negava capability de grupo virtual PARA ADMIN (divergindo
+ * do contrato `resolveCapabilityDecision` e do `has_capability` SQL, que dão
+ * `true`). Este helper é a lista de chaves que o mapa do admin precisa cobrir:
+ * módulos + grupos virtuais, tudo `true` (exceções mescladas por cima negam).
+ */
+export function adminMatrixKeys(allModules: readonly string[]): string[] {
+  return [...allModules, ...VIRTUAL_GROUPS]
+}
+
+// ============================================================================
+// Exibição da célula de capability na matriz (75-301) — decisão PURA, espelha
+// resolveCapabilityDecision para o caso SEM exceção de usuário (a matriz é por
+// ROLE; exceções são por usuário e vivem na aba Exceções).
+// ============================================================================
+
+export interface CapabilityCellInput {
+  /** role.name === 'admin' — admin ignora linhas do role (fullMatrix). */
+  isAdminRole: boolean
+  /** linha explícita (role_id, capability) em role_permissions */
+  explicit?: boolean
+  /** valor do módulo pai para o role (grupo virtual ⇒ false) */
+  parentGranted: boolean
+}
+
+/**
+ * Estado exibido do toggle de uma capability na matriz.
+ * `locked` = admin: sempre ON e desabilitado — a resolução real (F1) ignora a
+ * linha do role para admin; um toggle editável mentiria (risco 4 da story).
+ */
+export function capabilityCellState(input: CapabilityCellInput): {
+  checked: boolean
+  locked: boolean
+} {
+  if (input.isAdminRole) return { checked: true, locked: true }
+  return { checked: input.explicit ?? input.parentGranted, locked: false }
 }
 
 // ============================================================================

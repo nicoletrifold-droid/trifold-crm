@@ -4,9 +4,14 @@ import { describe, expect, it } from "vitest"
 import {
   CAPABILITIES,
   CAPABILITY_SEED,
+  ENFORCED_CAPABILITIES,
   KNOWN_ROLES,
   VIRTUAL_GROUPS,
+  VIRTUAL_GROUP_LABELS,
+  adminMatrixKeys,
+  capabilityCellState,
   capabilityGroup,
+  enforcedCapabilitiesByGroup,
   resolveCapabilityDecision,
 } from "./capabilities"
 import { ALL_MODULES, SUBMODULE_MAP } from "./permissions-modules"
@@ -162,5 +167,82 @@ describe("resolveCapabilityDecision — tabela-verdade da paridade app ↔ SQL (
 
   it("10. nada em lugar nenhum = default-deny (vale p/ grupos virtuais sem módulo)", () => {
     expect(resolveCapabilityDecision({ isAdmin: false })).toBe(false)
+  })
+})
+
+describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
+  it("só o piloto está enforced nesta fase", () => {
+    expect(ENFORCED_CAPABILITIES.map((c) => c.key)).toEqual([
+      "marketing.gerenciar",
+    ])
+  })
+
+  it("todo grupo VIRTUAL com capability enforced tem label de exibição", () => {
+    for (const cap of ENFORCED_CAPABILITIES) {
+      const group = capabilityGroup(cap.key)
+      if ((VIRTUAL_GROUPS as readonly string[]).includes(group)) {
+        const label =
+          VIRTUAL_GROUP_LABELS[group as keyof typeof VIRTUAL_GROUP_LABELS]
+        expect(label?.trim().length, cap.key).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it("todo grupo virtual declarado tem label (à prova de F3)", () => {
+    for (const g of VIRTUAL_GROUPS) {
+      expect(VIRTUAL_GROUP_LABELS[g]?.trim().length, g).toBeGreaterThan(0)
+    }
+  })
+
+  it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
+    const byGroup = enforcedCapabilitiesByGroup()
+    expect(Object.keys(byGroup)).toEqual(["marketing"])
+    expect(byGroup["marketing"]?.map((c) => c.key)).toEqual([
+      "marketing.gerenciar",
+    ])
+  })
+})
+
+describe("capabilityCellState — exibição espelha a resolução real (75-301, risco 2/4)", () => {
+  it("admin: sempre ON e TRAVADO (fullMatrix ignora a linha do role)", () => {
+    expect(
+      capabilityCellState({ isAdminRole: true, explicit: false, parentGranted: false })
+    ).toEqual({ checked: true, locked: true })
+  })
+
+  it("não-admin: linha explícita manda; sem linha, herda o pai; virtual herda false", () => {
+    expect(
+      capabilityCellState({ isAdminRole: false, explicit: false, parentGranted: true })
+    ).toEqual({ checked: false, locked: false })
+    expect(
+      capabilityCellState({ isAdminRole: false, parentGranted: true })
+    ).toEqual({ checked: true, locked: false })
+    expect(
+      capabilityCellState({ isAdminRole: false, parentGranted: false })
+    ).toEqual({ checked: false, locked: false })
+  })
+
+  it("CONSISTÊNCIA: para todo caso sem exceção de usuário, exibição === resolução da F1", () => {
+    for (const isAdminRole of [true, false]) {
+      for (const explicit of [true, false, undefined]) {
+        for (const parentGranted of [true, false]) {
+          const shown = capabilityCellState({ isAdminRole, explicit, parentGranted })
+          const resolved = resolveCapabilityDecision({
+            isAdmin: isAdminRole,
+            exactRoleRow: explicit,
+            parentRoleRow: parentGranted,
+          })
+          expect(shown.checked, JSON.stringify({ isAdminRole, explicit, parentGranted })).toBe(resolved)
+        }
+      }
+    }
+  })
+})
+
+describe("adminMatrixKeys — fix do T6 da 75-301 (admin × grupo virtual)", () => {
+  it("cobre todos os módulos E todos os grupos virtuais", () => {
+    const keys = adminMatrixKeys(ALL_MODULES)
+    for (const m of ALL_MODULES) expect(keys, m).toContain(m)
+    for (const g of VIRTUAL_GROUPS) expect(keys, g).toContain(g)
   })
 })

@@ -28,7 +28,17 @@ import {
 } from "lucide-react"
 import type { OrgRole, PermissionsMatrix } from "@web/lib/permissions"
 import { MODULE_LABELS, MODULE_DESCRIPTIONS, SUBMODULE_MAP } from "@web/lib/permissions-modules"
+import {
+  VIRTUAL_GROUP_LABELS,
+  capabilityCellState,
+  enforcedCapabilitiesByGroup,
+  type CapabilityDef,
+} from "@web/lib/capabilities"
 import { deleteRole, updatePermission } from "./actions"
+
+// Story 75-301 — ações (capabilities) com gate real no código, agrupadas pelo
+// prefixo. Só essas aparecem na matriz (regra anti-"botão que mente").
+const CAPS_BY_GROUP = enforcedCapabilitiesByGroup()
 
 /**
  * Mapeamento de ícone lucide-react para cada módulo. Espelha o sidebar.
@@ -236,6 +246,8 @@ interface PermissionToggleProps {
   onColorHex: string
   focusColorHex: string
   onToggle: (roleId: string, module: string, next: boolean) => void
+  /** 75-301: célula travada (ex.: admin em linha de ação) — desabilita e explica no title. */
+  lockedReason?: string
 }
 
 function PermissionToggle({
@@ -248,6 +260,7 @@ function PermissionToggle({
   onColorHex,
   focusColorHex,
   onToggle,
+  lockedReason,
 }: PermissionToggleProps) {
   // Aplicamos a cor "on" via style inline para evitar concatenação dinâmica
   // de classes Tailwind. O trilho OFF usa cores Tailwind padrão.
@@ -257,7 +270,8 @@ function PermissionToggle({
 
   return (
     <label
-      className="relative inline-flex cursor-pointer items-center align-middle"
+      className={`relative inline-flex items-center align-middle ${lockedReason ? "cursor-not-allowed" : "cursor-pointer"}`}
+      title={lockedReason}
       style={
         {
           // CSS custom property usada pelo focus ring abaixo
@@ -269,9 +283,13 @@ function PermissionToggle({
         type="checkbox"
         className="peer sr-only"
         checked={checked}
-        disabled={loading}
+        disabled={loading || lockedReason !== undefined}
         onChange={(e) => onToggle(roleId, module, e.target.checked)}
-        aria-label={`${moduleLabel} — ${roleLabel}`}
+        aria-label={
+          lockedReason
+            ? `${moduleLabel} — ${roleLabel} (${lockedReason})`
+            : `${moduleLabel} — ${roleLabel}`
+        }
       />
       <div
         aria-hidden="true"
@@ -317,6 +335,84 @@ function PermissionToggle({
 }
 
 // ============================================================================
+// CapabilityActionRow — linha de AÇÃO (capability enforced) da matriz (75-301)
+// ============================================================================
+
+interface CapabilityActionRowProps {
+  cap: CapabilityDef
+  /** módulo pai real; null para grupo virtual (herança = false) */
+  parentModule: string | null
+  roles: OrgRole[]
+  optimisticMatrix: PermissionsMatrix
+  loadingCells: Set<string>
+  onToggle: (roleId: string, module: string, next: boolean) => void
+}
+
+function CapabilityActionRow({
+  cap,
+  parentModule,
+  roles,
+  optimisticMatrix,
+  loadingCells,
+  onToggle,
+}: CapabilityActionRowProps) {
+  return (
+    <tr className="group bg-orange-50/30 transition-colors hover:bg-orange-50/60 dark:bg-orange-500/[0.04] dark:hover:bg-orange-500/[0.08]">
+      <td className="sticky left-0 z-10 bg-orange-50/30 px-6 py-2.5 transition-colors group-hover:bg-orange-50/60 dark:bg-stone-900 dark:group-hover:bg-stone-800/40">
+        <div className="flex items-center gap-2 pl-9">
+          <CornerDownRight
+            className="h-3.5 w-3.5 flex-shrink-0 text-orange-300 dark:text-orange-500/50"
+            aria-hidden="true"
+          />
+          <span className="text-xs font-medium text-gray-600 dark:text-stone-300">
+            {cap.label}
+          </span>
+          <span className="rounded bg-orange-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-orange-600 dark:bg-orange-500/15 dark:text-orange-300">
+            ação
+          </span>
+        </div>
+        {cap.description && (
+          <div className="pl-[3.75rem] text-[11px] text-gray-400 dark:text-stone-500">
+            {cap.description}
+          </div>
+        )}
+      </td>
+      {roles.map((role) => {
+        const palette = getRolePalette(role)
+        const key = cellKey(role.id, cap.key)
+        const { checked, locked } = capabilityCellState({
+          isAdminRole: role.name === "admin",
+          explicit: optimisticMatrix[role.id]?.[cap.key],
+          parentGranted: parentModule
+            ? (optimisticMatrix[role.id]?.[parentModule] ?? false)
+            : false,
+        })
+        return (
+          <td key={role.id} className="px-4 py-2.5 align-middle">
+            <PermissionToggle
+              roleId={role.id}
+              module={cap.key}
+              roleLabel={role.label}
+              moduleLabel={cap.label}
+              checked={checked}
+              loading={loadingCells.has(key)}
+              onColorHex={palette.toggleOnHex}
+              focusColorHex={palette.toggleFocusHex}
+              onToggle={onToggle}
+              lockedReason={
+                locked
+                  ? "Admin sempre tem todas as ações. Para negar a um admin específico, use uma exceção individual em Usuários."
+                  : undefined
+              }
+            />
+          </td>
+        )
+      })}
+    </tr>
+  )
+}
+
+// ============================================================================
 // PermissionsMatrix — Client Component principal
 // ============================================================================
 
@@ -358,13 +454,39 @@ export function PermissionsMatrix({
     const q = search.trim().toLowerCase()
     if (!q) return true
     const subLabels = Object.values(SUBMODULE_MAP[m] ?? {}).join(" ").toLowerCase()
+    // 75-301: a busca também encontra pelas AÇÕES do módulo
+    const capLabels = (CAPS_BY_GROUP[m] ?? [])
+      .map((c) => `${c.label} ${c.key}`)
+      .join(" ")
+      .toLowerCase()
     return (
       label.toLowerCase().includes(q) ||
       desc.toLowerCase().includes(q) ||
       m.toLowerCase().includes(q) ||
-      subLabels.includes(q)
+      subLabels.includes(q) ||
+      capLabels.includes(q)
     )
   })
+
+  // 75-301 — grupos VIRTUAIS (sem módulo na sidebar) com ≥1 ação enforced.
+  // Não têm toggle de módulo: a herança deles é sempre "negado" (F1).
+  const virtualGroups = Object.keys(CAPS_BY_GROUP)
+    .filter((g) => !modules.includes(g))
+    .filter((g) => {
+      const q = search.trim().toLowerCase()
+      if (!q) return true
+      const label =
+        VIRTUAL_GROUP_LABELS[g as keyof typeof VIRTUAL_GROUP_LABELS] ?? g
+      const capLabels = (CAPS_BY_GROUP[g] ?? [])
+        .map((c) => `${c.label} ${c.key}`)
+        .join(" ")
+        .toLowerCase()
+      return (
+        label.toLowerCase().includes(q) ||
+        g.includes(q) ||
+        capLabels.includes(q)
+      )
+    })
 
   function setCellLoading(key: string, loading: boolean) {
     setLoadingCells((prev) => {
@@ -696,12 +818,74 @@ export function PermissionsMatrix({
                       })}
                     </tr>
                   ))}
+
+                  {/* 75-301 — AÇÕES (capabilities enforced) do módulo */}
+                  {(CAPS_BY_GROUP[module] ?? []).map((cap) => (
+                    <CapabilityActionRow
+                      key={cap.key}
+                      cap={cap}
+                      parentModule={module}
+                      roles={roles}
+                      optimisticMatrix={optimisticMatrix}
+                      loadingCells={loadingCells}
+                      onToggle={handleToggle}
+                    />
+                  ))}
                   </Fragment>
                 )
               })}
 
+              {/* 75-301 — grupos VIRTUAIS (sem módulo na sidebar): linha-pai
+                  informativa sem toggle + suas ações (herança = negado) */}
+              {virtualGroups.map((group) => (
+                <Fragment key={group}>
+                  <tr className="group bg-gray-50/60 dark:bg-stone-800/20">
+                    <td className="sticky left-0 z-10 bg-gray-50/60 px-6 py-3.5 dark:bg-stone-900">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"
+                          aria-hidden="true"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-stone-100">
+                            {VIRTUAL_GROUP_LABELS[
+                              group as keyof typeof VIRTUAL_GROUP_LABELS
+                            ] ?? group}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-stone-400">
+                            Grupo de ações (não é um item do menu)
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    {roles.map((role) => (
+                      <td
+                        key={role.id}
+                        className="px-4 py-3.5 text-center align-middle text-xs text-gray-300 dark:text-stone-600"
+                        title="Grupos de ações não têm toggle de módulo — ligue as ações abaixo."
+                      >
+                        —
+                      </td>
+                    ))}
+                  </tr>
+                  {(CAPS_BY_GROUP[group] ?? []).map((cap) => (
+                    <CapabilityActionRow
+                      key={cap.key}
+                      cap={cap}
+                      parentModule={null}
+                      roles={roles}
+                      optimisticMatrix={optimisticMatrix}
+                      loadingCells={loadingCells}
+                      onToggle={handleToggle}
+                    />
+                  ))}
+                </Fragment>
+              ))}
+
               {/* Empty state — quando a busca não retorna nada */}
-              {filteredModules.length === 0 && (
+              {filteredModules.length === 0 && virtualGroups.length === 0 && (
                 <tr>
                   <td
                     colSpan={roles.length + 1}

@@ -3,7 +3,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 export { ALL_MODULES, MODULE_LABELS, MODULE_DESCRIPTIONS, podeVerMenuConfig } from "./permissions-modules"
 import { ALL_MODULES } from "./permissions-modules"
-import type { CapabilityKey } from "./capabilities"
+import { adminMatrixKeys, type CapabilityKey } from "./capabilities"
 
 // ============================================================================
 // Tipos
@@ -53,13 +53,28 @@ function fullMatrix(): Record<string, boolean> {
 }
 
 /**
+ * 75-301 — matriz do ADMIN: módulos + GRUPOS VIRTUAIS de capabilities
+ * (marketing, nicole, …), tudo `true`. Sem as chaves virtuais, a herança do
+ * pai negava capability de grupo virtual PARA ADMIN (bug pego no T6 — o
+ * `has_capability` SQL já dava `true`; contrato: resolveCapabilityDecision).
+ * Exceções individuais seguem mescladas por cima e podem negar.
+ * Só admin usa; o spread do supervisor hardcoded continua na fullMatrix
+ * module-only (grupos virtuais herdados=false lá, decididos por linha explícita).
+ */
+function adminFullMatrix(): Record<string, boolean> {
+  const out: Record<string, boolean> = {}
+  for (const m of adminMatrixKeys(ALL_MODULES)) out[m] = true
+  return out
+}
+
+/**
  * Retorna a matriz hardcoded de permissões para um role.
  * Usado como fallback quando a query ao banco falha ou retorna vazio.
  */
 function getHardcodedPermissions(role: string): Record<string, boolean> {
   switch (role) {
     case "admin":
-      return fullMatrix()
+      return adminFullMatrix()
 
     case "supervisor":
       return {
@@ -201,7 +216,7 @@ export async function getOrgPermissionsMatrix(
           // adicionados a ALL_MODULES antes de uma migration de seed.
           const finalPerms =
             role.name === "admin"
-              ? fullMatrix()
+              ? adminFullMatrix()
               : Object.keys(perms).length > 0 ? perms : getHardcodedPermissions(role.name)
           return [role.id, finalPerms] as const
         })
@@ -269,7 +284,7 @@ export async function getUserPermissions(
   // adicionados a ALL_MODULES antes de uma migration de seed.
   const finalPerms =
     userRole === "admin"
-      ? fullMatrix()
+      ? adminFullMatrix()
       : Object.keys(perms).length > 0 ? { ...perms } : { ...getHardcodedPermissions(userRole) }
 
   // 4. Aplicar exceções individuais (prioridade absoluta sobre o perfil base)
@@ -485,7 +500,17 @@ export async function updatePermission(
  */
 export async function createRole(
   orgId: string,
-  data: { name: string; label: string; color: string }
+  data: {
+    name: string
+    label: string
+    color: string
+    /**
+     * Story 75-301 — clonar permissões de um perfil existente da MESMA org:
+     * copia TODAS as linhas de `role_permissions` do perfil fonte (módulos,
+     * telas E capabilities). Sem ele, seed padrão = tudo `false`.
+     */
+    cloneFromRoleId?: string
+  }
 ): Promise<{ success: boolean; role?: OrgRole; error?: string }> {
   "use server"
 
@@ -540,13 +565,59 @@ export async function createRole(
     return { success: false, error: "Falha ao criar perfil." }
   }
 
-  // 4. Seed 17 permissões em `role_permissions` (todas can_access = false)
-  const permissionsRows = ALL_MODULES.map((module) => ({
-    org_id: orgId,
-    role_id: newRole.id as string,
-    module,
-    can_access: false,
-  }))
+  // 4. Seed das permissões em `role_permissions`:
+  //    - com `cloneFromRoleId`: cópia fiel das linhas do perfil fonte (75-301);
+  //    - sem: comportamento original — módulos de ALL_MODULES com can_access=false.
+  let permissionsRows: Array<{
+    org_id: string
+    role_id: string
+    module: string
+    can_access: boolean
+  }>
+
+  if (data.cloneFromRoleId) {
+    // Fonte precisa existir NA MESMA org (não vazar matriz de outra org).
+    const { data: sourceRole } = await supabase
+      .from("roles")
+      .select("id")
+      .eq("id", data.cloneFromRoleId)
+      .eq("org_id", orgId)
+      .maybeSingle()
+
+    if (!sourceRole) {
+      await supabase.from("roles").delete().eq("id", newRole.id as string)
+      return { success: false, error: "Perfil de origem não encontrado." }
+    }
+
+    const { data: sourceRows, error: sourceError } = await supabase
+      .from("role_permissions")
+      .select("module, can_access")
+      .eq("role_id", data.cloneFromRoleId)
+
+    if (sourceError || !sourceRows || sourceRows.length === 0) {
+      await supabase.from("roles").delete().eq("id", newRole.id as string)
+      return {
+        success: false,
+        error: sourceError?.message ?? "Perfil de origem sem permissões para clonar.",
+      }
+    }
+
+    permissionsRows = (sourceRows as Array<{ module: string; can_access: boolean }>).map(
+      (row) => ({
+        org_id: orgId,
+        role_id: newRole.id as string,
+        module: row.module,
+        can_access: row.can_access,
+      })
+    )
+  } else {
+    permissionsRows = ALL_MODULES.map((module) => ({
+      org_id: orgId,
+      role_id: newRole.id as string,
+      module,
+      can_access: false,
+    }))
+  }
 
   const { error: permsError } = await supabase
     .from("role_permissions")

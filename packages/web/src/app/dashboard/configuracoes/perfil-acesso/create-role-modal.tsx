@@ -70,6 +70,8 @@ interface CreateRoleModalProps {
   isOpen: boolean
   onClose: () => void
   existingColors?: string[]
+  /** 75-301 — perfis que podem ser clonados como ponto de partida. */
+  cloneOptions?: { id: string; label: string }[]
 }
 
 export function CreateRoleModal({
@@ -77,9 +79,11 @@ export function CreateRoleModal({
   isOpen,
   onClose,
   existingColors = [],
+  cloneOptions = [],
 }: CreateRoleModalProps) {
   const [name, setName] = useState("")
   const [label, setLabel] = useState("")
+  const [cloneFrom, setCloneFrom] = useState<string>("")
   const [selectedColor, setSelectedColor] = useState<RoleColor>(() =>
     pickAutoColor(existingColors)
   )
@@ -109,6 +113,7 @@ export function CreateRoleModal({
   function resetForm() {
     setName("")
     setLabel("")
+    setCloneFrom("")
     setSelectedColor(pickAutoColor(existingColors))
     setNameError(null)
     setLabelError(null)
@@ -158,6 +163,7 @@ export function CreateRoleModal({
         name: name.trim(),
         label: label.trim(),
         color: selectedColor,
+        cloneFromRoleId: cloneFrom || undefined,
       })
 
       if (result.success) {
@@ -328,6 +334,35 @@ export function CreateRoleModal({
                 </p>
               )}
             </div>
+
+            {/* 75-301 — clonar permissões de um perfil existente (opcional) */}
+            {cloneOptions.length > 0 && (
+              <div>
+                <label
+                  htmlFor="role-clone-from"
+                  className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-stone-300"
+                >
+                  Permissões iniciais
+                </label>
+                <select
+                  id="role-clone-from"
+                  value={cloneFrom}
+                  onChange={(e) => setCloneFrom(e.target.value)}
+                  disabled={isSubmitting}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:focus:border-orange-400 dark:focus:ring-orange-400/20"
+                >
+                  <option value="">Começar do zero (tudo desligado)</option>
+                  {cloneOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      Clonar de: {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-stone-400">
+                  Clonar copia módulos, telas e ações do perfil escolhido — ajuste depois na matriz.
+                </p>
+              </div>
+            )}
 
             {/* Preview do badge — feedback visual do que o usuário está criando */}
             {label.trim() && (
