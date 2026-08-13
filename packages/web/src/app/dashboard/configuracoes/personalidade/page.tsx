@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { PromptEditor } from "./prompt-editor"
@@ -34,7 +34,7 @@ async function saveAgentConfigAction(formData: FormData) {
   const supabaseServer = await mkClient()
   const user = await getUser()
 
-  if (user.role !== "admin") return
+  if (!(await can(user.id, user.orgId, "nicole.personalidade_editar"))) return
 
   await supabaseServer
     .from("agent_config")
@@ -53,7 +53,7 @@ export default async function PersonalidadePage() {
     redirect("/dashboard")
   }
 
-  const isAdmin = user.role === "admin"
+  const isAdmin = await can(user.id, user.orgId, "nicole.personalidade_editar")
 
   const supabase = await createClient()
 

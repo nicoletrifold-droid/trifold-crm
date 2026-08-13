@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendTelegramAdminAlert } from "@web/lib/telegram"
@@ -90,7 +91,7 @@ async function checkAndSendAlerts({
 
 export async function GET() {
   const user = await getServerUser()
-  if (user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await can(user.id, user.orgId, "sistema.emails_gerenciar"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const supabase = createAdminClient()
   const now = new Date()

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 /**
  * GET /api/admin/agent-prompts
@@ -11,7 +11,7 @@ export async function GET() {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = await requireCapability(appUser, "nicole.personalidade_editar")
   if (roleError) return roleError
 
   const { data: prompts, error } = await supabase

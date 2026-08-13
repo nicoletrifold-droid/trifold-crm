@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { generateEmbeddingStrict } from "@trifold/ai"
 
 export async function GET(request: NextRequest) {
@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
+  const roleError = await requireCapability(appUser, "nicole.treinamento_gerenciar")
   if (roleError) return roleError
 
   const { searchParams } = request.nextUrl
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
+  const roleError = await requireCapability(appUser, "nicole.treinamento_gerenciar")
   if (roleError) return roleError
 
   let body: Record<string, unknown>

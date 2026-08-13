@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import type { NextRequest } from "next/server"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
@@ -16,7 +17,7 @@ const DEFAULTS = {
 
 export async function GET() {
   const user = await getServerUser()
-  if (user.role !== "admin") {
+  if (!(await can(user.id, user.orgId, "sistema.emails_gerenciar"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -32,7 +33,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   const user = await getServerUser()
-  if (user.role !== "admin") {
+  if (!(await can(user.id, user.orgId, "sistema.emails_gerenciar"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

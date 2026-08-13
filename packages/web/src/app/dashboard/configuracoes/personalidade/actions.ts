@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { validateChangeReason, validatePromptContent } from "@web/lib/agent-prompts"
@@ -59,7 +60,7 @@ export async function savePromptAction(
   // Defesa em profundidade: a guarda efetiva no banco é a RLS admin-only da migration
   // 098 (`098_harden_rls_agent_prompts_admin_only.sql`, Story 53-2) — NÃO a 096, que é
   // o `crm_pipeline_readonly_layer` e não tem nada a ver com isto.
-  if (user.role !== "admin") {
+  if (!(await can(user.id, user.orgId, "nicole.personalidade_editar"))) {
     return { status: "erro", message: "Só administradores podem editar os prompts da Nicole." }
   }
 

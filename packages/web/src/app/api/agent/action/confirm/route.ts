@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { metaFetch, MetaOAuthException, MetaPermissionError } from "@trifold/shared"
 
 // Whitelist of action types the agent is allowed to execute.
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const { supabase, appUser } = auth
 
   // Only admins can execute actions
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "agente.confirmar_acoes")
   if (forbidden) return forbidden
 
   let body: { message_id: string }

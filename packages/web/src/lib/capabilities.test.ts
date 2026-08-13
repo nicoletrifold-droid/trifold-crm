@@ -239,6 +239,22 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "configuracoes.integracoes_gerenciar",
         "configuracoes.atendente_padrao_ver",
         "configuracoes.atendente_padrao_editar",
+        "sistema.auditoria_ver",
+        "sistema.emails_gerenciar",
+        "sistema.emails_disparar",
+        "alertas.followup_ver",
+        "roleta.configurar",
+        "roleta.distribuir_manual",
+        "corretores.gerenciar",
+        "nicole.personalidade_editar",
+        "nicole.treinamento_gerenciar",
+        "nicole.treinamento_apagar",
+        "nicole.midia_gerenciar",
+        "nicole.midia_enviar",
+        "agente.contexto_crm",
+        "agente.contexto_criativo",
+        "agente.confirmar_acoes",
+        "agente.ver_log",
         "clientes.gerenciar",
         "clientes.apagar",
         "clientes.resetar_senha",
@@ -277,7 +293,12 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "chat", "clientes", "configuracoes", "conversas", "imoveis", "leads", "marketing", "obras", "pastas", "perfis", "portal", "sistema", "usuarios"])
+    expect(Object.keys(byGroup).sort()).toEqual([
+      "agenda", "agente", "alertas", "analytics", "atividades", "campanhas",
+      "chamados", "chat", "clientes", "configuracoes", "conversas", "corretores",
+      "imoveis", "leads", "marketing", "nicole", "obras", "pastas", "perfis",
+      "portal", "roleta", "sistema", "usuarios",
+    ])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -484,5 +505,27 @@ describe("75-312 — Config & Usuários (espelhos + constante de seleção conge
     expect([...CAPABILITY_SEED["configuracoes.atendente_padrao_ver"]].sort()).toEqual(
       ["admin", "gerente-comercial", "gerente-relacionamento", "obras", "supervisor"]
     )
+  })
+})
+
+describe("75-313 — Sistema/Roleta/Corretores/Nicole/Agente (espelho final)", () => {
+  it("admin-only: auditoria, emails ×2, personalidade, treinamento_apagar, contexto_crm, confirmar_acoes", () => {
+    for (const key of ["sistema.auditoria_ver","sistema.emails_gerenciar","sistema.emails_disparar","nicole.personalidade_editar","nicole.treinamento_apagar","agente.contexto_crm","agente.confirmar_acoes"] as const) {
+      expect([...CAPABILITY_SEED[key]], key).toEqual(["admin"])
+    }
+  })
+  it("A/S: followup, distribuir_manual, ver_log · A/S/GC: roleta.configurar, treinamento, mídia ×2, contexto_criativo · A/GC: corretores", () => {
+    for (const key of ["alertas.followup_ver","roleta.distribuir_manual","agente.ver_log"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
+    }
+    for (const key of ["roleta.configurar","nicole.treinamento_gerenciar","nicole.midia_gerenciar","nicole.midia_enviar","agente.contexto_criativo"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "gerente-comercial", "supervisor"])
+    }
+    expect([...CAPABILITY_SEED["corretores.gerenciar"]].sort()).toEqual(["admin", "gerente-comercial"])
+  })
+  it("estruturais/UX seguem NÃO-enforced: bolsao ×2, roleta.atender_todo_empreendimento (RPC/F4)", () => {
+    for (const key of ["bolsao.puxar", "bolsao.puxar_dashboard", "roleta.atender_todo_empreendimento"]) {
+      expect(ENFORCED_CAPABILITIES.some((c) => c.key === key), key).toBe(false)
+    }
   })
 })

@@ -180,25 +180,25 @@ export const CAPABILITIES = [
   { key: "campanhas.meta_ver", label: "Ver detalhes Meta", description: "Criativos e log de ações da campanha Meta.", seed: [A], enforced: true },
 
   // ── Nicole — grupo virtual ───────────────────────────────────────────────
-  { key: "nicole.personalidade_editar", label: "Editar personalidade", description: "Prompts e configuração da Nicole.", seed: [A] },
-  { key: "nicole.treinamento_gerenciar", label: "Gerenciar treinamento", description: "Criar/editar entradas da base de conhecimento.", seed: [A, S, GC] },
-  { key: "nicole.treinamento_apagar", label: "Excluir treinamento", description: "Excluir entrada da KB e editar entradas vindas do site.", seed: [A] },
-  { key: "nicole.midia_gerenciar", label: "Gerenciar mídia", description: "Biblioteca de mídia: upload, edição e exclusão.", seed: [A, S, GC] },
-  { key: "nicole.midia_enviar", label: "Enviar mídia a lead", description: "Enviar mídia da biblioteca a um lead (o dono também pode).", seed: [A, S, GC] },
+  { key: "nicole.personalidade_editar", label: "Editar personalidade", description: "Prompts e configuração da Nicole.", seed: [A], enforced: true },
+  { key: "nicole.treinamento_gerenciar", label: "Gerenciar treinamento", description: "Criar/editar entradas da base de conhecimento.", seed: [A, S, GC], enforced: true },
+  { key: "nicole.treinamento_apagar", label: "Excluir treinamento", description: "Excluir entrada da KB e editar entradas vindas do site.", seed: [A], enforced: true },
+  { key: "nicole.midia_gerenciar", label: "Gerenciar mídia", description: "Biblioteca de mídia: upload, edição e exclusão.", seed: [A, S, GC], enforced: true },
+  { key: "nicole.midia_enviar", label: "Enviar mídia a lead", description: "Enviar mídia da biblioteca a um lead (o dono também pode).", seed: [A, S, GC], enforced: true },
 
   // ── Agente de marketing (Lídia · chat) — grupo virtual ───────────────────
-  { key: "agente.contexto_crm", label: "Contexto CRM no chat", description: "Chat da Lídia com dados CRM/PII injetados.", seed: [A] },
-  { key: "agente.contexto_criativo", label: "Contexto de criativos", description: "Chat da Lídia com performance de criativos.", seed: [A, S, GC] },
-  { key: "agente.confirmar_acoes", label: "Confirmar ações", description: "Confirmar/cancelar ações sugeridas pelo agente.", seed: [A] },
-  { key: "agente.ver_log", label: "Ver log do agente", description: "Log de sessões e de uso do agente.", seed: [A, S] },
+  { key: "agente.contexto_crm", label: "Contexto CRM no chat", description: "Chat da Lídia com dados CRM/PII injetados.", seed: [A], enforced: true },
+  { key: "agente.contexto_criativo", label: "Contexto de criativos", description: "Chat da Lídia com performance de criativos.", seed: [A, S, GC], enforced: true },
+  { key: "agente.confirmar_acoes", label: "Confirmar ações", description: "Confirmar/cancelar ações sugeridas pelo agente.", seed: [A], enforced: true },
+  { key: "agente.ver_log", label: "Ver log do agente", description: "Log de sessões e de uso do agente.", seed: [A, S], enforced: true },
 
   // ── Roleta · Bolsão · Corretores ─────────────────────────────────────────
-  { key: "roleta.configurar", label: "Configurar roleta", description: "Configuração, agenda de distribuição e fila da roleta.", seed: [A, S, GC] },
-  { key: "roleta.distribuir_manual", label: "Distribuir manualmente", description: "Distribuir um lead na mão.", seed: [A, S] },
+  { key: "roleta.configurar", label: "Configurar roleta", description: "Configuração, agenda de distribuição e fila da roleta.", seed: [A, S, GC], enforced: true },
+  { key: "roleta.distribuir_manual", label: "Distribuir manualmente", description: "Distribuir um lead na mão.", seed: [A, S], enforced: true },
   { key: "roleta.atender_todo_empreendimento", label: "Atender qualquer empreendimento", description: "Bypass do vínculo corretor↔empreendimento na distribuição (hoje hardcoded para SDR na RPC).", seed: [SDR] },
   { key: "bolsao.puxar", label: "Puxar do bolsão", description: "Puxar lead do bolsão na própria área (/broker).", seed: [COR] },
   { key: "bolsao.puxar_dashboard", label: "Puxar pelo dashboard", description: "Puxar lead do bolsão pela tela do dashboard.", seed: [GC] },
-  { key: "corretores.gerenciar", label: "Gerenciar corretores", description: "Criar/editar corretor (cadastro, teto, disponibilidade).", seed: [A, GC] },
+  { key: "corretores.gerenciar", label: "Gerenciar corretores", description: "Criar/editar corretor (cadastro, teto, disponibilidade).", seed: [A, GC], enforced: true },
 
   // ── Chamados ─────────────────────────────────────────────────────────────
   // enforced na 75-304 (F3-3): API de listagem, tela e badge do menu decidem por can().
@@ -223,11 +223,12 @@ export const CAPABILITIES = [
   { key: "configuracoes.atendente_padrao_editar", label: "Editar atendente padrão", description: "Trocar o atendente padrão do Chat.", seed: [A, S], enforced: true },
 
   // ── Sistema · Alertas ────────────────────────────────────────────────────
-  { key: "sistema.auditoria_ver", label: "Auditoria e logs", description: "Audit logs, exportação, eventos do sistema e logs de webhook.", seed: [A] },
-  { key: "sistema.emails_gerenciar", label: "Gerenciar e-mails", description: "Config SMTP, templates, automações e logs de e-mail.", seed: [A] },
-  { key: "sistema.emails_disparar", label: "Disparar e-mails", description: "Blast em massa e envio rápido.", seed: [A] },
+  // enforced na 75-313 (F3-12): APIs/telas de sistema, nicole e agente decidem por can().
+  { key: "sistema.auditoria_ver", label: "Auditoria e logs", description: "Audit logs, exportação, eventos do sistema e logs de webhook.", seed: [A], enforced: true },
+  { key: "sistema.emails_gerenciar", label: "Gerenciar e-mails", description: "Config SMTP, templates, automações e logs de e-mail.", seed: [A], enforced: true },
+  { key: "sistema.emails_disparar", label: "Disparar e-mails", description: "Blast em massa e envio rápido.", seed: [A], enforced: true },
   { key: "sistema.manutencao", label: "Manutenção", description: "Backfills e ferramentas de manutenção.", seed: [A], enforced: true },
-  { key: "alertas.followup_ver", label: "Follow-ups da equipe", description: "Ver follow-ups pendentes de toda a equipe.", seed: [A, S] },
+  { key: "alertas.followup_ver", label: "Follow-ups da equipe", description: "Ver follow-ups pendentes de toda a equipe.", seed: [A, S], enforced: true },
 ] as const satisfies readonly CapabilityDef[]
 
 export type CapabilityKey = (typeof CAPABILITIES)[number]["key"]

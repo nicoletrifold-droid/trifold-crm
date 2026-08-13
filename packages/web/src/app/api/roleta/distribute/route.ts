@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 
 export async function POST(req: NextRequest) {
@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  if (!["admin", "supervisor"].includes(appUser.role)) {
+  if (await requireCapability(appUser, "roleta.distribuir_manual")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

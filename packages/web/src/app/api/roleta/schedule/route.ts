@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 const HHMM = /^\d{2}:\d{2}(:\d{2})?$/
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest) {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  if (!["admin", "supervisor", "gerente-comercial"].includes(appUser.role)) {
+  if (await requireCapability(appUser, "roleta.configurar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

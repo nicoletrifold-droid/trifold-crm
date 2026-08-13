@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import { sendTemplateEmail } from "@web/lib/email"
 
 export async function POST(request: NextRequest) {
   const user = await getServerUser()
-  if (user.role !== "admin") {
+  if (!(await can(user.id, user.orgId, "sistema.emails_disparar"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

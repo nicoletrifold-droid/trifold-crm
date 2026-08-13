@@ -1,4 +1,5 @@
 import type { AppUser } from "@web/lib/api-auth"
+import { can } from "@web/lib/permissions"
 
 /**
  * Verifica se o usuario possui role admin estrito.
@@ -21,10 +22,11 @@ import type { AppUser } from "@web/lib/api-auth"
  *   }
  *
  * @param user Objeto AppUser autenticado (de requireAuth()).
- * @returns true se o role for exatamente 'admin'; caso contrario, false.
+ * @returns true se o usuário tem a capability agente.contexto_crm (seed = admin).
  */
-export function isAdmin(user: AppUser): boolean {
-  return user.role === "admin"
+export async function isAdmin(user: AppUser): Promise<boolean> {
+  // 75-313: capability agente.contexto_crm (seed = admin) — matriz/exceções valem.
+  return can(user.id, user.org_id, "agente.contexto_crm")
 }
 
 /**
@@ -32,10 +34,10 @@ export function isAdmin(user: AppUser): boolean {
  *
  * Contrato para Story 52-6 (analise de criativo no agente):
  * - Parametro: `user` — objeto AppUser retornado por requireAuth() de `@web/lib/api-auth`.
- * - Retorno: `true` para role === 'admin', 'supervisor' ou 'gerente-comercial';
- *            `false` para qualquer outro role (incluindo 'broker', 'cliente', 'obras').
+ * - Retorno: `true` p/ quem tem a capability (seed: admin/supervisor/gerente-comercial);
+ *            `false` caso contrário (incluindo 'broker', 'cliente', 'obras').
  * - Fonte do role: `appUser.role` (coluna `role` da tabela `users`).
- * - Verificacao ESTRITA de string. NAO delega para `canAccess()` nem para SQL.
+ * - 75-313: decide pela CAPABILITY agente.contexto_criativo (matriz + exceções).
  * - Diferente de `isAdmin`: acesso ampliado (nao inclui pipeline CRM — apenas criativo).
  *
  * O role 'obras' e deliberadamente excluido aqui, apesar de a funcao SQL
@@ -49,12 +51,10 @@ export function isAdmin(user: AppUser): boolean {
  *   if (adminOrSupervisor && requiresCreative(message)) { ... }
  *
  * @param user Objeto AppUser autenticado (de requireAuth()).
- * @returns true se o role for 'admin', 'supervisor' ou 'gerente-comercial'; false caso contrario.
+ * @returns true se tem agente.contexto_criativo; false caso contrário.
  */
-export function isAdminOrSupervisor(user: AppUser): boolean {
-  return (
-    user.role === "admin" ||
-    user.role === "supervisor" ||
-    user.role === "gerente-comercial"
-  )
+export async function isAdminOrSupervisor(user: AppUser): Promise<boolean> {
+  // 75-313: capability agente.contexto_criativo (seed = admin/supervisor/
+  // gerente-comercial — obras segue deliberadamente fora, como o stakeholder pediu).
+  return can(user.id, user.org_id, "agente.contexto_criativo")
 }

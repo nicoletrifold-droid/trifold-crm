@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   const user = await getServerUser()
-  if (user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await can(user.id, user.orgId, "sistema.emails_disparar"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const url = new URL(request.url)
   const segmentType = url.searchParams.get("segment_type") ?? "all"

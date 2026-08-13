@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { validateChangeReason, validatePromptContent } from "@web/lib/agent-prompts"
 
 /**
@@ -14,7 +14,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = await requireCapability(appUser, "nicole.personalidade_editar")
   if (roleError) return roleError
 
   const { slug } = await params
@@ -57,7 +57,7 @@ export async function PUT(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = await requireCapability(appUser, "nicole.personalidade_editar")
   if (roleError) return roleError
 
   const { slug } = await params

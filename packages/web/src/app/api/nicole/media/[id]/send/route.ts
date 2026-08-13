@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
@@ -70,7 +71,7 @@ export async function POST(
     )
   }
 
-  const isAdmin = ["admin", "supervisor", "gerente-comercial"].includes(appUser.role)
+  const isAdmin = await can(appUser.id, appUser.org_id, "nicole.midia_enviar")
   if (!isAdmin && lead.assigned_broker_id !== appUser.id) {
     return NextResponse.json(
       { success: false, error: "FORBIDDEN", message: "Este lead não está atribuído a você." },

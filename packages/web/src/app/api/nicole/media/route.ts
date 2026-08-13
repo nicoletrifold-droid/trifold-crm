@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import crypto from "crypto"
 
 export async function GET(request: NextRequest) {
@@ -53,14 +53,13 @@ const EXT: Record<string, string> = {
   "application/pdf": "pdf",
 }
 
-const ALLOWED_ROLES = ["admin", "supervisor", "gerente-comercial"] as const
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, [...ALLOWED_ROLES])
+  const forbidden = await requireCapability(appUser, "nicole.midia_gerenciar")
   if (forbidden) return forbidden
 
   const formData = await request.formData()
@@ -138,7 +137,7 @@ export async function PATCH(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, [...ALLOWED_ROLES])
+  const forbidden = await requireCapability(appUser, "nicole.midia_gerenciar")
   if (forbidden) return forbidden
 
   const id = request.nextUrl.searchParams.get("id")
@@ -169,7 +168,7 @@ export async function DELETE(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, [...ALLOWED_ROLES])
+  const forbidden = await requireCapability(appUser, "nicole.midia_gerenciar")
   if (forbidden) return forbidden
 
   const id = request.nextUrl.searchParams.get("id")

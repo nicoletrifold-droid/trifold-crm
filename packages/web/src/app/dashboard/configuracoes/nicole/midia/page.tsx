@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -26,7 +27,7 @@ export default async function MidiaPage({
   const filters = await searchParams
   const user = await getServerUser()
 
-  const canAccess = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
+  const canAccess = await can(user.id, user.orgId, "nicole.midia_gerenciar")
   if (!canAccess) redirect("/dashboard")
 
   const supabase = await createClient()
