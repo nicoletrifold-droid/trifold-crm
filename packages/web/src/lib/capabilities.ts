@@ -207,19 +207,20 @@ export const CAPABILITIES = [
   { key: "chamados.apagar", label: "Excluir chamado", description: "Excluir um ticket (hoje o gate vive só na RLS).", seed: [A] },
 
   // ── Usuários & Perfis — grupos virtuais ──────────────────────────────────
-  { key: "usuarios.criar", label: "Criar usuário", description: "Cadastrar novo usuário na organização.", seed: [A] },
-  { key: "usuarios.editar", label: "Editar usuário", description: "Editar usuário, ativar/desativar, resetar senha (gerente-comercial: só corretores).", seed: [A, GC] },
-  { key: "usuarios.trocar_perfil", label: "Trocar perfil", description: "Trocar o perfil de acesso de um usuário.", seed: [A] },
-  { key: "perfis.gerenciar", label: "Gerenciar perfis de acesso", description: "Criar/editar/excluir perfis, matriz de permissões e exceções por usuário.", seed: [A] },
+  // enforced na 75-312 (F3-11): APIs de usuários/config + telas decidem por can().
+  { key: "usuarios.criar", label: "Criar usuário", description: "Cadastrar novo usuário na organização.", seed: [A], enforced: true },
+  { key: "usuarios.editar", label: "Editar usuário", description: "Editar usuário, ativar/desativar, resetar senha (gerente-comercial: só corretores).", seed: [A, GC], enforced: true },
+  { key: "usuarios.trocar_perfil", label: "Trocar perfil", description: "Trocar o perfil de acesso de um usuário.", seed: [A], enforced: true },
+  { key: "perfis.gerenciar", label: "Gerenciar perfis de acesso", description: "Criar/editar/excluir perfis, matriz de permissões e exceções por usuário.", seed: [A], enforced: true },
 
   // ── Configurações (ações; as TELAS são sub-módulos do SUBMODULE_MAP) ─────
-  { key: "configuracoes.empresa_editar", label: "Editar empresa", description: "Editar os dados da organização.", seed: [A] },
+  { key: "configuracoes.empresa_editar", label: "Editar empresa", description: "Editar os dados da organização.", seed: [A], enforced: true },
   { key: "configuracoes.horario_editar", label: "Editar horário comercial", description: "Editar a grade de horário comercial.", seed: [A] },
-  { key: "configuracoes.pipeline_editar", label: "Editar etapas do pipeline", description: "Criar/editar/excluir etapas.", seed: [A] },
-  { key: "configuracoes.pipeline_followup", label: "Follow-up da etapa", description: "Configurar regras de follow-up por etapa.", seed: [A, S] },
-  { key: "configuracoes.integracoes_gerenciar", label: "Gerenciar integrações", description: "Conectar/desconectar Google Calendar e demais integrações.", seed: [A] },
-  { key: "configuracoes.atendente_padrao_ver", label: "Ver atendente padrão", description: "Consultar o atendente padrão do Chat.", seed: [A, S, OBR, GR, GC] },
-  { key: "configuracoes.atendente_padrao_editar", label: "Editar atendente padrão", description: "Trocar o atendente padrão do Chat.", seed: [A, S] },
+  { key: "configuracoes.pipeline_editar", label: "Editar etapas do pipeline", description: "Criar/editar/excluir etapas.", seed: [A], enforced: true },
+  { key: "configuracoes.pipeline_followup", label: "Follow-up da etapa", description: "Configurar regras de follow-up por etapa.", seed: [A, S], enforced: true },
+  { key: "configuracoes.integracoes_gerenciar", label: "Gerenciar integrações", description: "Conectar/desconectar Google Calendar e demais integrações.", seed: [A], enforced: true },
+  { key: "configuracoes.atendente_padrao_ver", label: "Ver atendente padrão", description: "Consultar o atendente padrão do Chat.", seed: [A, S, OBR, GR, GC], enforced: true },
+  { key: "configuracoes.atendente_padrao_editar", label: "Editar atendente padrão", description: "Trocar o atendente padrão do Chat.", seed: [A, S], enforced: true },
 
   // ── Sistema · Alertas ────────────────────────────────────────────────────
   { key: "sistema.auditoria_ver", label: "Auditoria e logs", description: "Audit logs, exportação, eventos do sistema e logs de webhook.", seed: [A] },

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 /**
@@ -7,14 +7,17 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * GET   → { atendente_padrao_id, staff[] }
  * PATCH { atendente_padrao_id } → define (null = nenhum)
  */
+
+// 75-312: gate = capabilities; esta lista fica SÓ para a SELEÇÃO dos candidatos
+// a atendente padrão (.in("role", …)) — CONGELADA ao seed de
+// configuracoes.atendente_padrao_ver por teste (capabilities.test.ts).
 const STAFF_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento", "gerente-comercial"]
-const CONFIG_ROLES = ["admin", "supervisor"]
 
 export async function GET() {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  if (!STAFF_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "configuracoes.atendente_padrao_ver")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -44,7 +47,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  if (!CONFIG_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "configuracoes.atendente_padrao_editar")) {
     return NextResponse.json({ error: "Apenas admin/supervisor configuram." }, { status: 403 })
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { exchangeCodeForTokens } from "@web/lib/google"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "configuracoes.integracoes_gerenciar")
   if (forbidden) return forbidden
 
   const code = request.nextUrl.searchParams.get("code")

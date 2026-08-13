@@ -3,7 +3,7 @@
 import { revalidateTag } from "next/cache"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { createClient } from "@web/lib/supabase/server"
-import { getUserPermissions } from "./permissions"
+import { can, getUserPermissions } from "./permissions"
 
 export { getUserPermissions }
 
@@ -33,11 +33,12 @@ export async function setUserException(
 
   const { data: appUser } = await supabase
     .from("users")
-    .select("role, org_id")
+    .select("id, role, org_id")
     .eq("auth_id", user.id)
     .maybeSingle()
 
-  if (!appUser || appUser.role !== "admin") {
+  // 75-312: exceções individuais = capability perfis.gerenciar.
+  if (!appUser || !(await can(appUser.id as string, appUser.org_id as string, "perfis.gerenciar"))) {
     return { success: false, error: "Unauthorized" }
   }
 
@@ -71,11 +72,11 @@ export async function removeUserException(
 
   const { data: appUser } = await supabase
     .from("users")
-    .select("role")
+    .select("id, org_id, role")
     .eq("auth_id", user.id)
     .maybeSingle()
 
-  if (!appUser || appUser.role !== "admin") {
+  if (!appUser || !(await can(appUser.id as string, (appUser as { org_id?: string }).org_id ?? "", "perfis.gerenciar"))) {
     return { success: false, error: "Unauthorized" }
   }
 
