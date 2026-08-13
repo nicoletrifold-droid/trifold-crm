@@ -11,13 +11,12 @@
 // opening-context.ts re-exporta daqui — importar a fonte, nunca reproduzir o
 // valor em array inline.
 
-export const OPENING_PRIVILEGED_ROLES = [
-  "admin",
-  "supervisor",
-  "gerente-comercial",
-  "sdr",
-  "gerente-relacionamento",
-]
+import { CAPABILITY_SEED } from "@web/lib/capabilities"
+
+// 75-317 (F5): a lista deixou de ser digitada — ela É o seed da capability
+// (fonte única). O gate real segue sendo can() no servidor; aqui é só a dica
+// de exibição client-side.
+export const OPENING_PRIVILEGED_ROLES = CAPABILITY_SEED["conversas.abrir_template"]
 
 /**
  * Gate de exibição do menu de abertura ("Iniciar atendimento") nas superfícies
@@ -32,6 +31,6 @@ export function canShowOpeningMenu(
   role: string | null | undefined,
   isLeadOwner: boolean
 ): boolean {
-  if (role && OPENING_PRIVILEGED_ROLES.includes(role)) return true
+  if (role && (OPENING_PRIVILEGED_ROLES as readonly string[]).includes(role)) return true
   return role === "broker" && isLeadOwner
 }

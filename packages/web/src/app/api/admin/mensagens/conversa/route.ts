@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
+import { CAPABILITY_SEED } from "@web/lib/capabilities"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 /**
@@ -9,9 +10,9 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * GET   ?obra_id=&cliente_id=  → { assigned_to, assigned_name, participants[] } (cria preguiçosamente)
  * PATCH { obra_id, cliente_id, assigned_to } → transfere/atribui
  */
-// 75-310: gate = capability chat.responder; a lista abaixo permanece SÓ para a
-// SELEÇÃO de participantes staff (.in("role", …)) — congelada ao seed por teste.
-const STAFF_ROLES = ["admin", "supervisor", "gerente-relacionamento", "gerente-comercial"]
+// 75-317 (F5): a seleção de participantes staff (.in("role", …)) passa a LER o
+// seed da capability — fonte única, sem congelamento por teste.
+const STAFF_ROLES = [...CAPABILITY_SEED["chat.responder"]]
 
 async function ensureConversa(
   admin: ReturnType<typeof createAdminClient>,
