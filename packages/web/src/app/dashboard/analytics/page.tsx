@@ -443,18 +443,9 @@ export default async function AnalyticsPage({
 
   const sourceLabels = SOURCE_LABELS_SHORT
 
-  // Story 75-318 — régua do Pipeline (contagens AO VIVO, mesma RPC do Dashboard;
-  // as etapas/cores reusam `stages`, que já vem da matriz do funil ordenável).
-  const { data: liveCountsData } = await supabase.rpc("get_dashboard_stage_counts", {
-    p_org_id: appUser.orgId,
-    p_segmento: "principal",
-  })
-  const liveStageCounts: Record<string, number> = Object.fromEntries(
-    ((liveCountsData ?? []) as Array<{ stage_id: string; total: number }>).map((r) => [
-      r.stage_id,
-      Number(r.total ?? 0),
-    ])
-  )
+  // Story 75-319 (decisão do Marcos 13/08): a régua SEGUE O PERÍODO — usa os
+  // MESMOS counts do Funil (leads que entraram na janela, por etapa atual),
+  // então régua e funil batem sempre; a foto "agora" continua no Dashboard.
   const stagesOrdenadas = [...stages].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 
   const selectedPropertyName = propertyId
@@ -635,11 +626,12 @@ export default async function AnalyticsPage({
         </div>
       </div>
 
-      {/* Story 75-318 — régua do Pipeline (contagens AO VIVO, como no Dashboard),
-          em versão compacta, entre os cards do período e o Leads por Período. */}
+      {/* Story 75-318/319 — régua do Pipeline entre os cards e o Leads por Período.
+          75-319: os counts SEGUEM O PERÍODO (mesma fonte do Funil) — decisão do
+          Marcos após os prints de 7d×30d; a foto "agora" fica no Dashboard. */}
       <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-stone-100">
-          Pipeline <span className="text-xs font-normal text-stone-400">· agora</span>
+          Pipeline <span className="text-xs font-normal text-stone-400">· {rangeLabel} · leads que entraram no período, por etapa atual</span>
         </h2>
         <div className="overflow-x-auto">
           <div className="flex min-w-max gap-1.5">
@@ -654,7 +646,7 @@ export default async function AnalyticsPage({
                   {stage.name}
                 </p>
                 <p className="mt-0.5 text-base font-bold tabular-nums text-gray-900 dark:text-stone-100">
-                  {liveStageCounts[stage.id] ?? 0}
+                  {stage.count}
                 </p>
               </Link>
             ))}
