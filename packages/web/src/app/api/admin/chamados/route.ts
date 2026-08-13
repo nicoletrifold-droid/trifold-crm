@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
+import { can } from "@web/lib/permissions"
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB por arquivo
 const MAX_FILES = 5
@@ -139,7 +140,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get("status")
 
-  const isAdmin = appUser.role === "admin" || appUser.role === "supervisor"
+  // 75-304: ver TODOS os tickets da org é a capability chamados.ver_todos
+  const isAdmin = await can(appUser.id, appUser.org_id, "chamados.ver_todos")
 
   let query = supabase
     .from("chamados")

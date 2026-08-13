@@ -27,9 +27,11 @@ const STATUS_FILTERS = [
 interface Props {
   initialChamados: Chamado[]
   isAdmin: boolean
+  /** 75-304: botões Responder/Reabrir do card (capability chamados.responder) */
+  canRespond?: boolean
 }
 
-export function ChamadosClientWrapper({ initialChamados, isAdmin }: Props) {
+export function ChamadosClientWrapper({ initialChamados, isAdmin, canRespond = false }: Props) {
   const [chamados, setChamados] = useState<Chamado[]>(initialChamados)
   const [statusFilter, setStatusFilter] = useState<string>("todos")
 
@@ -118,7 +120,7 @@ export function ChamadosClientWrapper({ initialChamados, isAdmin }: Props) {
             <ChamadoCard
               key={chamado.id}
               chamado={chamado}
-              isAdmin={isAdmin}
+              canRespond={canRespond}
               showReporter={isAdmin}
               onStatusChange={handleStatusChange}
             />

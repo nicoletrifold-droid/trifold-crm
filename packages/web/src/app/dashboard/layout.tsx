@@ -1,7 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { getUserPermissions, podeVerMenuConfig } from "@web/lib/permissions"
+import { can, getUserPermissions, podeVerMenuConfig } from "@web/lib/permissions"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 import { getUpcomingAppointmentsCount } from "@web/lib/agenda/appointments-count"
 import { redirect } from "next/navigation"
@@ -114,6 +114,12 @@ export default async function DashboardLayout({
   const isAdminOrSupervisorObras =
     permissions["obras"] && (user.role === "admin" || user.role === "supervisor")
 
+  // 75-304: o badge do Suporte conta TODOS os tickets p/ quem tem a capability
+  // chamados.ver_todos (antes: nome de role hardcoded).
+  const podeVerTodosChamados = permissions["chamados"]
+    ? await can(user.id, user.orgId, "chamados.ver_todos")
+    : false
+
   // Busca alertas_notifications_seen_at para filtrar badge — atualizado
   // via server action quando o usuário abre a página de Alertas
   const alertasSeenAt = permissions["alertas"]
@@ -159,7 +165,7 @@ export default async function DashboardLayout({
           // - admin/supervisor: tickets não resolvidos
           // - outros: respostas do admin ainda não lidas pelo reporter
           permissions["chamados"]
-            ? (user.role === "admin" || user.role === "supervisor")
+            ? podeVerTodosChamados
               ? supabase
                   .from("chamados")
                   .select("id", { count: "exact", head: true })

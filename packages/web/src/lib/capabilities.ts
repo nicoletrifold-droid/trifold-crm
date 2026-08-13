@@ -185,8 +185,9 @@ export const CAPABILITIES = [
   { key: "corretores.gerenciar", label: "Gerenciar corretores", description: "Criar/editar corretor (cadastro, teto, disponibilidade).", seed: [A, GC] },
 
   // ── Chamados ─────────────────────────────────────────────────────────────
-  { key: "chamados.ver_todos", label: "Ver todos os chamados", description: "Ver todos os tickets da organização (não só os próprios) + badge no menu.", seed: [A, S] },
-  { key: "chamados.responder", label: "Responder chamados", description: "Responder, mudar status, resolver e reabrir tickets.", seed: [A, S] },
+  // enforced na 75-304 (F3-3): API de listagem, tela e badge do menu decidem por can().
+  { key: "chamados.ver_todos", label: "Ver todos os chamados", description: "Ver todos os tickets da organização (não só os próprios) + badge no menu.", seed: [A, S], enforced: true },
+  { key: "chamados.responder", label: "Responder chamados", description: "Responder, mudar status, resolver e reabrir tickets.", seed: [A, S], enforced: true },
   { key: "chamados.apagar", label: "Excluir chamado", description: "Excluir um ticket (hoje o gate vive só na RLS).", seed: [A] },
 
   // ── Usuários & Perfis — grupos virtuais ──────────────────────────────────
