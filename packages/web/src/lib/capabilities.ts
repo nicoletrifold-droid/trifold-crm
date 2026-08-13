@@ -195,7 +195,7 @@ export const CAPABILITIES = [
   // ── Roleta · Bolsão · Corretores ─────────────────────────────────────────
   { key: "roleta.configurar", label: "Configurar roleta", description: "Configuração, agenda de distribuição e fila da roleta.", seed: [A, S, GC], enforced: true },
   { key: "roleta.distribuir_manual", label: "Distribuir manualmente", description: "Distribuir um lead na mão.", seed: [A, S], enforced: true },
-  { key: "roleta.atender_todo_empreendimento", label: "Atender qualquer empreendimento", description: "Bypass do vínculo corretor↔empreendimento na distribuição (hoje hardcoded para SDR na RPC).", seed: [SDR] },
+  { key: "roleta.atender_todo_empreendimento", label: "Atender qualquer empreendimento", description: "Bypass do vínculo corretor↔empreendimento na distribuição da roleta (decidido pela matriz na RPC — o check é sobre o corretor CANDIDATO).", seed: [SDR], enforced: true }, // F4-3: user_has_capability na roleta_pick_and_advance
   { key: "bolsao.puxar", label: "Puxar do bolsão", description: "Puxar lead do bolsão na própria área (/broker).", seed: [COR] },
   { key: "bolsao.puxar_dashboard", label: "Puxar pelo dashboard", description: "Puxar lead do bolsão pela tela do dashboard.", seed: [GC] },
   { key: "corretores.gerenciar", label: "Gerenciar corretores", description: "Criar/editar corretor (cadastro, teto, disponibilidade).", seed: [A, GC], enforced: true },

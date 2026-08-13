@@ -247,6 +247,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "alertas.followup_ver",
         "roleta.configurar",
         "roleta.distribuir_manual",
+        "roleta.atender_todo_empreendimento",
         "corretores.gerenciar",
         "nicole.personalidade_editar",
         "nicole.treinamento_gerenciar",
@@ -525,9 +526,12 @@ describe("75-313 — Sistema/Roleta/Corretores/Nicole/Agente (espelho final)", (
     }
     expect([...CAPABILITY_SEED["corretores.gerenciar"]].sort()).toEqual(["admin", "gerente-comercial"])
   })
-  it("estruturais/UX seguem NÃO-enforced: bolsao ×2, roleta.atender_todo_empreendimento (RPC/F4)", () => {
-    for (const key of ["bolsao.puxar", "bolsao.puxar_dashboard", "roleta.atender_todo_empreendimento"]) {
+  it("estruturais/UX seguem NÃO-enforced: bolsao ×2 (pegar_lead_bolsao exige linha em brokers)", () => {
+    for (const key of ["bolsao.puxar", "bolsao.puxar_dashboard"]) {
       expect(ENFORCED_CAPABILITIES.some((c) => c.key === key), key).toBe(false)
     }
+  })
+  it("roleta.atender_todo_empreendimento ENFORCED desde a F4-3 (user_has_capability na RPC)", () => {
+    expect(ENFORCED_CAPABILITIES.some((c) => c.key === "roleta.atender_todo_empreendimento")).toBe(true)
   })
 })
