@@ -1,6 +1,7 @@
 import { createClient } from "@web/lib/supabase/server"
 import { now } from "@web/lib/time"
 import { getServerUser } from "@web/lib/auth"
+import { can } from "@web/lib/permissions"
 import Link from "next/link"
 import { NewAppointmentButton } from "@web/app/dashboard/_components/new-appointment-modal"
 import { DeleteAppointmentButton } from "@web/app/dashboard/_components/delete-appointment-button"
@@ -184,6 +185,14 @@ export default async function AgendaPage({
   // (sem nomes de lead/corretor, sem notas, sem excluir) — a agenda continua
   // compartilhada p/ evitar choque de horário, mas o CONTEÚDO da house é
   // mascarado p/ o mundo IMOB. Detalhe pertinente = só team='imob'.
+  // 75-307: capabilities de agenda resolvidas 1× por request (a lista tem N
+  // compromissos — a decisão por linha é a função PURA canMutateAppointment).
+  const mutationGrants = {
+    house: await can(appUser.id, appUser.orgId, "agenda.gerenciar_house"),
+    imob: await can(appUser.id, appUser.orgId, "agenda.gerenciar_imob"),
+  }
+  const canEscolherEquipe = await can(appUser.id, appUser.orgId, "agenda.escolher_equipe")
+
   const maskHouse = ["imob", "consultoria"].includes(appUser.role)
   const isMaskedApt = (apt: { team: string | null }) => maskHouse && apt.team !== "imob"
 
@@ -271,7 +280,7 @@ export default async function AgendaPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-stone-100">Agenda</h1>
-          <NewAppointmentButton brokerId={params.broker_id} userRole={appUser.role} />
+          <NewAppointmentButton brokerId={params.broker_id} userRole={appUser.role} canPickTeam={canEscolherEquipe} />
           {/* View toggle */}
           <div className="flex rounded-lg border border-stone-200 bg-white p-0.5 dark:border-stone-800 dark:bg-stone-900">
             {(["day", "week", "month"] as const).map((v) => (
@@ -385,7 +394,7 @@ export default async function AgendaPage({
                             Ver feedback
                           </Link>
                         )}
-                        {isPastScheduled && canMutateAppointment(appUser.role, appUser.id, apt) && (
+                        {isPastScheduled && canMutateAppointment(mutationGrants, appUser.id, apt) && (
                           /* Story 75-185 (porta 2) — abre o modal de feedback (ciclo completo) */
                           <VisitFeedbackButton
                             appointmentId={apt.id}
@@ -627,7 +636,7 @@ export default async function AgendaPage({
           apt={selectedApt}
           closeUrl={buildUrl({ apt: undefined })}
           masked={isMaskedApt(selectedApt)}
-          canDelete={canMutateAppointment(appUser.role, appUser.id, selectedApt)}
+          canDelete={canMutateAppointment(mutationGrants, appUser.id, selectedApt)}
         />
       )}
     </div>

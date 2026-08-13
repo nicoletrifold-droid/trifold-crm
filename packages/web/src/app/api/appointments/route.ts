@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
@@ -11,9 +12,14 @@ import { isConflict, type AppointmentTeam } from "@web/lib/appointments/governan
 //  - perfil `imob` (Daiana) → sempre 'imob';
 //  - admin/supervisor → podem escolher via body.team (validado; default 'house');
 //  - demais perfis (corretor, gerente-comercial, etc.) → sempre 'house'.
-function resolveTeam(role: string, bodyTeam: unknown): AppointmentTeam {
-  if (role === "imob") return "imob"
-  if (["admin", "supervisor"].includes(role) && (bodyTeam === "house" || bodyTeam === "imob")) {
+// 75-307: escolher a equipe é a capability agenda.escolher_equipe; perfil imob
+// segue FORÇADO ao mundo imob (escopo, não autorização).
+function resolveTeam(
+  opts: { isImobProfile: boolean; canChooseTeam: boolean },
+  bodyTeam: unknown
+): AppointmentTeam {
+  if (opts.isImobProfile) return "imob"
+  if (opts.canChooseTeam && (bodyTeam === "house" || bodyTeam === "imob")) {
     return bodyTeam
   }
   return "house"
@@ -154,7 +160,13 @@ export async function POST(request: Request) {
   // Double-booking check (Story 81-9): sobrepor no horário dentro da MESMA equipe
   // já é conflito — o local não importa (1 compromisso por horário por equipe).
   // Story 81-1: HOUSE × IMOB não se bloqueiam.
-  const team = resolveTeam(appUser.role, body.team)
+  const team = resolveTeam(
+    {
+      isImobProfile: appUser.role === "imob",
+      canChooseTeam: await can(appUser.id, appUser.org_id, "agenda.escolher_equipe"),
+    },
+    body.team
+  )
   const location = body.location?.trim() || "Stand Trifold"
   // Compromissos de 1h com início alinhado a :00/:30 (guard de servidor,
   // independente do que o cliente enviar — passo de 30min desde 2026-07-23).

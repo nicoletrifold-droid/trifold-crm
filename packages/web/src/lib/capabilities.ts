@@ -100,10 +100,11 @@ export const CAPABILITIES = [
   { key: "chat.gerenciar_participantes", label: "Gerenciar participantes", description: "Adicionar/remover participantes de uma conversa do Chat.", seed: [A, S, GR, GC] },
 
   // ── Agenda ───────────────────────────────────────────────────────────────
-  { key: "agenda.gerenciar_house", label: "Gerenciar agenda HOUSE", description: "Editar/remarcar/cancelar compromissos de terceiros da equipe HOUSE (o dono sempre pode o seu).", seed: [A, S, GC, SDR] },
-  { key: "agenda.gerenciar_imob", label: "Gerenciar agenda IMOB", description: "Editar/cancelar compromissos da equipe IMOB.", seed: [A, S, IMB] },
-  { key: "agenda.escolher_equipe", label: "Escolher equipe", description: "Definir HOUSE/IMOB ao criar um compromisso.", seed: [A, S] },
-  { key: "agenda.feedback_visita", label: "Feedback de visita de terceiros", description: "Registrar visita/feedback em compromisso de outra pessoa.", seed: [A, S, GC, SDR] },
+  // enforced na 75-307 (F3-6): governança da agenda decide por can().
+  { key: "agenda.gerenciar_house", label: "Gerenciar agenda HOUSE", description: "Editar/remarcar/cancelar compromissos de terceiros da equipe HOUSE (o dono sempre pode o seu).", seed: [A, S, GC, SDR], enforced: true },
+  { key: "agenda.gerenciar_imob", label: "Gerenciar agenda IMOB", description: "Editar/cancelar compromissos da equipe IMOB.", seed: [A, S, IMB], enforced: true },
+  { key: "agenda.escolher_equipe", label: "Escolher equipe", description: "Definir HOUSE/IMOB ao criar um compromisso e consultar a grade da outra equipe.", seed: [A, S], enforced: true },
+  { key: "agenda.feedback_visita", label: "Feedback de visita de terceiros", description: "Registrar visita/feedback em compromisso de outra pessoa.", seed: [A, S, GC, SDR], enforced: true },
 
   // ── Analytics · Atividades · Dashboard ───────────────────────────────────
   // enforced na 75-305 (F3-4): as 6 rotas de analytics decidem por can().

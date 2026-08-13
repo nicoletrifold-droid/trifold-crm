@@ -184,6 +184,10 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "campanhas.meta_acionar",
         "campanhas.meta_sincronizar",
         "campanhas.meta_ver",
+        "agenda.gerenciar_house",
+        "agenda.gerenciar_imob",
+        "agenda.escolher_equipe",
+        "agenda.feedback_visita",
         "chamados.responder",
         "chamados.ver_todos",
         "imoveis.criar",
@@ -218,7 +222,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["analytics", "atividades", "campanhas", "chamados", "imoveis", "marketing", "pastas"])
+    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "imoveis", "marketing", "pastas"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -333,5 +337,14 @@ describe("75-306 — Imóveis (espelho dos 7 seeds)", () => {
       expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
     }
     expect([...CAPABILITY_SEED["imoveis.resetar_status_unidade"]]).toEqual(["admin"])
+  })
+})
+
+describe("75-307 — Agenda (espelho dos 4 seeds)", () => {
+  it("gerenciar_house = A/S/GC/SDR; gerenciar_imob = A/S/IMB; escolher_equipe = A/S; feedback = A/S/GC/SDR", () => {
+    expect([...CAPABILITY_SEED["agenda.gerenciar_house"]].sort()).toEqual(["admin", "gerente-comercial", "sdr", "supervisor"])
+    expect([...CAPABILITY_SEED["agenda.gerenciar_imob"]].sort()).toEqual(["admin", "imob", "supervisor"])
+    expect([...CAPABILITY_SEED["agenda.escolher_equipe"]].sort()).toEqual(["admin", "supervisor"])
+    expect([...CAPABILITY_SEED["agenda.feedback_visita"]].sort()).toEqual(["admin", "gerente-comercial", "sdr", "supervisor"])
   })
 })

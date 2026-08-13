@@ -30,6 +30,8 @@ interface NewAppointmentModalProps {
    * demais não veem nada (o servidor força a equipe — Story 81-1 `resolveTeam`).
    */
   userRole?: string
+  /** 75-307: capability agenda.escolher_equipe (server-resolved) */
+  canPickTeam?: boolean
   onClose: () => void
   onSuccess?: () => void
 }
@@ -39,12 +41,13 @@ type LeadMode = "search" | "new"
 export function NewAppointmentModal({
   brokerId,
   userRole,
+  canPickTeam = false,
   onClose,
   onSuccess,
 }: NewAppointmentModalProps) {
   const [location, setLocation] = useState("")
   const [team, setTeam] = useState<"house" | "imob">("house") // Story 81-2
-  const canPickTeam = userRole === "admin" || userRole === "supervisor"
+  // 75-307: decisão vem do server (can("agenda.escolher_equipe")) via prop.
   // Story 81-7 — compromisso da equipe IMOB (Daiana ou admin/supervisor com IMOB
   // selecionado): vincular imobiliária (opcional) + corretor parceiro (opcional).
   const isImobTeam = userRole === "imob" || (canPickTeam && team === "imob")

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { getOrgSchedule } from "@web/lib/roleta/business-time"
 import {
@@ -26,10 +27,12 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url)
   const teamParam = url.searchParams.get("team")
+  // 75-307: espelha o resolveTeam do POST — escolher grade de outra equipe é
+  // a mesma capability agenda.escolher_equipe.
   const team: "house" | "imob" =
     appUser.role === "imob"
       ? "imob"
-      : ["admin", "supervisor"].includes(appUser.role) && teamParam === "imob"
+      : (await can(appUser.id, appUser.org_id, "agenda.escolher_equipe")) && teamParam === "imob"
         ? "imob"
         : "house"
 

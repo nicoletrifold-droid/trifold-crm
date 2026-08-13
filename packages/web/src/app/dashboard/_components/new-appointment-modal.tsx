@@ -6,10 +6,12 @@ import { Plus } from "lucide-react"
 
 interface NewAppointmentButtonProps {
   brokerId?: string
-  userRole?: string // Story 81-2: habilita o seletor de equipe (admin/supervisor)
+  userRole?: string // Story 81-2 (mantido p/ UX do mundo imob no modal)
+  /** 75-307: seletor HOUSE/IMOB — capability agenda.escolher_equipe (resolvida no server) */
+  canPickTeam?: boolean
 }
 
-export function NewAppointmentButton({ brokerId, userRole }: NewAppointmentButtonProps) {
+export function NewAppointmentButton({ brokerId, userRole, canPickTeam }: NewAppointmentButtonProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -25,6 +27,7 @@ export function NewAppointmentButton({ brokerId, userRole }: NewAppointmentButto
         <NewAppointmentModal
           brokerId={brokerId}
           userRole={userRole}
+          canPickTeam={canPickTeam}
           onClose={() => setOpen(false)}
           onSuccess={() => setOpen(false)}
         />

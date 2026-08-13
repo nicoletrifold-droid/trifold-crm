@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
 
@@ -8,7 +9,6 @@ function getServiceClient() {
 }
 
 /** Story 75-185 — perfis que registram feedback de qualquer agendamento da org. */
-const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
 
 /**
  * POST /api/appointments/[id]/feedback
@@ -70,7 +70,9 @@ export async function POST(
     if (appointment.org_id !== appUser.org_id) {
       return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
     }
-    if (!FEEDBACK_ADMIN_ROLES.includes(appUser.role)) {
+    // 75-307: registrar feedback de compromisso de TERCEIROS é a capability
+    // agenda.feedback_visita; dono/lead-owner/imob-team seguem por identidade.
+    if (!(await can(appUser.id, appUser.org_id, "agenda.feedback_visita"))) {
       const isApptOwner = appointment.broker_id === appUser.id
       // Story 75-201: perfil imob/consultoria registra feedback de visita da
       // equipe IMOB (mesma matriz da governança 81-3 — imob cuida do team imob).

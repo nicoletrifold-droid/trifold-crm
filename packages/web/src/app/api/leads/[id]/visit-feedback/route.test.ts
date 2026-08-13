@@ -7,6 +7,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
+// 75-307: o gate "gestor" virou can("agenda.feedback_visita") — o mock decide
+// pelo SEED do registro (fonte da verdade), variando pelo role do requireAuth.
+vi.mock("@web/lib/permissions", async () => {
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    can: async (_userId: string, _orgId: string, capability: keyof typeof CAPABILITY_SEED) => {
+      const role = appUser?.role ?? ""
+      return role === "admin" || (CAPABILITY_SEED[capability] as readonly string[]).includes(role)
+    },
+  }
+})
+
 let appUser: { id: string; org_id: string; role: string } | null = {
   id: "admin-1",
   org_id: "org-1",
