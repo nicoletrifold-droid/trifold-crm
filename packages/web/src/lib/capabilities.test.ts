@@ -207,9 +207,11 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "conversas.enviar_qualquer",
         "conversas.abrir_template",
         "conversas.transferir",
+        "conversas.ver_qualquer",
         "chat.responder",
         "chat.gerenciar_participantes",
         "chamados.responder",
+        "chamados.apagar",
         "chamados.ver_todos",
         "obras.ver",
         "obras.criar",
@@ -471,8 +473,8 @@ describe("75-310 — Conversas & Chat (espelhos + constantes de UI congeladas ao
     const { OPENING_PRIVILEGED_ROLES } = await import("./whatsapp/opening-roles")
     expect([...OPENING_PRIVILEGED_ROLES].sort()).toEqual([...CAPABILITY_SEED["conversas.abrir_template"]].sort())
   })
-  it("conversas.ver_qualquer segue NÃO-enforced (gate é RLS — F4)", () => {
-    expect(ENFORCED_CAPABILITIES.some((c) => c.key === "conversas.ver_qualquer")).toBe(false)
+  it("conversas.ver_qualquer ENFORCED desde a F4-2 (a RLS obedece a matriz)", () => {
+    expect(ENFORCED_CAPABILITIES.some((c) => c.key === "conversas.ver_qualquer")).toBe(true)
   })
 })
 

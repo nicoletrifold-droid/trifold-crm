@@ -92,7 +92,7 @@ export const CAPABILITIES = [
   // ── Conversas (WhatsApp com leads) ───────────────────────────────────────
   // enforced na 75-310 (F3-9): composers/rotas de envio decidem por can().
   { key: "conversas.enviar", label: "Enviar no próprio lead", description: "Mensagem/arquivo WhatsApp no lead que é seu.", seed: [COR, A, S, GC, SDR], enforced: true },
-  { key: "conversas.ver_qualquer", label: "Ler conversas de terceiros", description: "Leitura de conversas/mensagens de qualquer lead (RLS). ⚠ espelho inclui obras — furo do god-gate, corrige em F4.", seed: [A, S, GC, SDR, GR, OBR] },
+  { key: "conversas.ver_qualquer", label: "Ler conversas de terceiros", description: "Leitura de conversas e mensagens de qualquer lead (vale direto no banco — RLS).", seed: [A, S, GC, SDR, GR], enforced: true }, // F4-2: obras CORTADO do seed (decisão Marcos) e RLS passou a obedecer a matriz
   { key: "conversas.enviar_qualquer", label: "Enviar em qualquer lead", description: "Enviar/reenviar mensagem e mídia em lead de terceiros.", seed: [A, S, GC, SDR, GR], enforced: true },
   { key: "conversas.abrir_template", label: "Iniciar por template", description: "Abrir atendimento com template de abertura (o dono sempre pode no próprio lead).", seed: [A, S, GC, SDR, GR], enforced: true },
   { key: "conversas.transferir", label: "Transferir conversa", description: "Passar a conversa para outro atendente.", seed: [A, S], enforced: true },
@@ -204,7 +204,7 @@ export const CAPABILITIES = [
   // enforced na 75-304 (F3-3): API de listagem, tela e badge do menu decidem por can().
   { key: "chamados.ver_todos", label: "Ver todos os chamados", description: "Ver todos os tickets da organização (não só os próprios) + badge no menu.", seed: [A, S], enforced: true },
   { key: "chamados.responder", label: "Responder chamados", description: "Responder, mudar status, resolver e reabrir tickets.", seed: [A, S], enforced: true },
-  { key: "chamados.apagar", label: "Excluir chamado", description: "Excluir um ticket (hoje o gate vive só na RLS).", seed: [A] },
+  { key: "chamados.apagar", label: "Excluir chamado", description: "Excluir um ticket (gate na RLS — obedece a matriz desde a F4-2).", seed: [A], enforced: true },
 
   // ── Usuários & Perfis — grupos virtuais ──────────────────────────────────
   // enforced na 75-312 (F3-11): APIs de usuários/config + telas decidem por can().
