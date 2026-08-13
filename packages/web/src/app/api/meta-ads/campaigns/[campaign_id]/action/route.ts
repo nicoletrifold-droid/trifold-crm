@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireRole } from '@web/lib/api-auth'
+import { requireAuth, requireCapability } from '@web/lib/api-auth'
 import { metaFetch, MetaOAuthException, MetaPermissionError } from '@trifold/shared'
 
 type ActionType = 'pause' | 'resume' | 'set_budget'
@@ -17,7 +17,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ['admin'])
+  const forbidden = await requireCapability(appUser, "campanhas.meta_acionar")
   if (forbidden) return forbidden
 
   const { campaign_id: metaCampaignId } = await params

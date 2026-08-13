@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireRole } from '@web/lib/api-auth'
+import { requireAuth, requireCapability } from '@web/lib/api-auth'
 
 interface ActionLogRow {
   started_at: string
@@ -27,7 +27,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ['admin'])
+  const forbidden = await requireCapability(appUser, "campanhas.meta_ver")
   if (forbidden) return forbidden
 
   const { campaign_id: metaCampaignId } = await params

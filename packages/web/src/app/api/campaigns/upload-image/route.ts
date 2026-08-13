@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import crypto from "crypto"
 
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "campanhas.gerenciar")
   if (forbidden) return forbidden
 
   const campaignId = request.nextUrl.searchParams.get("campaign_id")

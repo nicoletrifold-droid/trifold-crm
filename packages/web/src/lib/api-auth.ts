@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@web/lib/supabase/server';
+import { can } from '@web/lib/permissions';
+import type { CapabilityKey } from '@web/lib/capabilities';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface AppUser {
@@ -55,6 +57,24 @@ export async function requireAuth(): Promise<AuthResult> {
 
 export function requireRole(appUser: AppUser, allowedRoles: string[]): NextResponse | null {
   if (!allowedRoles.includes(appUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  return null;
+}
+
+/**
+ * Perfis de Acesso 2.0 (Story 75-303) — espelho ASYNC do `requireRole` para o
+ * modelo de capabilities: 403 quando o usuário não tem a AÇÃO na matriz
+ * (perfil + exceções individuais, resolução da F1). PADRÃO F3: toda rota
+ * migrada troca `requireRole(appUser, [...])` por
+ * `await requireCapability(appUser, "modulo.acao")`.
+ */
+export async function requireCapability(
+  appUser: AppUser,
+  capability: CapabilityKey
+): Promise<NextResponse | null> {
+  const allowed = await can(appUser.id, appUser.org_id, capability);
+  if (!allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   return null;

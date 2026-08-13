@@ -156,11 +156,12 @@ export const CAPABILITIES = [
   { key: "marketing.gerenciar", label: "Gerenciar marketing (Lídia)", description: "Posts, artes, pedidos, marcas e assets do agente de marketing.", seed: [A, S, SM], enforced: true },
 
   // ── Campanhas & Meta Ads ─────────────────────────────────────────────────
-  { key: "campanhas.gerenciar", label: "Gerenciar campanhas", description: "Criar/editar/ativar/pausar campanhas e imagens.", seed: [A, S] },
-  { key: "campanhas.disparar", label: "Disparar em massa", description: "Disparo WhatsApp/e-mail em massa + importação de CSV.", seed: [A, S] },
-  { key: "campanhas.meta_sincronizar", label: "Sincronizar Meta Ads", description: "Rodar o sync de campanhas do Meta.", seed: [A] },
-  { key: "campanhas.meta_acionar", label: "Acionar campanha Meta", description: "Pausar/ativar campanha Meta e confirmar ações do agente.", seed: [A] },
-  { key: "campanhas.meta_ver", label: "Ver detalhes Meta", description: "Criativos e log de ações da campanha Meta.", seed: [A] },
+  // enforced na 75-303 (F3-2): rotas de campanhas + telas Meta decidem por can().
+  { key: "campanhas.gerenciar", label: "Gerenciar campanhas", description: "Criar/editar/ativar/pausar campanhas, entradas e imagens.", seed: [A, S], enforced: true },
+  { key: "campanhas.disparar", label: "Disparar em massa", description: "Disparo WhatsApp/e-mail em massa + importação de CSV.", seed: [A, S], enforced: true },
+  { key: "campanhas.meta_sincronizar", label: "Sincronizar Meta Ads", description: "Rodar o sync de campanhas do Meta (botão e rota).", seed: [A], enforced: true },
+  { key: "campanhas.meta_acionar", label: "Acionar campanha Meta", description: "Pausar/ativar campanha Meta pela tela de detalhe.", seed: [A], enforced: true },
+  { key: "campanhas.meta_ver", label: "Ver detalhes Meta", description: "Criativos e log de ações da campanha Meta.", seed: [A], enforced: true },
 
   // ── Nicole — grupo virtual ───────────────────────────────────────────────
   { key: "nicole.personalidade_editar", label: "Editar personalidade", description: "Prompts e configuração da Nicole.", seed: [A] },
