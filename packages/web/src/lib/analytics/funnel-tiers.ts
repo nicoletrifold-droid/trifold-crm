@@ -46,6 +46,19 @@ function pick(
   }
 }
 
+// Story 75-320 (pedido do Marcos, 13/08): nível do líquido PROPORCIONAL ao
+// volume do andar — "se temos 31 no topo a base zero deveria estar quase
+// zerada". Escala √ ("mesmo que não tão fiel"): 4/31 ainda rende um nível
+// visível, e piso de 10% garante que andar zerado nunca fica sem cor.
+const NIVEL_MIN = 0.1
+const NIVEL_MAX = 0.88 // teto: deixa a crista da onda dentro do andar
+
+export function liquidFillFraction(count: number, maxCount: number): number {
+  if (count <= 0 || maxCount <= 0) return NIVEL_MIN
+  const ratio = Math.min(1, count / maxCount)
+  return NIVEL_MIN + (NIVEL_MAX - NIVEL_MIN) * Math.sqrt(ratio)
+}
+
 export function pickFunnelTiers(stages: FunnelStageInput[]): FunnelTiers {
   return {
     atendimento: pick(stages, "atendimento", "Atendimento", "#e0526e"),

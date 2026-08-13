@@ -40,3 +40,34 @@ describe("pickFunnelTiers", () => {
     expect(t.visitaAgendada.color).toBe("#123456")
   })
 })
+
+// Story 75-320 — nível do líquido proporcional ao volume
+import { liquidFillFraction } from "./funnel-tiers"
+
+describe("liquidFillFraction", () => {
+  it("andar com o maior volume fica no teto (0.88)", () => {
+    expect(liquidFillFraction(31, 31)).toBeCloseTo(0.88, 5)
+  })
+
+  it("andar zerado fica no piso de 10% — nunca sem cor", () => {
+    expect(liquidFillFraction(0, 31)).toBeCloseTo(0.1, 5)
+  })
+
+  it("todos zerados (max=0) não divide por zero: piso", () => {
+    expect(liquidFillFraction(0, 0)).toBeCloseTo(0.1, 5)
+  })
+
+  it("é monotônica e suavizada (√): 4/31 rende nível visível > proporção crua", () => {
+    const n1 = liquidFillFraction(1, 31)
+    const n4 = liquidFillFraction(4, 31)
+    const n31 = liquidFillFraction(31, 31)
+    expect(n1).toBeGreaterThan(0.1)
+    expect(n4).toBeGreaterThan(n1)
+    expect(n31).toBeGreaterThan(n4)
+    expect(n4).toBeGreaterThan(0.1 + 0.78 * (4 / 31)) // acima da linear
+  })
+
+  it("count acima do max não estoura o teto", () => {
+    expect(liquidFillFraction(50, 31)).toBeCloseTo(0.88, 5)
+  })
+})
