@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
+import { CAPABILITY_SEED } from "@web/lib/capabilities"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 /**
@@ -8,10 +9,8 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * PATCH { atendente_padrao_id } → define (null = nenhum)
  */
 
-// 75-312: gate = capabilities; esta lista fica SÓ para a SELEÇÃO dos candidatos
-// a atendente padrão (.in("role", …)) — CONGELADA ao seed de
-// configuracoes.atendente_padrao_ver por teste (capabilities.test.ts).
-const STAFF_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento", "gerente-comercial"]
+// 75-317 (F5): candidatos a atendente padrão = o seed da capability (fonte única).
+const STAFF_ROLES = [...CAPABILITY_SEED["configuracoes.atendente_padrao_ver"]]
 
 export async function GET() {
   const auth = await requireAuth()

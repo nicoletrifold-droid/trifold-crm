@@ -70,6 +70,10 @@ function adminFullMatrix(): Record<string, boolean> {
 /**
  * Retorna a matriz hardcoded de permissões para um role.
  * Usado como fallback quando a query ao banco falha ou retorna vazio.
+ * DECISÃO (F5, 75-317): MANTIDO de propósito — é a rede de segurança para org
+ * recém-criada sem seed e para falha transitória do banco; remover deixaria o
+ * app inteiro sem permissões nesses cenários. Não é fonte de verdade: o seed
+ * da matriz manda (mig 225+).
  */
 function getHardcodedPermissions(role: string): Record<string, boolean> {
   switch (role) {

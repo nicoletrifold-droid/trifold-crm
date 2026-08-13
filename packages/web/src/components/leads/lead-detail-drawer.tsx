@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useReducer, useState, useCallback } from "react"
+import { CAPABILITY_SEED } from "@web/lib/capabilities"
 import { usePathname } from "next/navigation"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
@@ -1147,7 +1148,9 @@ function TransferBrokerSection({ leadId, supabase }: { leadId: string; supabase:
         role = (row?.role as string | undefined) ?? ""
       }
       if (cancelled) return
-      if (["admin", "supervisor", "gerente-comercial", "sdr"].includes(role)) {
+      // 75-317 (F5): a dica de exibição lê o SEED de leads.atribuir (fonte única);
+      // o gate real é a rota /assign via can().
+      if ((CAPABILITY_SEED["leads.atribuir"] as readonly string[]).includes(role)) {
         setCanTransfer(true)
       }
     })

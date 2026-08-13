@@ -81,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Conversa (cria se não existir) + registro no histórico + handoff da Nicole.
   // Story 75-267 — importa a fonte (era array inline duplicado).
-  const isPrivileged = OPENING_PRIVILEGED_ROLES.includes(appUser.role)
+  const isPrivileged = (OPENING_PRIVILEGED_ROLES as readonly string[]).includes(appUser.role)
   const db = isPrivileged ? admin : supabase
   let { data: conversation } = await db
     .from("conversations")

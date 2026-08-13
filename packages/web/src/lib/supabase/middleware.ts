@@ -171,6 +171,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // DECISÃO Perfis de Acesso 2.0 (F5, 75-317): esta whitelist é ROTEAMENTO DE
+  // MUNDO (como broker×dashboard×portal), não autorização — os gates reais são
+  // capabilities nas APIs + RLS por has_capability. Fica role-based de propósito.
   // Obras / gerente-relacionamento: restritos a /dashboard/obras, /dashboard/brindes,
   // /dashboard/mensagens, /dashboard/chat, /dashboard/chamados e /dashboard/configuracoes/clientes
   if (
