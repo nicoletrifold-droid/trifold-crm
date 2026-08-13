@@ -19,9 +19,19 @@ vi.mock("@web/lib/api-auth", () => ({
   }),
 }))
 
-vi.mock("@web/lib/permissions", () => ({
-  canAccess: async () => qualificacaoAccess,
-}))
+vi.mock("@web/lib/permissions", async () => {
+  // 75-311: a rota também usa can("leads.editar_qualquer") — decide pelo SEED
+  // (o teste roda como admin → sempre true); canAccess segue controlando a
+  // qualificação (sub-módulo, flag do teste).
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    canAccess: async () => qualificacaoAccess,
+    can: async (_u: string, _o: string, capability: keyof typeof CAPABILITY_SEED) =>
+      (CAPABILITY_SEED[capability] as readonly string[]).includes("admin") || true,
+  }
+})
 
 vi.mock("@web/lib/audit", () => ({
   logAudit: async (params: Record<string, unknown>) => {

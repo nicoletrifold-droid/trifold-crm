@@ -8,11 +8,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 vi.mock("server-only", () => ({}))
 
 let appUserRole = "admin"
-vi.mock("@web/lib/api-auth", () => ({
-  requireAuth: async () => ({ appUser: { id: "admin-1", org_id: "org-1", role: appUserRole } }),
-  requireRole: (appUser: { role: string }, roles: string[]) =>
-    roles.includes(appUser.role) ? null : new Response("forbidden", { status: 403 }),
-}))
+vi.mock("@web/lib/api-auth", async () => {
+  // 75-311: gate = requireCapability(leads.transferir) — decide pelo seed.
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    requireAuth: async () => ({ appUser: { id: "admin-1", org_id: "org-1", role: appUserRole } }),
+    requireCapability: async (appUser: { role: string }, capability: keyof typeof CAPABILITY_SEED) =>
+      appUser.role === "admin" || (CAPABILITY_SEED[capability] as readonly string[]).includes(appUser.role)
+        ? null
+        : new Response("forbidden", { status: 403 }),
+  }
+})
 
 const pushSpy = vi.fn(async (..._a: unknown[]) => { void _a })
 vi.mock("@web/lib/server/push-service", () => ({ sendPushToUser: (...a: unknown[]) => pushSpy(...a) }))

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
@@ -40,9 +41,7 @@ export async function POST(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(
-    appUser.role
-  )
+  const isPrivileged = await can(appUser.id, appUser.org_id, "leads.anotar_qualquer")
   if (!isPrivileged && lead.assigned_broker_id !== appUser.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }

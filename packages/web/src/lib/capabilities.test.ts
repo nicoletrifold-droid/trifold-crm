@@ -188,6 +188,21 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "agenda.gerenciar_imob",
         "agenda.escolher_equipe",
         "agenda.feedback_visita",
+        "leads.ver_equipe",
+        "leads.criar",
+        "leads.criar_para_outro",
+        "leads.editar_qualquer",
+        "leads.apagar",
+        "leads.reativar",
+        "leads.atribuir",
+        "leads.transferir",
+        "leads.mover_etapa_qualquer",
+        "leads.acoes_em_massa",
+        "leads.anotar_qualquer",
+        "leads.ia_handoff",
+        "leads.ia_retomar",
+        "leads.ia_resumo",
+        "leads.ia_analisar",
         "conversas.enviar",
         "conversas.enviar_qualquer",
         "conversas.abrir_template",
@@ -252,7 +267,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "chat", "clientes", "conversas", "imoveis", "marketing", "obras", "pastas", "portal", "sistema"])
+    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "chat", "clientes", "conversas", "imoveis", "leads", "marketing", "obras", "pastas", "portal", "sistema"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -427,5 +442,21 @@ describe("75-310 — Conversas & Chat (espelhos + constantes de UI congeladas ao
   })
   it("conversas.ver_qualquer segue NÃO-enforced (gate é RLS — F4)", () => {
     expect(ENFORCED_CAPABILITIES.some((c) => c.key === "conversas.ver_qualquer")).toBe(false)
+  })
+})
+
+describe("75-311 — Leads (espelho dos 15 seeds)", () => {
+  it("gestor-4 (A/S/GC/SDR): ver_equipe, criar_para_outro, editar_qualquer, reativar, atribuir, acoes_em_massa, anotar_qualquer, ia_retomar", () => {
+    for (const key of ["leads.ver_equipe","leads.criar_para_outro","leads.editar_qualquer","leads.reativar","leads.atribuir","leads.acoes_em_massa","leads.anotar_qualquer","leads.ia_retomar"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "gerente-comercial", "sdr", "supervisor"])
+    }
+  })
+  it("A/S: transferir, mover_etapa_qualquer, ia_handoff, ia_resumo · admin: apagar · +broker: criar e ia_analisar", () => {
+    for (const key of ["leads.transferir","leads.mover_etapa_qualquer","leads.ia_handoff","leads.ia_resumo"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
+    }
+    expect([...CAPABILITY_SEED["leads.apagar"]]).toEqual(["admin"])
+    expect([...CAPABILITY_SEED["leads.criar"]].sort()).toEqual(["admin", "broker", "supervisor"])
+    expect([...CAPABILITY_SEED["leads.ia_analisar"]].sort()).toEqual(["admin", "broker", "gerente-comercial", "sdr", "supervisor"])
   })
 })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 import { sendPushToUser } from "@web/lib/server/push-service"
@@ -21,7 +21,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "leads.transferir")
   if (forbidden) return forbidden
 
   const body = (await request.json().catch(() => null)) as

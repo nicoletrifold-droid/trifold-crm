@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can } from "@web/lib/permissions"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { STAGE_IDS } from "@trifold/shared"
 import { LOST_REASON_GROUP_LABELS, isLostReasonGrupo } from "@web/lib/constants"
 
 export async function POST(request: NextRequest) {
   const user = await getServerUser()
-  const allowed = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role) ||
-    await canAccess(user.id, user.orgId, "sistema")
+  // 75-311: ações em massa = capability própria (morre o proxy canAccess("sistema")).
+  const allowed = await can(user.id, user.orgId, "leads.acoes_em_massa")
   if (!allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }

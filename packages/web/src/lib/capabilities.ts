@@ -72,21 +72,22 @@ const SM = "social-media" as const
 
 export const CAPABILITIES = [
   // ── Leads ────────────────────────────────────────────────────────────────
-  { key: "leads.ver_equipe", label: "Ver leads da equipe", description: "Listas completas, filtro por corretor e funil da equipe (não só os próprios leads).", seed: [A, S, GC, SDR] },
-  { key: "leads.criar", label: "Criar lead", description: "Cadastrar lead manualmente (para si). ⚠ espelho da API — a tela hoje permite GC/SDR que a API nega (furo nº 5 do inventário, F4).", seed: [COR, A, S] },
-  { key: "leads.criar_para_outro", label: "Criar lead para outro corretor", description: "Escolher o corretor dono no cadastro manual.", seed: [A, S, GC, SDR] },
-  { key: "leads.editar_qualquer", label: "Editar lead de terceiros", description: "Editar dados de lead que não é seu (o dono sempre edita o próprio).", seed: [A, S, GC, SDR] },
-  { key: "leads.apagar", label: "Excluir lead", description: "Exclusão (soft delete) de lead.", seed: [A] },
-  { key: "leads.reativar", label: "Reativar lead perdido", description: "Tirar lead da etapa Perdido e devolver ao funil.", seed: [A, S, GC, SDR] },
-  { key: "leads.atribuir", label: "Atribuir corretor", description: "Definir/trocar o corretor responsável pelo lead.", seed: [A, S, GC, SDR] },
-  { key: "leads.transferir", label: "Transferir lead", description: "Transferir lead + conversa entre corretores.", seed: [A, S] },
-  { key: "leads.mover_etapa_qualquer", label: "Mover etapa de terceiros", description: "Mover lead de outra pessoa no pipeline.", seed: [A, S] },
-  { key: "leads.acoes_em_massa", label: "Ações em massa", description: "Atribuir, marcar perdido ou enviar à roleta em lote.", seed: [A, S, GC, SDR] },
-  { key: "leads.anotar_qualquer", label: "Anotar em lead de terceiros", description: "Notas, atividades e aviso de resposta em lead de outra pessoa.", seed: [A, S, GC, SDR] },
-  { key: "leads.ia_handoff", label: "Handoff da Nicole", description: "Tirar o lead da IA e passar para atendimento humano.", seed: [A, S] },
-  { key: "leads.ia_retomar", label: "Devolver lead à Nicole", description: "Reativar a IA num lead em atendimento humano.", seed: [A, S, GC, SDR] },
-  { key: "leads.ia_resumo", label: "Resumo IA do lead", description: "Gerar resumo da conversa por IA.", seed: [A, S] },
-  { key: "leads.ia_analisar", label: "Análise de comportamento", description: "Rodar a análise de comportamento IA do lead.", seed: [A, S, GC, SDR, COR] },
+  // enforced na 75-311 (F3-10): rotas + telas de leads decidem por can().
+  { key: "leads.ver_equipe", label: "Ver leads da equipe", description: "Listas completas, filtro por corretor e funil da equipe (não só os próprios leads). ⚠ o dado em si é RLS — F4.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.criar", label: "Criar lead", description: "Cadastrar lead manualmente (para si). ⚠ espelho da API — a tela hoje permite GC/SDR que a API nega (furo nº 5 do inventário, F4).", seed: [COR, A, S], enforced: true },
+  { key: "leads.criar_para_outro", label: "Criar lead para outro corretor", description: "Escolher o corretor dono no cadastro manual.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.editar_qualquer", label: "Editar lead de terceiros", description: "Editar dados de lead que não é seu (o dono sempre edita o próprio).", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.apagar", label: "Excluir lead", description: "Exclusão (soft delete) de lead.", seed: [A], enforced: true },
+  { key: "leads.reativar", label: "Reativar lead perdido", description: "Tirar lead da etapa Perdido e devolver ao funil.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.atribuir", label: "Atribuir corretor", description: "Definir/trocar o corretor responsável pelo lead.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.transferir", label: "Transferir lead", description: "Transferir lead + conversa entre corretores.", seed: [A, S], enforced: true },
+  { key: "leads.mover_etapa_qualquer", label: "Mover etapa de terceiros", description: "Mover lead de outra pessoa no pipeline.", seed: [A, S], enforced: true },
+  { key: "leads.acoes_em_massa", label: "Ações em massa", description: "Atribuir, marcar perdido ou enviar à roleta em lote.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.anotar_qualquer", label: "Anotar em lead de terceiros", description: "Notas, atividades e aviso de resposta em lead de outra pessoa.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.ia_handoff", label: "Handoff da Nicole", description: "Tirar o lead da IA e passar para atendimento humano.", seed: [A, S], enforced: true },
+  { key: "leads.ia_retomar", label: "Devolver lead à Nicole", description: "Reativar a IA num lead em atendimento humano.", seed: [A, S, GC, SDR], enforced: true },
+  { key: "leads.ia_resumo", label: "Resumo IA do lead", description: "Gerar resumo da conversa por IA.", seed: [A, S], enforced: true },
+  { key: "leads.ia_analisar", label: "Análise de comportamento", description: "Rodar a análise de comportamento IA do lead.", seed: [A, S, GC, SDR, COR], enforced: true },
 
   // ── Conversas (WhatsApp com leads) ───────────────────────────────────────
   // enforced na 75-310 (F3-9): composers/rotas de envio decidem por can().

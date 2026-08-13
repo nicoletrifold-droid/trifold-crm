@@ -1,6 +1,7 @@
 "use server"
 
 import Link from "next/link"
+import { can } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
@@ -18,7 +19,7 @@ async function createLead(formData: FormData) {
   const admin = createAdminClient()
 
   const isBroker     = user.role === "broker"
-  const isAdminLike  = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)
+  const isAdminLike  = await can(user.id, user.orgId, "leads.criar_para_outro")
 
   // Stage padrão: Aguardando atendimento
   const { data: defaultStage } = await supabase
@@ -117,7 +118,7 @@ export default async function NewLeadPage() {
   if (!hasAccess) redirect("/dashboard")
 
   const isBroker    = user.role === "broker"
-  const isAdminLike = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)
+  const isAdminLike = await can(user.id, user.orgId, "leads.criar_para_outro")
 
   // Empreendimentos para o select
   const { data: properties } = await supabase
