@@ -3,7 +3,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 import { logFinancialNotification, marcoToTipo } from "@web/lib/financeiro/log-financial-notification"
-import { PASTA_MANAGER_ROLES } from "@web/lib/pastas/roles"
+import { roleEligibleForCapability } from "@web/lib/capabilities"
 
 // Janela de coalescing anti-flood. Dentro dela, só o 1º evento do mesmo GRUPO (ver
 // COALESCE_GROUP) dispara envio; os demais são suprimidos (o cliente vê tudo no portal).
@@ -775,13 +775,41 @@ export async function notifyNovaPastaGestor(params: NovaPastaGestorParams): Prom
   try {
     const admin = createAdminClient()
 
-    // Gestores de Pastas da org (admin/supervisor/gerente-comercial/imob), ativos.
+    // 75-302: gestores de Pastas = quem a MATRIZ diz (capability `pastas.gerenciar`;
+    // linha explícita do perfil, senão herança do módulo — cobre roles customizados
+    // como auxadministrativo/Silmara). Antes era a constante PASTA_MANAGER_ROLES.
+    const { data: orgRoles } = await admin
+      .from("roles")
+      .select("id, name")
+      .eq("org_id", orgId)
+
+    const roleRows = (orgRoles ?? []) as Array<{ id: string; name: string }>
+    const { data: permRows } = await admin
+      .from("role_permissions")
+      .select("role_id, module, can_access")
+      .in("role_id", roleRows.map((r) => r.id))
+      .in("module", ["pastas", "pastas.gerenciar"])
+
+    const permsByRole = new Map<string, { explicitRow?: boolean; moduleRow?: boolean }>()
+    for (const row of (permRows ?? []) as Array<{ role_id: string; module: string; can_access: boolean }>) {
+      const entry = permsByRole.get(row.role_id) ?? {}
+      if (row.module === "pastas.gerenciar") entry.explicitRow = row.can_access
+      else entry.moduleRow = row.can_access
+      permsByRole.set(row.role_id, entry)
+    }
+
+    const eligibleRoleNames = roleRows
+      .filter((r) => roleEligibleForCapability({ roleName: r.name, ...permsByRole.get(r.id) }))
+      .map((r) => r.name)
+
+    if (!eligibleRoleNames.length) return
+
     const { data: gestores } = await admin
       .from("users")
       .select("id, name, email, phone")
       .eq("org_id", orgId)
       .eq("is_active", true)
-      .in("role", PASTA_MANAGER_ROLES as unknown as string[])
+      .in("role", eligibleRoleNames)
 
     if (!gestores?.length) return
 

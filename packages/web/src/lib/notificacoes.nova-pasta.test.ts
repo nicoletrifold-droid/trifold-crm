@@ -14,10 +14,32 @@ vi.mock("@web/lib/email", () => ({
   sendEmail: (...a: unknown[]) => sendEmailMock(...a),
 }))
 
-// Admin mock: gestores (users) + whatsapp_config + log de envio.
+// Admin mock: roles/role_permissions (75-302: destinatários via matriz) +
+// gestores (users) + whatsapp_config + log de envio.
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
+      if (table === "roles") {
+        const b: Record<string, unknown> = {
+          select: () => b,
+          // .eq() encerra a query (awaited direto).
+          eq: () => Promise.resolve({ data: [{ id: "r-admin", name: "admin" }], error: null }),
+        }
+        return b
+      }
+      if (table === "role_permissions") {
+        const b: Record<string, unknown> = {
+          select: () => b,
+          // dois .in() encadeados; o segundo encerra.
+          in: () => {
+            const inner: Record<string, unknown> = {
+              in: () => Promise.resolve({ data: [], error: null }),
+            }
+            return inner
+          },
+        }
+        return b
+      }
       if (table === "users") {
         const b: Record<string, unknown> = {
           select: () => b,

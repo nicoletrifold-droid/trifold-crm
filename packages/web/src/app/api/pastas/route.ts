@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth } from "@web/lib/api-auth"
 import { buildDocSlots, type PastaTipo } from "@web/lib/pastas/checklist"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 import { isValidEmail, isValidPhoneBR, formatPhoneBR, normalizeEmail } from "@web/lib/validation/contato"
 
 // POST /api/pastas — cria uma pasta, gera o token do link público e semeia os
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!isPastaManager(appUser.role)) {
+  if (!(await canManagePastas(appUser.id, appUser.org_id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

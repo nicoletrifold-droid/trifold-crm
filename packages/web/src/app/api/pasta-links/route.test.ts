@@ -1,13 +1,18 @@
 /**
  * Story 75-146 — Testes de POST /api/pasta-links (gerar link de auto-cadastro).
- * Cobre: gate isPastaManager (403 p/ corretor), criação p/ gestor, imobiliária obrigatória.
+ * Cobre: gate can("pastas.gerenciar") (403 sem a capability — 75-302), criação p/ gestor, imobiliária obrigatória.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
 let role = "admin"
+let pastasAccess = true // 75-302: o gate é can("pastas.gerenciar"), não mais o nome do role
 let insertedLink: Record<string, unknown> | null = null
+
+vi.mock("@web/lib/permissions", () => ({
+  can: async () => pastasAccess,
+}))
 
 vi.mock("@web/lib/api-auth", () => ({
   requireAuth: async () => ({
@@ -41,6 +46,7 @@ function makeReq(body: unknown): NextRequest {
 
 beforeEach(() => {
   role = "admin"
+  pastasAccess = true
   insertedLink = null
 })
 
@@ -57,8 +63,9 @@ describe("POST /api/pasta-links", () => {
     expect(typeof insertedLink?.token).toBe("string")
   })
 
-  it("bloqueia perfil não-gestor (corretor) com 403", async () => {
+  it("bloqueia quem não tem a capability com 403", async () => {
     role = "corretor"
+    pastasAccess = false
     const res = await POST(makeReq({ imobiliaria_id: IMOB_ID, imobiliaria: "Imob X" }))
     expect(res.status).toBe(403)
     expect(insertedLink).toBeNull()

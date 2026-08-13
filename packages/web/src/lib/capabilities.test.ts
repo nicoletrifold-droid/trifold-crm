@@ -13,6 +13,7 @@ import {
   capabilityGroup,
   enforcedCapabilitiesByGroup,
   resolveCapabilityDecision,
+  roleEligibleForCapability,
 } from "./capabilities"
 import { ALL_MODULES, SUBMODULE_MAP } from "./permissions-modules"
 
@@ -171,8 +172,9 @@ describe("resolveCapabilityDecision — tabela-verdade da paridade app ↔ SQL (
 })
 
 describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
-  it("só o piloto está enforced nesta fase", () => {
+  it("enforced = exatamente os módulos já migrados (75-301 piloto + 75-302)", () => {
     expect(ENFORCED_CAPABILITIES.map((c) => c.key)).toEqual([
+      "pastas.gerenciar",
       "marketing.gerenciar",
     ])
   })
@@ -196,10 +198,9 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup)).toEqual(["marketing"])
-    expect(byGroup["marketing"]?.map((c) => c.key)).toEqual([
-      "marketing.gerenciar",
-    ])
+    expect(Object.keys(byGroup).sort()).toEqual(["marketing", "pastas"])
+    expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
+    expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
   })
 })
 
@@ -244,5 +245,32 @@ describe("adminMatrixKeys — fix do T6 da 75-301 (admin × grupo virtual)", () 
     const keys = adminMatrixKeys(ALL_MODULES)
     for (const m of ALL_MODULES) expect(keys, m).toContain(m)
     for (const g of VIRTUAL_GROUPS) expect(keys, g).toContain(g)
+  })
+})
+
+describe("75-302 — Pastas via capability (espelho + elegibilidade)", () => {
+  it("seed de pastas.gerenciar espelha a antiga PASTA_MANAGER_ROLES; demais fora", () => {
+    const seed = [...CAPABILITY_SEED["pastas.gerenciar"]]
+    expect(seed.sort()).toEqual(["admin", "gerente-comercial", "imob", "supervisor"])
+    for (const role of ["broker", "sdr", "obras", "gerente-relacionamento", "consultoria", "social-media"]) {
+      expect((seed as string[]).includes(role), role).toBe(false)
+    }
+  })
+
+  it("roleEligibleForCapability — o caso Silmara: role customizado SEM linha explícita herda o MÓDULO ligado", () => {
+    expect(
+      roleEligibleForCapability({ roleName: "auxadministrativo", moduleRow: true })
+    ).toBe(true)
+  })
+
+  it("roleEligibleForCapability — linha explícita FALSE bloqueia mesmo com módulo ligado", () => {
+    expect(
+      roleEligibleForCapability({ roleName: "broker", explicitRow: false, moduleRow: true })
+    ).toBe(false)
+  })
+
+  it("roleEligibleForCapability — admin sempre elegível; nada em lugar nenhum nega", () => {
+    expect(roleEligibleForCapability({ roleName: "admin" })).toBe(true)
+    expect(roleEligibleForCapability({ roleName: "corretor-novo" })).toBe(false)
   })
 })

@@ -149,7 +149,8 @@ export const CAPABILITIES = [
   { key: "imoveis.ativar_nicole", label: "Ativar Nicole no empreendimento", description: "Ligar a IA no empreendimento (desligar é livre).", seed: [A, S] },
 
   // ── Pastas · IMOB · Marketing ────────────────────────────────────────────
-  { key: "pastas.gerenciar", label: "Gerenciar pastas", description: "Pastas de pré-lançamento: criar, editar, documentos, links públicos, termos e assinaturas.", seed: [A, S, GC, IMB] },
+  // enforced na 75-302 (F3-1): rotas/páginas de Pastas + imobiliariasGuard decidem por can().
+  { key: "pastas.gerenciar", label: "Gerenciar pastas", description: "Pastas de pré-lançamento: criar, editar, documentos, links públicos, termos e assinaturas.", seed: [A, S, GC, IMB], enforced: true },
   { key: "imob.imobiliarias_gerenciar", label: "Gerenciar imobiliárias", description: "CRUD de imobiliárias parceiras.", seed: [A, S, GC, IMB] },
   // enforced na 75-301 (piloto): marketingGuard + telas de campanhas decidem por can().
   { key: "marketing.gerenciar", label: "Gerenciar marketing (Lídia)", description: "Posts, artes, pedidos, marcas e assets do agente de marketing.", seed: [A, S, SM], enforced: true },
@@ -269,6 +270,25 @@ export const VIRTUAL_GROUP_LABELS: Record<(typeof VIRTUAL_GROUPS)[number], strin
  */
 export function adminMatrixKeys(allModules: readonly string[]): string[] {
   return [...allModules, ...VIRTUAL_GROUPS]
+}
+
+/**
+ * 75-302 — elegibilidade de um ROLE para uma capability (sem exceções de
+ * usuário; nível role). Usada p/ resolver DESTINATÁRIOS de notificação que
+ * seguem a matriz (ex.: "gestores de Pastas"). Mesma tabela-verdade da F1.
+ */
+export function roleEligibleForCapability(input: {
+  roleName: string
+  /** linha explícita (role, capability) em role_permissions */
+  explicitRow?: boolean
+  /** linha do MÓDULO pai para o role */
+  moduleRow?: boolean
+}): boolean {
+  return resolveCapabilityDecision({
+    isAdmin: input.roleName === "admin",
+    exactRoleRow: input.explicitRow,
+    parentRoleRow: input.moduleRow,
+  })
 }
 
 // ============================================================================

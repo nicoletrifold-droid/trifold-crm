@@ -3,7 +3,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 import { ImobiliariasManager } from "../../imob/imobiliarias/_components/imobiliarias-manager"
 import type { Imobiliaria } from "@web/lib/imob/imobiliarias"
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic"
 
 export default async function PastasImobiliariasPage() {
   const user = await getServerUser()
-  if (!isPastaManager(user.role)) {
+  if (!(await canManagePastas(user.id, user.orgId))) {
     redirect("/dashboard")
   }
 

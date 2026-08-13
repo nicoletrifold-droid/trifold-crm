@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 import { fillTermo, type TermoData } from "@web/lib/pastas/termo/fill"
 
 // Story 75-127 (Etapa 3) — POST: recebe o TermoData revisado, gera o Termo de
@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
-  if (!isPastaManager(appUser.role)) {
+  if (!(await canManagePastas(appUser.id, appUser.org_id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

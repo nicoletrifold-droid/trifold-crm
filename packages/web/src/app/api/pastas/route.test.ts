@@ -7,6 +7,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
+// 75-302: o gate é can("pastas.gerenciar") — mock controlado por flag.
+let pastasAccess = true
+vi.mock("@web/lib/permissions", () => ({
+  can: async () => pastasAccess,
+}))
+
 let role = "admin"
 let insertedPasta: Record<string, unknown> | null = null
 
@@ -47,6 +53,7 @@ function makeReq(body: unknown): NextRequest {
 
 beforeEach(() => {
   role = "admin"
+  pastasAccess = true
   insertedPasta = null
 })
 
@@ -61,6 +68,7 @@ describe("POST /api/pastas (fluxo interno)", () => {
 
   it("bloqueia perfil não-gestor com 403", async () => {
     role = "corretor"
+    pastasAccess = false
     const res = await POST(makeReq({ nome: "Fulano" }))
     expect(res.status).toBe(403)
     expect(insertedPasta).toBeNull()

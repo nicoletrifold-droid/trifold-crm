@@ -2,12 +2,12 @@ import { redirect } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { PastasManager } from "./_components/pastas-manager"
-import { isPastaManager } from "@web/lib/pastas/roles"
+import { canManagePastas } from "@web/lib/pastas/roles"
 import { computePastaStatus } from "@web/lib/pastas/status"
 
 export default async function PastasPage() {
   const user = await getServerUser()
-  if (!isPastaManager(user.role)) {
+  if (!(await canManagePastas(user.id, user.orgId))) {
     redirect("/dashboard")
   }
 
