@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 export async function POST() {
@@ -7,7 +7,7 @@ export async function POST() {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "configuracoes.integracoes_gerenciar")
   if (forbidden) return forbidden
 
   const supabase = createAdminClient()

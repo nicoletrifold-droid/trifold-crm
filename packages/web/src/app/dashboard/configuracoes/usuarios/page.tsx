@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { UsersTableControls } from "@web/components/admin/users-table-controls"
@@ -37,7 +37,9 @@ export default async function UsuariosPage({
   }
 
   const supabase = await createClient()
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
+  // 75-312: morre o proxy canAccess("sistema") — capabilities próprias.
+  const canCriarUsuario = await can(user.id, user.orgId, "usuarios.criar")
+  const canTrocarPerfil = await can(user.id, user.orgId, "usuarios.trocar_perfil")
 
   let usersQuery = supabase
     .from("users")
@@ -84,7 +86,7 @@ export default async function UsuariosPage({
             Gerenciar usuários e permissões
           </p>
         </div>
-        {isAdmin && (
+        {canCriarUsuario && (
           <Link
             href="/dashboard/configuracoes/usuarios/novo"
             className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
@@ -99,7 +101,7 @@ export default async function UsuariosPage({
         roles={roles}
         roleColors={roleColors}
         roleLabels={roleLabels}
-        isAdmin={isAdmin}
+        isAdmin={canTrocarPerfil}
         currentUserId={user.id}
         currentOrgId={user.orgId}
         sort={sort}

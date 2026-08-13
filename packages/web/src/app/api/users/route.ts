@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
+import { canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { normalizePhoneBR } from "@trifold/shared"
 
@@ -16,7 +17,8 @@ export async function GET() {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  // 75-312: listar usuários = a TELA configuracoes.usuarios (mesma chave da matriz)
+  const forbidden = (await canAccess(appUser.id, appUser.org_id, "configuracoes.usuarios")) ? null : NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (forbidden) return forbidden
 
   const { data: users, error } = await supabase
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "usuarios.criar")
   if (forbidden) return forbidden
 
   const body = await request.json()

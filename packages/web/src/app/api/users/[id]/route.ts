@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { normalizePhoneBR } from "@trifold/shared"
@@ -14,7 +14,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "gerente-comercial"])
+  const forbidden = await requireCapability(appUser, "usuarios.editar")
   if (forbidden) return forbidden
 
   const body = await request.json()

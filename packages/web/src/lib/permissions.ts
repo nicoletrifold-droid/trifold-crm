@@ -439,11 +439,12 @@ export async function updatePermission(
   // 2. Verificar que o usuário é admin
   const { data: appUser, error: appUserError } = await supabase
     .from("users")
-    .select("role")
+    .select("id, org_id, role")
     .eq("auth_id", user.id)
     .maybeSingle()
 
-  if (appUserError || !appUser || appUser.role !== "admin") {
+  // 75-312: editar a matriz é a capability perfis.gerenciar (seed = admin).
+  if (appUserError || !appUser || !(await can(appUser.id as string, appUser.org_id as string, "perfis.gerenciar"))) {
     return { success: false, error: "Unauthorized" }
   }
 
@@ -528,14 +529,14 @@ export async function createRole(
   // 2. Verificar que o usuário é admin (e que pertence à org)
   const { data: appUser, error: appUserError } = await supabase
     .from("users")
-    .select("role, org_id")
+    .select("id, role, org_id")
     .eq("auth_id", user.id)
     .maybeSingle()
 
   if (
     appUserError ||
     !appUser ||
-    appUser.role !== "admin" ||
+    !(await can((appUser.id as string) ?? "", appUser.org_id as string, "perfis.gerenciar")) ||
     appUser.org_id !== orgId
   ) {
     return { success: false, error: "Unauthorized" }
@@ -667,14 +668,14 @@ export async function deleteRole(
     return { success: false, error: "Unauthorized" }
   }
 
-  // 2. Verificar que o usuário é admin
+  // 2. Verificar a capability perfis.gerenciar (75-312)
   const { data: appUser, error: appUserError } = await supabase
     .from("users")
-    .select("role, org_id")
+    .select("id, role, org_id")
     .eq("auth_id", user.id)
     .maybeSingle()
 
-  if (appUserError || !appUser || appUser.role !== "admin") {
+  if (appUserError || !appUser || !(await can(appUser.id as string, appUser.org_id as string, "perfis.gerenciar"))) {
     return { success: false, error: "Unauthorized" }
   }
 

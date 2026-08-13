@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 
 export async function PATCH(
@@ -12,7 +12,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "configuracoes.pipeline_editar")
   if (forbidden) return forbidden
 
   const body = await request.json()
@@ -60,7 +60,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "configuracoes.pipeline_editar")
   if (forbidden) return forbidden
 
   const result = await softDelete(supabase, "kanban_stages", id, appUser.org_id)

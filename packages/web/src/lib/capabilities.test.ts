@@ -229,6 +229,16 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "obras.vincular_imovel",
         "obras.receber_email_aprovacao",
         "sistema.manutencao",
+        "usuarios.criar",
+        "usuarios.editar",
+        "usuarios.trocar_perfil",
+        "perfis.gerenciar",
+        "configuracoes.empresa_editar",
+        "configuracoes.pipeline_editar",
+        "configuracoes.pipeline_followup",
+        "configuracoes.integracoes_gerenciar",
+        "configuracoes.atendente_padrao_ver",
+        "configuracoes.atendente_padrao_editar",
         "clientes.gerenciar",
         "clientes.apagar",
         "clientes.resetar_senha",
@@ -267,7 +277,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "chat", "clientes", "conversas", "imoveis", "leads", "marketing", "obras", "pastas", "portal", "sistema"])
+    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "chat", "clientes", "configuracoes", "conversas", "imoveis", "leads", "marketing", "obras", "pastas", "perfis", "portal", "sistema", "usuarios"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -458,5 +468,21 @@ describe("75-311 — Leads (espelho dos 15 seeds)", () => {
     expect([...CAPABILITY_SEED["leads.apagar"]]).toEqual(["admin"])
     expect([...CAPABILITY_SEED["leads.criar"]].sort()).toEqual(["admin", "broker", "supervisor"])
     expect([...CAPABILITY_SEED["leads.ia_analisar"]].sort()).toEqual(["admin", "broker", "gerente-comercial", "sdr", "supervisor"])
+  })
+})
+
+describe("75-312 — Config & Usuários (espelhos + constante de seleção congelada)", () => {
+  it("admin-only: usuarios.criar/trocar_perfil, perfis.gerenciar, empresa/pipeline/integracoes; A+GC: usuarios.editar; A+S: followup e atendente_editar", () => {
+    for (const key of ["usuarios.criar","usuarios.trocar_perfil","perfis.gerenciar","configuracoes.empresa_editar","configuracoes.pipeline_editar","configuracoes.integracoes_gerenciar"] as const) {
+      expect([...CAPABILITY_SEED[key]], key).toEqual(["admin"])
+    }
+    expect([...CAPABILITY_SEED["usuarios.editar"]].sort()).toEqual(["admin", "gerente-comercial"])
+    expect([...CAPABILITY_SEED["configuracoes.pipeline_followup"]].sort()).toEqual(["admin", "supervisor"])
+    expect([...CAPABILITY_SEED["configuracoes.atendente_padrao_editar"]].sort()).toEqual(["admin", "supervisor"])
+  })
+  it("atendente_padrao_ver = staff-5 (A/S/OBR/GR/GC) — e a lista de CANDIDATOS na rota é a MESMA (congelada)", () => {
+    expect([...CAPABILITY_SEED["configuracoes.atendente_padrao_ver"]].sort()).toEqual(
+      ["admin", "gerente-comercial", "gerente-relacionamento", "obras", "supervisor"]
+    )
   })
 })

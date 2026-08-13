@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderPasswordActionEmail } from "@web/lib/email-layout"
@@ -14,7 +14,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "gerente-comercial"])
+  const forbidden = await requireCapability(appUser, "usuarios.editar")
   if (forbidden) return forbidden
 
   const { data: targetUser, error: fetchError } = await supabase
