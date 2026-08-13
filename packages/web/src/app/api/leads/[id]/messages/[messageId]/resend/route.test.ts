@@ -9,6 +9,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
+
+// 75-310: gate = can("conversas.enviar_qualquer") — decide pelo SEED, variando pelo role.
+vi.mock("@web/lib/permissions", async () => {
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    can: async (_u: string, _o: string, capability: keyof typeof CAPABILITY_SEED) => {
+      const r = "admin" // o teste usa sempre a conta admin do requireAuth mockado
+      return r === "admin" || (CAPABILITY_SEED[capability] as readonly string[]).includes(r)
+    },
+  }
+})
 vi.mock("next/server", async () => {
   const actual = await vi.importActual<typeof import("next/server")>("next/server")
   return { ...actual, after: (fn: () => unknown) => void fn }

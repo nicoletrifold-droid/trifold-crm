@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
@@ -51,7 +52,8 @@ export async function POST(
   // relacionamento) lê/escreve via ADMIN client. A RLS de leads/conversations exige
   // admin/supervisor/corretor-dono e a gerente-relacionamento não passa; para
   // admin/supervisor/gerente-comercial é neutro (já passavam). Corretor → client de sessão.
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"].includes(appUser.role)
+  // 75-310: enviar em lead de terceiros é a capability conversas.enviar_qualquer.
+  const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
   const db = isPrivileged ? createAdminClient() : supabase
 
   // --- Validação do payload (AC8) ---

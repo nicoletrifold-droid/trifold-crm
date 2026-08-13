@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
@@ -33,7 +34,8 @@ export async function POST(
   // Story 76-4 — grupo privilegiado (inclui gerente-relacionamento p/ o Chat) lê/escreve
   // via ADMIN client (a RLS de leads/conversations não passa a gerente-relacionamento;
   // p/ admin/supervisor/gerente-comercial é neutro). Corretor → client de sessão.
-  const isPrivileged = ["admin", "supervisor", "gerente-comercial", "sdr", "gerente-relacionamento"].includes(appUser.role)
+  // 75-310: enviar em lead de terceiros é a capability conversas.enviar_qualquer.
+  const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
   const db = isPrivileged ? createAdminClient() : supabase
 
   let formData: FormData

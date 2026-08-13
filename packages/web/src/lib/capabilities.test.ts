@@ -188,6 +188,12 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "agenda.gerenciar_imob",
         "agenda.escolher_equipe",
         "agenda.feedback_visita",
+        "conversas.enviar",
+        "conversas.enviar_qualquer",
+        "conversas.abrir_template",
+        "conversas.transferir",
+        "chat.responder",
+        "chat.gerenciar_participantes",
         "chamados.responder",
         "chamados.ver_todos",
         "obras.ver",
@@ -246,7 +252,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "clientes", "imoveis", "marketing", "obras", "pastas", "portal", "sistema"])
+    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "chat", "clientes", "conversas", "imoveis", "marketing", "obras", "pastas", "portal", "sistema"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -401,5 +407,25 @@ describe("75-309 — Clientes & Portal (espelho dos 6 seeds)", () => {
     for (const key of ["clientes.sienge_vincular", "portal.ver_como_cliente", "portal.financeiro_ver"] as const) {
       expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
     }
+  })
+})
+
+describe("75-310 — Conversas & Chat (espelhos + constantes de UI congeladas ao seed)", () => {
+  it("enviar = COR+A/S/GC/SDR; enviar_qualquer/abrir_template = A/S/GC/SDR/GR; transferir = A/S", () => {
+    expect([...CAPABILITY_SEED["conversas.enviar"]].sort()).toEqual(["admin", "broker", "gerente-comercial", "sdr", "supervisor"])
+    expect([...CAPABILITY_SEED["conversas.enviar_qualquer"]].sort()).toEqual(["admin", "gerente-comercial", "gerente-relacionamento", "sdr", "supervisor"])
+    expect([...CAPABILITY_SEED["conversas.abrir_template"]].sort()).toEqual(["admin", "gerente-comercial", "gerente-relacionamento", "sdr", "supervisor"])
+    expect([...CAPABILITY_SEED["conversas.transferir"]].sort()).toEqual(["admin", "supervisor"])
+  })
+  it("chat.responder e gerenciar_participantes = A/S/GR/GC", () => {
+    expect([...CAPABILITY_SEED["chat.responder"]].sort()).toEqual(["admin", "gerente-comercial", "gerente-relacionamento", "supervisor"])
+    expect([...CAPABILITY_SEED["chat.gerenciar_participantes"]].sort()).toEqual(["admin", "gerente-comercial", "gerente-relacionamento", "supervisor"])
+  })
+  it("🔒 OPENING_PRIVILEGED_ROLES (dica de UI client-side) CONGELADA ao seed de abrir_template", async () => {
+    const { OPENING_PRIVILEGED_ROLES } = await import("./whatsapp/opening-roles")
+    expect([...OPENING_PRIVILEGED_ROLES].sort()).toEqual([...CAPABILITY_SEED["conversas.abrir_template"]].sort())
+  })
+  it("conversas.ver_qualquer segue NÃO-enforced (gate é RLS — F4)", () => {
+    expect(ENFORCED_CAPABILITIES.some((c) => c.key === "conversas.ver_qualquer")).toBe(false)
   })
 })

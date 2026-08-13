@@ -89,15 +89,16 @@ export const CAPABILITIES = [
   { key: "leads.ia_analisar", label: "Análise de comportamento", description: "Rodar a análise de comportamento IA do lead.", seed: [A, S, GC, SDR, COR] },
 
   // ── Conversas (WhatsApp com leads) ───────────────────────────────────────
-  { key: "conversas.enviar", label: "Enviar no próprio lead", description: "Mensagem/arquivo WhatsApp no lead que é seu.", seed: [COR, A, S, GC, SDR] },
+  // enforced na 75-310 (F3-9): composers/rotas de envio decidem por can().
+  { key: "conversas.enviar", label: "Enviar no próprio lead", description: "Mensagem/arquivo WhatsApp no lead que é seu.", seed: [COR, A, S, GC, SDR], enforced: true },
   { key: "conversas.ver_qualquer", label: "Ler conversas de terceiros", description: "Leitura de conversas/mensagens de qualquer lead (RLS). ⚠ espelho inclui obras — furo do god-gate, corrige em F4.", seed: [A, S, GC, SDR, GR, OBR] },
-  { key: "conversas.enviar_qualquer", label: "Enviar em qualquer lead", description: "Enviar/reenviar mensagem e mídia em lead de terceiros.", seed: [A, S, GC, SDR, GR] },
-  { key: "conversas.abrir_template", label: "Iniciar por template", description: "Abrir atendimento com template de abertura (o dono sempre pode no próprio lead).", seed: [A, S, GC, SDR, GR] },
-  { key: "conversas.transferir", label: "Transferir conversa", description: "Passar a conversa para outro atendente.", seed: [A, S] },
+  { key: "conversas.enviar_qualquer", label: "Enviar em qualquer lead", description: "Enviar/reenviar mensagem e mídia em lead de terceiros.", seed: [A, S, GC, SDR, GR], enforced: true },
+  { key: "conversas.abrir_template", label: "Iniciar por template", description: "Abrir atendimento com template de abertura (o dono sempre pode no próprio lead).", seed: [A, S, GC, SDR, GR], enforced: true },
+  { key: "conversas.transferir", label: "Transferir conversa", description: "Passar a conversa para outro atendente.", seed: [A, S], enforced: true },
 
   // ── Chat (relacionamento com clientes) ───────────────────────────────────
-  { key: "chat.responder", label: "Responder cliente", description: "Ler e responder conversas de clientes da base no Chat.", seed: [A, S, GR, GC] },
-  { key: "chat.gerenciar_participantes", label: "Gerenciar participantes", description: "Adicionar/remover participantes de uma conversa do Chat.", seed: [A, S, GR, GC] },
+  { key: "chat.responder", label: "Responder cliente", description: "Ler e responder conversas de clientes da base no Chat.", seed: [A, S, GR, GC], enforced: true },
+  { key: "chat.gerenciar_participantes", label: "Gerenciar participantes", description: "Adicionar/remover participantes de uma conversa do Chat.", seed: [A, S, GR, GC], enforced: true },
 
   // ── Agenda ───────────────────────────────────────────────────────────────
   // enforced na 75-307 (F3-6): governança da agenda decide por can().

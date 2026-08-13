@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
@@ -10,7 +11,6 @@ import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-fee
 // Story 82-3 — Análise IA para o corretor (painel compartilhado com o /dashboard)
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 
-const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial", "sdr"]
 
 export default async function BrokerLeadDetailPage({
   params,
@@ -293,7 +293,7 @@ export default async function BrokerLeadDetailPage({
         lastMessageAt={lastMessageAt}
         isAiActive={Boolean(activeConversation?.is_ai_active)}
         isWhatsApp={isWhatsApp}
-        canSend={CAN_SEND_ROLES.includes(user.role)}
+        canSend={await can(user.id, user.orgId, "conversas.enviar")}
         // Story 63-11 — ids das conversas para a subscription Realtime (um canal
         // por conversa). Array já construído acima (L45).
         conversationIds={conversationIds}
