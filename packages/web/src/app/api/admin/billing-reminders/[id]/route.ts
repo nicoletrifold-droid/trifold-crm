@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { isPlatformAdmin } from "@web/lib/platform"
+import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { validateUpdate } from "@web/lib/billing/reminder-validation"
 import { avancarCiclo } from "@web/lib/billing/reminder-schedule"
@@ -10,7 +11,7 @@ import { avancarCiclo } from "@web/lib/billing/reminder-schedule"
 // Hotfix de segurança (migration 209 / auditoria P4): a 209 revoga `authenticated` das tabelas
 // de custo interno da plataforma (a policy `admin_only` não tinha noção de org). Acesso só por
 // service-role em rota gated por admin — daí o createAdminClient() em vez do client de usuário
-// do requireAuth(). O gate de autorização segue sendo o requireRole(["admin"]).
+// do requireAuth(). O gate de autorização é is_platform_admin (75-314 — plataforma).
 
 /**
  * PATCH /api/admin/billing-reminders/[id]
@@ -38,7 +39,9 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = (await isPlatformAdmin(appUser.id))
+    ? null
+    : NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (roleError) return roleError
 
   const supabase = createAdminClient()
@@ -149,7 +152,9 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = (await isPlatformAdmin(appUser.id))
+    ? null
+    : NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (roleError) return roleError
 
   const supabase = createAdminClient()

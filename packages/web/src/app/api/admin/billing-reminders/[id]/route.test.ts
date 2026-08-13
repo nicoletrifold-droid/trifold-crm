@@ -11,6 +11,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
+// 75-314: gate de plataforma — o teste roda como platform admin.
+vi.mock("@web/lib/platform", () => ({ isPlatformAdmin: async () => true }))
+
 // Payload capturado do UPDATE (segunda cadeia de query da rota).
 let capturedUpdate: Record<string, unknown> | null = null
 // Linha "atual" retornada pela primeira cadeia (select due_date, billing_cycle).
@@ -47,13 +50,13 @@ vi.mock("@web/lib/api-auth", () => ({
     appUser: { id: "u1", role: "admin" },
     user: { id: "u1" },
   }),
-  requireRole: () => null,
+
 }))
 
 // Hotfix de segurança (migration 209 / auditoria P4): a rota passou a ler/escrever
 // service_billing_reminders via createAdminClient() (service-role), porque a 209 revoga
 // `authenticated` das tabelas de custo interno da plataforma. O gate de autorização segue
-// sendo requireRole(["admin"]). O mock espelha essa troca de client — a lógica de
+// sendo is_platform_admin (75-314). O mock espelha essa troca de client — a lógica de
 // recorrência-ao-pagar sob teste é a mesma.
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => makeSupabase(),
