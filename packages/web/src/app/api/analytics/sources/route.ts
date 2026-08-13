@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 // Story 30.1: shape escalar simples (1 campo `source` por lead).
 // Aceitável manter GROUP BY em JS — o over-fetch real era apenas o .limit(10000)
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = await requireCapability(appUser, "analytics.geral")
   if (roleError) return roleError
 
   const searchParams = request.nextUrl.searchParams

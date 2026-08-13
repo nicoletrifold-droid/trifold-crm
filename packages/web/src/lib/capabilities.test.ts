@@ -172,18 +172,24 @@ describe("resolveCapabilityDecision — tabela-verdade da paridade app ↔ SQL (
 })
 
 describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
-  it("enforced = exatamente os módulos já migrados (75-301..303)", () => {
-    expect(ENFORCED_CAPABILITIES.map((c) => c.key)).toEqual([
-      "pastas.gerenciar",
-      "marketing.gerenciar",
-      "campanhas.gerenciar",
-      "campanhas.disparar",
-      "campanhas.meta_sincronizar",
-      "campanhas.meta_acionar",
-      "campanhas.meta_ver",
-      "chamados.ver_todos",
-      "chamados.responder",
-    ])
+  it("enforced = exatamente os módulos já migrados (75-301..305)", () => {
+    // ordem = ordem do registro (agrupado por módulo)
+    expect(ENFORCED_CAPABILITIES.map((c) => c.key).sort()).toEqual(
+      [
+        "analytics.executivo",
+        "analytics.geral",
+        "atividades.ver",
+        "campanhas.disparar",
+        "campanhas.gerenciar",
+        "campanhas.meta_acionar",
+        "campanhas.meta_sincronizar",
+        "campanhas.meta_ver",
+        "chamados.responder",
+        "chamados.ver_todos",
+        "marketing.gerenciar",
+        "pastas.gerenciar",
+      ].sort()
+    )
   })
 
   it("todo grupo VIRTUAL com capability enforced tem label de exibição", () => {
@@ -205,7 +211,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["campanhas", "chamados", "marketing", "pastas"])
+    expect(Object.keys(byGroup).sort()).toEqual(["analytics", "atividades", "campanhas", "chamados", "marketing", "pastas"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -299,5 +305,16 @@ describe("75-304 — Chamados (espelho dos 2 seeds)", () => {
   it("ver_todos e responder = admin+supervisor (as antigas checagens inline)", () => {
     expect([...CAPABILITY_SEED["chamados.ver_todos"]].sort()).toEqual(["admin", "supervisor"])
     expect([...CAPABILITY_SEED["chamados.responder"]].sort()).toEqual(["admin", "supervisor"])
+  })
+})
+
+describe("75-305 — Analytics & Atividades (espelho dos 3 seeds)", () => {
+  it("analytics.geral = admin+supervisor; executivo = +gerente-comercial+sdr; atividades = A/S/GC", () => {
+    expect([...CAPABILITY_SEED["analytics.geral"]].sort()).toEqual(["admin", "supervisor"])
+    expect([...CAPABILITY_SEED["analytics.executivo"]].sort()).toEqual(["admin", "gerente-comercial", "sdr", "supervisor"])
+    expect([...CAPABILITY_SEED["atividades.ver"]].sort()).toEqual(["admin", "gerente-comercial", "supervisor"])
+  })
+  it("dashboard.ver_equipe segue NÃO-enforced (UX por role — bypass de admin tornaria admin elegível)", () => {
+    expect(ENFORCED_CAPABILITIES.some((c) => c.key === "dashboard.ver_equipe")).toBe(false)
   })
 })
