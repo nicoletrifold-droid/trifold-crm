@@ -1,8 +1,11 @@
 import { createClient } from "@web/lib/supabase/server"
+import Link from "next/link"
 import { getServerUser } from "@web/lib/auth"
 import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
+import { ConversionFunnel } from "@web/components/analytics/conversion-funnel"
+import { pickFunnelTiers } from "@web/lib/analytics/funnel-tiers"
 import { ExecutiveCharts } from "@web/components/analytics/executive-charts"
 import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
 import { AnalyticsFilterSelect } from "@web/components/analytics/analytics-filter-select"
@@ -439,7 +442,20 @@ export default async function AnalyticsPage({
   }
 
   const sourceLabels = SOURCE_LABELS_SHORT
-  const maxFunnelSqrt = Math.max(...stages.map((s) => Math.sqrt(s.count)), 1)
+
+  // Story 75-318 — régua do Pipeline (contagens AO VIVO, mesma RPC do Dashboard;
+  // as etapas/cores reusam `stages`, que já vem da matriz do funil ordenável).
+  const { data: liveCountsData } = await supabase.rpc("get_dashboard_stage_counts", {
+    p_org_id: appUser.orgId,
+    p_segmento: "principal",
+  })
+  const liveStageCounts: Record<string, number> = Object.fromEntries(
+    ((liveCountsData ?? []) as Array<{ stage_id: string; total: number }>).map((r) => [
+      r.stage_id,
+      Number(r.total ?? 0),
+    ])
+  )
+  const stagesOrdenadas = [...stages].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 
   const selectedPropertyName = propertyId
     ? (allProperties ?? []).find((p) => p.id === propertyId)?.name ?? "Empreendimento"
@@ -619,6 +635,33 @@ export default async function AnalyticsPage({
         </div>
       </div>
 
+      {/* Story 75-318 — régua do Pipeline (contagens AO VIVO, como no Dashboard),
+          em versão compacta, entre os cards do período e o Leads por Período. */}
+      <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
+        <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-stone-100">
+          Pipeline <span className="text-xs font-normal text-stone-400">· agora</span>
+        </h2>
+        <div className="overflow-x-auto">
+          <div className="flex min-w-max gap-1.5">
+            {stagesOrdenadas.map((stage) => (
+              <Link
+                key={stage.id}
+                href={`/dashboard/pipeline?stage=${stage.slug}`}
+                className="flex-1 cursor-pointer rounded-md px-2.5 py-2 text-center transition-[filter] hover:brightness-125"
+                style={{ backgroundColor: `${stage.color}15` }}
+              >
+                <p className="whitespace-nowrap text-[11px] font-medium" style={{ color: stage.color }}>
+                  {stage.name}
+                </p>
+                <p className="mt-0.5 text-base font-bold tabular-nums text-gray-900 dark:text-stone-100">
+                  {liveStageCounts[stage.id] ?? 0}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Leads por Período — gráfico (granularidade local; período vem da URL) */}
       <LeadsChart
         properties={(allProperties ?? []).map((p) => ({ id: p.id, name: p.name }))}
@@ -641,27 +684,12 @@ export default async function AnalyticsPage({
         />
       </div>
 
-      {/* Funnel */}
+      {/* Funnel — Story 75-318: funil de verdade em 4 andares (Atendimento →
+          Visita Agendada|Visitou → Proposta → Fechamento) com líquido animado.
+          Os números vêm do MESMO recorte do período que alimentava as barras. */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
         <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
-        <div className="space-y-2">
-          {stages.map((stage) => {
-            const widthPct = stage.count > 0 ? Math.max((Math.sqrt(stage.count) / maxFunnelSqrt) * 100, 4) : 0
-            return (
-              <div key={stage.id} className="flex items-center gap-3">
-                <span className="w-32 shrink-0 text-sm text-gray-600 dark:text-stone-300">{stage.name}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="relative h-7 rounded bg-stone-100 dark:bg-stone-800/60">
-                    {stage.count > 0 && (
-                      <div className="absolute inset-y-0 left-0 rounded transition-all" style={{ width: `${widthPct}%`, backgroundColor: stage.color, opacity: 0.85 }} />
-                    )}
-                  </div>
-                </div>
-                <span className="w-12 shrink-0 text-right text-sm font-medium tabular-nums dark:text-stone-100">{stage.count}</span>
-              </div>
-            )
-          })}
-        </div>
+        <ConversionFunnel tiers={pickFunnelTiers(stages)} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
