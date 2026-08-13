@@ -208,6 +208,12 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "obras.vincular_imovel",
         "obras.receber_email_aprovacao",
         "sistema.manutencao",
+        "clientes.gerenciar",
+        "clientes.apagar",
+        "clientes.resetar_senha",
+        "clientes.sienge_vincular",
+        "portal.ver_como_cliente",
+        "portal.financeiro_ver",
         "imoveis.criar",
         "imoveis.editar",
         "imoveis.apagar",
@@ -240,7 +246,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "imoveis", "marketing", "obras", "pastas", "sistema"])
+    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "clientes", "imoveis", "marketing", "obras", "pastas", "portal", "sistema"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -384,5 +390,16 @@ describe("75-308 — Obras (espelho dos seeds-chave)", () => {
   })
   it("solicitar_exclusao segue NÃO-enforced (FLUXO de quem envia — seed sem admin, regra da 75-305)", () => {
     expect(ENFORCED_CAPABILITIES.some((c) => c.key === "obras.solicitar_exclusao")).toBe(false)
+  })
+})
+
+describe("75-309 — Clientes & Portal (espelho dos 6 seeds)", () => {
+  it("gerenciar/apagar/resetar_senha = ex-ALLOWED_ROLES; sienge_vincular/portal = A+S", () => {
+    for (const key of ["clientes.gerenciar", "clientes.apagar", "clientes.resetar_senha"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "gerente-relacionamento", "obras", "supervisor"])
+    }
+    for (const key of ["clientes.sienge_vincular", "portal.ver_como_cliente", "portal.financeiro_ver"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
+    }
   })
 })

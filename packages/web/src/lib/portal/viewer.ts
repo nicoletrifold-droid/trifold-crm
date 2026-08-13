@@ -2,6 +2,7 @@ import "server-only"
 
 import { redirect } from "next/navigation"
 import { getServerUser, type AppUser } from "@web/lib/auth"
+import { can } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { cpfLookupValues, maskCpfCnpj } from "@web/lib/validation/contato"
 
@@ -15,16 +16,16 @@ import { cpfLookupValues, maskCpfCnpj } from "@web/lib/validation/contato"
 // contorna RLS) → o gate de role + o filtro por org_id são a fronteira de segurança.
 // NUNCA escrever no banco a partir do viewer (é read-only).
 
-const VIEWER_ROLES: AppUser["role"][] = ["admin", "supervisor"]
-
-export function canUsePortalViewer(role: AppUser["role"]): boolean {
-  return VIEWER_ROLES.includes(role)
+// Story 75-309: o acesso ao viewer é a capability `portal.ver_como_cliente`
+// (seed espelha a antiga VIEWER_ROLES = admin/supervisor).
+export async function canUsePortalViewer(user: AppUser): Promise<boolean> {
+  return can(user.id, user.orgId, "portal.ver_como_cliente")
 }
 
-/** Garante que o usuário é admin/supervisor e devolve o admin client (service role). */
+/** Garante a capability do viewer e devolve o admin client (service role). */
 export async function requireViewerAccess() {
   const user = await getServerUser()
-  if (!canUsePortalViewer(user.role)) {
+  if (!(await canUsePortalViewer(user))) {
     redirect("/dashboard")
   }
   return { user, admin: createAdminClient() }
