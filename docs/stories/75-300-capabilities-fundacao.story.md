@@ -347,4 +347,19 @@ em `users.role` (drift conhecido, fora do épico F1).
 
 ## QA Results
 
-_(pendente)_
+### Review Date: 2026-08-13 · Reviewed By: Quinn (@qa, Test Architect) · Round 1
+
+**Veredito: CONCERNS · quality score 94 · nada bloqueia o PR.**
+Gate: `docs/qa/gates/75.300-capabilities-fundacao.yml`. Os 7 checks passam; 2 concerns
+LOW registrados para as stories F3, não para esta:
+
+- **C-1 (low):** cadeia inventário→taxonomia→seed tem 2 elos humanos; amostragem 5/5
+  correta. Mitigação: toda story F3 confere o seed do módulo contra o gate hardcoded
+  ANTES de trocar o call site (item fixo do template F3).
+- **C-2 (low):** gates OR-compostos (ex.: `imobiliariasGuard` = módulo OR manager) não
+  cabem numa capability única — F3 desses gates compõe `canAccess() OR can()` ou amplia
+  o seed antes da troca.
+
+Decisões autônomas do @dev: as 5 aceitas (as 2 que desviam de AC — `group` derivado e
+teste antigo re-escrito — matam drift real e preservam semântica; justificativas
+conferidas contra o código).
