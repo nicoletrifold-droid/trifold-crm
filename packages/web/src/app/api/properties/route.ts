@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
-import { IMOVEIS_CREATE_ROLES } from "@web/lib/permissions-imoveis"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { PROPERTY_STATUSES, isPropertyStatus } from "@web/lib/property-status"
 
 function slugify(text: string): string {
@@ -37,7 +36,7 @@ export async function POST(request: Request) {
   const { supabase, appUser } = auth
 
   // Criar empreendimento: admin/supervisor (fonte única).
-  const forbidden = requireRole(appUser, [...IMOVEIS_CREATE_ROLES])
+  const forbidden = await requireCapability(appUser, "imoveis.criar")
   if (forbidden) return forbidden
 
   const body = await request.json()

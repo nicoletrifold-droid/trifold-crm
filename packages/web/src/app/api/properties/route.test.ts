@@ -13,16 +13,27 @@ vi.mock("server-only", () => ({}))
 
 let role = "admin"
 
-vi.mock("@web/lib/api-auth", () => ({
-  requireAuth: async () => ({
-    supabase: fakeSupabase,
-    appUser: { id: "u-1", name: "User", role, org_id: "org-1" },
-  }),
-  requireRole: (user: { role: string }, allowed: string[]) =>
-    allowed.includes(user.role)
-      ? null
-      : new Response(JSON.stringify({ error: "forbidden" }), { status: 403 }),
-}))
+vi.mock("@web/lib/api-auth", async () => {
+  // 75-306: gate = requireCapability; a decisão vem do SEED do registro
+  // (fonte da verdade do modelo), variando por `role` — nada de constante mockada.
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    requireAuth: async () => ({
+      supabase: fakeSupabase,
+      appUser: { id: "u-1", name: "User", role, org_id: "org-1" },
+    }),
+    requireCapability: async (
+      user: { role: string },
+      capability: keyof typeof CAPABILITY_SEED
+    ) =>
+      user.role === "admin" ||
+      (CAPABILITY_SEED[capability] as readonly string[]).includes(user.role)
+        ? null
+        : new Response(JSON.stringify({ error: "forbidden" }), { status: 403 }),
+  }
+})
 
 /** Último payload passado a .insert(), para inspeção nos testes. */
 let insertedPayload: Record<string, unknown> | null = null

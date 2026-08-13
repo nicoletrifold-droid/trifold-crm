@@ -1,24 +1,23 @@
 /**
- * Fonte única de permissões do módulo Imóveis (empreendimentos/unidades).
+ * Gates do módulo Imóveis (empreendimentos/unidades/tipologias).
  *
- * Regra de negócio (Story 72-1):
- *  - Editar empreendimento, unidades (menos status) e tipologias: admin, supervisor, obras.
- *  - Criar/excluir empreendimento: admin, supervisor.
- *  - Visualizar: qualquer perfil com acesso ao módulo `imoveis` (inclui corretor).
- *  - Status da unidade NÃO é editável no CRM (vem de integração externa).
- *
- * Módulo puro (sem código server-side) — pode ser importado em Server e Client Components.
+ * Story 75-306 (Perfis de Acesso 2.0, F3-5): as constantes IMOVEIS_EDIT_ROLES
+ * (admin/supervisor/obras/gerente-relacionamento) e IMOVEIS_CREATE_ROLES
+ * (admin/supervisor) viraram as capabilities `imoveis.editar` e `imoveis.criar`
+ * — seeds da mig 225 espelham exatamente aquelas listas (diff conferido).
+ * Visualizar segue sendo o módulo `imoveis` (canAccess), inclusive corretor.
+ * Status de unidade NÃO é editável no CRM (integração externa) — exceto o
+ * reset do admin, agora `imoveis.resetar_status_unidade`.
  */
 
-export const IMOVEIS_EDIT_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"] as const
-export const IMOVEIS_CREATE_ROLES = ["admin", "supervisor"] as const
+import { can } from "@web/lib/permissions"
 
-/** Pode editar empreendimentos, unidades (exceto status) e tipologias. */
-export function canEditImoveis(role: string | null | undefined): boolean {
-  return role != null && (IMOVEIS_EDIT_ROLES as readonly string[]).includes(role)
+/** Pode editar empreendimentos, unidades (exceto status) e criar tipologias. */
+export async function canEditImoveis(userId: string, orgId: string): Promise<boolean> {
+  return can(userId, orgId, "imoveis.editar")
 }
 
-/** Pode criar/excluir empreendimentos. */
-export function canCreateImoveis(role: string | null | undefined): boolean {
-  return role != null && (IMOVEIS_CREATE_ROLES as readonly string[]).includes(role)
+/** Pode criar empreendimentos. */
+export async function canCreateImoveis(userId: string, orgId: string): Promise<boolean> {
+  return can(userId, orgId, "imoveis.criar")
 }
