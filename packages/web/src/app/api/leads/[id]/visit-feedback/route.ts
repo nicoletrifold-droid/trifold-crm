@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
 import { buildVisitFeedbackList } from "@web/lib/appointments/visit-feedback-read"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 
 /** Mesma matriz do /api/appointments/[id]/feedback (75-185). */
-const FEEDBACK_ADMIN_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
 
 interface LeadForFeedbackAccess {
   assigned_broker_id: string | null
@@ -20,9 +20,11 @@ interface LeadForFeedbackAccess {
  */
 function canAccessFeedback(
   appUser: { id: string; role: string },
-  lead: LeadForFeedbackAccess
+  lead: LeadForFeedbackAccess,
+  // 75-307: can("agenda.feedback_visita") pré-computada pelo caller
+  hasFeedbackCapability: boolean
 ): boolean {
-  if (FEEDBACK_ADMIN_ROLES.includes(appUser.role)) return true
+  if (hasFeedbackCapability) return true
   if (lead.assigned_broker_id === appUser.id) return true
   return ["imob", "consultoria"].includes(appUser.role) && lead.segmento === "imob"
 }
@@ -62,7 +64,7 @@ export async function GET(
     if (!lead) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 })
     }
-    if (!canAccessFeedback(appUser, lead as LeadForFeedbackAccess)) {
+    if (!canAccessFeedback(appUser, lead as LeadForFeedbackAccess, await can(appUser.id, appUser.org_id, "agenda.feedback_visita"))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -174,7 +176,7 @@ export async function POST(
     // Permissão: admin/supervisor/gerente-comercial sempre; corretor só dono do
     // lead; perfil imob/consultoria em lead do mundo IMOB (Story 75-201).
     // Story 75-290: mesma régua do GET, uma única fonte (canAccessFeedback).
-    if (!canAccessFeedback(appUser, lead as LeadForFeedbackAccess)) {
+    if (!canAccessFeedback(appUser, lead as LeadForFeedbackAccess, await can(appUser.id, appUser.org_id, "agenda.feedback_visita"))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

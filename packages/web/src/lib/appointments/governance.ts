@@ -12,8 +12,6 @@
 //    equipes diferentes nunca conflitam (Story 81-1).
 //  - Nicole remarca/cancela via service role (packages/ai) SEM passar por aqui.
 
-export const APPOINTMENT_ADMIN_ROLES = ["admin", "supervisor"] as const
-
 export interface MutableAppointment {
   broker_id: string | null
   calendly_event_uri: string | null
@@ -21,21 +19,30 @@ export interface MutableAppointment {
   team?: string | null
 }
 
+/** Story 75-307 — as duas capabilities que governam a mutação, pré-computadas pelo caller. */
+export interface AppointmentMutationGrants {
+  /** can("agenda.gerenciar_house") — seed espelha admin/supervisor/gerente-comercial/sdr */
+  house: boolean
+  /** can("agenda.gerenciar_imob") — seed espelha admin/supervisor/imob */
+  imob: boolean
+}
+
 /**
  * Pode este usuário editar/cancelar/completar este compromisso? (matriz Story 81-3)
- * Calendly (sem dono interno) → livre; admin/supervisor → tudo;
- * IMOB → só perfil `imob`; HOUSE → gerente-comercial ou dono (broker_id).
+ * Story 75-307: a decisão vem das CAPABILITIES (matriz/exceções), não do nome do
+ * role — admin/supervisor têm as duas no seed (= "tudo" de antes); imob só a de
+ * imob; gerente/sdr só a de house; dono (broker_id) sempre pode o seu.
+ * Calendly (sem dono interno) → livre.
  */
 export function canMutateAppointment(
-  role: string,
+  grants: AppointmentMutationGrants,
   userId: string,
   appt: MutableAppointment
 ): boolean {
   if (appt.calendly_event_uri) return true // cliente marcou sozinho — sem dono interno
-  if ((APPOINTMENT_ADMIN_ROLES as readonly string[]).includes(role)) return true
-  if (appt.team === "imob") return role === "imob"
-  // HOUSE (ou team ausente — default do banco). Story 75-204: sdr = gerente.
-  if (role === "gerente-comercial" || role === "sdr") return true
+  if (appt.team === "imob") return grants.imob
+  // HOUSE (ou team ausente — default do banco).
+  if (grants.house) return true
   return appt.broker_id != null && appt.broker_id === userId
 }
 

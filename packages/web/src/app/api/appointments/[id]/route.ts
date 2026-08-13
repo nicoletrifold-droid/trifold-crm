@@ -3,6 +3,7 @@ import { requireAuth } from "@web/lib/api-auth"
 import { buildUpdatePayload } from "@web/lib/api-utils"
 import { mirrorDelete, mirrorUpdate } from "@web/lib/appointments/google-mirror"
 import { canMutateAppointment, isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
+import { can } from "@web/lib/permissions"
 
 // Campos cuja alteração exige justificativa (edição de dados do compromisso).
 // Mudança só de status (completed/confirmed/no_show) não é "edição de dados".
@@ -68,7 +69,11 @@ export async function PATCH(
 
   // Story 75-103: só o dono (corretor) ou admin/supervisor/gerente-comercial editam.
   // Compromisso do Calendly (cliente marcou sozinho) é livre.
-  if (!canMutateAppointment(appUser.role, appUser.id, existing)) {
+  const grants = {
+    house: await can(appUser.id, appUser.org_id, "agenda.gerenciar_house"),
+    imob: await can(appUser.id, appUser.org_id, "agenda.gerenciar_imob"),
+  }
+  if (!canMutateAppointment(grants, appUser.id, existing)) {
     return NextResponse.json(
       { error: "Sem permissão para editar este agendamento" },
       { status: 403 }
@@ -223,7 +228,11 @@ export async function DELETE(
 
   // Story 75-103: só o dono (corretor) ou admin/supervisor/gerente-comercial cancelam.
   // Compromisso do Calendly (cliente marcou sozinho) é livre.
-  if (!canMutateAppointment(appUser.role, appUser.id, existing)) {
+  const grants = {
+    house: await can(appUser.id, appUser.org_id, "agenda.gerenciar_house"),
+    imob: await can(appUser.id, appUser.org_id, "agenda.gerenciar_imob"),
+  }
+  if (!canMutateAppointment(grants, appUser.id, existing)) {
     return NextResponse.json(
       { error: "Sem permissão para excluir este agendamento" },
       { status: 403 }

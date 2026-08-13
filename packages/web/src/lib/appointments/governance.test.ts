@@ -1,34 +1,43 @@
 import { describe, it, expect } from "vitest"
 import { canMutateAppointment, overlaps, isConflict } from "./governance"
+import { CAPABILITY_SEED } from "@web/lib/capabilities"
+
+// 75-307: a decisão agora é por GRANTS (capabilities). Derivamos os grants de cada
+// role do PRÓPRIO SEED — assim estes testes provam que a matriz do diretor
+// (Stories 75-103/81-3/75-204) sobrevive intacta sob o modelo novo.
+const grantsFor = (role: string) => ({
+  house: role === "admin" || (CAPABILITY_SEED["agenda.gerenciar_house"] as readonly string[]).includes(role),
+  imob: role === "admin" || (CAPABILITY_SEED["agenda.gerenciar_imob"] as readonly string[]).includes(role),
+})
 
 describe("canMutateAppointment (Story 75-103)", () => {
   const internal = { broker_id: "broker-1", calendly_event_uri: null, team: "house" }
   const calendly = { broker_id: null, calendly_event_uri: "https://calendly.com/evt/abc", team: "house" }
 
   it("dono (corretor atribuído) pode", () => {
-    expect(canMutateAppointment("broker", "broker-1", internal)).toBe(true)
+    expect(canMutateAppointment(grantsFor("broker"), "broker-1", internal)).toBe(true)
   })
   it("outro corretor NÃO pode", () => {
-    expect(canMutateAppointment("broker", "broker-2", internal)).toBe(false)
+    expect(canMutateAppointment(grantsFor("broker"), "broker-2", internal)).toBe(false)
   })
   it("admin/supervisor/gerente-comercial podem no HOUSE (mesmo sem ser dono)", () => {
-    expect(canMutateAppointment("admin", "x", internal)).toBe(true)
-    expect(canMutateAppointment("supervisor", "x", internal)).toBe(true)
-    expect(canMutateAppointment("gerente-comercial", "x", internal)).toBe(true)
+    expect(canMutateAppointment(grantsFor("admin"), "x", internal)).toBe(true)
+    expect(canMutateAppointment(grantsFor("supervisor"), "x", internal)).toBe(true)
+    expect(canMutateAppointment(grantsFor("gerente-comercial"), "x", internal)).toBe(true)
   })
   it("sdr espelha o gerente-comercial no HOUSE, mas NÃO no IMOB (Story 75-204)", () => {
-    expect(canMutateAppointment("sdr", "x", internal)).toBe(true)
+    expect(canMutateAppointment(grantsFor("sdr"), "x", internal)).toBe(true)
     expect(
-      canMutateAppointment("sdr", "x", { broker_id: null, calendly_event_uri: null, team: "imob" })
+      canMutateAppointment(grantsFor("sdr"), "x", { broker_id: null, calendly_event_uri: null, team: "imob" })
     ).toBe(false)
   })
   it("perfil não privilegiado e não-dono NÃO pode no HOUSE (ex.: imob/consultoria)", () => {
-    expect(canMutateAppointment("imob", "x", internal)).toBe(false)
-    expect(canMutateAppointment("consultoria", "x", internal)).toBe(false)
+    expect(canMutateAppointment(grantsFor("imob"), "x", internal)).toBe(false)
+    expect(canMutateAppointment(grantsFor("consultoria"), "x", internal)).toBe(false)
   })
   it("Calendly (sem dono interno) é livre pra qualquer um", () => {
-    expect(canMutateAppointment("imob", "x", calendly)).toBe(true)
-    expect(canMutateAppointment("broker", "qualquer", calendly)).toBe(true)
+    expect(canMutateAppointment(grantsFor("imob"), "x", calendly)).toBe(true)
+    expect(canMutateAppointment(grantsFor("broker"), "qualquer", calendly)).toBe(true)
   })
 })
 
@@ -38,30 +47,30 @@ describe("canMutateAppointment por equipe (Story 81-3 — matriz do diretor)", (
 
   it("admin/supervisor mexem em TUDO (house e imob)", () => {
     for (const role of ["admin", "supervisor"]) {
-      expect(canMutateAppointment(role, "x", houseAppt)).toBe(true)
-      expect(canMutateAppointment(role, "x", imobAppt)).toBe(true)
+      expect(canMutateAppointment(grantsFor(role), "x", houseAppt)).toBe(true)
+      expect(canMutateAppointment(grantsFor(role), "x", imobAppt)).toBe(true)
     }
   })
   it("gerente-comercial mexe no HOUSE mas NÃO no IMOB (mudança vs 75-103)", () => {
-    expect(canMutateAppointment("gerente-comercial", "x", houseAppt)).toBe(true)
-    expect(canMutateAppointment("gerente-comercial", "x", imobAppt)).toBe(false)
+    expect(canMutateAppointment(grantsFor("gerente-comercial"), "x", houseAppt)).toBe(true)
+    expect(canMutateAppointment(grantsFor("gerente-comercial"), "x", imobAppt)).toBe(false)
   })
   it("perfil imob (Daiana) mexe no IMOB (mesmo sem ser dono) mas NÃO no HOUSE", () => {
-    expect(canMutateAppointment("imob", "daiana", imobAppt)).toBe(true)
-    expect(canMutateAppointment("imob", "daiana", houseAppt)).toBe(false)
+    expect(canMutateAppointment(grantsFor("imob"), "daiana", imobAppt)).toBe(true)
+    expect(canMutateAppointment(grantsFor("imob"), "daiana", houseAppt)).toBe(false)
   })
   it("dono house NÃO mexe se o compromisso for IMOB (mesmo sendo broker_id)", () => {
     const imobComBroker = { broker_id: "broker-1", calendly_event_uri: null, team: "imob" }
-    expect(canMutateAppointment("broker", "broker-1", imobComBroker)).toBe(false)
+    expect(canMutateAppointment(grantsFor("broker"), "broker-1", imobComBroker)).toBe(false)
   })
   it("corretor comum não mexe no IMOB", () => {
-    expect(canMutateAppointment("broker", "qualquer", imobAppt)).toBe(false)
+    expect(canMutateAppointment(grantsFor("broker"), "qualquer", imobAppt)).toBe(false)
   })
   it("team ausente/desconhecido = HOUSE (fallback consistente com 81-1/81-2)", () => {
     const semTeam = { broker_id: "broker-1", calendly_event_uri: null }
-    expect(canMutateAppointment("broker", "broker-1", semTeam)).toBe(true)
-    expect(canMutateAppointment("gerente-comercial", "x", { ...semTeam, team: undefined })).toBe(true)
-    expect(canMutateAppointment("imob", "x", { ...semTeam, team: null })).toBe(false)
+    expect(canMutateAppointment(grantsFor("broker"), "broker-1", semTeam)).toBe(true)
+    expect(canMutateAppointment(grantsFor("gerente-comercial"), "x", { ...semTeam, team: undefined })).toBe(true)
+    expect(canMutateAppointment(grantsFor("imob"), "x", { ...semTeam, team: null })).toBe(false)
   })
 })
 
