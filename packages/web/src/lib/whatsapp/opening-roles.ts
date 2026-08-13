@@ -1,6 +1,11 @@
 // Story 75-267 — fonte ÚNICA e client-safe dos roles que podem iniciar
 // atendimento (abrir conversa via template) em lead de qualquer corretor.
 //
+// 75-310 (Perfis de Acesso 2.0): o GATE REAL virou can("conversas.abrir_template")
+// no servidor (opening-context/start-whatsapp). Esta lista permanece SÓ como dica
+// de exibição em client components (drawer) — e está CONGELADA ao seed da
+// capability por teste (capabilities.test.ts); divergir quebra a suíte.
+//
 // Vivia em opening-context.ts, que é server-only (importa createAdminClient) e
 // por isso não podia entrar em client component (drawer/menu). O
 // opening-context.ts re-exporta daqui — importar a fonte, nunca reproduzir o

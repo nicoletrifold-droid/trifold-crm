@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import type { OpeningParamContext } from "./opening-templates"
 import { OPENING_PRIVILEGED_ROLES } from "./opening-roles"
+import { can } from "@web/lib/permissions"
 
 // Story 75-217 — contexto compartilhado entre o menu de templates de abertura
 // (GET opening-templates) e o envio (POST start-whatsapp): carrega o lead com
@@ -28,7 +29,8 @@ export async function loadOpeningContext(
   appUser: OpeningContextUser,
   supabase: SupabaseClient,
 ): Promise<OpeningContextResult> {
-  const isPrivileged = OPENING_PRIVILEGED_ROLES.includes(appUser.role)
+  // 75-310: privilegiado = capability conversas.abrir_template (matriz/exceções).
+  const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.abrir_template")
   const db = isPrivileged ? createAdminClient() : supabase
 
   const { data: lead } = await db

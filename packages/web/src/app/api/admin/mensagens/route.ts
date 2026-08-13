@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "gerente-relacionamento"]
 
 const PAGE_LIMIT_DEFAULT = 30
 const PAGE_LIMIT_MAX = 100
@@ -42,7 +41,10 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  // 75-310: listar conversas do Chat segue a capability chat.responder (GC entra
+  // no seed mas não tem o módulo chat — tela inalcançável; consultoria tem o
+  // módulo mas segue FORA do seed, como hoje).
+  if (await requireCapability(appUser, "chat.responder")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
@@ -19,7 +20,6 @@ import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as 
 // Story 75-155 — MESMA lista de roles do /broker (broker/leads/[id]/page.tsx:10).
 // `broker` é inócuo aqui (corretor não abre /dashboard/leads). Perfis fora da
 // lista (ex.: gerente-relacionamento, obras) ficam só-leitura.
-const CAN_SEND_ROLES = ["broker", "admin", "supervisor", "gerente-comercial", "sdr"]
 
 const TABS = [
   { key: "info", label: "Info" },
@@ -155,7 +155,9 @@ export default async function LeadDetailPage({
     (lead.metadata as { notify_broker_on_reply?: boolean } | null)
       ?.notify_broker_on_reply
   )
-  const canSendConversa = CAN_SEND_ROLES.includes(user.role)
+  // 75-310: composer segue a capability conversas.enviar (dono já é garantido
+  // pela própria tela/RLS; seed espelha a antiga CAN_SEND_ROLES).
+  const canSendConversa = await can(user.id, user.orgId, "conversas.enviar")
 
   // Fetch conversation state (collected_data)
   const { data: convState } = await supabase

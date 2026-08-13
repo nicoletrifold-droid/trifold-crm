@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 /**
@@ -9,6 +9,8 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * GET   ?obra_id=&cliente_id=  → { assigned_to, assigned_name, participants[] } (cria preguiçosamente)
  * PATCH { obra_id, cliente_id, assigned_to } → transfere/atribui
  */
+// 75-310: gate = capability chat.responder; a lista abaixo permanece SÓ para a
+// SELEÇÃO de participantes staff (.in("role", …)) — congelada ao seed por teste.
 const STAFF_ROLES = ["admin", "supervisor", "gerente-relacionamento", "gerente-comercial"]
 
 async function ensureConversa(
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  if (!STAFF_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "chat.responder")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -102,7 +104,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  if (!STAFF_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "chat.responder")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

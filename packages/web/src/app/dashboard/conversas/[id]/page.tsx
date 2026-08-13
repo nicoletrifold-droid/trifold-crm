@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -7,8 +8,6 @@ import { TransferConversa, type TargetUser } from "./_components/transfer-conver
 import { MessageMedia } from "@web/components/conversas/message-media"
 import { MessageText } from "@web/components/ui/message-text"
 
-const CAN_SEND_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"]
-const CAN_TRANSFER_ROLES = ["admin", "supervisor"]
 
 const roleConfig: Record<
   string,
@@ -104,7 +103,12 @@ export default async function ConversationDetailPage({
   // Story 75-84 — destinos de transferência (corretores + usuários com módulo chat).
   // Só busca para quem pode transferir (admin/supervisor).
   let transferTargets: TargetUser[] = []
-  if (lead?.id && CAN_TRANSFER_ROLES.includes(user.role)) {
+  // 75-310: capabilities server-resolved (GR ganha o composer só nominalmente —
+  // não tem o módulo conversas, a tela é inalcançável p/ ele; zero delta real).
+  const canEnviar = await can(user.id, user.orgId, "conversas.enviar_qualquer")
+  const canTransferir = await can(user.id, user.orgId, "conversas.transferir")
+
+  if (lead?.id && canTransferir) {
     const { data: chatRows } = await supabase
       .from("role_permissions")
       .select("roles!inner(name)")
@@ -216,11 +220,11 @@ export default async function ConversationDetailPage({
           <p className="text-sm text-gray-400 dark:text-stone-500">Nenhuma mensagem registrada.</p>
         )}
 
-        {lead?.id && CAN_SEND_ROLES.includes(user.role) && (
+        {lead?.id && canEnviar && (
           <BrokerMessageInput leadId={lead.id} />
         )}
 
-        {lead?.id && CAN_TRANSFER_ROLES.includes(user.role) && (
+        {lead?.id && canTransferir && (
           <TransferConversa leadId={lead.id} targets={transferTargets} />
         )}
       </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 /**
@@ -7,7 +7,6 @@ import { createAdminClient } from "@web/lib/supabase/admin"
  * POST   { obra_id, cliente_id, user_id } → adiciona participante
  * DELETE { obra_id, cliente_id, user_id } → remove participante
  */
-const STAFF_ROLES = ["admin", "supervisor", "gerente-relacionamento", "gerente-comercial"]
 
 async function resolveConversaId(
   admin: ReturnType<typeof createAdminClient>,
@@ -45,7 +44,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  if (!STAFF_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "chat.responder")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -84,7 +83,7 @@ export async function DELETE(req: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  if (!STAFF_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "chat.gerenciar_participantes")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

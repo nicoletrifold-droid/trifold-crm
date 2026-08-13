@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
@@ -36,13 +37,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const isPrivileged = [
-    "admin",
-    "supervisor",
-    "gerente-comercial",
-    "sdr",
-    "gerente-relacionamento",
-  ].includes(appUser.role)
+  const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
   const db = isPrivileged ? createAdminClient() : supabase
 
   const { data: lead } = await db
