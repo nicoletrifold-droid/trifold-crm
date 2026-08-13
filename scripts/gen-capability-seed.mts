@@ -2,7 +2,8 @@
 // REGISTRO ÚNICO em packages/web/src/lib/capabilities.ts. O SQL nunca é digitado à mão.
 //
 // Regenerar (da raiz do repo):
-//   node --experimental-transform-types scripts/gen-capability-seed.mts 2>/dev/null > supabase/migrations/225_capabilities_fundacao.sql
+//   node --experimental-transform-types scripts/gen-capability-seed.mts 2>/dev/null > supabase/migrations/NNN_<nome>.sql
+//   (saída é re-executável: ON CONFLICT DO NOTHING — capability nova = migration nova com a re-execução completa; ex.: 225 fundação, 226 tipologias)
 //
 // Saída determinística: sem timestamps, sem aleatoriedade — diff estável.
 
@@ -16,7 +17,7 @@ const lines: string[] = []
 lines.push(`-- 225: Perfis de Acesso 2.0 — F1 fundação (Story 75-300)
 --
 -- ⚠️ ARQUIVO GERADO — não editar à mão. Fonte única: packages/web/src/lib/capabilities.ts
---    Regenerar: node --experimental-transform-types scripts/gen-capability-seed.mts 2>/dev/null > supabase/migrations/225_capabilities_fundacao.sql
+--    Regenerar: node --experimental-transform-types scripts/gen-capability-seed.mts 2>/dev/null > supabase/migrations/NNN_<nome>.sql
 --
 -- 1) has_capability(text): espelho SQL do can()/canAccess dotted do app, evoluindo a
 --    has_module_access (mig 166) com a herança do módulo pai. NENHUMA policy passa a

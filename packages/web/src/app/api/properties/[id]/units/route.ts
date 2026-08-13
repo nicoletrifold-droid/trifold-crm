@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
-import { IMOVEIS_EDIT_ROLES } from "@web/lib/permissions-imoveis"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 export async function GET(
   req: NextRequest,
@@ -79,7 +78,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, [...IMOVEIS_EDIT_ROLES])
+  const forbidden = await requireCapability(appUser, "imoveis.editar")
   if (forbidden) return forbidden
 
   // Verify property belongs to user's org

@@ -144,12 +144,16 @@ export const CAPABILITIES = [
   { key: "portal.financeiro_ver", label: "Financeiro do cliente", description: "Boleto e extrato do cliente pelo dashboard.", seed: [A, S] },
 
   // ── Imóveis ──────────────────────────────────────────────────────────────
-  { key: "imoveis.criar", label: "Criar empreendimento", description: "Cadastrar novo empreendimento.", seed: [A, S] },
-  { key: "imoveis.editar", label: "Editar empreendimento", description: "Editar empreendimento, tipologias e unidades.", seed: [A, S, OBR, GR] },
-  { key: "imoveis.apagar", label: "Excluir empreendimento", description: "Excluir empreendimento ou tipologia.", seed: [A, S] },
-  { key: "imoveis.vender_unidade", label: "Registrar venda", description: "Registrar a venda de uma unidade.", seed: [A, S] },
-  { key: "imoveis.resetar_status_unidade", label: "Resetar status de unidade", description: "Transição livre de status fora da máquina de estados.", seed: [A] },
-  { key: "imoveis.ativar_nicole", label: "Ativar Nicole no empreendimento", description: "Ligar a IA no empreendimento (desligar é livre).", seed: [A, S] },
+  // enforced na 75-306 (F3-5): rotas + páginas de Imóveis decidem por can().
+  { key: "imoveis.criar", label: "Criar empreendimento", description: "Cadastrar novo empreendimento.", seed: [A, S], enforced: true },
+  { key: "imoveis.editar", label: "Editar empreendimento", description: "Editar empreendimento e unidades; criar tipologias.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "imoveis.apagar", label: "Excluir empreendimento", description: "Excluir empreendimento ou tipologia.", seed: [A, S], enforced: true },
+  { key: "imoveis.vender_unidade", label: "Registrar venda", description: "Registrar a venda de uma unidade.", seed: [A, S], enforced: true },
+  // 75-306: PATCH de tipologia é historicamente MAIS estrito que criar (A/S vs A/S/OBR/GR) —
+  // espelho estrito preserva a assimetria; alinhar é decisão de negócio futura. Seed na mig 226.
+  { key: "imoveis.tipologias_editar", label: "Editar tipologia existente", description: "Alterar uma tipologia já criada (criar tipologia segue em Editar empreendimento).", seed: [A, S], enforced: true },
+  { key: "imoveis.resetar_status_unidade", label: "Resetar status de unidade", description: "Resetar o status de uma unidade para disponível, fora da máquina de estados.", seed: [A], enforced: true },
+  { key: "imoveis.ativar_nicole", label: "Ativar Nicole no empreendimento", description: "Ligar a IA no empreendimento (desligar é livre).", seed: [A, S], enforced: true },
 
   // ── Pastas · IMOB · Marketing ────────────────────────────────────────────
   // enforced na 75-302 (F3-1): rotas/páginas de Pastas + imobiliariasGuard decidem por can().

@@ -186,6 +186,13 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "campanhas.meta_ver",
         "chamados.responder",
         "chamados.ver_todos",
+        "imoveis.criar",
+        "imoveis.editar",
+        "imoveis.apagar",
+        "imoveis.vender_unidade",
+        "imoveis.tipologias_editar",
+        "imoveis.resetar_status_unidade",
+        "imoveis.ativar_nicole",
         "marketing.gerenciar",
         "pastas.gerenciar",
       ].sort()
@@ -211,7 +218,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["analytics", "atividades", "campanhas", "chamados", "marketing", "pastas"])
+    expect(Object.keys(byGroup).sort()).toEqual(["analytics", "atividades", "campanhas", "chamados", "imoveis", "marketing", "pastas"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -316,5 +323,15 @@ describe("75-305 — Analytics & Atividades (espelho dos 3 seeds)", () => {
   })
   it("dashboard.ver_equipe segue NÃO-enforced (UX por role — bypass de admin tornaria admin elegível)", () => {
     expect(ENFORCED_CAPABILITIES.some((c) => c.key === "dashboard.ver_equipe")).toBe(false)
+  })
+})
+
+describe("75-306 — Imóveis (espelho dos 7 seeds)", () => {
+  it("editar = as ex-IMOVEIS_EDIT_ROLES; criar/apagar/vender/nicole/tipologias = A+S; resetar status = admin", () => {
+    expect([...CAPABILITY_SEED["imoveis.editar"]].sort()).toEqual(["admin", "gerente-relacionamento", "obras", "supervisor"])
+    for (const key of ["imoveis.criar", "imoveis.apagar", "imoveis.vender_unidade", "imoveis.ativar_nicole", "imoveis.tipologias_editar"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
+    }
+    expect([...CAPABILITY_SEED["imoveis.resetar_status_unidade"]]).toEqual(["admin"])
   })
 })

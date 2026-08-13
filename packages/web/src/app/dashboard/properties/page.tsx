@@ -16,8 +16,8 @@ export default async function PropertiesPage() {
     .order("created_at", { ascending: false })
 
   // Editar: admin/supervisor/obras. Criar: admin/supervisor (fonte única).
-  const canEdit = canEditImoveis(user.role)
-  const canCreate = canCreateImoveis(user.role)
+  const canEdit = await canEditImoveis(user.id, user.orgId)
+  const canCreate = await canCreateImoveis(user.id, user.orgId)
 
   return (
     <div className="space-y-6">

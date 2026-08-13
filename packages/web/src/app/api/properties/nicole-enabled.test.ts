@@ -27,11 +27,24 @@ let fake: FakeSupabase
 let papel = "admin"
 
 vi.mock("@web/lib/api-auth", async () => {
-  const real = await vi.importActual<typeof import("@web/lib/api-auth")>("@web/lib/api-auth")
+  // 75-306: o gate virou requireCapability (matriz). O espírito da decisão 2 do
+  // @po da 87-13 se mantém: a DECISÃO não é mockada como constante — ela vem do
+  // SEED do registro (a fonte da verdade do modelo novo), variando por `papel`.
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
   return {
-    // `requireRole` é o DE PRODUÇÃO — a decisão 2 do @po (o campo exige
-    // `IMOVEIS_CREATE_ROLES`) só é provada se o teste não mockar quem decide.
-    requireRole: real.requireRole,
+    requireCapability: async (
+      appUser: { role: string },
+      capability: keyof typeof CAPABILITY_SEED
+    ) => {
+      const allowed =
+        appUser.role === "admin" ||
+        (CAPABILITY_SEED[capability] as readonly string[]).includes(appUser.role)
+      return allowed
+        ? null
+        : new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 })
+    },
     requireAuth: async () => ({
       appUser: { org_id: ORG, role: papel, id: "u1" },
       supabase: fake,

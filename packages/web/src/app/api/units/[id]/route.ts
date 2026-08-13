@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
+import { can } from "@web/lib/permissions"
 import { buildUpdatePayload } from "@web/lib/api-utils"
-import { IMOVEIS_EDIT_ROLES } from "@web/lib/permissions-imoveis"
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   available: ["reserved", "sold"],
@@ -12,10 +12,11 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 function isValidTransition(
   from: string,
   to: string,
-  role: string
+  canResetStatus: boolean
 ): { valid: boolean; reason?: string } {
-  // Admin can reset any status to available
-  if (role === "admin" && to === "available") {
+  // 75-306: reset p/ available é a capability imoveis.resetar_status_unidade
+  // (antes: role === "admin" inline) — decisão vem pré-computada (função pura).
+  if (canResetStatus && to === "available") {
     return { valid: true }
   }
 
@@ -84,7 +85,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, [...IMOVEIS_EDIT_ROLES])
+  const forbidden = await requireCapability(appUser, "imoveis.editar")
   if (forbidden) return forbidden
 
   // Verify unit exists and belongs to user's org
@@ -114,7 +115,7 @@ export async function PATCH(
       const transition = isValidTransition(
         existing.status,
         body.status,
-        appUser.role
+        await can(appUser.id, appUser.org_id, "imoveis.resetar_status_unidade")
       )
       if (!transition.valid) {
         return NextResponse.json(

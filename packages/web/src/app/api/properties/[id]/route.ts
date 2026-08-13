@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { softDelete } from "@web/lib/api-utils"
-import { IMOVEIS_EDIT_ROLES, IMOVEIS_CREATE_ROLES } from "@web/lib/permissions-imoveis"
 import { avaliarMinimosNicole, carregarCadastroNicole } from "@web/lib/nicole-minimos"
 
 export async function GET(
@@ -42,7 +41,7 @@ export async function PATCH(
   // Editar empreendimento: admin/supervisor/obras/gerente-relacionamento (fonte
   // única). Story 87-13 — o comentário dizia "admin/supervisor/obras" e estava
   // errado desde a 72-1: `IMOVEIS_EDIT_ROLES` tem QUATRO papéis.
-  const forbidden = requireRole(appUser, [...IMOVEIS_EDIT_ROLES])
+  const forbidden = await requireCapability(appUser, "imoveis.editar")
   if (forbidden) return forbidden
 
   const body = await request.json()
@@ -123,7 +122,7 @@ export async function PATCH(
     if (muda) {
       // Papel: `IMOVEIS_CREATE_ROLES` (admin/supervisor) — a mesma constante que
       // já governa criar e excluir. Usa constante existente, não inventa papel.
-      const forbiddenNicole = requireRole(appUser, [...IMOVEIS_CREATE_ROLES])
+      const forbiddenNicole = await requireCapability(appUser, "imoveis.ativar_nicole")
       if (forbiddenNicole) return forbiddenNicole
 
       // DESLIGAR nunca é bloqueado, em qualquer estado de cadastro. É a válvula:
@@ -191,7 +190,7 @@ export async function DELETE(
   const { supabase, appUser } = auth
 
   // Excluir empreendimento: admin/supervisor (fonte única).
-  const forbidden = requireRole(appUser, [...IMOVEIS_CREATE_ROLES])
+  const forbidden = await requireCapability(appUser, "imoveis.apagar")
   if (forbidden) return forbidden
 
   const result = await softDelete(supabase, "properties", id, appUser.org_id)

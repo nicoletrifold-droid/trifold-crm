@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { autoVincularClienteObra } from "@web/lib/auto-vincular-cliente-obra"
 import { normalizePhoneBR } from "@trifold/shared"
 
@@ -13,7 +13,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "imoveis.vender_unidade")
   if (forbidden) return forbidden
 
   // Verify unit exists and belongs to user's org

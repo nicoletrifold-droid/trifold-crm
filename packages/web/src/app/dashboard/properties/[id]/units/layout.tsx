@@ -14,7 +14,7 @@ export default async function UnitsGuardLayout({
 }) {
   const { id } = await params
   const user = await getServerUser()
-  if (!canEditImoveis(user.role)) {
+  if (!(await canEditImoveis(user.id, user.orgId))) {
     redirect(`/dashboard/properties/${id}`)
   }
   return <>{children}</>

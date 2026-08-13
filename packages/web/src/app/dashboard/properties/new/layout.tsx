@@ -10,7 +10,7 @@ export default async function NewPropertyGuardLayout({
   children: React.ReactNode
 }) {
   const user = await getServerUser()
-  if (!canCreateImoveis(user.role)) {
+  if (!(await canCreateImoveis(user.id, user.orgId))) {
     redirect("/dashboard/properties")
   }
   return <>{children}</>
