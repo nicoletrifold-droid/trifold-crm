@@ -28,10 +28,37 @@ describe("podeVerMenuConfig", () => {
     expect(podeVerMenuConfig({ configuracoes: false, configuracoesx: true })).toBe(false)
   })
 
-  it("qualquer sub-módulo concedido serve — vale por construção p/ perfis futuros", () => {
-    for (const sub of ["configuracoes.corretores", "configuracoes.horario", "configuracoes.clientes"]) {
-      expect(podeVerMenuConfig({ configuracoes: false, [sub]: true })).toBe(true)
+  it("qualquer TELA registrada no SUBMODULE_MAP concedida serve", () => {
+    // Story 75-300: o contrato mudou de "qualquer prefixo configuracoes.*" para
+    // "tela registrada no SUBMODULE_MAP" — o teste antigo usava
+    // "configuracoes.corretores", chave que nunca existiu no mapa (a UI de
+    // exceções só grava chaves do mapa, então em prod não há linhas fora dele).
+    for (const sub of Object.keys(SUBMODULE_MAP["configuracoes"] ?? {})) {
+      expect(podeVerMenuConfig({ configuracoes: false, [sub]: true }), sub).toBe(true)
     }
+  })
+
+  // Story 75-300 (Perfis de Acesso 2.0) — o seed de capabilities grava AÇÕES como
+  // `configuracoes.atendente_padrao_ver`; elas NÃO podem abrir o menu Config
+  // (supervisor tem o módulo desligado e ganharia o menu no dia 1 — o gotcha da story).
+  it("🔴 O CASO DA 75-300 — capability de AÇÃO concedida NÃO abre o menu", () => {
+    expect(
+      podeVerMenuConfig({
+        configuracoes: false,
+        "configuracoes.atendente_padrao_ver": true,
+        "configuracoes.pipeline_followup": true,
+      })
+    ).toBe(false)
+  })
+
+  it("75-300 — tela E ação juntas: a tela continua mandando", () => {
+    expect(
+      podeVerMenuConfig({
+        configuracoes: false,
+        "configuracoes.pipeline": true,
+        "configuracoes.atendente_padrao_ver": true,
+      })
+    ).toBe(true)
   })
 })
 

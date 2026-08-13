@@ -1,0 +1,50 @@
+storyId: 75-300
+reviewedBy: Quinn (@qa, Test Architect)
+reviewDate: 2026-08-13
+branch: feat/75-300-capabilities-fundacao @ 8024bea4 (de main @ 231cd050)
+verdict: CONCERNS
+qualityScore: 94
+summary: >
+  Nada bloqueia. Fundação sem consumidor por decisão declarada (AC7a); gates verdes
+  conferidos (2319 testes, tsc 0, eslint = base de 24, build 0); amostragem de 5 seeds
+  contra o inventário: 5/5 corretos (leads.transferir, obras.mensagens_enviar,
+  conversas.ver_qualquer, bolsao.puxar_dashboard, roleta.atender_todo_empreendimento).
+  As 5 decisões autônomas do @dev estão justificadas e documentadas; as duas que
+  desviam de AC (campo group derivado; teste antigo re-escrito) preservam a semântica
+  e matam fonte de drift real.
+issues:
+  - severity: low
+    category: requirements
+    id: C-1
+    description: >
+      A cadeia inventário → taxonomia → registro tem 2 elos de transcrição humana e
+      101×10 células; a amostragem (5/5) reduz mas não zera o risco de um seed
+      transcrito errado. Um seed errado NÃO muda comportamento nesta story (nada
+      consome) — só apareceria em F3.
+    recommendation: >
+      Em cada story de F3, o primeiro passo do @dev é conferir o seed das capabilities
+      do módulo contra o gate hardcoded que está substituindo (diff role a role) ANTES
+      de trocar o call site. Tornar isso item fixo do template das stories F3.
+  - severity: low
+    category: requirements
+    id: C-2
+    description: >
+      Gates compostos por OR hoje (ex.: imobiliariasGuard = canAccess("imob") OR
+      isPastaManager) não são espelháveis numa capability única: o seed de
+      imob.imobiliarias_gerenciar cobre o ramo isPastaManager, mas quem passa hoje só
+      pelo módulo imob (ex.: consultoria, se tiver o módulo) não está no seed. Se F3
+      trocar o gate por can() sozinho, esses perfis perdem acesso.
+    recommendation: >
+      F3 desses gates deve compor "canAccess(módulo) OR can(capability)" ou ampliar o
+      seed antes da troca — decisão por gate, registrada na story correspondente.
+checks:
+  code_review: PASS — can() delega (zero 2ª verdade); podeVerMenuConfig com contrato novo correto; SQL com search_path fixado, STABLE, sem grant novo
+  unit_tests: PASS — 18 novos (invariantes + tabela-verdade) + 3 do menu Config, provados no verbose
+  acceptance_criteria: PASS — AC1-7 atendidas (AC1/AC3 com desvio documentado e semanticamente equivalente)
+  no_regressions: PASS — suíte 2319 passed | 6 expected fail; zero policy tocada; zero call site alterado além do podeVerMenuConfig (contrato preservado p/ dados reais)
+  performance: PASS — has_capability é 4 LEFT JOINs indexados (mesmo perfil da has_module_access em produção desde a 166)
+  security: PASS — SECURITY DEFINER com search_path fixado; anon → false por construção; sem PII; seed não CONCEDE nada novo (espelho conferido por amostragem)
+  documentation: PASS — limites (AC7 a-f) no código e na story; divergências app↔SQL documentadas nos dois lados
+notes: >
+  Validação em PROD (mig 225 via Management API + has_capability em transação
+  revertida) é passo de deploy com o Marcos — fora do gate, registrado em T6/AC7e.
