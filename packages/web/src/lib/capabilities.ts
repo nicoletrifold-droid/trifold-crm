@@ -140,14 +140,15 @@ export const CAPABILITIES = [
   { key: "obras.receber_email_aprovacao", label: "Receber e-mail de aprovação", description: "Elegível ao toggle pessoal de e-mails de aprovação pendente.", seed: [A, S], enforced: true },
 
   // ── Clientes (portal) — grupo virtual ────────────────────────────────────
-  { key: "clientes.gerenciar", label: "Gerenciar clientes", description: "Criar/editar cliente do portal, vincular obras, buscar.", seed: [A, S, OBR, GR] },
-  { key: "clientes.apagar", label: "Excluir cliente", description: "Excluir cliente do portal.", seed: [A, S, OBR, GR] },
-  { key: "clientes.resetar_senha", label: "Resetar senha", description: "Resetar a senha de acesso do cliente ao portal.", seed: [A, S, OBR, GR] },
-  { key: "clientes.sienge_vincular", label: "Vincular ao Sienge", description: "Vincular cliente ao cadastro do Sienge.", seed: [A, S] },
+  // enforced na 75-309 (F3-8): rotas de clientes + Portal Viewer decidem por can().
+  { key: "clientes.gerenciar", label: "Gerenciar clientes", description: "Criar/editar cliente do portal, vincular obras, buscar.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "clientes.apagar", label: "Excluir cliente", description: "Excluir cliente do portal.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "clientes.resetar_senha", label: "Resetar senha", description: "Resetar a senha de acesso do cliente ao portal.", seed: [A, S, OBR, GR], enforced: true },
+  { key: "clientes.sienge_vincular", label: "Vincular ao Sienge", description: "Vincular cliente ao cadastro do Sienge.", seed: [A, S], enforced: true },
 
   // ── Portal do Cliente (visão interna) — grupo virtual ────────────────────
-  { key: "portal.ver_como_cliente", label: "Ver como cliente", description: "Abrir o Portal Viewer de qualquer cliente.", seed: [A, S] },
-  { key: "portal.financeiro_ver", label: "Financeiro do cliente", description: "Boleto e extrato do cliente pelo dashboard.", seed: [A, S] },
+  { key: "portal.ver_como_cliente", label: "Ver como cliente", description: "Abrir o Portal Viewer de qualquer cliente.", seed: [A, S], enforced: true },
+  { key: "portal.financeiro_ver", label: "Financeiro do cliente", description: "Boleto e extrato do cliente pelo dashboard.", seed: [A, S], enforced: true },
 
   // ── Imóveis ──────────────────────────────────────────────────────────────
   // enforced na 75-306 (F3-5): rotas + páginas de Imóveis decidem por can().

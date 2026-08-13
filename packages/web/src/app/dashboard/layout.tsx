@@ -267,7 +267,9 @@ export default async function DashboardLayout({
 
   // Story 78-1 — Portal Cliente (Visão Mestre): "ver como cliente", somente leitura.
   // Gate hardcoded por role (admin/supervisor); migrar p/ matriz de Perfil de Acesso depois.
-  const showPortalViewer = user.role === "admin" || user.role === "supervisor"
+  // 75-309: menu "Portal Cliente" segue a capability do viewer (o gate hardcoded
+  // que o comentário antigo pedia p/ migrar — migrado).
+  const showPortalViewer = await can(user.id, user.orgId, "portal.ver_como_cliente")
   const portalViewerItem = {
     href: "/dashboard/portal-cliente",
     label: "Portal Cliente",

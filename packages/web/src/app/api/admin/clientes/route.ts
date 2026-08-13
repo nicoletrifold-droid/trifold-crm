@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { normalizePhoneBR } from "@trifold/shared"
 import { cpfLookupValues, normalizeCpfCnpj } from "@web/lib/validation/contato"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { searchParams } = new URL(request.url)
@@ -135,7 +134,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   let body: Record<string, unknown>

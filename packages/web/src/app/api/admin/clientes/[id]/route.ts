@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { normalizePhoneBR } from "@trifold/shared"
 import { cpfLookupValues, normalizeCpfCnpj } from "@web/lib/validation/contato"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 const UPDATABLE_FIELDS = [
   "nome",
@@ -38,7 +37,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { id } = await params
@@ -74,7 +73,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { id } = await params
@@ -196,7 +195,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.apagar")
   if (roleError) return roleError
 
   const { id } = await params

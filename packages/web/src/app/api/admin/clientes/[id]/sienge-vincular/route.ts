@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import {
   searchCustomerByCpf,
@@ -7,7 +7,6 @@ import {
   getAllSalesContracts,
 } from "@web/lib/integrations/sienge/client"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
 
 export async function POST(
   request: NextRequest,
@@ -17,7 +16,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.sienge_vincular")
   if (roleError) return roleError
 
   const { id } = await params
@@ -198,7 +197,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.sienge_vincular")
   if (roleError) return roleError
 
   const { id } = await params

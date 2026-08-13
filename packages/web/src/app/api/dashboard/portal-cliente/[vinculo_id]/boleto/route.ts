@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getViewerVinculo } from "@web/lib/portal/viewer"
 import { getFinancialStatement, getPaymentSlip } from "@web/lib/integrations/sienge/client"
@@ -15,7 +15,7 @@ export async function GET(
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "portal.financeiro_ver")
   if (forbidden) return forbidden
 
   const { vinculo_id } = await params

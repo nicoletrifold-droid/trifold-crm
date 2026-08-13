@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { cpfLookupValues } from "@web/lib/validation/contato"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 type ObraRef = { id: string; name: string } | { id: string; name: string }[] | null
 
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { searchParams } = new URL(request.url)

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 async function assertClienteOwnership(
   supabase: SupabaseClient,
@@ -35,7 +34,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { id, vinculo_id } = await params
@@ -95,7 +94,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { id, vinculo_id } = await params

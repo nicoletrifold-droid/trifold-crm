@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 export async function GET(
   _request: NextRequest,
@@ -11,7 +10,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { id } = await params
@@ -74,7 +73,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "clientes.gerenciar")
   if (roleError) return roleError
 
   const { id } = await params
