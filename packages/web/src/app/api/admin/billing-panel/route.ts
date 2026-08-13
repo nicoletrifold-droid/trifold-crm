@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { isPlatformAdmin } from "@web/lib/platform"
+import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 // Story 78-9 — API consolidada do Painel de Saúde & Billing (admin-only).
@@ -98,7 +99,9 @@ export async function GET() {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = (await isPlatformAdmin(appUser.id))
+    ? null
+    : NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (roleError) return roleError
 
   // Tabelas de plataforma (sem org_id) — leitura só por service-role (migration 209).

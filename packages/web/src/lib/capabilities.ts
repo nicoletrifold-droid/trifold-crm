@@ -74,7 +74,7 @@ export const CAPABILITIES = [
   // ── Leads ────────────────────────────────────────────────────────────────
   // enforced na 75-311 (F3-10): rotas + telas de leads decidem por can().
   { key: "leads.ver_equipe", label: "Ver leads da equipe", description: "Listas completas, filtro por corretor e funil da equipe (não só os próprios leads). ⚠ o dado em si é RLS — F4.", seed: [A, S, GC, SDR], enforced: true },
-  { key: "leads.criar", label: "Criar lead", description: "Cadastrar lead manualmente (para si). ⚠ espelho da API — a tela hoje permite GC/SDR que a API nega (furo nº 5 do inventário, F4).", seed: [COR, A, S], enforced: true },
+  { key: "leads.criar", label: "Criar lead", description: "Cadastrar lead manualmente (para si ou escolhendo o corretor).", seed: [COR, A, S, GC, SDR], enforced: true }, // furo nº5 FECHADO na F4-1 (decisão Marcos 13/08): GC/SDR liberados — a tela sempre aparentou permitir
   { key: "leads.criar_para_outro", label: "Criar lead para outro corretor", description: "Escolher o corretor dono no cadastro manual.", seed: [A, S, GC, SDR], enforced: true },
   { key: "leads.editar_qualquer", label: "Editar lead de terceiros", description: "Editar dados de lead que não é seu (o dono sempre edita o próprio).", seed: [A, S, GC, SDR], enforced: true },
   { key: "leads.apagar", label: "Excluir lead", description: "Exclusão (soft delete) de lead.", seed: [A], enforced: true },

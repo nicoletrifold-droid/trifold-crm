@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { isPlatformAdmin } from "@web/lib/platform"
+import { requireAuth } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { validateCreate } from "@web/lib/billing/reminder-validation"
 
 // Story 78-8 — CRUD admin-only de service_billing_reminders (vencimentos/lembretes de
 // fatura da plataforma). Schema fixado em 78-1 (migration 164) — sem migration nova.
-// Admin-only via requireAuth() + requireRole(["admin"]) (padrão de admin/agent-prompts).
+// Plataforma-only via requireAuth() + is_platform_admin (75-314): billing é da Trifold, não do tenant.
 // Estas tabelas NÃO têm org_id (custo da própria plataforma, não de tenant — ver 78-1).
 //
 // Hotfix de segurança (migration 209 / auditoria P4): a 209 revoga `authenticated` das 5
@@ -24,7 +25,9 @@ export async function GET() {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = (await isPlatformAdmin(appUser.id))
+    ? null
+    : NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (roleError) return roleError
 
   const supabase = createAdminClient()
@@ -56,7 +59,9 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = (await isPlatformAdmin(appUser.id))
+    ? null
+    : NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (roleError) return roleError
 
   const supabase = createAdminClient()

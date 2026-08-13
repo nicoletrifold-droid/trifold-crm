@@ -487,7 +487,7 @@ describe("75-311 — Leads (espelho dos 15 seeds)", () => {
       expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
     }
     expect([...CAPABILITY_SEED["leads.apagar"]]).toEqual(["admin"])
-    expect([...CAPABILITY_SEED["leads.criar"]].sort()).toEqual(["admin", "broker", "supervisor"])
+    expect([...CAPABILITY_SEED["leads.criar"]].sort()).toEqual(["admin", "broker", "gerente-comercial", "sdr", "supervisor"]) // F4-1: GC/SDR liberados (decisão Marcos)
     expect([...CAPABILITY_SEED["leads.ia_analisar"]].sort()).toEqual(["admin", "broker", "gerente-comercial", "sdr", "supervisor"])
   })
 })
