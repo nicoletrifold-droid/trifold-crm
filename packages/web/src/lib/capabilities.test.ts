@@ -190,6 +190,24 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "agenda.feedback_visita",
         "chamados.responder",
         "chamados.ver_todos",
+        "obras.ver",
+        "obras.criar",
+        "obras.editar",
+        "obras.apagar",
+        "obras.reativar",
+        "obras.fases_gerenciar",
+        "obras.fotos_enviar",
+        "obras.fotos_apagar",
+        "obras.documentos_gerenciar",
+        "obras.documentos_assinar",
+        "obras.aprovar_uploads",
+        "obras.mensagens_enviar",
+        "obras.clientes_vincular",
+        "obras.distrato",
+        "obras.sienge_gerenciar",
+        "obras.vincular_imovel",
+        "obras.receber_email_aprovacao",
+        "sistema.manutencao",
         "imoveis.criar",
         "imoveis.editar",
         "imoveis.apagar",
@@ -222,7 +240,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "imoveis", "marketing", "pastas"])
+    expect(Object.keys(byGroup).sort()).toEqual(["agenda", "analytics", "atividades", "campanhas", "chamados", "imoveis", "marketing", "obras", "pastas", "sistema"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
     expect(byGroup["campanhas"]?.length).toBe(5)
@@ -346,5 +364,25 @@ describe("75-307 — Agenda (espelho dos 4 seeds)", () => {
     expect([...CAPABILITY_SEED["agenda.gerenciar_imob"]].sort()).toEqual(["admin", "imob", "supervisor"])
     expect([...CAPABILITY_SEED["agenda.escolher_equipe"]].sort()).toEqual(["admin", "supervisor"])
     expect([...CAPABILITY_SEED["agenda.feedback_visita"]].sort()).toEqual(["admin", "gerente-comercial", "sdr", "supervisor"])
+  })
+})
+
+describe("75-308 — Obras (espelho dos seeds-chave)", () => {
+  it("ver/criar/editar/fases/fotos_enviar/docs/mensagens+broker/clientes = as ex-ALLOWED_ROLES", () => {
+    for (const key of ["obras.ver", "obras.criar", "obras.editar", "obras.fases_gerenciar", "obras.fotos_enviar", "obras.documentos_gerenciar", "obras.documentos_assinar", "obras.clientes_vincular"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "gerente-relacionamento", "obras", "supervisor"])
+    }
+    expect([...CAPABILITY_SEED["obras.mensagens_enviar"]].sort()).toEqual(["admin", "broker", "gerente-relacionamento", "obras", "supervisor"])
+  })
+  it("aprovar/fotos_apagar/sienge/vincular_imovel/email = A+S; apagar/reativar/distrato/manutencao = admin", () => {
+    for (const key of ["obras.aprovar_uploads", "obras.fotos_apagar", "obras.sienge_gerenciar", "obras.vincular_imovel", "obras.receber_email_aprovacao"] as const) {
+      expect([...CAPABILITY_SEED[key]].sort(), key).toEqual(["admin", "supervisor"])
+    }
+    for (const key of ["obras.apagar", "obras.reativar", "obras.distrato", "sistema.manutencao"] as const) {
+      expect([...CAPABILITY_SEED[key]], key).toEqual(["admin"])
+    }
+  })
+  it("solicitar_exclusao segue NÃO-enforced (FLUXO de quem envia — seed sem admin, regra da 75-305)", () => {
+    expect(ENFORCED_CAPABILITIES.some((c) => c.key === "obras.solicitar_exclusao")).toBe(false)
   })
 })

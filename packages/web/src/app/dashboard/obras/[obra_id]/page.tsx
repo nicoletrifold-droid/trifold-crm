@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -60,7 +60,11 @@ export default async function ObraDetailPage({
 
   const property = propertyRes?.data ?? null
 
-  const isAdminOrSupervisor = user.role === "admin" || user.role === "supervisor"
+  // 75-308: capabilities distintas p/ cada superfície (todas [A,S] no seed = hoje).
+  const canAprovarUploads = await can(user.id, user.orgId, "obras.aprovar_uploads")
+  const canApagarDireto = await can(user.id, user.orgId, "obras.fotos_apagar")
+  const canSienge = await can(user.id, user.orgId, "obras.sienge_gerenciar")
+  const canApagarObra = await can(user.id, user.orgId, "obras.apagar")
 
   const [
     fasesRes,
@@ -91,8 +95,8 @@ export default async function ObraDetailPage({
         .from("clientes_obras_vinculos")
         .select("id, numero_unidade, created_at, clientes(id, nome, cpf, email, sienge_customer_id)")
         .eq("obra_id", obra_id),
-      // Busca aprovações: admin/supervisor vê todos os pendentes; obras vê os próprios
-      isAdminOrSupervisor
+      // Busca aprovações: quem aprova vê todos os pendentes; obras vê os próprios
+      canAprovarUploads
         ? supabase
             .from("obra_upload_aprovacoes")
             .select(
@@ -196,7 +200,7 @@ export default async function ObraDetailPage({
         .createSignedUrl(item.storage_path, 3600)
 
       const userRecord = (item as { users?: unknown }).users
-      const enviado_por_nome = isAdminOrSupervisor
+      const enviado_por_nome = canAprovarUploads
         ? (() => {
             if (Array.isArray(userRecord)) return (userRecord[0] as { name?: string })?.name ?? "—"
             return (userRecord as { name?: string } | null)?.name ?? "—"
@@ -249,7 +253,7 @@ export default async function ObraDetailPage({
               {statusLabel}
             </span>
             <ObraEditButton obra={obra} />
-            {user.role === "admin" && (
+            {canApagarObra && (
               <ObraDeleteButton obraId={obra.id} obraName={obra.name} />
             )}
           </div>
@@ -293,10 +297,11 @@ export default async function ObraDetailPage({
         </section>
       )}
 
-      {/* Sienge integration (apenas admin/supervisor) */}
-      {isAdminOrSupervisor && (
+      {/* Sienge integration — capability obras.sienge_gerenciar (75-308) */}
+      {canSienge && (
         <ObraSiengeSection
           obraId={obra.id}
+          canManage={canSienge}
           sienge_enterprise_id={
             (obra as { sienge_enterprise_id?: number | null })
               .sienge_enterprise_id ?? null
@@ -313,12 +318,13 @@ export default async function ObraDetailPage({
             (obra as { sienge_last_synced_at?: string | null })
               .sienge_last_synced_at ?? null
           }
-          userRole={user.role}
         />
       )}
 
       {/* Tabs */}
       <ObraDetailTabs
+        canAprovarUploads={canAprovarUploads}
+        canApagarDireto={canApagarDireto}
         obraId={obra.id}
         adminName={user.name ?? "Admin"}
         fases={fases}

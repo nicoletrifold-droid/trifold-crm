@@ -54,12 +54,33 @@ function makeAdminClient() {
   }
 }
 
-vi.mock("@web/lib/api-auth", () => ({
-  requireAuth: async () => ({
-    supabase: makeUserClient(),
-    appUser: { id: userId, name: "Samara", role, org_id: "org-1" },
-  }),
-}))
+vi.mock("@web/lib/api-auth", async () => {
+  // 75-308: gate = requireCapability; decisão vem do SEED do registro (varia por `role`).
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  const allowed = (r: string, capability: keyof typeof CAPABILITY_SEED) =>
+    r === "admin" || (CAPABILITY_SEED[capability] as readonly string[]).includes(r)
+  return {
+    requireAuth: async () => ({
+      supabase: makeUserClient(),
+      appUser: { id: userId, name: "Samara", role, org_id: "org-1" },
+    }),
+    requireCapability: async (u: { role: string }, capability: keyof typeof CAPABILITY_SEED) =>
+      allowed(u.role, capability)
+        ? null
+        : new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 }),
+  }
+})
+vi.mock("@web/lib/permissions", async () => {
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    can: async (_u: string, _o: string, capability: keyof typeof CAPABILITY_SEED) =>
+      role === "admin" || (CAPABILITY_SEED[capability] as readonly string[]).includes(role),
+  }
+})
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => makeAdminClient(),
 }))

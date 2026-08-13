@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 export async function DELETE(
   req: NextRequest,
@@ -12,7 +11,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.documentos_gerenciar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

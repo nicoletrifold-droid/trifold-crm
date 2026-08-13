@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
 
 export async function GET() {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.ver")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

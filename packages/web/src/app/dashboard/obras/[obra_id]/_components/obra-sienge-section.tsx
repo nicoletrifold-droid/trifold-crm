@@ -16,7 +16,8 @@ interface ObraSiengeSectionProps {
   sienge_enterprise_name: string | null
   sienge_sync_status: string | null
   sienge_last_synced_at: string | null
-  userRole: string
+  /** 75-308: can("obras.sienge_gerenciar") resolvida no server (substituiu userRole) */
+  canManage: boolean
 }
 
 type SyncStatus = "never" | "syncing" | "done" | "error"
@@ -60,7 +61,7 @@ export function ObraSiengeSection({
   sienge_enterprise_name,
   sienge_sync_status,
   sienge_last_synced_at,
-  userRole,
+  canManage,
 }: ObraSiengeSectionProps) {
   const [enterpriseId, setEnterpriseId] = useState<number | null>(
     sienge_enterprise_id
@@ -96,7 +97,9 @@ export function ObraSiengeSection({
   }, [syncMessage, syncError])
 
   // Permissão: só admin/supervisor
-  if (userRole !== "admin" && userRole !== "supervisor") {
+  // 75-308: o pai só renderiza com can("obras.sienge_gerenciar"); este guard
+  // interno fica como cinto-e-suspensório baseado na MESMA prop (server-resolved).
+  if (!canManage) {
     return null
   }
 

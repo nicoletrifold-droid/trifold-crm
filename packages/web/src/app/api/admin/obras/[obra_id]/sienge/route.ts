@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
 
 export async function GET(
   _req: NextRequest,
@@ -11,7 +10,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "obras.sienge_gerenciar")
   if (roleError) return roleError
 
   const { obra_id } = await params
@@ -53,7 +52,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ALLOWED_ROLES)
+  const roleError = await requireCapability(appUser, "obras.sienge_gerenciar")
   if (roleError) return roleError
 
   const { obra_id } = await params

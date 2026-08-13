@@ -88,6 +88,10 @@ interface ObraDetailTabsProps {
   docDestinatarios?: DocDestinatario[]
   supabaseUrl: string
   userRole: string
+  /** can("obras.aprovar_uploads") */
+  canAprovarUploads: boolean
+  /** can("obras.fotos_apagar") — botões de exclusão direta */
+  canApagarDireto: boolean
   initialAprovacoes: AprovacaoItem[]
   initialTab?: string
 }
@@ -418,10 +422,14 @@ export function ObraDetailTabs({
   docDestinatarios = [],
   supabaseUrl,
   userRole,
+  canAprovarUploads,
+  canApagarDireto,
   initialAprovacoes,
   initialTab,
 }: ObraDetailTabsProps) {
-  const isAdminOrSupervisor = userRole === "admin" || userRole === "supervisor"
+  // 75-308: decisões server-resolved via props (aba/fila = aprovar_uploads;
+  // exclusão direta = fotos_apagar). mostraPendentes segue por role: é FLUXO
+  // (quem envia vê os próprios pendentes), não autorização.
   // Story 75-176 — quem sobe via FILA DE APROVAÇÃO (não publica direto) vê os
   // próprios uploads pendentes/rejeitados inline nas abas Fotos/Documentos, com
   // selo "Aguardando aprovação". São os mesmos roles que caem na fila no upload:
@@ -580,7 +588,7 @@ export function ObraDetailTabs({
     { key: "documentos", label: `Documentos (${documentos.length})` },
     { key: "mensagens", label: "Mensagens" },
     { key: "clientes", label: `Clientes (${clientes.length})` },
-    ...(isAdminOrSupervisor
+    ...(canAprovarUploads
       ? [
           {
             key: "aprovacoes" as Tab,
@@ -827,7 +835,7 @@ export function ObraDetailTabs({
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         {/* Botão de exclusão apenas para admin/supervisor (direto) */}
-                        {isAdminOrSupervisor && (
+                        {canApagarDireto && (
                           <FotoDeleteButton obraId={obraId} fotoId={foto.id} />
                         )}
                         {/* Story 75-14 — obras solicita exclusão (com motivo → aprovação) */}
@@ -978,7 +986,7 @@ export function ObraDetailTabs({
                           )}
                         </button>
                         {/* Botão de exclusão apenas para admin/supervisor */}
-                        {isAdminOrSupervisor && (
+                        {canApagarDireto && (
                           <DocDeleteButton obraId={obraId} docId={doc.id} />
                         )}
                       </div>
@@ -1088,7 +1096,7 @@ export function ObraDetailTabs({
       )}
 
       {/* Aprovações tab — apenas admin/supervisor */}
-      {tab === "aprovacoes" && isAdminOrSupervisor && (
+      {tab === "aprovacoes" && canAprovarUploads && (
         <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-stone-400">
             Uploads aguardando aprovação

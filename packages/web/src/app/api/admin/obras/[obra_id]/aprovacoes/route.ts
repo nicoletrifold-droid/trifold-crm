@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin", "supervisor"]
 
 export async function GET(
   _req: NextRequest,
@@ -11,7 +10,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.aprovar_uploads")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

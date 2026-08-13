@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
+import { can } from "@web/lib/permissions"
 import { getRequestIp, logAudit } from "@web/lib/audit"
 import { notifyClientes } from "@web/lib/notificacoes"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "obras", "gerente-relacionamento"]
-const ADMIN_ONLY = ["admin"]
 
 export async function GET(
   _req: Request,
@@ -14,7 +13,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.ver")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -62,7 +61,7 @@ export async function PATCH(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.editar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -97,7 +96,7 @@ export async function PATCH(
   if (typeof body.progress_pct === "number") {
     updates.progress_pct = Math.max(0, Math.min(100, Math.round(body.progress_pct)))
   }
-  if ("deleted_at" in body && body.deleted_at === null && ADMIN_ONLY.includes(appUser.role)) {
+  if ("deleted_at" in body && body.deleted_at === null && (await can(appUser.id, appUser.org_id, "obras.reativar"))) {
     updates.deleted_at = null
   }
 
@@ -124,7 +123,7 @@ export async function PATCH(
   const isReativar =
     "deleted_at" in body &&
     body.deleted_at === null &&
-    ADMIN_ONLY.includes(appUser.role)
+    (await can(appUser.id, appUser.org_id, "obras.reativar"))
 
   const action = isReativar ? "obra.reativar" : "obra.update"
 
@@ -163,7 +162,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ADMIN_ONLY.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.apagar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

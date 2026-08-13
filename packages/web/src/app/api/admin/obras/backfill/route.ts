@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
-const ALLOWED_ROLES = ["admin"]
 
 interface BackfillLink {
   obra_id: string
@@ -13,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "sistema.manutencao")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

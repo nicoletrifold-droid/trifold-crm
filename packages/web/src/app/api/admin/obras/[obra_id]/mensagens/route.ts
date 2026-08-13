@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { notifyClientes } from "@web/lib/notificacoes"
 
-const ALLOWED_ROLES = ["admin", "supervisor", "broker", "obras", "gerente-relacionamento"]
 
 export async function GET(
   req: NextRequest,
@@ -12,7 +11,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.mensagens_enviar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -67,7 +66,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (!ALLOWED_ROLES.includes(appUser.role)) {
+  if (await requireCapability(appUser, "obras.mensagens_enviar")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
