@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 import { generateEmbeddingStrict } from "@trifold/ai"
 
@@ -14,7 +14,7 @@ export async function PATCH(
   const { supabase, appUser } = auth
 
   // admin/supervisor/gerente-comercial podem editar — mas website só admin
-  const roleError = requireRole(appUser, ["admin", "supervisor", "gerente-comercial"])
+  const roleError = await requireCapability(appUser, "nicole.treinamento_gerenciar")
   if (roleError) return roleError
 
   // Fetch current entry to check source (title/content p/ re-embedar em edição parcial)
@@ -92,7 +92,7 @@ export async function DELETE(
   const { appUser, supabase } = auth
 
   // Exclusão: somente admin
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = await requireCapability(appUser, "nicole.treinamento_apagar")
   if (roleError) return roleError
 
   const result = await softDelete(supabase, "knowledge_base", id, appUser.org_id)

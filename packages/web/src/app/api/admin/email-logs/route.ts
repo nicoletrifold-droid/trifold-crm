@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
@@ -12,7 +13,7 @@ function getStartOfDayBRT(): Date {
 
 export async function GET(request: NextRequest) {
   const user = await getServerUser()
-  if (user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await can(user.id, user.orgId, "sistema.emails_gerenciar"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { searchParams } = request.nextUrl
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 100)

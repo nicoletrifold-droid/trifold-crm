@@ -195,9 +195,9 @@ export async function POST(request: NextRequest) {
 
   // ── Gate de CRM (Story 52-2) — decisão de produto: SOMENTE admin ─────────────
   // Único ponto de decisão para acesso a dados de pipeline/CRM. Verificação
-  // estrita via isAdmin (appUser.role === 'admin'); NUNCA canAccess() nem
+  // via capability agente.contexto_crm (isAdmin async — 75-313); nem módulo nem
   // is_admin_or_supervisor(). A RLS das views/RPC (Story 52-1) é a 2ª camada.
-  const admin = isAdmin(appUser)
+  const admin = await isAdmin(appUser)
   let pipelineContext = ""
 
   if (admin) {
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
   // Dados agregados anônimos (sem PII) — sem log_pii_access, sem fail-closed.
   // O bloco if(admin) de pipeline CRM (52-2) NÃO é tocado por esta lógica.
   let creativeContext = ""
-  const adminOrSupervisor = isAdminOrSupervisor(appUser)
+  const adminOrSupervisor = await isAdminOrSupervisor(appUser)
   if (adminOrSupervisor && requiresCreative(message)) {
     const creative = await fetchCreativePerformance(supabase, appUser.org_id, dateWindow)
     if (creative) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 // GET /api/agent/chat/sessions/log — audit log of all agent sessions in the org (admin/supervisor only)
 export async function GET(request: NextRequest) {
@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = await requireCapability(appUser, "agente.ver_log")
   if (roleError) return roleError
 
   const { searchParams } = request.nextUrl

@@ -1,4 +1,5 @@
 import { getServerUser } from "@web/lib/auth"
+import { can } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
 
 /**
@@ -11,7 +12,7 @@ import { redirect } from "next/navigation"
 export default async function LogsLayout({ children }: { children: React.ReactNode }) {
   const user = await getServerUser()
 
-  if (user.role !== "admin") {
+  if (!(await can(user.id, user.orgId, "sistema.auditoria_ver"))) {
     redirect("/dashboard")
   }
 

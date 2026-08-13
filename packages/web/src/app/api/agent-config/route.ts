@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { buildUpdatePayload } from "@web/lib/api-utils"
 
 export async function GET() {
@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin"])
+  const roleError = await requireCapability(appUser, "nicole.personalidade_editar")
   if (roleError) return roleError
 
   const body = await request.json()

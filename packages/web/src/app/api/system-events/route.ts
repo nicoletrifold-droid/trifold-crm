@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
 
@@ -50,7 +51,7 @@ const emptySummary: SystemEventsSummary = {
 export async function GET(request: NextRequest) {
   const user = await getServerUser()
 
-  if (user.role !== "admin") {
+  if (!(await can(user.id, user.orgId, "sistema.auditoria_ver"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 // POST /api/agent/action/cancel
 export async function POST(request: NextRequest) {
@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   const { supabase, appUser } = auth
 
   // Only admins can resolve actions (symmetry with confirm/route.ts)
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "agente.confirmar_acoes")
   if (forbidden) return forbidden
 
   let body: { message_id: string }

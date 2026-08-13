@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -14,11 +15,11 @@ export default async function TreinamentoPage({
   const user = await getServerUser()
 
   // Permite admin, supervisor e gerente-comercial
-  const canAccess = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
+  const canAccess = await can(user.id, user.orgId, "nicole.treinamento_gerenciar")
   if (!canAccess) redirect("/dashboard")
 
-  const isAdmin = user.role === "admin"
-  const canEditNonWebsite = ["admin", "supervisor", "gerente-comercial"].includes(user.role)
+  const isAdmin = await can(user.id, user.orgId, "nicole.treinamento_apagar")
+  const canEditNonWebsite = await can(user.id, user.orgId, "nicole.treinamento_gerenciar")
 
   const supabase = await createClient()
 

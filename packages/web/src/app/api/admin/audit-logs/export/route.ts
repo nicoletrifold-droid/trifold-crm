@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 
 // Hard cap para exportação — proteção contra cargas enormes.
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (appUser.role !== "admin") {
+  if (!(await can(appUser.id, appUser.org_id, "sistema.auditoria_ver"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 export async function GET() {
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const roleError = requireRole(appUser, ["admin", "supervisor"])
+  const roleError = await requireCapability(appUser, "alertas.followup_ver")
   if (roleError) return roleError
 
   const { data: logs, error } = await supabase

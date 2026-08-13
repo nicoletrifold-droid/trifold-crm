@@ -9,10 +9,20 @@ vi.mock("server-only", () => ({}))
 
 // requireAuth mockável por teste.
 let authUser: { org_id: string; role: string } | null = { org_id: "org-1", role: "admin" }
-vi.mock("@web/lib/api-auth", () => ({
-  requireAuth: async () =>
-    authUser ? { appUser: authUser } : { error: new Response("unauth", { status: 401 }) },
-}))
+vi.mock("@web/lib/api-auth", async () => {
+  // 75-313: gate = requireCapability(roleta.configurar) — decide pelo seed.
+  const { CAPABILITY_SEED } = await vi.importActual<
+    typeof import("@web/lib/capabilities")
+  >("@web/lib/capabilities")
+  return {
+    requireAuth: async () =>
+      authUser ? { appUser: authUser } : { error: new Response("unauth", { status: 401 }) },
+    requireCapability: async (u: { role: string }, capability: keyof typeof CAPABILITY_SEED) =>
+      u.role === "admin" || (CAPABILITY_SEED[capability] as readonly string[]).includes(u.role)
+        ? null
+        : new Response("forbidden", { status: 403 }),
+  }
+})
 
 // Config atual no banco (para o cross-check quando só um campo é enviado).
 let currentConfig: { sla_alerta_corretor_min: number; sla_alerta_gestor_min: number } = {
