@@ -138,9 +138,13 @@ export const SUBMODULE_MAP: Record<string, Record<string, string>> = {
  */
 export function podeVerMenuConfig(permissions: Record<string, boolean>): boolean {
   if (permissions["configuracoes"]) return true
-  for (const [modulo, concedido] of Object.entries(permissions)) {
-    // sub-módulo CONCEDIDO (AC4: linha explícita `false` não vale)
-    if (concedido && modulo.startsWith("configuracoes.")) return true
+  // Story 75-300: contar só TELAS (sub-módulos do SUBMODULE_MAP), nunca AÇÕES
+  // (capabilities tipo `configuracoes.atendente_padrao_ver` — Perfis de Acesso 2.0).
+  // Antes o teste era `startsWith("configuracoes.")`, que abriria o menu Config
+  // para qualquer role com uma capability de Configurações concedida no seed.
+  for (const tela of Object.keys(SUBMODULE_MAP["configuracoes"] ?? {})) {
+    // TELA concedida (linha explícita `false` não vale)
+    if (permissions[tela]) return true
   }
   return false
 }

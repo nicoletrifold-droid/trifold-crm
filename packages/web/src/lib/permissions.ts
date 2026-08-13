@@ -3,6 +3,7 @@ import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 export { ALL_MODULES, MODULE_LABELS, MODULE_DESCRIPTIONS, podeVerMenuConfig } from "./permissions-modules"
 import { ALL_MODULES } from "./permissions-modules"
+import type { CapabilityKey } from "./capabilities"
 
 // ============================================================================
 // Tipos
@@ -349,6 +350,29 @@ export async function canAccess(
   // Módulo top-level: comportamento original.
   const perms = await getUserPermissions(userId, orgId)
   return perms[module] ?? false
+}
+
+// ============================================================================
+// can — helper de CAPABILITY (Perfis de Acesso 2.0 · Story 75-300)
+// ============================================================================
+
+/**
+ * `can(userId, orgId, "leads.apagar")` — o gate de AÇÃO do épico Perfis de
+ * Acesso 2.0. Wrapper TIPADO de `canAccess`: a resolução (exceção do usuário →
+ * linha explícita do perfil → herança do módulo pai) é a mesma que já roda em
+ * produção para sub-módulos; o que o wrapper agrega é o `CapabilityKey` — chave
+ * fora do registro (`lib/capabilities.ts`) não compila.
+ *
+ * REGRA (F3): todo gate novo de ação usa `can()`, nunca lista de nomes de role.
+ * Nesta story (F1) ainda NÃO há call sites de produção — os gates existentes
+ * migram módulo a módulo na F3.
+ */
+export async function can(
+  userId: string,
+  orgId: string,
+  capability: CapabilityKey
+): Promise<boolean> {
+  return canAccess(userId, orgId, capability)
 }
 
 // ============================================================================
