@@ -4,7 +4,7 @@ import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { parseCalor } from "@web/lib/leads/calor"
 import { parseQualificacao } from "@web/lib/leads/qualificacao"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
-import { canAccess } from "@web/lib/permissions"
+import { can } from "@web/lib/permissions"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
@@ -95,7 +95,6 @@ export default async function LeadsPage({
 
   // "Admin powers" intra-página (ex.: ações de gestão sobre leads):
   // capturado como acesso ao módulo "sistema" — somente admin tem por padrão.
-  const isAdmin = await canAccess(user.id, user.orgId, "sistema")
 
   const view = params.view === "perdidos" ? "perdidos" : "ativos"
   // Story 75-151 — modo "Leads hoje" (clique no card do dashboard): lista TODOS os leads do dia
@@ -426,7 +425,7 @@ export default async function LeadsPage({
         <LeadFilters
           stages={allStages.map(s => ({ id: s.id, name: s.name, color: s.color }))}
           properties={allProperties.map(p => ({ id: p.id, name: p.name }))}
-          brokers={["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)
+          brokers={(await can(user.id, user.orgId, "leads.ver_equipe"))
             ? allBrokers.map(b => ({ id: b.id, name: b.name }))
             : undefined}
           sources={SOURCE_FILTER_KEYS.map(k => ({ value: k, label: SOURCE_LABELS[k] ?? k }))}
@@ -512,7 +511,7 @@ export default async function LeadsPage({
             })}
             brokers={allBrokers}
             view={view}
-            canReactivate={["admin", "supervisor", "gerente-comercial", "sdr"].includes(user.role)}
+            canReactivate={await can(user.id, user.orgId, "leads.reativar")}
           />
         </ScrollableX>
         {totalPages > 1 && (

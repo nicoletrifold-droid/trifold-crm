@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { can } from "@web/lib/permissions"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { LEAD_PATCH_ALLOWED_FIELDS } from "@web/lib/leads/patch-allowed-fields"
 import { buildUpdatePayload, softDelete } from "@web/lib/api-utils"
 import { isLostReasonGrupo } from "@web/lib/constants"
@@ -53,7 +54,7 @@ export async function PATCH(
 
   // Check permission: admin/supervisor/gerente-comercial, assigned broker, or
   // imob editing an imob-world lead (Story 75-199 — espelha o canEdit da página)
-  if (!["admin", "supervisor", "gerente-comercial", "sdr"].includes(appUser.role)) {
+  if (!(await can(appUser.id, appUser.org_id, "leads.editar_qualquer"))) {
     const { data: lead } = await supabase
       .from("leads")
       .select("assigned_broker_id, segmento")
@@ -223,7 +224,7 @@ export async function DELETE(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin"])
+  const forbidden = await requireCapability(appUser, "leads.apagar")
   if (forbidden) return forbidden
 
   // Snapshot ANTES do softDelete — a função não retorna o nome.

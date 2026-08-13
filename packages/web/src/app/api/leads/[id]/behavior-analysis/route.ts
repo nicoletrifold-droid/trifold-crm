@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAnthropicClient, analyzeLeadBehavior, ANTHROPIC_MODELS } from "@trifold/ai"
 import { fetchLeadChronology } from "@web/lib/leads/behavior-chronology"
 
@@ -26,13 +26,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, [
-    "admin",
-    "supervisor",
-    "gerente-comercial",
-    "sdr",
-    "broker",
-  ])
+  const forbidden = await requireCapability(appUser, "leads.ia_analisar")
   if (forbidden) return forbidden
 
   // Story 82-3 — corretor só analisa lead dele (mesma regra das notas/tarefas).

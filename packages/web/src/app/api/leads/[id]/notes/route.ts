@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 
 const PERDIDO_STAGE_IDS = [
@@ -74,7 +75,7 @@ export async function POST(
 
   // admin/supervisor/gerente-comercial sempre podem; corretor só se atribuído ao lead
   if (
-    !["admin", "supervisor", "gerente-comercial", "sdr"].includes(appUser.role) &&
+    !(await can(appUser.id, appUser.org_id, "leads.anotar_qualquer")) &&
     lead.assigned_broker_id !== appUser.id
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })

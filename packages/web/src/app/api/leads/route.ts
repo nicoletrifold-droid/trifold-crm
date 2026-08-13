@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
@@ -107,11 +107,12 @@ export async function POST(request: Request) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
+  // 75-311: criar lead é a capability leads.criar (seed espelha broker/admin/
+  // supervisor — o furo nº5 do inventário, tela permite GC/SDR e API nega, fica
+  // PRESERVADO e visível na matriz; alinhar é decisão de negócio).
   const isBroker = appUser.role === "broker"
-  if (!isBroker) {
-    const forbidden = requireRole(appUser, ["admin", "supervisor"])
-    if (forbidden) return forbidden
-  }
+  const forbidden = await requireCapability(appUser, "leads.criar")
+  if (forbidden) return forbidden
 
   const body = await request.json()
 

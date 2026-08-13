@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
@@ -22,7 +22,6 @@ const ROLETA = "__roleta__"
 // conflito (ver distributor.ts / 156_roleta_pick_no_perdido.sql).
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-const MANAGER_ROLES = ["admin", "supervisor", "gerente-comercial", "sdr"] as const
 
 type EligibleBroker = { userId: string; name: string }
 
@@ -39,7 +38,7 @@ export async function GET(
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const forbidden = requireRole(appUser, [...MANAGER_ROLES])
+  const forbidden = await requireCapability(appUser, "leads.reativar")
   if (forbidden) return forbidden
 
   const admin = createAdminClient()
@@ -108,7 +107,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { appUser } = auth
 
-  const forbidden = requireRole(appUser, [...MANAGER_ROLES])
+  const forbidden = await requireCapability(appUser, "leads.reativar")
   if (forbidden) return forbidden
 
   const body = (await request.json().catch(() => null)) as

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAnthropicClient } from "@trifold/ai"
 
 export async function POST(
@@ -12,7 +12,7 @@ export async function POST(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "leads.ia_handoff")
   if (forbidden) return forbidden
 
   // Verify lead exists and belongs to org

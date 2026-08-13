@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 
 /**
@@ -42,9 +43,7 @@ export async function POST(
   }
 
   // Permissão: admin/supervisor/gerente-comercial OU corretor dono do lead.
-  const isAdmin = ["admin", "supervisor", "gerente-comercial", "sdr"].includes(
-    appUser.role
-  )
+  const isAdmin = await can(appUser.id, appUser.org_id, "leads.ia_retomar")
   if (!isAdmin && lead.assigned_broker_id !== appUser.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
