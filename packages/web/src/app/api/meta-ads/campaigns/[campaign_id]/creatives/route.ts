@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 /**
  * GET /api/meta-ads/campaigns/[campaign_id]/creatives
@@ -96,9 +96,9 @@ export async function GET(
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  if (appUser.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
+  // 75-303: era `role !== "admin"` inline — agora a matriz decide.
+  const forbidden = await requireCapability(appUser, "campanhas.meta_ver")
+  if (forbidden) return forbidden
 
   const { campaign_id: metaCampaignId } = await params
   const period = request.nextUrl.searchParams.get("period") ?? "30d"

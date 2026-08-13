@@ -172,10 +172,15 @@ describe("resolveCapabilityDecision — tabela-verdade da paridade app ↔ SQL (
 })
 
 describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
-  it("enforced = exatamente os módulos já migrados (75-301 piloto + 75-302)", () => {
+  it("enforced = exatamente os módulos já migrados (75-301..303)", () => {
     expect(ENFORCED_CAPABILITIES.map((c) => c.key)).toEqual([
       "pastas.gerenciar",
       "marketing.gerenciar",
+      "campanhas.gerenciar",
+      "campanhas.disparar",
+      "campanhas.meta_sincronizar",
+      "campanhas.meta_acionar",
+      "campanhas.meta_ver",
     ])
   })
 
@@ -198,9 +203,10 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
 
   it("enforcedCapabilitiesByGroup agrupa pelo prefixo", () => {
     const byGroup = enforcedCapabilitiesByGroup()
-    expect(Object.keys(byGroup).sort()).toEqual(["marketing", "pastas"])
+    expect(Object.keys(byGroup).sort()).toEqual(["campanhas", "marketing", "pastas"])
     expect(byGroup["marketing"]?.map((c) => c.key)).toEqual(["marketing.gerenciar"])
     expect(byGroup["pastas"]?.map((c) => c.key)).toEqual(["pastas.gerenciar"])
+    expect(byGroup["campanhas"]?.length).toBe(5)
   })
 })
 
@@ -272,5 +278,17 @@ describe("75-302 — Pastas via capability (espelho + elegibilidade)", () => {
   it("roleEligibleForCapability — admin sempre elegível; nada em lugar nenhum nega", () => {
     expect(roleEligibleForCapability({ roleName: "admin" })).toBe(true)
     expect(roleEligibleForCapability({ roleName: "corretor-novo" })).toBe(false)
+  })
+})
+
+describe("75-303 — Campanhas & Meta Ads (espelho dos 5 seeds)", () => {
+  it("gerenciar e disparar = admin+supervisor (as antigas requireRole)", () => {
+    expect([...CAPABILITY_SEED["campanhas.gerenciar"]].sort()).toEqual(["admin", "supervisor"])
+    expect([...CAPABILITY_SEED["campanhas.disparar"]].sort()).toEqual(["admin", "supervisor"])
+  })
+  it("meta_sincronizar/meta_acionar/meta_ver = só admin (requireRole(['admin']) / inline / proxy sistema)", () => {
+    expect([...CAPABILITY_SEED["campanhas.meta_sincronizar"]]).toEqual(["admin"])
+    expect([...CAPABILITY_SEED["campanhas.meta_acionar"]]).toEqual(["admin"])
+    expect([...CAPABILITY_SEED["campanhas.meta_ver"]]).toEqual(["admin"])
   })
 })

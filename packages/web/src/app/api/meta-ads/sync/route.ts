@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 export async function POST() {
   const auth = await requireAuth()
   if (auth.error) return auth.error
 
-  const roleError = requireRole(auth.appUser, ["admin"])
+  const roleError = await requireCapability(auth.appUser, "campanhas.meta_sincronizar")
   if (roleError) return roleError
 
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"

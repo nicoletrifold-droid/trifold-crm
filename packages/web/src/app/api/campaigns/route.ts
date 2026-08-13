@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@web/lib/api-auth"
+import { requireAuth, requireCapability } from "@web/lib/api-auth"
 
 function slugify(text: string): string {
   return text
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "campanhas.gerenciar")
   if (forbidden) return forbidden
 
   const body = await request.json()
@@ -124,7 +124,7 @@ export async function GET() {
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
 
-  const forbidden = requireRole(appUser, ["admin", "supervisor"])
+  const forbidden = await requireCapability(appUser, "campanhas.gerenciar")
   if (forbidden) return forbidden
 
   const { data: campaigns, error } = await supabase
