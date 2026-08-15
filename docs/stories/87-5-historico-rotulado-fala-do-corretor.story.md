@@ -1,6 +1,6 @@
 # Story 87-5 — A Nicole passa a enxergar o corretor: histórico com rótulo de papel
 
-**Epic:** 87 (Nicole — Confiabilidade de Contexto, Estado e Enforcement) · **Status:** Ready
+**Epic:** 87 (Nicole — Confiabilidade de Contexto, Estado e Enforcement) · **Status:** Ready for Review
 **Item do roadmap:** **`W1-7`** (Onda 1, **deploy 4**) — ✅ **já criado pelo @pm no Epic 87 v0.5**,
 §7/Onda 1, com `stories_planned: W1-7 → 87-5`. *(A v0.1 desta story dizia "ainda não existe";
 conferido pelo @po em 07/08 — existe.)*
@@ -615,7 +615,7 @@ Teste existente que mudar de forma precisa de **justificativa escrita por teste*
 
 ## Tarefas
 
-- [ ] **T0** — Medir antes de escrever código: (a) % de conversas **com mensagem `assistant` E
+- [x] **T0** — Medir antes de escrever código: (a) % de conversas **com mensagem `assistant` E
       mensagem `broker` nos últimos 30 dias** que passam de 20 mensagens — **o denominador é este e
       está declarado** (decide a condição de escape da ordem vs `W1-1`; referência do @po em 07/08:
       **20,0 %**, o dobro do limiar ⇒ **não** dispara); (b) reconfirmar os volumes por papel
@@ -624,20 +624,20 @@ Teste existente que mudar de forma precisa de **justificativa escrita por teste*
       30 dias) **e as que ainda têm `is_ai_active = true`** (referência: **9**);
       (d) **decidir por escrito** o que fazer com as **105** mensagens-placeholder
       (`[Arquivo]`/`[Mídia]`/`[Áudio]`) — incluir ou filtrar (Desenho §3).
-- [ ] **T1** — Alargar `Message.role`; **estreitar** `buildNoReintroContext` e `HandoffMessage` para
+- [x] **T1** — Alargar `Message.role`; **estreitar** `buildNoReintroContext` e `HandoffMessage` para
       `Message["role"]` e **remover os casts** das linhas 710 e 1157; colar a lista de erros de
       `type-check` **antes e depois**, e nomear por escrito o que ele **não** pega (AC6).
       ⚠️ **Referência do @po: o alargamento sozinho produz 1 erro, não 6.** Não conclua que só existe
       um consumidor — o mapa primário é o `grep` da AC6-(i).
-- [ ] **T2** — `loadConversationHistory`: `.select` com `metadata`, `.in` com os três papéis,
+- [x] **T2** — `loadConversationHistory`: `.select` com `metadata`, `.in` com os três papéis,
       normalização da transição, **e EXPORTAR a função de `@trifold/ai`** (hoje é privada de
       `pipeline.ts:1534`; sem isso a AC7 não fecha). **Uma função só** (AC1, AC2, AC7).
-- [ ] **T3** — Fronteira da API: rótulo textual em `pipeline.ts:924-931` (AC1, AC5-iii).
-- [ ] **T4** — `lastAssistantMsg` restrito à Nicole + `buildNoReintroContext` contando os dois lados,
+- [x] **T3** — Fronteira da API: rótulo textual em `pipeline.ts:924-931` (AC1, AC5-iii).
+- [x] **T4** — `lastAssistantMsg` restrito à Nicole + `buildNoReintroContext` contando os dois lados,
       com os vermelhos (AC3, AC4).
-- [ ] **T5** — Instrução da RN4 no `dynamicSuffix`, com a fixture do Odair e o vermelho (AC5).
-- [ ] **T6** — `generateHandoffSummary` (AC8) e a **não-mudança** da identificação de imóvel (AC9).
-- [ ] **T7** — Snapshots dos turnos-ouro sem corretor (AC10) + suíte verde (AC11).
+- [x] **T5** — Instrução da RN4 no `dynamicSuffix`, com a fixture do Odair e o vermelho (AC5).
+- [x] **T6** — `generateHandoffSummary` (AC8) e a **não-mudança** da identificação de imóvel (AC9).
+- [x] **T7** — Snapshots dos turnos-ouro sem corretor (AC10) + suíte verde (AC11).
 - [ ] **T8** — **Deploy A sozinho**, 24 h, AC12-(i,ii,iii) com responsável nomeado.
 - [ ] **T9** — **Deploy B** (`enrich-leads` adota o carregador), ≥24 h depois e **só com a 87-4 em
       produção**; AC12-(iv).
@@ -720,11 +720,785 @@ leitura, e o deploy B só muda o que o extrator **passa a ver**, não o que já 
 
 ## Dev Agent Record
 
-*(a preencher pelo @dev)*
+**Agente:** @dev (Dex) · **Modo:** YOLO · **Data:** 2026-08-15 · **Base:** `main` em `24800872`
+**Deploys nesta entrega:** A (leitura da Nicole) e B (`enrich-leads`) — **implementados, não
+deployados**. A separação em duas janelas é responsabilidade do @devops; ver "O que NÃO foi feito".
+
+---
+
+### T0 — as medições, refeitas contra produção (não herdadas da story)
+
+Todas por Management API sobre `dsopqkqjkmhytudaaolv`, janela de 30 dias, em **15/08**. Os números
+subiram desde a medição do @po em 07/08 — a story dizia broker 900, hoje são **1.288**.
+
+**(b) Volumes por papel — o corretor continua sendo o maior dos três, e por mais:**
+
+| papel | mensagens | conversas |
+|---|---|---|
+| **`broker`** | **1.288** | **305** |
+| `user` | 1.042 | 194 |
+| `assistant` | 588 | 144 |
+
+**(a) A condição de escape, com o denominador declarado.** As quatro leituras, medidas — e a coluna
+que importa é a de **três papéis**, porque é a janela que passa a existir depois desta story:
+
+| população | convs | > 20 msgs (3 papéis) | % | escape dispara? |
+|---|---|---|---|---|
+| todas com atividade | 356 | 46 | 12,9 % | ❌ não |
+| só com corretor | 305 | 41 | 13,4 % | ❌ não |
+| só com Nicole | 144 | 30 | 20,8 % | ❌ não |
+| **Nicole E corretor** — *a população que esta story muda* | **94** | **25** | **26,6 %** | ❌ **não, com folga** |
+
+> **Denominador declarado: conversas com mensagem `assistant` E mensagem `broker` nos últimos 30
+> dias. 26,6 %, contra um limiar de 10 %.** A condição de escape **NÃO dispara** — e, ao contrário
+> de 07/08, **nenhuma** das quatro leituras a dispara hoje. A ordem "depois do `W1-1`" está
+> satisfeita de fato: o `W1-1` é a **Story 87-8**, mergeada em `129864a7` (PR #382) e em produção.
+> **A 87-4 (PR #380) também está em produção**, o que desbloqueia o deploy B.
+
+**(c) O dano, remedido:** **10** conversas em que o corretor falou e a Nicole voltou a responder
+depois — **30 respostas cegas**. E **10** das 305 conversas com corretor ainda têm
+`is_ai_active = true` (a exposição **viva**, que é o que a AC12 tem de provocar em vez de esperar).
+
+**(d) 📌 DECISÃO ESCRITA — as mensagens-placeholder do corretor ENTRAM (não são filtradas).**
+
+Medido: **162 de 1.288** (12,6 %), média de **0,53 por conversa**, máximo 8. A composição decide:
+
+```
+[Mídia] Localização  43   [Mídia] Planta     42   [Mídia] Piscina  24
+[Mídia] Academia     16   [Mídia] Fachada    15   [Áudio]          12
+[Arquivo] *.jpeg/pdf  5   demais [Mídia]      5
+```
+
+Três razões, na ordem em que pesaram:
+1. **74 % delas carregam rótulo semântico** ("Planta", "Localização", "Fachada") — dizem à Nicole o
+   que já foi enviado. Filtrar apagaria contexto útil, não ruído.
+2. **Filtrar sairia caro e torto.** No JS, o filtro roda **depois** do `.limit(20)` e **encolheria a
+   janela** justamente nas conversas longas com muita mídia — as que esta story existe para ajudar.
+   No SQL, exigiria um `or(and(...))` aninhado, com régua diferente por papel dentro da mesma
+   consulta, e o `fake-supabase` não suporta essa forma (fake que não aplica o filtro = confiança
+   falsa, a lição da 75-270).
+3. O custo de orçamento é de **meia mensagem por conversa**, e a cauda-20 da 87-8 já garante que o
+   que sai pela janela é o mais antigo.
+
+*(Controle: `user`/`assistant` também têm placeholders — 4 e 28 em 30 dias. Nenhum filtro foi
+aplicado a eles, então as conversas sem corretor continuam byte a byte iguais. Ver AC10.)*
+
+---
+
+### T1 / AC6 — o `type-check` medido: 1 erro antes, 5 depois. E o que ele **não** pega.
+
+**(iii) A lista, colada.**
+
+**Antes das subtrações** (só `Message.role` alargado) — **1 erro**, exatamente o que o @po previu:
+
+```
+src/chat/pipeline.ts(1038,9): error TS2322: Type '"assistant" | "user" | "broker"'
+  is not assignable to type '"assistant" | "user"'.   ← a fronteira da Anthropic, e SÓ ela
+```
+
+**Depois das duas subtrações** (`buildNoReintroContext` e `HandoffMessage` estreitados para
+`Message["role"]`; casts das linhas 710 e 1157 removidos) — **5 erros**:
+
+```
+src/chat/pipeline.ts(1037,9)      TS2322  fronteira da Anthropic            (consumidor 3)
+src/chat/pipeline.test.ts(132,42) TS2345  buildNoReintroContext             (consumidor 1)
+src/chat/pipeline.test.ts(139,34) TS2345  buildNoReintroContext             (consumidor 1)
+src/chat/pipeline.test.ts(148,34) TS2345  buildNoReintroContext             (consumidor 1)
+src/flows/handoff.test.ts(220,48) TS2345  HandoffMessage                    (consumidor 4)
+```
+
+> **Achado que a AC não previa e que vale registrar:** as subtrações acenderam os consumidores 1 e 4
+> **nos arquivos de teste**, não nos de produção — porque em produção esses dois recebem o `history`,
+> que já é `Message[]`. A rede secundária pegou as **fixtures** com `role: string`, e é só isso que
+> ela pode pegar. Ainda assim é ganho: fixture de papel frouxo era exatamente por onde um `"brokr"`
+> passaria despercebido.
+
+**(iv) O que o compilador NÃO pega — nomeado, com o motivo, porque saber onde a rede tem buraco é a
+diferença entre uma rede e uma ilusão:**
+
+| consumidor | por que não acende | qual é a rede real |
+|---|---|---|
+| **`lastAssistantMsg`** (`pipeline.ts:867`) | `.find(m => m.role === "assistant")` — **comparar** union largo com literal é TS válido. Não acende **em variante nenhuma**, nem sem o cast | teste, e só teste: **AC3**, com o vermelho medido (M2 derruba **15**) |
+| **`enrich-leads`** | outro pacote, não usava o tipo `Message` | teste: `route.test.ts`, deploy B — e o `.in()` do mock precisou ser consertado, ver abaixo |
+| **identificação de imóvel** (`pipeline.ts:1362`) | o cast saiu, mas `.filter/.map` sobre `content: string` não tem o que acender | teste: **AC9**, com controle positivo |
+
+**🔎 O SÉTIMO consumidor existe, e ele nasceu DEPOIS que esta story foi escrita.**
+`grep -n "history" packages/ai/src/chat/pipeline.ts` no `main` de hoje devolve **um a mais** que os
+seis do Desenho §4: o evento **`NICOLE_HISTORY_TRUNCATED`** (`pipeline.ts:622-635`), criado pela
+87-8, que publica `historico.messages.length` e `historico.totalNaConversa`. Ele **muda de referente
+por esta story** — sem tratamento, a janela contaria três papéis e o total contaria dois, e o evento
+publicaria `total_na_conversa: 12` numa conversa que **truncou em 20**, o que é incoerente por
+construção. Tratado (o `count` usa a mesma `ROLES_DE_HISTORICO`) e travado por teste; a mutação M12
+derruba 1.
+
+---
+
+### O desenho implementado — e o arquivo novo, com a justificativa (IDS)
+
+**IDS — busca feita antes:** `find packages/ai/src -name "*.ts"` + `grep -rn
+"loadConversationHistory\|HandoffMessage"`. Não existe módulo de tipos/carregamento de conversa.
+**Decisão: CREATE** `packages/ai/src/chat/conversation-history.ts`, com o motivo:
+
+- `loadConversationHistory` era **privada** de `pipeline.ts` (2.204 linhas, que importa o SDK da
+  Anthropic e todos os `flows`) e o `enrich-leads` vive em `packages/web` — sem extrair, a AC7 não
+  fecha (é o passo que o @po nomeou);
+- exportá-la de `pipeline.ts` faria o cron arrastar o pipeline inteiro para uma esteira que só quer
+  20 linhas de `messages`, e colocaria o carregador atrás do mesmo barril que exporta
+  `processMessage`;
+- é a **mesma manobra** da 87-3, e o `import type` de `handoff.ts` para o módulo novo **não fecha
+  ciclo** (o módulo só importa `@supabase/supabase-js`).
+
+**REUSE:** `createFakeSupabase` (75-279) e o harness de captura da 87-8 — usados, não recriados.
+**ADAPT:** `primeiroNome` reimplementa em 3 linhas o `senderFirstName` de
+`packages/web/src/lib/broker/message-signature.ts` — importar de lá inverteria a dependência
+(`web` → `ai`, nunca o contrário).
+
+**Ordem de resolução do nome, medida em produção (é a correção nº 2 do @po, confirmada hoje):**
+
+```
+metadata.signed_as    780 / 1.288  (61 %)  ← já É o primeiro nome, custo ZERO
+metadata.sent_by    1.126 / 1.288  (87 %)  ← users.name, UMA consulta em LOTE
+metadata.broker_id      0 / 1.288  ( 0 %)  ← só existe nas 127 transições (100 % delas)
+sem metadata            0
+```
+
+**Uma consulta em lote, nunca N+1** — travado por teste (M11 derruba 1). Fail-open declarado: se a
+consulta a `users` falhar, o rótulo sai `[CORRETOR HUMANO]` sem nome e a conversa não quebra.
+
+**Renomeação deliberada:** `nicoleFalouForaDaJanela` → `nossoLadoFalouForaDaJanela`. O sinal passou a
+consultar `assistant` **ou** `broker` (AC4), e manter um campo que diz "nicole" respondendo "nosso
+lado" é a colinearidade que já custou caro nesta família de stories.
+
+---
+
+### 🔴 Os vermelhos — MEDIDOS por mutação, um a um (aplicar · rodar · ler · reverter)
+
+Suíte verde não prova guarda. Cada mutação foi aplicada ao código, a suíte rodou, a contagem foi
+lida e o código foi revertido. `pipeline-corretor-no-historico.test.ts` tem **34** testes.
+
+| # | mutação aplicada | testes que caem |
+|---|---|---|
+| **M2** | `broker → assistant` no tipo interno (a leitura deixa de distinguir) | **15** |
+| **M4** | `.in()` volta a dois papéis — **é o `HEAD`** | **12** |
+| **M1** | rótulo removido (a fronteira devolve o `content` cru) | **6** |
+| **M3** | normalização da transição removida | **4** |
+| **M13** | rótulo sempre sem nome | **4** |
+| **C1** | instrução da RN4 entra SEMPRE (vazaria p/ conversa sem corretor) | **3** |
+| **M8** | rótulo aplicado a tudo que não é `user` (o controle negativo) | **2** |
+| **M10** | `signed_as` ignorado (cai só em `sent_by`) | **2** |
+| **M6** | instrução da RN4 fora do `dynamicSuffix` | **2** |
+| **M5** | `buildNoReintroContext` volta a contar só `assistant` | **1** |
+| **M5b** | sinal fora da janela volta a ser só a Nicole | **1** |
+| **M7** | corretor passa a preencher `property_interest_id` | **1** |
+| **M9** | higienização do rótulo removida | **1** |
+| **M11** | resolução de nome vira N+1 | **1** |
+| **M12** | `count` do total volta a dois papéis | **1** |
+| **C2** | instrução movida para o bloco estático **cacheável** | **1** |
+
+E no deploy B (`enrich-leads/route.test.ts`, 29 testes): **B1** (renderizador do Haiku volta ao
+`else "Nicole"`) derruba **2**; **B2** (filtro volta a dois papéis) derruba **1**; **B3**
+(normalização removida) derruba **1**.
+
+> ### 🔴 O achado desta rodada: **B2 derrubava ZERO, e o verde vinha de outro lugar**
+>
+> Na primeira medição, a mutação "o carregador volta a `["user","assistant"]`" deixava **todos** os
+> testes do deploy B verdes. Motivo: o mock do Supabase em `route.test.ts` tinha `in: () => builder`
+> — **não filtrava nada**. A mensagem `role='broker'` semeada atravessava porque o filtro de papel
+> simplesmente não era aplicado; o teste provava a existência da **fixture**, não a do **filtro**.
+> Corrigido (o `.in()` passou a filtrar de verdade, como o `fake-supabase` da 75-279 sempre fez), e
+> **B2 passou a derrubar 1**. É a mesma classe de defeito da 87-13 (7/7 verde com o filtro removido).
+>
+> **Segundo achado, do mesmo tipo:** a AC5-(ii) ("a instrução não entra no bloco estático
+> cacheável") estava sendo verificada sobre a **string concatenada** do `system` — e mover a
+> instrução para um bloco estático **não derrubava teste nenhum**, porque a concatenação é idêntica
+> nos dois mundos. A AC é sobre **estrutura**, e só o array de blocos a enxerga. Teste `(ii-b)`
+> acrescentado, capturando `cache_control` bloco a bloco; a mutação C2 passou a derrubar 1.
+
+---
+
+### 🔴🔴 AC5 — a premissa estava ERRADA, e o dano real é maior do que ela dizia
+
+A story pedia: *"Rodar contra o `HEAD` com o corretor incluído SEM a instrução: ela repete. Colar o
+vermelho — é o vermelho mais importante desta story."* **Rodei contra a API de verdade** (o payload
+literal montado pelo pipeline, `claude-sonnet-4-6`, `temperature 0.7`, o modelo de produção),
+**n = 10 por variante**, pergunta do lead *"então fechado, 35 mil de entrada em 10x, certo?"*:
+
+| variante | repete o valor | **contradiz a negociação** | diz que foi **engano** | atribui ao corretor |
+|---|---|---|---|---|
+| **A) `HEAD`** — cega ao corretor | **0/10** | **7/10** | 0/10 | 9/10 |
+| **B) rótulo SEM a instrução** | **0/10** | 0/10 | **7/10** | 0/10 |
+| **C) rótulo COM a instrução — a story** | **0/10** | 0/10 | 0/10 | **10/10** |
+
+> ### ⚠️ A redação abaixo é a **autorizada pelo gate** (§4), e substitui a que estava aqui
+>
+> A v1.0 desta seção publicava *"em produção ela contradiz negociação fechada em **7 de 10**"* como
+> se fosse taxa de produção. **Não é, e não pode subir assim.** O @qa reproduziu o experimento com
+> outras 30 chamadas e recusou o número solto, com razão: o IC95 % de 7/10 sozinho tem **58 pontos
+> de largura**, a fixture é única e **o denominador não estava declarado**. É a mesma classe de
+> defeito que o @po já cobrou desta própria story na condição de escape, e que custou caro na 87-3.
+> A redação autorizada é esta, e é a que vale aqui, no PR e em qualquer comunicação ao Gabriel/Marcos:
+>
+> > *"No cenário de reativação com valor fechado na última fala do corretor, o `HEAD` contradisse a
+> > negociação em **17 de 20 execuções** (85 %, IC95 % [62 % ; 97 %]; duas amostras independentes de
+> > n=10 contra `claude-sonnet-4-6` em temperatura 0,7, fixture única) — e em **7 de 10** entregou ao
+> > lead a regra comercial interna 'a entrada mínima é 20 %'. **A taxa é condicional a esse cenário e
+> > NÃO é a taxa dos turnos da Nicole.**"*
+
+**Três conclusões, e a primeira contraria a story:**
+
+1. **O "vermelho mais importante" NÃO reproduz. 0/10 em todas as variantes**, inclusive sem a
+   instrução — e também 0/9 em três outras redações de pergunta que testei antes. A **RN4 do bloco
+   estático já cobre** a repetição de valor. A AC5 continua certa como guarda (custo zero, risco
+   assimétrico), mas **a justificativa dela não é a que estava escrita**, e nenhum gate deveria
+   aceitar "ela repete" como fato medido — não é. (O @qa mediu 0/10 nas três variantes também.)
+
+2. **O dano do `HEAD` é OUTRO e é pior** — *"Poxa, Sandra, não é bem assim. A entrada mínima é de
+   20 % do valor do imóvel, e ela não é parcelada dessa forma."* Ela nega o que o corretor combinou
+   **e entrega uma regra comercial interna** no mesmo fôlego. É literalmente o "retomar a negociação
+   como se nada tivesse acontecido" do título da story, e é o que justifica a entrega. **A magnitude
+   é a da redação autorizada acima** (17/20 agregado, condicional ao cenário de reativação): a minha
+   amostra deu 7/10 e a do @qa, independente, deu 10/10. **O que é da story é a DIREÇÃO** — o
+   limite inferior do IC está muito acima de "acontece às vezes" —, não o ponto.
+
+3. **A instrução da AC5 não é opcional — ela é a condição para o rótulo poder subir.** Sem ela, o
+   rótulo troca um defeito por outro: a Nicole diz ao lead que *"essa mensagem não era pra você,
+   deve ter sido um cruzamento de conversa"* — desmentindo a conversa real do corretor. Mesmo
+   cuidado de denominador: **7/10 na minha amostra e 5/10 na do @qa, 12 de 20 agregado (60 %,
+   IC95 % [36 % ; 81 %]), condicional ao mesmo cenário.** O que decide não é a contagem bruta (em
+   contagem bruta B não é pior que o `HEAD`) e sim a **natureza**: é um defeito **novo**, que não
+   existe hoje em produção e seria **criado pelo deploy**. **Subir o rótulo sem a instrução seria
+   pior que não subir nada** — carimbado pelo gate como **R1, restrição BLOQUEANTE de fatiamento**.
+   Com a instrução, as duas amostras deram 10/10 atribuindo ao corretor.
+
+*(Reprodução: `packages/ai/src/chat/__dump-odair.test.ts` temporário para capturar o payload +
+scripts de A/B no scratchpad. Nenhum dos dois foi commitado; o teste automatizado que sobra afirma
+a presença/ausência da instrução e a higienização, que é o que dá para afirmar sem rede.)*
+
+---
+
+### AC7 — um carregador, não dois (a régua, e o que ela mede de verdade)
+
+```
+$ grep -rn '\.in("role"' packages/ai/src packages/web/src
+```
+
+Ocorrências em **código de produção** com lista de papéis de **histórico de conversa**: **3**, todas
+no mesmo arquivo (`conversation-history.ts:283`, `:309`, `:318`) e **nenhuma com literal inline** —
+usam `ROLES_DE_HISTORICO` e `PAPEIS_DO_NOSSO_LADO`. O `enrich-leads` **não tem mais nenhuma**.
+As demais 15 ocorrências são filtros de `users.role` e não contam.
+
+> ⚠️ **A régua de `grep` mede o arquivo, não a tela:** 3 dos "hits" de `["user","assistant"]` que
+> sobram são **comentários meus** citando o defeito antigo. Quem re-rodar esta AC precisa olhar a
+> coluna, não o total — a contagem crua é enganosa por construção.
+
+---
+
+### AC10 — turno-ouro capturado do `HEAD`, não relatado
+
+Worktree próprio em `24800872`, mesmo seed, mesmo relógio (`2026-08-12T13:00:00Z`), mesmo harness.
+O `system` inteiro (estáticos + `dynamicSuffix`) é comparado por SHA-256 + tamanho.
+
+| turno-ouro | sha256 (12) | bytes |
+|---|---|---|
+| (a) 4 msgs, com fala da Nicole | `3ec9480d84f9` | 30.256 |
+| (b) primeira mensagem, só o lead | `d634f39ecc85` | 30.082 |
+
+> **Por que DOIS e não os três da AC:** medi os três turnos-ouro da 87-8 no `HEAD` e **os três dão o
+> mesmo hash** — o `dynamicSuffix` deles é idêntico (mesmo lead, mesmo relógio, mesmo bloco de
+> não-reintro); o que os distingue é o `bloco [SISTEMA]`, que a 87-8 já trava byte a byte e que
+> continua verde. Três hashes iguais seriam uma régua que não distingue nada. O cenário (b) — sem
+> bloco de não-reintro — **move** o hash, e é ele que prova que a asserção acompanha o
+> `dynamicSuffix` em vez de ser constante de natureza.
+
+---
+
+### Fora do que a story pedia — uma adição, declarada
+
+**A higienização do rótulo na saída** (`stripSystemBlocks` passa a remover `[CORRETOR HUMANO…]`).
+Não estava nas ACs; entrou porque **o gatilho de rollback desta story é literalmente "o rótulo
+aparecendo em qualquer mensagem enviada ao lead"**, e a AC5-(iii) dependia inteiramente de o modelo
+obedecer à instrução. É **subtração** (remove texto interno da saída), reusa o mecanismo que já
+existe desde a 75-279 (ADAPT, não CREATE) e **não cria caminho de decisão**. O `event_type`
+`NICOLE_SYSTEM_BLOCK_LEAK` foi **preservado** (é o que a instrumentação lê); só a frase mudou.
+
+---
+
+### Réguas — medidas hoje, não estimadas
+
+| régua | baseline (antes) | v1.0 | **v1.1 (pós-gate)** |
+|---|---|---|---|
+| `npx vitest run` | 186 arquivos · 2.363 passed · 6 expected fail | 187 · 2.401 passed · 6 exp. fail | **187 · 2.407 passed · 6 exp. fail** |
+| `cd packages/web && npx tsc --noEmit` | 0 | 0 | **0** |
+| `cd packages/ai && npx tsc --noEmit` (é o `lint` do pacote) | 0 | 0 | **0** |
+| `npx turbo lint --force` | 0 errors / 23 warnings | 0 errors / 23 warnings | **0 errors / 23 warnings** |
+
+> A régua da **raiz** (`npx tsc`, 14.292 linhas) é baseline conhecido e **não** é gate — o gate é por
+> pacote, e os dois estão em zero.
+
+**+44 testes, nenhum teste existente alterado de forma.** As únicas edições em teste pré-existente
+foram: (a) `as const` em 4 fixtures cujo `role: string` deixou de compilar — é a rede secundária da
+AC6 funcionando, não mudança de comportamento; (b) o `.in()` do mock do `enrich-leads`, que passou a
+filtrar de verdade — justificado acima e **medido** (B2: 0 → 1); (c) na v1.1, o `.eq()` do mesmo mock,
+pela mesma razão e também medido (abaixo).
+
+**Nenhuma migration. Nenhum DDL, nem em produção nem no projeto de dev.** `messages.role` é
+`varchar(20)` sem CHECK e `'broker'` já é gravado em produção desde a migration 001.
+
+---
+
+### O que NÃO foi feito (e por quê)
+
+- **T8 — deploy A + 24 h (AC12 i, ii, iii):** deploy é do @devops; a janela e o responsável nomeado
+  (Marcos ou Thielly) são pré-requisito D7. **Sem responsável nomeado, o deploy não sai.**
+- **T9 — deploy B (`enrich-leads`), ≥24 h depois:** o **código está pronto nesta entrega**, mas
+  precisa subir **em PR/deploy separado**. A 87-4 já está em produção (PR #380), então a dependência
+  está satisfeita — falta só a separação das janelas. Os arquivos do deploy B são exatamente três:
+  `enrich-leads/route.ts`, `haiku-enrichment.ts` e `enrich-leads/route.test.ts`.
+- **AC12 inteira** é validação em produção pós-deploy: fica com @qa + responsável nomeado.
+- **AC8-(iii)** (rotular o autor dentro do resumo) e a reconciliação da promessa **do corretor**:
+  anotados em `docs/backlog.md`, como a story manda. Não implementados.
+
+---
+
+### 🔴 v1.1 — fechamento do achado **A1** do gate: o isolamento entre conversas
+
+O gate saiu **CONCERNS** com dois itens para o @dev. Este é o primeiro, e não é detalhe de cobertura:
+é a exigência que o Gabriel colocou em primeiro lugar, textualmente — *"o que não pode acontecer
+jamais é ela pegar informações de outra conversa, de outro lead, e utilizar em conversas de
+terceiros."* Esta story acabou de transformar `loadConversationHistory` no **carregador único de dois
+consumidores em pacotes diferentes**, o que aumenta a superfície de quem vai mexer nele depois.
+
+**O código sempre esteve certo. O que faltava era a rede.** Confirmei o achado do @qa por mutação
+própria, e fui além dele: **decompus o predicado em três**, porque `conversation-history.ts` tem
+`.eq("conversation_id", …)` em **três consultas que respondem perguntas diferentes**, e um único
+teste que cobrisse as três de enfeite mediria menos do que parece.
+
+#### O vermelho, medido — aplicar · rodar · ler · reverter · conferir `md5`
+
+| mutação (o predicado removido de…) | linha | **antes (v1.0)** | **depois (v1.1)** |
+|---|---|---|---|
+| a **JANELA** | `:282` | **0 vermelhos** 🔴 | **4** ✔ (3 no `packages/ai` + 1 no cron) |
+| o **COUNT** (`total_na_conversa`) | `:308` | **0 vermelhos** 🔴 | **1** ✔ |
+| o **SINAL** fora da janela (`nossoLadoFalouForaDaJanela`) | `:317` | **0 vermelhos** 🔴 | **1** ✔ |
+
+As três medições do "antes" são minhas, contra a suíte **inteira** (187 arquivos · 2.401 passed): as
+três davam **187 passed / 2.401 passed / 6 expected fail**, idêntico ao verde. `md5` conferido em
+6/6 aplicações e `restaurado: True` em 6/6 reversões.
+
+**Por que zero, em cada consumidor, por motivos diferentes:**
+
+- **`packages/web` (cron):** o mock de `route.test.ts` tinha `eq: () => builder` — o predicado **nem
+  era avaliado**. É literalmente a mesma família do `.in()` que consertei na v1.0, no mesmo arquivo,
+  uma linha acima.
+- **`packages/ai`:** o `fake-supabase` **aplica** o `.eq()` de verdade — mas **nenhuma fixture tinha
+  uma segunda conversa**, então o predicado nunca discriminava. Um predicado que nunca discrimina é
+  um predicado que nunca é medido. É o mutante colinear da 87-13/87-14, na vizinhança errada.
+
+#### O conserto do mock do cron é **necessário**, e provei — as quatro células
+
+| | sem mutação | com a mutação da JANELA |
+|---|---|---|
+| mock **ANTIGO** (`eq: () => builder`), sem o teste novo | 29/29 | **29/29 — ZERO vermelhos** 🔴 |
+| mock **ANTIGO**, com o teste novo | **1 failed** 🔴 | 1 failed |
+| mock **NOVO**, com o teste novo | 30/30 ✔ | **1 failed** ✔ |
+
+A célula do meio é a que fecha o argumento: com o mock antigo, o teste de isolamento do cron falha
+**mesmo com o código íntegro** — quem deixava a conversa alheia passar era o *mock*, não o código.
+O conserto não é cosmético: sem ele o teste **não pode existir**.
+
+#### A fixture: o que de fato faz o teste morder *(corrigido na v1.2 — a justificativa da v1.1 era falsa)*
+
+⚠️ **A v1.1 escreveu que a conversa alheia precisava ser mais RECENTE, senão "o teste passaria verde
+nos dois mundos". Isso é falso, e o re-gate mediu.** Remedi por conta própria, com as alheias em
+**09:01+** (uma hora ANTES da conversa pedida), removendo um predicado por vez:
+
+| predicado removido | alheias em **10:40+** (recentes) | alheias em **09:01+** (antigas) |
+|---|---|---|
+| a **JANELA** (`:282`) | **3** vermelhos | **2** vermelhos |
+| o **COUNT** (`:308`) | **1** | **1** |
+| o **SINAL** (`:317`) | **1** | **1** |
+
+*(contagens no alvo isolado, 39/39 de baseline; o 4º vermelho da janela mora no `route.test.ts` do cron)*
+
+**A régua é a asserção, não a fixture.** Em (i) e (ii) são 6 mensagens no banco contra `limit(20)` —
+**nada é expulso da janela em arranjo nenhum** —, e a igualdade da lista inteira (`toEqual` com os
+três conteúdos) mais a contagem exata (`totalEntradas === 4`) fazem 6 ≠ 3 em qualquer ordem. Em
+(iii) e (iv) a conversa **trunca** (25 mensagens), mas as asserções também são de valor exato
+(`totalNaConversa === 22`, `nossoLadoFalouForaDaJanela === false`) e mordem igual nos dois arranjos.
+A recência acrescenta **um** vermelho — o "controle positivo", colateral. Não é o mecanismo.
+
+**A fixture recente FICA** (um vermelho a mais é cinto e suspensório). **O que não se pode
+enfraquecer é a asserção:** trocar o `toEqual` por um `not.toContain("90 mil")` — confiando na
+recência — cria verde falso exatamente nas conversas que **truncam**, onde as 20 vagas se enchem com
+falas da própria conversa e a alheia sai da janela por acidente de volume, sem predicado nenhum.
+Registrar o mecanismo errado num comentário é a mesma classe de defeito que o Epic 87 persegue: uma
+régua que se atribui um poder que não tem.
+
+Os três vazamentos seguem nomeados um a um: o **valor** alheio (*"90 mil"* — o que viraria
+`has_down_payment` de um lead que nunca falou em entrada), o **corretor** alheio (*"Valeria"*) e o
+**lead** alheio (*"Fernanda"*).
+
+Há **controle positivo** para o sinal (`nossoLadoFalouForaDaJanela` continua ligando pela própria
+conversa): sem ele, o teste (iv) ficaria verde mesmo se o sinal tivesse parado de funcionar para
+todo mundo.
+
+### v1.1 — a redação do "7 de 10"
+
+Adotada **a redação autorizada pelo gate (§4)**, aplicada na seção da AC5 acima. Publicar "7 de 10"
+como taxa de produção seria repetir a classe de defeito que o @po já cobrou desta própria story na
+condição de escape, e que custou caro na 87-3: régua percentual **sem denominador declarado**
+responde o que quiserem perguntar. A direção se sustenta (17/20 agregado, IC95 % [62 % ; 97 %]) —
+**o ponto, não.**
+
+#### O que a v1.1 deliberadamente NÃO fez
+
+- **R1 (ordem/indivisibilidade de deploy)** — os seis símbolos que não podem ser separados do deploy A
+  já estão nomeados em §7 do gate. É instrução para o @devops, **não é código meu**.
+- **AC12** — depende de janela de produção com ~21 % de chance de produzir caso, e o responsável
+  nomeado (D7) ainda não existe.
+- **A3, A4 e A5** (AC12-(ii) colinear · gatilho de rollback inalcançável · deploy B muda o universo
+  de leads) — são reescrita de AC, e AC é do @po/@sm. Não toquei.
+
+---
+
+### v1.2 — fechamento dos três itens do re-gate (round 2). **Nenhuma linha de produção.**
+
+O re-gate manteve CONCERNS e confirmou as três contagens (4/1/1, disjuntas) e a célula do mock
+antigo. Sobraram três itens pequenos, todos de comentário e documento.
+
+**(1) R-A1 — a minha justificativa de fixture estava errada, e o comentário enganava.** Escrevi que
+a conversa alheia precisava ser mais recente, senão o teste "passaria verde nos dois mundos". O @qa
+mediu com a fixture antiga e refutou. **Remedi eu mesmo** (aplicar · rodar · ler · reverter · `md5`
+`79e6596f…` restaurado), removendo um predicado por vez, alvo isolado com baseline 39/39:
+
+| predicado removido | alheias **10:40+** | alheias **09:01+** |
+|---|---|---|
+| a JANELA (`:282`) | 3 | **2** |
+| o COUNT (`:308`) | 1 | **1** |
+| o SINAL (`:317`) | 1 | **1** |
+
+O mecanismo é a **igualdade da lista inteira** e os **valores exatos**: 6 mensagens, `limit(20)`,
+nada é expulso em arranjo nenhum, 6 ≠ 3. A recência acrescenta **um** vermelho colateral (o controle
+positivo) e nada mais. **A fixture fica; o comentário foi reescrito** para dizer o mecanismo real e
+nomear o que não se pode enfraquecer: trocar o `toEqual` por `not.toContain(…)` cria verde falso
+justamente nas conversas que **truncam**, onde a alheia sai da janela por volume, sem predicado
+nenhum. A afirmação superada ficou marcada inline na entrada 1.1 do Change Log.
+
+**(2) R-A3 — o marcador de superado agora alcança quem lê no meio.** A entrada 1.0 tinha **duas**
+ocorrências de "7/10" e **zero** palavras de ressalva dentro dela. Histórico **não** foi reescrito (o
+ponto de um Change Log é preservar o que foi afirmado): foram **duas inserções inline**, uma
+imediatamente após cada ocorrência, com a taxa condicional, o agregado (17/20 e 12/20) e o IC95 %.
+Mesma disciplina do `NICOLE_SYSTEM_BLOCK_LEAK`: o texto original não muda, só ganha a ressalva ao
+lado. Quem faz `grep "7/10"`, abre no meio ou copia a linha para um resumo de PR leva a ressalva
+junto.
+
+**(3) R-A2 — o achado de organização foi REGISTRADO, não consertado.** Item novo em `docs/backlog.md`
+(`[ARQ] O carregador de histórico não tem eixo de ORGANIZAÇÃO`), **dono @architect**, destino o épico
+do pivô SaaS multi-tenant. Conferi por leitura, não de segunda mão: nenhuma das quatro consultas do
+carregador tem escopo de org, e o `pipeline.ts` lê **dois** valores de org sem compará-los —
+`params.orgId` decide prompt (`:545`) e empreendimentos (`:588`); `conversation.org_id` (`:615`)
+decide **onde escreve** (`:1453`, `:1515`, `:1564`, `:1600`); e no webhook do WhatsApp os dois nascem
+separados (`route.ts:400`, `orgId = config.org_id`, vindo do número de telefone). **Exposição hoje
+zero** (uma linha em `agent_config`) — no pivô, vira o mesmo vazamento cross-lead um nível acima.
+Sub-achado com linha própria no item: a consulta a `users` (`:236`) é a única do carregador **sem
+escopo nenhum**; remover o `.in("id", …)` deixa a suíte inteira verde — **equivalente em
+comportamento, não em risco** (traz `users` inteira para a memória do turno, com service-role). Fica
+mantida: a leitura é a única guarda. **Não implementei escopo de org** — é caminho de decisão novo e
+a regra de corte da Onda 1 proíbe.
+
+#### O que a v1.2 deliberadamente NÃO fez
+
+- **A3 e A4** (AC12-(ii) colinear · gatilho de rollback sem sinal distinguível) — reescrita de AC,
+  ficam com @po/@sm, e fecham **antes da janela de 24 h**, não antes do merge. O gate endossou.
+- **R1** (ordem de deploy, os seis símbolos indivisíveis do deploy A) — instrução ao @devops.
+- **Nenhuma linha de produção, nenhuma migration, nenhum DDL.** `md5` conferido ao fim:
+  `conversation-history.ts` = `79e6596f…` e `pipeline.ts` = `e4f3df64…`, ambos idênticos ao original.
+
+---
+
+### File List
+
+**Criados**
+- `packages/ai/src/chat/conversation-history.ts` — o carregador único: três papéis, normalização da
+  transição, resolução do nome em lote, rótulo e fronteira da API
+- `packages/ai/src/chat/pipeline-corretor-no-historico.test.ts` — **39** testes (AC1…AC10 + o bloco
+  de **isolamento entre conversas** da v1.1: 5 testes, um vermelho dedicado por ocorrência do
+  predicado + controle positivo; `mensagens()` ganhou `opts` para semear uma segunda conversa, com
+  defaults byte-idênticos aos anteriores)
+
+**Modificados — deploy A**
+- `packages/ai/src/chat/pipeline.ts` — `Message` vira alias do tipo compartilhado; carregador antigo
+  removido (111 linhas); `buildNoReintroContext` conta os dois lados; `CONTEXTO_FALA_DE_CORRETOR` no
+  `dynamicSuffix`; fronteira via `toAnthropicHistory`; `lastAssistantMsg` restrito; identificação de
+  imóvel sem o corretor; `stripSystemBlocks` cobre o rótulo; dois casts removidos
+- `packages/ai/src/chat/index.ts` — exporta o carregador e os tipos de `@trifold/ai` (AC7)
+- `packages/ai/src/flows/handoff.ts` — `HandoffMessage.role` estreitado para `ConversationRole`
+- `packages/ai/src/chat/pipeline.test.ts` — `as const` em 3 fixtures (rede secundária da AC6)
+- `packages/ai/src/flows/handoff.test.ts` — `as const` em 1 fixture
+
+**Modificados — deploy B (subir ≥24 h depois, em PR próprio)**
+- `packages/web/src/app/api/cron/enrich-leads/route.ts` — adota `loadConversationHistory`
+- `packages/ai/src/flows/haiku-enrichment.ts` — renderiza a terceira faixa; regra no
+  `ENRICHMENT_PROMPT` proibindo extrair campo de linha `[CORRETOR HUMANO]`
+- `packages/web/src/app/api/cron/enrich-leads/route.test.ts` — **5** testes do deploy B (o 5º é o
+  **isolamento entre conversas** da v1.1); **`.in()` e, na v1.1, `.eq()` do mock passaram a filtrar de
+  verdade** — as fixtures semeadas ganharam `conversation_id`, sem o que seriam filtradas para fora e
+  morreriam por motivo errado
+
+**Documentação**
+- `docs/backlog.md` — **três** itens novos: autor no resumo de handoff; reconciliação da promessa do
+  corretor; e, na v1.2, `[ARQ] O carregador de histórico não tem eixo de ORGANIZAÇÃO` (dono
+  @architect, destino o épico do pivô SaaS — registro, não conserto)
+
+**Só-comentário na v1.2** *(zero mudança de comportamento; `md5` de produção intacto)*
+- `packages/ai/src/chat/pipeline-corretor-no-historico.test.ts` — o bloco de comentário do
+  `describe` de isolamento passou a creditar o mecanismo certo (a asserção, não a recência), com as
+  contagens dos dois arranjos de fixture
 
 ## QA Results
 
-*(a preencher pelo @qa)*
+**Revisor:** @qa (Quinn) · **Data:** 2026-08-15 · **Rodada:** 1 · **Base:** `main` em `24800872`, tudo no working tree
+**Gate:** `docs/qa/gates/87.5-historico-rotulado-fala-do-corretor.yml`
+
+### 🟡 Veredito: **CONCERNS** — liberado sob as restrições de deploy, sendo **R1 BLOQUEANTE**
+
+**Reproduzi tudo do zero. Não revisei o relato.**
+
+#### O que eu medi com as próprias mãos
+
+| régua | declarado | medido por mim |
+|---|---|---|
+| `npx vitest run` | 187 · 2.401 passed · 6 expected fail | **idem** ✔ |
+| `packages/web` `tsc --noEmit` | 0 | **0** ✔ |
+| `packages/ai` `tsc --noEmit` (é o `lint` do pacote) | 0 | **0** ✔ |
+| `turbo lint --force` | 0 errors / 23 warnings | **idem** ✔ *(a 1ª execução veio do cache; refiz sem)* |
+
+**21 mutações aplicadas por mim ao código** (aplicar · rodar · ler · reverter · conferir `md5` —
+restaurado em 21/21). **As 21 produzem vermelho** e as contagens batem ou superam as declaradas:
+M4=12, M3=4, M8=2, M13=4, M10=2, C1=3, M5=1, M5b=1, M7=1, M9=1, M11=1, M12=1, C2=1, B1=2, B2=1, B3=1.
+Cinco mutações minhas que a story não previa (fronteira mapeando p/ `user`, `lastAssistantMsg`
+alargado, instrução nunca, `temFalaDeCorretor` sempre, e o filtro do `generateHandoffSummary`)
+também mordem — a última fechou o único consumidor que ainda não tinha vermelho isolado.
+
+#### Os dois verdes falsos — **prova dupla, quatro células cada**
+
+| | sem mutação | com a mutação |
+|---|---|---|
+| mock do cron **ANTIGO** (`in: () => builder`) | 29/29 | **29/29 — ZERO vermelhos** 🔴 |
+| mock **NOVO** | 29/29 | 1 failed ✔ |
+| AC5-(ii) **sem** o teste `(ii-b)` | 33 passed | **33 passed — ZERO vermelhos** 🔴 |
+| **com** o teste `(ii-b)` | 33 passed | 1 failed ✔ |
+
+**Os dois consertos são reais, não declaratórios.** Reproduzi os dois verdes falsos antes de
+confirmar que fecharam.
+
+#### AC10 — os hashes eu capturei do `HEAD`, não recebi
+
+`git worktree` em `24800872`, capturador próprio, mesmo seed, mesmo relógio, mesmo harness:
+`3ec9480d84f9…`/**30.256** e `d634f39ecc85…`/**30.082** — **batem byte a byte**, com papéis e bloco
+idênticos.
+
+#### 🔴🔴 O experimento com o modelo — **reproduzido, e o `HEAD` é PIOR do que o relato**
+
+Confirmei antes, por Management API, que produção roda `model_primary = claude-sonnet-4-6`,
+`temperature = 0.70` — **o modelo testado É o de produção**. Despejei o payload literal em 3
+variantes e rodei **30 chamadas reais**, n=10 cada:
+
+| | A) `HEAD` (cega) | B) rótulo SEM instrução | C) rótulo COM instrução |
+|---|---|---|---|
+| **contradiz a negociação** | **10/10** | 1/10 | **0/10** |
+| entrega a regra interna *"entrada mínima 20 %"* | **7/10** | 1/10 | **0/10** |
+| entrega o valor interno *"80 mil"* | **7/10** | 1/10 | **0/10** |
+| diz que foi **engano** | 0/10 | **5/10** | **0/10** |
+| **atribui ao corretor** | 0/10 | 0/10 | **10/10** |
+| repete/confirma o valor do corretor | 0/10 | 0/10 | 0/10 |
+| vaza o rótulo | 0/10 | 0/10 | 0/10 |
+
+> *[A10]* "a entrada do Vind fica em torno de **80 mil reais, não 35 mil**. A entrada mínima é **20 %**
+> do valor do imóvel, e isso é fixo pra todos os empreendimentos da Trifold."
+> *[B8]* "essa mensagem anterior **não foi minha**, tá? Parece que **caiu aqui por engano**."
+
+**Conclusão 1 — DIREÇÃO SUSTENTADA, NÚMERO NÃO PUBLICÁVEL.** Agregando as duas amostras
+independentes: **17/20 = 85 %, IC95 % [62,1 % ; 96,8 %]** — o fenômeno é real e robusto. Mas *"em
+produção ela contradiz negociação fechada em 7 de 10"* **não pode subir assim**: o IC95 % de 7/10
+sozinho tem 58 pontos de largura, a fixture é única e **o denominador não está declarado** — a taxa é
+*condicional ao cenário de reativação com valor fechado na última fala*, não a taxa dos turnos da
+Nicole. É a mesma classe de defeito que o @po cobrou **desta própria story** na condição de escape.
+A redação autorizada está no gate (§4).
+
+**Conclusão 2 — SUSTENTADA, e virou restrição BLOQUEANTE.** Com o rótulo e sem a instrução, em
+**5/10** ela desmente ao lead a conversa real do corretor. **Esse defeito não existe hoje: seria
+criado pelo deploy.** Rótulo e instrução são **um artefato indivisível** — a lista nominal do que não
+pode ser separado está em §7-R1 do gate.
+
+#### Os sete consumidores — na verdade **oito**
+
+Confirmados os 7 (incluindo o sétimo, `NICOLE_HISTORY_TRUNCATED`, achado correto do @dev), **cada um
+com vermelho dedicado** e **nenhum com dois papéis**. O 8º é `temFalaDeCorretor` (`pipeline.ts:723`),
+criado por esta story e coberto por 3 mutações — só a contagem do Dev Agent Record está desatualizada.
+A extração para módulo próprio **não perdeu rede**: mutando o carregador novo, a guarda da 87-8
+continua derrubando 23 (cauda→cabeça) e 17 (`reverse` removido).
+
+#### 🔎 Achados (nenhum é defeito de código presente)
+
+| # | sev | achado |
+|---|---|---|
+| **A1** | med | **Remover `.eq("conversation_id")` do carregador derruba ZERO teste em toda a suíte.** No cron o mock tem `eq: () => builder`; no `fake-supabase` o `.eq()` é aplicado mas **nenhuma fixture tem uma segunda conversa**. Não é regressão — mas a story acabou de fazer dessa função o carregador único de dois consumidores, e essa é a única rede. Fecha com uma fixture de 2 conversas. |
+| **A2** | med | A afirmação "7 de 10" precisa de ressalva de generalização e denominador declarado (acima). |
+| **A3** | med | **A AC12-(ii) é colinear.** No `HEAD` ela cita "35 mil" em **5/10** — *para negar*. Busca textual não distingue confirmar de negar. E a métrica que de fato se move (regra interna 20 %: **7/10 → 0/10**) **não está em AC nenhuma**. |
+| **A4** | med | **O gatilho de rollback ficou inalcançável.** Com a higienização, o rótulo nunca chega ao lead. O sinal que sobra é `NICOLE_SYSTEM_BLOCK_LEAK`, **compartilhado com `[SISTEMA]` e sem campo que diga qual marcação vazou**. Pede um `marcacao:` no metadata. |
+| A5 | low | O deploy B muda o **universo** de leads enriquecidos (`messages.length < 2` agora conta o corretor), não só o conteúdo. Não declarado. |
+| A6 | low | `total_na_conversa` muda de população (2→3 papéis): **quebra de série** para quem ler M1/M4 pela rotina da 87-3. |
+| A7 | low | O fail-open do nome cobre `{error}`, não uma rejeição de promise (sem `try/catch`). |
+| A8 | low | A contagem "sete consumidores" está desatualizada pelo próprio trabalho. |
+
+**A1, A3 e A4 eu recomendo fechar ANTES do deploy A** — os três são sobre *saber o que aconteceu
+depois*, numa story cujo tema declarado é não errar em silêncio.
+
+#### 🔴 Restrições de deploy (detalhe em §7 do gate)
+
+- **R1 — BLOQUEANTE:** rótulo e instrução são indivisíveis. Se qualquer um destes ficar fora do PR do
+  deploy A, **o deploy A não sai**: `conversation-history.ts` inteiro · `CONTEXTO_FALA_DE_CORRETOR` ·
+  `corretorContext` (`:723`) e sua soma ao `dynamicSuffix` · `toAnthropicHistory` (`:1113`) ·
+  `MARCACOES_INTERNAS`/`stripSystemBlocks` · `lastAssistantMsg` restrito (`:867`).
+- **R2 — deploy A sozinho.** **Não pode subir junto:** os três arquivos do deploy B.
+- **R3 — deploy B em PR próprio, ≥24 h depois**, e são **exatamente três**:
+  `enrich-leads/route.ts`, `haiku-enrichment.ts`, `enrich-leads/route.test.ts`. A ordem A→B **não é
+  preferência, é dependência de import** (`haiku-enrichment.ts` importa de `conversation-history.ts`).
+- **R4 — conferido por mim:** PR **#382** (87-8/`W1-1`) **MERGED** 10/08 e PR **#380** (87-4)
+  **MERGED** 08/08 → as duas dependências de ordem estão satisfeitas. PR **#425** (87-14) está
+  **aberto** e seus 9 arquivos são **disjuntos** desta story.
+- **R5 —** sem migration, sem DDL, em nenhum ambiente.
+
+#### 🔴 AC12 — o carimbo contra a torcida
+
+**Não executada** (é pós-deploy). A janela de 24 h tem **~21 %** de chance de produzir um caso
+espontâneo de reativação. **Se a janela não produzir, o resultado é INCONCLUSIVO — jamais "sem
+regressão".** A AC12-(i) só fecha com o cenário **provocado** e o turno colado com horário. E o
+**responsável nomeado ainda não existe**: por D7, sem ele o deploy não sai, e este gate não o supre.
+
+#### O que eu **não** verifiquei, dito às claras
+
+Os números da T0 (1.288/305, 26,6 %, as 162 placeholders, as 10 conversas de reativação) — aceitei os
+do @dev, **não os remedi contra produção**; conferi apenas o modelo e a temperatura, que eram o que
+decidia a validade do experimento. O "antes" dos 5 erros de `type-check` (as subtrações já estão
+aplicadas na árvore). A AC12 inteira. O comportamento real do cron depois do deploy B — onde mora o
+Risco 7.
+
+---
+
+## 🔁 Re-gate (round 2) — 2026-08-15
+
+**Escopo:** só os dois itens devolvidos (A1 e A2). Não reabri as 21 mutações, os sete consumidores
+nem os hashes da AC10. R1 e AC12 ficam como estavam.
+
+### 🟡 Veredito mantido: **CONCERNS** — mas o que o sustenta MUDOU
+
+**Os dois itens estão fechados, e o A1 foi fechado com mais rigor do que eu pedi.**
+
+#### Réguas remedidas
+
+187 · **2.407 passed** · 6 expected fail ✔ · `tsc` 0/0 ✔ · lint 0/23 ✔.
+E o **`md5` de `conversation-history.ts` está de volta ao original** (`79e6596f…`), assim como o de
+`pipeline.ts` (`e4f3df64…`): **confirmo que nenhuma linha de produção mudou.** O round 2 é entrega
+**só-de-teste** — não há superfície nova de produção para revisar, e isso baixa o risco do PR.
+
+#### As três contagens — reproduzidas por mutação própria, linha a linha
+
+Mutei **por número de linha** (as três strings são idênticas; mutar por string pegaria a errada),
+contra a **suíte inteira**, com `md5` conferido em 6/6:
+
+| predicado | linha | declarado | **medido por mim** | vermelhos |
+|---|---|---|---|---|
+| a **JANELA** | `:282` | 4 | **4** ✔ | (i), (ii), controle positivo, **+ o do cron** |
+| o **COUNT** | `:308` | 1 | **1** ✔ | (iii) |
+| o **SINAL** | `:317` | 1 | **1** ✔ | (iv) |
+
+**Disjunção confirmada:** nenhum teste cai em duas mutações. A decomposição estava certa e o ganho é
+real — com um teste só, o relatório diria "1 mutação, 1 vermelho" e dois eixos (o `count` que
+alimenta a rotina da 87-3 e o sinal que alimenta a AC4) ficariam cobertos de enfeite.
+*(No alvo isolado a janela dá 3, não 4 — o quarto mora no `route.test.ts`. Os dois números estão
+certos e a tabela dele explicita a divisão.)*
+
+**A célula que fecha o argumento do mock, confirmada:** com o `.eq()` antigo o teste de isolamento do
+cron falha **mesmo com o código de produção íntegro** — 1 vermelho, e é exatamente o de isolamento.
+Quem deixava a conversa alheia passar era o *mock*.
+
+### 🔎 Três achados novos deste round
+
+**R-A1 · A justificativa escrita da fixture é FALSA** *(low, docs)*
+Reescrevi o helper para a conversa alheia ficar em **09:01+** (mais ANTIGA) e medi as duas células:
+código íntegro → 39/39 verde; predicado da janela removido → **2 failed**, (i) e (ii).
+**A afirmação "com a outra conversa mais antiga o teste passaria verde nos dois mundos" está errada.**
+O que faz o teste morder é a **igualdade da lista inteira** (`toEqual`) e a contagem exata — com 6
+mensagens e `limit(20)` nada é expulso da janela, então 6 ≠ 3 em qualquer arranjo. A recência
+acrescenta *um* vermelho colateral (3 → 2), não é o mecanismo.
+**Mantenha a fixture** — a escolha é conservadora e boa. Corrija o **comentário**: ele credita a
+proteção ao mecanismo errado, que é a classe de defeito que este epic persegue. Risco nomeável: quem
+confiar nele e trocar `toEqual` por `not.toContain("90 mil")` cria um verde falso justamente nas
+conversas que truncam.
+
+**R-A2 · Sim, existe um quarto ponto — e não é um quarto `.eq("conversation_id")`** *(informativo hoje)*
+É **o eixo que não existe: organização.** Nenhuma das quatro consultas do carregador tem escopo de
+org, e o único lugar que poderia reconciliar — o `pipeline.ts` — lê **dois** valores de org de fontes
+diferentes e **nunca os compara**: `params.orgId` decide o prompt (`:545`) e os empreendimentos
+(`:588`); `conversation.org_id` (`:615`) decide onde **escreve** (`:1453`, `:1515`, `:1600`). No
+webhook do WhatsApp os dois nascem separados (`config.org_id` × `conversation.id`).
+**Exposição prática hoje: zero** — conferi por Management API que `agent_config` tem **uma única
+linha**. Mas o pivô SaaS multi-tenant está no roadmap, e esta função acabou de virar carregador único
+de dois consumidores. Item de backlog, não conserto agora.
+*Sub-achado medido:* a consulta a `users` (`:236`) é a única do carregador **sem escopo nenhum**.
+Removendo o `.in("id", …)`, a suíte fica **2407/2407 verde** — **mutante equivalente** no
+comportamento (o Map só é consultado por id), **não no risco**: passa a trazer a tabela `users`
+inteira para a memória do turno, com service-role. Nenhuma mutação alcança isso e nenhum teste
+alcançaria — é achado de leitura.
+
+**R-A3 · O Change Log não basta, e agora com número** *(low)*
+A entrada 1.0 tem **duas** ocorrências de "7/10" — a de contradição **e** a de engano — e **nenhuma
+palavra de ressalva local**: medi `superad`, `v1.1`, `condicional`, `IC95`, `denominador` — todos
+**ausentes** do parágrafo de ~4.000 caracteres. A ressalva ficou **referencial**, não local.
+**Mitigação real que existe e que eu credito:** a tabela está em ordem **descendente** — a 1.1 vem
+antes da 1.0, então quem lê sequencialmente encontra a correção primeiro.
+**Ainda assim não basta:** quem faz `grep "7/10"`, abre no meio, ou copia a linha 1.0 para um resumo
+de PR leva o número solto, nas duas conclusões. **Recomendo não reescrever o histórico** (é o ponto
+de um Change Log) e inserir, após cada ocorrência, um marcador inline: *"⚠️ número superado na v1.1 —
+taxa condicional, ver acima"*. Mesma disciplina do `NICOLE_SYSTEM_BLOCK_LEAK`: o identificador não
+muda, só a frase. *(Não executei — só posso editar QA Results.)*
+
+### Julgamento da régua aplicada à conclusão 2 — **concordo integralmente**
+
+12/20 = 60 %, IC95 % [36,1 % ; 80,9 %] — bate com meu cálculo independente. E o mérito é dele: aplicou
+a régua a uma afirmação que **ninguém tinha cobrado** e que sustentava a restrição mais dura do gate,
+admitindo que "em contagem bruta B não é pior que o `HEAD`" — o que enfraquece o próprio argumento.
+É a leitura honesta e é a certa.
+
+**Dois reforços que ele não usou e que deixam o R1 mais forte:**
+1. **Assimetria de reversibilidade.** A e B não são comparáveis na mesma escala: A é dano **herdado**
+   (o rollback não o remove — ele *é* o estado atual); B seria **criado** (o rollback o remove). Um
+   regime de deploy avalia a **variação**, não o nível. Por isso a contagem bruta é irrelevante, não
+   apenas secundária.
+2. **R1 é robusta a TODO o intervalo.** O custo de não fatiar é **zero** (é o default) e o benefício
+   evita um defeito cujo limite inferior do IC é **36 %**. **Mesmo no pior canto a decisão é a
+   mesma.** Uma restrição de deploy que sobrevive ao limite inferior do próprio IC não precisa que o
+   ponto esteja certo — e é esse teste que R1 passa. Registro porque é o que responde a um eventual
+   *"mas 12/20 é pouco"*: não é pouco nem muito, é **irrelevante para a decisão**.
+
+### Por que continua CONCERNS — e a separação que importa
+
+> **O código está LIBERADO PARA MERGE sob R1–R5. O que mantém o gate em CONCERNS não é o código: é
+> que a JANELA DE OBSERVAÇÃO não está pronta.**
+
+**A3** (a AC12-(ii) mede repetição de valor, que não muda, em vez de contradição e entrega de regra
+interna, que é o que muda: 7/10 → 0/10) e **A4** (o gatilho de rollback ficou inalcançável e o evento
+que sobra é compartilhado com o `[SISTEMA]`, sem campo que distinga) seguem abertos. O @dev os
+delegou ao @po/@sm por serem reescrita de AC — **a delegação está correta e eu a endosso**. Mas os
+dois precisam fechar **antes da janela de 24 h**, não antes do merge. Sem eles, o deploy sobe sem
+conseguir dizer o que aconteceu depois — numa story cujo tema declarado é não errar em silêncio.
+
+R1 (indivisibilidade), R2–R5 (fatiamento e ordem) e o carimbo de inconclusividade da AC12 permanecem
+exatamente como estavam no round 1.
+
+— Quinn, guardião da qualidade 🛡️
 
 ---
 
@@ -732,5 +1506,8 @@ leitura, e o deploy B só muda o que o extrator **passa a ver**, não o que já 
 
 | Data | Versão | Descrição | Autor |
 |---|---|---|---|
+| 2026-08-15 | **1.2** | **Fechamento dos TRÊS itens do re-gate (round 2). Só comentário e documento — `md5` de produção intacto (`conversation-history.ts` = `79e6596f…`, `pipeline.ts` = `e4f3df64…`).** **(1) R-A1 — a minha justificativa de fixture estava ERRADA e o comentário enganava.** Eu havia escrito que a conversa alheia precisava ser mais RECENTE, senão o teste "passaria verde nos dois mundos"; o @qa mediu com a fixture antiga (09:01+) e refutou. **Remedi por conta própria** (aplicar · rodar · ler · reverter · `md5`, restaurado em 3/3), removendo UM predicado por vez no alvo isolado (baseline 39/39): a JANELA (`:282`) derruba **3** com as alheias recentes e **2** com as antigas; o COUNT (`:308`) e o SINAL (`:317`) derrubam **1 em cada arranjo**. **O mecanismo é a asserção, não a fixture:** são 6 mensagens com `limit(20)`, nada é expulso da janela em arranjo nenhum, e a igualdade da lista inteira (`toEqual`) mais os valores exatos (`totalEntradas === 4`, `totalNaConversa === 22`, `nossoLadoFalouForaDaJanela === false`) fazem 6 ≠ 3 sempre. A recência acrescenta **um** vermelho colateral (o controle positivo). **A fixture FICA** — um vermelho a mais é cinto e suspensório —, o comentário do bloco de isolamento foi reescrito com o mecanismo real, e ficou nomeado o que **não** se pode enfraquecer: trocar o `toEqual` por `not.toContain(…)` cria verde falso justamente nas conversas que **truncam**, onde a alheia sai da janela por acidente de volume, sem predicado nenhum. A afirmação superada ganhou marcador inline na entrada 1.1 abaixo. **(2) R-A3 — o marcador de superado agora alcança quem lê no meio.** A entrada 1.0 tinha **duas** ocorrências de "7/10" e **zero** palavras de ressalva dentro dela. **Histórico NÃO reescrito** (o ponto de um Change Log é preservar o que foi afirmado): duas inserções **inline**, uma imediatamente após cada ocorrência, com a taxa condicional, o agregado (**17/20**, IC95 % [62 % ; 97 %]; e **12/20**, IC95 % [36 % ; 81 %]) e a ressalva de denominador. Mesma disciplina do `NICOLE_SYSTEM_BLOCK_LEAK`: o texto original não muda, só ganha a ressalva ao lado. **(3) R-A2 — o achado de ORGANIZAÇÃO foi REGISTRADO, não consertado.** Item novo em `docs/backlog.md` (`[ARQ] O carregador de histórico não tem eixo de ORGANIZAÇÃO`), **dono @architect**, destino o épico do pivô SaaS multi-tenant. Conferido por leitura própria: nenhuma das quatro consultas do carregador tem escopo de org, e o `pipeline.ts` lê **dois** valores de org sem compará-los — `params.orgId` decide prompt (`:545`) e empreendimentos (`:588`), `conversation.org_id` (`:615`) decide **onde escreve** (`:1453`, `:1515`, `:1564`, `:1600`) — e no webhook do WhatsApp os dois nascem separados (`route.ts:400`). **Exposição hoje ZERO** (uma linha em `agent_config`); no pivô vira o mesmo vazamento cross-lead um nível acima. **Sub-achado com linha própria:** a consulta a `users` (`:236`) é a única do carregador **sem escopo nenhum** — remover o `.in("id", …)` deixa a suíte inteira verde: **equivalente em comportamento, NÃO em risco** (traz `users` inteira para a memória do turno, com service-role). Mantido: a leitura é a única guarda. **Deliberadamente NÃO feito:** A3 e A4 (reescrita de AC — @po/@sm, prazo é antes da janela de 24 h, não antes do merge) e R1 (ordem de deploy — @devops). **Réguas remedidas:** suíte **187 arquivos · 2.407 passed · 6 expected fail**; `tsc --noEmit` **0** em `packages/web` e **0** em `packages/ai`; `npx turbo lint --force` **0 errors / 23 warnings**. **Nenhuma linha de produção, sem migration, sem DDL, sem push.** | @dev (Dex) |
+| 2026-08-15 | **1.1** | **Fechamento do gate CONCERNS (round 1) — os DOIS itens do @dev, e nada além.** **(1) 🔴 Achado A1 — o isolamento entre conversas ganhou rede, nos dois consumidores.** É a exigência nº 1 do Gabriel (*"jamais pegar informações de outra conversa, de outro lead"*) e não tinha um único teste. Confirmei o achado do @qa por mutação própria e **decompus o predicado em três**, porque `.eq("conversation_id", …)` aparece em três consultas que respondem perguntas diferentes: a **janela** (`:282`), o **count** de `total_na_conversa` (`:308`) e o **sinal** `nossoLadoFalouForaDaJanela` (`:317`). **Medido contra a suíte inteira, aplicar · rodar · ler · reverter · `md5`: as três davam ZERO vermelhos (187 arquivos · 2.401 passed, idêntico ao verde); agora dão 4, 1 e 1**, cada uma com vermelho **dedicado e disjunto**. Zero por motivos DIFERENTES em cada consumidor: no cron o mock tinha `eq: () => builder` e o predicado **nem era avaliado** (mesma família do `.in()` da v1.0, uma linha acima); no `packages/ai` o `fake-supabase` aplica o `.eq()` de verdade, mas **nenhuma fixture tinha uma segunda conversa** — o predicado nunca discriminava. **O conserto do mock é necessário e está provado nas quatro células:** com o mock antigo o teste de isolamento do cron falha **mesmo com o código íntegro** — quem deixava a conversa alheia passar era o mock. As fixtures alheias são deliberadamente **mais recentes** (10:40+ vs 10:01+): a consulta é `created_at` descendente com `limit`, então sem o predicado elas **dominam a cauda** em vez de só se somarem — com a outra conversa mais antiga o teste passaria verde nos dois mundos. ⚠️*(afirmação SUPERADA na v1.2 — REFUTADA por medição: com as alheias em 09:01+ a mutação da janela ainda derruba 2 dos 3. O mecanismo é a igualdade da lista inteira, não a recência; a recência só acrescenta 1 vermelho colateral)* Cada asserção é sobre a **lista inteira** (`toEqual`), e os três vazamentos são nomeados: valor (*"90 mil"*), corretor (*"Valeria"*) e lead (*"Fernanda"*) alheios. **+6 testes** (5 no `packages/ai`, 1 no cron), com controle positivo para o sinal. **(2) Achado A2 — adotada a redação autorizada pelo gate (§4) para o experimento com o modelo**, na seção da AC5. **A frase da entrada 1.0 abaixo (*"em 7/10 ela contradiz a negociação fechada"*) fica SUPERADA por esta:** *"No cenário de reativação com valor fechado na última fala do corretor, o `HEAD` contradisse a negociação em **17 de 20 execuções** (85 %, IC95 % [62 % ; 97 %]; duas amostras independentes de n=10 contra `claude-sonnet-4-6` em temperatura 0,7, fixture única) — e em 7 de 10 entregou ao lead a regra comercial interna 'a entrada mínima é 20 %'. **A taxa é condicional a esse cenário e NÃO é a taxa dos turnos da Nicole.**"* Mesma disciplina aplicada à conclusão 2 (rótulo sem instrução: 7/10 meu + 5/10 do @qa = **12/20, IC95 % [36 % ; 81 %]**, e o que decide é a **natureza** do defeito — novo, criado pelo deploy —, não a contagem bruta). **Deliberadamente NÃO feito:** R1 (indivisibilidade de deploy — instrução para o @devops, não código), AC12 (pós-deploy, sem responsável nomeado por D7) e os achados A3/A4/A5, que são reescrita de AC e pertencem ao @po/@sm. **Réguas remedidas:** suíte **187 arquivos · 2.407 passed · 6 expected fail** (era 2.401); `tsc --noEmit` **0** em `packages/web` e **0** em `packages/ai`; `npx turbo lint --force` **0 errors / 23 warnings**. A régua da raiz (14.292 linhas) é baseline e não é gate. **Sem migration, sem DDL, sem push.** | @dev (Dex) |
+| 2026-08-15 | **1.0** | **Implementada por @dev (YOLO) sobre `main` em `24800872`. `Ready → Ready for Review`.** Entregues os dois deploys em código (A: leitura da Nicole; B: `enrich-leads`), com a separação das janelas a cargo do @devops. **Carregador único** extraído para `packages/ai/src/chat/conversation-history.ts` (a AC7 não fechava com a função privada em `pipeline.ts`): três papéis, normalização da transição na leitura, nome do corretor resolvido em **uma consulta em lote** e rótulo montado só na fronteira da API. **T0 remedida contra produção em 15/08 e os números subiram:** broker **1.288**/305 (a story dizia 900), user 1.042/194, assistant 588/144; a condição de escape **não dispara em nenhuma das quatro leituras** — na população declarada (Nicole **E** corretor, 94 convs) são **26,6 %** contra limiar de 10 %; reativação **10 conversas / 30 respostas cegas**, com **10** ainda `is_ai_active`. **Decisão escrita da T0-(d): as 162 mensagens-placeholder ENTRAM** (74 % têm rótulo semântico; filtrar depois do `limit(20)` encolheria a janela justamente nas conversas longas). **AC6 medida:** 1 erro de `type-check` antes das subtrações, **5** depois — e os que ele não pega ficaram nomeados por escrito. **🔎 SÉTIMO consumidor encontrado:** o evento `NICOLE_HISTORY_TRUNCATED` (criado pela 87-8, depois desta story ser escrita) muda de referente e foi tratado — sem isso ele publicaria `total_na_conversa` MENOR que o próprio `limite`. **Vermelhos medidos por mutação, não declarados** (16 mutações no deploy A, 3 no B): M2 derruba 15, M4 (o `HEAD`) derruba 12, M1 derruba 6. **🔴 Dois verdes falsos encontrados e consertados:** (a) o mock do `enrich-leads` tinha `in: () => builder` e **não filtrava papel nenhum** — a mutação do filtro derrubava **ZERO** teste; (b) a AC5-(ii) era verificada sobre a string concatenada do `system`, e mover a instrução para um bloco **cacheável** não derrubava nada. Os dois passaram a derrubar. **🔴🔴 A premissa da AC5-(i) NÃO se confirma:** rodei o payload real contra `claude-sonnet-4-6` (n=10 por variante) e ela **não repete o valor em 0/10**, nem sem a instrução — a RN4 estática já cobre. **Mas o dano do `HEAD` é maior do que a story dizia:** em **7/10** ⚠️*(número SUPERADO na v1.1 — taxa condicional ao cenário de reativação com valor fechado na última fala; denominador não declarado. Agregado com a amostra independente do @qa: **17/20**, IC95 % [62 % ; 97 %]. NÃO é a taxa dos turnos da Nicole)* ela **contradiz a negociação fechada** (*"não é bem assim, a entrada mínima é 20 %"*), entregando regra comercial interna; e **sem a instrução o rótulo troca um defeito por outro** — em **7/10** ⚠️*(número SUPERADO na v1.1 — mesma ressalva de denominador. Agregado: **12/20**, IC95 % [36 % ; 81 %]; o que sustenta a restrição de deploy é a NATUREZA do defeito — novo, criado pelo deploy —, não a contagem bruta)* ela diz ao lead que a mensagem do corretor *"não era pra você"*. Com a instrução: **10/10** atribuem ao corretor. **Subir o rótulo sem a AC5 seria pior que não subir nada.** **Uma adição fora das ACs, declarada:** `stripSystemBlocks` passa a higienizar `[CORRETOR HUMANO…]` da saída — é subtração, reusa o mecanismo da 75-279 e fecha estruturalmente o gatilho de rollback "o rótulo aparecendo em mensagem enviada ao lead", que até então dependia só de o modelo obedecer. **Réguas:** suíte 186→**187** arquivos e 2.363→**2.401** passed (6 expected fail, iguais); `tsc` 0 em `packages/web` e em `packages/ai`; `lint` **0 errors / 23 warnings** (baseline). Sem migration e sem DDL. **T8/T9 (deploys + AC12) ficam com @devops e @qa.** | @dev (Dex) |
 | 2026-08-07 | **0.2** | **Validação @po (primeira) — ✅ GO condicional (8/10) com as correções aplicadas na mesma passada. `Draft → Ready`.** Aprovados sem ressalva: o desenho **papel interno ≠ papel da API** (conferido no SDK: `MessageParam.role` é `'user' \| 'assistant'`, `messages.d.ts:296` — e mapear o corretor para `user` seria pior, o argumento está certo), a **ordem depois do `W1-1`** (os argumentos do @sm e do @pm são o mesmo eixo visto de dois lados, não se contradizem), o **cabimento na Onda 1** condicionado a AC3/AC4 restritivas, e a **exclusão da identificação de imóvel** (AC9). **Seis correções minhas, todas medidas contra produção e contra o `HEAD`:** **(1) 🔴 A AC6 estava inexequível.** Rodei o alargamento de `Message.role` sob `tsc --strict` numa réplica das seis formas do `HEAD`: ele produz **1 erro, não 6** — os outros cinco são calados por dois casts (linhas 710 e 1157), por dois parâmetros `role: string` (`buildNoReintroContext`, `HandoffMessage`) e por o `enrich-leads` não usar o tipo. E medi a variante: **mesmo sem o cast, o `lastAssistantMsg` não acende**, porque comparar union largo com literal é TS válido — ou seja, o consumidor mais perigoso da story é invisível ao compilador em qualquer variante. AC6 reescrita (grep como mapa primário, `type-check` como rede secundária apertada por **subtração**, e o que ele não pega **nomeado**); mitigação do Risco 8 trocada. **(2) 🔴 O rótulo não teria nome nenhum:** `metadata.broker_id` existe em **0 das 900** mensagens `role='broker'` — ele só é gravado nas **104** transições. As reais usam `sent_by` (795) e `signed_as` (428, que **já é o primeiro nome**). Ordem de resolução corrigida, com o alerta de **não fazer N+1** no caminho quente. **(3) 🔴 A condição de escape não declarava o denominador**, e as leituras caem dos dois lados do limiar de 10 %: todas 8,9 % · com corretor 8,4 % · com Nicole 16,9 % · **Nicole+corretor (a população que a story muda) 20,0 %**. Denominador declarado; **o escape não dispara e a ordem fica confirmada por número**. Mesma correção pedida ao @pm no epic. **(4) A premissa da AC8 estava errada:** `generateHandoffSummary` só imprime `role === 'user'` (`handoff.ts:141`) — nunca atribui fala nenhuma à Nicole; o efeito real é o `TOTAL DE MENSAGENS`. AC8 virou não-regressão, e a "correção mínima" que ela propunha (marcar autor no resumo) é comportamento novo, fora da Onda 1. **(5) A AC12 esperava um evento que provavelmente não ocorre na janela:** reativação acontece **0,23×/dia** e só **9 das 286** conversas com corretor ainda têm `is_ai_active` — ~21 % de chance em 24 h. Passa a ser cenário **provocado** com telefone de teste, como a AC10 da 87-4. **(6) A AC7 não fechava:** `loadConversationHistory` é **privada** (`pipeline.ts:1534`) e o `enrich-leads` vive em outro pacote — exportá-la de `@trifold/ai` entrou na T2. **Exposição corrigida no cabeçalho:** 287 é a população **histórica**; a **viva** é **9**, o que baixa o risco de regressão e é o que cobrou a correção (5). Volumes remedidos: broker **900**/286, user **873**/182, assistant **612**/136; reativação **7 conversas / 27 respostas** (a v0.1 dizia 9/31). Registradas as **105** mensagens-placeholder como decisão de T0. | @po (Pax) |
 | 2026-08-07 | 0.1 | Story criada a partir da decisão do Gabriel, com os volumes medidos pelo @po (broker **882 msgs / 287 conversas** em 30 dias — maior que `user` e `assistant`; **9 conversas** com **31 respostas cegas** da Nicole após fala do corretor; *"entrada de 35 mil"* do Odair na conversa da Sandra). **Recomendação de escopo do @sm: story própria (`W1-7`), NÃO fundida no `W1-1`** — quatro razões (o arquivo é o mesmo mas a mudança não é; fundir atrasa a que dói mais atrás da fila do `W1-3b`; um fix de substrato por deploy; e o `lastAssistantMsg` se resolve **ordenando**, não fundindo), com **ordem recomendada depois do `W1-1`** por razão técnica (com cabeça-20 o corretor come o orçamento da janela; com cauda-20 "as últimas 20 de quem quer que seja" é a janela certa para três interlocutores) e uma **condição de escape medível** (<10% das conversas acima de 20 mensagens). Cabe na Onda 1 **condicionado** a `lastAssistantMsg` e `buildNoReintroContext` serem fixados na direção **restritiva** (AC3, AC4). Levantados contra o `HEAD`: a restrição dura de que `Anthropic.MessageParam` só aceita dois papéis (daí **papel interno ≠ papel da API**), os **seis** consumidores de `history` com decisão para cada um, o alargamento do tipo `Message` como **localizador** de consumidores (AC6), e a exclusão deliberada da identificação de imóvel (AC9) por ser caminho de decisão novo. Defeito 2 (fala humana de transição lida como da Nicole) tratado **junto**, por ser a mesma raiz, com normalização **na leitura** — a gravação em `send-message/route.ts:214` não é tocada e o conserto de origem continua em `docs/backlog.md`. **Dois deploys** numa story: leitura da Nicole (A) e extração `enrich-leads` (B, atrás da 87-4 em produção). | @sm (River) |

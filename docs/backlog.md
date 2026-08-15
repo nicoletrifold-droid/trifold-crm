@@ -366,6 +366,76 @@ curl -X GET https://crm.trifold.eng.br/api/cron/calendly-sync \
 
 ---
 
+### [NICOLE] 🟡 O resumo de handoff não diz QUEM falou — e agora existem três autores
+
+**Adicionado em:** 2026-08-15
+**Prioridade:** P2
+**Origem:** Story 87-5, AC8-(iii) — deliberadamente FORA do escopo dela
+
+`generateHandoffSummary` (`packages/ai/src/flows/handoff.ts:142`) imprime só `role === "user"`: a
+seção `MENSAGENS DO LEAD` nunca citou fala da Nicole e continua não citando a do corretor. Com a
+87-5, o corretor entrou no histórico, então o resumo passou a **contá-lo** em `TOTAL DE MENSAGENS`
+sem **mostrá-lo** — o corretor que recebe o handoff lê "TOTAL: 14" e vê 5 frases do lead.
+
+Marcar o autor dentro do resumo seria **acrescentar conteúdo** ao artefato do handoff, ou seja
+comportamento novo — proibido pela regra de corte da Onda 1 do Epic 87. Fica para onda posterior,
+e a decisão de fazer ou não é do produto, não do implementador.
+
+---
+
+### [NICOLE] 🟡 A promessa do CORRETOR não tem reconciliação — só a da Nicole tem
+
+**Adicionado em:** 2026-08-15
+**Prioridade:** P2
+**Origem:** Story 87-5 (fronteiras) + Story 87-3
+
+A rotina diária da 87-3 mede `M1`/`M4` sobre a fala **da Nicole**. Depois da 87-5 a fala do corretor
+está no mesmo histórico e no mesmo resumo, e ela pode afirmar dia/horário de visita sem lastro em
+`appointments` exatamente como a dela podia. Hoje ninguém mede isso, e o volume não é pequeno:
+**1.288 mensagens `role='broker'` em 30 dias** (medido em 15/08), contra 588 da Nicole.
+
+---
+
+### [ARQ] 🔴 O carregador de histórico não tem eixo de ORGANIZAÇÃO — e o pipeline lê dois valores de org sem comparar
+
+**Adicionado em:** 2026-08-15
+**Prioridade:** P2 hoje · **P0 antes do pivô SaaS** (ver item `[SAAS] Pivô multi-tenant` acima)
+**Dono:** @architect — destino é o épico do pivô multi-tenant, não uma story do Epic 87
+**Origem:** achado R-A2 do re-gate da Story 87-5 (`docs/qa/gates/87.5-historico-rotulado-fala-do-corretor.yml`, §11)
+
+A 87-5 fechou o eixo **conversa**: `.eq("conversation_id", …)` nas três consultas de
+`packages/ai/src/chat/conversation-history.ts` (`:282` janela, `:308` count, `:317` sinal), cada uma
+com vermelho dedicado e disjunto. **O eixo que não existe é o de organização.** Conferido por leitura:
+
+- **nenhuma** das quatro consultas do carregador tem escopo de org;
+- o único lugar que poderia reconciliar — `packages/ai/src/chat/pipeline.ts` — lê **dois** valores de
+  org, de fontes diferentes, e **nunca os compara**: `params.orgId` decide o prompt
+  (`loadAgentConfig`, `:545`) e os empreendimentos (`loadProperties`, `:588`); `conversation.org_id`,
+  lido do banco em `:615`, decide **onde escreve** (appointments `:1453`, activities `:1515`/`:1564`,
+  handoff `:1600`);
+- no webhook do WhatsApp os dois **nascem separados**: `orgId = config.org_id` vem do número de
+  telefone (`packages/web/src/app/api/webhook/whatsapp/route.ts:400`) e o `conversationId` vem da
+  conversa. Se divergirem, o carregador entrega o histórico sem uma linha de defesa.
+
+**Exposição hoje: ZERO** — `agent_config` tem uma única linha (org
+`00000000-0000-0000-0000-000000000001`), então os dois valores não podem divergir. Com multi-tenant,
+vira o mesmo vazamento cross-lead **um nível acima**: cross-org.
+
+**Sub-achado, e é o que dá urgência ao registro:** a consulta a `users`
+(`conversation-history.ts:236`) é a **única do carregador sem escopo nenhum** — nem conversa, nem org.
+O @qa mediu: trocar `.select("id, name").in("id", idsParaResolver)` por `.select("id, name")` deixa a
+suíte **inteira verde** (2.407 passed). É **mutante equivalente em comportamento** (o `Map` só é lido
+por id) **e não em risco**: passa a trazer a tabela `users` inteira para a memória do turno, com
+client de service-role e RLS desligada. Nenhum teste alcança isso — é achado de leitura, não de
+mutação. **Manter o `.in("id", …)`: a leitura é a única guarda que existe.**
+
+**O que fazer (fora do escopo da 87-5, que é read-only e proibida de abrir caminho de decisão novo):**
+comparar `params.orgId` × `conversation.org_id` no pipeline, emitir evento na divergência e decidir a
+política (abortar o turno vs. seguir com o do banco). Uma comparação e um evento — mas é caminho de
+decisão novo, e por isso não entrou aqui.
+
+---
+
 ## Concluído
 
 ### [INFRA] Chaves Supabase legacy no .env.local

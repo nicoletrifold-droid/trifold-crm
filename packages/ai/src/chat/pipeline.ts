@@ -39,6 +39,12 @@ import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
 import type { DbPromptOverrides } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
+import {
+  loadConversationHistory,
+  toAnthropicHistory,
+  temFalaDeCorretor,
+} from "./conversation-history"
+import type { ConversationMessage } from "./conversation-history"
 import { STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 
 /**
@@ -151,8 +157,18 @@ export { detectAffirmedSlot } from "../flows/visit-slot"
 export const SANITIZED_EMPTY_FALLBACK =
   "Desculpa, tive um probleminha aqui. Pode repetir, por favor?"
 
+/**
+ * Story 87-5 — o rótulo do corretor é a SEGUNDA marcação interna que o modelo
+ * pode reproduzir, e o gatilho de rollback desta story é literalmente "o rótulo
+ * [CORRETOR HUMANO aparecendo em qualquer mensagem enviada ao lead". A instrução
+ * do prompt (`CONTEXTO_FALA_DE_CORRETOR`) é a primeira linha de defesa; esta é a
+ * segunda, e é a única que não depende de o modelo obedecer. Mesma mecânica do
+ * `[SISTEMA` — subtração de texto interno na saída, nenhum caminho novo.
+ */
+const MARCACOES_INTERNAS = /\[(SISTEMA|CORRETOR HUMANO)/i
+
 export function stripSystemBlocks(text: string): { text: string; stripped: boolean } {
-  if (!/\[SISTEMA/i.test(text)) return { text, stripped: false }
+  if (!MARCACOES_INTERNAS.test(text)) return { text, stripped: false }
   const cleaned = text
     // Bloco fechado, inclusive quebrando linha ("[^\]]" casa \n).
     // Sem `\b` depois de SISTEMA de propósito: a variante que o modelo inventa
@@ -161,6 +177,9 @@ export function stripSystemBlocks(text: string): { text: string; stripped: boole
     .replace(/\[SISTEMA[^\]]*\]/gi, "")
     // Bloco que o modelo não fechou: até o fim da linha.
     .replace(/\[SISTEMA[^\n]*/gi, "")
+    // O rótulo do corretor: fechado e não-fechado, mesma regra.
+    .replace(/\[CORRETOR HUMANO[^\]]*\]:?/gi, "")
+    .replace(/\[CORRETOR HUMANO[^\n]*/gi, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
@@ -213,15 +232,45 @@ export function resolveNotificationBrokerUserId(
  * A direção é sempre RESTRITIVA: o sinal só SOMA ao `some()`, então só pode
  * suprimir uma apresentação, nunca provocar uma. Suprimir apresentação indevida
  * não causa dano; produzir uma causa constrangimento.
+ *
+ * Story 87-5 (AC4) — passa a contar `assistant` **OU** `broker`: a pergunta é
+ * "o NOSSO lado já falou com este lead?", não "a Nicole já falou?". Um lead que
+ * trocou 20 mensagens com o corretor não pode ouvir "Sou a Nicole, da Trifold
+ * Engenharia" como se fosse primeiro contato. A direção continua sendo a
+ * conservadora — o termo novo só SOMA ao `some()`.
+ *
+ * (E é por isso que a normalização da transição não vira buraco: as 127
+ * mensagens humanas de handoff saem de `assistant` e entram em `broker`, mas
+ * continuam contando aqui — no `lastAssistantMsg` é que elas deixam de contar,
+ * que é justamente onde precisavam parar de contar. Ver AC3.)
  */
 export function buildNoReintroContext(
-  history: Array<{ role: string }>,
+  history: Array<{ role: Message["role"] }>,
   jaFalouForaDaJanela: boolean = false
 ): string {
-  return history.some((m) => m.role === "assistant") || jaFalouForaDaJanela
+  return history.some((m) => m.role === "assistant" || m.role === "broker") ||
+    jaFalouForaDaJanela
     ? "\nIMPORTANTE: Voce JA se apresentou a este lead anteriormente. NAO diga 'Sou a Nicole' ou qualquer variacao de apresentacao. Continue a conversa naturalmente, sem introducao.\n"
     : ""
 }
+
+/**
+ * Story 87-5 (AC5) — a instrução da RN4 para a fala do corretor.
+ *
+ * Exportada porque é conteúdo de prompt e o teste precisa afirmar presença E
+ * ausência dela (uma constante inline viraria string duplicada no teste, que é
+ * como uma guarda passa a existir só no teste).
+ *
+ * Vai no `dynamicSuffix` (por-conversa), NUNCA no bloco estático cacheável.
+ */
+export const CONTEXTO_FALA_DE_CORRETOR =
+  "\n=== FALA DO CORRETOR HUMANO ===\n" +
+  "Mensagens marcadas com [CORRETOR HUMANO] foram escritas por um corretor da equipe, NAO por voce. " +
+  "Use-as apenas para saber o que ja foi tratado com o cliente. " +
+  "NUNCA repita, confirme nem reformule valor, preco, desconto, entrada ou condicao de pagamento que apareca numa mensagem [CORRETOR HUMANO] — " +
+  "se o cliente perguntar sobre isso, diga que o corretor responsavel confirma os detalhes. " +
+  "NUNCA escreva a marcacao [CORRETOR HUMANO] na sua resposta: ela e interna e o cliente nao pode ve-la.\n" +
+  "=== END FALA DO CORRETOR HUMANO ===\n"
 
 interface ConversationState {
   id: string
@@ -234,10 +283,12 @@ interface ConversationState {
   context: Record<string, unknown>
 }
 
-interface Message {
-  role: "user" | "assistant"
-  content: string
-}
+/**
+ * Story 87-5 — o tipo mora em `conversation-history.ts` junto com o carregador
+ * (um dono só, e o cron `enrich-leads` consome o MESMO). `role` tem três
+ * valores: os consumidores precisam distinguir a fala do corretor.
+ */
+type Message = ConversationMessage
 
 interface AgentConfig {
   personality_prompt: string | null
@@ -660,7 +711,16 @@ export async function processMessageWithMetadata(
   // No-reintro context — Story 59-1 (AC1, AC4, AC5)
   // Story 87-8 (AC4) — o 2º argumento é o que impede a cauda de fazer a Nicole
   // se reapresentar quando as 20 mensagens recentes são todas do lead.
-  const noReintroContext = buildNoReintroContext(history, historico.nicoleFalouForaDaJanela)
+  const noReintroContext = buildNoReintroContext(history, historico.nossoLadoFalouForaDaJanela)
+
+  // Story 87-5 (AC5) — a RN4 aplicada à fala do corretor. Só entra quando HÁ
+  // fala de corretor na janela: é contexto por-conversa, nunca bloco estático
+  // cacheável. O corretor pode dizer valor fechado, desconto e condição de
+  // pagamento; a Nicole NÃO pode. Sem isto, a fala dele chega à API como turno
+  // anterior DELA MESMA (`role: "assistant"`, é o único papel que a API aceita)
+  // e o modelo repete o número — foi o "entrada de 35 mil" do Odair na conversa
+  // da Sandra que originou esta guarda.
+  const corretorContext = temFalaDeCorretor(history) ? CONTEXTO_FALA_DE_CORRETOR : ""
 
   // Build the system prompt as Anthropic block array.
   //
@@ -677,6 +737,7 @@ export async function processMessageWithMetadata(
     memoryContext +
     noShowContext +
     noReintroContext +
+    corretorContext +
     buildFlowContext(qualificationStep, qualificationScore, identifiedPropertyId) +
     yardenGateContext
 
@@ -789,9 +850,21 @@ export async function processMessageWithMetadata(
     (agendaState!.data_absoluta !== null || agendaState!.hora !== null)
   // Story 75-268 — última fala da Nicole (o modo agendamento também liga por ela,
   // e a extração de nome da 75-161 usa a mesma string logo abaixo).
+  //
+  // Story 87-5 (AC3) — 🔴 FICA RESTRITO À NICOLE. `broker` nunca é
+  // `lastAssistantMsg`, e a transição normalizada TAMBÉM não (ela era
+  // `role='assistant'` no banco e agora vira `broker` na leitura). Isso corrige
+  // um defeito que já existia: 127 mensagens humanas de handoff podiam ligar o
+  // gate de agendamento e a extração de nome como se a Nicole as tivesse
+  // escrito. A direção é RESTRITIVA — menos coisas contam como fala dela do que
+  // ontem. Se a fala do corretor LIGAR um gate que hoje está desligado, a story
+  // está errada ali.
+  //
+  // ⚠️ Este consumidor é INVISÍVEL ao `type-check` em qualquer variante:
+  // comparar um union largo com um literal é TypeScript válido. A rede aqui é
+  // teste, e só teste — `pipeline-corretor-no-historico.test.ts`, AC3.
   const lastAssistantMsg =
-    [...history].reverse().find((m) => (m as { role?: string }).role === "assistant")
-      ?.content ?? ""
+    [...history].reverse().find((m) => m.role === "assistant")?.content ?? ""
   // Story 75-245 — regra de verdade colada em TODO bloco [SISTEMA] de visita.
   // No incidente do lead Ailton o bloco dizia "visita JÁ confirmada para segunda
   // 3/08 às 12:00 — apenas confirme" e a Nicole anunciou "sábado às 9h" e depois
@@ -1032,13 +1105,12 @@ export async function processMessageWithMetadata(
 
   userContent.push({ type: "text", text: messageWithContext })
 
+  // Story 87-5 (AC1) — A FRONTEIRA. `Anthropic.MessageParam.role` só aceita
+  // dois papéis; a fala do corretor vai como `assistant` (o nosso lado da
+  // conversa) com o `content` prefixado por `[CORRETOR HUMANO — {nome}]: `.
+  // O rótulo é montado AQUI e nunca persistido em `messages`.
   const messages: Anthropic.MessageParam[] = [
-    ...history.map(
-      (msg): Anthropic.MessageParam => ({
-        role: msg.role,
-        content: msg.content,
-      })
-    ),
+    ...toAnthropicHistory(history),
     { role: "user", content: userContent },
   ]
 
@@ -1117,7 +1189,10 @@ export async function processMessageWithMetadata(
       level: "error",
       category: "ai",
       event_type: "NICOLE_SYSTEM_BLOCK_LEAK",
-      message: "Nicole reproduziu um bloco [SISTEMA] na resposta — removido antes do envio",
+      // Story 87-5 — o `event_type` NÃO muda (é o que a instrumentação lê); só a
+      // frase, porque a higienização passou a cobrir duas marcações internas.
+      message:
+        "Nicole reproduziu uma marcacao interna ([SISTEMA] ou [CORRETOR HUMANO]) na resposta — removida antes do envio",
       metadata: {
         lead_id: conversation?.lead_id ?? null,
         raw_message: rawAssistantMessage.slice(0, 500),
@@ -1273,10 +1348,19 @@ export async function processMessageWithMetadata(
     const currentPropId = currentLead?.property_interest_id ?? null
     const explicitFromLead = identifyPropertyUnique(message, properties)
     // Contexto recente (msg atual + histórico) só é usado para PREENCHER quando vazio.
+    // Story 87-5 (AC9) — a fala do CORRETOR fica de fora desta string, de
+    // propósito. Deixar o corretor preencher `property_interest_id` faria o
+    // sistema PASSAR A ACREDITAR em algo que hoje não acredita: é caminho de
+    // decisão novo, e a regra de corte da Onda 1 o proíbe — mesmo sendo
+    // provavelmente a coisa certa a fazer. TODO(onda 3+): reavaliar com o
+    // mesmo cuidado que o `detect-appointment.ts:71` recebeu na 87-4.
     const contextPropertyId = currentPropId
       ? null
       : identifyPropertyUnique(
-          [message, ...history.map((m) => (m as { content?: string }).content ?? "")].join("  "),
+          [
+            message,
+            ...history.filter((m) => m.role !== "broker").map((m) => m.content),
+          ].join("  "),
           properties
         )
     let collectedPropertyId: string | null = null
@@ -1656,117 +1740,6 @@ async function loadConversationState(
   }
 
   return data as ConversationState
-}
-
-/**
- * Story 87-8 (`CR-1`) — o que o carregador de histórico devolve, além das
- * mensagens. Tudo aqui só é preenchido quando a janela TRUNCOU; em conversa
- * curta (87,5 % da população) nenhuma consulta a mais é feita.
- */
-interface HistoricoCarregado {
-  /** A CAUDA da conversa, em ordem cronológica crescente. */
-  messages: Message[]
-  /** `rows.length === limit` — a conversa não coube na janela. */
-  truncou: boolean
-  /** O limite configurado. Explícito, e não `messages.length`: os dois são
-   *  iguais por construção quando truncou, e derivar um do outro esconderia a
-   *  mudança se o limite deixasse de ser 20 algum dia. */
-  limite: number
-  /** Total de mensagens `user+assistant` na conversa (só quando truncou). */
-  totalNaConversa: number | null
-  maisAntigaCarregada: string | null
-  maisRecenteCarregada: string | null
-  /**
-   * A Nicole já falou nesta conversa, mesmo que FORA da janela carregada.
-   *
-   * Só é consultado quando a janela truncou **e** a cauda não tem nenhuma fala
-   * dela — hoje 0 conversas em produção (medido em 08/08 sobre todo o
-   * histórico), mas estrutural. O sinal é de direção RESTRITIVA: ele só pode
-   * SUPRIMIR uma reapresentação, nunca provocar uma.
-   */
-  nicoleFalouForaDaJanela: boolean
-}
-
-/**
- * Story 87-8 — a CAUDA, não a cabeça.
- *
- * O defeito: `ascending: true` + `limit(20)` devolve as 20 mensagens MAIS
- * ANTIGAS. Em conversa longa a Nicole respondia com precisão a um contexto
- * vencido — a Sandra disse "só posso até 400 mil" em 27/07 e ouviu isso de
- * volta em 05/08 porque, para ela, 27/07 ERA o presente. Vivo desde `7194d9b2`
- * (31/03/2026): nunca funcionou.
- *
- * A saída continua CRONOLÓGICA CRESCENTE — nenhum consumidor muda de formato,
- * só de conteúdo.
- */
-async function loadConversationHistory(
-  supabase: SupabaseClient,
-  conversationId: string,
-  limit: number = 20
-): Promise<HistoricoCarregado> {
-  const vazio: HistoricoCarregado = {
-    messages: [],
-    truncou: false,
-    limite: limit,
-    totalNaConversa: null,
-    maisAntigaCarregada: null,
-    maisRecenteCarregada: null,
-    nicoleFalouForaDaJanela: false,
-  }
-
-  const { data, error } = await supabase
-    .from("messages")
-    .select("role, content, created_at")
-    .eq("conversation_id", conversationId)
-    .in("role", ["user", "assistant"])
-    .order("created_at", { ascending: false })
-    // Armadilha 1 da story: duas mensagens no mesmo milissegundo fariam a fatia
-    // de corte entrar/sair de forma não determinística e produzir teste
-    // intermitente. O desempate por `id` é arbitrário mas ESTÁVEL.
-    .order("id", { ascending: false })
-    .limit(limit)
-
-  if (error || !data) {
-    return vazio
-  }
-
-  const linhas = data as Array<Message & { created_at?: string }>
-  // Armadilha 2: `.reverse()` muta. `data` vem do driver — devolver a cópia
-  // deixa o teste honesto e evita efeito colateral no chamador.
-  const messages = [...linhas].reverse()
-  const truncou = linhas.length === limit
-
-  if (!truncou) {
-    // Caso comum (87,5 % da população): NENHUMA consulta a mais.
-    return { ...vazio, messages }
-  }
-
-  const { count } = await supabase
-    .from("messages")
-    .select("id", { count: "exact", head: true })
-    .eq("conversation_id", conversationId)
-    .in("role", ["user", "assistant"])
-
-  // Só quando a cauda inteira é do lead. Hoje: 0 conversas em produção.
-  let nicoleFalouForaDaJanela = false
-  if (!messages.some((m) => m.role === "assistant")) {
-    const { count: falasDela } = await supabase
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("conversation_id", conversationId)
-      .eq("role", "assistant")
-    nicoleFalouForaDaJanela = (falasDela ?? 0) > 0
-  }
-
-  return {
-    messages,
-    truncou,
-    limite: limit,
-    totalNaConversa: count ?? null,
-    maisAntigaCarregada: messages[0]?.created_at ?? null,
-    maisRecenteCarregada: messages[messages.length - 1]?.created_at ?? null,
-    nicoleFalouForaDaJanela,
-  }
 }
 
 async function loadAgentConfig(
