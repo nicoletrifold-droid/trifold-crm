@@ -214,7 +214,7 @@ describe("generateHandoffSummary", () => {
 
   it("limits to last 5 user messages", () => {
     const messages = Array.from({ length: 10 }, (_, i) => ({
-      role: "user",
+      role: "user" as const,
       content: `Mensagem ${i + 1}`,
     }))
     const summary = generateHandoffSummary({}, messages)

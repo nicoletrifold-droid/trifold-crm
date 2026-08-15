@@ -4,6 +4,8 @@
  * and generates structured summaries for the handoff.
  */
 
+import type { ConversationRole } from "../chat/conversation-history"
+
 interface HandoffCheckParams {
   qualificationScore: number
   message: string
@@ -15,8 +17,14 @@ interface HandoffResult {
   reason?: string
 }
 
+/**
+ * Story 87-5 (AC6-ii) — o `role` era `string`, e `string` aceita qualquer
+ * papel: este consumidor não acendia no `type-check`. Estreitar para o union
+ * é SUBTRAÇÃO (não fere a regra de corte da Onda 1) e transforma o compilador
+ * numa rede secundária de verdade.
+ */
 interface HandoffMessage {
-  role: string
+  role: ConversationRole
   content: string
 }
 
@@ -111,6 +119,13 @@ export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
 /**
  * Generates a structured summary of the conversation for the broker.
  * Includes all collected data and key conversation highlights.
+ *
+ * Story 87-5 (AC8) — NÃO-REGRESSÃO, não conserto. A seção `MENSAGENS DO LEAD`
+ * filtra `role === "user"`: ela nunca imprimiu fala da Nicole e continua não
+ * imprimindo fala do corretor. Com o corretor entrando no histórico, a ÚNICA
+ * diferença é `TOTAL DE MENSAGENS`, que passa a contá-lo — e isso é correto:
+ * ele É mensagem da conversa. Rotular o autor DENTRO do resumo seria
+ * acrescentar conteúdo (comportamento novo) e ficou fora da Onda 1.
  */
 export function generateHandoffSummary(
   collectedData: Record<string, unknown>,

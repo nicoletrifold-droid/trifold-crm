@@ -126,8 +126,8 @@ describe("resolveOffHoursResponse — off-hours message (Story 53-1)", () => {
 describe("buildNoReintroContext", () => {
   it("returns instruction when history has at least one assistant message", () => {
     const history = [
-      { role: "user", content: "oi" },
-      { role: "assistant", content: "Sou a Nicole..." },
+      { role: "user" as const, content: "oi" },
+      { role: "assistant" as const, content: "Sou a Nicole..." },
     ]
     const result = buildNoReintroContext(history)
     expect(result).toContain("NAO diga 'Sou a Nicole'")
@@ -135,7 +135,7 @@ describe("buildNoReintroContext", () => {
   })
 
   it("returns empty string when history has no assistant messages", () => {
-    const history = [{ role: "user", content: "oi" }]
+    const history = [{ role: "user" as const, content: "oi" }]
     expect(buildNoReintroContext(history)).toBe("")
   })
 
@@ -144,7 +144,7 @@ describe("buildNoReintroContext", () => {
   })
 
   it("returns instruction when first message is from assistant", () => {
-    const history = [{ role: "assistant", content: "Olá!" }]
+    const history = [{ role: "assistant" as const, content: "Olá!" }]
     expect(buildNoReintroContext(history)).toContain("JA se apresentou")
   })
 })
