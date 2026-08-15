@@ -55,6 +55,10 @@ vi.mock("@web/lib/api-auth", async () => {
 import { PATCH } from "./[id]/route"
 import { POST } from "./route"
 import { MINIMOS_BLOQUEANTES, MINIMOS_NICOLE } from "@web/lib/nicole-minimos"
+// Story 87-14 (AC1) — a tabela de papéis vem do REGISTRO, nunca de uma lista de
+// nomes digitada à mão: papel novo no registro tem de QUEBRAR o teste, não passar
+// despercebido.
+import { KNOWN_ROLES, CAPABILITY_SEED } from "@web/lib/capabilities"
 
 /**
  * Cadastro de produção reduzido ao que os mínimos leem. `is_active: true` nos
@@ -279,5 +283,110 @@ describe("AC7 — a constante única", () => {
       expect(m.rotulo.length).toBeGreaterThan(10)
     }
     expect(new Set(MINIMOS_NICOLE.map((m) => m.id)).size).toBe(MINIMOS_NICOLE.length)
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Story 87-14 — o switch sai do formulário e vai para a lista.
+//
+// A story é de TELA, mas a régua da permissão continua sendo a ROTA: é ela que
+// decide, e é ela que um teste alcança. O que segue não altera uma vírgula do
+// enforcement da 87-13 — só o exercita por eixos que ainda não estavam cobertos.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("87-14 · AC1 — a permissão é comportamental e cobre TODOS os papéis do registro", () => {
+  it("(i) os 10 papéis de `KNOWN_ROLES`: só quem tem a capability altera o campo", async () => {
+    // Papel novo no registro sem linha aqui ⇒ este número muda e o teste cai.
+    expect(KNOWN_ROLES).toHaveLength(10)
+
+    const autorizados: string[] = []
+    const recusados: string[] = []
+
+    for (const papelSobTeste of KNOWN_ROLES) {
+      // 🔴 RESET A CADA VOLTA — isto não é higiene, é a AC.
+      // `KNOWN_ROLES[0] === "admin"`: sem reset, a primeira volta deixaria o Vind
+      // em `true` e as NOVE seguintes virariam no-op (`muda === false`), que é
+      // precisamente o caso em que o gate da rota NÃO roda. O laço mediria o
+      // vazio e ficaria verde com o gate apagado.
+      fake = createFakeSupabase(seed())
+      papel = papelSobTeste
+
+      const autorizado =
+        papelSobTeste === "admin" ||
+        (CAPABILITY_SEED["imoveis.ativar_nicole"] as readonly string[]).includes(papelSobTeste)
+
+      // Transição REAL `false → true`: o fixture nasce com o Vind desligado.
+      const { status } = await patch(VIND, { nicole_enabled: true })
+
+      if (autorizado) {
+        // 🔴 `status !== 403` NÃO serviria: um PATCH que não muda devolve 200 sem
+        // nunca consultar a capability. A metade "autorizado" só vale se a
+        // alteração ACONTECEU — daí a asserção sobre a linha.
+        expect(status, papelSobTeste).toBe(200)
+        expect(linha(VIND).nicole_enabled, papelSobTeste).toBe(true)
+        autorizados.push(papelSobTeste)
+      } else {
+        expect(status, papelSobTeste).toBe(403)
+        expect(linha(VIND).nicole_enabled, papelSobTeste).toBe(false)
+        recusados.push(papelSobTeste)
+      }
+    }
+
+    expect(autorizados).toEqual(["admin", "supervisor"])
+    expect(recusados).toHaveLength(8)
+  })
+
+  it("(ii) controle positivo COM DENTES: `supervisor` liga de verdade — não é bypass de admin", async () => {
+    // Sem este caso, a metade "autorizado" do laço poderia passar inteira pelo
+    // `role === "admin"` do mock e a AC não mediria a capability.
+    papel = "supervisor"
+    const { status } = await patch(VIND, { nicole_enabled: true })
+    expect(status).toBe(200)
+    expect(linha(VIND).nicole_enabled).toBe(true)
+  })
+})
+
+describe("87-14 · AC2 — controle negativo: LIGAR quem passa os mínimos FUNCIONA", () => {
+  it("(i) `supervisor` liga o Vind (1 tipologia, passa o B1) ⇒ 200 e a linha grava", async () => {
+    papel = "supervisor"
+    const { status } = await patch(VIND, { nicole_enabled: true })
+    expect(status).toBe(200)
+    expect(linha(VIND).nicole_enabled).toBe(true)
+  })
+
+  it("(ii) `supervisor` liga o Japura (0 tipologias) ⇒ 422 com `missing` e `faltando` legível", async () => {
+    papel = "supervisor"
+    const { status, json } = await patch(JAPURA, { nicole_enabled: true })
+    expect(status).toBe(422)
+    expect(json.missing).toEqual(["tipologias"])
+    // `faltando` é o array que a TELA renderiza (rótulos pt-BR), não os ids
+    // técnicos de `missing`. Se ele vier vazio, a célula fala em jargão ou não
+    // fala nada.
+    expect(json.faltando.length).toBeGreaterThan(0)
+    expect(linha(JAPURA).nicole_enabled).toBe(false)
+  })
+})
+
+describe("87-14 · AC3 — desligar não é bloqueado pelos MÍNIMOS, mas continua exigindo o PAPEL", () => {
+  it("(i) `supervisor` desliga o Japura com o cadastro vazio ⇒ 200, sem 422", async () => {
+    // A válvula da 87-13: nada que este código faça impede alguém de calar a
+    // Nicole. É decisão sobre os MÍNIMOS — não sobre permissão.
+    linha(JAPURA).nicole_enabled = true
+    papel = "supervisor"
+    const { status, json } = await patch(JAPURA, { nicole_enabled: false })
+    expect(status).toBe(200)
+    expect(json.error).toBeUndefined()
+    expect(linha(JAPURA).nicole_enabled).toBe(false)
+  })
+
+  it("(ii) `obras` tentando DESLIGAR ⇒ 403 — a válvula não é 'qualquer um desliga'", async () => {
+    // A confusão que esta AC existe para impedir: "desligar nunca é bloqueado"
+    // vale para o cadastro, não para o papel. O gate (`if (muda)`) roda ANTES do
+    // `if (desejado)`, nas duas direções.
+    linha(VIND).nicole_enabled = true
+    papel = "obras"
+    const { status } = await patch(VIND, { nicole_enabled: false })
+    expect(status).toBe(403)
+    expect(linha(VIND).nicole_enabled).toBe(true)
   })
 })

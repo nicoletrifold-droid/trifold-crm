@@ -1,0 +1,344 @@
+schema: 1
+storyId: "87-14"
+story: "docs/stories/87-14-switch-da-nicole-na-lista-e-so-para-quem-pode.story.md"
+title: "Quality Gate — o switch da Nicole sai do fim do formulário e vai para a lista, habilitado só para quem pode alterá-lo"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-15"
+branch: "main — trabalho NÃO commitado; HEAD == origin/main == 24800872 (conferido)"
+po_validation: "docs/qa/po-validation-87-14.md (GO 9/10, 8 emendas)"
+
+status_reason: >
+  **Reproduzi tudo do zero e o instrumento morde.** Apaguei o gate de capability da rota (a mutação
+  que o briefing pediu, mais forte que a do @dev, que só trocava a chave) e a suíte da raiz devolveu
+  **4 vermelhos**, entre eles a AC1-(i) e a AC3-(ii) — as duas ACs novas que tocam o gate. As 6
+  mutações declaradas pelo @dev batem, e acrescentei **5 minhas** na função pura (motivo sempre
+  preenchido, polaridade do rótulo invertida, `ligado` fixo): todas as cinco caem, com mensagem que
+  nomeia a combinação. A guarda da 87-13 está **intacta e protegida**: `if (muda)` → `if (true)`
+  derruba 2 testes, e mover `updateFields.nicole_enabled` para dentro do `if (muda)` derruba 1.
+  **A D2 eu conferi literalmente, não por leitura.** Script próprio que extrai as strings dos dois
+  arquivos e compara byte a byte: o `className` do `<span>` para os 8 papéis sem a capability é
+  **idêntico** nas duas direções, o texto é idêntico, o `<td>` é idêntico, o `<span>` continua sendo
+  **filho imediato** do `<td>` (`return badge` cru, sem wrapper) e o único atributo a mais é
+  `title`. Réguas do @po batem: `packages/web` `tsc` = **0**, lint **0 errors / 23 warnings**, suíte
+  **187 arquivos / 2372 passed / 6 expected fail**, AC6 vazia na minha própria forma de comando.
+  **O que segura o PASS não é defeito de código — é o que a story afirma cobrir e não cobre.**
+  Instrumentei o mock de `requireCapability` e medi quais papéis **chegam** ao gate de
+  `imoveis.ativar_nicole`: são **4 dos 10**, não 10. Os outros 6 levam 403 do gate de
+  `imoveis.editar`, em `route.ts:44`, antes. A AC1-(i) se chama *"os 10 papéis"* e é discriminante
+  para **2**. Some-se a isso o `config-surfaces.test.ts`, que continua declarando que este campo é
+  editado no `edit/page.tsx` — a tela de onde esta story acabou de removê-lo — e que a AC6 proíbe
+  corrigir; e a **AC8 sem prova nenhuma** (T9 aberta, 2 caixas do DoD abertas). Nada disso impede o
+  push; tudo isso impede chamar a story de Done hoje.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Verificado de forma independente — reproduzido, não aceito por relato
+# ────────────────────────────────────────────────────────────────────────────
+verificacoes:
+
+  V1_mutacao_decisiva_gate_de_capability_APAGADO:
+    pedido_do_briefing: "apague o gate de capability e conte quantos testes caem"
+    forma: >
+      `route.ts:126` — a linha `if (forbiddenNicole) return forbiddenNicole` substituída por
+      comentário (a chamada a `requireCapability` fica, o EFEITO some). É mutação mais forte que a
+      do @dev, que trocava a chave por `imoveis.editar` e ainda deixava um gate de pé.
+    medido: "Test Files 1 failed | 186 passed (187) · Tests **4 failed** | 2368 passed | 6 expected fail"
+    os_quatro_vermelhos:
+      - "AC6 (87-13) > papel: `obras` pode editar o empreendimento, mas NÃO pode ligar a Nicole"
+      - "AC6 (87-13) > papel: `gerente-relacionamento` também não liga — e salvar outro campo não quebra"
+      - "87-14 · AC1 > (i) os 10 papéis de `KNOWN_ROLES`: só quem tem a capability altera o campo"
+      - "87-14 · AC3 > (ii) `obras` tentando DESLIGAR ⇒ 403 — a válvula não é 'qualquer um desliga'"
+    resultado: MORDE
+    leitura: >
+      A versão corrigida pela emenda E2 é o que faz a AC1 cair. Confirmado de lado pelo próprio
+      @dev: a mutação (b) da AC2 (`missing` sempre `["tipologias"]`) derruba AC1-(i) e AC1-(ii),
+      o que só é possível porque o ramo autorizado assere `status === 200` **e**
+      `linha(VIND).nicole_enabled === true`. Com o `status !== 403` original, um 422 passaria.
+
+  V2_quantos_papeis_CHEGAM_ao_gate:
+    forma: >
+      instrumentei o `requireCapability` mockado do `nicole-enabled.test.ts` para registrar
+      `appUser.role` toda vez que a capability consultada é `imoveis.ativar_nicole`, e revelei o
+      array por uma asserção proposital. Arquivo restaurado depois (md5 conferido).
+    medido: '["admin", "supervisor", "obras", "gerente-relacionamento"] — 4 de 10'
+    causa: >
+      `route.ts:44` cobra `requireCapability(appUser, "imoveis.editar")` ANTES. Os 6 papéis sem
+      `imoveis.editar` (`gerente-comercial`, `sdr`, `broker`, `imob`, `consultoria`,
+      `social-media`) recebem 403 ali e **nunca alcançam** o gate de `imoveis.ativar_nicole`.
+    resultado: DIVERGE_DO_QUE_A_AC_AFIRMA
+    consequencia: "ver findings.Q1 — não é falso verde, é cobertura declarada acima da real"
+
+  V3_a_guarda_da_87_13_nao_foi_quebrada:
+    pedido_do_briefing: "o body só envia nicole_enabled quando o valor muda; sem isso 3 usuários ativos levam 403"
+    duas_camadas_conferidas:
+      camada_rota:
+        mutacao_a: "`if (muda)` → `if (true)` ⇒ **2 vermelhos**"
+        vermelhos_a:
+          - "AC6 > (iv) a checagem roda SÓ na transição false → true"
+          - "AC6 > papel: reenviar o valor ATUAL não exige o papel elevado"
+        mutacao_b: "mover `updateFields.nicole_enabled = desejado` para DENTRO do `if (muda)` ⇒ **1 vermelho** (o (iv), por 400 'No fields to update')"
+        resultado: PROTEGIDA_POR_TESTE_VIVO
+      camada_cliente:
+        forma: "`grep -c 'nicole_enabled\\|nicoleEnabled\\|faltando'` no `edit/page.tsx`"
+        origin_main: 15
+        agora: 0
+        leitura: >
+          A guarda passou de condicional para vacuidade: o formulário não envia o campo em
+          circunstância NENHUMA. `obras`/`gerente-relacionamento` (3 pessoas ativas) salvam o resto
+          da tela pelo motivo mais forte. E o `route.ts` está com **zero diff** — a lógica que
+          protege qualquer outro cliente da API segue de pé.
+    resultado: INTACTA
+
+  V4_D2_byte_a_byte_conferido_LITERALMENTE:
+    pedido_do_briefing: >
+      "o `<span>` tem de continuar filho imediato do `<td>`, mesma string de `className`,
+      sem wrapper — verifique literalmente, não por leitura"
+    forma: >
+      script `node` próprio: extrai por regex o template do `<span>` de
+      `git show origin/main:.../properties/page.tsx`, monta as duas strings finais como o React
+      montaria, extrai `BADGE_BASE`/`BADGE_LIGADA`/`BADGE_DESLIGADA` do componente novo e do
+      `rotulo` da função pura, e compara com `===`.
+    resultados:
+      className_ligada: 'IDENTICO — "rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"'
+      className_desligada: 'IDENTICO — "rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 dark:bg-stone-800 dark:text-stone-400"'
+      texto: 'IDENTICO — ["Nicole: ligada", "Nicole: desligada"]'
+      td_className: 'IDENTICO — "px-6 py-4" nos dois'
+      wrapper: "NENHUM — `if (!estado.interativo) return badge` devolve o `<span>` cru"
+      atributos_do_span: "className, title — exatamente `+title`, nada mais"
+    coercao_de_tipo: >
+      o antigo testava `p.nicole_enabled` (truthy) e o novo passa `p.nicole_enabled === true`.
+      Conferi a coluna: `boolean not null default false`
+      (`supabase/migrations/223_properties_nicole_enabled.sql:79`) — os dois predicados são
+      equivalentes em todo valor possível. Sem divergência.
+    resultado: CONFERE
+
+  V5_ordem_de_hooks_no_early_return:
+    pergunta: "um `return` antecipado num componente é o lugar clássico de quebrar a ordem dos hooks"
+    medido: "`useRouter` + 4 `useState` ficam TODOS antes do `if (!estado.interativo) return badge`"
+    resultado: CORRETO
+
+  V6_AC6_zero_diff_na_MINHA_forma_de_comando:
+    pedido_do_briefing: "refaça com a sua própria forma e diga se concorda"
+    minha_forma: >
+      `git status --porcelain -uall -- packages/ai/ supabase/migrations/ packages/web/src/app/api/`
+      com `grep -v` do arquivo de teste. Prefiro `--porcelain -uall` a `git diff --name-only`
+      **numa chamada só**: o `git diff` não enxerga arquivo novo não rastreado, e nesta story o
+      trabalho está inteiro fora do índice — o @dev precisou de DOIS comandos para cobrir o mesmo
+      terreno. `-uall` evita a colapsagem de diretório novo em uma linha só.
+    saida_a: "VAZIA"
+    controle: "sem a exclusão, sai exatamente 1 linha: ` M packages/web/src/app/api/properties/nicole-enabled.test.ts`"
+    saida_b_numstat: "109	0	packages/web/src/app/api/properties/nicole-enabled.test.ts — deleções = 0, aditivo"
+    inventario_completo_da_arvore_sob_packages: >
+      3 modificados + 3 novos, **idêntico à File List**, nada a mais:
+      `api/properties/nicole-enabled.test.ts` (+109/−0),
+      `dashboard/properties/[id]/edit/page.tsx` (+23/−49),
+      `dashboard/properties/page.tsx` (+23/−9),
+      `dashboard/properties/_components/nicole-switch.tsx` (165 linhas, novo),
+      `lib/nicole-switch.ts` (89, novo), `lib/nicole-switch.test.ts` (74, novo).
+    concordo: SIM
+    epic_e_migrations: >
+      `docs/stories/epics/epic-87-*.md` está modificado na árvore, mas **por outras stories**:
+      `git diff origin/main` daquele arquivo tem **0** ocorrências de "87-14". A afirmação do @dev
+      de não ter tocado o corpo do epic **procede** — e é por isso que a entrada em
+      `stories_planned` continua faltando (pendência do @pm, declarada).
+
+  V7_a_mutacao_que_o_dev_diz_nao_matar:
+    pedido_do_briefing: "julgue se isso é desenho aceitável ou teste frouxo"
+    forma: "mover SÓ `carregarCadastroNicole` (+ o `if (!cadastro) 404`) para fora do `if (desejado)`"
+    medido: "Test Files 187 passed · Tests 2372 passed | 6 expected fail — **suíte inteira verde**"
+    veredito: DESENHO_ACEITAVEL_NAO_TESTE_FROUXO
+    razao: >
+      É um **mutante equivalente**. O `atual` já foi carregado com os mesmos três `.eq` logo acima
+      (`route.ts:108-114`); a única diferença observável seria um SELECT extra no caminho do
+      DESLIGAR e um 404 teórico se a linha sumisse entre as duas leituras — um TOCTOU que só faria
+      o desligar falhar, nunca passar. Nenhuma suíte pode matar um mutante equivalente, por
+      definição. O defeito estava na **escolha** da mutação pelo @sm, não na cobertura — e o @po
+      pegou isso na emenda E3. Confirmo: a mutação certa (remover o `if (desejado)` inteiro) mata,
+      e é a que está na AC.
+
+  V8_ACs_de_comando_e_baselines:
+    ac5_i: "grep no `edit/page.tsx`: origin/main = **15** → agora = **0**"
+    ac5_ii: "`fica na lista de empreendimentos` = 1 ocorrência (linha 429), e o `<Link>` para `/dashboard/properties` existe (import de `next/link` na linha 6)"
+    ac5_v: "`grep -c '\"imoveis.ativar_nicole\"'` no `page.tsx` = **1** — a chave é a mesma que a rota cobra em `route.ts:125`"
+    ac7_i: "`npx vitest run` da raiz: **187 arquivos, 2372 passed, 6 expected fail** — bate com o declarado"
+    ac7_ii: >
+      congelamento dos 14 títulos por `comm -23` entre `git show origin/main:` e o arquivo atual:
+      **saída vazia** (nenhum sumiu nem foi renomeado); 14 → 20.
+    ac7_iii: "`cd packages/web && npx tsc --noEmit | wc -l` = **0**"
+    ac7_iv: "`npm run lint` = **0 errors, 23 warnings**, 8/8 tarefas — idêntico ao baseline; nenhum warning em arquivo desta story"
+    ac4_mutacoes_do_dev: "(a) `interativo: true` ⇒ 1 vermelho, mensagem `false/false: expected true to be false`; (b) `textoConfirmacao` literal ⇒ 1 vermelho, `expected 'Ligar…' to be 'Desligar…'`"
+    ac4_mutacoes_MINHAS:
+      - "`motivo` sempre preenchido ⇒ vermelho (`false/true: expected 'Só admin e supervisor…' to be null`) — o lado `toBeNull` da AC existe e morde"
+      - "polaridade de `rotulo` invertida ⇒ vermelho no (ii) — o congelamento do texto de produção é real"
+      - "`ligado` fixo em `true` ⇒ vermelho no (i)"
+    resultado: TODAS_CONFEREM
+
+  V9_AC8_declaracao_de_nao_automatizavel:
+    reconferido_por_mim:
+      - "`grep -rn testing-library package.json packages/*/package.json` ⇒ exit 1, zero ocorrência"
+      - "`find packages -name '*.test.tsx'` (fora de node_modules e .next) ⇒ **0**"
+      - "`vitest.config.ts` `include` ⇒ só `packages/{ai,shared,web}/src/**/*.test.ts` — `.tsx` fora do glob"
+    resultado: DECLARACAO_PROCEDE
+    registro: "AC8 fica **NÃO VERIFICADA**. Não inventei cobertura e não marquei por leitura de código."
+
+  V10_arvore_restaurada:
+    forma: "`md5` de 8 arquivos antes de qualquer mutação × depois de todas; `diff` dos dois manifestos"
+    resultado: "IDÊNTICOS — nenhuma mutação sobreviveu à revisão"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Rastreabilidade AC → prova
+# ────────────────────────────────────────────────────────────────────────────
+traceability:
+  AC1: { status: VERDE_COM_RESSALVA, prova: "V1 + V2 — morde, mas cobre 4/10 no gate e discrimina 2/10 (Q1)" }
+  AC2: { status: VERDE, prova: "2 casos novos; mutação nas duas direções reportada pelo @dev e coerente com V1" }
+  AC3: { status: VERDE, prova: "V1 (o (ii) cai com o gate apagado) + V7 (a mutação corrigida da E3 é a que mata)" }
+  AC4: { status: VERDE, prova: "V8 — 2 mutações do @dev + 3 minhas, todas vermelhas" }
+  AC5: { status: VERDE, prova: "V8 — 15→0, ponteiro em 1 ocorrência, capability literal = 1" }
+  AC6: { status: VERDE, prova: "V6 — na minha forma de comando; concordo com a régua da emenda E1" }
+  AC7: { status: VERDE, prova: "V8 — suíte, `comm` dos 14 títulos, tsc 0, lint no baseline" }
+  AC8: { status: NAO_VERIFICADA, prova: "V9 — não automatizável (reconferido). T9 aberta." }
+
+# ────────────────────────────────────────────────────────────────────────────
+# Achados meus — nenhum é defeito de código do que sobe
+# ────────────────────────────────────────────────────────────────────────────
+findings:
+
+  Q1:
+    severidade: medium
+    categoria: tests
+    titulo: 'A AC1-(i) se chama "os 10 papéis" e é discriminante para 2'
+    medido: >
+      instrumentando o mock (V2), os papéis que **chegam** ao gate de `imoveis.ativar_nicole` são
+      `["admin","supervisor","obras","gerente-relacionamento"]`. Os outros 6 param no
+      `requireCapability(appUser, "imoveis.editar")` de `route.ts:44`.
+    por_que_importa: >
+      O `expect(status).toBe(403)` do ramo recusado **não sabe de qual gate veio o 403**. Para os 6
+      papéis sem `imoveis.editar`, ele continuaria verde mesmo que a capability
+      `imoveis.ativar_nicole` fosse removida da rota — é colinearidade entre duas capabilities,
+      irmã da que o @po pegou na E6 pelo eixo do seed. A mutação do V1 só mata porque `obras` e
+      `gerente-relacionamento` viram 200, e esses dois **já eram cobertos pelos 2 testes da 87-13**.
+    contribuicao_marginal_real_da_AC1: >
+      (a) o trip-wire `expect(KNOWN_ROLES).toHaveLength(10)`, que é novo e vale — papel acrescentado
+      ao registro quebra o teste; (b) assertar o **estado da linha** e não só o status (emenda E2).
+      Ambas legítimas. O que não é verdade é a frase "os 10 papéis são exercidos [contra esta
+      capability]".
+    recomendacao: >
+      Barato e decisivo: assertar o **corpo** do 403 ou instrumentar qual capability foi consultada,
+      de modo que o teste distinga `imoveis.editar` de `imoveis.ativar_nicole`. Alternativa mais
+      barata ainda: um comentário honesto no teste dizendo que 6 dos 10 são barrados antes, para o
+      próximo leitor não superestimar a régua. **Não bloqueia** — a AC morde onde precisa morder.
+
+  Q2:
+    severidade: medium
+    categoria: docs
+    titulo: "O inventário de superfícies passou a mentir sobre onde este campo é editado — e a AC6 proíbe consertar"
+    onde: "packages/ai/src/config-surfaces.test.ts:270"
+    texto_atual: 'editadoEm: "painel /dashboard/properties/[id]/edit + PATCH /api/properties/[id]"'
+    problema: >
+      Depois desta story o campo **não é mais editável** naquela tela — o controle vive em
+      `/dashboard/properties`. O `config-surfaces.test.ts` é justamente o artefato que este epic
+      criou para impedir "controle no painel que o runtime ignora"; ele continua verde (o campo
+      `editadoEm` é descritivo, só entra na mensagem de erro da linha 422, nunca é assertado), mas
+      passou a apontar para a tela errada.
+    tensao_declarada: >
+      Corrigir a linha é 1 palavra e **viola a AC6** (zero diff em `packages/ai/`), cuja (iii) manda
+      devolver a story ao @po se ficar vermelha. Não peço a correção aqui — registro que a story
+      invalidou uma linha de um artefato de governança e que a própria cerca de escopo dela impede
+      o conserto. É item de uma linha para a próxima story do epic que já abra `packages/ai/`.
+
+  Q3:
+    severidade: low
+    categoria: requirements
+    titulo: "As ACs de `grep` continuam sem dizer O QUE medem"
+    contexto: >
+      O @dev registrou as duas armadilhas no Dev Agent Record (o JSX quebrando a frase em duas
+      linhas deu grep 0 com código certo; um comentário dele deixou o grep da AC5 em 1) e concluiu
+      que *"uma AC de grep precisa dizer se mede o texto renderizado ou o texto do arquivo"*.
+      **A conclusão ficou só no registro — o texto da AC5 não foi emendado**, e @dev não pode
+      emendar AC (autoridade do @po).
+    risco_real_medido: >
+      Baixo nesta casa: a linha 429 tem 108 caracteres e **não há Prettier instalado nem
+      configurado** no repositório (`npx prettier` → command not found; nenhum `.prettierrc`), e o
+      lint não tem `max-len` como erro. Ou seja, nada no pipeline vai reflowar a frase sozinho. O
+      risco é o próximo humano que quebre a linha por estética.
+    recomendacao: "quando a AC5 for reaproveitada, escrever no corpo dela: 'mede o TEXTO DO ARQUIVO, e por isso a frase fica numa linha só de propósito'."
+
+  Q4:
+    severidade: low
+    categoria: requirements
+    titulo: "O passo 3 do roteiro da AC8 pede para observar uma coisa que não está na tela naquele momento"
+    texto_da_AC: '"admin tenta ligar o Japura ⇒ aparece ''Pelo menos uma tipologia cadastrada'' e o link Completar cadastro; o switch **não** muda de estado"'
+    o_que_o_codigo_faz: >
+      ao clicar, a célula **inteira** é substituída pela pergunta de confirmação (decisão 4 do @dev,
+      para não deixar checkbox mentindo). Depois do 422 o componente **não** reseta `confirmando`,
+      então a célula mostra pergunta + [Confirmar]/[Cancelar] + erro + lista `faltando` + link.
+      **O checkbox não está visível para se conferir que "não mudou".** O comportamento está certo
+      (não há update otimista); o roteiro é que está escrito para o desenho anterior.
+    como_conferir_na_pratica: "após o 422, clicar [Cancelar] e conferir que o checkbox volta desmarcado. Ajustei o roteiro do passo 3 abaixo."
+
+  Q5:
+    severidade: low
+    categoria: tests
+    titulo: "As 4 combinações num `it` só param na primeira que quebra"
+    contexto: "ressalva de contagem que o próprio @dev levantou (AC4-(iv)(a) previa '2 dos 4 caem', o reporter mostra 1)"
+    meu_juizo: ACEITAVEL_COM_RESSALVA
+    razao: >
+      A legibilidade está preservada: o rótulo passado como 2º argumento do `expect` aparece no
+      vermelho (`false/false: expected true to be false`), então o leitor sabe **qual** combinação
+      quebrou. O que se perde é **resolução**: o laço aborta na primeira falha, então se duas
+      combinações quebrarem por motivos diferentes, só a primeira é vista. Para uma função de 6
+      linhas isso não paga 4 `it`s — mas a AC deveria dizer "1 vermelho nomeando a combinação",
+      não "2 dos 4 casos caem", senão a próxima pessoa vai procurar um segundo vermelho que não
+      existe. O @dev declarou a divergência em vez de esconder; é o comportamento certo.
+
+# ────────────────────────────────────────────────────────────────────────────
+# NÃO VERIFICADO — dito na cara, sem cobertura inventada
+# ────────────────────────────────────────────────────────────────────────────
+nao_verificado:
+
+  AC8_conferencia_humana:
+    razao: >
+      Não há harness de teste de componente React neste repositório (V9, reconferido por mim: sem
+      `@testing-library`, zero `.test.tsx`, e o `include` do vitest nem coletaria um). O Playwright
+      existe mas exige app de pé **e sessão autenticada por papel**, que esta story não monta.
+      É a quarta story seguida assim; o @po já abriu o item no `docs/backlog.md`
+      (*"[QA] 🔴 Não existe harness de teste de componente React"*).
+    quem: "@qa (Quinn) + Gabriel — T9"
+    roteiro_de_6_passos:
+      - "1. **admin** abre `/dashboard/properties`: a coluna NICOLE mostra checkbox acionável nos quatro; Vind e Yarden ligados, Japura e Solum desligados."
+      - "2. **admin** desliga o **Yarden** ⇒ pergunta *\"Desligar a Nicole no Yarden?\"* ⇒ [Confirmar] ⇒ a lista reflete \"desligada\" após o `router.refresh()`; **religa** ⇒ volta. (É o R2 — se o refresh não refletir, o conserto é `revalidatePath`.)"
+      - "3. **admin** tenta ligar o **Japura** ⇒ [Confirmar] ⇒ aparece *\"Pelo menos uma tipologia cadastrada\"* e o link **Completar cadastro**. ⚠️ **corrigido (Q4):** o checkbox não está na tela nesse instante — clicar **[Cancelar]** e conferir que ele volta **desmarcado**."
+      - "4. 🔴 usuário **`obras`** (2 ativos) ou **`gerente-relacionamento`** (1 ativo) abre a mesma URL ⇒ **nenhum controle na célula**: só o badge, com o motivo no `title`. **Print lado a lado com produção de hoje.** (Eu já provei byte a byte no V4 que o markup é o mesmo; o print é para o Gabriel ver o mesmo que eu medi.)"
+      - "5. o mesmo usuário abre `Editar` ⇒ **não há toggle**; há o ponteiro estático na caixa `mt-6` com `<Link>` para a lista; salvar outro campo (ex.: `Conceito`) ⇒ **200, sem 403**. É a regressão que mais importa — e a que eu já cobri por dois lados no V3."
+      - "6. 🔴 confirmação nas duas direções; **[Cancelar]** não dispara `PATCH` nenhum (conferir na aba Network)."
+
+  R2_router_refresh:
+    razao: "só observável com o app de pé e sessão autenticada — passo 2 do roteiro acima"
+
+  comportamento_em_producao:
+    razao: "nada foi deployado; o trabalho está não commitado sobre `origin/main`"
+
+# ────────────────────────────────────────────────────────────────────────────
+evidencias_de_qualidade:
+  suite: "187 arquivos / 2372 passed / 6 expected fail — 0 falhas novas (baseline do @po batido)"
+  typecheck: "cd packages/web && npx tsc --noEmit ⇒ 0 linhas (o da raiz é baseline de 14.292 e NÃO é o gate — emenda E8)"
+  lint: "0 errors / 23 warnings, 8/8 tarefas turbo — idêntico ao baseline"
+  seguranca: >
+    o enforcement continua **inteiramente** no servidor: `route.ts` com zero diff, gate por
+    `requireCapability` na transição. A tela deixou de OFERECER o que o servidor recusa — não passou
+    a ser a régua. `podeAtivar` chega ao cliente como booleano de exibição; forjá-lo no browser não
+    contorna nada (V1 prova que a rota barra).
+  arquitetura: >
+    a subtração é o instrumento certo e a story a usou: 49 linhas removidas do formulário contra 23
+    acrescentadas. Um controle que não é renderizado não pode mentir. A decisão saiu do JSX e virou
+    função pura testável — que é a única forma de cobertura possível nesta casa.
+
+recomendacao_final: >
+  **Liberado para @devops.** O que segura o PASS é o que **falta medir** (AC8/T9, 2 caixas do DoD) e
+  duas verdades declaradas acima do real (Q1 e Q2) — nenhuma delas é defeito do código que sobe, e
+  nenhuma delas piora produção. Antes de marcar `Done`: rodar o roteiro de 6 passos com o Gabriel
+  (com o passo 3 corrigido), e o @pm criar a entrada em `stories_planned` do Epic 87, que continua
+  faltando (conferido: 0 ocorrências de "87-14" no diff do epic).

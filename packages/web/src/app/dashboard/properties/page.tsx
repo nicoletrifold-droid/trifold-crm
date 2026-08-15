@@ -2,8 +2,10 @@ import { createClient } from "@web/lib/supabase/server"
 import { propertyStatusBadge, propertyStatusLabel } from "@web/lib/property-status"
 import { getServerUser } from "@web/lib/auth"
 import { canEditImoveis, canCreateImoveis } from "@web/lib/permissions-imoveis"
+import { can } from "@web/lib/permissions"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
+import { NicoleSwitch } from "./_components/nicole-switch"
 
 export default async function PropertiesPage() {
   const user = await getServerUser()
@@ -18,6 +20,18 @@ export default async function PropertiesPage() {
   // Editar: admin/supervisor/obras. Criar: admin/supervisor (fonte única).
   const canEdit = await canEditImoveis(user.id, user.orgId)
   const canCreate = await canCreateImoveis(user.id, user.orgId)
+  /**
+   * Story 87-14 — a capability PRÓPRIA do switch, resolvida uma vez por request
+   * (o `getUserPermissions` por trás de `can()` é cacheado por userId/orgId), não
+   * por linha da tabela.
+   *
+   * 🔴 A chave literal importa: 29 das 103 capabilities do registro têm o mesmo
+   * seed `[admin, supervisor]` — inclusive `imoveis.criar` e `imoveis.apagar`.
+   * Qualquer uma delas compilaria e acertaria a tela HOJE, e a divergência só
+   * apareceria no dia em que a matriz do painel mudasse para uma das duas, sem
+   * deploy e sem aviso. É a mesma chave que a rota cobra (`route.ts:125`).
+   */
+  const podeAtivarNicole = await can(user.id, user.orgId, "imoveis.ativar_nicole")
 
   return (
     <div className="space-y-6">
@@ -63,15 +77,15 @@ export default async function PropertiesPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      p.nicole_enabled
-                        ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
-                        : "bg-gray-100 text-gray-600 dark:bg-stone-800 dark:text-stone-400"
-                    }`}
-                  >
-                    {p.nicole_enabled ? "Nicole: ligada" : "Nicole: desligada"}
-                  </span>
+                  {/* Story 87-14 — o CONTROLE vive aqui, não no fim do formulário
+                      de edição. Para quem não tem `imoveis.ativar_nicole`, o
+                      componente devolve exatamente o badge de leitura de antes. */}
+                  <NicoleSwitch
+                    propertyId={p.id}
+                    nome={p.name}
+                    nicoleEnabled={p.nicole_enabled === true}
+                    podeAtivar={podeAtivarNicole}
+                  />
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
                   {p.city}/{p.state}
