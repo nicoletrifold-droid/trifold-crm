@@ -29,7 +29,6 @@ interface PropertyData {
   faq: unknown
   restrictions: unknown
   video_tour_url: string | null
-  nicole_enabled: boolean
 }
 
 // Story 75-283: opções vêm da fonte única (`PROPERTY_STATUS_OPTIONS`)
@@ -42,8 +41,6 @@ export default function PropertyEditPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** Story 87-13 — a lista `missing` do 422, renderizada item a item. */
-  const [faltando, setFaltando] = useState<string[]>([])
   const [success, setSuccess] = useState(false)
 
   const [name, setName] = useState("")
@@ -68,15 +65,17 @@ export default function PropertyEditPage() {
   const [faq, setFaq] = useState("")
   const [restrictions, setRestrictions] = useState("")
   const [videoTourUrl, setVideoTourUrl] = useState("")
-  const [nicoleEnabled, setNicoleEnabled] = useState(false)
   /**
-   * Story 87-13 — o valor que veio do servidor. O `handleSave` monta o body
-   * inteiro a cada save; se `nicole_enabled` fosse SEMPRE enviado, um usuário de
-   * `obras` ou `gerente-relacionamento` (que pode editar o empreendimento, mas
-   * não pode mexer neste campo) levaria 403 ao salvar QUALQUER coisa. Envia-se o
-   * campo só quando ele muda de verdade.
+   * Story 87-14 — o switch da Nicole NÃO mora mais nesta tela; ele foi para a
+   * lista, onde a permissão (`imoveis.ativar_nicole`) é resolvida no servidor
+   * antes de o controle existir.
+   *
+   * Este formulário deixou de carregar o campo DE PROPÓSITO: enquanto o
+   * identificador existisse aqui, um refactor futuro que remontasse o body a
+   * partir do estado o reenviaria sem querer, e `obras`/`gerente-relacionamento`
+   * voltariam a levar 403 ao salvar qualquer outro campo. A guarda "só envia
+   * quando muda" da 87-13 não foi revogada — ela ficou sem objeto.
    */
-  const [nicoleEnabledOriginal, setNicoleEnabledOriginal] = useState(false)
 
   useEffect(() => {
     async function fetchProperty() {
@@ -112,8 +111,6 @@ export default function PropertyEditPage() {
         setFaq(data.faq ? JSON.stringify(data.faq, null, 2) : "")
         setRestrictions(data.restrictions ? JSON.stringify(data.restrictions, null, 2) : "")
         setVideoTourUrl(data.video_tour_url || "")
-        setNicoleEnabled(data.nicole_enabled === true)
-        setNicoleEnabledOriginal(data.nicole_enabled === true)
       } catch {
         setError("Erro ao carregar empreendimento")
       }
@@ -134,7 +131,6 @@ export default function PropertyEditPage() {
   async function handleSave() {
     setSaving(true)
     setError(null)
-    setFaltando([])
     setSuccess(false)
 
     // Parse JSON fields
@@ -191,11 +187,6 @@ export default function PropertyEditPage() {
       video_tour_url: videoTourUrl.trim() || null,
     }
 
-    // Story 87-13 — só vai no body quando MUDA (ver `nicoleEnabledOriginal`).
-    if (nicoleEnabled !== nicoleEnabledOriginal) {
-      body.nicole_enabled = nicoleEnabled
-    }
-
     try {
       const res = await fetch(`/api/properties/${propertyId}`, {
         method: "PATCH",
@@ -206,16 +197,10 @@ export default function PropertyEditPage() {
       if (!res.ok) {
         const json = await res.json()
         setError(json.error || "Erro ao salvar")
-        // Story 87-13 — quando o servidor recusa LIGAR a Nicole (422), a lista do
-        // que falta volta item a item. Renderizá-la é a diferença entre "corrija
-        // o cadastro assim" e um "erro ao salvar" genérico, que o admin não sabe
-        // o que fazer com.
-        setFaltando(Array.isArray(json.faltando) ? json.faltando : [])
         setSaving(false)
         return
       }
 
-      setNicoleEnabledOriginal(nicoleEnabled)
       setSuccess(true)
       setTimeout(() => {
         router.push(`/dashboard/properties/${propertyId}`)
@@ -434,36 +419,25 @@ export default function PropertyEditPage() {
           </div>
         </div>
 
-        {/* Story 87-13 — o switch do que a Nicole pode falar deste empreendimento */}
+        {/* Story 87-14 — o PONTEIRO, no mesmo lugar visual onde o toggle estava.
+            Estático de propósito: espelhar o estado exigiria trazer o campo de
+            volta para a `PropertyData` e para o `setState` do fetch, que é o
+            vetor de ressurreição do 403 que esta story fechou. O estado real
+            está a um clique, na lista, onde o controle vive. */}
         <div className="mt-6 rounded-md border border-gray-200 p-4 dark:border-stone-700">
-          <label className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={nicoleEnabled}
-              onChange={(e) => setNicoleEnabled(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
-            />
-            <span>
-              <span className="block text-sm font-medium text-gray-900 dark:text-stone-100">
-                A Nicole pode falar deste empreendimento
-              </span>
-              <span className="mt-0.5 block text-xs text-gray-500 dark:text-stone-400">
-                Desligado: ela não menciona, não reconhece o nome e não envia mídia deste
-                empreendimento.
-              </span>
-            </span>
-          </label>
+          <p className="text-sm text-gray-600 dark:text-stone-400">
+            O switch da Nicole (quais empreendimentos ela pode citar) fica na lista de empreendimentos.{" "}
+            <Link
+              href="/dashboard/properties"
+              className="font-medium text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
+            >
+              Ir para a lista
+            </Link>
+          </p>
         </div>
 
         {/* Messages */}
         {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {faltando.length > 0 && (
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-600 dark:text-red-400">
-            {faltando.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        )}
         {success && <p className="mt-4 text-sm text-green-600 dark:text-green-400">Salvo com sucesso! Redirecionando...</p>}
 
         {/* Actions */}
