@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient()
   const { createAnthropicClient } = await import("@trifold/ai")
-  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel, omitAgendaKeys, omitLegacyAgendaKeys, LEGACY_AGENDA_KEYS, calculateQualificationScore, analisarAfirmacaoDeVisita, carregarAppointmentsDoLead, classificarResumo, renderFatoDeAgenda, EVENTO_RESUMO_SEM_LASTRO } = await import("@trifold/ai")
+  const { enrichLeadFromConversation, mapExtractedDataToLeadFields, stripAlreadyFilledPerfil, stripManualInterestLevel, omitAgendaKeys, omitLegacyAgendaKeys, LEGACY_AGENDA_KEYS, calculateQualificationScore, analisarAfirmacaoDeVisita, carregarAppointmentsDoLead, classificarResumo, renderFatoDeAgenda, EVENTO_RESUMO_SEM_LASTRO, loadConversationHistory } = await import("@trifold/ai")
   const anthropic = createAnthropicClient()
 
   const cutoff = new Date(Date.now() - ENRICHMENT_WINDOW_MINUTES * 60 * 1000).toISOString()
@@ -72,22 +72,21 @@ export async function GET(request: NextRequest) {
       // terceira story seguida em que esta esteira foi a esquecida (87-4: último
       // escritor de 70 % dos estados residuais; 87-7: toca 92,5 % dos resumos).
       //
-      // A ordem de leitura é decrescente e o array é revertido logo abaixo — a
-      // entrega ao Haiku continua CRONOLÓGICA. O 2º `.order("id")` é desempate
-      // determinístico para `created_at` repetido (mesmo milissegundo), senão a
-      // fatia de corte oscila e o teste fica intermitente.
-      const { data: messagesDesc } = await supabase
-        .from("messages")
-        .select("role, content")
-        .eq("conversation_id", conv.id)
-        .in("role", ["user", "assistant"])
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(20)
+      // Story 87-5 (deploy B, AC7) — UM CARREGADOR, NÃO DOIS. Esta esteira
+      // reimplementava a consulta do `pipeline.ts` linha a linha, e por isso
+      // herdava TODOS os defeitos dele com um deploy de atraso: a cabeça em vez
+      // da cauda (87-8), e agora a cegueira ao corretor. Passa a chamar a MESMA
+      // função — cauda, três papéis, transição normalizada, nome resolvido.
+      //
+      // O deploy é PRÓPRIO e vem ≥24 h depois do A: aqui não é leitura, é
+      // CRENÇA. O extrator escreve em `collected_data`/`leads`, e um
+      // "entrada de 35 mil" dito pelo CORRETOR não pode virar
+      // `has_down_payment: true` sem o lead ter confirmado nada (a regra está no
+      // `ENRICHMENT_PROMPT`, e a amostra de 5 leads está na AC12-iv).
+      const historico = await loadConversationHistory(supabase, conv.id)
+      const messages = historico.messages
 
-      const messages = messagesDesc ? [...messagesDesc].reverse() : null
-
-      if (!messages || messages.length < 2) {
+      if (messages.length < 2) {
         results.skipped++
         continue
       }
@@ -124,7 +123,7 @@ export async function GET(request: NextRequest) {
 
       // AC4-AC7: Call Haiku for extraction + summary
       const enrichment = await enrichLeadFromConversation(anthropic, {
-        messages: messages as Array<{ role: string; content: string }>,
+        messages,
         currentCollectedData: currentData,
         fatoDeAgenda: appointmentsDoLead ? renderFatoDeAgenda(appointmentsDoLead, agora) : null,
       })
