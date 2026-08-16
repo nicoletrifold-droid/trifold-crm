@@ -485,3 +485,58 @@ describe("AC6 (C1) — a citação do `agenda_state` também é truncada em 120"
     )
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AC6 · C5 do gate R2 — o terceiro sítio de `truncar()` tinha ZERO vermelhos
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 🔴 GUARDA ÓRFÃ, achado A6 do @qa (gate R2). O `truncar()` tem TRÊS sítios de
+ * chamada, e a mutação do R1 alterava `VALOR_MAX_CHARS` — a **constante
+ * compartilhada** —, o que acendia os três de uma vez e mascarava o descoberto.
+ * Isolando sítio a sítio:
+ *
+ *   `:160` citação   → 2 vermelhos (o C1 acima)
+ *   `:184` ROTULADOS → **ZERO em 2.445**   ← esta lacuna
+ *   `:196` extras    → 2 vermelhos (os dois testes de `profissao`/`cidade_bairro`)
+ *
+ * Não é mutante equivalente: removido o `truncar()` de `:184`, a linha `- Nome:`
+ * sai com **1.989 chars e sem reticência**; com ele, **129**. O que faltava era
+ * a régua, não o código.
+ *
+ * O MECANISMO é o mesmo já observado, não hipótese: os campos rotulados são
+ * preenchidos pelo Haiku do cron `enrich-leads` a partir de texto livre, e o
+ * registro real da Ivone tem `name: "Tudo"` — a fala inteira caiu em
+ * `visit_availability` e um pedaço dela virou "nome". Sem exposição hoje (o
+ * maior rotulado vivo é `name`, com 49 chars), mas alcançável pelo caminho que
+ * já produziu o `"Tudo"`.
+ *
+ * ⚠️ DECLARADO — o controle de fronteira deste sítio (valor de exatamente 120
+ * chars NÃO ganha `…`) NÃO é escrito aqui: ele já é medido pelo turno-ouro da
+ * AC2, cujo `toEqual` byte a byte exige `- Nome: Ronaldo` sem reticência. Um
+ * `slice` incondicional neste sítio já nasce vermelho lá. Um segundo controle
+ * seria régua duplicada, não vermelho novo.
+ */
+describe("AC6 (C5) — o valor de um campo ROTULADO também é truncado em 120", () => {
+  it("🔴 prosa de produção em `name` (campo rotulado) entra com 120 + `…`", () => {
+    // Fixture ISOLADA de propósito: só o campo rotulado longo. Sem
+    // `agenda_state` e sem extra longo — os outros dois sítios de `truncar()`
+    // não são tocados por este teste, e por isso o vermelho dele aponta para um
+    // sítio só.
+    const linhas = renderDadosColetados({ name: FALA_DA_IVONE }, NOW_RONALDO)
+    const linha = linhas[1]!
+
+    // (i) NEGATIVO — trechos do MEIO e do FIM da prosa não sobrevivem ao corte.
+    expect(linha).not.toContain("Portal das Torres")
+    expect(linha).not.toContain("Muito obrigada")
+
+    // (ii) A linha INTEIRA, e os dois números do achado A6 fixados: 129 com a
+    // guarda, 1.989 sem ela.
+    expect(linha).toBe(`- Nome: ${FALA_DA_IVONE.slice(0, VALOR_MAX_CHARS)}…`)
+    expect(linha.length).toBe(129)
+    expect(FALA_DA_IVONE.length + "- Nome: ".length).toBe(1989)
+
+    // (iii) CONTROLE POSITIVO — a guarda TRUNCA, não apaga.
+    expect(linha).toContain("Olá, o meu nome é Ivone")
+  })
+})
