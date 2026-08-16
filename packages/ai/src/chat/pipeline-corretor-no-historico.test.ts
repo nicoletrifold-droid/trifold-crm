@@ -1051,8 +1051,30 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
    * diferentes não prova que ele acompanha o `dynamicSuffix`.
    *
    * O cenário (b) — conversa SÓ do lead, sem bloco de não-reintro — move o hash
-   * (30.082 vs 30.256 bytes). Com os dois, a asserção mede a diferença, não a
+   * (30.201 vs 30.375 bytes). Com os dois, a asserção mede a diferença, não a
    * constante.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * 🔄 RECAPTURA DA STORY 87-11 (16/08) — os dois hashes mudaram, e a mudança é
+   * EXPLICADA E ARITMÉTICA, não "atualizei o snapshot".
+   *
+   * A 87-11 removeu de `pipeline.ts` a linha que despejava o `collected_data`
+   * inteiro em JSON cru e pôs no lugar o bloco rotulado de
+   * `prompts/collected-data.ts`. Estas duas fixtures têm `collectedData:
+   * { name: "Ana" }`, então elas SENTEM a story — legitimamente:
+   *
+   *     antes: `Data collected so far: {"name":"Ana"}`                   37 chars
+   *     agora: cabeçalho (144) + "\n" + `- Nome: Ana` (11)              156 chars
+   *     delta: +119 chars
+   *
+   * E os DOIS cenários cresceram **exatamente +119** (30.256→30.375 e
+   * 30.082→30.201). Que o delta seja idêntico nos dois é o que distingue "a
+   * story mexeu na linha certa" de "alguma outra coisa mudou junto": o
+   * `dynamicSuffix` dos dois é diferente, o `collected_data` é o mesmo.
+   *
+   * A AC10 desta story (87-5) continua íntegra: ela mede *"conversa sem corretor
+   * não sente a 87-5"*, e `ROTULO_CORRETOR_PREFIXO` segue ausente nas duas.
+   * ─────────────────────────────────────────────────────────────────────────
    */
   const OURO: Array<{
     nome: string
@@ -1074,8 +1096,8 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       mensagem: "qual o preço?",
       bloco: "qual o preço?",
       papeis: ["user", "assistant", "user", "assistant", "user"],
-      sha256: "3ec9480d84f943732ccc4f2ce4e760a2db110c16de7114e207dd5e7405eb0aa3",
-      length: 30256,
+      sha256: "9855159b69cd7540c275568bb73d8ab49b708da0ffc07e55ff4edb10d8db456d",
+      length: 30375,
     },
     {
       nome: "(b) primeira mensagem, só o lead → SEM bloco de não-reintro",
@@ -1083,8 +1105,8 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       mensagem: "tem apartamento de 3 quartos?",
       bloco: "tem apartamento de 3 quartos?",
       papeis: ["user", "user"],
-      sha256: "d634f39ecc852edb9c55c1ad8069c5a946cc82138853d159110b813153183371",
-      length: 30082,
+      sha256: "9a1414a480abc8ae4585eddb587b6ded178a327a168bc3381fd4e4fd4207bd78",
+      length: 30201,
     },
   ]
 
