@@ -407,11 +407,22 @@ describe("Story 87-12 — disponibilidade para visita", () => {
     // saída certa é "nao informado".
     const semCitacao = { ...AGENDA_RITA, citacao: "   " }
     const origemNicole = { ...AGENDA_RITA, origem: "nicole" }
+    // 🔴 QA-6 — a guarda da citação também é uma DISJUNÇÃO
+    // (`typeof o.citacao !== "string" || !o.citacao.trim()`), e o `semCitacao`
+    // acima só acende a SEGUNDA metade: `"   "` É string. Esta fixture acende a
+    // PRIMEIRA e só ela — `citacao` não-string com o resto do objeto íntegro.
+    // O caso é real para uma coluna `jsonb` livre: quem escreve o campo é o
+    // modelo, e a mensagem que mais vira `citacao` é justamente a que começa com
+    // número de dia (`"15\nAgosto…"`).
+    const citacaoNaoString = { ...AGENDA_RITA, citacao: 15 }
 
     expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: semCitacao }, []))).toBe(
       "- Disponibilidade para visita: nao informado"
     )
     expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: origemNicole }, []))).toBe(
+      "- Disponibilidade para visita: nao informado"
+    )
+    expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: citacaoNaoString }, []))).toBe(
       "- Disponibilidade para visita: nao informado"
     )
   })
@@ -431,13 +442,30 @@ describe("Story 87-12 — disponibilidade para visita", () => {
     // `readAgendaState`, onde `Date.parse` de uma âncora ausente vira `NaN` e o TTL
     // devolve `null` — o que MASCARA a falha. Aqui não há máscara: sem esta guarda,
     // um estado sem âncora nenhuma IMPRIME para o corretor.
+    //
+    // 🔴 QA-6 — E A GUARDA É UMA DISJUNÇÃO: `typeof o.ancorado_em !== "string" ||
+    // typeof o.expira_em !== "string"`. As duas fixtures que estavam aqui
+    // (`semAncora` e um `ancoraNaoString` com AS DUAS chaves numéricas) faziam A e
+    // B verdadeiros AO MESMO TEMPO — cada uma se escondia atrás da outra, e
+    // enfraquecer UMA das duas metades deixava a suíte inteira verde. As duas
+    // fixtures abaixo isolam UMA sub-expressão CADA: em cada uma, a outra chave de
+    // âncora continua sendo string VÁLIDA. Sem isso, a metade do `expira_em` não
+    // tem vermelho — e é ela que decide se o corretor lê um estado SEM VALIDADE
+    // LEGÍVEL, num consumidor onde o TTL não passa depois para desmentir.
+    const soAncoradoInvalido = { ...AGENDA_RITA, ancorado_em: 1755259247409 }
+    const soExpiraInvalido = { ...AGENDA_RITA, expira_em: 1755431847409 }
+    // Este NÃO isola (fere as duas metades), e fica declarado como tal: ele está
+    // aqui porque é o caso REAL — estado gravado sem âncora nenhuma —, não como
+    // vermelho de sub-expressão. Contá-lo como um terceiro seria contar errado.
     const semAncora = { citacao: "sexta de manha", origem: "lead", fonte: "pendencia" }
-    const ancoraNaoString = { ...AGENDA_RITA, ancorado_em: 1755259247409, expira_em: 1755431847409 }
 
-    expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: semAncora }, []))).toBe(
+    expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: soAncoradoInvalido }, []))).toBe(
       "- Disponibilidade para visita: nao informado"
     )
-    expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: ancoraNaoString }, []))).toBe(
+    expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: soExpiraInvalido }, []))).toBe(
+      "- Disponibilidade para visita: nao informado"
+    )
+    expect(linhaDisponibilidade(generateHandoffSummary({ agenda_state: semAncora }, []))).toBe(
       "- Disponibilidade para visita: nao informado"
     )
   })
