@@ -174,8 +174,21 @@ export function isAgendaStateExpired(state: AgendaState, now: Date): boolean {
  * Valida a forma do que está gravado. `collected_data` é `jsonb` livre e já
  * recebeu de tudo — objeto sem citação, sem âncora ou com `origem` diferente de
  * `'lead'` NÃO é estado de agenda e é tratado como ausente.
+ *
+ * Story 87-12 — passa a ser exportada (só isso: nenhuma linha do corpo muda).
+ * O resumo do corretor (`flows/handoff.ts`) precisa da MESMA regra de admissão
+ * que `readAgendaState` e `hasAgendaFact` já usam: a procedência do fato está
+ * no TIPO (`origem: 'lead'` + `citacao` não-vazia), nunca no texto. Copiar a
+ * validação para lá criaria um segundo leitor divergente do mesmo objeto — que
+ * é exatamente o que o painel (`leads/[id]/page.tsx:199-206`) faz hoje, e por
+ * isso ele NÃO confere `origem`.
+ *
+ * ⚠️ Exportar isto NÃO abre os campos reservados do item W1-2c: `ofertas_do_sistema`
+ * e `afirmado_pela_nicole` seguem WRITE-ONLY (ver `:108-126`). Quem consome esta
+ * função lê `citacao`, `data_absoluta`, `hora`, `minuto`, `periodo` e `fonte`.
+ * Fora de `flows/`, ninguém: ela NÃO é reexportada em `flows/index.ts`.
  */
-function parseAgendaState(raw: unknown): AgendaState | null {
+export function parseAgendaState(raw: unknown): AgendaState | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
   const o = raw as Record<string, unknown>
   if (typeof o.citacao !== "string" || !o.citacao.trim()) return null

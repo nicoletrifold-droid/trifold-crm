@@ -5,6 +5,7 @@
  */
 
 import type { ConversationRole } from "../chat/conversation-history"
+import { AGENDA_STATE_KEY, parseAgendaState } from "./agenda-state"
 
 interface HandoffCheckParams {
   qualificationScore: number
@@ -150,7 +151,7 @@ export function generateHandoffSummary(
   lines.push(`- Vista: ${collectedData.view ?? "nao informado"}`)
   lines.push(`- Vagas: ${collectedData.garages ?? "nao informado"}`)
   lines.push(`- Entrada disponivel: ${formatBoolean(collectedData.has_down_payment)}`)
-  lines.push(`- Disponibilidade para visita: ${formatBoolean(collectedData.visit_availability)}`)
+  lines.push(`- Disponibilidade para visita: ${formatDisponibilidade(collectedData)}`)
   lines.push("")
 
   // Conversation highlights
@@ -176,4 +177,98 @@ function formatBoolean(value: unknown): string {
   if (value === true) return "sim"
   if (value === false) return "nao"
   return "nao informado"
+}
+
+/**
+ * Story 87-12 — o corretor lê a CITAÇÃO do lead, não um booleano que nunca existiu.
+ *
+ * O que esta função substitui: `formatBoolean(collectedData.visit_availability)`,
+ * escrita em 31/03/2026 (`a5e29d70`, commit inicial do arquivo). **Não é regressão
+ * da 87-4**: `visit_availability` nunca foi booleano em produção — `jsonb_typeof` =
+ * `string` em 56 de 56 linhas (remedido em 16/08). `formatBoolean` devolve
+ * "nao informado" para tudo que não é `true`/`false` literal, então a linha era uma
+ * CONSTANTE: dos 14 resumos de handoff gravados all-time, 14 dizem "nao informado",
+ * `sim` = 0. O que a 87-4 fez foi migrar o fato para `agenda_state` e migrar só UM
+ * dos dois leitores humanos (o painel) — este aqui ficou para trás.
+ *
+ * A regra de admissão é a MESMA do gate de qualificação e do painel:
+ * `parseAgendaState`. Não há régua de conteúdo aqui, e não pode haver — quem garante
+ * que isto é fala do lead é o TIPO (`origem: "lead"` + `citacao` literal de mensagem
+ * `role='user'`, Story 87-4), não o texto. Duas réguas de conteúdo foram contadas
+ * sobre as 56 linhas legadas e as duas reprovaram (comprimento `>60`: pega 44, erra 3;
+ * procedência por substring: pega 45 e apaga dois fatos verdadeiros).
+ *
+ * O LEGADO NÃO É LIDO, e não volta como fallback. Três razões, em ordem de peso:
+ *  1. Ele não chega: `stripLegacyAgendaKeys` (`chat/pipeline.ts:821`) é incondicional
+ *     e roda antes de o `finalData` nascer (`:1298`) e de o resumo ser montado (`:1326`).
+ *  2. Se chegasse, imprimi-lo seria PIOR que o defeito: dos 9 handoffs reais com
+ *     conteúdo na chave, 8 são fala da própria Nicole. "Imprima o que está lá" teria
+ *     transformado um campo inútil num campo mentiroso.
+ *  3. Filtrá-lo exigiria a régua que não existe (ver acima).
+ * Modo de falha resultante, declarado: se a chave legada reaparecer por um caminho
+ * não previsto, a saída é "nao informado" — silêncio, não afirmação falsa.
+ *
+ * O rótulo "nao e visita marcada" é OBRIGATÓRIO: visita marcada mora em
+ * `appointments`. O caso Ronaldo (10/08) é a prova — o sistema RECUSOU o 17:30
+ * daquele turno, e a citação continua sendo o que o lead disse.
+ *
+ * ⚠️ TETO DE VALOR, declarado para que ninguém prometa o contrário: "nao informado"
+ * seguirá sendo a saída na maioria dos handoffs, e na maioria deles continuará sendo
+ * a saída CERTA. O `agenda_state` tem TTL de 48 h (a fixture da Rita expira em 17/08
+ * e aponta para 18/08 — o estado vence ANTES do dia que ele indica) e
+ * `writeAgendaState(cd, null)` (`chat/pipeline.ts:1064`) apaga a chave justamente
+ * quando a visita é agendada. Esta função compra "o campo PODE informar", não
+ * "o campo informa".
+ *
+ * Sem TTL aqui de propósito: `chat/pipeline.ts:799-803` já apagou o estado vencido
+ * antes de o `finalData` nascer. Um `if` de validade aqui seria caminho de decisão
+ * duplicado — e exigiria um `now` que tornaria esta função impura e o teste
+ * não-determinístico.
+ *
+ * Lê `citacao` e `data_absoluta`, e SÓ. `ofertas_do_sistema` e `afirmado_pela_nicole`
+ * (item W1-2c) são WRITE-ONLY por decisão ratificada — o resumo do corretor é um
+ * leitor e não os toca.
+ *
+ * ⚠️ A `citacao` é ACHATADA EM UMA LINHA, e isto é um desvio deliberado do desenho
+ * literal da story. A `citacao` é a mensagem CRUA do lead (`qualification.ts:356`,
+ * `chat/pipeline.ts:958` e `:1048` passam a mensagem do turno como `citacao`), e o
+ * denominador que importa NÃO é "toda mensagem": é a mensagem que carrega token de
+ * dia/hora, porque só ela vira `citacao`. Medido na população INTEIRA em 16/08
+ * (1.877 mensagens `role='user'`, sem o teto de 1.000 do PostgREST):
+ *
+ *   população inteira ......................... 99/1877 alteradas = 5,3 %
+ *   com token de dia/hora, régua ESTREITA ....... 3/45  alteradas = 6,7 %
+ *      (as `dayKeywords` literais do `qualification.ts:323-337` + hora explícita)
+ *   com token de dia/hora, régua LARGA ......... 10/103 alteradas = 9,7 %
+ *      (dia sem exigir "-feira" + hora + período — é a régua que pega a citação
+ *       REAL da Rita, `"Terça"`, que a estreita perde)
+ *
+ * Duas réguas, duas contagens, mesma direção: no denominador que de fato vira
+ * `citacao` a taxa é MAIOR que na população inteira, não menor. (O @qa mediu 9/110 =
+ * 8,2 % com uma terceira régua; o intervalo das três é 6,7–9,7 %.)
+ *
+ * O bloco `INTERESSE:` é uma tabela de um rótulo por linha; uma citação multilinha
+ * parte um campo rotulado ao meio. E o pior caso é PIOR que uma linha a mais: com
+ * `\n\n` na citação entra uma LINHA EM BRANCO dentro do bloco — e a linha em branco
+ * é o SEPARADOR DE BLOCO deste formato (ver os `lines.push("")` acima). O bloco
+ * `INTERESSE:` fecha no meio e o resto da citação vira bloco órfão sem cabeçalho:
+ * quebra ESTRUTURAL, não cosmética. Existem em produção: 17 das 1.877 mensagens têm
+ * linha em branco, 2 delas dentro da régua larga (ex.: `"15\nAgosto \n2026\n\nSábado…"`).
+ * E ela se PROPAGA — o `ai_summary` volta ao contexto da Nicole como fallback de L1
+ * (`memory/loader.ts:196-203`), então um resumo com bloco quebrado vira prompt
+ * quebrado. É exatamente o "resumo malformado" do gatilho (a) de rollback desta story.
+ *
+ * O achatamento é do FORMATADOR, não do escritor: o dado gravado continua íntegro
+ * para auditoria, e é só a linha do resumo que fica com a forma que ela promete ter.
+ * O `.trim()` é INERTE na população de hoje (0 de 1.877 mensagens têm espaço nas
+ * bordas) — está aqui como fecho da normalização, não como conserto de caso vivo.
+ * *(O bloco `MENSAGENS DO LEAD` também imprime texto cru do lead e já tolera quebras
+ * hoje — comportamento anterior a esta story, não tocado. Fica como achado.)*
+ */
+function formatDisponibilidade(collectedData: Record<string, unknown>): string {
+  const st = parseAgendaState(collectedData[AGENDA_STATE_KEY])
+  if (!st) return "nao informado"
+  const citacao = st.citacao.replace(/\s+/g, " ").trim()
+  const dia = st.data_absoluta ? ` (dia ${st.data_absoluta})` : ""
+  return `"${citacao}"${dia} - nas palavras do lead, nao e visita marcada`
 }
