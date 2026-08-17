@@ -1,6 +1,6 @@
 # Story 75-323 — Funil de Conversão conta quem CHEGOU a cada etapa
 
-**Story ID:** 75-323 · **Status:** InReview · **Estimativa:** M (~5 pts)
+**Story ID:** 75-323 · **Status:** Done · **Estimativa:** M (~5 pts)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · Origem: auditoria do Analytics (17/08), item 4
 
 ## O relato e o diagnóstico

@@ -1,6 +1,6 @@
 # Story 75-324 — Visão Executiva respeita os filtros · janela do período em BRT
 
-**Story ID:** 75-324 · **Status:** InReview · **Estimativa:** S (~3 pts)
+**Story ID:** 75-324 · **Status:** Done · **Estimativa:** S (~3 pts)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · Origem: auditoria do Analytics (17/08), itens 5 e 9
 
 ## O relato e o diagnóstico
