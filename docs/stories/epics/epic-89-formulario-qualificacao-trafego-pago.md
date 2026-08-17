@@ -34,6 +34,24 @@ decisoes_do_diretor:
       pergunta: Quem recebe o lead que agendou pelo formulário?
       decisao: SDR (Thielly) abre e confirma; DEPOIS vai para a roleta.
       motivo: Mantém a decisão de 04/08 ("todo lead passa pelo SDR humano") intacta.
+      revisado_em: 17/08/2026
+      revisao: >
+        SIMPLIFICADA pelo Marcos ao ver o custo da versão original. NÃO existe passo de
+        confirmação e NÃO há entrega à roleta. O lead agenda, a visita cai na agenda, o SDR
+        fica como responsável e **transfere manualmente** para um corretor quando fizer
+        sentido. Some a tela de confirmar (que seria construção nova), some a chamada ao
+        distribuidor e some a migration na `roleta_pick_and_advance`.
+      o_que_isso_resolve: >
+        A versão original esbarrava em duas coisas achadas na validação da 75-331: (1) o
+        distribuidor desiste se o lead já tem dono (`distributor.ts:86-88`), então carimbar o
+        SDR mataria a entrega à roleta em silêncio; (2) a Thielly está no pool da roleta e a
+        RPC não tem parâmetro de exclusão, então a roleta poderia devolver o lead para ela
+        mesma. Sem roleta neste fluxo, os dois problemas deixam de existir.
+      pre_requisito_operacional: >
+        ⚠️ MEDIDO EM PROD (17/08): o perfil `sdr` está com `leads.transferir = false` — só
+        `admin` e `supervisor` transferem. Do jeito que está, a Thielly NÃO consegue transferir.
+        É um toggle na matriz de Perfis de Acesso (tela já existente), não código. Alternativa
+        sem mexer em nada: quem transfere é admin/supervisor.
 substitui:
   - YayForms (formulário) — sai
   - Calendly (agenda) — sai
@@ -105,12 +123,16 @@ anúncio → /formulario/[token]  (público, sem login)
         │     ├─ espelhado no Google Agenda
         │     └─ lead entra na etapa "Visita Agendada", dona = SDR (D3)
         │
-        └─ tela final: "Visita pré-agendada para {data}. Nossa equipe confirma em breve."
+        └─ tela final: "Visita agendada para {data}. Nossa equipe entra em contato."
 
-SDR liga/WhatsApp → confirma → `scheduled` → `confirmed` → lead vai para a ROLETA
+SDR trabalha o lead → quando fizer sentido, TRANSFERE manualmente a um corretor
                                                               │
                                             corretor assume → sync-visit-owner move a visita
 ```
+
+> **D3 revisada em 17/08** (ver frontmatter): não há passo de confirmação nem entrega à
+> roleta. A transferência é manual e usa o endpoint que já existe
+> (`/api/leads/[id]/transferir`), cuja capability é `leads.transferir`.
 
 ## 5. Stories
 

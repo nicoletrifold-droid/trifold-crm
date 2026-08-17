@@ -103,3 +103,51 @@ funciona e porque (b) toca a RPC mais sensível do sistema.
 significa refazer a parte que toca a RPC — o pedaço mais caro e mais arriscado da story.
 
 — Pax, @po
+
+---
+
+# ADENDO — 17/08, após a decisão do Marcos
+
+## VEREDITO REVISTO: 🟢 **GO** — `Draft` → **`Ready`**
+
+A pergunta da §2 foi respondida **dissolvendo o problema em vez de escolhendo entre (a), (b) e
+(c)**: não existe passo de confirmação e não existe entrega à roleta. O lead agenda, a visita
+cai na agenda, o SDR fica como responsável e transfere manualmente quando fizer sentido.
+
+**O que isso apaga:**
+
+| Item | Antes | Agora |
+|------|-------|-------|
+| Tela/endpoint de confirmar | construção nova (nenhuma tela do sistema promove `confirmed` hoje) | **não existe** |
+| Chamada ao distribuidor | precisava limpar `assigned_broker_id` antes, senão falhava calada | **não existe** |
+| Migration na `roleta_pick_and_advance` | provável, para excluir o SDR do sorteio | **não existe** |
+| Estimativa | L (~8 pts) | **M (~5 pts)** |
+| Migrations | 0 ou 1 | **0** |
+
+As duas armadilhas que eu havia levantado continuam **verdadeiras** — só deixaram de ser
+problema desta story, porque o caminho que passava por elas foi cortado. Ficam registradas
+aqui: qualquer story futura que queira automatizar a entrega deste lead à roleta vai reencontrar
+as duas.
+
+## 🔴 A pendência que sobra NÃO é de código
+
+Medido em produção:
+
+```
+leads.transferir → admin: true · supervisor: true · sdr: FALSE
+```
+
+**A Thielly não consegue transferir lead hoje.** O desenho novo depende disso para fechar.
+Duas saídas, ambas na matriz de Perfis de Acesso (tela existente, sem deploy):
+
+- ligar `leads.transferir` para o perfil `sdr`; ou
+- deixar a transferência com admin/supervisor, e o SDR só trabalha o lead.
+
+Não bloqueia a implementação — bloqueia a **operação**. Registrado na DoD.
+
+## Checklist revisto
+
+Itens 5 (dependências), 6 (estimativa) e 8 (riscos) reavaliados com o escopo novo:
+**9/10**. GO.
+
+— Pax, @po
