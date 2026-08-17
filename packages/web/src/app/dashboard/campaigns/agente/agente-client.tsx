@@ -18,6 +18,8 @@ import {
 } from "@web/lib/marketing/direcao"
 import { PostPreviewModal } from "./_components/post-preview-modal"
 import { buildPostPreview, nomeDaUnidade, quantasArtes, tipoDePreview } from "@web/lib/marketing/post-preview"
+// Story 75-333: barra de abas compartilhada (antes era copiada aqui).
+import { CampaignsTabs } from "../_components/campaigns-tabs"
 
 // Story 75-219 — aba "Agente": sugestões do agente de marketing IA + fila de
 // aprovação + publicados. Nada é publicado automaticamente — toda transição é
@@ -54,28 +56,6 @@ interface PropertyOption {
   name: string
 }
 
-// ─── Tabs (padrão duplicado-inline das telas CRM e Meta Ads) ───────────────
-
-function CampaignsTabs() {
-  const inactive =
-    "px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors dark:text-stone-400 dark:hover:text-stone-200 dark:hover:border-stone-700"
-  return (
-    <div className="flex border-b border-gray-200 mb-4 dark:border-stone-800">
-      <Link href="/dashboard/campaigns" className={inactive}>
-        CRM
-      </Link>
-      <Link href="/dashboard/campaigns/meta" className={inactive}>
-        Meta Ads
-      </Link>
-      <Link
-        href="/dashboard/campaigns/agente"
-        className="px-4 py-2 text-sm font-medium border-b-2 border-orange-600 text-orange-600 dark:text-orange-300"
-      >
-        Lídia
-      </Link>
-    </div>
-  )
-}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -976,7 +956,15 @@ function PostCard({
 
 // ─── Componente principal ──────────────────────────────────────────────────
 
-export default function AgenteClient({ properties }: { properties: PropertyOption[] }) {
+export default function AgenteClient({
+  properties,
+  // Story 75-333 — a barra de abas virou compartilhada; a visibilidade da aba
+  // de Formulários vem do servidor, que é quem sabe o módulo do usuário.
+  showFormulariosTab,
+}: {
+  properties: PropertyOption[]
+  showFormulariosTab: boolean
+}) {
   const [posts, setPosts] = useState<MarketingPost[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -1190,7 +1178,7 @@ export default function AgenteClient({ properties }: { properties: PropertyOptio
         </div>
       </div>
 
-      <CampaignsTabs />
+      <CampaignsTabs showAgente showFormularios={showFormulariosTab} />
 
       {/* Erros de geração/ação com retry */}
       {generateError && (
