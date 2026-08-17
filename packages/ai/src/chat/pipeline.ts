@@ -37,6 +37,8 @@ import type { AgendaState } from "../flows/agenda-state"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
+// Story 87-11 — o renderizador que substituiu o despejo do estado em JSON cru.
+import { renderDadosColetados } from "../prompts/collected-data"
 import type { DbPromptOverrides } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
 import {
@@ -729,7 +731,7 @@ export async function processMessageWithMetadata(
   // - `dynamicSuffix` = todos os contextos por-conversa (data/hora, property data,
   //   memória do lead, no-show, flow, yarden gate). Concatenados em UM bloco
   //   sem cache_control. Story 21.2 (lead context) deve ser incluída aqui.
-  const staticBlocks = buildSystemPrompt(agentConfig, ragContext, state, emit, params.mediaContext)
+  const staticBlocks = buildSystemPrompt(agentConfig, ragContext, state, emit, now, params.mediaContext)
   const dynamicSuffix =
     dateTimeContext +
     propertyDataContext +
@@ -1872,6 +1874,10 @@ function buildSystemPrompt(
   ragContext: string,
   state: ConversationState | null,
   emit: (event: PipelineEvent) => void,
+  // Story 87-11 — o `now` do TURNO, não um relógio novo. `renderDadosColetados`
+  // precisa dele para aplicar o TTL do `agenda_state`, que neste ponto do turno
+  // ainda não foi aplicado (a leitura com TTL só acontece em `:799`).
+  now: Date,
   mediaContext?: MediaAvailability
 ): Anthropic.Messages.TextBlockParam[] {
   // Static blocks (cacheable) + optional RAG block (uncached) come from buildPromptFromCode.
@@ -1902,9 +1908,20 @@ function buildSystemPrompt(
     if (state.qualification_step) {
       convoLines.push(`Current qualification step: ${state.qualification_step}`)
     }
-    if (state.collected_data && Object.keys(state.collected_data).length > 0) {
+    // Story 87-11 (item W1-6) — SUBTRAÇÃO. Aqui ia o `collected_data` INTEIRO
+    // serializado cru, sob um rótulo em inglês e sem instrução nenhuma: chave
+    // de máquina, timestamp, procedência e fala inteira dentro. Agora o mesmo
+    // dado entra classificado e rotulado, ou não entra.
+    //
+    // A linha antiga não é reproduzida em comentário nenhum de propósito: a AC1
+    // desta story é uma régua de `grep`, e documentá-la literalmente a deixaria
+    // vermelha por documentação. Ela está colada no Dev Agent Record da story e
+    // nas asserções de `pipeline-collected-data.test.ts`, que é onde ela precisa
+    // existir para que se possa provar a ausência dela. Ver
+    // `prompts/collected-data.ts`.
+    if (state.collected_data) {
       convoLines.push(
-        `Data collected so far: ${JSON.stringify(state.collected_data)}`
+        ...renderDadosColetados(state.collected_data as Record<string, unknown>, now)
       )
     }
     if (state.visit_proposed) {
