@@ -12,6 +12,9 @@ import {
 } from "@web/lib/analytics/executive"
 // Story 75-269 — paginação extraída daqui e compartilhada com o /leads-by-period.
 import { fetchAllLeads, LEADS_PAGE_SIZE, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
+import { ANALYTICS_APPOINTMENT_TEAM } from "@web/lib/analytics/visits-rule"
+// Story 75-324 — os MESMOS filtros da página, lidos e aplicados pelo mesmo módulo.
+import { activeFilterKeys, applyLeadFilters, parseAnalyticsFilters } from "@web/lib/analytics/filters"
 
 // Mesmos nomes ocultos da tela de Analytics (contas de demonstração).
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
@@ -41,7 +44,17 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const from = sp.get("from")
   const to = sp.get("to")
-  const propertyId = sp.get("property") ?? ""
+  // Story 75-324 — a Visão Executiva lia SÓ `property` e ficava global enquanto o
+  // resto da tela encolhia: com um corretor selecionado, o Funil e os KPIs mostravam
+  // o recorte dele e estes gráficos mostravam a org inteira, um ao lado do outro.
+  // Agora os filtros vêm pelos MESMOS parâmetros da página (`parseAnalyticsFilters`).
+  // `property` (nome antigo) segue aceito para não quebrar link salvo.
+  const filters = parseAnalyticsFilters(sp)
+  if (!filters.propertyId) {
+    const legado = sp.get("property")?.trim()
+    if (legado) filters.propertyId = legado
+  }
+  const propertyId = filters.propertyId ?? ""
   if (!from || !to) {
     return NextResponse.json({ error: "from and to are required" }, { status: 400 })
   }
@@ -65,7 +78,7 @@ export async function GET(request: NextRequest) {
   // Recorte, filtros e ordem seguem IDÊNTICOS: só o laço saiu daqui.
   function fetchLeads(sinceISO: string, untilISO: string, columns: string): Promise<LeadRow[]> {
     return fetchAllLeads<LeadRow>(() => {
-      let q = supabase
+      const q = supabase
         .from("leads")
         .select(columns)
         .eq("org_id", appUser.org_id)
@@ -73,23 +86,37 @@ export async function GET(request: NextRequest) {
         .gte("created_at", sinceISO)
         .lt("created_at", untilISO)
         .order("created_at", { ascending: true })
-      if (propertyId) q = q.eq("property_interest_id", propertyId)
+      // Story 75-324 — era um `.eq("property_interest_id", …)` solto; agora TODOS os
+      // filtros da página valem aqui, pelo mesmo helper que a tela e o PDF usam.
       // O select com colunas dinâmicas (string) faz o PostgREST devolver
       // `ParserError`; o cast reconcilia com LeadRow, como já era antes.
-      return q as unknown as RangeableQuery<LeadRow>
+      return applyLeadFilters(q, filters) as unknown as RangeableQuery<LeadRow>
     })
   }
 
   try {
+    // Story 75-324 — `appointments` só tem duas das doze dimensões de filtro
+    // (empreendimento e corretor); as outras (calor, perfil) vivem em `leads`.
+    // Aplicamos as duas que existem e OMITIMOS o card quando alguma das outras está
+    // ativa — é o mesmo princípio que o PDF já seguia (75-271): melhor não mostrar
+    // do que mostrar um número que ignora o filtro ao lado de números que o respeitam.
+    const filtrosNaoAplicaveis = activeFilterKeys(filters).filter(
+      (k) => k !== "propertyId" && k !== "brokerId"
+    )
+    const visitsFiltravel = filtrosNaoAplicaveis.length === 0
+
     let apptsQuery = supabase
       .from("appointments")
       .select("scheduled_at, status")
       .eq("org_id", appUser.org_id)
-      .eq("team", "house") // agenda IMOB fora do analytics principal (Epic 81)
+      // agenda IMOB fora do analytics principal (Epic 81). Story 75-322: a equipe
+      // virou constante compartilhada com o PDF, que não tinha esse recorte.
+      .eq("team", ANALYTICS_APPOINTMENT_TEAM)
       .gte("scheduled_at", from)
       .lt("scheduled_at", to)
       .limit(PAGE)
     if (propertyId) apptsQuery = apptsQuery.eq("property_id", propertyId)
+    if (filters.brokerId) apptsQuery = apptsQuery.eq("broker_id", filters.brokerId)
 
     // Story 75-276 — leads COM visita registrada, base da faixa "Agendou/fez visita".
     //
@@ -169,7 +196,10 @@ export async function GET(request: NextRequest) {
         },
         (k) => brokerNames.get(k) ?? "Sem nome"
       ),
-      visits: buildVisits((apptsRes.data ?? []) as { scheduled_at: string; status: string }[], from, to, granularity),
+      visits: visitsFiltravel
+        ? buildVisits((apptsRes.data ?? []) as { scheduled_at: string; status: string }[], from, to, granularity)
+        : null,
+      visitsIndisponivelPor: visitsFiltravel ? null : filtrosNaoAplicaveis,
     }
 
     return NextResponse.json(data)

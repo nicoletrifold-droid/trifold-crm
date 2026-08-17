@@ -24,6 +24,7 @@ import {
   buildAnalyticsHref,
   buildClearFiltersHref,
   activeFilterKeys,
+  serializeAnalyticsFilters,
   PERFIL_FILTER_KEYS,
   type PeriodParams,
 } from "@web/lib/analytics/filters"
@@ -37,6 +38,9 @@ import {
 } from "@web/lib/analytics/filter-options"
 // Story 75-271 — mesma soma que o PDF usa (QA-002: uma implementação, não duas).
 import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
+// Story 75-323 — o Funil conta quem CHEGOU a cada etapa (não quem está nela agora).
+import { buildPipelineRows, type LeadStageRow, type StageChangeRow, type StageDef } from "@web/lib/analytics/funnel-reached"
+import { fetchAllLeads, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
 
 /**
  * Story 75-272 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
@@ -144,7 +148,6 @@ export default async function AnalyticsPage({
     applyLeadFilters(lpVindQ, filters),
   ])
 
-  let stages: { id: string; name: string; slug: string; color: string; position: number; count: number }[] = []
   let properties: { id: string; name: string; count: number }[] = []
   let brokers: { id: string; name: string; count: number; avgScore: number }[] = []
   const sourceCounts: Record<string, number> = {}
@@ -173,9 +176,6 @@ export default async function AnalyticsPage({
     if (analyticsError) console.error("[ANALYTICS] get_analytics_summary_ranged RPC failed", analyticsError)
     const summary = (analytics as AnalyticsSummary | null) ?? null
 
-    stages = (summary?.funnel ?? []).map((s) => ({
-      id: s.stage_id, name: s.name, slug: s.slug, color: s.color, position: s.position, count: toCount(s.count),
-    }))
     properties = (summary?.by_property ?? []).map((p) => ({ id: p.property_id, name: p.name, count: toCount(p.count) }))
     brokers = (summary?.by_broker ?? [])
       .filter((b) => !HIDDEN_BROKER_NAMES.has((b.name ?? "").toLowerCase().trim()) && activeBrokerIds.has(b.user_id))
@@ -223,9 +223,6 @@ export default async function AnalyticsPage({
       hiddenBrokerNames: HIDDEN_BROKER_NAMES,
       activeBrokerIds,
     })
-    stages = agg.stages.map((s) => ({
-      id: s.id, name: s.name, slug: s.slug ?? "", color: s.color ?? "", position: s.position ?? 0, count: s.count,
-    }))
     brokers = agg.brokers.map((b) => ({ ...b, avgScore: 0 }))
     for (const [k, v] of Object.entries(agg.sourceCounts)) sourceCounts[k] = v
 
@@ -267,6 +264,62 @@ export default async function AnalyticsPage({
     for (const [k, v] of Object.entries(lg?.groups ?? {})) lostGroups[k] = toCount(v)
     lostEstruturados = toCount(lg?.estruturados)
   }
+
+  // ── Funil: quantos leads CHEGARAM a cada etapa (Story 75-323) ──────────────
+  // A régua do Pipeline acima responde "onde estão AGORA os leads que entraram no
+  // período" e continua assim (decisão da 75-319). O Funil responde outra coisa —
+  // "quantos chegaram até aqui" — e é por isso que os dois números diferem de
+  // propósito: quem avançou sai da régua e PERMANECE no funil.
+  //
+  // Uma implementação só para os dois caminhos da página (com e sem filtro): a coorte
+  // sai de `leads` com os mesmos filtros de sempre, e o histórico sai de `activities`
+  // recortado por PERÍODO — não por lista de ids, que estouraria a URL do PostgREST
+  // com centenas de uuid. O cruzamento acontece em memória, em `buildReachedCounts`.
+  //
+  // A janela do histórico vai de `sinceISO` até AGORA (e não até `untilISO`): lead que
+  // entrou no fim do período e avançou depois chegou à etapa do mesmo jeito. É o mesmo
+  // critério que a contagem por etapa atual já usava implicitamente.
+  const cohortLeads = await fetchAllLeads<LeadStageRow>(() =>
+    applyLeadFilters(
+      supabase
+        .from("leads")
+        .select("id, stage_id")
+        .eq("org_id", appUser.orgId)
+        .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB
+        .gte("created_at", sinceISO).lt("created_at", untilISO)
+        .order("id", { ascending: true }), // `.range()` exige coluna ÚNICA
+      filters
+    ) as unknown as RangeableQuery<LeadStageRow>
+  )
+
+  const stageChanges = await fetchAllLeads<StageChangeRow>(() =>
+    supabase
+      .from("activities")
+      .select("lead_id, metadata")
+      .eq("org_id", appUser.orgId)
+      .eq("type", "stage_change")
+      .gte("created_at", sinceISO)
+      .order("id", { ascending: true }) as unknown as RangeableQuery<StageChangeRow>
+  )
+
+  // Story 75-326 — as definições de etapa SEM filtro de `is_active`: "Perdido" é
+  // inativa e guardava 11 dos 84 leads da janela auditada. Sem ela na lista, a coluna
+  // "agora" não fecharia a base do período — que é justamente o ponto deste card.
+  const { data: stageDefsData } = await supabase
+    .from("kanban_stages")
+    .select("id, name, slug, color, position, is_active")
+    .eq("org_id", appUser.orgId)
+    .order("position")
+
+  const pipelineRows = buildPipelineRows(
+    cohortLeads,
+    stageChanges,
+    (stageDefsData ?? []) as StageDef[]
+  )
+  // Base do período: TODAS as entradas, inclusive as perdidas. Um funil que esconde
+  // quem se perdeu no caminho mede o próprio otimismo — e é o total que a coluna
+  // "agora" fecha, tornando as duas leituras reconciliáveis a olho.
+  const funnelBase = cohortLeads.length
 
   // "Leads por Empreendimento" — sempre ambos, limitado ao período
   // Story 75-272 — com QUALQUER filtro ativo, recalcula por empreendimento. Os
@@ -446,7 +499,6 @@ export default async function AnalyticsPage({
   // Story 75-319 (decisão do Marcos 13/08): a régua SEGUE O PERÍODO — usa os
   // MESMOS counts do Funil (leads que entraram na janela, por etapa atual),
   // então régua e funil batem sempre; a foto "agora" continua no Dashboard.
-  const stagesOrdenadas = [...stages].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 
   const selectedPropertyName = propertyId
     ? (allProperties ?? []).find((p) => p.id === propertyId)?.name ?? "Empreendimento"
@@ -630,12 +682,17 @@ export default async function AnalyticsPage({
           75-319: os counts SEGUEM O PERÍODO (mesma fonte do Funil) — decisão do
           Marcos após os prints de 7d×30d; a foto "agora" fica no Dashboard. */}
       <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-stone-100">
-          Pipeline <span className="text-xs font-normal text-stone-400">· {rangeLabel} · leads que entraram no período, por etapa atual</span>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
+          Pipeline <span className="text-xs font-normal text-stone-400">· {rangeLabel} · {funnelBase} entradas no período</span>
         </h2>
+        <p className="mb-3 text-xs text-stone-500 dark:text-stone-400">
+          <strong className="font-semibold">agora</strong> = onde o lead está hoje (cada lead conta
+          uma vez, a linha fecha as {funnelBase} entradas) · <strong className="font-semibold">chegaram</strong> =
+          passaram por aqui (o mesmo lead entra em várias etapas, então esta linha não soma).
+        </p>
         <div className="overflow-x-auto">
           <div className="flex min-w-max gap-1.5">
-            {stagesOrdenadas.map((stage) => (
+            {pipelineRows.map((stage) => (
               <Link
                 key={stage.id}
                 href={`/dashboard/pipeline?stage=${stage.slug}`}
@@ -646,7 +703,10 @@ export default async function AnalyticsPage({
                   {stage.name}
                 </p>
                 <p className="mt-0.5 text-base font-bold tabular-nums text-gray-900 dark:text-stone-100">
-                  {stage.count}
+                  {stage.agora}
+                </p>
+                <p className="text-[11px] font-semibold tabular-nums text-stone-500 dark:text-stone-400">
+                  {stage.chegaram} <span className="font-normal">chegaram</span>
                 </p>
               </Link>
             ))}
@@ -671,17 +731,24 @@ export default async function AnalyticsPage({
         <ExecutiveCharts
           from={sinceISO}
           to={untilISO}
-          propertyId={propertyId ?? undefined}
+          /* Story 75-324 — TODOS os filtros, não só o empreendimento. */
+          filterQuery={serializeAnalyticsFilters(filters)}
           rangeLabel={rangeLabel}
         />
       </div>
 
       {/* Funnel — Story 75-318: funil de verdade em 4 andares (Atendimento →
           Visita Agendada|Visitou → Proposta → Fechamento) com líquido animado.
-          Os números vêm do MESMO recorte do período que alimentava as barras. */}
+          Story 75-323: os números passaram a ser "quantos CHEGARAM a cada etapa"
+          (antes era "quantos estão nela agora", que fazia cada andar perder quem
+          avançou e o topo do funil não ser o volume de entrada). */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
-        <ConversionFunnel tiers={pickFunnelTiers(stages)} />
+        <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
+        <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
+          {funnelBase} entradas no período · desenha a coluna <strong className="font-semibold">chegaram</strong> da
+          régua acima: quem passou por cada etapa, incluindo quem já avançou ou se perdeu depois.
+        </p>
+        <ConversionFunnel tiers={pickFunnelTiers(pipelineRows.map((r) => ({ ...r, count: r.chegaram })))} base={funnelBase} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

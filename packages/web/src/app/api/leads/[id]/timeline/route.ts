@@ -225,6 +225,8 @@ function formatAppointmentStatus(status: string): string {
     completed: "concluida",
     cancelled: "cancelada",
     no_show: "nao compareceu",
+    // Story 75-321 — encerrada sem confirmacao de presenca.
+    closed: "encerrada sem registro",
   }
   return labels[status] ?? status
 }

@@ -11,6 +11,9 @@ import { liquidFillFraction, type FunnelTiers } from "@web/lib/analytics/funnel-
 
 interface ConversionFunnelProps {
   tiers: FunnelTiers
+  /** Story 75-323 — entradas do período: régua do nível e base das conversões.
+   *  Ausente (ou 0) mantém o comportamento da 75-320, com o maior andar no teto. */
+  base?: number
 }
 
 // Geometria: viewBox 0..720 de largura; andares centrados em x=360.
@@ -111,19 +114,22 @@ function TierText({
   y,
   label,
   count,
+  share,
   small = false,
 }: {
   x: number
   y: number
   label: string
   count: number
+  /** Story 75-323 — % sobre as entradas do período; null quando não há base. */
+  share?: number | null
   small?: boolean
 }) {
   return (
     <g textAnchor="middle" style={{ pointerEvents: "none" }}>
       <text
         x={x}
-        y={y - 8}
+        y={y - 12}
         className="fill-stone-800 dark:fill-white"
         style={{ fontSize: small ? 13 : 15, fontWeight: 600, opacity: 0.95 }}
       >
@@ -131,19 +137,32 @@ function TierText({
       </text>
       <text
         x={x}
-        y={y + 22}
+        y={y + 16}
         className="fill-stone-900 dark:fill-white"
         style={{ fontSize: small ? 24 : 30, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}
       >
         {count}
       </text>
+      {share != null && (
+        <text
+          x={x}
+          y={y + 32}
+          className="fill-stone-600 dark:fill-stone-300"
+          style={{ fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}
+        >
+          {share}% das entradas
+        </text>
+      )}
     </g>
   )
 }
 
-export function ConversionFunnel({ tiers }: ConversionFunnelProps) {
+export function ConversionFunnel({ tiers, base }: ConversionFunnelProps) {
   const [t1, t2, t3, t4] = TIERS
   // 75-320: o maior andar dita a régua — ele fica "cheio" e os demais proporcionais.
+  // 75-323: com o número de entradas do período em mãos, a régua passa a ser ELE.
+  // Assim o topo do funil deixa de estar sempre cheio: se 84 entraram e 36 chegaram
+  // ao Atendimento, o primeiro andar mostra essa perda em vez de fingir 100%.
   const maxCount = Math.max(
     tiers.atendimento.count,
     tiers.visitaAgendada.count,
@@ -151,7 +170,10 @@ export function ConversionFunnel({ tiers }: ConversionFunnelProps) {
     tiers.proposta.count,
     tiers.fechamento.count
   )
-  const nivel = (count: number) => liquidFillFraction(count, maxCount)
+  const referencia = base && base > 0 ? base : maxCount
+  const nivel = (count: number) => liquidFillFraction(count, referencia)
+  const share = (count: number) =>
+    base && base > 0 ? Math.round((count / base) * 100) : null
   return (
     <div className="mx-auto w-full max-w-xl">
       <style>{`
@@ -163,21 +185,21 @@ export function ConversionFunnel({ tiers }: ConversionFunnelProps) {
       <svg viewBox="0 0 720 400" role="img" aria-label="Funil de conversão em 4 etapas" className="h-auto w-full">
         {/* Andar 1 — Atendimento */}
         <LiquidTier clipId="funil-t1" path={trapezoid(t1.top, t1.bottom, t1.y, t1.h)} color={tiers.atendimento.color} y={t1.y} h={t1.h} delay={0} fill={nivel(tiers.atendimento.count)} />
-        <TierText x={360} y={t1.y + t1.h / 2} label={tiers.atendimento.label} count={tiers.atendimento.count} />
+        <TierText x={360} y={t1.y + t1.h / 2} label={tiers.atendimento.label} count={tiers.atendimento.count} share={share(tiers.atendimento.count)} />
 
         {/* Andar 2 — Visita: Agendada | Visitou (mesmo andar, cores distintas) */}
         <LiquidTier clipId="funil-t2a" path={halfTrapezoid(t2.top, t2.bottom, t2.y, t2.h, "left")} color={tiers.visitaAgendada.color} y={t2.y} h={t2.h} delay={0.4} fill={nivel(tiers.visitaAgendada.count)} />
         <LiquidTier clipId="funil-t2b" path={halfTrapezoid(t2.top, t2.bottom, t2.y, t2.h, "right")} color={tiers.visitou.color} y={t2.y} h={t2.h} delay={1.1} fill={nivel(tiers.visitou.count)} />
-        <TierText x={360 - (t2.top + t2.bottom) / 8} y={t2.y + t2.h / 2} label={tiers.visitaAgendada.label} count={tiers.visitaAgendada.count} small />
-        <TierText x={360 + (t2.top + t2.bottom) / 8} y={t2.y + t2.h / 2} label={tiers.visitou.label} count={tiers.visitou.count} small />
+        <TierText x={360 - (t2.top + t2.bottom) / 8} y={t2.y + t2.h / 2} label={tiers.visitaAgendada.label} count={tiers.visitaAgendada.count} share={share(tiers.visitaAgendada.count)} small />
+        <TierText x={360 + (t2.top + t2.bottom) / 8} y={t2.y + t2.h / 2} label={tiers.visitou.label} count={tiers.visitou.count} share={share(tiers.visitou.count)} small />
 
         {/* Andar 3 — Proposta */}
         <LiquidTier clipId="funil-t3" path={trapezoid(t3.top, t3.bottom, t3.y, t3.h)} color={tiers.proposta.color} y={t3.y} h={t3.h} delay={0.7} fill={nivel(tiers.proposta.count)} />
-        <TierText x={360} y={t3.y + t3.h / 2} label={tiers.proposta.label} count={tiers.proposta.count} />
+        <TierText x={360} y={t3.y + t3.h / 2} label={tiers.proposta.label} count={tiers.proposta.count} share={share(tiers.proposta.count)} />
 
         {/* Andar 4 — Fechamento */}
         <LiquidTier clipId="funil-t4" path={trapezoid(t4.top, t4.bottom, t4.y, t4.h)} color={tiers.fechamento.color} y={t4.y} h={t4.h} delay={1.5} fill={nivel(tiers.fechamento.count)} />
-        <TierText x={360} y={t4.y + t4.h / 2} label={tiers.fechamento.label} count={tiers.fechamento.count} />
+        <TierText x={360} y={t4.y + t4.h / 2} label={tiers.fechamento.label} count={tiers.fechamento.count} share={share(tiers.fechamento.count)} />
       </svg>
     </div>
   )

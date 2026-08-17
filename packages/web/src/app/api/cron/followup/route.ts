@@ -615,10 +615,14 @@ const NO_SHOW_STAGE_ID = STAGE_IDS.no_show
  * Mark as no_show, move lead to No-Show stage, reset conversation state.
  *
  * Story 75-177: antes de marcar no_show, consulta a etapa atual do lead e a última
- * atividade humana do corretor. Se a visita já foi resolvida (lead avançou p/ pós-visita
- * ou corretor tratou depois do horário) marca o agendamento `completed`; se o lead é
- * terminal/parqueado (perdido/represamento) cancela — sem nunca mover/ressuscitar o lead.
- * Só quando NÃO há sinal de tratamento é que o no-show real dispara (comportamento antigo).
+ * atividade humana do corretor. Se o lead já avançou p/ pós-visita marca `completed`;
+ * se o lead é terminal/parqueado (perdido/represamento) cancela — sem nunca
+ * mover/ressuscitar o lead. Só quando NÃO há sinal de tratamento é que o no-show real
+ * dispara (comportamento antigo).
+ *
+ * Story 75-321: "corretor tratou depois do horário" deixou de virar `completed` e passou
+ * a virar `closed` (encerrado sem confirmação de presença). Nota de corretor não é prova
+ * de que a visita aconteceu, e o Analytics contava como se fosse.
  */
 async function processNoShowDetection(
   supabase: SupabaseClient,
@@ -667,9 +671,17 @@ async function processNoShowDetection(
       latestBrokerActivityAt: latestActivityByLead.get(appt.lead_id) ?? null,
     })
 
-    // Visita resolvida (lead avançou ou corretor tratou): fecha o agendamento, não move o lead.
+    // Lead JÁ em etapa pós-visita: a visita aconteceu. Fecha como realizada, não move o lead.
     if (action === "complete") {
       await supabase.from("appointments").update({ status: "completed" }).eq("id", appt.id)
+      continue
+    }
+
+    // Story 75-321 — corretor tratou o lead depois do horário, mas ninguém confirmou
+    // presença: encerra SEM afirmar que a visita ocorreu. Antes isto virava
+    // `completed` e entrava no card "Visitas realizadas" do Analytics.
+    if (action === "close") {
+      await supabase.from("appointments").update({ status: "closed" }).eq("id", appt.id)
       continue
     }
 

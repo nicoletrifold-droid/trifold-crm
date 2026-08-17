@@ -619,6 +619,8 @@ async function fetchTimelineData(
         completed: "concluída",
         cancelled: "cancelada",
         no_show: "não compareceu",
+        // Story 75-321 — encerrada pelo cron sem confirmação de presença.
+        closed: "encerrada sem registro",
       }
       events.push({
         type: "appointment",

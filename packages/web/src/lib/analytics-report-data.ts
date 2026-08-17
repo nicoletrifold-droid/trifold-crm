@@ -16,6 +16,10 @@ type AggLeadRow = AggregableLead
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
 // Story 75-179: tipo da RPC + derivação de métricas centralizados (dedup tela/PDF).
 import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
+// Story 75-322 — regra única de "visita realizada", compartilhada com a tela.
+import { applyRealizedVisitFilter } from "@web/lib/analytics/visits-rule"
+// Story 75-323 — mesmo funil da tela: quem CHEGOU a cada etapa.
+import { buildPipelineRows, type LeadStageRow, type StageChangeRow, type StageDef } from "@web/lib/analytics/funnel-reached"
 
 type RawLead = {
   created_at: string
@@ -457,12 +461,63 @@ export async function buildAnalyticsReportData(
   const perdidos = perdidosFiltrados ?? metrics.perdidos
   const entradasDelta = entradas - (prevEntradasFiltradas ?? prevMetrics.entradas)
 
+  // ── Funil do PDF: quem CHEGOU a cada etapa (Story 75-323) ─────────────────
+  // A seção "Funil de Conversão" do PDF mostrava as mesmas contagens por etapa
+  // ATUAL que a tela mostrava — e a tela mudou. Duas seções com o mesmo nome e
+  // números diferentes é exatamente o defeito que esta leva de stories fecha, então
+  // o PDF passa a usar o MESMO helper e o mesmo recorte da tela.
+  const [stageDefsForFunnel, cohortLeads, stageChanges] = await Promise.all([
+    // Story 75-326 — SEM filtro de `is_active`: "Perdido" é inativa e guarda leads;
+    // sem ela a coluna "agora" não fecharia as entradas do período.
+    supabase.from("kanban_stages").select("id, name, slug, color, position, is_active").eq("org_id", orgId).order("position"),
+    fetchAllLeads<LeadStageRow>(() =>
+      applyLeadFilters(
+        supabase
+          .from("leads")
+          .select("id, stage_id")
+          .eq("org_id", orgId)
+          .eq("segmento", "principal")
+          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
+          .order("id", { ascending: true }), // `.range()` exige coluna ÚNICA
+        filters
+      ) as unknown as RangeableQuery<LeadStageRow>
+    ),
+    fetchAllLeads<StageChangeRow>(() =>
+      supabase
+        .from("activities")
+        .select("lead_id, metadata")
+        .eq("org_id", orgId)
+        .eq("type", "stage_change")
+        .gte("created_at", aggSince.toISOString())
+        .order("id", { ascending: true }) as unknown as RangeableQuery<StageChangeRow>
+    ),
+  ])
+
+  // Story 75-326 — as duas leituras, MESMO helper da tela: "agora" (cada lead uma
+  // vez, fecha a base) e "chegaram" (o mesmo lead em toda etapa por onde passou).
+  const pipelineRows = buildPipelineRows(
+    cohortLeads,
+    stageChanges,
+    (stageDefsForFunnel.data ?? []) as StageDef[]
+  )
+  const funnelStages = pipelineRows.map((r) => ({
+    name: r.name,
+    color: r.color,
+    count: r.chegaram,
+    agora: r.agora,
+  }))
+  const funnelBase = cohortLeads.length
+
   // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
   const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
 
   // Card 2: VISITAS REALIZADAS no período — agendamentos (appointments) com
-  // scheduled_at na janela e status ≠ cancelado/no-show ("visita que aconteceu",
-  // independente de quando o lead entrou). Story 75-71.
+  // scheduled_at na janela que de fato aconteceram, independente de quando o lead
+  // entrou. Story 75-71.
+  // Story 75-322 — a regra saiu daqui e virou `applyRealizedVisitFilter`, a MESMA
+  // que a tela usa. O filtro daqui era `status NOT IN (cancelled, no_show)` e sem
+  // recorte de equipe: contava visita ainda por acontecer (`scheduled`/`confirmed`)
+  // e trazia a agenda do IMOB. Na janela 09→16/08 isso dava 4 contra os 3 da tela.
   // Story 75-271 — appointments NÃO tem as colunas dos filtros (corretor/calor/
   // perfil vivem em `leads`), então este card não é filtrável sem um join que a
   // tela também não faz. Para não exibir número que ignora o filtro ao lado de
@@ -471,11 +526,12 @@ export async function buildAnalyticsReportData(
   // contrário: lá havia como calcular, e foi calculado.
   let visitasRealizadas: number | null = null
   if (!filtrado) {
-    const { count: visitasCount } = await supabase
-      .from("appointments").select("id", { count: "exact", head: true })
-      .eq("org_id", orgId)
-      .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
-      .not("status", "in", "(cancelled,no_show)")
+    const { count: visitasCount } = await applyRealizedVisitFilter(
+      supabase
+        .from("appointments").select("id", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
+    )
     visitasRealizadas = visitasCount ?? 0
   }
 
@@ -530,6 +586,8 @@ export async function buildAnalyticsReportData(
     currentLabel: "Atual",
     previousLabel: "Anterior",
     stages,
+    funnelStages,
+    funnelBase,
     properties,
     sources,
     brokers,

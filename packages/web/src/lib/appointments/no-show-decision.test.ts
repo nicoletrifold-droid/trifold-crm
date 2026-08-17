@@ -3,9 +3,14 @@
  *
  * Cobre os 4 caminhos:
  *  1. lead em etapa pós-visita           → "complete" (guard 1)
- *  2. atividade do corretor após visita  → "complete" (guard 2)
+ *  2. atividade do corretor após visita  → "close"    (guard 2 — Story 75-321)
  *  3. lead terminal/parqueado            → "cancel"   (guard bônus)
  *  4. nenhum sinal (no-show real)        → "no_show"  (AC4, comportamento atual)
+ *
+ * Story 75-321 mudou SÓ o guard 2: era "complete" (afirmava que a visita
+ * aconteceu por causa de uma nota do corretor) e virou "close" (encerra sem
+ * afirmar presença). O guard 1 continua "complete": ali a etapa pós-visita é a
+ * prova. Os testes abaixo travam essa distinção.
  */
 import { describe, it, expect } from "vitest"
 import { STAGE_IDS } from "@trifold/shared"
@@ -28,10 +33,22 @@ describe("decideStaleAppointment (Story 75-177)", () => {
     }
   })
 
-  it("guard 2: atividade do corretor DEPOIS do horário agendado → complete", () => {
+  // Story 75-321 — este era o caminho que carimbava "visita realizada" em cima de
+  // uma nota do corretor. Encerra igual (não fica pendente), mas sem mentir.
+  it("guard 2: atividade do corretor DEPOIS do horário agendado → close (não complete)", () => {
     expect(
       decideStaleAppointment({
         leadStageId: STAGE_IDS.visita_agendada,
+        scheduledAt: SCHEDULED,
+        latestBrokerActivityAt: AFTER,
+      })
+    ).toBe("close")
+  })
+
+  it("guard 1 tem precedência sobre o guard 2: etapa pós-visita + nota depois → complete", () => {
+    expect(
+      decideStaleAppointment({
+        leadStageId: STAGE_IDS.visitou,
         scheduledAt: SCHEDULED,
         latestBrokerActivityAt: AFTER,
       })

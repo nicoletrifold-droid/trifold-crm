@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { commercialDayRangeForOrg } from "@web/lib/metrics/commercial-day"
+// Story 75-325 — mesma constante de equipe do Analytics (IMOB fora).
+import { ANALYTICS_APPOINTMENT_TEAM } from "@web/lib/analytics/visits-rule"
 
 export async function GET() {
   const auth = await requireAuth()
@@ -15,16 +17,17 @@ export async function GET() {
   const { from: commercialDayStart } = await commercialDayRangeForOrg(orgId, supabase, now)
   const todayStart = commercialDayStart.toISOString()
 
-  // Start of this week (Monday)
-  const dayOfWeek = now.getUTCDay()
+  // Start of this week (Monday). Story 75-325: a semana é a de BRASÍLIA, não a de
+  // UTC — entre 21h e a meia-noite de domingo as duas discordam sobre em que semana
+  // estamos, e é justamente o horário em que o dia comercial vira.
+  const brtNow = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+  const dayOfWeek = brtNow.getUTCDay()
   const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-  const weekStart = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() - mondayOffset
-    )
-  ).toISOString()
+  const weekStartMs =
+    Date.UTC(brtNow.getUTCFullYear(), brtNow.getUTCMonth(), brtNow.getUTCDate() - mondayOffset) +
+    3 * 60 * 60 * 1000 // volta o deslocamento: 00:00 BRT em instante real
+  const weekStart = new Date(weekStartMs).toISOString()
+  const weekEnd = new Date(weekStartMs + 7 * 24 * 60 * 60 * 1000).toISOString()
 
   // Start of this month
   const monthStart = new Date(
@@ -54,19 +57,12 @@ export async function GET() {
     )
 
     const qualificadoId = stageMap["qualificado"]
-    const visitaAgendadaId = stageMap["visita-agendada"]
 
     // Defensive: log if expected stages are missing, but do NOT throw.
     // Missing stages yield count=0 (via empty-string filter), preserving response shape.
     if (!qualificadoId) {
       console.warn(
         "[metrics] Stage 'qualificado' not found for org:",
-        orgId
-      )
-    }
-    if (!visitaAgendadaId) {
-      console.warn(
-        "[metrics] Stage 'visita-agendada' not found for org:",
         orgId
       )
     }
@@ -102,14 +98,28 @@ export async function GET() {
         .eq("stage_id", qualificadoId ?? "")
         .gte("updated_at", weekStart),
 
-      // Scheduled visits this week (visit_scheduled_at column exists in schema)
+      // Visitas marcadas para esta semana — Story 75-325.
+      //
+      // Lia `leads.visit_scheduled_at` cruzado com a etapa "Visita Agendada", e as
+      // duas condições estavam erradas. A coluna é preenchida por poucos caminhos de
+      // escrita: medido em prod (17/08/2026), 12 leads têm `visit_scheduled_at`
+      // contra 59 leads COM agendamento — 52 leads têm visita marcada e a coluna nula.
+      // E exigir a etapa atual = "Visita Agendada" descartava quem já visitou. O
+      // resultado da conta inteira era 0, com 8 leads na etapa e 4 compromissos
+      // futuros na agenda.
+      //
+      // A agenda é a fonte da verdade de agendamento: `appointments`. Canceladas
+      // ficam de fora (visita desmarcada não foi marcada para esta semana); as
+      // demais contam, inclusive as que já aconteceram — a pergunta é sobre a
+      // semana, não sobre o futuro.
       supabase
-        .from("leads")
+        .from("appointments")
         .select("id", { count: "exact", head: true })
         .eq("org_id", orgId)
-        .eq("segmento", "principal")
-        .eq("stage_id", visitaAgendadaId ?? "")
-        .gte("visit_scheduled_at", weekStart),
+        .eq("team", ANALYTICS_APPOINTMENT_TEAM) // agenda IMOB fora (Epic 81)
+        .neq("status", "cancelled")
+        .gte("scheduled_at", weekStart)
+        .lt("scheduled_at", weekEnd),
 
       // Total leads this month (for qualification rate)
       supabase

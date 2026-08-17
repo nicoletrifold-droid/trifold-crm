@@ -54,7 +54,13 @@ export interface AnalyticsReportData {
   comparisonTitle: string
   currentLabel: string
   previousLabel: string
+  /** Pipeline por etapa ATUAL — base do card Ativos. */
   stages: { name: string; color: string; count: number }[]
+  /** Story 75-323/326 — por etapa: `count` = quantos CHEGARAM (passaram por ela) e
+   *  `agora` = quantos estão nela hoje. Mesmo helper e mesmos números da tela. */
+  funnelStages: { name: string; color: string; count: number; agora: number }[]
+  /** Entradas do período — base das conversões do funil. */
+  funnelBase: number
   properties: { name: string; count: number }[]
   sources: { label: string; count: number }[]
   brokers: { name: string; count: number }[]
@@ -138,6 +144,8 @@ const s = StyleSheet.create({
   funnelBarBg: { flex: 1, height: 8, backgroundColor: BORDER, borderRadius: 2 },
   funnelBarFill: { height: 8, borderRadius: 2 },
   funnelCount: { width: 24, fontSize: 7, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "right", marginLeft: 4 },
+  /** Story 75-326 — "agora" ao lado do "chegaram", como na régua da tela. */
+  funnelNow: { width: 24, fontSize: 7, color: GRAY, textAlign: "right", marginLeft: 2 },
   noData: { fontSize: 8, color: GRAY },
 
   // Comparison table (HERO)
@@ -200,7 +208,9 @@ function formatTempo(min: number | null): string {
 }
 
 export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
-  const maxCount = Math.max(...data.stages.map((st) => st.count), 1)
+  // Story 75-323 — a régua das barras do funil é a ENTRADA do período (não o maior
+  // andar): com quem-chegou-até-aqui, o topo raramente é 100% e essa perda é o dado.
+  const maxCount = Math.max(data.funnelBase, ...data.funnelStages.map((st) => st.count), 1)
 
   return (
     <Document>
@@ -279,11 +289,16 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
           </View>
         )}
 
-        {/* Funil — apoio */}
+        {/* Funil — apoio. Story 75-323: passou a usar `funnelStages` (quem CHEGOU a
+            cada etapa), o MESMO recorte da tela. Antes lia `stages` (etapa atual) sob
+            o mesmo título "Funil de Conversão" que a tela usava para outra conta. */}
         <View style={s.section} wrap={false}>
           <Text style={s.sectionTitle}>Funil de Conversão</Text>
-          <Text style={s.sectionNote}>Entradas do período · {data.rangeLabel.toLowerCase()}</Text>
-          {data.stages.map((stage, i) => (
+          <Text style={s.sectionNote}>
+            {data.funnelBase} entradas no período · barra e número = quantos CHEGARAM a cada etapa
+            (o mesmo lead entra em várias); entre parênteses, quantos estão nela agora · {data.rangeLabel.toLowerCase()}
+          </Text>
+          {data.funnelStages.map((stage, i) => (
             <View key={i} style={s.funnelRow}>
               <Text style={s.funnelLabel}>{stage.name}</Text>
               <View style={s.funnelBarBg}>
@@ -295,9 +310,10 @@ export function AnalyticsReportPDF({ data }: { data: AnalyticsReportData }) {
                 )}
               </View>
               <Text style={s.funnelCount}>{stage.count}</Text>
+              <Text style={s.funnelNow}>({stage.agora})</Text>
             </View>
           ))}
-          {data.stages.length === 0 && <Text style={s.noData}>Sem dados de funil</Text>}
+          {data.funnelStages.length === 0 && <Text style={s.noData}>Sem dados de funil</Text>}
         </View>
 
         {/* Tempo médio de atendimento por corretor */}

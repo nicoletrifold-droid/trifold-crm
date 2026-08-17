@@ -1,0 +1,25 @@
+-- 230_appointment_status_closed
+-- Story 75-321 — "Visita realizada" volta a significar "a visita aconteceu".
+--
+-- O detector de no-show (cron follow-up, Story 75-177) tem dois caminhos que
+-- fechavam o agendamento como `completed`:
+--   1. lead JÁ avançou para etapa pós-visita (visitou/proposta/negociando/fechou)
+--      → a visita aconteceu mesmo; `completed` está correto.
+--   2. houve atividade humana do corretor DEPOIS do horário → "o corretor está
+--      tratando". Isso NÃO é prova de que a visita ocorreu — e virou `completed`.
+--
+-- O caminho 2 carimbou visita que não aconteceu. Prova em prod (17/08/2026):
+-- agendamento 5d809dc1-fcdb-4786-a440-0e382c5033dd estava `completed`, sem
+-- feedback nenhum, e a última nota do corretor no lead era "Cliente desmarcou".
+-- Medido no mesmo dia: 7 das 26 visitas `completed` desde julho (27%) não têm
+-- feedback — ou seja, o card "Visitas realizadas" do Analytics estava inflado e
+-- a taxa de no-show, subestimada.
+--
+-- `closed` = agendamento encerrado SEM confirmação de comparecimento. Não é
+-- realizada, não é no-show, não é cancelamento do cliente. Fica fora dos três
+-- baldes do Analytics, que é exatamente o ponto: número que não sabemos não
+-- entra como número que sabemos.
+--
+-- ADD VALUE é aditivo e idempotente aqui; nenhuma linha existente muda de valor.
+
+ALTER TYPE public.appointment_status ADD VALUE IF NOT EXISTS 'closed';

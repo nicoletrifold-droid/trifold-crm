@@ -40,6 +40,13 @@ const statusConfig: Record<
     bg: "bg-yellow-50 dark:bg-yellow-500/15",
     border: "border-yellow-200 dark:border-yellow-500/30",
   },
+  // Story 75-321 — ver dashboard/agenda: encerrado sem confirmação de presença.
+  closed: {
+    label: "Encerrado sem registro",
+    color: "text-stone-500 dark:text-stone-400",
+    bg: "bg-stone-100 dark:bg-stone-800/50",
+    border: "border-stone-200 dark:border-stone-700",
+  },
 }
 
 function getWeekDays(weekStart: Date): Date[] {

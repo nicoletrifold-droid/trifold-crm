@@ -36,10 +36,17 @@ export const BROKER_ACTIVITY_TYPES: readonly string[] = [
 
 /**
  * - `no_show`  → marcar agendamento no_show + mover lead (comportamento atual)
- * - `complete` → visita resolvida (lead avançou ou corretor tratou): marcar `completed`, NÃO mover
+ * - `complete` → lead JÁ está em etapa pós-visita: a visita aconteceu. Marcar
+ *                `completed`, NÃO mover.
+ * - `close`    → Story 75-321: corretor tratou o lead depois do horário, mas NÃO
+ *                há prova de que a visita ocorreu. Marcar `closed` (encerrado sem
+ *                confirmação), NÃO mover. Antes isto virava `completed` e inflava
+ *                "Visitas realizadas" no Analytics — 27% das realizadas de
+ *                jul/ago 2026 eram agendamentos sem feedback nenhum, incluindo
+ *                um em que a nota do corretor era "Cliente desmarcou".
  * - `cancel`   → lead terminal/parqueado: cancelar agendamento, NÃO mover (não ressuscitar)
  */
-export type StaleAppointmentAction = "no_show" | "complete" | "cancel"
+export type StaleAppointmentAction = "no_show" | "complete" | "close" | "cancel"
 
 export interface StaleAppointmentInput {
   /** Etapa atual do lead. */
@@ -71,11 +78,14 @@ export function decideStaleAppointment(input: StaleAppointmentInput): StaleAppoi
   // Guard 1: lead já avançou para pós-visita → visita ocorreu.
   if (leadStageId && POST_VISIT_STAGE_IDS.includes(leadStageId)) return "complete"
 
-  // Guard 2: houve atividade humana do corretor DEPOIS do horário agendado → está tratando.
+  // Guard 2: houve atividade humana do corretor DEPOIS do horário agendado → está
+  // tratando. Story 75-321: isso encerra o agendamento (não fica pendente para
+  // sempre, que era a dor da 75-177) mas NÃO afirma que a visita aconteceu — daí
+  // `close` e não `complete`. Só o feedback ou a etapa pós-visita provam presença.
   const activity = toEpoch(latestBrokerActivityAt)
   const scheduled = toEpoch(scheduledAt)
   if (Number.isFinite(activity) && Number.isFinite(scheduled) && activity > scheduled) {
-    return "complete"
+    return "close"
   }
 
   return "no_show"

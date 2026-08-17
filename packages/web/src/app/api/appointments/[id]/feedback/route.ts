@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
+import { applyNoShowFeedback, applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
 
 function getServiceClient() {
   return createAdminClient()
@@ -20,9 +20,16 @@ function getServiceClient() {
  *
  * Body: {
  *   feedback: string,
- *   interest_after: "cold" | "warm" | "hot",
+ *   outcome?: "visited" | "no_show",   // Story 75-321 — default "visited"
+ *   interest_after: "cold" | "warm" | "hot",   // exigido só quando outcome=visited
  *   next_steps: string
  * }
+ *
+ * Story 75-321 — `outcome: "no_show"` registra que o cliente não compareceu:
+ * agendamento vira no_show, lead volta p/ a etapa de No-Show e a Nicole pós-visita
+ * não dispara. Sem essa porta, a única saída do corretor era registrar como visita
+ * realizada e corrigir a etapa na mão — que é como "Visitas realizadas" e o Funil
+ * passaram a contar histórias diferentes.
  */
 export async function POST(
   request: NextRequest,
@@ -37,6 +44,16 @@ export async function POST(
     const supabase = getServiceClient()
     const body = await request.json()
 
+    // Story 75-321 — desfecho do agendamento; ausente = "visited" (compatível com
+    // os clientes antigos, que só sabiam registrar visita realizada).
+    const outcome: "visited" | "no_show" = body.outcome === "no_show" ? "no_show" : "visited"
+    if (body.outcome !== undefined && !["visited", "no_show"].includes(body.outcome)) {
+      return NextResponse.json(
+        { error: "outcome must be one of: visited, no_show" },
+        { status: 400 }
+      )
+    }
+
     // Validate required fields
     if (!body.feedback) {
       return NextResponse.json(
@@ -45,7 +62,9 @@ export async function POST(
       )
     }
 
-    if (!body.interest_after || !["cold", "warm", "hot"].includes(body.interest_after)) {
+    // Nível de interesse só faz sentido quando houve visita — no no-show não há o
+    // que avaliar, e exigir o campo empurraria o corretor de volta para a mentira.
+    if (outcome === "visited" && (!body.interest_after || !["cold", "warm", "hot"].includes(body.interest_after))) {
       return NextResponse.json(
         { error: "interest_after must be one of: cold, warm, hot" },
         { status: 400 }
@@ -90,6 +109,18 @@ export async function POST(
       if (!isApptOwner && !isImobTeam && !isLeadOwner) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
+    }
+
+    if (outcome === "no_show") {
+      const noShow = await applyNoShowFeedback(supabase, appointment, {
+        feedback: body.feedback,
+        next_steps: body.next_steps ?? null,
+        actor_user_id: appUser.id,
+      })
+      if ("error" in noShow) {
+        return NextResponse.json({ error: noShow.error }, { status: noShow.status })
+      }
+      return NextResponse.json({ data: { outcome: "no_show" } }, { status: 201 })
     }
 
     // Story 75-193 — ciclo completo extraído para visit-feedback-core (reuso

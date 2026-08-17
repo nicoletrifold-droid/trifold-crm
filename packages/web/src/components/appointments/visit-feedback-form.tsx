@@ -6,6 +6,13 @@
 // visit_feedback + appointment completed + lead → Visitou + pós-visita da Nicole.
 // Usado por: página /broker/agenda/[id]/feedback (rota original), botão na página
 // do lead do corretor, dashboard/agenda ("Marcar como realizado") e kanban → Visitou.
+//
+// Story 75-321 — o formulário passou a perguntar ANTES se o cliente compareceu.
+// Sem essa pergunta, o corretor cuja visita furou só tinha o caminho de "visita
+// realizada": em prod apareceu um feedback com o texto "cli não compareceu,
+// tentando remarcar" que moveu o lead para Visitou e foi desfeito na mão 50s
+// depois. O agendamento ficava contado como visita realizada no Analytics.
+// Respondendo "Não", o envio vai com `outcome: "no_show"`.
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -39,10 +46,16 @@ export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }
   const [additionalNotes, setAdditionalNotes] = useState("")
   const retroMode = !appointmentId && !!leadId
   const [visitedDate, setVisitedDate] = useState(todayLocalISO())
+  // Story 75-321 — desfecho. A porta retroativa existe para registrar visita que
+  // ACONTECEU sem agendamento no sistema; não-comparecimento não cabe ali (não
+  // havia agendamento para furar), então lá o seletor não aparece.
+  const [attended, setAttended] = useState(true)
+  const noShowMode = !retroMode && !attended
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!feedback.trim() || !interestAfter) return
+    if (!feedback.trim()) return
+    if (!noShowMode && !interestAfter) return
 
     setSubmitting(true)
     setError(null)
@@ -50,7 +63,6 @@ export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }
     try {
       const body: Record<string, unknown> = {
         feedback: feedback.trim(),
-        interest_after: interestAfter,
         next_steps: [
           nextSteps.trim(),
           wantsProposal ? "Lead deseja receber proposta" : "",
@@ -58,6 +70,12 @@ export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }
         ]
           .filter(Boolean)
           .join("\n"),
+      }
+
+      if (noShowMode) {
+        body.outcome = "no_show"
+      } else {
+        body.interest_after = interestAfter
       }
 
       if (retroMode) {
@@ -111,34 +129,73 @@ export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }
           </p>
         </div>
       )}
+      {!retroMode && (
+        <fieldset>
+          <legend className={labelClass}>O cliente compareceu? *</legend>
+          <div className="flex gap-2">
+            {[
+              { value: true, label: "Sim, a visita aconteceu" },
+              { value: false, label: "Não compareceu" },
+            ].map((opt) => (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => setAttended(opt.value)}
+                aria-pressed={attended === opt.value}
+                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  attended === opt.value
+                    ? "border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-500 dark:bg-orange-500/15 dark:text-orange-300"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {noShowMode && (
+            <p className="mt-1.5 text-xs text-gray-400 dark:text-stone-500">
+              A visita será registrada como ausência e o lead volta para a etapa de No-Show.
+            </p>
+          )}
+        </fieldset>
+      )}
+
       <div>
-        <label htmlFor="vf-feedback" className={labelClass}>Como foi a visita? *</label>
+        <label htmlFor="vf-feedback" className={labelClass}>
+          {noShowMode ? "O que aconteceu? *" : "Como foi a visita? *"}
+        </label>
         <textarea
           id="vf-feedback"
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
           required
           rows={4}
-          placeholder="Descreva como foi a visita, pontos relevantes, impressoes do lead..."
+          placeholder={
+            noShowMode
+              ? "O cliente avisou? Ja tentou contato? Da para remarcar?"
+              : "Descreva como foi a visita, pontos relevantes, impressoes do lead..."
+          }
           className={inputClass}
         />
       </div>
 
-      <div>
-        <label htmlFor="vf-interest" className={labelClass}>Nivel de interesse do lead *</label>
-        <select
-          id="vf-interest"
-          value={interestAfter}
-          onChange={(e) => setInterestAfter(e.target.value)}
-          required
-          className={inputClass}
-        >
-          <option value="">Selecione...</option>
-          <option value="cold">Frio</option>
-          <option value="warm">Morno</option>
-          <option value="hot">Quente</option>
-        </select>
-      </div>
+      {!noShowMode && (
+        <div>
+          <label htmlFor="vf-interest" className={labelClass}>Nivel de interesse do lead *</label>
+          <select
+            id="vf-interest"
+            value={interestAfter}
+            onChange={(e) => setInterestAfter(e.target.value)}
+            required
+            className={inputClass}
+          >
+            <option value="">Selecione...</option>
+            <option value="cold">Frio</option>
+            <option value="warm">Morno</option>
+            <option value="hot">Quente</option>
+          </select>
+        </div>
+      )}
 
       <div>
         <label htmlFor="vf-next" className={labelClass}>Proximos passos</label>
@@ -152,18 +209,20 @@ export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }
         />
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          id="vf-proposal"
-          type="checkbox"
-          checked={wantsProposal}
-          onChange={(e) => setWantsProposal(e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
-        />
-        <label htmlFor="vf-proposal" className="text-sm font-medium text-gray-700 dark:text-stone-300">
-          O lead quer receber proposta?
-        </label>
-      </div>
+      {!noShowMode && (
+        <div className="flex items-center gap-2">
+          <input
+            id="vf-proposal"
+            type="checkbox"
+            checked={wantsProposal}
+            onChange={(e) => setWantsProposal(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 dark:border-stone-600"
+          />
+          <label htmlFor="vf-proposal" className="text-sm font-medium text-gray-700 dark:text-stone-300">
+            O lead quer receber proposta?
+          </label>
+        </div>
+      )}
 
       <div>
         <label htmlFor="vf-notes" className={labelClass}>Observacoes adicionais</label>
@@ -186,10 +245,10 @@ export function VisitFeedbackForm({ appointmentId, leadId, onSuccess, onCancel }
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={submitting || !feedback.trim() || !interestAfter}
+          disabled={submitting || !feedback.trim() || (!noShowMode && !interestAfter)}
           className="rounded-md bg-orange-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {submitting ? "Enviando..." : "Enviar feedback"}
+          {submitting ? "Enviando..." : noShowMode ? "Registrar ausência" : "Enviar feedback"}
         </button>
         {onCancel && (
           <button
