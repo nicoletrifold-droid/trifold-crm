@@ -1,9 +1,12 @@
 # Story 87-5 — A Nicole passa a enxergar o corretor: histórico com rótulo de papel
 
 **Epic:** 87 (Nicole — Confiabilidade de Contexto, Estado e Enforcement) · **Status:** Ready for Review
-· ⚠️ **DEPLOY A EM PRODUÇÃO desde `2026-08-15T17:25:45Z` (PR #426, `6b760887`). NÃO é `Done`:** a AC12
-não foi executada, o deploy B não subiu, e a janela de 24 h corre **com instrumentação incompleta**
-(A3/A4 abertos). Ver **§ Registro de deploy (@devops)** no fim do arquivo.
+· ⚠️ **OS DOIS DEPLOYS ESTÃO EM PRODUÇÃO — deploy A desde `2026-08-15T17:25:45Z` (PR #426,
+`6b760887`) e deploy B desde `2026-08-17T00:18:45Z` (PR #427, `47eb5c00`). E MESMO ASSIM NÃO é
+`Done`:** a janela de 24 h do deploy A fechou **INCONCLUSIVA** — **2 turnos** na população-alvo
+contra o **piso de 5** —, e por decisão da própria AC12 a leitura fica **estendida até `n ≥ 5` ou
+7 dias corridos**. **Ausência de caso não é evidência de sucesso**; é evidência de que não houve o
+que medir. Ver **§ Registro de deploy (@devops) — deploy A** e **— deploy B** no fim do arquivo.
 **Item do roadmap:** **`W1-7`** (Onda 1, **deploy 4**) — ✅ **já criado pelo @pm no Epic 87 v0.5**,
 §7/Onda 1, com `stories_planned: W1-7 → 87-5`. *(A v0.1 desta story dizia "ainda não existe";
 conferido pelo @po em 07/08 — existe.)*
@@ -1714,10 +1717,102 @@ Idem para o deploy do #425 (`sha=dc3c13c8`, deployment `5922838150`): `success` 
 
 ---
 
+## Registro de deploy (@devops) — deploy B
+
+### ⏱️ O marco zero da janela do deploy B
+
+| evento | instante (UTC) | prova |
+|---|---|---|
+| merge do PR #427 em `main` | entre **00:16:26Z** e **00:16:29Z** | commit de squash `47eb5c0060165e7386820ec11dad5b40372a2462` |
+| `success` do build no projeto `trifold-s-projects` | **2026-08-17T00:18:18Z** | deployment `5936954629` (API de Deployments do GitHub, `sha=47eb5c00…`) |
+| build servido em `crm.trifold.eng.br` | entre 00:18:24Z e **00:18:34Z** | `data-dpl-id` `dpl_G3vVrpdLft6cySMF88trwpTPf5Vb` → `dpl_A9qvPacCpuLtwG3JEFMciMkYsyjz` |
+| `success` do build no projeto `freelans-projects-d9ab20e0` | **2026-08-17T00:18:43Z** | mesmo deployment `5936954629`, segundo `status` |
+| build servido em `trifold-crm.vercel.app` | entre 00:18:35Z e **00:18:45Z** | `data-dpl-id` `dpl_5Qx7tgvR4aijAbouCPethG6TZF6p` → `dpl_AG5GingVtxPbYCHQAc72K1jfQr9z` |
+
+> ### 🕐 **MARCO ZERO DO DEPLOY B = `2026-08-17T00:18:45Z`**
+>
+> Mesma regra do deploy A: adota-se o instante do domínio **mais tardio**, não do primeiro. Antes de
+> `00:18:45Z` não existiu um instante em que os dois lados estivessem servindo o código novo.
+> Amostragem a cada **10 s** — a precisão do instante é essa, não melhor.
+>
+> **🔄 A ORDEM DOS DOMÍNIOS INVERTEU em relação ao deploy A.** No A, `trifold-crm.vercel.app` trocou
+> primeiro e `crm.trifold.eng.br` fechou a janela; no B foi o contrário. **Qual projeto é o "mais
+> tardio" não é fixo** — quem for medir o próximo deploy precisa observar os dois domínios, não
+> assumir o de ontem.
+
+### 🗓️ O relógio da fila do Epic 87 parte daqui
+
+| PR | story | elegível a partir de (UTC) |
+|---|---|---|
+| **#428** | 87-11 — `collected_data` fora do prompt | **2026-08-18T00:18:45Z** (marco zero + 24 h) |
+| **#429** | 87-12 bloco A — handoff lê o fato de agenda no formato novo | **2026-08-19T00:18:45Z** (marco zero + 48 h) |
+
+A ordem é condição **C4 do gate da 87-11 (`bloqueia_merge: true`)**, não preferência. Depois de #429
+seguem a 87-10 e o bloco B da 87-12, também com ≥24 h entre si.
+
+### ✅ Conferido em `main` **depois** do merge (não no PR)
+
+| # | símbolo | em `47eb5c00` |
+|---|---|---|
+| 1 | `loadConversationHistory` importado de `@trifold/ai` no `enrich-leads` | ✅ `route.ts:30` |
+| 2 | a chamada substituiu a consulta reimplementada | ✅ `route.ts:86` |
+| 3 | `loadConversationHistory` exportada do carregador único | ✅ `conversation-history.ts:264` |
+| 4 | `role` do renderizador do Haiku admite `"broker"` + `brokerName` | ✅ `haiku-enrichment.ts:13`, `:94` |
+| 5 | proibição explícita de extrair campo de linha `[CORRETOR HUMANO]` no `ENRICHMENT_PROMPT` | ✅ `haiku-enrichment.ts:72` |
+| 6 | **zero `.sql`** no diff `735f40a8 → 47eb5c00` | ✅ nenhum arquivo de migration |
+
+### 🔴 O que este deploy **muda de natureza** — e por que a janela importa mais aqui
+
+No deploy A a fala do corretor era **leitura**. Aqui ela vira **crença**: o extrator escreve em
+`collected_data`, `ai_summary` e nos campos de perfil de `leads`. É o Risco 7 da story. A AC12-(iv)
+— amostra de 5 leads enriquecidos após este instante, conferida campo a campo — é a régua, e ela
+**ainda não foi executada**.
+
+### 🔴 A janela do deploy A fechou **INCONCLUSIVA**, e isso não muda com este merge
+
+Fechamento em `2026-08-16T17:25:45Z`: **2 turnos** na população-alvo, **1 conversa**, contra piso
+exigido de **5**. O @po já previa ~**60 %** de chance de zero (população de 34 turnos/30 dias,
+1,13/dia, chegando **em rajada**). **O verde não foi observado — ele não foi medido.** Ausência de
+caso **não é evidência de sucesso**. Por isso a AC12 segue **estendida até `n ≥ 5` ou 7 dias**, e a
+story **não é `Done`** com o deploy B no ar.
+
+### 🧭 Observação de campo do deploy A que muda a leitura do que subiu agora
+
+O único caso rico da janela (o do José, 16/08): o lead pediu para remarcar e a Nicole respondeu
+**sabendo que a visita existia** — informação que vinha **exclusivamente** de mensagens do corretor
+de 12/08, às quais ela era cega antes do deploy A. É o primeiro sinal de campo de que o A funciona.
+**E, no mesmo turno, ela confirmou um horário novo que o sistema não acompanhou** — um humano
+corrigiu **67 min** depois. **Contexto melhor sem autoridade de escrita aumenta a superfície de
+promessa sem lastro**, e o deploy B amplia justamente o contexto. É o argumento de campo que subiu a
+prioridade do **Epic 88** (tool use de agenda).
+
+### ⚠️ O que este registro **NÃO** prova
+
+- **O elo alias→deployment continua aberto**, pelo mesmo motivo do deploy A: fechar
+  *"`crm.trifold.eng.br` aponta para o deployment X, e X veio do SHA Y"* exige a API da Vercel,
+  **bloqueada por SAML** no escopo `trifold-s-projects`. O que está provado são duas coisas
+  independentes que **concordam em ordem**: houve build de produção `success` daquele SHA nos dois
+  projetos, e os dois domínios trocaram de `data-dpl-id` logo em seguida, na **mesma ordem** dos
+  builds (`trifold-s` antes de `freelans`; `eng.br` antes de `vercel.app`).
+- **A defasagem medida entre os dois instrumentos não é idêntica** (25 s entre os `success`, 11 s
+  entre os flips detectados). Isso está dentro do intervalo de amostragem de 10 s somado à
+  propagação do alias — mas é honesto registrar que, no deploy A, as duas defasagens bateram (42 s
+  vs 41 s) e aqui **não bateram**.
+- **Nenhum comportamento em produção foi validado.** A AC12 é do @qa + responsável nomeado
+  (**Marcos**, por D7) e **não foi executada** — nem a (i–iii) do A, nem a (iv) do B.
+- **Segue não conferido qual dos dois projetos Vercel atende o webhook do WhatsApp.** Como os dois
+  trocaram, "o código está no ar" vale dos dois lados de qualquer forma.
+- **A suíte não foi re-executada por mim depois do merge.** Este repositório **não tem GitHub
+  Actions**: o único check é o build do Vercel, e ele **não roda `vitest`**. O verde citado no PR é o
+  medido pelo @dev/@qa antes do merge, não uma medição minha em `main`.
+
+---
+
 ## Change Log
 
 | Data | Versão | Descrição | Autor |
 |---|---|---|---|
+| 2026-08-17 | **1.5** | **Deploy B EM PRODUÇÃO. Merge do PR #427 (squash `47eb5c00`) às `00:16:2xZ`; código servido nos DOIS domínios a partir de `2026-08-17T00:18:45Z` — MARCO ZERO da janela do deploy B.** Registro completo em **§ Registro de deploy (@devops) — deploy B**. **A ORDEM DOS DOMÍNIOS INVERTEU em relação ao deploy A:** aqui `crm.trifold.eng.br` trocou primeiro (`≤00:18:34Z`) e `trifold-crm.vercel.app` fechou a janela (`≤00:18:45Z`) — no A foi o contrário. Qual projeto é o "mais tardio" **não é fixo**; quem medir o próximo deploy tem de observar os dois. Corroborado pela API de Deployments do GitHub (`sha=47eb5c00…` → deployment `5936954629`, um `success` por projeto: `trifold-s` às `00:18:18Z`, `freelans` às `00:18:43Z`) — **mesma ordem** dos flips, embora a defasagem **não** tenha batido como no A (25 s entre builds vs 11 s entre flips; no A foram 41 s vs 42 s). Amostragem de 10 s. **Conferido em `main` DEPOIS do merge: 6/6** (`loadConversationHistory` importada em `route.ts:30` e chamada em `:86`; exportada em `conversation-history.ts:264`; `role: "broker"` + `brokerName` em `haiku-enrichment.ts:13`/`:94`; proibição de extrair campo de linha `[CORRETOR HUMANO]` em `:72`; **zero `.sql`** no diff). **🔴 AQUI A FALA DO CORRETOR DEIXA DE SER LEITURA E VIRA CRENÇA** — o extrator escreve em `collected_data`, `ai_summary` e nos campos de perfil de `leads` (Risco 7); a AC12-(iv) é a régua e **não foi executada**. **🔴 A janela do deploy A fechou INCONCLUSIVA e o merge do B não muda isso:** 2 turnos na população-alvo contra piso de 5 — **ausência de caso NÃO é evidência de sucesso**, é evidência de que não houve o que medir. AC12 **estendida até `n ≥ 5` ou 7 dias**; a story **continua `Ready for Review`, NÃO `Done`**. **Relógio da fila registrado:** #428 (87-11) elegível a partir de `2026-08-18T00:18:45Z`, #429 (87-12 A) a partir de `2026-08-19T00:18:45Z` — condição C4 do gate da 87-11, `bloqueia_merge: true`. **Observação de campo do A que muda a leitura do B (caso do José, 16/08):** a Nicole respondeu **sabendo que havia visita**, com informação vinda só das mensagens do corretor — e **confirmou um horário novo que o sistema não acompanhou**, corrigido por um humano 67 min depois. Contexto melhor **sem autoridade de escrita aumenta** a superfície de promessa sem lastro; é o argumento de campo que subiu a prioridade do **Epic 88**. **NÃO verificado:** o elo alias→deployment (API da Vercel bloqueada por SAML); a AC12 inteira; qual projeto atende o webhook do WhatsApp; e a suíte **não** foi re-executada em `main` — este repo não tem GitHub Actions e o build do Vercel não roda `vitest`. Sem migration, sem DDL. | @devops (Gage) |
 | 2026-08-15 | **1.4** | **Correção da própria v1.3: eu havia carimbado "não confirmei o SHA de origem dos deployments" e isso era pessimismo desnecessário — dá para confirmar SEM token da Vercel.** A API de Deployments do **GitHub** carrega o carimbo do bot da Vercel: `sha=6b760887…` → deployment `5922860667` com **um `status: success` por projeto** — `freelans-projects-d9ab20e0` às `17:24:56Z` e `trifold-s-projects` às `17:25:37Z`. **Isto fecha com a medição de fora e a ordem bate:** cada `success` vem imediatamente antes do flip de `data-dpl-id` do domínio correspondente (`≤17:25:03Z` e `≤17:25:45Z`), e a defasagem de **42 s** entre os domínios é a **mesma** dos 41 s entre os builds — o mesmo evento por dois instrumentos independentes, não coincidência. Idem para o #425 (`dc3c13c8` → `5922838150`, `success` nos dois às `17:22:09Z`/`17:22:10Z`). **O marco zero NÃO muda: segue `2026-08-15T17:25:45Z`** (instante do segundo domínio). **Beco sem saída registrado para ninguém repetir:** buscar o `data-dpl-id` nas URLs de deployment (`trifold-ihbhajpfk-…`, `trifold-1m331dwft-…`) **não mede nada** — as duas redirecionam para `vercel.com/login` por proteção de deployment e devolvem o `dpl_` da **página de login da Vercel** (`dpl_FnjXYHAuYSshE5Wfogd1zBxS93we`, idêntico nas duas, que é o sinal de que não é a nossa app). **O que continua aberto** é só o elo alias→deployment (*"`crm.trifold.eng.br` aponta para o deployment X, e X veio do SHA Y"*), que exige a API da Vercel, bloqueada por SAML. Só documento; nenhuma linha de código, sem migration, sem DDL. | @devops (Gage) |
 | 2026-08-15 | **1.3** | **Deploy A EM PRODUÇÃO. Merge do PR #426 (squash `6b760887`) às `17:23:07Z`; código servido nos DOIS domínios a partir de `17:25:45Z` — este é o MARCO ZERO da janela de 24 h, que fecha em `2026-08-16T17:25:45Z`.** Registro completo em **§ Registro de deploy (@devops)**. **Marco zero é o instante do SEGUNDO domínio, deliberadamente:** os dois projetos Vercel não trocam juntos e houve **42 s** com `trifold-crm.vercel.app` já no código novo e `crm.trifold.eng.br` ainda no anterior — antes de `17:25:45Z` não existia instante com o rótulo no ar dos dois lados. **R1 conferido em `origin/main` DEPOIS do merge, não no PR: 6/6 símbolos presentes** (arquivo `conversation-history.ts` inteiro com 331 linhas; `CONTEXTO_FALA_DE_CORRETOR`; `corretorContext` + soma ao `dynamicSuffix`; `...toAnthropicHistory`; `MARCACOES_INTERNAS` + os dois `.replace` de `[CORRETOR HUMANO`; `lastAssistantMsg` restrito). O cenário que R1 existe para impedir — rótulo sem instrução, que **cria** um defeito novo em produção — **não ocorreu**. **R2/R3: o deploy B NÃO subiu** — `git diff` nos três caminhos contra o commit anterior devolve vazio; eles seguem não commitados na árvore de trabalho, para PR próprio elegível a partir de `2026-08-16T17:25:45Z` (a ordem A→B é dependência de import, não preferência). **R5: zero `.sql`**, e a árvore mesclada não introduz nenhum prefixo de migration duplicado novo (as 20 duplicatas são idênticas às pré-existentes em `main`). **🔴 A JANELA COMEÇOU COM INSTRUMENTAÇÃO INCOMPLETA:** A3 e A4 (@po/@sm) seguem ABERTOS, e o próprio re-gate exigia que fechassem **antes** da janela. Somado aos ~21 % de chance de caso espontâneo, **qualquer leitura da AC12 antes de A3/A4 fecharem é inconclusiva POR CONSTRUÇÃO** — silêncio na janela não é evidência de sucesso, é evidência de que não houve o que medir. **NÃO verificado:** o SHA de origem dos deployments (a correlação é temporal, não criptográfica — a API da Vercel é bloqueada por SAML no escopo `trifold-s-projects`) ⚠️*(afirmação SUPERADA na v1.4 — o SHA **foi** confirmado pela API de Deployments do GitHub, que não precisa de token da Vercel; o que fica aberto é só o elo alias→deployment)*; a AC12 em si (é do @qa + responsável D7); e qual dos dois projetos atende o webhook do WhatsApp. **Status permanece `Ready for Review` — NÃO promovido a `Done`.** Sem migration, sem DDL. | @devops (Gage) |
 | 2026-08-15 | **1.3** | **Fechamento de A3 e A4 do gate (round 2) — as duas reescritas de AC que ficaram com o @po. Só as seções de AC12 e de rollback; nenhuma linha de código, nenhum epic tocado.** **(1) A3 — a AC12-(ii) foi reescrita, mas NÃO para a métrica que o gate propôs, e o motivo é medição.** Rodei as duas réguas candidatas contra produção antes de adotar qualquer uma. **O denominador certo — e ele nunca tinha sido declarado — é o turno da Nicole cujo histórico já continha fala de corretor: 34 de 588 turnos em 30 dias, em 13 conversas (1,13/dia), com distribuição em RAJADA (9 dos últimos 15 dias em ZERO, um dia com 6). A janela de 24 h tem ~60 % de chance de produzir ZERO turno observável.** Nessa população: a busca textual da redação anterior mede **0 de 34** (o único turno com cifra repete o orçamento **do próprio lead**, "R$ 400 mil") — **régua já saturada em zero**, 0 antes e 0 depois. E a métrica que o gate mandou adotar (*"regra comercial interna: entrada mínima 20 % / 80 mil"*) é **pior**, por três medições: **(a) ela NÃO é interna** — o prompt manda dizer, literalmente, em `packages/ai/src/prompts/property-presentation.ts:48-52` (*"a entrada fica em torno de 80 mil reais"*) e `qualification.ts:34-36`; contá-la é contar a Nicole **obedecendo**; **(b)** na população-alvo ela vale **0 de 34** hoje; **(c)** as **4** ocorrências dos últimos 30 dias estão **todas na população oposta** (turnos anteriores a qualquer fala de corretor: 07/08 ×2, 12/08, e a de 28/07 que ecoa o *"dando 80k"* dito pelo próprio lead), e a story **não muda nenhuma das quatro** — precisão **0 de 4** para o defeito-alvo. O `7/10 → 0/10` é real, mas é **condicional à fixture**, que é o pior caso construído. **A AC12-(ii) passa a ser classificação em três saídas nomeadas (ATRIBUI · CONTRADIZ · DESMENTE)**, fechada pelo **turno provocado** da (i); a leitura observacional lê **todos** os turnos da população (consulta SQL colada na AC), com **piso explícito: n < 5 ⇒ INCONCLUSIVO, jamais "sem regressão"**, e critério de extensão escrito antes (até n ≥ 5 ou 7 dias corridos; chegando aos 7 dias, fecha como INCONCLUSIVO POR BASE RATE). **Controle positivo obrigatório e provocado (ii-d):** segunda conversa **sem** corretor em que a Nicole **deve continuar** entregando a resposta prescrita sobre entrada — emudecer também é reversão. **(2) A4 — declarado que NÃO HÁ gatilho automático, com quem/o quê/quando nomeados.** Três medições: **(a)** a higienização roda antes de persistir e de enviar (`pipeline.ts:1181-1186`, `saveMessages` grava o texto limpo em `:1625`) ⇒ `messages` com `[CORRETOR HUMANO` = **0** e continuará 0 — o gatilho como escrito é estruturalmente inalcançável; **(b)** `NICOLE_SYSTEM_BLOCK_LEAK` tem **0 registros em toda a história** de `system_events`, contra 471 `CLAUDE_RESPONSE` em 30 dias (o caminho de emissão funciona) — e **o único vazamento real de marcação que existe em produção não gerou evento**: a mensagem `3a885e0e…` de **06/08 10:04 UTC** foi entregue ao lead com `[SISTEMA: horário 11h do sábado 08/08 — LIVRE]`, **~6 h antes** do deploy da 75-279 (`fa100677`, 13:05 UTC) — base rate **1 em 1.320** turnos, valor esperado em 24 h ≈ **0,02**, ou seja **"zero ocorrências" é o resultado esperado inclusive num mundo quebrado**; **(c)** distinguir as duas marcações **não exige campo novo** — o `metadata.raw_message` já guarda os 500 primeiros caracteres da saída crua, e a consulta `metadata->>'raw_message' ilike '%[CORRETOR HUMANO%'` **eu rodei contra produção** (0 linhas, como previsto); **o `marcacao:` pedido pelo gate fica FORA desta fase** por ser caminho de decisão novo, com o **limite declarado** de que marcação além do caractere 500 vira "indeterminada" e vai para inspeção manual. O bullet da **reapresentação** virou **gatilho de INSPEÇÃO, não de reversão automática**, com baseline medido (**3 em 40 turnos da população-alvo em 90 dias, 7,5 %**): já ocorre hoje, e reverter na primeira ocorrência seria reverter por defeito **herdado**. **Não fechável sem trabalho de terceiros e nomeado como tal:** o **responsável da AC12 continua indefinido** (Marcos ou Thielly) — por D7, sem nome o deploy não sai, e esta reescrita **não supre o nome**; dono da definição: **@pm/Gabriel**. **Nada rodado além de leitura**: nenhuma alteração de código, de teste, de migration ou dos epics 87/88. | @po (Pax) |
