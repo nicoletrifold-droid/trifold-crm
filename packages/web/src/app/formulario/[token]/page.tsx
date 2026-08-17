@@ -63,7 +63,7 @@ export default async function FormularioPublicoPage({
     <div className="min-h-screen bg-stone-950 px-4 py-8">
       <div className="mx-auto w-full max-w-md">
         <div className="rounded-2xl bg-stone-900 p-6 ring-1 ring-stone-800 sm:p-8">
-          <p className="text-xs font-semibold uppercase tracking-wider text-violet-400">Trifold</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-orange-400">Trifold</p>
           <h1 className="mt-1 text-xl font-bold text-stone-100">{data.nome as string}</h1>
           <div className="mt-6">
             <FormRunner token={token} schema={schema} />

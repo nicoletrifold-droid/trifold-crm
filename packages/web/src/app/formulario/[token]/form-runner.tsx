@@ -22,7 +22,7 @@ import { AgendaStep } from "./agenda-step"
 // projeto não tem jsdom, então nada que decida pode morar neste arquivo.
 
 const inputCls =
-  "w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+  "w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const
 
@@ -236,7 +236,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
           <button
             type="button"
             onClick={() => setAbrirAgenda(true)}
-            className="mt-6 w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
+            className="mt-6 w-full rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-500"
           >
             Agendar
           </button>
@@ -258,7 +258,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     <div>
       <div className="mb-6 h-1 w-full overflow-hidden rounded-full bg-stone-800">
         <div
-          className="h-full rounded-full bg-violet-500 transition-all duration-300"
+          className="h-full rounded-full bg-orange-500 transition-all duration-300"
           style={{ width: `${progresso}%` }}
         />
       </div>
@@ -277,7 +277,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
               <div key={p.id}>
                 <label className="block text-sm font-medium text-stone-100">
                   {p.titulo}
-                  {p.obrigatoria ? <span className="ml-1 text-violet-400">*</span> : null}
+                  {p.obrigatoria ? <span className="ml-1 text-orange-400">*</span> : null}
                 </label>
                 {p.ajuda ? <p className="mt-1 text-xs text-stone-500">{p.ajuda}</p> : null}
                 <div className="mt-2">
@@ -297,7 +297,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
           <button
             type="button"
             onClick={responder}
-            className="mt-5 w-full rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500"
+            className="mt-5 w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500"
           >
             Continuar
           </button>
@@ -315,7 +315,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
               type="checkbox"
               checked={lgpd}
               onChange={(e) => setLgpd(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-600 bg-stone-800 text-violet-600 focus:ring-violet-500"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-600 bg-stone-800 text-orange-600 focus:ring-orange-500"
             />
             <span>
               Autorizo o contato da Trifold e o tratamento dos meus dados conforme a{" "}
@@ -323,7 +323,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
                 href="/politica-de-privacidade"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-violet-400 underline hover:text-violet-300"
+                className="text-orange-400 underline hover:text-orange-300"
               >
                 Política de Privacidade
               </a>
@@ -337,7 +337,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
             type="button"
             onClick={() => void finalizar()}
             disabled={enviando || !completo}
-            className="mt-5 w-full rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {enviando ? "Enviando…" : "Enviar"}
           </button>
@@ -369,7 +369,7 @@ function CampoDaPergunta({
             onClick={() => onChange(o.valor)}
             className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
               valor === o.valor
-                ? "border-violet-500 bg-violet-500/10 text-stone-100"
+                ? "border-orange-500 bg-orange-500/10 text-stone-100"
                 : "border-stone-700 bg-stone-800 text-stone-300 hover:border-stone-600"
             }`}
           >
@@ -395,7 +395,7 @@ function CampoDaPergunta({
               }
               className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
                 ativo
-                  ? "border-violet-500 bg-violet-500/10 text-stone-100"
+                  ? "border-orange-500 bg-orange-500/10 text-stone-100"
                   : "border-stone-700 bg-stone-800 text-stone-300 hover:border-stone-600"
               }`}
             >

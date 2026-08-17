@@ -62,7 +62,7 @@ export function FormResponsesPanel({
           cruas: é o que o corretor lê para abrir a conversa. Sem resumo (IA
           falhou ou formulário sem pergunta aberta) o bloco não renderiza. */}
       {resumoIa ? (
-        <p className="mt-3 rounded-lg bg-violet-50 p-3 text-sm text-stone-700 dark:bg-violet-950/30 dark:text-stone-200">
+        <p className="mt-3 rounded-lg bg-orange-50 p-3 text-sm text-stone-700 dark:bg-orange-950/30 dark:text-stone-200">
           {resumoIa}
         </p>
       ) : null}
