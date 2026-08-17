@@ -1,6 +1,6 @@
 # Story 86-9 — Pixel Meta + eventos CAPI no formulário de qualificação (alvo EMQ ≥ 9)
 
-**Status:** Ready
+**Status:** Ready for Review (QA PASS — aguarda deploy para o AC11)
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Prioridade:** P0 (o formulário vira a URL de destino das campanhas pagas)
@@ -382,3 +382,20 @@ teste não contam para otimização de campanha.
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-08-17 | 0.1 | Story criada como correção de curso das 86-5/6/7 (que apontavam para uma landing inexistente), com baseline de EMQ medido via Meta MCP e as decisões do stakeholder de 17/08. | @sm (River) |
+
+## QA Results
+
+**Gate:** `docs/qa/gates/86.9-pixel-capi-formulario-qualificacao.yml`
+**Veredito:** PASS na 2ª iteração (1ª foi FAIL).
+
+| Iteração | Veredito | Motivo |
+|---|---|---|
+| 1 | FAIL | `86.9-QA-001` (high) — corrida de carregamento descartava o `ViewContent` do browser e fazia o par server-side sair **sem `fbp`**, reintroduzindo na prática o problema de 9,2% que a story veio corrigir |
+| 2 | PASS | corrigido em `77f3b489`, com teste travando a decisão de esperar |
+
+7 checks: code review, testes, ACs, regressões, performance, segurança e
+documentação — todos PASS. Pendências que não bloqueiam merge: `86.9-QA-002`
+(sobrescrita de atribuição em lead pré-existente — aceita e comentada no código)
+e `86.9-QA-003` (AC11 só verificável após deploy).
+
+— Quinn, guardião da qualidade 🛡️

@@ -5,18 +5,26 @@ reviewed_at: "2026-08-17"
 branch: "story/86-9-pixel-capi-formulario"
 commit: "ce2c41f4"
 
-verdict: FAIL
+verdict: PASS
 verdict_rationale: >
-  Implementação sólida e bem coberta, mas há uma corrida de carregamento que
-  descarta o disparo do `ViewContent` no browser e faz o par server-side sair sem
-  `fbp` — exatamente a chave de correspondência que esta story existe para
-  consertar (9,2% de cobertura no baseline). Sem correção, a story entrega os
-  eventos e não entrega a nota.
+  A primeira passagem foi FAIL por uma corrida de carregamento que descartava o
+  `ViewContent` do browser e fazia o par server-side sair sem `fbp` — a chave que
+  esta story existe para consertar. Corrigido no commit 77f3b489 e coberto por
+  teste que trava a decisão. Restam apenas itens que dependem de deploy.
+verdict_history:
+  - iteration: 1
+    verdict: FAIL
+    at: "2026-08-17"
+    reason: "86.9-QA-001 (high) — evento do browser perdido em corrida com o carregamento do script"
+  - iteration: 2
+    verdict: PASS
+    at: "2026-08-17"
+    reason: "86.9-QA-001 corrigido e testado; suíte em 209 arquivos / 2623 testes"
 
 checks:
   code_review: PASS
-  unit_tests: PASS          # 208 arquivos / 2618 testes; 35 novos
-  acceptance_criteria: CONCERNS  # AC1/AC3/AC6 comprometidos pelo defeito abaixo
+  unit_tests: PASS          # 209 arquivos / 2623 testes; 40 novos
+  acceptance_criteria: PASS # AC1–AC10 verificados; AC11 depende de deploy
   no_regressions: PASS      # suíte completa verde; contrato do "Visitou" testado
   performance: PASS         # script assíncrono; envio CAPI fora do caminho da resposta
   security: PASS            # ver notas
@@ -51,7 +59,15 @@ issues:
            para não vazar em quem usa bloqueador).
         b) O POST server-side do `ViewContent` deve sair DEPOIS de o Pixel ter
            criado o `_fbp`, para que o evento carregue a chave.
-    status: OPEN
+    status: FIXED
+    fixed_in: "77f3b489"
+    fix_verification: |
+      `quandoPixelPronto()` sonda `window.fbq` a cada 100ms por até 5s, e os dois
+      disparos passaram a ser Pixel-primeiro / POST-depois. Verificado por
+      `pixel-events.test.ts` (window simulado + fake timers), cobrindo os três
+      caminhos: o script chega depois, já está presente, ou nunca chega. O último
+      também assere `vi.getTimerCount() === 0` — a espera não pode virar um timer
+      vazado por página em quem usa bloqueador de anúncios.
 
   - id: "86.9-QA-002"
     severity: medium
@@ -94,4 +110,8 @@ positive_notes: |
     degradaria o EMQ sem gerar erro nenhum.
   - O contrato do evento "Visitou" (86-3/86-4) tem teste de não-regressão próprio.
 
-next_action: "Devolver ao @dev para 86.9-QA-001. Reavaliar após a correção."
+next_action: >
+  Liberado para @devops: provisionar `NEXT_PUBLIC_META_PIXEL_ID` via REST API
+  (nunca `vercel env add` por pipe), abrir o PR e deployar. Depois do deploy,
+  fechar o AC11 no Test Events e só então marcar a story como Done. A nota
+  EMQ ≥ 9 é acompanhamento pós-deploy, não gate de merge.
