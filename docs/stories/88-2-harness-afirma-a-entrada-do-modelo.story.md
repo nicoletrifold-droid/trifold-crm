@@ -1109,7 +1109,181 @@ baseline; nenhuma das 23 é de arquivo desta story).
 
 ## QA Results
 
-*(a preencher pelo @qa)*
+**Agente:** Quinn (@qa) · **Data:** 2026-08-17 · **Rodada:** R1
+**Gate:** `docs/qa/gates/88.2-harness-afirma-a-entrada-do-modelo.yml`
+**Veredito: 🟡 CONCERNS — não bloqueia o merge.** Um achado com data (F-1), quatro de registro.
+**Onde:** worktree `/Users/ogabrielhr/trifold-88-2-wt`, `HEAD ccb93935`, base `a60a1bc6`. A árvore
+principal não foi tocada — nenhum `checkout`, nenhum `stash pop`. Árvore limpa ao fim
+(`git status --porcelain` vazio, ~25 mutações revertidas e conferidas entre si).
+
+### 1. Os onze números declarados — MEDIDOS, um sítio isolado por vez
+
+Controle nulo do instrumento (comentário inócuo na mesma constante) = **0 vermelhos**, então a
+contagem não tem ruído. Nenhuma constante compartilhada, nenhuma guarda inteira.
+
+| # | Mutação | Declarado | Medido | |
+|---|---|---|---|---|
+| M1a | `lerBloco → ""` | 29 | **29** | ✅ agenda-state 15 · entrada 4 · cauda 4 · contrato 4 · scheduling 2 · nicole-enabled **0** |
+| M1b | `lerSystem → ""` | 6 | **6** | ✅ nicole-enabled 2 · cauda 2 · entrada 1 · contrato 1 |
+| M1c | `lerHistorico → []` | 11 | **11** | ✅ cauda 9 · scheduling 1 · contrato 1 |
+| M1d | `lerPapeis → []` | 1 | **1** | ✅ |
+| M2 | José lê `auxiliares()[0]` | 5 | **5** | ✅ os 5 na fixture do José |
+| M3 | `resposta()` não estoura | 2 | **2** | ✅ |
+| M4 | rótulo por ORDEM | **4** | **6** | ✅ divergência publicada — **e ela fecha**, ver §2 |
+| M5 | régua perde o `\s+` | 2 | **2** | ✅ |
+| M6a / M6b | `lerTools` / `lerToolChoice` | 1 / 1 | **1 / 1** | ✅ e em testes **diferentes** |
+| ME | `Math.min` → `??` | 0 | **0** | ✅ equivalente, com a fronteira dita abaixo |
+| catraca pré-migração | 5 × 1 | **5 × 1** | ✅ por leitura de histórico, sem checkout |
+
+**Catraca 5×1, sem confiar na saída colada:** `git grep -lE '…' c868b803 -- 'packages/ai/src/chat/*.test.ts'`
+devolve **5** (nicole-enabled, agenda-state, corretor-no-historico, historico-cauda, scheduling);
+no `HEAD` devolve **1**.
+
+### 2. As duas autodeclarações do @dev — confirmo as duas
+
+**M4 (6 medidos × 4 declarados) — a explicação fecha.** Os 6 vermelhos que medi, com nome: AC1
+"duas chamadas IDÊNTICAS", AC2-(ii), AC2-(ii-b), AC2-(iii), AC2-(iv) e AC4 "`respostas` serve uma
+por chamada DE TURNO". Os dois extras são **exatamente** os dois que ele nomeou — o caso de zero
+chamadas de turno e o de `respostas` das Ondas 2–3. Publicar em vez de reescrever o esperado é o
+comportamento certo, e a divergência é para **mais**, que é a direção que não esconde nada.
+
+**A separação `tools` × `tool_choice` é real, não cosmética.** M6a acende
+`AC3 … tools volta idêntico ao que entrou`; M6b acende
+`AC3 … tool_choice volta idêntico ao que entrou — mesma referência`. **Nomes diferentes**, cada
+uma com vermelho próprio.
+
+**Sobre o ME, uma fronteira que ele não escreveu:** a equivalência vale **sob o contrato de tipo**.
+Para um array com elemento nullish as duas expressões divergem (`["a", undefined, "c"]`, i=1 →
+`undefined` × `"c"`); o TS proíbe esse array, então o mutante é equivalente — mas **por tipo**, não
+por álgebra pura.
+
+### 3. A quarta camada da auto-régua — ataquei por quatro vias, resistiu às quatro
+
+| Ataque | O que fiz | Resultado |
+|---|---|---|
+| B1 | injetei o padrão **por extenso, num COMENTÁRIO** do próprio `anthropic-harness.test.ts` | **2 vermelhos**: o AC7-vi **e** a igualdade de conjunto ⇒ o caso **não é vácuo** |
+| B2 | quebrei `PEDACOS_DO_CAST` (`Anthropic` → `Anthropik`) | **4 vermelhos**, entre eles o **controle de vivacidade** dentro do AC7-vi |
+| B3 | alarguei a população de `.test.ts` para `.ts` | **1 vermelho** — puxa o `anthropic-harness.ts`, onde o cast mora. A exclusão estrutural é **medida** |
+| B4 | tirei a recursão da varredura | **1 vermelho** — o caso "a população contém este próprio arquivo" |
+
+Instrumento independente: `git grep --untracked -lE '…'` em `chat/**` devolve **2** hits — o
+`anthropic-harness.ts` (fora da população por **estrutura**) e a única exceção. **Nenhuma linha do
+teste do harness — código ou comentário — transcreve o padrão.** Esta é a classe que mordeu quatro
+vezes nesta semana; aqui ela está fechada por contrato, não por intenção.
+
+### 4. `EXCECOES_DECLARADAS` — 1 entrada real, e a recusa dele está certa
+
+A única entrada existe e tem o cast. Os outros dois arquivos não existem nesta base — declará-los
+faria a régua nascer satisfeita, como ele escreveu. A catraca acende nos **dois** sentidos:
+
+- exceção apontando para arquivo inexistente ⇒ **2 vermelhos**
+- `dono` sem `88-2b` ⇒ **1 vermelho**
+- migrei a exceção e "esqueci" de tirar da lista ⇒ **1 vermelho**
+- **simulei o merge**: criei um 7º arquivo com fábrica ad-hoc ⇒ catraca vermelha, **nomeando o
+  arquivo novo**. O aviso dele é desenho funcionando.
+
+*(A varredura lê o **disco**, não o índice do git — o arquivo que criei era untracked e ela o pegou.
+É mais forte que o `git grep --untracked` usado como segundo instrumento.)*
+
+### 5. A fixture do José — reproduzida com fake PRÓPRIO, não com o harness
+
+Validar o harness com o harness seria circular. Escrevi um fake que guarda todos os
+`MessageCreateParams` e rodei `processMessageWithMetadata` contra `createFakeSupabase`, relógio
+fixo. Script criado e apagado; árvore limpa.
+
+| # | Bloco `[SISTEMA]` | `scheduled_at` depois |
+|---|---|---|
+| 1 | `Visita JÁ confirmada … às 10:00` · REMARCAR=false · 14:00=false | **13:00Z** intacto |
+| 2 | **instrução idêntica** — `instrucao(1) === instrucao(2)` devolveu literalmente `true` | **13:00Z** intacto |
+| 3 | `REMARCAR … para … 14:00. O novo horário está LIVRE` | **17:00Z**, 1 linha |
+| 4 | `REMARCAR … 14:00` | **17:00Z**, 1 linha |
+
+2 chamadas por turno em todos os casos (1 com `system`, 1 sem) — `resposta()` não estoura. **Os 4
+discriminam.** Os controles 3 e 4 são calculados em runtime a partir do literal por `.replace()`:
+se alguém editar o literal e o trecho sumir, o `.replace` vira no-op, o caso 3 vira o caso 1 e
+**fica vermelho** — falha alto em vez de concordar.
+
+**`parseHour` intocado:** `git diff merge-base..HEAD -- packages/ai/src/chat/visit-slot.ts` = **vazio**.
+O `88-14` não foi antecipado.
+
+**E7 provada, não aceita de palavra:** quebrei o setup de propósito ⇒ **7 vermelhos**, incluindo o
+caso 1 — e o `casoDeDivida` ficou **verde** (expected fail), exatamente como a @po previu. A guarda
+de vivacidade funciona: o marcador não tem como apodrecer em silêncio. E o vermelho dele sob
+`AIOS_88_2_SEM_MARCADORES=1` é **falha de ASSERÇÃO** (`expected … to contain '14:00'`), não de setup.
+
+**Total de chamadas:** `captura.chamadas` aparece **11 vezes, todas em `anthropic-harness.test.ts`**
+— o contrato, com chamadas diretas. Nenhum arquivo de turno afirma total. Emenda E4 honrada.
+
+### 6. Achados que ninguém pediu
+
+**🟡 F-1 (MÉDIA — é o motivo do CONCERNS) — o filtro `type === "text"` do acessor `bloco` é um
+predicado ÓRFÃO, e é o lado da entrada de que a Onda 3 depende.**
+Troquei `.filter((b) => b.type === "text")` por `.filter(() => true)` em `lerBloco`
+(`anthropic-harness.ts:186`): **0 vermelhos na suíte inteira.** Nenhuma fixture de `chat/` põe um
+bloco não-`text` no conteúdo da última mensagem —
+`git grep --untracked -nE 'tool_result|tool_use' -- 'packages/ai/src/chat/**/*.test.ts'` devolve 3
+ocorrências, **todas no lado da RESPOSTA** (o caso da AC4). A assimetria é datada: a AC4 cobre a
+**saída** para habilitar a 88-1; a **entrada** — por onde a Onda 3 devolve `tool_result` — não tem
+caso. É esse filtro que decide se `bloco` continua significando "o texto que o modelo recebeu" ou
+passa a devolver `""` em silêncio no primeiro turno com tool. Um harness cuja razão de existir é a
+Onda 3 tem o predicado da Onda 3 sem rede.
+**Não bloqueia:** nenhuma AC pede isso, a 88-1 está fora de escopo por escrito, e o defeito só nasce
+quando o primeiro bloco não-`text` entrar numa mensagem. **Remédio:** ~6 linhas de caso no contrato,
+**dentro da 88-1**, que é a story que cria a condição.
+
+**F-2 (baixa)** — `lerSystem` (`String(s)`) e o ramo não-array de `lerBlocosDoSystem`: **0
+vermelhos** cada. Ramos defensivos sem consumidor (o `pipeline.ts` sempre manda `system` como
+array). Não escondem defeito; escondem regressão futura.
+
+**F-3 (baixa)** — `lerMessages` fallback `: []` e a guarda `opts.respostas.length > 0`: **0
+vermelhos** cada. A segunda é a guarda em que o próprio argumento de equivalência do ME se apoia —
+a álgebra está certa, mas a guarda que a sustenta não tem caso.
+
+**F-4 (baixa) — a mesma classe que ele consertou em M6a/M6b sobrevive 40 linhas acima.** M1c
+(`historico`), M1d (`papeis`), `cacheavel → false` e `text → ""` acendem **exatamente o mesmo
+teste** (`AC1 … acessores derivados`). Para `papeis` e `blocosDoSystem` esse é o **único** vermelho
+da suíte. **Diferença material em relação ao M6:** medi as quatro isoladamente e **as quatro são
+detectadas** — nenhuma guarda está escondida. Perde-se resolução de diagnóstico, não cobertura.
+Registro porque é literalmente o critério que ele declarou contra si mesmo, aplicado a um par e não
+ao vizinho.
+
+**F-5 (informativo)** — a catraca lê o **disco**, não o índice do git. É uma força; que ninguém
+"conserte" trocando `readdirSync` por listagem do git.
+
+### 7. Os três avisos dele — julgados
+
+1. **"A catraca vai ficar vermelha no merge"** — verdadeiro e é desenho. Simulei: o vermelho
+   **nomeia o arquivo**. O caminho preguiçoso já está fechado por contrato (entrada sem `88-2b`
+   reprova; entrada fantasma reprova). **@devops: não silenciar sem olhar.**
+2. **"Depois da 87-16, `auxiliares()` pode ser `[]`"** — verdadeiro e coberto por caso de contrato.
+   **Ressalva:** nesse cenário o caso M2 passa a afirmar só `system.length > 100` — não vira vácuo,
+   mas perde o par discriminante. Reler o M2 no merge da 87-16, não só ver verde.
+3. **"Cópias untracked de docs podem conflitar no PR"** — verdadeiro, operacional do @devops.
+
+### 8. Evidências
+
+`chat` **10 arq · 237 passed | 1 expected fail** · raiz **190 arq · 2451 passed | 7 expected fail**
+(rodada 2×, idêntica) · `tsc --noEmit` = **0** em `ai`, `web` e `shared` · lint com `--force` (sem
+cache) = **0 errors / 23 warnings**, as 23 todas em `packages/web`, **nenhuma** nos arquivos desta
+story · diff contra o **merge-base**: só `*.test.ts`, `__fixtures__/*` e docs — nenhuma linha de
+`pipeline.ts`, `visit-slot.ts`, `lead-memory.ts` ou `writer.ts`, nem export novo.
+
+**Não verificável, e digo que não é:** o baseline de `origin/main` (188 · 2416 | 6) — recontá-lo
+exigiria um segundo worktree em `a60a1bc6`, e a árvore principal está na 87-16 com `stash` de
+terceiros. Fecha indiretamente: o branch tem 190 e adiciona exatamente 2 arquivos de teste ⇒ 188 na
+base; o 7º `expected fail` é o `casoDeDivida`, que vi falhar sozinho. Também não verificável:
+comportamento em produção (story test-only, zero produção) e CI (`.github/workflows` ausente — R-7;
+até o `Epic 87 · D5` o gate é manual, e foi o que fiz).
+
+### 9. Recomendação
+
+**Mergear.** O CONCERNS é de **alcance da régua**, não de correção, e nenhum dos cinco achados toca
+produção. F-1 é o único com consequência datada e ela cai **dentro da 88-1**, que é quem cria a
+condição — vai para lá com dono. Esta é a evidência mais bem fechada que o Epic 88 produziu até
+aqui: as duas autodeclarações se sustentaram, a auto-régua sobreviveu a quatro ataques, e os onze
+números reproduziram sem um ajuste.
+
+— Quinn, guardião da qualidade 🛡️
 
 ---
 
