@@ -140,7 +140,18 @@ SDR trabalha o lead → quando fizer sentido, TRANSFERE manualmente a um correto
 |----|--------|---------|-----------|
 | **75-330** | Motor do formulário: schema em `jsonb`, ramificação, score gravado, página pública | M | — |
 | **75-331** | Agenda no fim: visita `scheduled`, SDR dona, confirmação promove a `confirmed`, entrega à roleta | S | 75-330 |
-| **75-332** | Haiku lê as respostas abertas → calor, qualificação comercial e resumo para o corretor | S | 75-330 |
+| **75-332** | Haiku lê as respostas abertas → **calor e resumo** para o corretor | M | 75-330 |
+
+> **Correção de 17/08 (@sm, na 75-332):** este item dizia "calor, **qualificação comercial** e
+> resumo". A qualificação comercial **saiu**: `217_leads_qualificacao_comercial.sql` a define
+> como *"campo **manual** e independente"* (Story 84-1). IA escrevendo ali apagaria o
+> julgamento do corretor — que é exatamente o bug que a migration **201** teve de consertar no
+> calor (*"corretor evoluía p/ Quente e a próxima mensagem devolvia p/ Frio"*). Repetir em
+> outro campo seria reincidência.
+>
+> Descoberto junto: o cron `enrich-leads` itera sobre **conversas com mensagens**, e o lead do
+> formulário não tem nenhuma. Sem a 75-332 ele fica **sem calor para sempre** — a leitura por
+> IA não é extra, é o único caminho. Por isso o item subiu de S para M.
 
 Migration livre no momento da criação: **231** (a 230 é a última aplicada).
 

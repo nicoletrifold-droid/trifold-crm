@@ -14,6 +14,8 @@ export interface FormResponsesPanelProps {
   preenchidoEm: string | null
   /** Resposta parcial = a pessoa abandonou no meio. Isso é informação de venda. */
   parcial: boolean
+  /** Story 75-332 — leitura da IA sobre as respostas abertas. Ausente = sem espaço vazio (AC7). */
+  resumoIa?: string | null
 }
 
 export function FormResponsesPanel({
@@ -22,6 +24,7 @@ export function FormResponsesPanel({
   score,
   preenchidoEm,
   parcial,
+  resumoIa,
 }: FormResponsesPanelProps) {
   if (respostas.length === 0) return null
 
@@ -54,6 +57,15 @@ export function FormResponsesPanel({
           )}
         </div>
       </div>
+
+      {/* Story 75-332 — o que a IA leu nas respostas abertas, ANTES das respostas
+          cruas: é o que o corretor lê para abrir a conversa. Sem resumo (IA
+          falhou ou formulário sem pergunta aberta) o bloco não renderiza. */}
+      {resumoIa ? (
+        <p className="mt-3 rounded-lg bg-violet-50 p-3 text-sm text-stone-700 dark:bg-violet-950/30 dark:text-stone-200">
+          {resumoIa}
+        </p>
+      ) : null}
 
       <dl className="mt-3 space-y-2.5">
         {respostas.map((r) => (

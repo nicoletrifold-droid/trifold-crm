@@ -295,6 +295,7 @@ export default async function BrokerLeadDetailPage({
           score={respostaFormulario.score}
           preenchidoEm={respostaFormulario.preenchidoEm}
           parcial={respostaFormulario.parcial}
+          resumoIa={respostaFormulario.resumoIa}
         />
       )}
 

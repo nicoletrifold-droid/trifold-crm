@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODELS } from "../client/anthropic"
+import { interestLevelFromScore } from "./interest-level"
 import { calculateQualificationScore } from "./qualification"
 import { REGRAS_FATO_DE_AGENDA } from "./summary-grounding"
 import { rotuloDeCorretor } from "../chat/conversation-history"
@@ -250,7 +251,9 @@ export function mapExtractedDataToLeadFields(
   const score = calculateQualificationScore(mergedForScore)
   patch.qualification_score = score
   patch.qualification_status = score >= 70 ? "qualified" : score > 0 ? "in_progress" : "not_started"
-  patch.interest_level = score >= 70 ? "hot" : score >= 40 ? "warm" : "cold"
+  // Story 75-332: a régua saiu daqui para `interest-level.ts` — a 75-332 precisa
+  // da MESMA conta para o lead do formulário, que nunca passa por este cron.
+  patch.interest_level = interestLevelFromScore(score)
 
   return patch
 }

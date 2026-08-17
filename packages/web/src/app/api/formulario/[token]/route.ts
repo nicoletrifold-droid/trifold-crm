@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { getDefaultStageId } from "@web/lib/leads/default-stage"
 import { parseFormSchema, type FormSchema } from "@web/lib/forms/schema"
 import { limparRespostas, formularioCompleto, type Respostas } from "@web/lib/forms/branching"
 import { calcularScore } from "@web/lib/forms/score"
+import { analisarRespostasAbertas } from "@web/lib/forms/ai-reading"
 import { normalizePhoneBR } from "@trifold/shared"
 
 // Story 75-330 (Epic 89) — endpoint PÚBLICO do formulário de qualificação.
@@ -281,6 +282,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       type: "form_completed",
       description: `Formulário de qualificação preenchido: ${form.nome}`,
       metadata: { form_id: form.id, response_id: respostaId, score },
+    })
+
+    // Story 75-332 — a IA lê as respostas ABERTAS depois de responder ao lead
+    // (AC3: o clique em "Enviar" não espera o modelo).
+    //
+    // 🔴 `after()`, NÃO `void`. Um `void` solto aqui reintroduziria o bug da
+    // Story 75-139: na Vercel a invocação é congelada assim que a resposta sai,
+    // e o trabalho pendente morre no meio — foi assim que o e-mail de reset
+    // nunca era enviado. `after()` roda depois da resposta E mantém a invocação
+    // viva até terminar. Com um round-trip de até 15s ao modelo, a diferença
+    // não é teórica: seria a leitura nunca acontecendo, em silêncio.
+    after(async () => {
+      await analisarRespostasAbertas({
+        admin,
+        schema,
+        respostas,
+        score,
+        leadId,
+        respostaId,
+        orgId: form.org_id,
+      }).catch((e: unknown) => console.error("[formulario] leitura por IA:", e))
     })
   }
 
