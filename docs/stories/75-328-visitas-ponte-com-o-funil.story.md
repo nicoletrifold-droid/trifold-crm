@@ -1,6 +1,6 @@
 # Story 75-328 — Card de Visitas mostra quantas são da safra do período
 
-**Story ID:** 75-328 · **Status:** InReview · **Estimativa:** XS (~1 pt)
+**Story ID:** 75-328 · **Status:** Done · **Estimativa:** XS (~1 pt)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · **Pedido do Marcos (17/08)**, logo após o deploy da 75-321..326
 
 ## O relato
