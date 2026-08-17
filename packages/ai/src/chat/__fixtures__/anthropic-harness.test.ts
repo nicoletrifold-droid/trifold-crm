@@ -215,20 +215,31 @@ describe("AC3 — tools e tool_choice são lidos dos params", () => {
    * campos são `undefined`; afirmar `undefined` é afirmar nada. O que mede é a
    * igualdade com o que entrou.
    */
-  it("voltam idênticos — mesma referência e mesmo conteúdo", async () => {
+  const TOOL_CHOICE_FORCADO = { type: "tool" as const, name: "agendar_visita" }
+
+  async function turnoComTool() {
     const { anthropic, captura } = criarAnthropicFake()
-    const toolChoice = { type: "tool" as const, name: "agendar_visita" }
     await anthropic.messages.create({
       ...paramsDeTurno("quero visitar sábado"),
       tools: [TOOL_AGENDAR],
-      tool_choice: toolChoice,
+      tool_choice: TOOL_CHOICE_FORCADO,
     })
+    return captura.resposta()
+  }
 
-    const c = captura.resposta()
+  // Os dois acessores têm caso PRÓPRIO de propósito: num caso só, neutralizar
+  // `tools` e neutralizar `toolChoice` acenderiam o MESMO vermelho, e uma das duas
+  // guardas ficaria escondida atrás da outra.
+  it("`tools` volta idêntico ao que entrou", async () => {
+    const c = await turnoComTool()
     expect(c.tools).toEqual([TOOL_AGENDAR])
-    expect(c.toolChoice).toEqual(toolChoice)
-    expect(c.toolChoice).toBe(toolChoice)
     expect((c.tools as Array<{ name: string }>)[0]!.name).toBe("agendar_visita")
+  })
+
+  it("`tool_choice` volta idêntico ao que entrou — mesma referência", async () => {
+    const c = await turnoComTool()
+    expect(c.toolChoice).toEqual(TOOL_CHOICE_FORCADO)
+    expect(c.toolChoice).toBe(TOOL_CHOICE_FORCADO)
   })
 
   it("CONTROLE — numa chamada sem tools, os dois acessores devolvem undefined", async () => {
