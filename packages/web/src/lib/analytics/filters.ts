@@ -225,6 +225,24 @@ export function buildAnalyticsHref(
   return qs ? `${basePath}?${qs}` : basePath
 }
 
+/**
+ * Story 75-324 — filtros ativos como querystring, para a Visão Executiva mandá-los
+ * ao próprio endpoint. Ela recebia SÓ `property` e por isso ficava global enquanto
+ * o resto da tela encolhia: escolher um corretor deixava o Funil e os KPIs no
+ * recorte dele e o card de Visitas contando a org inteira, lado a lado.
+ *
+ * Deriva de `FILTER_SPEC` como todo o resto do módulo — filtro novo não pode ficar
+ * meio-implementado aqui.
+ */
+export function serializeAnalyticsFilters(filters: AnalyticsFilters): string {
+  const sp = new URLSearchParams()
+  for (const key of FILTER_KEYS) {
+    const value = filters[key]
+    if (value !== null && value !== "") sp.set(FILTER_SPEC[key].param, value)
+  }
+  return sp.toString()
+}
+
 /** Href que limpa TODOS os filtros, preservando o período (AC8). */
 export function buildClearFiltersHref(
   basePath: string,

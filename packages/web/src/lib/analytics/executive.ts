@@ -388,10 +388,15 @@ export function buildVisits(
 // ── Payload completo da API ──────────────────────────────────────────────────
 
 export interface ExecutiveData {
+  /** Story 75-324 — `null` quando há filtro que `appointments` não sabe aplicar
+   *  (calor, perfil): o card é omitido em vez de exibir número que ignora o filtro
+   *  ao lado de números que o respeitam. */
+  visits: VisitsData | null
+  /** Dimensões que causaram a omissão acima, para a tela explicar o "—". */
+  visitsIndisponivelPor?: string[] | null
   comparison: ComparisonData
   sourceTrend: SourceTrendData
   heatmap: HeatmapData
   outcomeBySource: OutcomeRow[]
   outcomeByBroker: OutcomeRow[]
-  visits: VisitsData
 }

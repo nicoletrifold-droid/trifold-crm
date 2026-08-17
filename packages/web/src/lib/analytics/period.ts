@@ -27,9 +27,19 @@ export function resolvePeriod(
   const now = Date.now()
 
   // Custom com data inicial e final válidas.
+  //
+  // Story 75-324 — o offset de Brasília é EXPLÍCITO. Sem ele, `new Date("...T00:00:00")`
+  // é interpretado no fuso do SERVIDOR, que na Vercel é UTC: pedir 09/08 → 16/08 na tela
+  // recortava de 08/08 21:00 a 16/08 20:59 BRT. O gráfico de Visitas, que agrupa em BRT
+  // (`dayKey`, UTC-3 fixo), ganhava uma coluna fantasma de 08/08 e perdia as três últimas
+  // horas do último dia. Na janela auditada em 17/08 isso não moveu nenhum número — zero
+  // leads e zero visitas caíram nas bordas —, mas é erro que aparece sozinho um dia.
+  //
+  // -03:00 fixo é a mesma convenção do resto do analytics (`brtShift` em executive.ts):
+  // o Brasil não tem horário de verão desde 2019.
   if (rangeRaw === "custom" && from && to) {
-    const sinceMs = new Date(`${from}T00:00:00`).getTime()
-    const untilMs = new Date(`${to}T23:59:59.999`).getTime()
+    const sinceMs = new Date(`${from}T00:00:00.000-03:00`).getTime()
+    const untilMs = new Date(`${to}T23:59:59.999-03:00`).getTime()
     if (Number.isFinite(sinceMs) && Number.isFinite(untilMs) && untilMs > sinceMs) {
       const days = Math.max(1, Math.round((untilMs - sinceMs) / 86400000))
       return {

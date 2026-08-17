@@ -65,6 +65,21 @@ const DARK: Palette = {
   heat: ["#292524", "#431407", "#7c2d12", "#9a3412", "#c2410c", "#ea580c", "#f97316", "#fb923c"],
 }
 
+/** Story 75-324 — nome de tela das dimensões que a agenda não sabe filtrar, para o
+ *  card de Visitas dizer QUAL filtro o tirou do ar em vez de sumir sem explicação. */
+const FILTRO_LABEL: Record<string, string> = {
+  interestLevel: "calor",
+  finalidade: "finalidade",
+  profissao: "profissão",
+  rendaFamiliar: "renda familiar",
+  filhos: "filhos",
+  estadoCivil: "estado civil",
+  faixaEtaria: "faixa etária",
+  situacaoMoradia: "situação de moradia",
+  temPet: "pet",
+  cidadeBairro: "cidade/bairro",
+}
+
 const CARD = "rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800"
 const TITLE = "text-lg font-semibold text-gray-900 dark:text-stone-100"
 const SUBTITLE = "text-xs text-gray-400 dark:text-stone-500"
@@ -417,7 +432,33 @@ const VISIT_SERIES = [
   { key: "canceladas", label: "Canceladas" },
 ] as const
 
-function VisitsChart({ data, p, rangeLabel }: { data: ExecutiveData["visits"]; p: Palette; rangeLabel: string }) {
+function VisitsChart({
+  data,
+  indisponivelPor,
+  p,
+  rangeLabel,
+}: {
+  data: ExecutiveData["visits"]
+  indisponivelPor?: string[] | null
+  p: Palette
+  rangeLabel: string
+}) {
+  // Story 75-324 — `appointments` só conhece empreendimento e corretor. Com filtro de
+  // calor ou perfil ativo, o card sai em vez de exibir um número que ignora o recorte
+  // ao lado de números que o respeitam (mesmo princípio do PDF, 75-271).
+  if (!data) {
+    return (
+      <div className={CARD}>
+        <h2 className={TITLE}>Visitas</h2>
+        <p className={`mt-2 ${SUBTITLE}`}>
+          Indisponível com {indisponivelPor?.length === 1 ? "o filtro" : "os filtros"} de{" "}
+          {(indisponivelPor ?? []).map((k) => FILTRO_LABEL[k] ?? k).join(", ")}: a agenda não
+          guarda essas informações do lead. Limpe {indisponivelPor?.length === 1 ? "esse filtro" : "esses filtros"} para ver o card.
+        </p>
+      </div>
+    )
+  }
+
   const colorOf: Record<(typeof VISIT_SERIES)[number]["key"], string> = {
     realizadas: p.visits.realizada,
     agendadas: p.visits.agendada,
@@ -522,7 +563,10 @@ function VisitsChart({ data, p, rangeLabel }: { data: ExecutiveData["visits"]; p
 interface Props {
   from: string
   to: string
-  propertyId?: string
+  /** Story 75-324 — TODOS os filtros ativos, já serializados pela página
+   *  (`serializeAnalyticsFilters`). Era só `propertyId`, e por isso estes gráficos
+   *  ficavam globais enquanto o resto da tela encolhia. */
+  filterQuery: string
   rangeLabel: string
 }
 
@@ -534,7 +578,7 @@ interface FetchResult {
   error: boolean
 }
 
-export function ExecutiveCharts({ from, to, propertyId, rangeLabel }: Props) {
+export function ExecutiveCharts({ from, to, filterQuery, rangeLabel }: Props) {
   const { resolvedTheme } = useTheme()
   // Hidratação: false no servidor, true no cliente — sem setState em efeito.
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
@@ -542,27 +586,27 @@ export function ExecutiveCharts({ from, to, propertyId, rangeLabel }: Props) {
   // com opacidade reduzida durante o refetch (sem flash de skeleton).
   const [result, setResult] = useState<FetchResult | null>(null)
 
-  const key = `${from}|${to}|${propertyId ?? ""}`
+  const key = `${from}|${to}|${filterQuery}`
 
   useEffect(() => {
     let cancelled = false
     const params = new URLSearchParams({ from, to })
-    if (propertyId) params.set("property", propertyId)
+    for (const [k, v] of new URLSearchParams(filterQuery)) params.set(k, v)
     fetch(`/api/analytics/executive?${params}`)
       .then((res) => {
         if (!res.ok) throw new Error("API error")
         return res.json()
       })
       .then((json: ExecutiveData) => {
-        if (!cancelled) setResult({ key: `${from}|${to}|${propertyId ?? ""}`, data: json, error: false })
+        if (!cancelled) setResult({ key: `${from}|${to}|${filterQuery}`, data: json, error: false })
       })
       .catch(() => {
-        if (!cancelled) setResult({ key: `${from}|${to}|${propertyId ?? ""}`, data: null, error: true })
+        if (!cancelled) setResult({ key: `${from}|${to}|${filterQuery}`, data: null, error: true })
       })
     return () => {
       cancelled = true
     }
-  }, [from, to, propertyId])
+  }, [from, to, filterQuery])
 
   const loading = result?.key !== key
   const data = result?.data ?? null
@@ -610,7 +654,7 @@ export function ExecutiveCharts({ from, to, propertyId, rangeLabel }: Props) {
           p={p}
         />
       </div>
-      <VisitsChart data={data.visits} p={p} rangeLabel={rangeLabel} />
+      <VisitsChart data={data.visits} indisponivelPor={data.visitsIndisponivelPor} p={p} rangeLabel={rangeLabel} />
     </div>
   )
 }

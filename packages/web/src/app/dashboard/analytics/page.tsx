@@ -24,6 +24,7 @@ import {
   buildAnalyticsHref,
   buildClearFiltersHref,
   activeFilterKeys,
+  serializeAnalyticsFilters,
   PERFIL_FILTER_KEYS,
   type PeriodParams,
 } from "@web/lib/analytics/filters"
@@ -717,7 +718,8 @@ export default async function AnalyticsPage({
         <ExecutiveCharts
           from={sinceISO}
           to={untilISO}
-          propertyId={propertyId ?? undefined}
+          /* Story 75-324 — TODOS os filtros, não só o empreendimento. */
+          filterQuery={serializeAnalyticsFilters(filters)}
           rangeLabel={rangeLabel}
         />
       </div>
