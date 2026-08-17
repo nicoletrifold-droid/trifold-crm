@@ -21,10 +21,10 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type Anthropic from "@anthropic-ai/sdk"
 import { STAGE_IDS } from "@trifold/shared"
 import { processMessageWithMetadata } from "./pipeline"
 import { createFakeSupabase, type FakeSupabase, type Row } from "./__fixtures__/fake-supabase"
+import { criarAnthropicFake } from "./__fixtures__/anthropic-harness"
 
 const ORG = "org-1"
 const CONVERSATION = "conv-1"
@@ -85,50 +85,6 @@ function numeradas(n: number): Spec[] {
   }))
 }
 
-function anthropicCapturando(
-  box: { historico: string[]; bloco: string; system: string; capturou: boolean },
-  resposta: string
-): Anthropic {
-  return {
-    messages: {
-      create: async (args: {
-        messages: Array<{ role: string; content: unknown }>
-        system?: Array<{ type: string; text?: string }> | string
-      }) => {
-        // SÓ a primeira chamada é a da resposta. A segunda é o `updateLeadMemory`
-        // (Haiku do resumo, fire-and-forget, `content` string simples) — sem esta
-        // guarda ela sobrescreveria a captura com lixo e o teste mediria o resumo
-        // achando que media a resposta.
-        if (!box.capturou) {
-          box.capturou = true
-          // O último elemento é a mensagem ATUAL do lead (com o bloco [SISTEMA]);
-          // tudo antes dele é o `history` carregado — é o que a AC1 mede.
-          box.historico = args.messages
-            .slice(0, -1)
-            .map((m) => (typeof m.content === "string" ? m.content : ""))
-          const last = args.messages[args.messages.length - 1]!
-          const blocks = last.content as Array<{ type: string; text?: string }>
-          box.bloco = Array.isArray(blocks)
-            ? blocks.filter((b) => b.type === "text").map((b) => b.text ?? "").join("")
-            : String(last.content)
-          box.system = Array.isArray(args.system)
-            ? args.system.map((b) => b.text ?? "").join("")
-            : String(args.system ?? "")
-        }
-        return {
-          content: [{ type: "text", text: resposta }],
-          usage: {
-            input_tokens: 1,
-            output_tokens: 1,
-            cache_creation_input_tokens: 0,
-            cache_read_input_tokens: 0,
-          },
-        }
-      },
-    },
-  } as unknown as Anthropic
-}
-
 function seed(input: {
   msgs: Row[]
   collectedData?: Row
@@ -179,23 +135,27 @@ async function turno(input: {
   propertyInterestId?: string | null
   leadName?: string | null
 }): Promise<Turno> {
-  const box = { historico: [] as string[], bloco: "", system: "", capturou: false }
   const eventos: Turno["eventos"] = []
   const fake = createFakeSupabase(seed(input))
+  const { anthropic, captura } = criarAnthropicFake({ resposta: input.respostaDaNicole ?? "Certo!" })
   const resultado = await processMessageWithMetadata({
     supabase: fake as unknown as SupabaseClient,
-    anthropic: anthropicCapturando(box, input.respostaDaNicole ?? "Certo!"),
+    anthropic,
     conversationId: CONVERSATION,
     message: input.mensagemDoLead,
     orgId: ORG,
     onEvent: (e) =>
       eventos.push({ event_type: e.event_type, metadata: e.metadata as Record<string, unknown> }),
   })
+  // Story 88-2 — a flag `capturou` ("só a primeira") virou RÓTULO: `resposta()` é a
+  // chamada que trouxe `system`, e ela estoura se houver 0 ou >=2 candidatas em vez
+  // de escolher em silêncio. A ordem deixa de ser o critério.
+  const daResposta = captura.resposta()
   return {
     fake,
-    historico: box.historico,
-    bloco: box.bloco,
-    system: box.system,
+    historico: daResposta.historico,
+    bloco: daResposta.bloco,
+    system: daResposta.system,
     eventos,
     estado: (fake.table("conversation_state")[0]?.collected_data as Record<string, unknown>) ?? {},
     lead: fake.table("leads")[0],

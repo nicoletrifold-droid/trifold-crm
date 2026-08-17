@@ -30,9 +30,9 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type Anthropic from "@anthropic-ai/sdk"
 import { loadProperties, buildPropertyDataContext, processMessage } from "./pipeline"
 import { createFakeSupabase, type FakeSupabase, type Row } from "./__fixtures__/fake-supabase"
+import { criarAnthropicFake } from "./__fixtures__/anthropic-harness"
 import {
   CADASTRO_PRODUCAO,
   ORG_PRODUCAO,
@@ -246,38 +246,6 @@ describe("C3 — o soft delete continua segurando (is_active e nicole_enabled s�
 // AC4 — o filtro atua nos TRÊS consumidores, e a prova é o turno inteiro
 // ────────────────────────────────────────────────────────────────────────────
 
-type TurnoAnthropic = { systemEnviado: string }
-
-/**
- * ⚠️ O turno faz DUAS chamadas a `anthropic.messages.create`: a da resposta (com
- * `system`) e a da extração estruturada (sem `system`). Capturar a última zeraria
- * o `system` e as asserções de (i) passariam verdes contra uma string vazia — o
- * falso verde clássico. Guarda-se a PRIMEIRA que trouxer `system`.
- */
-function fakeAnthropic(resposta: string, captura: TurnoAnthropic): Anthropic {
-  return {
-    messages: {
-      create: async (params: { system?: unknown }) => {
-        const s = params.system
-        if (s !== undefined && captura.systemEnviado === "") {
-          captura.systemEnviado = Array.isArray(s)
-            ? s.map((b: { text?: string }) => b.text ?? "").join("\n\n")
-            : String(s)
-        }
-        return {
-          content: [{ type: "text", text: resposta }],
-          usage: {
-            input_tokens: 10,
-            output_tokens: 10,
-            cache_creation_input_tokens: 0,
-            cache_read_input_tokens: 0,
-          },
-        }
-      },
-    },
-  } as unknown as Anthropic
-}
-
 function seedDoTurno(linhas: Row[]) {
   return {
     conversations: [{ id: CONVERSATION, lead_id: LEAD, org_id: ORG_PRODUCAO }],
@@ -316,12 +284,14 @@ async function rodarTurno(
   // `nicole_enabled`, (i) e (ii) passariam verdes sem o filtro existir.
   linhas: Row[] = cadastroComIsActiveRestaurado()
 ): Promise<{ fake: FakeSupabase; system: string; eventos: Evento[] }> {
-  const captura: TurnoAnthropic = { systemEnviado: "" }
   const eventos: Evento[] = []
   const fake = createFakeSupabase(seedDoTurno(linhas))
+  const { anthropic, captura } = criarAnthropicFake({
+    resposta: "Claro! Me conta um pouco do que você procura.",
+  })
   await processMessage({
     supabase: fake as unknown as SupabaseClient,
-    anthropic: fakeAnthropic("Claro! Me conta um pouco do que você procura.", captura),
+    anthropic,
     conversationId: CONVERSATION,
     message: mensagem,
     orgId: ORG_PRODUCAO,
@@ -330,7 +300,19 @@ async function rodarTurno(
     // sempre, e o (ii) passaria verde sem provar nada.
     onEvent: (e) => eventos.push(e as Evento),
   })
-  return { fake, system: captura.systemEnviado, eventos }
+  // Story 88-2 — `resposta()` ESTOURA se houver 0 ou ≥2 chamadas com `system`, em
+  // vez de escolher em silêncio "a primeira que trouxer `system`". Era essa escolha
+  // silenciosa que a fábrica local documentava como falso verde clássico: apontar
+  // para a chamada auxiliar zera o `system` e as asserções de (i) passam contra "".
+  //
+  // ⚠️ Separador: a fábrica local achatava os blocos com `\n\n`; o harness usa `""`,
+  // como os outros dois arquivos de turno. Medido antes de trocar: 3 blocos, 32.127
+  // caracteres com `\n\n` × 32.123 com `""` — delta de 4 (2 separadores × 2). As 5
+  // asserções reais são `toContain` de token único ("Japura", "Solum", "Vind
+  // Residence") e um `length > 1000`; nenhuma atravessa fronteira de bloco, e o
+  // limiar não chega perto do delta. Se um dia precisar do separador, o harness
+  // expõe `blocosDoSystem` e a asserção escolhe.
+  return { fake, system: captura.resposta().system, eventos }
 }
 
 function propertyIdentified(eventos: Evento[]): Evento[] {
@@ -383,3 +365,4 @@ describe("AC4 — o filtro atua nos três consumidores do turno", () => {
     expect(identificados[0]!.metadata!.property_id).toBe(JAPURA.id)
   })
 })
+

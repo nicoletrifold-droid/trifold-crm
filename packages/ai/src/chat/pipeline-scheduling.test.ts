@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type Anthropic from "@anthropic-ai/sdk"
 import { STAGE_IDS } from "@trifold/shared"
 import { processMessage, SANITIZED_EMPTY_FALLBACK } from "./pipeline"
 import { createFakeSupabase, type FakeSupabase } from "./__fixtures__/fake-supabase"
+import { criarAnthropicFake, type CapturaAnthropic } from "./__fixtures__/anthropic-harness"
 
 /**
  * Story 75-279 — AC6/AC7: o INSERT em `appointments` exercitado de ponta a ponta.
@@ -31,22 +31,6 @@ function nextSaturdayIso(): string {
 /** ISO UTC do sábado às 11h BRT. */
 function saturdayAt11Utc(iso: string): string {
   return new Date(`${iso}T11:00:00.000-03:00`).toISOString()
-}
-
-function fakeAnthropic(resposta: string): Anthropic {
-  return {
-    messages: {
-      create: async () => ({
-        content: [{ type: "text", text: resposta }],
-        usage: {
-          input_tokens: 10,
-          output_tokens: 10,
-          cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 0,
-        },
-      }),
-    },
-  } as unknown as Anthropic
 }
 
 /**
@@ -111,17 +95,22 @@ function seedDoIncidente(sabadoIso: string) {
   }
 }
 
-async function rodarTurno(mensagem: string): Promise<{ fake: FakeSupabase; sabadoIso: string }> {
+async function rodarTurno(
+  mensagem: string
+): Promise<{ fake: FakeSupabase; sabadoIso: string; captura: CapturaAnthropic }> {
   const sabadoIso = nextSaturdayIso()
   const fake = createFakeSupabase(seedDoIncidente(sabadoIso))
+  const { anthropic, captura } = criarAnthropicFake({
+    resposta: "Anotado, Maria! Te espero sábado às 11h.",
+  })
   await processMessage({
     supabase: fake as unknown as SupabaseClient,
-    anthropic: fakeAnthropic("Anotado, Maria! Te espero sábado às 11h."),
+    anthropic,
     conversationId: CONVERSATION,
     message: mensagem,
     orgId: ORG,
   })
-  return { fake, sabadoIso }
+  return { fake, sabadoIso, captura }
 }
 
 describe("Story 75-279 — AC6: 'As 11hrs' grava a visita de verdade", () => {
@@ -169,7 +158,7 @@ describe("Story 75-279 — AC6: 'As 11hrs' grava a visita de verdade", () => {
     const fake = createFakeSupabase(seedDoIncidente(sabadoIso))
     await processMessage({
       supabase: fake as unknown as SupabaseClient,
-      anthropic: fakeAnthropic("[SISTEMA: horário 11h — LIVRE]"),
+      anthropic: criarAnthropicFake({ resposta: "[SISTEMA: horário 11h — LIVRE]" }).anthropic,
       conversationId: CONVERSATION,
       message: "As 11hrs",
       orgId: ORG,
@@ -184,5 +173,61 @@ describe("Story 75-279 — AC6: 'As 11hrs' grava a visita de verdade", () => {
     // Sábado fecha ao meio-dia: 15h não pode virar visita.
     const { fake } = await rodarTurno("As 15hrs")
     expect(fake.table("appointments")).toHaveLength(0)
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Story 88-2 (AC6-iv) — este arquivo passa a afirmar sobre a ENTRADA do modelo
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Até a 88-2 este era o único dos cinco arquivos de turno que **não capturava
+ * nada** (`create: async () => (...)`, zero argumentos): ele provava o EFEITO no
+ * banco e nunca a INSTRUÇÃO que produziu o efeito. Migrar a fábrica sem acrescentar
+ * uma asserção sobre a entrada deixaria a migração decorativa.
+ *
+ * 🔴 ACESSORES DECLARADOS (AC6-iv / emenda E1-b): estes casos exercitam **`bloco`
+ * (M1a)** e **`historico` (M1c)**. Ambos pertencem à família de mutações do harness,
+ * então este arquivo tem como ficar vermelho — o que a AC6-iii exige e que ele, com
+ * 0 asserções sobre a entrada, não tinha.
+ */
+describe("Story 88-2 — AC6-iv: o que o modelo RECEBEU no turno da Maria", () => {
+  it("o bloco [SISTEMA] autoriza o horário pedido, e é o mesmo que virou linha em appointments", async () => {
+    const { fake, sabadoIso, captura } = await rodarTurno("As 11hrs")
+    const bloco = captura.resposta().bloco
+
+    // O dia é DERIVADO do sábado da fixture — nada de data fixa: `nextSaturdayIso`
+    // depende do relógio da máquina de propósito (o horário tem de estar no futuro).
+    const diaLegivel = new Date(saturdayAt11Utc(sabadoIso)).toLocaleDateString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+
+    expect(bloco).toContain(`O cliente quer a visita em ${diaLegivel} às 11:00`)
+    expect(bloco).toContain("Esse horário está LIVRE")
+    // A instrução e o efeito falam do MESMO instante — é isto que a captura permite
+    // afirmar e que o teste de efeito sozinho não alcança.
+    expect(fake.table("appointments")[0]!.scheduled_at).toBe(saturdayAt11Utc(sabadoIso))
+    // Controle: a mensagem crua do lead vai junto, embaixo do bloco.
+    expect(bloco).toContain("As 11hrs")
+  })
+
+  it("o histórico entregue ao modelo é a pergunta da Nicole que armou a pendência", async () => {
+    const { captura } = await rodarTurno("As 11hrs")
+    expect(captura.resposta().historico).toEqual([
+      "Ótimo, sábado funciona bem! Qual horário fica melhor pra você? Atendemos das 8h às 12h.",
+    ])
+  })
+
+  it("horário fora do expediente: o bloco RECUSA, em vez de autorizar em silêncio", async () => {
+    // O espelho do caso de efeito "As 15hrs não agenda nada": ali se prova que a
+    // linha não nasce; aqui, que o modelo foi INSTRUÍDO a não confirmar. Sem isto,
+    // um pipeline que ficasse mudo passaria igual nos dois.
+    const { captura } = await rodarTurno("As 15hrs")
+    const bloco = captura.resposta().bloco
+    expect(bloco).toContain("fora do atendimento")
+    expect(bloco).not.toContain("está LIVRE")
   })
 })
