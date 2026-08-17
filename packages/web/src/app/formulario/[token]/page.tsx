@@ -17,6 +17,7 @@ function LinkInvalido() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-950 px-4">
       <div className="w-full max-w-md rounded-2xl bg-stone-900 p-8 text-center ring-1 ring-stone-800">
+        <img src="/logo-trifold-branco.svg" alt="Trifold" className="mx-auto mb-5 h-5 w-auto" />
         <p className="text-3xl">🔗</p>
         <h1 className="mt-3 text-lg font-semibold text-stone-100">Link inválido ou desativado</h1>
         <p className="mt-2 text-sm text-stone-400">
@@ -63,8 +64,10 @@ export default async function FormularioPublicoPage({
     <div className="min-h-screen bg-stone-950 px-4 py-8">
       <div className="mx-auto w-full max-w-md">
         <div className="rounded-2xl bg-stone-900 p-6 ring-1 ring-stone-800 sm:p-8">
-          <p className="text-xs font-semibold uppercase tracking-wider text-orange-400">Trifold</p>
-          <h1 className="mt-1 text-xl font-bold text-stone-100">{data.nome as string}</h1>
+          {/* Story 75-338 — a marca de verdade, não o nome em texto. Esta é a
+              primeira tela que o lead vê depois de clicar no anúncio. */}
+          <img src="/logo-trifold-branco.svg" alt="Trifold" className="h-5 w-auto" />
+          <h1 className="mt-4 text-xl font-bold text-stone-100">{data.nome as string}</h1>
           <div className="mt-6">
             <FormRunner token={token} schema={schema} />
           </div>

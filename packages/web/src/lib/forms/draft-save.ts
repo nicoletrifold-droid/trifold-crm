@@ -34,19 +34,29 @@ function preenchido(v: Resposta): boolean {
  * preenchimento — uma melhoria de captura virando perda total.
  */
 export function prepararSalvamentoDeRascunho(params: {
-  pergunta: Pergunta | null
-  rascunho: Resposta
+  /**
+   * O passo da vez. Story 75-336 tornou o passo multi-campo (nome + telefone
+   * juntos), então o que se salva é o BLOCO, não um campo.
+   */
+  passo: Pergunta[]
+  rascunhos: Respostas
   respostas: Respostas
   ultimaAssinatura: string
 }): SalvamentoDeRascunho | null {
-  const { pergunta, rascunho, respostas, ultimaAssinatura } = params
-  if (!pergunta) return null
-  if (!preenchido(rascunho)) return null
+  const { passo, rascunhos, respostas, ultimaAssinatura } = params
+  if (passo.length === 0) return null
+
+  const preenchidos: Respostas = {}
+  for (const p of passo) {
+    const v = rascunhos[p.id]
+    if (v !== undefined && preenchido(v)) preenchidos[p.id] = v
+  }
+  if (Object.keys(preenchidos).length === 0) return null
 
   // Deliberadamente SEM `limparRespostas`: aqui o objetivo é guardar o que
   // existe, não decidir o caminho. Podar um ramo com base numa resposta que a
   // pessoa ainda não confirmou poderia apagar justamente o que se quer salvar.
-  const payload: Respostas = { ...respostas, [pergunta.id]: rascunho }
+  const payload: Respostas = { ...respostas, ...preenchidos }
   const assinatura = JSON.stringify(payload)
   if (assinatura === ultimaAssinatura) return null
 
