@@ -502,13 +502,32 @@ function VisitsChart({
           </span>
         )}
       </div>
-      <p className={`mb-3 ${SUBTITLE}`}>
+      <p className={SUBTITLE}>
         {total} visitas no período: {data.totals.realizadas} realizadas · {data.totals.noShow} no-show
         {data.totals.agendadas > 0 && ` · ${data.totals.agendadas} agendadas`}
         {data.totals.canceladas > 0 && ` · ${data.totals.canceladas} canceladas`}
         {data.totals.encerradas > 0 && ` · ${data.totals.encerradas} encerradas sem registro`}
         {" · "}{data.granularity === "week" ? "por semana" : "por dia"} · {rangeLabel}
       </p>
+      {/* Story 75-328 — a ponte com o Funil. Este card conta visitas pela DATA DA
+          VISITA; o Funil conta leads que ENTRARAM no período. Sem esta linha, quem
+          via "23 realizadas" aqui e "16" no funil tinha de deduzir sozinho que são
+          perguntas diferentes — foi exatamente o que aconteceu (Marcos, 17/08). */}
+      {data.totals.leadsRealizadas > 0 && (
+        <p className={`mb-3 mt-1 ${SUBTITLE}`}>
+          As {data.totals.realizadas} realizadas são de {data.totals.leadsRealizadas}{" "}
+          {data.totals.leadsRealizadas === 1 ? "lead" : "leads"};{" "}
+          <strong className="font-semibold">{data.totals.leadsRealizadasNaCoorte}</strong>{" "}
+          {data.totals.leadsRealizadasNaCoorte === 1 ? "entrou" : "entraram"} no período.
+          {data.totals.leadsRealizadas > data.totals.leadsRealizadasNaCoorte && (
+            <>
+              {" "}Os outros {data.totals.leadsRealizadas - data.totals.leadsRealizadasNaCoorte}{" "}
+              entraram antes — visitaram agora, mas não são da safra do período, então o Funil
+              abaixo não os conta.
+            </>
+          )}
+        </p>
+      )}
       <div className="mb-3">
         <Legend items={VISIT_SERIES.map((s) => ({ label: s.label, color: colorOf[s.key] }))} />
       </div>
