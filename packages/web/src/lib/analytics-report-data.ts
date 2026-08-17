@@ -19,7 +19,7 @@ import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytic
 // Story 75-322 — regra única de "visita realizada", compartilhada com a tela.
 import { applyRealizedVisitFilter } from "@web/lib/analytics/visits-rule"
 // Story 75-323 — mesmo funil da tela: quem CHEGOU a cada etapa.
-import { buildReachedCounts, type LeadStageRow, type StageChangeRow } from "@web/lib/analytics/funnel-reached"
+import { buildPipelineRows, type LeadStageRow, type StageChangeRow, type StageDef } from "@web/lib/analytics/funnel-reached"
 
 type RawLead = {
   created_at: string
@@ -467,7 +467,9 @@ export async function buildAnalyticsReportData(
   // números diferentes é exatamente o defeito que esta leva de stories fecha, então
   // o PDF passa a usar o MESMO helper e o mesmo recorte da tela.
   const [stageDefsForFunnel, cohortLeads, stageChanges] = await Promise.all([
-    supabase.from("kanban_stages").select("id, name, color, position").eq("org_id", orgId).eq("is_active", true).order("position"),
+    // Story 75-326 — SEM filtro de `is_active`: "Perdido" é inativa e guarda leads;
+    // sem ela a coluna "agora" não fecharia as entradas do período.
+    supabase.from("kanban_stages").select("id, name, slug, color, position, is_active").eq("org_id", orgId).order("position"),
     fetchAllLeads<LeadStageRow>(() =>
       applyLeadFilters(
         supabase
@@ -491,9 +493,19 @@ export async function buildAnalyticsReportData(
     ),
   ])
 
-  const reached = buildReachedCounts(cohortLeads, stageChanges)
-  const funnelStages = ((stageDefsForFunnel.data ?? []) as { id: string; name: string; color: string | null }[])
-    .map((st) => ({ name: st.name, color: st.color ?? "", count: reached.get(st.id) ?? 0 }))
+  // Story 75-326 — as duas leituras, MESMO helper da tela: "agora" (cada lead uma
+  // vez, fecha a base) e "chegaram" (o mesmo lead em toda etapa por onde passou).
+  const pipelineRows = buildPipelineRows(
+    cohortLeads,
+    stageChanges,
+    (stageDefsForFunnel.data ?? []) as StageDef[]
+  )
+  const funnelStages = pipelineRows.map((r) => ({
+    name: r.name,
+    color: r.color,
+    count: r.chegaram,
+    agora: r.agora,
+  }))
   const funnelBase = cohortLeads.length
 
   // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.

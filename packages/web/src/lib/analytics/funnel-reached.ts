@@ -91,3 +91,69 @@ export function buildReachedCounts(
 
   return new Map([...byStage].map(([stageId, set]) => [stageId, set.size]))
 }
+
+export interface StageDef {
+  id: string
+  name: string
+  slug: string | null
+  color: string | null
+  position: number | null
+  is_active: boolean
+}
+
+export interface PipelineRow {
+  id: string
+  name: string
+  slug: string
+  color: string
+  position: number
+  /** Leads da coorte cuja etapa ATUAL é esta. Cada lead conta uma vez só. */
+  agora: number
+  /** Leads da coorte que passaram por esta etapa. O mesmo lead entra em várias. */
+  chegaram: number
+}
+
+/**
+ * Story 75-326 — as duas leituras do período lado a lado, numa lista só.
+ *
+ * Marcos perguntou por que Pipeline e Funil mostravam números diferentes se a base
+ * é a mesma. E é a mesma: 84 leads, uma query. O que muda é quantas VEZES cada lead
+ * é contado — uma só (onde está agora) ou em toda etapa por onde passou. Colocar as
+ * duas colunas no mesmo lugar torna isso auto-evidente e mata a comparação errada
+ * entre dois cards distantes.
+ *
+ * `agora` cobre a coorte INTEIRA, sem filtrar ativo/perdido: é o que faz a coluna
+ * somar exatamente as entradas do período. Por isso a lista precisa incluir etapas
+ * inativas que ainda guardam lead (é o caso de "Perdido", `is_active = false`) —
+ * sem ela, 11 dos 84 sumiam e a soma não fechava.
+ *
+ * Ficam de fora só as etapas inativas e vazias: entulho de pipeline antigo.
+ */
+export function buildPipelineRows(
+  leads: LeadStageRow[],
+  changes: StageChangeRow[],
+  stageDefs: StageDef[]
+): PipelineRow[] {
+  const reached = buildReachedCounts(leads, changes)
+
+  const agora = new Map<string, number>()
+  for (const lead of leads) {
+    if (!lead.stage_id) continue
+    agora.set(lead.stage_id, (agora.get(lead.stage_id) ?? 0) + 1)
+  }
+
+  return stageDefs
+    .filter(
+      (def) => def.is_active || (agora.get(def.id) ?? 0) > 0 || (reached.get(def.id) ?? 0) > 0
+    )
+    .map((def) => ({
+      id: def.id,
+      name: def.name,
+      slug: def.slug ?? "",
+      color: def.color ?? "",
+      position: def.position ?? 0,
+      agora: agora.get(def.id) ?? 0,
+      chegaram: reached.get(def.id) ?? 0,
+    }))
+    .sort((a, b) => a.position - b.position)
+}
