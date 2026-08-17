@@ -10,6 +10,9 @@ import { markLeadConversationsRead } from "./_actions/mark-read"
 import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-feedback-entry-button"
 // Story 82-3 — Análise IA para o corretor (painel compartilhado com o /dashboard)
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
+// Story 75-330 (Epic 89) — respostas do formulário de qualificação na ficha (AC9).
+import { FormResponsesPanel } from "@web/components/leads/form-responses-panel"
+import { fetchRespostaDoLead } from "@web/lib/forms/lead-responses"
 
 
 export default async function BrokerLeadDetailPage({
@@ -165,6 +168,10 @@ export default async function BrokerLeadDetailPage({
     ? [...staleCandidates].sort()[staleCandidates.length - 1]!
     : null
 
+  // Story 75-330 (Epic 89) — AC9. Devolve null quando o lead não veio de
+  // formulário, e o painel não renderiza.
+  const respostaFormulario = await fetchRespostaDoLead(lead.id as string, user.orgId)
+
   return (
     <div className="space-y-6">
       <Link
@@ -276,6 +283,20 @@ export default async function BrokerLeadDetailPage({
         theme="dark"
         collapsible
       />
+
+      {/* Story 75-330 (Epic 89) — AC9: o que o lead respondeu no formulário de
+          qualificação, em texto legível. Fica logo acima do chat porque é o
+          contexto que o corretor precisa ANTES de escrever a primeira mensagem.
+          Sem resposta de formulário, o painel não renderiza nada. */}
+      {respostaFormulario && (
+        <FormResponsesPanel
+          formNome={respostaFormulario.formNome}
+          respostas={respostaFormulario.respostas}
+          score={respostaFormulario.score}
+          preenchidoEm={respostaFormulario.preenchidoEm}
+          parcial={respostaFormulario.parcial}
+        />
+      )}
 
       {/*
         Conversation — Story 63-5: a área de chat (header + histórico + bolhas +

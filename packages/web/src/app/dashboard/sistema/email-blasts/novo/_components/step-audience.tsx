@@ -5,8 +5,12 @@ import { useState, useEffect, useCallback } from "react"
 interface Stage { id: string; name: string }
 interface Property { id: string; name: string }
 
+// ⚠️ Cópia local — não é a SOURCE_OPTIONS de @web/lib/constants (esta lista é o
+// recorte de público do blast e tem entradas próprias, como "manual"). Dívida
+// conhecida: o nome igual convida ao engano. Ver docs/qa/po-validation-75-330.md.
 const SOURCE_OPTIONS = [
   { value: "meta_ads", label: "Meta Ads" },
+  { value: "form_qualificacao", label: "Formulário de Qualificação" }, // Story 75-330
   { value: "whatsapp_organic", label: "WhatsApp Orgânico" },
   { value: "whatsapp_click_to_ad", label: "WhatsApp Patrocinado (Click-to-Ad)" },
   { value: "manual", label: "Cadastro manual" },

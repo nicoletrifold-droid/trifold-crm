@@ -112,6 +112,10 @@ export async function updateSession(request: NextRequest) {
   //                     responde "link inválido" sem vazar nada.
   // - `/pasta/*`      — Story 75-189: link público de upload de documentos +
   //                     auto-cadastro de imobiliária; mesmas garantias por token.
+  // - `/formulario/*` — Story 75-330 (Epic 89): formulário de qualificação do
+  //                     tráfego pago. Token = lead_forms.token; token inválido,
+  //                     revogado ou de formulário inativo responde a MESMA tela
+  //                     genérica, sem revelar org nem campanha.
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/sw" ||
@@ -123,6 +127,7 @@ export async function updateSession(request: NextRequest) {
     pathname === "/reset-senha" ||
     pathname.startsWith("/agendar/") ||
     pathname.startsWith("/pasta/") ||
+    pathname.startsWith("/formulario/") ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/")
 

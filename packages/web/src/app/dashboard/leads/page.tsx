@@ -27,6 +27,8 @@ import { fetchAllLeads } from "@web/lib/analytics/fetch-all-leads"
 const SOURCE_FILTER_KEYS = [
   "meta_ads",
   "google_ads",
+  "form_qualificacao", // Story 75-330 — sem esta linha o lead do formulário some do filtro
+
   "whatsapp_organic",
   "whatsapp_click_to_ad",
   "website",
