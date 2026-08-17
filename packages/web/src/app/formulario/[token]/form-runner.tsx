@@ -27,8 +27,13 @@ import { AgendaStep } from "./agenda-step"
 // lib/forms/branching.ts, que é puro e testado. Aqui só há tela e rede: o
 // projeto não tem jsdom, então nada que decida pode morar neste arquivo.
 
-const inputCls =
-  "w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+// ⚠️ GOTCHA Tailwind (já custou uma vez, no campo de telefone da 75-338): a
+// base NÃO leva largura. Acrescentar `w-auto` depois de uma base que tem
+// `w-full` não estreita nada — quem decide o conflito é a ordem no CSS gerado,
+// não a ordem na string de classes. Largura sempre explícita no uso.
+const inputBase =
+  "rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100 placeholder-stone-500 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+const inputCls = `${inputBase} w-full`
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const
 
@@ -474,7 +479,7 @@ function CampoTelefone({
         onChange={(e) => aplicar(e.target.value, nacional)}
         onBlur={onBlur}
         aria-label="País"
-        className={`${inputCls} w-auto shrink-0`}
+        className={`${inputBase} w-[7.5rem] shrink-0`}
       >
         {DDIS.map((d) => (
           <option key={d.codigo} value={d.codigo}>
@@ -490,7 +495,9 @@ function CampoTelefone({
         onChange={(e) => aplicar(ddi, e.target.value)}
         onBlur={onBlur}
         placeholder={ddi === "55" ? "(44) 99999-9999" : "número"}
-        className={inputCls}
+        // `min-w-0` é o que permite o input encolher dentro do flex: sem ele o
+        // conteúdo mínimo o empurra e o select come a linha.
+        className={`${inputBase} min-w-0 flex-1`}
       />
     </div>
   )
