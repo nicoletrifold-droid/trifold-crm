@@ -2,9 +2,15 @@ import type Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODELS } from "../client/anthropic"
 import { calculateQualificationScore } from "./qualification"
 import { REGRAS_FATO_DE_AGENDA } from "./summary-grounding"
+import { rotuloDeCorretor } from "../chat/conversation-history"
 
 interface EnrichmentInput {
-  messages: Array<{ role: string; content: string }>
+  /**
+   * Story 87-5 (deploy B) — `role` passa a admitir `"broker"`: o cron consome o
+   * MESMO carregador do pipeline (`loadConversationHistory`), com a mesma
+   * normalização da transição. `brokerName` é o primeiro nome já resolvido.
+   */
+  messages: Array<{ role: string; content: string; brokerName?: string | null }>
   currentCollectedData: Record<string, unknown>
   /**
    * Story 87-7 — bloco `FATO DE AGENDA` renderizado de `appointments`
@@ -34,7 +40,7 @@ interface EnrichmentResult {
  * `cron/enrich-leads/route.ts`): tirar só do prompt deixaria o merge aberto a um
  * modelo que devolvesse a chave por hábito de contexto.
  */
-const ENRICHMENT_PROMPT = `Voce e um assistente de extracao de dados. Analise a conversa abaixo entre Nicole (assistente de vendas) e um lead interessado em imoveis.
+const ENRICHMENT_PROMPT = `Voce e um assistente de extracao de dados. Analise a conversa abaixo entre Nicole (assistente de vendas), um CORRETOR HUMANO da equipe e um lead interessado em imoveis.
 
 Retorne um JSON com exatamente dois campos:
 1. "summary": resumo da conversa em portugues (max 200 palavras, foco em: perfil do lead, interesse, preferencias, objecoes, proximo passo)
@@ -63,6 +69,7 @@ REGRAS:
 - Retorne APENAS JSON valido, sem markdown, sem code blocks
 - Em extracted_data, inclua SOMENTE campos que o lead mencionou explicitamente
 - NAO invente dados — se o lead nao falou, nao inclua o campo
+- Linhas marcadas com [CORRETOR HUMANO] foram escritas por um corretor da equipe, NAO pelo lead e NAO pela Nicole. Elas servem de CONTEXTO para o summary. NUNCA extraia campo de extracted_data a partir de uma linha [CORRETOR HUMANO]: se o corretor disse "entrada de 35 mil" e o lead nao confirmou, has_down_payment NAO e true
 - Para os campos de enum (renda_familiar, filhos, estado_civil, faixa_etaria, situacao_moradia, tem_pet) use EXATAMENTE um dos valores listados — nunca outro texto
 - Se o lead mencionou interesse em ambos empreendimentos, use o que ele demonstrou MAIS interesse
 - Para source, mapeie: instagram/facebook/tiktok → "meta_ads", google/youtube → "website", indicacao/amigo → "referral", placa/stand/passou na frente → "walk_in"
@@ -77,8 +84,16 @@ export async function enrichLeadFromConversation(
   anthropic: Anthropic,
   input: EnrichmentInput
 ): Promise<EnrichmentResult | null> {
+  // Story 87-5 (deploy B) — TRÊS interlocutores, três rótulos. Sem o terceiro
+  // ramo a fala do corretor entraria etiquetada como "Nicole", que é exatamente
+  // o defeito de autoria que esta story existe para fechar — e aqui ele seria
+  // pior, porque o extrator ESCREVE em `collected_data`/`leads`.
   const messagesText = input.messages
-    .map((m) => `${m.role === "user" ? "Lead" : "Nicole"}: ${m.content}`)
+    .map((m) => {
+      if (m.role === "user") return `Lead: ${m.content}`
+      if (m.role === "broker") return `${rotuloDeCorretor(m.brokerName)}: ${m.content}`
+      return `Nicole: ${m.content}`
+    })
     .join("\n")
 
   // Story 87-7 — o bloco vem ANTES da conversa de propósito: ele é a fonte

@@ -52,10 +52,41 @@ let mensagensSemeadas: Array<Record<string, unknown>> | null = null
 function makeBuilder(table: string) {
   const orders: Array<{ col: string; asc: boolean }> = []
   let limitN: number | null = null
+  /**
+   * Story 87-5 — o `.in()` era `() => builder`: NÃO FILTRAVA NADA.
+   *
+   * Medido: com a mutação "o carregador volta a `["user","assistant"]`", os
+   * testes do deploy B continuavam **todos verdes** — a mensagem `role='broker'`
+   * semeada atravessava o mock porque o filtro de papel simplesmente não era
+   * aplicado. O teste provava a existência da fixture, não a do filtro.
+   *
+   * Com o `.in()` de verdade, essa mesma mutação passa a derrubar os testes que
+   * ela deve derrubar. Mesma lição do `fake-supabase` da 75-279: um fake que
+   * aceita o filtro e devolve tudo dá confiança falsa.
+   */
+  const inFilters: Array<{ col: string; vals: unknown[] }> = []
+  /**
+   * Story 87-5 / achado A1 do gate — o `.eq()` era `() => builder`, exatamente
+   * como o `.in()` uma linha acima, e pela mesma razão: **NÃO FILTRAVA NADA**.
+   *
+   * Medido antes de escrever isto: remover `.eq("conversation_id", …)` do
+   * `loadConversationHistory` derrubava ZERO testes na suíte inteira. Aqui o
+   * predicado nem chegava a ser avaliado; no `packages/ai` ele era avaliado mas
+   * nenhuma fixture tinha uma segunda conversa. Dois consumidores, dois motivos,
+   * o mesmo buraco — e o isolamento entre conversas é a exigência nº 1 desta
+   * família de stories.
+   */
+  const eqFilters: Array<{ col: string; val: unknown }> = []
   const builder: Record<string, unknown> = {
     select: () => builder,
-    eq: () => builder,
-    in: () => builder,
+    eq: (col: string, val: unknown) => {
+      eqFilters.push({ col, val })
+      return builder
+    },
+    in: (col: string, vals: unknown[]) => {
+      inFilters.push({ col, vals })
+      return builder
+    },
     gte: () => builder,
     lte: () => builder,
     or: () => builder,
@@ -89,7 +120,11 @@ function makeBuilder(table: string) {
       }
       if (table === "messages") {
         if (mensagensSemeadas) {
-          let out = [...mensagensSemeadas]
+          let out = mensagensSemeadas.filter(
+            (r) =>
+              inFilters.every(({ col, vals }) => vals.includes(r[col])) &&
+              eqFilters.every(({ col, val }) => r[col] === val)
+          )
           if (orders.length > 0) {
             out.sort((a, b) => {
               for (const { col, asc } of orders) {
@@ -229,6 +264,10 @@ describe("Story 87-8 / AC8 — o cron enrich-leads lê a CAUDA, não a cabeça",
   function vinteECinco(): Array<Record<string, unknown>> {
     return Array.from({ length: 25 }, (_, i) => ({
       id: `msg-${String(i + 1).padStart(2, "0")}`,
+      // Story 87-5 — agora que o mock aplica `.eq()` de verdade, a fixture
+      // precisa dizer a que conversa pertence. Sem isto ela seria filtrada para
+      // fora e o teste morreria por motivo errado.
+      conversation_id: CONV,
       role: i % 2 === 0 ? "user" : "assistant",
       content: `m${i + 1}`,
       created_at: `2026-08-01T10:${String(i + 1).padStart(2, "0")}:00.000Z`,
@@ -514,6 +553,103 @@ describe("AC8 — o recibo do descarte também sai por AQUI (achado do re-gate)"
     await rodar()
     expect(recibo()).toBeUndefined()
     expect(estadoPersistido()).toHaveProperty("agenda_state")
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Story 87-5 — AC7 / deploy B: a SEGUNDA esteira adota o MESMO carregador
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("Story 87-5 / deploy B — o cron enxerga o corretor, rotulado", () => {
+  /** Lead → Nicole → corretor. As três faixas, com o corretor no fim. */
+  function conversaComCorretor(): Array<Record<string, unknown>> {
+    return [
+      { id: "msg-01", conversation_id: CONV, role: "user", content: "oi, tenho interesse", metadata: {}, created_at: "2026-08-01T10:01:00.000Z" },
+      { id: "msg-02", conversation_id: CONV, role: "assistant", content: "Oi! Posso te ajudar.", metadata: {}, created_at: "2026-08-01T10:02:00.000Z" },
+      { id: "msg-03", conversation_id: CONV, role: "broker", content: "Consegui a entrada de 35 mil parcelada em 10x", metadata: { signed_as: "Odair" }, created_at: "2026-08-01T10:03:00.000Z" },
+    ]
+  }
+
+  it("🔴 a fala do corretor entra no texto do Haiku, e como CORRETOR — não como Nicole", async () => {
+    mensagensSemeadas = conversaComCorretor()
+    await rodar()
+    const linhas = promptEntregueAoHaiku.split("Conversa:\n")[1]!.trim().split("\n")
+
+    // 🔴 Contra o `HEAD`: são 2 linhas e a do corretor não existe.
+    expect(linhas).toHaveLength(3)
+    expect(linhas[2]).toBe("[CORRETOR HUMANO — Odair]: Consegui a entrada de 35 mil parcelada em 10x")
+    // Controle negativo: se o renderizador cair no `else` (o "Nicole:" de antes),
+    // o extrator atribui ao robô um valor que só o humano podia dizer.
+    expect(promptEntregueAoHaiku).not.toContain("Nicole: Consegui a entrada")
+  })
+
+  it("controle positivo — lead e Nicole continuam com os rótulos de sempre", async () => {
+    mensagensSemeadas = conversaComCorretor()
+    await rodar()
+    const linhas = promptEntregueAoHaiku.split("Conversa:\n")[1]!.trim().split("\n")
+    expect(linhas[0]).toBe("Lead: oi, tenho interesse")
+    expect(linhas[1]).toBe("Nicole: Oi! Posso te ajudar.")
+  })
+
+  it("a transição humana é normalizada aqui TAMBÉM — um carregador, uma regra", async () => {
+    mensagensSemeadas = [
+      { id: "msg-01", conversation_id: CONV, role: "user", content: "oi", metadata: {}, created_at: "2026-08-01T10:01:00.000Z" },
+      { id: "msg-02", conversation_id: CONV, role: "assistant", content: "Já vou te encaminhar…", metadata: { is_transition: true, broker_id: "u-1" }, created_at: "2026-08-01T10:02:00.000Z" },
+    ]
+    await rodar()
+    const linhas = promptEntregueAoHaiku.split("Conversa:\n")[1]!.trim().split("\n")
+    // `users` não é semeado neste mock → fail-open: rótulo sem nome, e a
+    // conversa NÃO quebra. É o comportamento declarado do carregador.
+    expect(linhas[1]).toBe("[CORRETOR HUMANO]: Já vou te encaminhar…")
+  })
+
+  /**
+   * 🔴 Achado A1 do gate — o isolamento entre conversas, no SEGUNDO consumidor.
+   *
+   * O gêmeo deste teste está em `packages/ai/src/chat/
+   * pipeline-corretor-no-historico.test.ts` ("isolamento — o carregador nunca
+   * traz fala de OUTRA conversa"). São dois porque o carregador é UM só e os
+   * consumidores são DOIS, em pacotes diferentes: lá o vazamento chegaria ao
+   * prompt da Nicole; **aqui ele vira CRENÇA** — o extrator escreve
+   * `collected_data`, `ai_summary` e os campos de perfil em `leads`.
+   *
+   * A outra conversa é de OUTRO lead e suas mensagens são mais RECENTES
+   * (10:40+ contra 10:01+): a consulta é `created_at` descendente com `limit`,
+   * então sem o predicado elas dominam a cauda em vez de só se somarem a ela.
+   */
+  it("🔴 a fala de OUTRA conversa não entra no texto entregue ao Haiku", async () => {
+    mensagensSemeadas = [
+      ...conversaComCorretor(),
+      { id: "out-40", conversation_id: "conv-2", role: "user", content: "aqui é a Fernanda, outro lead", metadata: {}, created_at: "2026-08-01T10:40:00.000Z" },
+      { id: "out-41", conversation_id: "conv-2", role: "broker", content: "Fechei a entrada de 90 mil com você", metadata: { signed_as: "Valeria" }, created_at: "2026-08-01T10:41:00.000Z" },
+      { id: "out-42", conversation_id: "conv-2", role: "assistant", content: "Perfeito, Fernanda!", metadata: {}, created_at: "2026-08-01T10:42:00.000Z" },
+    ]
+    await rodar()
+    const linhas = promptEntregueAoHaiku.split("Conversa:\n")[1]!.trim().split("\n")
+
+    // A lista INTEIRA é a régua — "não contém a alheia" ficaria verde com o
+    // prompt vazio.
+    expect(linhas).toEqual([
+      "Lead: oi, tenho interesse",
+      "Nicole: Oi! Posso te ajudar.",
+      "[CORRETOR HUMANO — Odair]: Consegui a entrada de 35 mil parcelada em 10x",
+    ])
+    // Os três vazamentos nomeados. O primeiro é o que vira `has_down_payment`
+    // de um lead que nunca falou em entrada nenhuma.
+    expect(promptEntregueAoHaiku).not.toContain("90 mil")
+    expect(promptEntregueAoHaiku).not.toContain("Valeria")
+    expect(promptEntregueAoHaiku).not.toContain("Fernanda")
+  })
+
+  it("o ENRICHMENT_PROMPT proíbe extrair campo a partir da fala do corretor", async () => {
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../../../../../../ai/src/flows/haiku-enrichment.ts", import.meta.url), "utf8")
+    )
+    const prompt = src.slice(src.indexOf("const ENRICHMENT_PROMPT"), src.indexOf("/**\n * Calls Haiku"))
+    // Risco 7: o "entrada de 35 mil" do Odair virando `has_down_payment: true`
+    // sem o lead ter dito nada. Aqui não é leitura, é CRENÇA — e ela escreve.
+    expect(prompt).toContain("NUNCA extraia campo de extracted_data a partir de uma linha [CORRETOR HUMANO]")
+    expect(prompt).toContain("has_down_payment NAO e true")
   })
 })
 
