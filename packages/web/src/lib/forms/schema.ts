@@ -44,10 +44,25 @@ export interface Pergunta {
   campo_contato?: CampoContato
 }
 
+/**
+ * Story 75-331 — a agenda no fim do formulário, configurada POR CAMPANHA e sem
+ * migration (mora no mesmo jsonb das perguntas).
+ *
+ * `ativa: false` faz o formulário terminar na mensagem final, como na 75-330.
+ * Isso é CONFIGURAÇÃO, não qualificação: quando a agenda está ativa, ela aparece
+ * para todos (Epic 89, D2).
+ */
+export interface AgendaConfig {
+  ativa: boolean
+  /** Decorado. Ausente = o lead escolhe entre os decorados disponíveis. */
+  local?: string
+}
+
 export interface FormSchema {
   perguntas: Pergunta[]
-  /** Texto da tela final, antes da agenda (a agenda é a 75-331). */
+  /** Texto da tela final (com agenda ativa, aparece depois do agendamento). */
   mensagem_final?: string
+  agenda?: AgendaConfig
 }
 
 export class FormSchemaInvalido extends Error {
@@ -157,11 +172,22 @@ export function parseFormSchema(raw: unknown): FormSchema {
     }
   })
 
+  // Story 75-331 — agenda. Objeto ausente ou malformado = agenda desligada, e o
+  // formulário termina na mensagem final. Desligar por omissão é de propósito:
+  // um erro de digitação no JSON não pode abrir a agenda do decorado sozinho.
+  let agenda: AgendaConfig | undefined
+  if (ehObjeto(raw.agenda)) {
+    const ativa = raw.agenda.ativa === true
+    const local = typeof raw.agenda.local === "string" ? raw.agenda.local.trim() : ""
+    agenda = { ativa, ...(local ? { local } : {}) }
+  }
+
   return {
     perguntas,
     ...(typeof raw.mensagem_final === "string" && raw.mensagem_final.trim()
       ? { mensagem_final: raw.mensagem_final.trim() }
       : {}),
+    ...(agenda ? { agenda } : {}),
   }
 }
 

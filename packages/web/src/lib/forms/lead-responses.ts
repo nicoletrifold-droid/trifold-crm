@@ -16,6 +16,8 @@ export interface RespostaDoLead {
   score: number | null
   preenchidoEm: string | null
   parcial: boolean
+  /** Story 75-332 — leitura do Haiku sobre as respostas abertas. */
+  resumoIa: string | null
 }
 
 /**
@@ -26,7 +28,7 @@ export async function fetchRespostaDoLead(leadId: string, orgId: string): Promis
   const admin = createAdminClient()
   const { data } = await admin
     .from("lead_form_responses")
-    .select("answers, score, status, completed_at, created_at, lead_forms(nome, schema)")
+    .select("answers, score, status, completed_at, created_at, metadata, lead_forms(nome, schema)")
     .eq("lead_id", leadId)
     .eq("org_id", orgId)
     .order("created_at", { ascending: false })
@@ -60,5 +62,9 @@ export async function fetchRespostaDoLead(leadId: string, orgId: string): Promis
     score: (data.score as number | null) ?? null,
     preenchidoEm: (data.completed_at as string | null) ?? (data.created_at as string | null) ?? null,
     parcial: data.status !== "completa",
+    resumoIa:
+      typeof (data.metadata as Record<string, unknown> | null)?.resumo_ia === "string"
+        ? ((data.metadata as Record<string, unknown>).resumo_ia as string)
+        : null,
   }
 }

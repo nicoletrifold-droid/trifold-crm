@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { can } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import AgenteClient from "./agente-client"
 
 // Story 75-219 — aba "Agente" do módulo Campanhas (fundação do agente de
@@ -23,5 +23,10 @@ export default async function CampaignsAgentePage() {
     .eq("is_active", true)
     .order("name")
 
-  return <AgenteClient properties={properties ?? []} />
+  return (
+    <AgenteClient
+      properties={properties ?? []}
+      showFormulariosTab={await canAccess(user.id, user.orgId, "campanhas")}
+    />
+  )
 }

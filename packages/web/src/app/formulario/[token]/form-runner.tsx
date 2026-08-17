@@ -10,6 +10,8 @@ import {
   type Respostas,
   type Resposta,
 } from "@web/lib/forms/branching"
+import { prepararSalvamentoDeRascunho } from "@web/lib/forms/draft-save"
+import { AgendaStep } from "./agenda-step"
 
 // Story 75-330 — o executor do formulário público. Uma pergunta por vez.
 //
@@ -33,7 +35,10 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   const [lgpd, setLgpd] = useState(false)
   const [erro, setErro] = useState("")
   const [enviando, setEnviando] = useState(false)
-  const [concluido, setConcluido] = useState<{ mensagem: string | null } | null>(null)
+  // Story 75-331: `agendaAtiva` decide se a tela final é a mensagem ou a agenda.
+  const [concluido, setConcluido] = useState<{ mensagem: string | null; agendaAtiva: boolean } | null>(
+    null
+  )
   const sessionToken = useRef<string | null>(null)
 
   // AC6 — a atribuição vem da URL do anúncio e viaja junto até o lead nascer.
@@ -56,8 +61,17 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
 
   // Salva o progresso sem finalizar. É o que faz quem abandona no meio virar
   // lead assim mesmo (AC4) — desde que já tenha dado nome e telefone.
+  // Story 75-333 — dedupe: o salvamento agora dispara também no blur, e sem
+  // isto uma correção de digitação queimaria a cota de 30 req/min POR IP do
+  // endpoint público. O próprio lead passaria a ver 429 no meio do
+  // preenchimento — uma melhoria de captura virando perda total.
+  const ultimoEnviado = useRef<string>("")
+
   const salvarParcial = useCallback(
     async (respostasAtuais: Respostas) => {
+      const assinatura = JSON.stringify(respostasAtuais)
+      if (assinatura === ultimoEnviado.current) return
+      ultimoEnviado.current = assinatura
       try {
         const res = await fetch(`/api/formulario/${token}`, {
           method: "POST",
@@ -95,6 +109,37 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     void salvarParcial(atualizadas)
   }
 
+  // 🔴 Story 75-333 (AC5) — salva o que foi DIGITADO E NÃO CONFIRMADO.
+  //
+  // Até aqui o salvamento só rodava dentro de `responder()`, ou seja no clique
+  // em "Continuar". Numa campanha paga o caso mais comum é o oposto: a pessoa
+  // digita o telefone, hesita e fecha a aba — e era justamente o dado que
+  // permite a oferta ativa que se perdia. Pedido do Marcos (17/08): "não posso
+  // perder estas informações".
+  // A DECISÃO (há rascunho? é diferente do último envio?) vive em
+  // lib/forms/draft-save.ts — puro e testado. Aqui só a rede.
+  const salvarRascunho = useCallback(() => {
+    const pronto = prepararSalvamentoDeRascunho({
+      pergunta,
+      rascunho,
+      respostas,
+      ultimaAssinatura: ultimoEnviado.current,
+    })
+    if (!pronto) return
+    void salvarParcial(pronto.payload)
+  }, [pergunta, rascunho, respostas, salvarParcial])
+
+  // Fechar/esconder a aba é o momento em que mais se perde: mobile mata a página
+  // sem aviso, e `visibilitychange` é o único evento confiável nesse caso
+  // (`beforeunload` não dispara em iOS).
+  useEffect(() => {
+    const aoEsconder = () => {
+      if (document.visibilityState === "hidden") salvarRascunho()
+    }
+    document.addEventListener("visibilitychange", aoEsconder)
+    return () => document.removeEventListener("visibilitychange", aoEsconder)
+  }, [salvarRascunho])
+
   // Rascunho acompanha a pergunta da vez (múltipla começa como lista).
   useEffect(() => {
     setRascunho(pergunta?.tipo === "multipla" ? [] : "")
@@ -119,12 +164,20 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
           finalizar: true,
         }),
       })
-      const json = (await res.json()) as { error?: string; mensagem_final?: string | null }
+      const json = (await res.json()) as {
+        error?: string
+        mensagem_final?: string | null
+        agenda_ativa?: boolean
+        session_token?: string
+      }
       if (!res.ok) {
         setErro(json.error ?? "Não foi possível enviar. Tente novamente.")
         return
       }
-      setConcluido({ mensagem: json.mensagem_final ?? null })
+      // A sessão pode ter nascido só agora (quem respondeu tudo antes do primeiro
+      // salvamento parcial): sem guardá-la, o passo de agenda não teria o que enviar.
+      if (json.session_token) sessionToken.current = json.session_token
+      setConcluido({ mensagem: json.mensagem_final ?? null, agendaAtiva: json.agenda_ativa === true })
     } catch {
       setErro("Não foi possível enviar. Verifique sua conexão e tente novamente.")
     } finally {
@@ -133,6 +186,18 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   }
 
   if (concluido) {
+    // Story 75-331 — com agenda ativa, o fim do formulário é a agenda (D2: ela
+    // aparece para TODOS; nada nas respostas a esconde). Sem sessão gravada não
+    // há como amarrar a visita ao lead, então cai na mensagem.
+    if (concluido.agendaAtiva && sessionToken.current) {
+      return (
+        <AgendaStep
+          token={token}
+          sessionToken={sessionToken.current}
+          mensagemFinal={concluido.mensagem}
+        />
+      )
+    }
     return (
       <div className="text-center">
         <p className="text-3xl">✅</p>
@@ -162,7 +227,12 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
           {pergunta.ajuda ? <p className="mt-1 text-xs text-stone-500">{pergunta.ajuda}</p> : null}
 
           <div className="mt-3">
-            <CampoDaPergunta pergunta={pergunta} valor={rascunho} onChange={setRascunho} />
+            <CampoDaPergunta
+              pergunta={pergunta}
+              valor={rascunho}
+              onChange={setRascunho}
+              onBlur={salvarRascunho}
+            />
           </div>
 
           {erro ? <p className="mt-3 text-sm text-red-400">{erro}</p> : null}
@@ -224,10 +294,13 @@ function CampoDaPergunta({
   pergunta,
   valor,
   onChange,
+  onBlur,
 }: {
   pergunta: Pergunta
   valor: Resposta
   onChange: (v: Resposta) => void
+  /** Story 75-333 — salva o digitado ao sair do campo, sem esperar "Continuar". */
+  onBlur: () => void
 }) {
   if (pergunta.tipo === "escolha") {
     return (
@@ -286,6 +359,7 @@ function CampoDaPergunta({
       type={tipoHtml}
       value={Array.isArray(valor) ? "" : String(valor)}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       inputMode={pergunta.tipo === "telefone" ? "tel" : pergunta.tipo === "numero" ? "numeric" : undefined}
       className={inputCls}
       autoFocus
