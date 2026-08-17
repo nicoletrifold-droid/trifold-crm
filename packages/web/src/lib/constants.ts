@@ -32,6 +32,10 @@ export const SOURCE_LABELS: Record<string, string> = {
   walk_in: 'Walk-in',
   telegram: 'Telegram',
   imob_link: 'Link Imobiliária',
+  // Story 75-330 (Epic 89) — formulário público de qualificação do tráfego pago.
+  // Origem PRÓPRIA de propósito: se reusasse meta_ads, os leads do formulário
+  // ficariam indistinguíveis dos do Meta Lead Forms e o funil viraria um só.
+  form_qualificacao: 'Formulário de Qualificação',
   other: 'Outro',
 };
 
@@ -53,6 +57,7 @@ export const SOURCE_LABELS_SHORT: Record<string, string> = {
   lp_yarden: 'Landing Page Yarden',
   lp_vind: 'Landing Page Vind',
   imob_link: 'Link Imob',
+  form_qualificacao: 'Formulário',   // Story 75-330
   other: 'Outro',
 };
 
@@ -99,6 +104,11 @@ export const LOST_REASON_ALL_GROUP_LABELS: Record<string, string> = {
   nao_classificado: 'Não classificado',
 };
 
+// Story 75-330: `form_qualificacao` NÃO entra aqui de propósito — esta lista é o
+// seletor do cadastro MANUAL, e origem automática não pode ser escolhida à mão
+// (o corretor carimbaria "veio do formulário" num lead que ele digitou, sujando
+// a única métrica que mede o formulário). Mesmo tratamento de `imob_link`, que
+// também vive em SOURCE_LABELS e fica fora daqui.
 export const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: 'referral',         label: 'Indicação' },
   { value: 'broker_sponsored', label: 'Patrocinado Corretor' },
