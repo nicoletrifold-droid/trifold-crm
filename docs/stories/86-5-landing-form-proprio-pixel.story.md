@@ -1,6 +1,6 @@
 # Story 86-5 — Landing page/form próprio no CRM com Meta Pixel instrumentado
 
-**Status:** Ready
+**Status:** Superseded (por 86-9)
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex) + @ux-design-expert (Uma)
 **Prioridade:** P1
@@ -202,3 +202,10 @@ form). Verificar se o projeto já tem algum utilitário de rate-limit
 |------|---------|-------------|--------|
 | 2026-08-04 | 0.1 | Draft criado a partir da auditoria de tracking Meta e da decisão travada de migrar forms/landing para o CRM. | @sm (River) |
 | 2026-08-04 | 0.2 | Validação @po (10-point): GO, 8/10. Draft → Ready. É a maior story do epic mas o escopo está bem delimitado (Fora do escopo explícito: DNS, descontinuação WP, design final). Fixes aplicados via Dev Notes: (1) enum `lead_source` já tem `'website'` — não abrir migration de enum; (2) rate-limit não existe no projeto, usar in-memory básico; (3) costura com 86-6 — deixar a rota `/api/public/leads` pronta para receber campos de atribuição sem reescrita. Dependência formal em 86-4 é conservadora (só P0 completo) mas 86-5 poderia iniciar após 86-4 em paralelo com 86-6 — sequência do epic OK. | @po (Pax) |
+
+## Nota do @po (2026-08-17)
+
+Story **substituída pela 86-9**. Ela presumia a landing e a rota `POST /api/public/leads`
+da Story 86-5, que nunca foram criadas: o Epic 89 entregou `/formulario/[token]` +
+`POST /api/formulario/[token]` no lugar. Os objetivos desta story foram consolidados
+na 86-9, apontando para os arquivos que de fato existem.

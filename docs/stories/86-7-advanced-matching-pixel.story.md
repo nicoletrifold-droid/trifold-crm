@@ -1,6 +1,6 @@
 # Story 86-7 — Advanced Matching no Meta Pixel (AAM + external_id/em/ph)
 
-**Status:** Ready
+**Status:** Superseded (por 86-9)
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Prioridade:** P1
@@ -141,3 +141,10 @@ capturados por 86-6 não são afetados aqui, que foca em `external_id`/`em`/`ph`
 |------|---------|-------------|--------|
 | 2026-08-04 | 0.1 | Draft criado a partir da auditoria de tracking Meta — fecha o objetivo de subir o EMQ acima de 3.9/10. | @sm (River) |
 | 2026-08-04 | 0.2 | Validação @po (10-point): GO, 8/10. Draft → Ready. Escopo estritamente aditivo em torno de `fbq(...)` da 86-5, dependências (86-5, 86-6) corretas. Distinção crítica browser-hash-pelo-SDK vs. server-hash-manual (86-3) está bem explicada — evita o erro clássico de hashear duas vezes. AC5 (EMQ) corretamente tratado como acompanhamento manual não bloqueante. Nota: T4 (isomorfia de `normalizePhoneBR`) — confirmado que a função não usa nada exclusivo de Node (regex/string puro), então é reutilizável no client sem extração especial. | @po (Pax) |
+
+## Nota do @po (2026-08-17)
+
+Story **substituída pela 86-9**. Ela presumia a landing e a rota `POST /api/public/leads`
+da Story 86-5, que nunca foram criadas: o Epic 89 entregou `/formulario/[token]` +
+`POST /api/formulario/[token]` no lugar. Os objetivos desta story foram consolidados
+na 86-9, apontando para os arquivos que de fato existem.

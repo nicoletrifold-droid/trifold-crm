@@ -1,6 +1,6 @@
 # Story 86-6 — Captura de `fbclid`/`fbc`/`fbp` e IP/User-Agent na entrada do lead
 
-**Status:** Ready
+**Status:** Superseded (por 86-9)
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Prioridade:** P1
@@ -180,3 +180,10 @@ sem lançar erro se ausente (AC8 exige tolerância a campos faltantes).
 |------|---------|-------------|--------|
 | 2026-08-04 | 0.1 | Draft criado a partir da auditoria de tracking Meta. Enriquece o evento Visitou (86-4) com dados de atribuição capturados na landing própria (86-5). | @sm (River) |
 | 2026-08-04 | 0.2 | Validação @po (10-point): GO, 8/10. Draft → Ready. Dois fixes aplicados: (1) dependência real de 86-5 tornada explícita no header (AC2/4/5 vivem na landing/rota da 86-5); (2) confirmado que `buildCtwaMetadata` grava na RAIZ do JSONB — valida o namespace `meta_ad` e a sugestão de "mover CTWA para namespace" foi rejeitada (código em prod, fora de escopo). AC7 (fbc/fbp/IP/UA nunca hasheados) coerente com AC5 da 86-3. | @po (Pax) |
+
+## Nota do @po (2026-08-17)
+
+Story **substituída pela 86-9**. Ela presumia a landing e a rota `POST /api/public/leads`
+da Story 86-5, que nunca foram criadas: o Epic 89 entregou `/formulario/[token]` +
+`POST /api/formulario/[token]` no lugar. Os objetivos desta story foram consolidados
+na 86-9, apontando para os arquivos que de fato existem.

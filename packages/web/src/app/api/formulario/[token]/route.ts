@@ -5,7 +5,14 @@ import { parseFormSchema, type FormSchema } from "@web/lib/forms/schema"
 import { limparRespostas, formularioCompleto, type Respostas } from "@web/lib/forms/branching"
 import { calcularScore } from "@web/lib/forms/score"
 import { analisarRespostasAbertas } from "@web/lib/forms/ai-reading"
-import { normalizePhoneBR } from "@trifold/shared"
+import { criarRateLimit, ipDaRequisicao } from "@web/lib/forms/rate-limit"
+import {
+  extrairSinais,
+  enviarEventoFormulario,
+  comMetaAd,
+  type CorpoTracking,
+} from "@web/lib/meta/form-capi"
+import { normalizePhoneBR, FORM_CAPI_EVENTS } from "@trifold/shared"
 
 // Story 75-330 (Epic 89) — endpoint PÚBLICO do formulário de qualificação.
 // Token = lead_forms.token (uuid não-enumerável). Mesmas garantias do
@@ -27,38 +34,12 @@ interface LeadForm {
 }
 
 // ─── Rate limit (em memória, por IP, 30 req/min) ─────────────────────────────
-// Mesmo padrão do app/api/agent/chat/route.ts:60 — decisão da story: reusar o
-// que existe em vez de introduzir Redis aqui.
-// ⚠️ LIMITAÇÃO CONHECIDA E ACEITA: na Vercel isso vale POR INSTÂNCIA de lambda.
-// Segura repetição acidental e script ingênuo; NÃO é defesa contra abuso
-// distribuído. Defesa séria de endpoint público é story própria.
-// ⚠️ @qa (gate 75-330): o padrão original do chat é indexado por USUÁRIO
-// (limitado pelo tamanho do time). Aqui a chave é IP de tráfego pago — sem
-// poda, o Map cresce sem teto enquanto a lambda viver e vira vazamento de
-// memória. Por isso a varredura abaixo, que o original não precisava ter.
-const rateLimitMap = new Map<string, number[]>()
-const JANELA_MS = 60 * 1000
-const MAX_POR_JANELA = 30
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now()
-
-  // Poda: remove IPs cuja janela já expirou por completo.
-  for (const [chave, marcas] of rateLimitMap) {
-    if (marcas.every((t) => now - t >= JANELA_MS)) rateLimitMap.delete(chave)
-  }
-
-  const recentes = (rateLimitMap.get(ip) ?? []).filter((t) => now - t < JANELA_MS)
-  if (recentes.length >= MAX_POR_JANELA) return false
-  recentes.push(now)
-  rateLimitMap.set(ip, recentes)
-  return true
-}
-
-function ipDaRequisicao(request: NextRequest): string {
-  const fwd = request.headers.get("x-forwarded-for")
-  return fwd?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "desconhecido"
-}
+// Story 86-9: a implementação saiu daqui para `lib/forms/rate-limit.ts`, sem
+// mudança de comportamento — a rota nova de tracking do formulário precisa da
+// mesma proteção, e duplicar o Map com poda em dois arquivos era pedir para os
+// dois divergirem. Todos os avisos (limite por instância na Vercel, poda
+// obrigatória para não vazar memória com IPs de tráfego pago) estão lá.
+const checkRateLimit = criarRateLimit(30)
 
 async function acharFormularioPorToken(token: string): Promise<{ form: LeadForm; schema: FormSchema } | null> {
   if (!UUID_RE.test(token)) return null
@@ -94,6 +75,19 @@ interface CorpoPost {
   lgpd_aceito?: boolean
   finalizar?: boolean
   utm?: Record<string, string>
+  /** Story 86-9 — sinais de atribuição lidos no browser (`_fbp`, `_fbc`, `fbclid`). */
+  tracking?: CorpoTracking
+  /**
+   * Story 86-9 — ids gerados NO BROWSER para deduplicar com o disparo do Pixel.
+   * O browser propõe os ids; QUEM DECIDE se o evento sai é o servidor, com base
+   * no que de fato aconteceu (o lead nasceu? a resposta foi finalizada?). Um
+   * endpoint público que aceitasse "dispare um Lead" seria um canal aberto para
+   * inflar conversão de graça.
+   */
+  event_ids?: {
+    lead?: string
+    complete_registration?: string
+  }
 }
 
 // POST /api/formulario/[token]
@@ -174,12 +168,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
   }
 
+  // Story 86-9 — sinais de atribuição: metade veio do browser no corpo, metade
+  // só o servidor enxerga (IP, User-Agent). Colhidos antes de qualquer escrita.
+  const sinais = extrairSinais(request, body.tracking)
+  const urlPadrao = new URL(`/formulario/${token}`, request.url).toString()
+  // O `Lead` só sai no POST em que o lead REALMENTE nasce (ou é vinculado à
+  // sessão pela primeira vez). O formulário salva parcial a cada passo e no
+  // `visibilitychange`: sem esta trava, uma pessoa geraria cinco `Lead`.
+  let leadVinculadoAgora = false
+  // Eventos que o servidor DE FATO enviou neste POST. O browser espelha esta
+  // lista para disparar o Pixel com o mesmo `event_id` — se ele decidisse
+  // sozinho, bastaria um telefone que o servidor recusou para os dois lados
+  // divergirem: o Meta contaria duas conversões em vez de deduplicar uma.
+  const eventosDisparados: string[] = []
+
   // ─── Lead: nasce assim que há nome + telefone, mesmo sem finalizar ─────────
   if (!leadId && contato.nome && telefoneNormalizado) {
     const utm = body.utm ?? {}
     const { data: existente } = await admin
       .from("leads")
-      .select("id")
+      .select("id, metadata")
       .eq("org_id", form.org_id)
       .eq("phone_normalized", telefoneNormalizado)
       .limit(1)
@@ -187,12 +195,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (existente) {
       leadId = existente.id as string
+      leadVinculadoAgora = true
       // Lead que já existia NÃO tem a origem reescrita: quem chegou antes pelo
       // Meta Ads continua sendo do Meta Ads. Só completamos o que falta.
+      //
+      // Story 86-9: a atribuição, porém, é REESCRITA — este clique é mais
+      // recente que o anterior, e é o que o Meta precisa para creditar a
+      // conversão ao anúncio certo. `comMetaAd` preserva as demais chaves.
       await admin
         .from("leads")
         .update({
           ...(contato.email ? { email: contato.email } : {}),
+          metadata: comMetaAd(
+            existente.metadata as Record<string, unknown> | null,
+            sinais,
+          ),
           last_contact_at: new Date().toISOString(),
         })
         .eq("id", leadId)
@@ -215,7 +232,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           utm_campaign: utm.utm_campaign ?? null,
           utm_content: utm.utm_content ?? null,
           utm_term: utm.utm_term ?? null,
-          metadata: { form_id: form.id, form_nome: form.nome },
+          // Story 86-9 — `meta_ad` entra já no nascimento do lead: é o que faz o
+          // evento "Visitou" (cron meta-capi-dispatch, dias depois) sair COM
+          // fbc/fbp/IP/UA. Até aqui aquele cron lia um campo que ninguém escrevia.
+          metadata: comMetaAd({ form_id: form.id, form_nome: form.nome }, sinais),
         })
         .select("id")
         .single()
@@ -227,7 +247,36 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         )
       }
       leadId = novo.id as string
+      leadVinculadoAgora = true
     }
+  }
+
+  // ─── Story 86-9 (AC6) — evento `Lead` para o Meta ─────────────────────────
+  // Sai uma única vez, no POST em que o lead passou a existir para esta sessão.
+  // O `event_id` é o mesmo que o Pixel usou no browser: o Meta deduplica os dois
+  // e fica com a união dos sinais (browser traz fbp/fbc; aqui vêm telefone e
+  // nome hasheados, UF, IP e User-Agent).
+  if (leadVinculadoAgora && leadId && body.event_ids?.lead) {
+    const idDoEvento = body.event_ids.lead
+    const dadosLead = {
+      leadId,
+      nome: contato.nome,
+      email: contato.email,
+      telefone: telefoneNormalizado ?? contato.telefone,
+    }
+    // `after()`, nunca `void`: na Vercel a invocação congela quando a resposta
+    // sai, e o envio morreria no meio — sem erro, sem evento. Ver form-capi.ts.
+    after(async () => {
+      await enviarEventoFormulario({
+        evento: FORM_CAPI_EVENTS.LEAD,
+        eventId: idDoEvento,
+        sinais,
+        lead: dadosLead,
+        contentName: form.nome,
+        urlPadrao,
+      })
+    })
+    eventosDisparados.push(FORM_CAPI_EVENTS.LEAD)
   }
 
   // ─── Grava a resposta ─────────────────────────────────────────────────────
@@ -284,6 +333,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       metadata: { form_id: form.id, response_id: respostaId, score },
     })
 
+    // ─── Story 86-9 (AC6) — evento `CompleteRegistration` ───────────────────
+    // O lead qualificado: formulário inteiro respondido, com aceite LGPD. Leva o
+    // `qualification_score` em `value` — é o sinal que permite, mais adiante,
+    // otimizar a campanha por qualidade e não só por volume.
+    // O guard de `status === "completa"` no início da rota impede repetição.
+    if (body.event_ids?.complete_registration) {
+      const idDoEvento = body.event_ids.complete_registration
+      const dadosLead = {
+        leadId,
+        nome: contato.nome,
+        email: contato.email,
+        telefone: telefoneNormalizado ?? contato.telefone,
+      }
+      after(async () => {
+        await enviarEventoFormulario({
+          evento: FORM_CAPI_EVENTS.COMPLETE_REGISTRATION,
+          eventId: idDoEvento,
+          sinais,
+          lead: dadosLead,
+          contentName: form.nome,
+          value: score,
+          urlPadrao,
+        })
+      })
+      eventosDisparados.push(FORM_CAPI_EVENTS.COMPLETE_REGISTRATION)
+    }
+
     // Story 75-332 — a IA lê as respostas ABERTAS depois de responder ao lead
     // (AC3: o clique em "Enviar" não espera o modelo).
     //
@@ -309,6 +385,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return NextResponse.json({
     session_token: tokenDaSessao,
     status: querFinalizar ? "completa" : "parcial",
+    // Story 86-9 — o browser dispara no Pixel exatamente estes, com os mesmos ids.
+    eventos: eventosDisparados,
     ...(querFinalizar
       ? {
           mensagem_final: schema.mensagem_final ?? null,

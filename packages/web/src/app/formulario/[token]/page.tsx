@@ -1,5 +1,6 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { parseFormSchema } from "@web/lib/forms/schema"
+import { MetaPixel } from "@web/components/tracking/meta-pixel"
 import { FormRunner } from "./form-runner"
 
 // Story 75-330 (Epic 89) — página PÚBLICA do formulário de qualificação do
@@ -61,6 +62,11 @@ export default async function FormularioPublicoPage({
 
   return (
     <div className="min-h-screen bg-stone-950 px-4 py-8">
+      {/* Story 86-9 — Pixel SÓ nesta rota pública. O CRM autenticado não carrega
+          Pixel: não há por que mandar ao Meta a navegação interna do corretor.
+          Fica antes do conteúdo para que o cookie `_fbp` exista a tempo do
+          primeiro POST — era ele que faltava em 91% dos eventos do dataset. */}
+      <MetaPixel />
       <div className="mx-auto w-full max-w-md">
         <div className="rounded-2xl bg-stone-900 p-6 ring-1 ring-stone-800 sm:p-8">
           <p className="text-xs font-semibold uppercase tracking-wider text-orange-400">Trifold</p>

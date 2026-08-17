@@ -13,6 +13,15 @@ import {
   type Resposta,
 } from "@web/lib/forms/branching"
 import { prepararSalvamentoDeRascunho } from "@web/lib/forms/draft-save"
+import { coletarAtribuicao } from "@web/lib/meta/browser-attribution"
+import { getVisitorId } from "@web/lib/meta/visitor-id"
+import {
+  PIXEL_EVENTS,
+  novoEventId,
+  pixelTrack,
+  pixelIdentificar,
+} from "@web/lib/meta/pixel-events"
+import { normalizePhoneBR } from "@trifold/shared"
 import { AgendaStep } from "./agenda-step"
 
 // Story 75-330 — o executor do formulário público. Uma pergunta por vez.
@@ -61,6 +70,96 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     return encontrados
   }, [])
 
+  // ─── Story 86-9 — rastreamento Meta ───────────────────────────────────────
+  // Um `event_id` por evento do funil, gerado UMA vez e reusado nos dois lados
+  // (Pixel no browser, CAPI no servidor). É o id compartilhado que faz o Meta
+  // deduplicar em vez de contar duas conversões.
+  const eventIds = useRef({
+    viewContent: novoEventId(),
+    initiateCheckout: novoEventId(),
+    lead: novoEventId(),
+    completeRegistration: novoEventId(),
+  })
+  const viewContentEnviado = useRef(false)
+  const initiateCheckoutEnviado = useRef(false)
+  const identificado = useRef(false)
+
+  /**
+   * Espelha no Pixel os eventos que o SERVIDOR confirmou ter enviado.
+   * Quem decide é o servidor — ele é quem sabe se o lead nasceu de verdade.
+   */
+  const espelharNoPixel = useCallback((eventos: string[] | undefined) => {
+    if (!eventos?.length) return
+    if (eventos.includes(PIXEL_EVENTS.LEAD)) {
+      pixelTrack(PIXEL_EVENTS.LEAD, eventIds.current.lead, {
+        content_category: "form_qualificacao",
+      })
+    }
+    if (eventos.includes(PIXEL_EVENTS.COMPLETE_REGISTRATION)) {
+      pixelTrack(
+        PIXEL_EVENTS.COMPLETE_REGISTRATION,
+        eventIds.current.completeRegistration,
+        { content_category: "form_qualificacao" },
+      )
+    }
+  }, [])
+
+  /**
+   * Advanced Matching: registra no Pixel os dados de identidade assim que a
+   * pessoa os fornece. Vão em TEXTO PURO — o script do Meta hasheia sozinho no
+   * browser (o servidor faz o oposto; ver pixel-events.ts).
+   */
+  const identificarNoPixel = useCallback((r: Respostas) => {
+    if (identificado.current) return
+    const contato: Record<string, string> = {}
+    for (const p of schema.perguntas) {
+      if (!p.campo_contato) continue
+      const v = r[p.id]
+      if (v === undefined || Array.isArray(v)) continue
+      const texto = String(v).trim()
+      if (texto) contato[p.campo_contato] = texto
+    }
+    const telefone = normalizePhoneBR(contato.telefone)
+    if (!contato.nome || !telefone) return
+
+    const partes = contato.nome.trim().split(/\s+/)
+    pixelIdentificar({
+      external_id: getVisitorId(),
+      fn: partes[0],
+      ln: partes.slice(1).join(" ") || undefined,
+      ph: telefone,
+      em: contato.email,
+    })
+    identificado.current = true
+  }, [schema.perguntas])
+
+  // `ViewContent`: abriu o formulário. Sai no carregamento, não no primeiro
+  // clique — é o número que separa o criativo que traz gente que abre e desiste
+  // do que não traz ninguém. Roda uma vez só (StrictMode monta duas vezes em dev).
+  useEffect(() => {
+    if (viewContentEnviado.current) return
+    viewContentEnviado.current = true
+
+    const id = eventIds.current.viewContent
+    pixelTrack(PIXEL_EVENTS.VIEW_CONTENT, id, {
+      content_name: schema.perguntas[0]?.titulo,
+      content_category: "form_qualificacao",
+    })
+    void fetch(`/api/formulario/${token}/tracking`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        evento: PIXEL_EVENTS.VIEW_CONTENT,
+        event_id: id,
+        visitor_id: getVisitorId(),
+        page_url: window.location.href,
+        ...coletarAtribuicao(),
+      }),
+    }).catch(() => {
+      // Falha de tracking nunca interrompe quem está preenchendo.
+    })
+  }, [token, schema.perguntas])
+
   const pergunta = proximaPergunta(schema, respostas)
   const passo = passoAtual(schema, respostas)
   const visiveis = perguntasVisiveis(schema, respostas)
@@ -81,6 +180,9 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
       const assinatura = JSON.stringify(respostasAtuais)
       if (assinatura === ultimoEnviado.current) return
       ultimoEnviado.current = assinatura
+      // Advanced Matching ANTES do POST: quando o servidor confirmar o `Lead`,
+      // o Pixel já estará com nome e telefone registrados para este visitante.
+      identificarNoPixel(respostasAtuais)
       try {
         const res = await fetch(`/api/formulario/${token}`, {
           method: "POST",
@@ -89,16 +191,22 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
             session_token: sessionToken.current,
             respostas: respostasAtuais,
             utm,
+            tracking: { visitor_id: getVisitorId(), page_url: window.location.href, ...coletarAtribuicao() },
+            event_ids: {
+              lead: eventIds.current.lead,
+              complete_registration: eventIds.current.completeRegistration,
+            },
           }),
         })
-        const json = (await res.json()) as { session_token?: string }
+        const json = (await res.json()) as { session_token?: string; eventos?: string[] }
         if (json.session_token) sessionToken.current = json.session_token
+        espelharNoPixel(json.eventos)
       } catch {
         // Silencioso de propósito: falha ao salvar o PARCIAL não pode
         // interromper quem está preenchendo. O envio final reporta erro.
       }
     },
-    [token, utm]
+    [token, utm, identificarNoPixel, espelharNoPixel]
   )
 
   function valorPreenchido(v: Resposta): boolean {
@@ -122,6 +230,31 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     const atualizadas = limparRespostas(schema, novas)
     setRespostas(atualizadas)
     setRascunhos({})
+
+    // `InitiateCheckout`: engajou de verdade — confirmou a primeira resposta.
+    // Sai antes do `Lead` e tem muito mais volume; com ~22 leads/mês é este o
+    // sinal que dá à campanha material para sair de "Learning Limited".
+    if (!initiateCheckoutEnviado.current) {
+      initiateCheckoutEnviado.current = true
+      const id = eventIds.current.initiateCheckout
+      pixelTrack(PIXEL_EVENTS.INITIATE_CHECKOUT, id, {
+        content_category: "form_qualificacao",
+      })
+      void fetch(`/api/formulario/${token}/tracking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          evento: PIXEL_EVENTS.INITIATE_CHECKOUT,
+          event_id: id,
+          visitor_id: getVisitorId(),
+          page_url: window.location.href,
+          ...coletarAtribuicao(),
+        }),
+      }).catch(() => {
+        // Falha de tracking nunca interrompe quem está preenchendo.
+      })
+    }
+
     void salvarParcial(atualizadas)
   }
 
@@ -182,6 +315,11 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
           utm,
           lgpd_aceito: true,
           finalizar: true,
+          tracking: { visitor_id: getVisitorId(), page_url: window.location.href, ...coletarAtribuicao() },
+          event_ids: {
+            lead: eventIds.current.lead,
+            complete_registration: eventIds.current.completeRegistration,
+          },
         }),
       })
       const json = (await res.json()) as {
@@ -189,6 +327,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
         mensagem_final?: string | null
         agenda_ativa?: boolean
         session_token?: string
+        eventos?: string[]
       }
       if (!res.ok) {
         setErro(json.error ?? "Não foi possível enviar. Tente novamente.")
@@ -197,6 +336,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
       // A sessão pode ter nascido só agora (quem respondeu tudo antes do primeiro
       // salvamento parcial): sem guardá-la, o passo de agenda não teria o que enviar.
       if (json.session_token) sessionToken.current = json.session_token
+      espelharNoPixel(json.eventos)
       setConcluido({ mensagem: json.mensagem_final ?? null, agendaAtiva: json.agenda_ativa === true })
     } catch {
       setErro("Não foi possível enviar. Verifique sua conexão e tente novamente.")
