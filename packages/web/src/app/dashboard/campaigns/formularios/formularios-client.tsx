@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { parseFormSchema, type FormSchema } from "@web/lib/forms/schema"
+import { ConstrutorPerguntas } from "./construtor-perguntas"
 
 // Story 75-330 — editor do schema. Deliberadamente um editor de JSON com
 // validação, não um construtor visual arrastando campos (fora de escopo, Epic
@@ -17,6 +19,19 @@ export interface FormularioRow {
   created_at: string
 }
 
+/**
+ * Story 75-334 (AC8) — formulário criado pela tela antiga abre no construtor.
+ * Schema ilegível degrada para vazio em vez de quebrar a página: perder a tela
+ * inteira por causa de um JSON ruim seria pior do que começar do zero naquele.
+ */
+function schemaSeguro(bruto: unknown): FormSchema {
+  try {
+    return parseFormSchema(bruto)
+  } catch {
+    return { perguntas: [] }
+  }
+}
+
 export function FormulariosClient({
   formularios,
   podeEditar,
@@ -27,7 +42,6 @@ export function FormulariosClient({
   const router = useRouter()
   const [novoNome, setNovoNome] = useState("")
   const [editando, setEditando] = useState<string | null>(null)
-  const [rascunho, setRascunho] = useState("")
   const [erro, setErro] = useState("")
   const [salvando, setSalvando] = useState(false)
   const [copiado, setCopiado] = useState<string | null>(null)
@@ -56,17 +70,13 @@ export function FormulariosClient({
     }
   }
 
-  async function salvarSchema(id: string) {
+  // Story 75-334 — o construtor já entrega um FormSchema montado; não há mais
+  // JSON digitado a mão para dar errado. O servidor segue validando: a tela
+  // reduz o erro, ela não substitui a garantia.
+  async function salvarSchema(id: string, schema: FormSchema) {
     setSalvando(true)
     setErro("")
     try {
-      let schema: unknown
-      try {
-        schema = JSON.parse(rascunho)
-      } catch {
-        setErro("JSON malformado — confira vírgulas e chaves.")
-        return
-      }
       const res = await fetch("/api/lead-forms", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -173,7 +183,6 @@ export function FormulariosClient({
                           type="button"
                           onClick={() => {
                             setEditando(editando === f.id ? null : f.id)
-                            setRascunho(JSON.stringify(f.schema ?? { perguntas: [] }, null, 2))
                             setErro("")
                           }}
                           className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
@@ -194,21 +203,11 @@ export function FormulariosClient({
 
                 {editando === f.id && (
                   <div className="mt-4">
-                    <textarea
-                      value={rascunho}
-                      onChange={(e) => setRascunho(e.target.value)}
-                      rows={18}
-                      spellCheck={false}
-                      className="w-full rounded-lg border border-stone-300 bg-stone-50 p-3 font-mono text-xs text-stone-800 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-200"
+                    <ConstrutorPerguntas
+                      schemaInicial={schemaSeguro(f.schema)}
+                      salvando={salvando}
+                      onSalvar={(schema) => void salvarSchema(f.id, schema)}
                     />
-                    <button
-                      type="button"
-                      onClick={() => void salvarSchema(f.id)}
-                      disabled={salvando}
-                      className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-                    >
-                      {salvando ? "Salvando…" : "Salvar perguntas"}
-                    </button>
                   </div>
                 )}
               </div>
