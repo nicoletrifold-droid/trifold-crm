@@ -107,7 +107,9 @@ export async function GET(request: NextRequest) {
 
     let apptsQuery = supabase
       .from("appointments")
-      .select("scheduled_at, status")
+      // Story 75-328 — `lead_id` entra no select p/ cruzar as visitas realizadas com a
+      // coorte do período (a ponte entre o card de Visitas e o Funil).
+      .select("scheduled_at, status, lead_id")
       .eq("org_id", appUser.org_id)
       // agenda IMOB fora do analytics principal (Epic 81). Story 75-322: a equipe
       // virou constante compartilhada com o PDF, que não tinha esse recorte.
@@ -197,7 +199,15 @@ export async function GET(request: NextRequest) {
         (k) => brokerNames.get(k) ?? "Sem nome"
       ),
       visits: visitsFiltravel
-        ? buildVisits((apptsRes.data ?? []) as { scheduled_at: string; status: string }[], from, to, granularity)
+        ? buildVisits(
+            (apptsRes.data ?? []) as { scheduled_at: string; status: string; lead_id: string | null }[],
+            from,
+            to,
+            granularity,
+            // A MESMA coorte que alimenta o Funil: leads criados na janela, com os
+            // mesmos filtros. Reaproveita o fetch que já foi feito acima.
+            new Set(leads.map((l) => l.id))
+          )
         : null,
       visitsIndisponivelPor: visitsFiltravel ? null : filtrosNaoAplicaveis,
     }

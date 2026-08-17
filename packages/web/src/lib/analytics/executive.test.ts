@@ -187,6 +187,47 @@ describe("buildVisits", () => {
     expect(r.totals.taxaNoShow).toBeNull()
   })
 
+  // Story 75-328 — a ponte com o Funil: quantos LEADS (não visitas) estão por trás
+  // das realizadas, e quantos deles são da safra do período. Foi a pergunta do Marcos
+  // ao ver "23 realizadas" no card e "16" no funil.
+  it("conta leads distintos e a interseção com a coorte do período", () => {
+    const appts = [
+      // l1 visitou DUAS vezes — 2 visitas, 1 lead.
+      { scheduled_at: "2026-07-21T14:00:00Z", status: "completed", lead_id: "l1" },
+      { scheduled_at: "2026-07-21T16:00:00Z", status: "completed", lead_id: "l1" },
+      { scheduled_at: "2026-07-21T18:00:00Z", status: "completed", lead_id: "l2" },
+      // l3 entrou antes da janela: visitou agora, mas não é da safra.
+      { scheduled_at: "2026-07-21T19:00:00Z", status: "completed", lead_id: "l3" },
+      // no-show não entra na ponte.
+      { scheduled_at: "2026-07-21T20:00:00Z", status: "no_show", lead_id: "l4" },
+    ]
+    const r = buildVisits(appts, "2026-07-21T03:00:00Z", "2026-07-21T03:00:00Z", "day", new Set(["l1", "l2"]))
+    expect(r.totals.realizadas).toBe(4)
+    expect(r.totals.leadsRealizadas).toBe(3)
+    expect(r.totals.leadsRealizadasNaCoorte).toBe(2)
+  })
+
+  it("sem coorte informada, a ponte sai zerada em vez de chutar", () => {
+    const r = buildVisits(
+      [{ scheduled_at: "2026-07-21T14:00:00Z", status: "completed", lead_id: "l1" }],
+      "2026-07-21T03:00:00Z", "2026-07-21T03:00:00Z", "day"
+    )
+    expect(r.totals.leadsRealizadas).toBe(1)
+    expect(r.totals.leadsRealizadasNaCoorte).toBe(0)
+  })
+
+  it("visita sem lead_id não quebra nem infla a contagem de leads", () => {
+    const r = buildVisits(
+      [
+        { scheduled_at: "2026-07-21T14:00:00Z", status: "completed", lead_id: null },
+        { scheduled_at: "2026-07-21T15:00:00Z", status: "completed" },
+      ],
+      "2026-07-21T03:00:00Z", "2026-07-21T03:00:00Z", "day", new Set(["l1"])
+    )
+    expect(r.totals.realizadas).toBe(2)
+    expect(r.totals.leadsRealizadas).toBe(0)
+  })
+
   // Story 75-321 — o `closed` (encerrado sem confirmação de presença) não pode cair
   // em nenhuma das 4 séries. Antes da story o `else` final varria qualquer status
   // desconhecido para "agendadas", então o status novo nasceria contado errado.

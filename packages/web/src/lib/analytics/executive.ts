@@ -326,14 +326,24 @@ export interface VisitsData {
      *  exatamente o que inflava "realizadas" antes. */
     encerradas: number
     taxaNoShow: number | null
+    /** Story 75-328 — leads DISTINTOS por trás das visitas realizadas. Um lead que
+     *  visitou duas vezes são duas visitas e um lead só. */
+    leadsRealizadas: number
+    /** Desses, quantos entraram no período — a interseção com a coorte do Funil.
+     *  É a ponte que faltava entre os dois cards: o resto visitou agora, mas
+     *  entrou antes, e por isso nunca apareceria no funil da janela. */
+    leadsRealizadasNaCoorte: number
   }
 }
 
 export function buildVisits(
-  appts: { scheduled_at: string; status: string }[],
+  appts: { scheduled_at: string; status: string; lead_id?: string | null }[],
   fromISO: string,
   toISO: string,
-  granularity: ExecGranularity
+  granularity: ExecGranularity,
+  /** Story 75-328 — ids dos leads que ENTRARAM no período (a coorte do Funil).
+   *  Ausente = a ponte não é calculada e os totais saem zerados. */
+  cohortLeadIds?: Set<string>
 ): VisitsData {
   const periods = listPeriods(fromISO, toISO, granularity)
   const periodIndex = new Map(periods.map((p, i) => [p, i]))
@@ -347,13 +357,23 @@ export function buildVisits(
     arr[i] = (arr[i] ?? 0) + 1
   }
   let encerradas = 0
+  // Story 75-328 — leads por trás das realizadas, e quantos deles são da safra do
+  // período. Set porque a pergunta é "quantos LEADS", não "quantas visitas".
+  const leadsRealizadas = new Set<string>()
+  const leadsRealizadasNaCoorte = new Set<string>()
   for (const a of appts) {
     const i = periodIndex.get(periodKey(a.scheduled_at, granularity))
     if (i == null) continue
     // Story 75-321 — status virou explícito (era um `else` que varria tudo que não
     // fosse completed/no_show/cancelled para "agendadas"). Com o `closed` novo, o
     // catch-all teria transformado "encerrado sem registro" em "agendada".
-    if (isRealizedVisit(a.status)) bump(realizadas, i)
+    if (isRealizedVisit(a.status)) {
+      bump(realizadas, i)
+      if (a.lead_id) {
+        leadsRealizadas.add(a.lead_id)
+        if (cohortLeadIds?.has(a.lead_id)) leadsRealizadasNaCoorte.add(a.lead_id)
+      }
+    }
     else if (a.status === "no_show") bump(noShow, i)
     else if (a.status === "cancelled") bump(canceladas, i)
     else if (a.status === "closed") encerradas++
@@ -381,6 +401,8 @@ export function buildVisits(
       canceladas: tC,
       encerradas,
       taxaNoShow: decided > 0 ? Math.round((tN / decided) * 100) : null,
+      leadsRealizadas: leadsRealizadas.size,
+      leadsRealizadasNaCoorte: leadsRealizadasNaCoorte.size,
     },
   }
 }
