@@ -432,7 +432,18 @@ function VisitsChart({ data, p, rangeLabel }: { data: ExecutiveData["visits"]; p
     canceladas: data.canceladas[i] ?? 0,
   }))
   const ticks = thinTicks(data.periods)
-  const total = data.totals.realizadas + data.totals.agendadas + data.totals.noShow + data.totals.canceladas
+  // Story 75-322 — o cabeçalho tinha DOIS denominadores sem dizer: "3 de 6" contava
+  // as canceladas e o "25% no-show" não (1 de 4). Os dois estavam certos e ninguém
+  // adivinhava qual era qual. Agora a composição aparece inteira e a taxa diz sobre
+  // o que ela é. `total` é tudo que estava na agenda na janela — inclusive as
+  // `encerradas` da 75-321, que não cabem em nenhuma das 4 séries mas existem.
+  const total =
+    data.totals.realizadas +
+    data.totals.agendadas +
+    data.totals.noShow +
+    data.totals.canceladas +
+    data.totals.encerradas
+  const decididas = data.totals.realizadas + data.totals.noShow
 
   return (
     <div className={CARD}>
@@ -446,12 +457,16 @@ function VisitsChart({ data, p, rangeLabel }: { data: ExecutiveData["visits"]; p
                 : "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
             }`}
           >
-            {data.totals.taxaNoShow}% no-show
+            {data.totals.taxaNoShow}% no-show ({data.totals.noShow} de {decididas} com desfecho)
           </span>
         )}
       </div>
       <p className={`mb-3 ${SUBTITLE}`}>
-        {data.totals.realizadas} realizadas de {total} no período, {data.granularity === "week" ? "por semana" : "por dia"} · {rangeLabel}
+        {total} visitas no período: {data.totals.realizadas} realizadas · {data.totals.noShow} no-show
+        {data.totals.agendadas > 0 && ` · ${data.totals.agendadas} agendadas`}
+        {data.totals.canceladas > 0 && ` · ${data.totals.canceladas} canceladas`}
+        {data.totals.encerradas > 0 && ` · ${data.totals.encerradas} encerradas sem registro`}
+        {" · "}{data.granularity === "week" ? "por semana" : "por dia"} · {rangeLabel}
       </p>
       <div className="mb-3">
         <Legend items={VISIT_SERIES.map((s) => ({ label: s.label, color: colorOf[s.key] }))} />

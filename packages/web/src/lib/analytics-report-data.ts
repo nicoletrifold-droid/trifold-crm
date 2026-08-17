@@ -16,6 +16,8 @@ type AggLeadRow = AggregableLead
 import type { ResolvedPeriod } from "@web/lib/analytics/period"
 // Story 75-179: tipo da RPC + derivação de métricas centralizados (dedup tela/PDF).
 import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
+// Story 75-322 — regra única de "visita realizada", compartilhada com a tela.
+import { applyRealizedVisitFilter } from "@web/lib/analytics/visits-rule"
 
 type RawLead = {
   created_at: string
@@ -461,8 +463,12 @@ export async function buildAnalyticsReportData(
   const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
 
   // Card 2: VISITAS REALIZADAS no período — agendamentos (appointments) com
-  // scheduled_at na janela e status ≠ cancelado/no-show ("visita que aconteceu",
-  // independente de quando o lead entrou). Story 75-71.
+  // scheduled_at na janela que de fato aconteceram, independente de quando o lead
+  // entrou. Story 75-71.
+  // Story 75-322 — a regra saiu daqui e virou `applyRealizedVisitFilter`, a MESMA
+  // que a tela usa. O filtro daqui era `status NOT IN (cancelled, no_show)` e sem
+  // recorte de equipe: contava visita ainda por acontecer (`scheduled`/`confirmed`)
+  // e trazia a agenda do IMOB. Na janela 09→16/08 isso dava 4 contra os 3 da tela.
   // Story 75-271 — appointments NÃO tem as colunas dos filtros (corretor/calor/
   // perfil vivem em `leads`), então este card não é filtrável sem um join que a
   // tela também não faz. Para não exibir número que ignora o filtro ao lado de
@@ -471,14 +477,12 @@ export async function buildAnalyticsReportData(
   // contrário: lá havia como calcular, e foi calculado.
   let visitasRealizadas: number | null = null
   if (!filtrado) {
-    const { count: visitasCount } = await supabase
-      .from("appointments").select("id", { count: "exact", head: true })
-      .eq("org_id", orgId)
-      .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
-      // Story 75-321 — `closed` (encerrado sem confirmação de presença) entra na
-      // lista de exclusão junto com cancelled/no_show. A unificação desta regra com
-      // a da tela é a 75-322; aqui só evitamos que o status novo nasça contado.
-      .not("status", "in", "(cancelled,no_show,closed)")
+    const { count: visitasCount } = await applyRealizedVisitFilter(
+      supabase
+        .from("appointments").select("id", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
+    )
     visitasRealizadas = visitasCount ?? 0
   }
 

@@ -7,6 +7,9 @@
  * da página precisam concordar sobre em que dia um lead caiu.
  */
 
+// Story 75-322 — "visita realizada" tem uma definição só, e ela mora em visits-rule.
+import { isRealizedVisit } from "./visits-rule"
+
 export type ExecGranularity = "day" | "week"
 
 /** Janela ≥ 42 dias agrupa por semana; abaixo disso, por dia. */
@@ -350,7 +353,7 @@ export function buildVisits(
     // Story 75-321 — status virou explícito (era um `else` que varria tudo que não
     // fosse completed/no_show/cancelled para "agendadas"). Com o `closed` novo, o
     // catch-all teria transformado "encerrado sem registro" em "agendada".
-    if (a.status === "completed") bump(realizadas, i)
+    if (isRealizedVisit(a.status)) bump(realizadas, i)
     else if (a.status === "no_show") bump(noShow, i)
     else if (a.status === "cancelled") bump(canceladas, i)
     else if (a.status === "closed") encerradas++

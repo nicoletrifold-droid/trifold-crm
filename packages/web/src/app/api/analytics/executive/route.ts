@@ -12,6 +12,7 @@ import {
 } from "@web/lib/analytics/executive"
 // Story 75-269 — paginação extraída daqui e compartilhada com o /leads-by-period.
 import { fetchAllLeads, LEADS_PAGE_SIZE, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
+import { ANALYTICS_APPOINTMENT_TEAM } from "@web/lib/analytics/visits-rule"
 
 // Mesmos nomes ocultos da tela de Analytics (contas de demonstração).
 const HIDDEN_BROKER_NAMES = new Set(["corretor demo", "target editado"])
@@ -85,7 +86,9 @@ export async function GET(request: NextRequest) {
       .from("appointments")
       .select("scheduled_at, status")
       .eq("org_id", appUser.org_id)
-      .eq("team", "house") // agenda IMOB fora do analytics principal (Epic 81)
+      // agenda IMOB fora do analytics principal (Epic 81). Story 75-322: a equipe
+      // virou constante compartilhada com o PDF, que não tinha esse recorte.
+      .eq("team", ANALYTICS_APPOINTMENT_TEAM)
       .gte("scheduled_at", from)
       .lt("scheduled_at", to)
       .limit(PAGE)
