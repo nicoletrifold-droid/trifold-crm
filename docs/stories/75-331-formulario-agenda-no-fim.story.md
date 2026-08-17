@@ -1,6 +1,6 @@
 # Story 75-331 — Agenda no fim do formulário
 
-**Status:** Draft
+**Status:** InReview
 **Tipo:** Feature (rota pública)
 **Epic:** 89 — Formulário de qualificação para tráfego pago
 **Story ID:** 75-331
@@ -156,3 +156,5 @@ não depende dela para ser implementada, mas o fluxo não fecha na operação se
 | 17/08/2026 | @sm (River) | Story criada a partir do Épico 89. Levantada a armadilha do `assigned_broker_id` no distribuidor |
 | 17/08/2026 | @po (Pax) | GO BLOQUEADO: a Thielly está no pool da roleta e a RPC não tem exclusão — a roleta devolveria o lead para ela mesma. Escalado ao Marcos |
 | 17/08/2026 | Marcos | **D3 simplificada**: sem confirmação e sem roleta. SDR fica dono e transfere manualmente. Story cai de **L para M**; saem a tela de confirmar, o distribuidor e a migration na RPC |
+| 17/08/2026 | @dev (Dex) | Implementada. Helper de slots extraído e a rota autenticada 81-8 passou a usá-lo (uma grade só). Agenda configurada no jsonb, sem migration |
+| 17/08/2026 | @qa (Quinn) | **CONCERNS** — refatorei-a-rota-sem-teste virou `team-slots.test.ts` (7 casos). Gates verdes, 2506 testes. Parecer: `docs/qa/qa-gate-75-331.md` |

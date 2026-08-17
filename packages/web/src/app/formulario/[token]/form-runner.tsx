@@ -10,6 +10,7 @@ import {
   type Respostas,
   type Resposta,
 } from "@web/lib/forms/branching"
+import { AgendaStep } from "./agenda-step"
 
 // Story 75-330 — o executor do formulário público. Uma pergunta por vez.
 //
@@ -33,7 +34,10 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   const [lgpd, setLgpd] = useState(false)
   const [erro, setErro] = useState("")
   const [enviando, setEnviando] = useState(false)
-  const [concluido, setConcluido] = useState<{ mensagem: string | null } | null>(null)
+  // Story 75-331: `agendaAtiva` decide se a tela final é a mensagem ou a agenda.
+  const [concluido, setConcluido] = useState<{ mensagem: string | null; agendaAtiva: boolean } | null>(
+    null
+  )
   const sessionToken = useRef<string | null>(null)
 
   // AC6 — a atribuição vem da URL do anúncio e viaja junto até o lead nascer.
@@ -119,12 +123,20 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
           finalizar: true,
         }),
       })
-      const json = (await res.json()) as { error?: string; mensagem_final?: string | null }
+      const json = (await res.json()) as {
+        error?: string
+        mensagem_final?: string | null
+        agenda_ativa?: boolean
+        session_token?: string
+      }
       if (!res.ok) {
         setErro(json.error ?? "Não foi possível enviar. Tente novamente.")
         return
       }
-      setConcluido({ mensagem: json.mensagem_final ?? null })
+      // A sessão pode ter nascido só agora (quem respondeu tudo antes do primeiro
+      // salvamento parcial): sem guardá-la, o passo de agenda não teria o que enviar.
+      if (json.session_token) sessionToken.current = json.session_token
+      setConcluido({ mensagem: json.mensagem_final ?? null, agendaAtiva: json.agenda_ativa === true })
     } catch {
       setErro("Não foi possível enviar. Verifique sua conexão e tente novamente.")
     } finally {
@@ -133,6 +145,18 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   }
 
   if (concluido) {
+    // Story 75-331 — com agenda ativa, o fim do formulário é a agenda (D2: ela
+    // aparece para TODOS; nada nas respostas a esconde). Sem sessão gravada não
+    // há como amarrar a visita ao lead, então cai na mensagem.
+    if (concluido.agendaAtiva && sessionToken.current) {
+      return (
+        <AgendaStep
+          token={token}
+          sessionToken={sessionToken.current}
+          mensagemFinal={concluido.mensagem}
+        />
+      )
+    }
     return (
       <div className="text-center">
         <p className="text-3xl">✅</p>

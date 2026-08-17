@@ -287,6 +287,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return NextResponse.json({
     session_token: tokenDaSessao,
     status: querFinalizar ? "completa" : "parcial",
-    ...(querFinalizar ? { mensagem_final: schema.mensagem_final ?? null } : {}),
+    ...(querFinalizar
+      ? {
+          mensagem_final: schema.mensagem_final ?? null,
+          // Story 75-331 — avisa a tela se o próximo passo é a agenda. Sai daqui
+          // (e não de uma segunda chamada) para não piscar entre telas.
+          agenda_ativa: schema.agenda?.ativa === true,
+        }
+      : {}),
   })
 }

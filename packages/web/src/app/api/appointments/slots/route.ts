@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { getOrgSchedule } from "@web/lib/roleta/business-time"
-import {
-  imobSlotsForDay,
-  buildDayOptions,
-  type ImobBusySlot,
-} from "@web/lib/appointments/imob-slots"
+import { gradeDaEquipe } from "@web/lib/appointments/team-slots"
 
 // Story 81-8 (Epic 81) — disponibilidade da agenda para o MODAL INTERNO, no mesmo
 // formato do link público: dias abertos + grade de horários livres/ocupados da
@@ -36,33 +31,17 @@ export async function GET(request: NextRequest) {
         ? "imob"
         : "house"
 
-  const { week, timezone } = await getOrgSchedule(appUser.org_id, supabase)
-  const payload: Record<string, unknown> = { team, days: buildDayOptions(timezone, week) }
-
-  const date = url.searchParams.get("date")
-  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const [y, mo, d] = date.split("-").map(Number) as [number, number, number]
-    // Janela com folga de fuso; a grade filtra por sobreposição real.
-    const dayStart = new Date(Date.UTC(y, mo - 1, d - 1, 0, 0)).toISOString()
-    const dayEnd = new Date(Date.UTC(y, mo - 1, d + 2, 0, 0)).toISOString()
-    const { data: busy } = await supabase
-      .from("appointments")
-      .select("scheduled_at, duration_minutes")
-      .eq("org_id", appUser.org_id)
-      .eq("team", team)
-      .in("status", ["scheduled", "confirmed"])
-      .gte("scheduled_at", dayStart)
-      .lte("scheduled_at", dayEnd)
-    payload.slots = imobSlotsForDay({
-      y,
-      mo,
-      d,
-      week,
-      timezone,
-      busy: (busy ?? []) as ImobBusySlot[],
-      now: new Date(),
-    })
-  }
+  // Story 75-331: a conta da grade saiu daqui para `lib/appointments/team-slots.ts`,
+  // porque a rota PUBLICA do formulario precisa exatamente da mesma. O gate de
+  // capability acima continua sendo responsabilidade desta rota.
+  const grade = await gradeDaEquipe({
+    supabase,
+    orgId: appUser.org_id,
+    team,
+    date: url.searchParams.get("date"),
+  })
+  const payload: Record<string, unknown> = { team, days: grade.days }
+  if (grade.slots) payload.slots = grade.slots
 
   return NextResponse.json(payload)
 }
