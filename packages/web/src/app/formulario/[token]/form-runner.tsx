@@ -91,12 +91,12 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   const espelharNoPixel = useCallback((eventos: string[] | undefined) => {
     if (!eventos?.length) return
     if (eventos.includes(PIXEL_EVENTS.LEAD)) {
-      pixelTrack(PIXEL_EVENTS.LEAD, eventIds.current.lead, {
+      void pixelTrack(PIXEL_EVENTS.LEAD, eventIds.current.lead, {
         content_category: "form_qualificacao",
       })
     }
     if (eventos.includes(PIXEL_EVENTS.COMPLETE_REGISTRATION)) {
-      pixelTrack(
+      void pixelTrack(
         PIXEL_EVENTS.COMPLETE_REGISTRATION,
         eventIds.current.completeRegistration,
         { content_category: "form_qualificacao" },
@@ -123,7 +123,10 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     if (!contato.nome || !telefone) return
 
     const partes = contato.nome.trim().split(/\s+/)
-    pixelIdentificar({
+    // Sem `await`: o salvamento parcial é o que captura quem abandona no meio, e
+    // não pode ficar esperando o Pixel. O `init` sai antes do `track` do Lead na
+    // prática — nesse ponto do funil o script já carregou há tempos.
+    void pixelIdentificar({
       external_id: getVisitorId(),
       fn: partes[0],
       ln: partes.slice(1).join(" ") || undefined,
@@ -141,23 +144,34 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     viewContentEnviado.current = true
 
     const id = eventIds.current.viewContent
-    pixelTrack(PIXEL_EVENTS.VIEW_CONTENT, id, {
-      content_name: schema.perguntas[0]?.titulo,
-      content_category: "form_qualificacao",
-    })
-    void fetch(`/api/formulario/${token}/tracking`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        evento: PIXEL_EVENTS.VIEW_CONTENT,
-        event_id: id,
-        visitor_id: getVisitorId(),
-        page_url: window.location.href,
-        ...coletarAtribuicao(),
-      }),
-    }).catch(() => {
-      // Falha de tracking nunca interrompe quem está preenchendo.
-    })
+    void (async () => {
+      // 🔴 Defeito 86.9-QA-001 — a ORDEM aqui não é estilo, é o dado.
+      //
+      // `pixelTrack` espera o `fbevents.js` carregar. Só depois disso o cookie
+      // `_fbp` existe — e é ele que `coletarAtribuicao()` lê logo abaixo. Se o
+      // POST saísse primeiro (como saía), o evento chegaria ao Meta sem `fbp`,
+      // que é exatamente a chave faltando em 91% dos eventos do baseline.
+      //
+      // Com bloqueador de anúncios a espera estoura em 5s e o evento sai assim
+      // mesmo, sem `fbp` — é o melhor possível nesse caso.
+      await pixelTrack(PIXEL_EVENTS.VIEW_CONTENT, id, {
+        content_name: schema.perguntas[0]?.titulo,
+        content_category: "form_qualificacao",
+      })
+      await fetch(`/api/formulario/${token}/tracking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          evento: PIXEL_EVENTS.VIEW_CONTENT,
+          event_id: id,
+          visitor_id: getVisitorId(),
+          page_url: window.location.href,
+          ...coletarAtribuicao(),
+        }),
+      }).catch(() => {
+        // Falha de tracking nunca interrompe quem está preenchendo.
+      })
+    })()
   }, [token, schema.perguntas])
 
   const pergunta = proximaPergunta(schema, respostas)
@@ -237,22 +251,27 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     if (!initiateCheckoutEnviado.current) {
       initiateCheckoutEnviado.current = true
       const id = eventIds.current.initiateCheckout
-      pixelTrack(PIXEL_EVENTS.INITIATE_CHECKOUT, id, {
-        content_category: "form_qualificacao",
-      })
-      void fetch(`/api/formulario/${token}/tracking`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          evento: PIXEL_EVENTS.INITIATE_CHECKOUT,
-          event_id: id,
-          visitor_id: getVisitorId(),
-          page_url: window.location.href,
-          ...coletarAtribuicao(),
-        }),
-      }).catch(() => {
-        // Falha de tracking nunca interrompe quem está preenchendo.
-      })
+      void (async () => {
+        // Mesma ordem do ViewContent: Pixel primeiro (garante o `_fbp`), POST
+        // depois. Aqui a espera é instantânea — a pessoa já interagiu com a
+        // página, então o script carregou há muito.
+        await pixelTrack(PIXEL_EVENTS.INITIATE_CHECKOUT, id, {
+          content_category: "form_qualificacao",
+        })
+        await fetch(`/api/formulario/${token}/tracking`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            evento: PIXEL_EVENTS.INITIATE_CHECKOUT,
+            event_id: id,
+            visitor_id: getVisitorId(),
+            page_url: window.location.href,
+            ...coletarAtribuicao(),
+          }),
+        }).catch(() => {
+          // Falha de tracking nunca interrompe quem está preenchendo.
+        })
+      })()
     }
 
     void salvarParcial(atualizadas)

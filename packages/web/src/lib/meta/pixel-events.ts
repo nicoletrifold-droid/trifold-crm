@@ -68,31 +68,75 @@ export interface IdentidadePixel {
  * apareceram depois do carregamento (aqui, quando a pessoa digita nome e
  * telefone). Não dispara evento nenhum — só enriquece os próximos.
  */
-export function pixelIdentificar(identidade: IdentidadePixel): void {
+export async function pixelIdentificar(identidade: IdentidadePixel): Promise<void> {
   try {
-    if (typeof window === 'undefined' || !window.fbq || !PIXEL_ID) return
-
     const limpo = Object.fromEntries(
       Object.entries(identidade).filter(([, v]) => typeof v === 'string' && v.length > 0),
     )
     if (Object.keys(limpo).length === 0) return
 
-    window.fbq('init', PIXEL_ID, limpo)
+    if (!(await quandoPixelPronto())) return
+    window.fbq?.('init', PIXEL_ID, limpo)
   } catch {
     // tracking nunca derruba o formulário
   }
 }
 
-/** Dispara um evento padrão no Pixel com o `eventID` de deduplicação. */
-export function pixelTrack(
+/**
+ * Espera o script do Pixel existir de verdade.
+ *
+ * [Defeito 86.9-QA-001]
+ *
+ * O `fbevents.js` é carregado com `strategy="afterInteractive"`, que roda DEPOIS
+ * da hidratação — e os `useEffect` do formulário rodam NA hidratação. Ou seja,
+ * no primeiro disparo `window.fbq` ainda não existe. Sem esta espera, o
+ * `ViewContent` do browser era descartado em silêncio e o par server-side saía
+ * sem o cookie `_fbp`, que só nasce quando o script roda. Seria a story
+ * entregando exatamente o sintoma que veio corrigir (fbp em 9,2%).
+ *
+ * O teto de tentativas existe para quem usa bloqueador de anúncios: ali o script
+ * nunca chega, e ficar sondando para sempre vazaria um timer por página.
+ */
+const INTERVALO_MS = 100
+const MAX_TENTATIVAS = 50 // 5s — além disso, o script não vem mais (bloqueador)
+
+export function quandoPixelPronto(): Promise<boolean> {
+  if (typeof window === 'undefined' || !PIXEL_ID) return Promise.resolve(false)
+  if (window.fbq) return Promise.resolve(true)
+
+  return new Promise((resolve) => {
+    let tentativas = 0
+    const timer = setInterval(() => {
+      if (window.fbq) {
+        clearInterval(timer)
+        resolve(true)
+        return
+      }
+      if (++tentativas >= MAX_TENTATIVAS) {
+        clearInterval(timer)
+        resolve(false)
+      }
+    }, INTERVALO_MS)
+  })
+}
+
+/**
+ * Dispara um evento padrão no Pixel com o `eventID` de deduplicação.
+ *
+ * Aguarda o Pixel carregar antes de desistir — ver `quandoPixelPronto`.
+ * Resolve `true` quando o evento saiu, `false` quando o Pixel nunca apareceu.
+ */
+export async function pixelTrack(
   evento: string,
   eventId: string,
   params: Record<string, unknown> = {},
-): void {
+): Promise<boolean> {
   try {
-    if (typeof window === 'undefined' || !window.fbq || !PIXEL_ID) return
-    window.fbq('track', evento, params, { eventID: eventId })
+    if (!(await quandoPixelPronto())) return false
+    window.fbq?.('track', evento, params, { eventID: eventId })
+    return true
   } catch {
     // tracking nunca derruba o formulário
+    return false
   }
 }
