@@ -1,0 +1,286 @@
+schema: 1
+story: '87.16'
+story_title: 'Enterrar o MemPalace sem levar a memória da Nicole junto'
+gate: CONCERNS
+status_reason: >-
+  Toda AC verificável no gate foi reproduzida por mim e bateu — inclusive a AC1 (mutação 0 → 7,
+  mais 5 mutações isoladas minhas que não estavam na story) e a correção de denominador da AC9
+  (140/137, não 138/135), que confirmei ser um defeito real do parecer do @po. Ficam abertas a AC7
+  (T9, medição de 72 h pós-deploy, indisponível por natureza) e uma higiene de merge com TRÊS
+  linhas em DUAS PRs abertas que reprovam as réguas desta story — uma delas (#429) não estava
+  declarada.
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-08-16T22:45:00Z'
+branch: 'story/87-16-enterrar-mempalace'
+base_commit: 'a60a1bc6'
+review_mode: 'reprodução independente — nada herdado do Dev Agent Record'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# O QUE EU REPRODUZI, E COM QUE RÉGUA
+# ─────────────────────────────────────────────────────────────────────────────
+
+evidencia_reproduzida:
+  ac1_equivalencia_byte_a_byte:
+    metodo: >-
+      Não me contentei com leitura de código. Restaurei o `pipeline.ts`, o `memory/loader.ts`, o
+      `memory/writer.ts` e o `memory-extraction.ts` do commit `a60a1bc6` NA ÁRVORE ATUAL (MemPalace
+      vivo) e rodei os 10 testes novos da AC1 contra o CÓDIGO VELHO.
+    resultado: '`Test Files 1 passed (1)` · `Tests 10 passed (10)` — a MESMA régua verde nos dois mundos'
+    os_tres_casos:
+      com_resumo: >-
+        Ramo vivo antigo: `loader.ts:198` devolve `MEMORIA DO LEAD (resumo):\n${resumo}` como
+        `l1Snapshot`; `pipeline.ts:685` faz `parts.join("\n\n")` com UM elemento (identidade) e
+        embrulha em `\n…\n\nUse essas…\n`. O bloco novo produz o mesmo literal. IDÊNTICO, inclusive
+        o `(resumo)` — NÃO o `(informacoes de conversas anteriores)` do ramo morto.
+      sem_resumo: >-
+        Antigo: `l1Snapshot=""`, `aiSummaryFallback` falsy ⇒ o `if` de `:196` não arma; L2/L3
+        devolvem `""` ⇒ `parts=[]` ⇒ `memoryContext=""`. Novo: `""`. Provado também pelos
+        turnos-ouro (abaixo).
+      sem_lead_id: 'Antigo: bloco não roda. Novo: guarda falsa. Ambos `""`.'
+    contraprova_independente: >-
+      Os 2 turnos-ouro por SHA-256 da 87-5 (`pipeline-corretor-no-historico.test.ts`, hashes
+      `3ec9480d84…` e `d634f39ecc…`) rodam VERDES contra a árvore VELHA restaurada
+      (`39 passed (39)`) e contra a nova. Para lead SEM resumo o `system` inteiro saiu byte a byte
+      igual ao de antes da PR — segunda régua, eixo independente.
+
+  ac1_mutacao:
+    declarado_pelo_dev: '0 → 7'
+    medido_por_mim: '7 failed | 2396 passed | 6 expected fail (2409) — bate ao número'
+    mutacao: 'bloco `memoryContext` colapsado em `const memoryContext = ""`'
+
+  ac1_mutacoes_isoladas_do_qa:
+    nota: >-
+      Não mutei constante compartilhada nem a guarda inteira. Isolei SUB-EXPRESSÃO a
+      sub-expressão, uma por vez, revertendo antes da seguinte (`sha256` do `pipeline.ts`
+      conferido no fim: idêntico).
+    resultados:
+      - id: 'A — cabeçalho `(resumo)` → `(informacoes de conversas anteriores)`'
+        vermelhos: 6
+        leitura: 'a regressão nomeada no Risco 2 tem vermelho dedicado'
+      - id: 'B — remover `conversation?.lead_id &&` da guarda'
+        vermelhos: 0
+        leitura: >-
+          🟡 MUTANTE EQUIVALENTE, declarado explicitamente e NÃO contado como guarda órfã.
+          `currentSummary` só é atribuído dentro do `if (conversation?.lead_id)` de
+          `pipeline.ts:646-657` e nasce `null` — a meia-guarda é logicamente inalcançável. A própria
+          story declara a redundância como legibilidade, e ela está certa.
+      - id: 'C — remover o `\n` FINAL do bloco'
+        vermelhos: 1
+      - id: 'D — remover o `\n` INICIAL do bloco'
+        vermelhos: 1
+      - id: 'E — `\n\n` antes da instrução vira `\n`'
+        vermelhos: 2
+    conclusao: >-
+      Cada perturbação de UM byte da string acende ao menos um vermelho. "Byte a byte" aqui não é
+      figura de linguagem — é uma propriedade medida.
+
+  ordem_de_execucao:
+    exigida: 'T10 → T11 → T12 vermelha → T4 → T1/T2/T3 → T12 verde'
+    como_confirmei: >-
+      Não pela afirmação do @dev — pela ARITMÉTICA da população colada nas duas saídas. Contei os
+      arquivos de produção em `a60a1bc6` sob a mesma regra do script
+      (`packages/{ai,web,shared}/src`, sem `*.test.ts(x)`/`__fixtures__/`/`__mocks__/`): **971**.
+    conta:
+      - 'vermelho colado: população 972 = 971 (base, MemPalace VIVO) + 1 (`referenced-objects.ts`, da T10)'
+      - 'e 972 SÓ fecha se `source-scan.ts` (AC5/AC6, posterior) ainda não existisse — e não existia'
+      - 'verde colado: população 970 = 971 − 3 (loader/writer/memory-extraction) + 2 (os dois módulos novos)'
+      - 'sítios: 1742 − 1735 = 7, exatamente os 7 sítios dos 3 objetos enterrados'
+    veredito: >-
+      As duas saídas são internamente consistentes SOMENTE com `packages/` intocado no momento do
+      vermelho. A ordem está confirmada por evidência, não por palavra.
+
+  ac9_denominador:
+    achado_do_dev: '140 (117+23), não 138 (115+23) — o parecer do @po subtraía 10 buckets PELO NOME'
+    veredito_do_qa: '✅ O @dev está certo, e o parecer do @po tem um defeito da classe que a story combate'
+    como_verifiquei:
+      - '`docs/qa/po-validation-87-16-ac9.md:28` diz textualmente "125 nomes − 10 buckets = 115"'
+      - >-
+        `pastas` e `lancamentos` são bucket de storage E tabela do Postgres. Conferido em produção
+        (somente `SELECT`): `to_regclass(''public.pastas'')` = `pastas`,
+        `to_regclass(''public.lancamentos'')` = `lancamentos`
+      - >-
+        E são consultadas por cliente de BANCO, não de storage:
+        `packages/web/src/app/api/pasta/[token]/route.ts:14` `admin.from("pastas")` e
+        `packages/web/src/app/api/lancamentos/[id]/route.ts:15` `admin.from("lancamentos")`
+      - 'Ambas aparecem na lista verde de 137 alvos do `--verbose` de hoje'
+    consequencia: >-
+      Subtrair por nome apagava DUAS TABELAS REAIS em silêncio — o modo de falha exato que a AC9
+      existe para pegar. A exclusão por DONO da chamada (`storage.from` fora, `supabase.from`
+      dentro) é estruturalmente correta e deixa a régua MAIS coberta, não menos.
+
+  ac9_instrumento_pg_class:
+    suspeita: '`information_schema` não enxerga materialized view'
+    medido_por_mim_em_producao:
+      information_schema_tables_public: 122
+      pg_class_relkind_rvmpf_public: 123
+      meta_campaign_roas_relkind: 'm'
+      meta_campaign_roas_em_information_schema: 0
+    veredito: >-
+      ✅ Confirmado nos dois sentidos. O script usa `to_regclass`/`pg_class` (nunca
+      `information_schema`) e `meta_campaign_roas` sai VERDE entre os 137 — não vira falso ausente.
+      Uma régua por `information_schema` nasceria com 1 falso vermelho.
+
+  ac9_mutacoes_do_qa:
+    nota: 'Rodadas por mim com literais PRÓPRIOS (diferentes dos do @dev), cada uma em arquivo próprio, revertida antes da seguinte.'
+    m1: 'literal de 1 linha ⇒ 116 rel + 22 RPC = 138 alvos, 1 reprovado, EXIT=1 — previsto +1 ✅'
+    m2: '`.rpc(` ⏎ `"nome"` multilinha ⇒ 115 rel + 23 RPC = 138 alvos, o +1 caiu no lado RPC, EXIT=1 ✅'
+    m3: '`Buffer.from("tabela_qa_m3_87_16")` ⇒ 115 + 22 = 137 alvos INALTERADOS, EXIT=0 — previsto +0 ✅'
+
+  outras_acs:
+    ac2: '`grep -rn "lead_facts|lead_memories|match_lead_memory" packages/` ⇒ **0** (medido por mim)'
+    ac3: 'suíte medida por mim: `189 passed (189)` / `2403 passed | 6 expected fail (2409)`. E o lado subtrativo: restaurei os 3 arquivos removidos e rodei — **54 testes**, contados pelo executor'
+    ac4: 'restaurei `loader.test.ts` SEM `loader.ts` e rodei: `19 passed (19)`. `grep` de imports de projeto no arquivo ⇒ **0**. Reproduzido, não copiado'
+    ac5: 'rodei `pipeline-sem-mempalace.test.ts` contra a árvore VELHA: **3 de 4 vermelhos**. O teste de ausência discrimina de verdade'
+    ac6: >-
+      Controle positivo MEU: criei `__qa_sonda_ac6.test.ts` com um `it("noop")` que PASSA e nenhum
+      import do projeto. A catraca acendeu — `1 de 190 sem import do projeto`, nomeando o arquivo, e
+      o `noop` passou (11 testes, 1 falho). Sonda removida ⇒ `11 passed`. O vermelho vem da catraca,
+      não do coletor do vitest
+    ac8a: 'declarado 39 módulos de produção / 0 órfãos em `packages/ai/src` — aceito sob a exceção escrita de `__fixtures__`/`__mocks__`; não re-varri módulo a módulo'
+    ac8b: '`grep -rn "memory/loader|memory/writer" packages/` ⇒ **0** hoje. Só 1 dos 2 docstrings existe nesta árvore, como o @dev declarou — ver QA-1'
+    ac9_t13: '`npm run db:objects:check` ⇒ `🟢 137 de 137`, **EXIT=0**. Rodado por mim no gate'
+
+  reguas_de_saida_medidas_por_mim:
+    vitest: '189 arquivos · 2403 passed + 6 expected fail (2409) · EXIT=0'
+    type_check: '`turbo type-check --force` ⇒ 8 successful, 8 total, **0 erros** (ai, web, shared)'
+    lint: '`turbo lint --force` ⇒ ✖ 23 problems (**0 errors**, 23 warnings) — idêntico ao baseline'
+    prompts_check: '✅ `agent_prompts == snapshot` (7 slugs) — gate permanente da 87-1 AC7-(ii) cumprido'
+    db_objects_check: '🟢 137 de 137 · EXIT=0'
+
+  escopo_e_higiene:
+    doze_cinco_b: '`atualizarResumoComLastro` INTOCADO — `git diff a60a1bc6 -- flows/lead-memory.ts` ⇒ 0 linhas; `shouldRunHaiku = (msgCount ?? 0) % 5 === 0` segue em `pipeline.ts:1660`'
+    fixtures: 'as 5 remoções de `lead_facts: []` são de UMA linha cada, sem carona; nenhum hash-ouro foi reescrito'
+    producao: 'só `SELECT` sobre catálogo (`pg_class`, `pg_proc`, `information_schema` para a comparação). Nenhum DDL, nenhum INSERT/UPDATE, em ambiente nenhum'
+    arvore: '`git status --short` idêntico ao inicial depois de 12 mutações; `sha256` do `pipeline.ts` conferido; `stash@{0}` de outro agente preservado; nenhum commit, nenhum push, nenhuma PR'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACHADOS
+# ─────────────────────────────────────────────────────────────────────────────
+
+top_issues:
+  - id: 'QA-1'
+    severity: medium
+    category: 'requirements'
+    finding: >-
+      TRÊS linhas em DUAS PRs abertas reprovam as réguas desta story quando mergearem — e uma delas
+      não está declarada em lugar nenhum. Extraí com precisão do `gh pr diff`:
+      (a) `#428` · `packages/ai/src/chat/pipeline-collected-data.test.ts:160` — `lead_facts: []`,
+      reprova a AC2 (`grep` ⇒ 1). Estava previsto na T3/AC2 ("9 ou 10 arquivos, depende da 87-11").
+      (b) `#428` · `packages/ai/src/prompts/collected-data.ts:50` — `→ \`memory/loader.ts\` →
+      prompt)`, reprova a AC8-b (`grep` ⇒ 1) e cita um caminho que deixou de existir. Declarado no
+      Dev Agent Record §11.
+      (c) 🔴 `#429` · `packages/ai/src/flows/handoff.ts:258` — `` (`memory/loader.ts:196-203`) ``,
+      reprova a AC8-b também. **NÃO está declarado em nenhum lugar da story** — o aviso do @dev
+      contava uma PR e são duas.
+    suggested_action: >-
+      Quem mergear POR ÚLTIMO conserta as três, e o gatilho é mecânico: rodar `grep -rn
+      "lead_facts\|lead_memories\|match_lead_memory" packages/` e `grep -rn "memory/loader\|memory/writer"
+      packages/` no rebase, ambos ⇒ 0. Como o merge desta story está atrás da ratificação do
+      `D2-(c)` e a fila é #428 → #429, o cenário provável é ESTA story rebasear por último ⇒ o
+      conserto é dela. Acrescentar o item (c) ao aviso do Dev Agent Record §11.
+
+  - id: 'QA-2'
+    severity: low
+    category: 'docs'
+    finding: >-
+      O campo `ObjectReference.line` de `packages/shared/src/db/referenced-objects.ts:51` está
+      documentado como *"Linha 1-based do início do literal"*, mas o que ele reporta é o início do
+      MATCH — que, em cadeia multilinha (`await supabase` ⏎ `.from("x")`), é a linha do DONO. Por
+      isso a saída vermelha colada diz `loader.ts:54`/`:105` e `pipeline.ts:1646`/`:1655` enquanto a
+      própria §AC9-(D) da story previa `:55`/`:106` e `:1647`/`:1656`. Conferi contra `a60a1bc6`: o
+      `.from("lead_facts")` está mesmo em `:1647` e o `await supabase` em `:1646`.
+    suggested_action: >-
+      Corrigir o docstring para "linha do início da CHAMADA" (o comportamento está bom — aponta o
+      statement, que é o que o humano quer ver) e reconciliar a divergência de ±1 no Dev Agent
+      Record. Numa story cuja tese é *"docstring que mente cria a próxima crença"*, um docstring com
+      a definição errada de linha merece o conserto de 1 linha.
+
+  - id: 'QA-3'
+    severity: low
+    category: 'tests'
+    finding: >-
+      Os nomes proibidos da AC5 são montados por `join` (`["lead","facts"].join("_")`) para não
+      reprovar a régua de `grep` da AC2. **É solução, não disfarce** — julguei e o veredito é a
+      favor: (a) a asserção continua íntegra, porque o teste compara contra a saída REAL do extrator
+      sobre o `pipeline.ts`; (b) o próprio arquivo declara o motivo no cabeçalho, linhas 11-16;
+      (c) os três literais SOBREVIVEM em texto plano em `scripts/check-db-objects.ts:6-7`, fora da
+      população da régua — então `grep -rn "lead_facts" .` na raiz ainda acha UM lugar canônico.
+      O custo residual é real e vale escrito: um retorno do MemPalace escrito com `join` em código
+      de PRODUÇÃO passaria pela régua de `grep`. A defesa nesse caso não é a AC2 nem a AC5 — é o
+      `db:objects:check`, que afirma o OBJETO e não a string.
+    suggested_action: 'Nenhuma mudança pedida. Registrado para que a próxima story não leia a régua de `grep` da AC2 como cobertura completa — ela é proxy, e a cobertura de verdade é a AC9.'
+
+  - id: 'QA-4'
+    severity: low
+    category: 'code'
+    finding: >-
+      `scripts/check-db-objects.ts` não é coberto por `npm run type-check`: o turbo roda `tsc` por
+      pacote e o `tsconfig.json` da raiz não está ligado a script nenhum. O `dump-agent-prompts.ts`
+      tem o mesmo buraco, então é pré-existente e não desta story. Metade da régua da AC9 (o
+      extrator) roda em `pnpm test` com tipo conferido; a outra metade (o script) não tem `tsc`.
+    suggested_action: 'Backlog: um `type-check` de `scripts/` ao lado do `prompts:check`. Fora do escopo desta story.'
+
+  - id: 'QA-5'
+    severity: low
+    category: 'code'
+    finding: >-
+      `packages/shared/src/testing/source-scan.ts` é um módulo em caminho de produção cujos ÚNICOS
+      consumidores são testes — a mesma espécie dos `__fixtures__/` que a AC8-a teve de excluir, mas
+      em outra pasta. Hoje é inócuo (a população da AC8-a é `packages/ai/src`, e o barrel
+      `packages/shared/src/index.ts` NÃO o reexporta, então `node:fs` não entra no bundle do web —
+      conferido). Se algum dia a AC8-a for estendida a `shared`, ele nasce falso órfão. Junto: o
+      import profundo `@trifold/shared/src/...` é padrão NOVO no repo (só esta story o usa).
+    suggested_action: 'Registrar a exceção junto da exceção de `__fixtures__`/`__mocks__` quando a AC8-a for reusada. Sem ação nesta PR.'
+
+  - id: 'QA-6'
+    severity: low
+    category: 'requirements'
+    finding: >-
+      **AC7 (T9) está ABERTA e não é verificável neste gate por natureza** — pede (a) contagem de
+      `processConversationTurn` evitadas, (b) p95 de `whatsapp_async_done` antes/depois e (c)
+      atribuição parcial declarada, tudo nas 72 h POSTERIORES ao deploy, que não aconteceu.
+      Escrevo que não é verificável agora em vez de dá-la por satisfeita.
+    suggested_action: >-
+      T9 fica comigo, com janela declarada e `n` de cada leitura, no gate de 72 h pós-deploy. Régua
+      já escrita na AC7(a): `role='assistant' and (metadata is null or metadata = '{}'::jsonb)`,
+      baseline 476/30 d — publicar os DOIS números (593 bruto e 476 filtrado). Amostra sem efeito
+      visível é INCONCLUSIVA, não "sem efeito".
+
+  - id: 'QA-7'
+    severity: low
+    category: 'requirements'
+    finding: >-
+      A ratificação escrita do `D2-(c)` pelo Gabriel não está registrada em lugar nenhum do
+      repositório — a caixa da DoD segue aberta e o §16 do Dev Agent Record ainda a declara como
+      bloqueio vivo. Fui informado pelo lead de que ela já ocorreu; informação de agente não é o
+      registro.
+    suggested_action: 'Registrar a linha do Gabriel na story (Change Log) ou na descrição da PR antes do merge, e marcar a caixa. É o único item da DoD que nenhum executável pode fechar.'
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+waiver: { active: false }
+
+recommended_status: 'Ready for Done — após (1) a ratificação do `D2-(c)` registrada, (2) o QA-1 tratado no rebase, e (3) a T9 publicada nas 72 h pós-deploy'
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Nenhuma escrita em produção. `scripts/check-db-objects.ts` só faz `SELECT` sobre catálogo; `assertSafeName` valida o identificador antes de entrar no literal SQL. Credencial lida de env ou `~/.supabase/access-token`, nunca embutida.'
+  reliability:
+    status: PASS
+    notes: >-
+      O script falha RUIDOSAMENTE, conferido na leitura do diff linha a linha: `exit 2` para
+      credencial ausente, erro de rede, HTTP != 2xx, resposta não-JSON, resposta vazia, alvo sem
+      linha no resultado e lista de alvos vazia. **Nenhum `if (error) return ""` / `return []` /
+      `catch {}` silencioso** em `check-db-objects.ts` nem em `referenced-objects.ts` — que é
+      exatamente o defeito que a story enterra.
+  performance:
+    status: CONCERNS
+    notes: >-
+      A economia declarada (≈476 Haiku + ≤1.831 embeddings + ~1.600 round-trips / 30 d) é derivação
+      de contagem de produção, não medição pós-deploy. Só a T9 fecha, e a atribuição é PARCIAL por
+      construção: `atualizarResumoComLastro` (gate `% 5`) e `haiku-enrichment` continuam chamando
+      Haiku.
+  maintainability:
+    status: PASS
+    notes: 'Os dois módulos novos são funções puras testáveis sem credencial (16 + 11 testes). A separação extrator × script credenciado é a decisão certa e está justificada por escrito.'

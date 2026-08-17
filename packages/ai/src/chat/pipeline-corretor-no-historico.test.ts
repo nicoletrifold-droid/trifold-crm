@@ -216,7 +216,6 @@ function seed(input: {
     users: input.users ?? [],
     appointments: [],
     activities: [],
-    lead_facts: [],
     properties: input.properties ?? [],
   }
 }
