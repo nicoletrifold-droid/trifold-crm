@@ -16,8 +16,8 @@ describe("prepararSalvamentoDeRascunho", () => {
     // O caso que motivou a story: a pessoa digita o telefone, hesita e fecha a
     // aba. Este é o dado que torna a oferta ativa possível.
     const r = prepararSalvamentoDeRascunho({
-      pergunta: tel,
-      rascunho: "44999990000",
+      passo: [tel],
+      rascunhos: { tel: "44999990000" },
       respostas: { nome: "Ana" },
       ultimaAssinatura: "",
     })
@@ -25,18 +25,44 @@ describe("prepararSalvamentoDeRascunho", () => {
     expect(r!.payload).toEqual({ nome: "Ana", tel: "44999990000" })
   })
 
+  it("🔴 passo com DOIS campos salva os dois de uma vez", () => {
+    // Story 75-336 juntou nome e telefone numa tela só. O rascunho tem de
+    // guardar o BLOCO — salvar só um deixaria o outro a perder-se, que é
+    // exatamente o que a AC5 existe para impedir.
+    const nome: Pergunta = { id: "nome", tipo: "texto", titulo: "Nome", campo_contato: "nome" }
+    const r = prepararSalvamentoDeRascunho({
+      passo: [nome, tel],
+      rascunhos: { nome: "Ana", tel: "+55 (44) 99999-4444" },
+      respostas: {},
+      ultimaAssinatura: "",
+    })
+    expect(r!.payload).toEqual({ nome: "Ana", tel: "+55 (44) 99999-4444" })
+  })
+
+  it("no passo de dois, o campo já preenchido é salvo mesmo com o outro vazio", () => {
+    // Quem digita o nome, hesita no telefone e fecha a aba não pode sumir.
+    const nome: Pergunta = { id: "nome", tipo: "texto", titulo: "Nome", campo_contato: "nome" }
+    const r = prepararSalvamentoDeRascunho({
+      passo: [nome, tel],
+      rascunhos: { nome: "Ana", tel: "" },
+      respostas: {},
+      ultimaAssinatura: "",
+    })
+    expect(r!.payload).toEqual({ nome: "Ana" })
+  })
+
   it("rascunho vazio não vira requisição", () => {
     expect(
-      prepararSalvamentoDeRascunho({ pergunta: tel, rascunho: "", respostas: {}, ultimaAssinatura: "" })
+      prepararSalvamentoDeRascunho({ passo: [tel], rascunhos: { tel: "" }, respostas: {}, ultimaAssinatura: "" })
     ).toBeNull()
     expect(
-      prepararSalvamentoDeRascunho({ pergunta: tel, rascunho: "   ", respostas: {}, ultimaAssinatura: "" })
+      prepararSalvamentoDeRascunho({ passo: [tel], rascunhos: { tel: "   " }, respostas: {}, ultimaAssinatura: "" })
     ).toBeNull()
   })
 
   it("formulário terminado (sem pergunta na tela) não salva rascunho", () => {
     expect(
-      prepararSalvamentoDeRascunho({ pergunta: null, rascunho: "x", respostas: {}, ultimaAssinatura: "" })
+      prepararSalvamentoDeRascunho({ passo: [], rascunhos: { tel: "x" }, respostas: {}, ultimaAssinatura: "" })
     ).toBeNull()
   })
 
@@ -44,14 +70,14 @@ describe("prepararSalvamentoDeRascunho", () => {
     // Sem isto, blur a cada correção queimaria os 30 req/min por IP do endpoint
     // público e o próprio lead veria 429 no meio do preenchimento.
     const primeiro = prepararSalvamentoDeRascunho({
-      pergunta: tel,
-      rascunho: "44999990000",
+      passo: [tel],
+      rascunhos: { tel: "44999990000" },
       respostas: { nome: "Ana" },
       ultimaAssinatura: "",
     })!
     const segundo = prepararSalvamentoDeRascunho({
-      pergunta: tel,
-      rascunho: "44999990000",
+      passo: [tel],
+      rascunhos: { tel: "44999990000" },
       respostas: { nome: "Ana" },
       ultimaAssinatura: primeiro.assinatura,
     })
@@ -60,14 +86,14 @@ describe("prepararSalvamentoDeRascunho", () => {
 
   it("mas uma CORREÇÃO real reenvia", () => {
     const primeiro = prepararSalvamentoDeRascunho({
-      pergunta: tel,
-      rascunho: "4499999000",
+      passo: [tel],
+      rascunhos: { tel: "4499999000" },
       respostas: {},
       ultimaAssinatura: "",
     })!
     const corrigido = prepararSalvamentoDeRascunho({
-      pergunta: tel,
-      rascunho: "44999990000", // um dígito a mais
+      passo: [tel],
+      rascunhos: { tel: "44999990000" }, // um dígito a mais
       respostas: {},
       ultimaAssinatura: primeiro.assinatura,
     })
@@ -83,11 +109,11 @@ describe("prepararSalvamentoDeRascunho", () => {
       opcoes: [{ valor: "morar", rotulo: "Morar" }],
     }
     expect(
-      prepararSalvamentoDeRascunho({ pergunta: multipla, rascunho: [], respostas: {}, ultimaAssinatura: "" })
+      prepararSalvamentoDeRascunho({ passo: [multipla], rascunhos: { m: [] }, respostas: {}, ultimaAssinatura: "" })
     ).toBeNull()
     const r = prepararSalvamentoDeRascunho({
-      pergunta: multipla,
-      rascunho: ["morar"],
+      passo: [multipla],
+      rascunhos: { m: ["morar"] },
       respostas: {},
       ultimaAssinatura: "",
     })
@@ -99,8 +125,8 @@ describe("prepararSalvamentoDeRascunho", () => {
     // pessoa ainda não confirmou nada. Podar agora apagaria justamente o que se
     // quer salvar.
     const r = prepararSalvamentoDeRascunho({
-      pergunta: tel,
-      rascunho: "4499",
+      passo: [tel],
+      rascunhos: { tel: "4499" },
       respostas: { pagamento: "vista", banco: "Itaú" }, // "banco" seria podado
       ultimaAssinatura: "",
     })

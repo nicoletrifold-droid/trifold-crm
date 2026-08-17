@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { FormSchema, Pergunta } from "@web/lib/forms/schema"
 import {
-  proximaPergunta,
   perguntasVisiveis,
   formularioCompleto,
   limparRespostas,
@@ -13,6 +12,13 @@ import {
   type Resposta,
 } from "@web/lib/forms/branching"
 import { prepararSalvamentoDeRascunho } from "@web/lib/forms/draft-save"
+import {
+  DDIS,
+  DDI_PADRAO,
+  formatarTelefone,
+  montarTelefone,
+  separarTelefone,
+} from "@web/lib/forms/phone-mask"
 import { AgendaStep } from "./agenda-step"
 
 // Story 75-330 — o executor do formulário público. Uma pergunta por vez.
@@ -61,7 +67,6 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     return encontrados
   }, [])
 
-  const pergunta = proximaPergunta(schema, respostas)
   const passo = passoAtual(schema, respostas)
   const visiveis = perguntasVisiveis(schema, respostas)
   const completo = formularioCompleto(schema, respostas)
@@ -101,10 +106,6 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     [token, utm]
   )
 
-  function valorPreenchido(v: Resposta): boolean {
-    return Array.isArray(v) ? v.length > 0 : String(v).trim() !== ""
-  }
-
   function responder() {
     if (passo.length === 0) return
     if (!passoCompleto(passo, rascunhos)) {
@@ -135,16 +136,14 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   // A DECISÃO (há rascunho? é diferente do último envio?) vive em
   // lib/forms/draft-save.ts — puro e testado. Aqui só a rede.
   const salvarRascunho = useCallback(() => {
-    const preenchidos: Respostas = {}
-    for (const p of passo) {
-      const v = rascunhos[p.id]
-      if (v !== undefined && valorPreenchido(v)) preenchidos[p.id] = v
-    }
-    if (Object.keys(preenchidos).length === 0) return
-    const payload = { ...respostas, ...preenchidos }
-    const assinatura = JSON.stringify(payload)
-    if (assinatura === ultimoEnviado.current) return
-    void salvarParcial(payload)
+    const pronto = prepararSalvamentoDeRascunho({
+      passo,
+      rascunhos,
+      respostas,
+      ultimaAssinatura: ultimoEnviado.current,
+    })
+    if (!pronto) return
+    void salvarParcial(pronto.payload)
   }, [passo, rascunhos, respostas, salvarParcial])
 
   // Fechar/esconder a aba é o momento em que mais se perde: mobile mata a página
@@ -408,8 +407,23 @@ function CampoDaPergunta({
     )
   }
 
+  // Story 75-338 — telefone com DDI e máscara, em vez de texto livre.
+  if (pergunta.tipo === "telefone") {
+    return <CampoTelefone valor={Array.isArray(valor) ? "" : String(valor)} onChange={onChange} onBlur={onBlur} />
+  }
+
   const tipoHtml =
-    pergunta.tipo === "email" ? "email" : pergunta.tipo === "telefone" ? "tel" : pergunta.tipo === "numero" ? "number" : "text"
+    pergunta.tipo === "email" ? "email" : pergunta.tipo === "numero" ? "number" : "text"
+
+  // Story 75-338 — `autoComplete` deixa o dispositivo oferecer o que ele já
+  // sabe. Numa campanha paga isso é conversão: o lead toca na sugestão em vez
+  // de digitar o nome inteiro no celular.
+  const autoComplete =
+    pergunta.campo_contato === "nome"
+      ? "name"
+      : pergunta.campo_contato === "email" || pergunta.tipo === "email"
+        ? "email"
+        : undefined
 
   return (
     <input
@@ -417,10 +431,67 @@ function CampoDaPergunta({
       value={Array.isArray(valor) ? "" : String(valor)}
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}
-      inputMode={pergunta.tipo === "telefone" ? "tel" : pergunta.tipo === "numero" ? "numeric" : undefined}
+      autoComplete={autoComplete}
+      inputMode={pergunta.tipo === "numero" ? "numeric" : undefined}
       className={inputCls}
       // Sem autoFocus: com dois campos no mesmo passo (Story 75-336) eles
       // brigariam pelo foco, e no celular o teclado subiria sobre o segundo.
     />
+  )
+}
+
+/**
+ * Telefone: seletor de DDI (Brasil pré-selecionado) + número mascarado.
+ *
+ * O valor que sobe é `+55 (44) 99999-4444` — legível na ficha e, o que importa
+ * mais, ainda normalizável pelo `normalizePhoneBR` que a API usa para achar o
+ * lead. Há teste amarrando exatamente isso.
+ */
+function CampoTelefone({
+  valor,
+  onChange,
+  onBlur,
+}: {
+  valor: string
+  onChange: (v: Resposta) => void
+  onBlur: () => void
+}) {
+  const inicial = separarTelefone(valor)
+  const [ddi, setDdi] = useState(inicial.ddi || DDI_PADRAO)
+  const [nacional, setNacional] = useState(inicial.nacional)
+
+  function aplicar(novoDdi: string, novoNacional: string) {
+    const mascarado = formatarTelefone(novoNacional, novoDdi)
+    setDdi(novoDdi)
+    setNacional(mascarado)
+    onChange(montarTelefone(novoDdi, mascarado))
+  }
+
+  return (
+    <div className="flex gap-2">
+      <select
+        value={ddi}
+        onChange={(e) => aplicar(e.target.value, nacional)}
+        onBlur={onBlur}
+        aria-label="País"
+        className={`${inputCls} w-auto shrink-0`}
+      >
+        {DDIS.map((d) => (
+          <option key={d.codigo} value={d.codigo}>
+            {d.bandeira} +{d.codigo}
+          </option>
+        ))}
+      </select>
+      <input
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
+        value={nacional}
+        onChange={(e) => aplicar(ddi, e.target.value)}
+        onBlur={onBlur}
+        placeholder={ddi === "55" ? "(44) 99999-9999" : "número"}
+        className={inputCls}
+      />
+    </div>
   )
 }
