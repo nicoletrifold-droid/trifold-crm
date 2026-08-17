@@ -79,3 +79,5 @@ export type {
   PropertyOption,
   BrandKnowledge,
 } from "./marketing-suggestions"
+export { interestLevelFromScore, type InterestLevel } from "./interest-level"
+export { lerRespostasDoFormulario, validarLeitura, type RespostaAberta, type LeituraDoFormulario } from "./form-reading"
