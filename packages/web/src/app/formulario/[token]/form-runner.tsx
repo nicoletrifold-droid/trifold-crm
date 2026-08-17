@@ -39,6 +39,10 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   const [concluido, setConcluido] = useState<{ mensagem: string | null; agendaAtiva: boolean } | null>(
     null
   )
+  // Story 75-335 — o calendário só aparece DEPOIS do clique em "Agendar". Antes
+  // ele abria junto com a mensagem final, e o lead caía numa grade de horários
+  // sem ter lido o convite.
+  const [abrirAgenda, setAbrirAgenda] = useState(false)
   const sessionToken = useRef<string | null>(null)
 
   // AC6 — a atribuição vem da URL do anúncio e viaja junto até o lead nascer.
@@ -189,13 +193,38 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     // Story 75-331 — com agenda ativa, o fim do formulário é a agenda (D2: ela
     // aparece para TODOS; nada nas respostas a esconde). Sem sessão gravada não
     // há como amarrar a visita ao lead, então cai na mensagem.
+    //
+    // Story 75-335 — mas primeiro a MENSAGEM com o convite e um botão. Abrir o
+    // calendário direto joga o lead numa grade de horários antes de ele saber
+    // por que deveria escolher um.
     if (concluido.agendaAtiva && sessionToken.current) {
+      if (abrirAgenda) {
+        return (
+          <AgendaStep
+            token={token}
+            sessionToken={sessionToken.current}
+            mensagemFinal={concluido.mensagem}
+          />
+        )
+      }
       return (
-        <AgendaStep
-          token={token}
-          sessionToken={sessionToken.current}
-          mensagemFinal={concluido.mensagem}
-        />
+        <div className="text-center">
+          <p className="text-3xl">✅</p>
+          <h2 className="mt-3 text-lg font-semibold text-stone-100">
+            Recebemos suas respostas!
+          </h2>
+          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-stone-300">
+            {concluido.mensagem ??
+              "Nossa equipe entrará em contato para combinar a visita."}
+          </p>
+          <button
+            type="button"
+            onClick={() => setAbrirAgenda(true)}
+            className="mt-6 w-full rounded-lg bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
+          >
+            Agendar
+          </button>
+        </div>
       )
     }
     return (

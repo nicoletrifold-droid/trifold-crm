@@ -1,12 +1,20 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  gradeDoMes,
+  mesesDisponiveis,
+  nomeDoMes,
+  rotuloDoDia,
+  DIAS_DA_SEMANA,
+} from "@web/lib/appointments/month-grid"
 
-// Story 75-331 (Epic 89) — o passo de agenda, depois do formulário enviado.
+// Story 75-331 — o passo de agenda, depois do formulário enviado.
+// Story 75-335 — apresentação em CALENDÁRIO MENSAL, a pedido do Marcos: mês em
+// grade, clicar no dia, horários ao lado (modelo Calendly). A fileira de chips
+// anterior não dava noção de calendário.
 //
-// Mesmo desenho do `/agendar/[token]` da imobiliária: decorado → dia → horário
-// livre. A diferença é o que a tela final PROMETE (ver AC6): aqui não existe
-// passo de confirmação, então ela não pode dizer "confirmaremos com você".
+// A conta de calendário vive em lib/appointments/month-grid.ts, testada sem DOM.
 
 interface DayOption {
   date: string
@@ -30,14 +38,15 @@ export function AgendaStep({
   const [locations, setLocations] = useState<string[]>([])
   const [days, setDays] = useState<DayOption[]>([])
   const [location, setLocation] = useState("")
+  const [mes, setMes] = useState<string>("")
   const [date, setDate] = useState("")
   const [slots, setSlots] = useState<SlotOption[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [carregandoSlots, setCarregandoSlots] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState("")
   const [agendado, setAgendado] = useState<{ scheduled_at: string; location: string } | null>(null)
 
-  // Carga inicial: decorados e dias abertos.
   useEffect(() => {
     let vivo = true
     void (async () => {
@@ -45,10 +54,11 @@ export function AgendaStep({
         const res = await fetch(`/api/formulario/${token}/agenda`, { cache: "no-store" })
         const json = (await res.json()) as { locations?: string[]; days?: DayOption[] }
         if (!vivo) return
+        const dias = json.days ?? []
         setLocations(json.locations ?? [])
-        setDays(json.days ?? [])
+        setDays(dias)
         setLocation(json.locations?.[0] ?? "")
-        setDate(json.days?.[0]?.date ?? "")
+        setMes(mesesDisponiveis(dias.map((d) => d.date))[0] ?? "")
       } finally {
         if (vivo) setCarregando(false)
       }
@@ -58,17 +68,31 @@ export function AgendaStep({
     }
   }, [token])
 
-  const carregarSlots = useCallback(async () => {
-    if (!date) return
-    setSlots([])
-    const res = await fetch(`/api/formulario/${token}/agenda?date=${date}`, { cache: "no-store" })
-    const json = (await res.json()) as { slots?: SlotOption[] }
-    setSlots(json.slots ?? [])
-  }, [token, date])
+  const disponiveis = useMemo(() => days.map((d) => d.date), [days])
+  const meses = useMemo(() => mesesDisponiveis(disponiveis), [disponiveis])
+  const semanas = useMemo(() => (mes ? gradeDoMes({ mes, disponiveis }) : []), [mes, disponiveis])
+  const indiceMes = meses.indexOf(mes)
 
-  useEffect(() => {
-    void carregarSlots()
-  }, [carregarSlots])
+  const carregarSlots = useCallback(
+    async (dia: string) => {
+      setCarregandoSlots(true)
+      setSlots([])
+      try {
+        const res = await fetch(`/api/formulario/${token}/agenda?date=${dia}`, { cache: "no-store" })
+        const json = (await res.json()) as { slots?: SlotOption[] }
+        setSlots(json.slots ?? [])
+      } finally {
+        setCarregandoSlots(false)
+      }
+    },
+    [token]
+  )
+
+  function escolherDia(dia: string) {
+    setDate(dia)
+    setErro("")
+    void carregarSlots(dia)
+  }
 
   async function agendar(startIso: string) {
     setEnviando(true)
@@ -85,9 +109,8 @@ export function AgendaStep({
       }
       if (!res.ok || !json.data) {
         setErro(json.error ?? "Não foi possível agendar. Escolha outro horário.")
-        // 409 = alguém pegou o horário enquanto a pessoa decidia: recarrega a grade
-        // para ela não tentar de novo no mesmo slot já ocupado.
-        if (res.status === 409) void carregarSlots()
+        // 409 = alguém pegou o horário enquanto a pessoa decidia.
+        if (res.status === 409 && date) void carregarSlots(date)
         return
       }
       setAgendado(json.data)
@@ -114,11 +137,8 @@ export function AgendaStep({
           <br />
           {agendado.location}
         </p>
-        {/* AC6 — NÃO prometer confirmação: ninguém vai confirmar. Prometer o que
-            não acontece é fabricar no-show. */}
         <p className="mt-3 text-sm text-stone-400">
-          Nossa equipe entra em contato com você. Se precisar remarcar, é só responder o
-          WhatsApp.
+          Nossa equipe entra em contato com você. Se precisar remarcar, é só responder o WhatsApp.
         </p>
       </div>
     )
@@ -128,8 +148,8 @@ export function AgendaStep({
     return <p className="text-center text-sm text-stone-400">Carregando horários…</p>
   }
 
-  // Sem dia aberto (org sem horário configurado, feriado prolongado): a captação
-  // já aconteceu, então a tela encerra bem em vez de mostrar grade vazia (AC7).
+  // Sem dia aberto: a captação já aconteceu, então encerra bem em vez de
+  // mostrar um calendário todo cinza.
   if (days.length === 0) {
     return (
       <div className="text-center">
@@ -142,71 +162,115 @@ export function AgendaStep({
     )
   }
 
+  const livres = slots.filter((s) => s.free)
+
   return (
     <div>
-      <h2 className="text-base font-semibold text-stone-100">Quer conhecer o decorado?</h2>
-      <p className="mt-1 text-sm text-stone-400">Escolha o melhor dia e horário para você.</p>
+      <h2 className="text-base font-semibold text-stone-100">Escolha o dia e o horário</h2>
+      <p className="mt-1 text-sm text-stone-400">Visita de 1 hora, com um especialista.</p>
 
       {locations.length > 1 && (
-        <div className="mt-4">
-          <label className="block text-xs text-stone-400">Decorado</label>
-          <select
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100"
-          >
-            {locations.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          className="mt-3 w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-100"
+        >
+          {locations.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
       )}
 
-      <div className="mt-4">
-        <label className="block text-xs text-stone-400">Dia</label>
-        <div className="mt-1 flex gap-2 overflow-x-auto pb-1">
-          {days.map((d) => (
+      {/* Calendário à esquerda, horários à direita — modelo Calendly. No celular
+          empilha, com os horários logo abaixo do dia escolhido. */}
+      <div className="mt-4 gap-5 sm:flex">
+        <div className="sm:flex-1">
+          <div className="mb-2 flex items-center justify-between">
             <button
-              key={d.date}
               type="button"
-              onClick={() => setDate(d.date)}
-              className={`shrink-0 rounded-lg border px-3 py-2 text-xs transition ${
-                date === d.date
-                  ? "border-violet-500 bg-violet-500/10 text-stone-100"
-                  : "border-stone-700 bg-stone-800 text-stone-300"
-              }`}
+              onClick={() => setMes(meses[indiceMes - 1] ?? mes)}
+              disabled={indiceMes <= 0}
+              className="rounded px-2 py-1 text-stone-400 disabled:opacity-30"
+              aria-label="Mês anterior"
             >
-              {d.label}
+              ‹
             </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <label className="block text-xs text-stone-400">Horário</label>
-        {slots.filter((s) => s.free).length === 0 ? (
-          <p className="mt-2 text-sm text-stone-500">
-            Sem horários livres neste dia. Escolha outro dia.
-          </p>
-        ) : (
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {slots
-              .filter((s) => s.free)
-              .map((s) => (
-                <button
-                  key={s.startIso}
-                  type="button"
-                  disabled={enviando}
-                  onClick={() => void agendar(s.startIso)}
-                  className="rounded-lg border border-stone-700 bg-stone-800 px-2 py-2 text-sm text-stone-100 transition hover:border-violet-500 disabled:opacity-50"
-                >
-                  {s.labelLocal}
-                </button>
-              ))}
+            <span className="text-sm font-medium text-stone-200">
+              {mes ? nomeDoMes(Number(mes.slice(0, 4)), Number(mes.slice(5, 7))) : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMes(meses[indiceMes + 1] ?? mes)}
+              disabled={indiceMes >= meses.length - 1}
+              className="rounded px-2 py-1 text-stone-400 disabled:opacity-30"
+              aria-label="Próximo mês"
+            >
+              ›
+            </button>
           </div>
-        )}
+
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {DIAS_DA_SEMANA.map((d) => (
+              <span key={d} className="pb-1 text-[11px] font-medium uppercase text-stone-500">
+                {d}
+              </span>
+            ))}
+            {semanas.flat().map((c, i) => {
+              if (!c.date) return <span key={`v${i}`} />
+              const selecionado = c.date === date
+              return (
+                <button
+                  key={c.date}
+                  type="button"
+                  disabled={!c.disponivel}
+                  onClick={() => escolherDia(c.date!)}
+                  className={`aspect-square rounded-full text-sm transition ${
+                    selecionado
+                      ? "bg-violet-600 font-semibold text-white"
+                      : c.disponivel
+                        ? "bg-violet-500/10 font-medium text-violet-300 hover:bg-violet-500/25"
+                        : "text-stone-600"
+                  }`}
+                >
+                  {c.dia}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5 sm:mt-0 sm:w-44 sm:shrink-0">
+          {!date ? (
+            <p className="text-sm text-stone-500">Escolha um dia no calendário.</p>
+          ) : (
+            <>
+              <p className="mb-2 text-sm font-medium text-stone-200">{rotuloDoDia(date)}</p>
+              {carregandoSlots ? (
+                <p className="text-sm text-stone-500">Carregando…</p>
+              ) : livres.length === 0 ? (
+                <p className="text-sm text-stone-500">
+                  Sem horários livres neste dia. Escolha outro.
+                </p>
+              ) : (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {livres.map((s) => (
+                    <button
+                      key={s.startIso}
+                      type="button"
+                      disabled={enviando}
+                      onClick={() => void agendar(s.startIso)}
+                      className="w-full rounded-lg border border-violet-500/40 bg-transparent px-3 py-2.5 text-sm font-medium text-violet-300 transition hover:border-violet-400 hover:bg-violet-500/10 disabled:opacity-50"
+                    >
+                      {s.labelLocal}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {erro ? <p className="mt-3 text-sm text-red-400">{erro}</p> : null}
