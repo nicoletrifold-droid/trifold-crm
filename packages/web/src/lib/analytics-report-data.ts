@@ -18,6 +18,8 @@ import type { ResolvedPeriod } from "@web/lib/analytics/period"
 import { type AnalyticsSummary, deriveAnalyticsMetrics } from "@web/lib/analytics/metrics"
 // Story 75-322 — regra única de "visita realizada", compartilhada com a tela.
 import { applyRealizedVisitFilter } from "@web/lib/analytics/visits-rule"
+// Story 75-323 — mesmo funil da tela: quem CHEGOU a cada etapa.
+import { buildReachedCounts, type LeadStageRow, type StageChangeRow } from "@web/lib/analytics/funnel-reached"
 
 type RawLead = {
   created_at: string
@@ -459,6 +461,41 @@ export async function buildAnalyticsReportData(
   const perdidos = perdidosFiltrados ?? metrics.perdidos
   const entradasDelta = entradas - (prevEntradasFiltradas ?? prevMetrics.entradas)
 
+  // ── Funil do PDF: quem CHEGOU a cada etapa (Story 75-323) ─────────────────
+  // A seção "Funil de Conversão" do PDF mostrava as mesmas contagens por etapa
+  // ATUAL que a tela mostrava — e a tela mudou. Duas seções com o mesmo nome e
+  // números diferentes é exatamente o defeito que esta leva de stories fecha, então
+  // o PDF passa a usar o MESMO helper e o mesmo recorte da tela.
+  const [stageDefsForFunnel, cohortLeads, stageChanges] = await Promise.all([
+    supabase.from("kanban_stages").select("id, name, color, position").eq("org_id", orgId).eq("is_active", true).order("position"),
+    fetchAllLeads<LeadStageRow>(() =>
+      applyLeadFilters(
+        supabase
+          .from("leads")
+          .select("id, stage_id")
+          .eq("org_id", orgId)
+          .eq("segmento", "principal")
+          .gte("created_at", aggSince.toISOString()).lt("created_at", aggUntil.toISOString())
+          .order("id", { ascending: true }), // `.range()` exige coluna ÚNICA
+        filters
+      ) as unknown as RangeableQuery<LeadStageRow>
+    ),
+    fetchAllLeads<StageChangeRow>(() =>
+      supabase
+        .from("activities")
+        .select("lead_id, metadata")
+        .eq("org_id", orgId)
+        .eq("type", "stage_change")
+        .gte("created_at", aggSince.toISOString())
+        .order("id", { ascending: true }) as unknown as RangeableQuery<StageChangeRow>
+    ),
+  ])
+
+  const reached = buildReachedCounts(cohortLeads, stageChanges)
+  const funnelStages = ((stageDefsForFunnel.data ?? []) as { id: string; name: string; color: string | null }[])
+    .map((st) => ({ name: st.name, color: st.color ?? "", count: reached.get(st.id) ?? 0 }))
+  const funnelBase = cohortLeads.length
+
   // Card 1: leads atualmente NA ETAPA "Visitou" (do funil ranged). Story 75-71.
   const visitou = stages.find((st) => /visitou/i.test(st.name))?.count ?? 0
 
@@ -537,6 +574,8 @@ export async function buildAnalyticsReportData(
     currentLabel: "Atual",
     previousLabel: "Anterior",
     stages,
+    funnelStages,
+    funnelBase,
     properties,
     sources,
     brokers,

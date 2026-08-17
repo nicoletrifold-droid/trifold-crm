@@ -37,6 +37,9 @@ import {
 } from "@web/lib/analytics/filter-options"
 // Story 75-271 — mesma soma que o PDF usa (QA-002: uma implementação, não duas).
 import { aggregateFilteredLeads } from "@web/lib/analytics/aggregate-filtered"
+// Story 75-323 — o Funil conta quem CHEGOU a cada etapa (não quem está nela agora).
+import { buildReachedCounts, type LeadStageRow, type StageChangeRow } from "@web/lib/analytics/funnel-reached"
+import { fetchAllLeads, type RangeableQuery } from "@web/lib/analytics/fetch-all-leads"
 
 /**
  * Story 75-272 — nome de cada dimensão de perfil no seletor. Rótulo de TELA
@@ -267,6 +270,49 @@ export default async function AnalyticsPage({
     for (const [k, v] of Object.entries(lg?.groups ?? {})) lostGroups[k] = toCount(v)
     lostEstruturados = toCount(lg?.estruturados)
   }
+
+  // ── Funil: quantos leads CHEGARAM a cada etapa (Story 75-323) ──────────────
+  // A régua do Pipeline acima responde "onde estão AGORA os leads que entraram no
+  // período" e continua assim (decisão da 75-319). O Funil responde outra coisa —
+  // "quantos chegaram até aqui" — e é por isso que os dois números diferem de
+  // propósito: quem avançou sai da régua e PERMANECE no funil.
+  //
+  // Uma implementação só para os dois caminhos da página (com e sem filtro): a coorte
+  // sai de `leads` com os mesmos filtros de sempre, e o histórico sai de `activities`
+  // recortado por PERÍODO — não por lista de ids, que estouraria a URL do PostgREST
+  // com centenas de uuid. O cruzamento acontece em memória, em `buildReachedCounts`.
+  //
+  // A janela do histórico vai de `sinceISO` até AGORA (e não até `untilISO`): lead que
+  // entrou no fim do período e avançou depois chegou à etapa do mesmo jeito. É o mesmo
+  // critério que a contagem por etapa atual já usava implicitamente.
+  const cohortLeads = await fetchAllLeads<LeadStageRow>(() =>
+    applyLeadFilters(
+      supabase
+        .from("leads")
+        .select("id, stage_id")
+        .eq("org_id", appUser.orgId)
+        .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB
+        .gte("created_at", sinceISO).lt("created_at", untilISO)
+        .order("id", { ascending: true }), // `.range()` exige coluna ÚNICA
+      filters
+    ) as unknown as RangeableQuery<LeadStageRow>
+  )
+
+  const stageChanges = await fetchAllLeads<StageChangeRow>(() =>
+    supabase
+      .from("activities")
+      .select("lead_id, metadata")
+      .eq("org_id", appUser.orgId)
+      .eq("type", "stage_change")
+      .gte("created_at", sinceISO)
+      .order("id", { ascending: true }) as unknown as RangeableQuery<StageChangeRow>
+  )
+
+  const reached = buildReachedCounts(cohortLeads, stageChanges)
+  const funnelStages = stages.map((s) => ({ ...s, count: reached.get(s.id) ?? 0 }))
+  // Base do funil: TODAS as entradas do período, inclusive as perdidas. Um funil que
+  // esconde quem se perdeu no caminho mede o próprio otimismo.
+  const funnelBase = cohortLeads.length
 
   // "Leads por Empreendimento" — sempre ambos, limitado ao período
   // Story 75-272 — com QUALQUER filtro ativo, recalcula por empreendimento. Os
@@ -678,10 +724,16 @@ export default async function AnalyticsPage({
 
       {/* Funnel — Story 75-318: funil de verdade em 4 andares (Atendimento →
           Visita Agendada|Visitou → Proposta → Fechamento) com líquido animado.
-          Os números vêm do MESMO recorte do período que alimentava as barras. */}
+          Story 75-323: os números passaram a ser "quantos CHEGARAM a cada etapa"
+          (antes era "quantos estão nela agora", que fazia cada andar perder quem
+          avançou e o topo do funil não ser o volume de entrada). */}
       <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="mb-4 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
-        <ConversionFunnel tiers={pickFunnelTiers(stages)} />
+        <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
+        <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
+          {funnelBase} entradas no período · cada andar conta quem <strong className="font-semibold">chegou até ele</strong>,
+          incluindo quem já avançou ou se perdeu depois. A régua do Pipeline acima mostra onde cada lead está agora.
+        </p>
+        <ConversionFunnel tiers={pickFunnelTiers(funnelStages)} base={funnelBase} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

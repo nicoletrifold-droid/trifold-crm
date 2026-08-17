@@ -33,11 +33,11 @@ const norm = (s: string) =>
 
 function pick(
   stages: FunnelStageInput[],
-  slugAlvo: string,
+  slugsAlvo: readonly string[],
   nomeAlvo: string,
   fallbackColor: string
 ): FunnelTierEntry {
-  const bySlug = stages.find((s) => s.slug && norm(s.slug) === slugAlvo)
+  const bySlug = stages.find((s) => s.slug && slugsAlvo.includes(norm(s.slug)))
   const byName = bySlug ?? stages.find((s) => norm(s.name) === norm(nomeAlvo))
   return {
     label: byName?.name ?? nomeAlvo,
@@ -59,12 +59,21 @@ export function liquidFillFraction(count: number, maxCount: number): number {
   return NIVEL_MIN + (NIVEL_MAX - NIVEL_MIN) * Math.sqrt(ratio)
 }
 
+/**
+ * Story 75-323 — os slugs REAIS das etapas em prod não são os nomes delas. A etapa
+ * chamada "Atendimento" tem slug `no-show` e a "Fechamento" tem slug `fechou`
+ * (herança da nomenclatura antiga do pipeline). Os alvos originais eram
+ * `atendimento` e `fechamento`, que não casam com nada — os dois andares só
+ * funcionavam pelo fallback de NOME, e renomear a etapa em Configurações →
+ * Pipeline zeraria o funil em silêncio. Agora cada andar aceita a lista de slugs
+ * que já significam aquilo, e o nome segue como último recurso.
+ */
 export function pickFunnelTiers(stages: FunnelStageInput[]): FunnelTiers {
   return {
-    atendimento: pick(stages, "atendimento", "Atendimento", "#e0526e"),
-    visitaAgendada: pick(stages, "visita-agendada", "Visita Agendada", "#7c5cd6"),
-    visitou: pick(stages, "visitou", "Visitou", "#38a3c4"),
-    proposta: pick(stages, "proposta", "Proposta", "#76a84e"),
-    fechamento: pick(stages, "fechamento", "Fechamento", "#a855f7"),
+    atendimento: pick(stages, ["atendimento", "no-show"], "Atendimento", "#e0526e"),
+    visitaAgendada: pick(stages, ["visita-agendada"], "Visita Agendada", "#7c5cd6"),
+    visitou: pick(stages, ["visitou"], "Visitou", "#38a3c4"),
+    proposta: pick(stages, ["proposta"], "Proposta", "#76a84e"),
+    fechamento: pick(stages, ["fechamento", "fechou"], "Fechamento", "#a855f7"),
   }
 }
