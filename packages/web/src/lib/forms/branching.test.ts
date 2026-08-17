@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { perguntaVisivel, proximaPergunta, formularioCompleto, limparRespostas } from "./branching"
+import {
+  perguntaVisivel,
+  proximaPergunta,
+  formularioCompleto,
+  limparRespostas,
+  passoAtual,
+  passoCompleto,
+} from "./branching"
 import type { FormSchema } from "./schema"
 
 // Story 75-330 — AC3. A ramificação é o que separa este formulário de um
@@ -138,5 +145,88 @@ describe("limparRespostas", () => {
   it("ignora chave que não existe no schema", () => {
     const limpas = limparRespostas(schema, { nome: "Ana", pagamento: "vista", inventada: "x" })
     expect(limpas.inventada).toBeUndefined()
+  })
+})
+
+// ─── Story 75-336: passo agrupado ────────────────────────────────────────────
+// Pedido do Marcos: nome e telefone no PRIMEIRO passo, juntos, com uma frase
+// amigável. O motor mostrava uma pergunta por tela.
+
+describe("passoAtual", () => {
+  const agrupado: FormSchema = {
+    perguntas: [
+      { id: "nome", tipo: "texto", titulo: "Seu nome", obrigatoria: true, grupo: "contato", intro: "Oi!" },
+      { id: "tel", tipo: "telefone", titulo: "Seu WhatsApp", obrigatoria: true, grupo: "contato" },
+      { id: "valor", tipo: "escolha", titulo: "Faixa", obrigatoria: true, opcoes: [{ valor: "a", rotulo: "A" }] },
+    ],
+  }
+
+  it("o primeiro passo traz nome E telefone juntos", () => {
+    expect(passoAtual(agrupado, {}).map((p) => p.id)).toEqual(["nome", "tel"])
+  })
+
+  it("respondido só o nome, o passo continua sendo o bloco inteiro", () => {
+    // Senão a tela perderia o campo do nome no meio do preenchimento.
+    expect(passoAtual(agrupado, { nome: "Ana" }).map((p) => p.id)).toEqual(["nome", "tel"])
+  })
+
+  it("bloco completo avança para a pergunta seguinte, sozinha", () => {
+    expect(passoAtual(agrupado, { nome: "Ana", tel: "4499" }).map((p) => p.id)).toEqual(["valor"])
+  })
+
+  it("formulário terminado devolve passo vazio", () => {
+    expect(passoAtual(agrupado, { nome: "Ana", tel: "4499", valor: "a" })).toEqual([])
+  })
+
+  it("pergunta sem grupo continua sendo um passo de uma", () => {
+    expect(passoAtual(schema, {}).map((p) => p.id)).toEqual(["nome"])
+  })
+
+  it("grupos IGUAIS mas NÃO consecutivos não se juntam", () => {
+    // Agrupar por cima de uma pergunta do meio reordenaria o formulário sem o
+    // autor pedir.
+    const separado: FormSchema = {
+      perguntas: [
+        { id: "a", tipo: "texto", titulo: "A", grupo: "x", obrigatoria: true },
+        { id: "meio", tipo: "texto", titulo: "Meio", obrigatoria: true },
+        { id: "b", tipo: "texto", titulo: "B", grupo: "x", obrigatoria: true },
+      ],
+    }
+    expect(passoAtual(separado, {}).map((p) => p.id)).toEqual(["a"])
+    expect(passoAtual(separado, { a: "1" }).map((p) => p.id)).toEqual(["meio"])
+    expect(passoAtual(separado, { a: "1", meio: "2" }).map((p) => p.id)).toEqual(["b"])
+  })
+
+  it("pergunta do grupo escondida pela ramificação sai do passo", () => {
+    const comCondicao: FormSchema = {
+      perguntas: [
+        { id: "tipo", tipo: "escolha", titulo: "Tipo", obrigatoria: true, opcoes: [{ valor: "pf", rotulo: "PF" }, { valor: "pj", rotulo: "PJ" }] },
+        { id: "nome", tipo: "texto", titulo: "Nome", obrigatoria: true, grupo: "c" },
+        { id: "cnpj", tipo: "texto", titulo: "CNPJ", grupo: "c", condicoes: [{ pergunta: "tipo", em: ["pj"] }] },
+      ],
+    }
+    expect(passoAtual(comCondicao, { tipo: "pf" }).map((p) => p.id)).toEqual(["nome"])
+    expect(passoAtual(comCondicao, { tipo: "pj" }).map((p) => p.id)).toEqual(["nome", "cnpj"])
+  })
+})
+
+describe("passoCompleto", () => {
+  const passo = [
+    { id: "nome", tipo: "texto" as const, titulo: "Nome", obrigatoria: true },
+    { id: "tel", tipo: "telefone" as const, titulo: "Tel", obrigatoria: true },
+    { id: "obs", tipo: "texto" as const, titulo: "Obs" },
+  ]
+
+  it("exige todas as obrigatórias do passo", () => {
+    expect(passoCompleto(passo, { nome: "Ana" })).toBe(false)
+    expect(passoCompleto(passo, { nome: "Ana", tel: "4499" })).toBe(true)
+  })
+
+  it("opcional em branco não trava o passo", () => {
+    expect(passoCompleto(passo, { nome: "Ana", tel: "4499", obs: "" })).toBe(true)
+  })
+
+  it("obrigatória só com espaços não conta", () => {
+    expect(passoCompleto(passo, { nome: "  ", tel: "4499" })).toBe(false)
   })
 })
