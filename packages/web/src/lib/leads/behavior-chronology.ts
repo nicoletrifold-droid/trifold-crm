@@ -71,6 +71,8 @@ const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
   completed: "realizada",
   cancelled: "cancelada",
   no_show: "não compareceu (no-show)",
+  // Story 75-321 — encerrada sem confirmação de presença (nem realizada, nem no-show).
+  closed: "encerrada sem registro",
 }
 
 function activityEvent(a: ChronologySources["activities"][number]): BehaviorChronologyEvent {

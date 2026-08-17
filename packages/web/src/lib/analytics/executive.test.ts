@@ -186,4 +186,23 @@ describe("buildVisits", () => {
     const r = buildVisits([{ scheduled_at: "2026-07-21T14:00:00Z", status: "scheduled" }], "2026-07-21T03:00:00Z", "2026-07-21T03:00:00Z", "day")
     expect(r.totals.taxaNoShow).toBeNull()
   })
+
+  // Story 75-321 — o `closed` (encerrado sem confirmação de presença) não pode cair
+  // em nenhuma das 4 séries. Antes da story o `else` final varria qualquer status
+  // desconhecido para "agendadas", então o status novo nasceria contado errado.
+  it("closed fica fora das 4 séries e não mexe na taxa de no-show", () => {
+    const appts = [
+      { scheduled_at: "2026-07-21T14:00:00Z", status: "completed" },
+      { scheduled_at: "2026-07-21T15:00:00Z", status: "no_show" },
+      { scheduled_at: "2026-07-21T16:00:00Z", status: "closed" },
+      { scheduled_at: "2026-07-21T17:00:00Z", status: "closed" },
+    ]
+    const r = buildVisits(appts, "2026-07-21T03:00:00Z", "2026-07-21T03:00:00Z", "day")
+    expect(r.agendadas).toEqual([0])
+    expect(r.realizadas).toEqual([1])
+    expect(r.noShow).toEqual([1])
+    expect(r.canceladas).toEqual([0])
+    expect(r.totals.encerradas).toBe(2)
+    expect(r.totals.taxaNoShow).toBe(50) // 1 de 2 decididas — as encerradas não entram
+  })
 })

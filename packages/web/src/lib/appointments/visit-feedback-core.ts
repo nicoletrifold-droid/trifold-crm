@@ -200,3 +200,79 @@ export async function applyVisitFeedback(
 
   return { feedback }
 }
+
+/**
+ * Story 75-321 — porta "o cliente NÃO compareceu".
+ *
+ * Antes ela não existia: o corretor com uma visita pendente de feedback só tinha o
+ * formulário de "visita realizada". Medido em prod (17/08/2026), o lead do
+ * agendamento 732b3a72 recebeu um feedback cujo texto era "cli não compareceu,
+ * tentando remarcar" — o sistema fez o que estava escrito no código (moveu para
+ * Visitou) e 50 segundos depois o corretor arrastou o card de volta para
+ * Atendimento na mão. Resultado: o agendamento contava como visita realizada no
+ * Analytics e o lead não contava em Visitou. Os dois cards discordando por falta
+ * de uma opção no formulário.
+ *
+ * Aqui o registro é honesto: agendamento vira `no_show`, o relato do corretor fica
+ * na linha do tempo, o lead volta para a etapa de No-Show (a mesma que o detector
+ * automático usa) e a Nicole pós-visita NÃO dispara — não houve visita.
+ *
+ * NÃO grava em `visit_feedback`: aquela tabela é o relato de uma visita que
+ * aconteceu, e é ela que apaga o "pendente de feedback" das telas. Como o status
+ * sai de (scheduled, confirmed, completed), o pendente some do mesmo jeito.
+ */
+export async function applyNoShowFeedback(
+  supabase: SupabaseClient,
+  appointment: AppointmentForFeedback,
+  body: { feedback: string; next_steps?: string | null; actor_user_id?: string | null }
+): Promise<{ ok: true } | { error: string; status: number }> {
+  const { error: updateError } = await supabase
+    .from("appointments")
+    .update({ status: "no_show" })
+    .eq("id", appointment.id)
+
+  if (updateError) {
+    return { error: updateError.message, status: 500 }
+  }
+
+  // Move para a etapa de No-Show — mas SÓ saindo de "Visita Agendada". Lead que já
+  // avançou (visitou/proposta/…) não regride por causa de um agendamento antigo
+  // marcado como ausência: é a mesma regra de não-regressão do fluxo de presença.
+  const { STAGE_IDS } = await import("@trifold/shared")
+  const { data: leadForStage } = await supabase
+    .from("leads")
+    .select("stage_id")
+    .eq("id", appointment.lead_id)
+    .single()
+
+  if (leadForStage && leadForStage.stage_id === STAGE_IDS.visita_agendada) {
+    await supabase
+      .from("leads")
+      .update({ stage_id: STAGE_IDS.no_show })
+      .eq("id", appointment.lead_id)
+  }
+
+  const description = [
+    "Cliente não compareceu à visita.",
+    body.feedback.trim(),
+    body.next_steps?.trim() ? `Próximos passos: ${body.next_steps.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n")
+
+  await supabase.from("activities").insert({
+    org_id: appointment.org_id,
+    lead_id: appointment.lead_id,
+    user_id: body.actor_user_id ?? null,
+    type: "appointment_no_show",
+    description,
+    metadata: {
+      appointment_id: appointment.id,
+      next_steps: body.next_steps?.trim() || null,
+      // Registrado por gente, não pelo detector de 48h do cron.
+      source: "manual",
+    },
+  })
+
+  return { ok: true }
+}

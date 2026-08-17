@@ -475,7 +475,10 @@ export async function buildAnalyticsReportData(
       .from("appointments").select("id", { count: "exact", head: true })
       .eq("org_id", orgId)
       .gte("scheduled_at", aggSince.toISOString()).lt("scheduled_at", aggUntil.toISOString())
-      .not("status", "in", "(cancelled,no_show)")
+      // Story 75-321 — `closed` (encerrado sem confirmação de presença) entra na
+      // lista de exclusão junto com cancelled/no_show. A unificação desta regra com
+      // a da tela é a 75-322; aqui só evitamos que o status novo nasça contado.
+      .not("status", "in", "(cancelled,no_show,closed)")
     visitasRealizadas = visitasCount ?? 0
   }
 

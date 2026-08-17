@@ -313,7 +313,17 @@ export interface VisitsData {
   agendadas: number[]
   noShow: number[]
   canceladas: number[]
-  totals: { realizadas: number; agendadas: number; noShow: number; canceladas: number; taxaNoShow: number | null }
+  totals: {
+    realizadas: number
+    agendadas: number
+    noShow: number
+    canceladas: number
+    /** Story 75-321 — encerradas pelo cron sem ninguém confirmar presença. Não
+     *  entram em nenhuma das 4 séries: não sabemos o que aconteceu, e chutar é
+     *  exatamente o que inflava "realizadas" antes. */
+    encerradas: number
+    taxaNoShow: number | null
+  }
 }
 
 export function buildVisits(
@@ -333,12 +343,17 @@ export function buildVisits(
   const bump = (arr: number[], i: number) => {
     arr[i] = (arr[i] ?? 0) + 1
   }
+  let encerradas = 0
   for (const a of appts) {
     const i = periodIndex.get(periodKey(a.scheduled_at, granularity))
     if (i == null) continue
+    // Story 75-321 — status virou explícito (era um `else` que varria tudo que não
+    // fosse completed/no_show/cancelled para "agendadas"). Com o `closed` novo, o
+    // catch-all teria transformado "encerrado sem registro" em "agendada".
     if (a.status === "completed") bump(realizadas, i)
     else if (a.status === "no_show") bump(noShow, i)
     else if (a.status === "cancelled") bump(canceladas, i)
+    else if (a.status === "closed") encerradas++
     else bump(agendadas, i) // scheduled | confirmed
   }
 
@@ -356,7 +371,14 @@ export function buildVisits(
     agendadas,
     noShow,
     canceladas,
-    totals: { realizadas: tR, agendadas: tA, noShow: tN, canceladas: tC, taxaNoShow: decided > 0 ? Math.round((tN / decided) * 100) : null },
+    totals: {
+      realizadas: tR,
+      agendadas: tA,
+      noShow: tN,
+      canceladas: tC,
+      encerradas,
+      taxaNoShow: decided > 0 ? Math.round((tN / decided) * 100) : null,
+    },
   }
 }
 
