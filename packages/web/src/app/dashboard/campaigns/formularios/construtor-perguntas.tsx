@@ -166,6 +166,37 @@ export function ConstrutorPerguntas({
                 className={`${inputCls} text-xs`}
               />
 
+              {/* Story 75-336 — agrupar com a anterior e a frase de abertura do passo. */}
+              {i > 0 && (
+                <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
+                  <input
+                    type="checkbox"
+                    checked={!!p.grupo && p.grupo === perguntas[i - 1]?.grupo}
+                    onChange={(e) => {
+                      if (!e.target.checked) return atualizar(i, { grupo: undefined })
+                      // Herda o grupo da anterior; se ela não tem, cria um.
+                      const anterior = perguntas[i - 1]!
+                      const grupo = anterior.grupo ?? `passo_${i}`
+                      setPerguntas((atual) =>
+                        atual.map((x, idx) =>
+                          idx === i - 1 ? { ...x, grupo } : idx === i ? { ...x, grupo } : x
+                        )
+                      )
+                    }}
+                    className="h-4 w-4 rounded"
+                  />
+                  Mostrar na MESMA tela que a pergunta anterior
+                </label>
+              )}
+
+              <textarea
+                value={p.intro ?? ""}
+                onChange={(e) => atualizar(i, { intro: e.target.value || undefined })}
+                rows={2}
+                placeholder="Frase amigável acima desta tela (opcional)"
+                className={`${inputCls} text-xs`}
+              />
+
               <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
                 <input
                   type="checkbox"

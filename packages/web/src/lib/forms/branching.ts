@@ -101,3 +101,49 @@ export function limparRespostas(schema: FormSchema, respostas: Respostas): Respo
   }
   return limpas
 }
+
+/**
+ * O PASSO atual: uma pergunta, ou o bloco de perguntas agrupadas que começa nela.
+ *
+ * Story 75-336 — pedido do Marcos: nome e telefone no primeiro passo, juntos.
+ * O motor mostrava uma pergunta por tela; agora perguntas com o mesmo `grupo`,
+ * e **consecutivas**, formam um passo só.
+ *
+ * "Consecutivas" não é detalhe: agrupar perguntas separadas por uma terceira
+ * reordenaria o formulário sem o autor pedir. O grupo só junta o que já estava
+ * junto.
+ *
+ * Devolve `[]` quando o formulário acabou.
+ */
+export function passoAtual(schema: FormSchema, respostas: Respostas): Pergunta[] {
+  const proxima = proximaPergunta(schema, respostas)
+  if (!proxima) return []
+  if (!proxima.grupo) return [proxima]
+
+  const inicio = schema.perguntas.findIndex((p) => p.id === proxima.id)
+  const bloco: Pergunta[] = []
+
+  // Anda para trás enquanto o grupo for o mesmo: se a pessoa voltou a uma
+  // pergunta do meio do bloco, o passo continua sendo o bloco inteiro.
+  let i = inicio
+  while (i > 0 && schema.perguntas[i - 1]?.grupo === proxima.grupo) i--
+
+  for (let j = i; j < schema.perguntas.length; j++) {
+    const p = schema.perguntas[j]!
+    if (p.grupo !== proxima.grupo) break
+    if (perguntaVisivel(p, respostas)) bloco.push(p)
+  }
+
+  return bloco.length > 0 ? bloco : [proxima]
+}
+
+/** Todas as obrigatórias do passo estão respondidas? */
+export function passoCompleto(passo: Pergunta[], rascunhos: Respostas): boolean {
+  return passo
+    .filter((p) => p.obrigatoria)
+    .every((p) => {
+      const r = rascunhos[p.id]
+      if (Array.isArray(r)) return r.length > 0
+      return r !== undefined && r !== null && String(r).trim() !== ""
+    })
+}

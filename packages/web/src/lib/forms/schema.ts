@@ -36,6 +36,16 @@ export interface Pergunta {
   tipo: TipoPergunta
   titulo: string
   ajuda?: string
+  /**
+   * Story 75-336 — perguntas com o MESMO grupo, e consecutivas, aparecem na
+   * MESMA tela. Pedido do Marcos: nome e telefone no primeiro passo, juntos.
+   *
+   * Consecutivas de propósito: agrupar perguntas separadas por uma terceira
+   * mudaria a ordem que o autor definiu, sem ele pedir.
+   */
+  grupo?: string
+  /** Texto amigável acima do passo. Só o da PRIMEIRA pergunta do grupo aparece. */
+  intro?: string
   obrigatoria?: boolean
   opcoes?: OpcaoPergunta[]
   /** Todas as condições precisam ser satisfeitas (E, não OU). */
@@ -165,6 +175,8 @@ export function parseFormSchema(raw: unknown): FormSchema {
       tipo,
       titulo,
       ...(typeof p.ajuda === "string" && p.ajuda.trim() ? { ajuda: p.ajuda.trim() } : {}),
+      ...(typeof p.grupo === "string" && p.grupo.trim() ? { grupo: p.grupo.trim() } : {}),
+      ...(typeof p.intro === "string" && p.intro.trim() ? { intro: p.intro.trim() } : {}),
       ...(p.obrigatoria === true ? { obrigatoria: true } : {}),
       ...(opcoes ? { opcoes } : {}),
       ...(condicoes && condicoes.length ? { condicoes } : {}),

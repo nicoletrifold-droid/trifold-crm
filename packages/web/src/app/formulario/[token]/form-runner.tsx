@@ -7,6 +7,8 @@ import {
   perguntasVisiveis,
   formularioCompleto,
   limparRespostas,
+  passoAtual,
+  passoCompleto,
   type Respostas,
   type Resposta,
 } from "@web/lib/forms/branching"
@@ -31,7 +33,9 @@ interface FormRunnerProps {
 
 export function FormRunner({ token, schema }: FormRunnerProps) {
   const [respostas, setRespostas] = useState<Respostas>({})
-  const [rascunho, setRascunho] = useState<Resposta>("")
+  // Story 75-336 — o passo pode ter mais de um campo (nome + telefone juntos),
+  // então o rascunho virou um mapa por id em vez de um valor só.
+  const [rascunhos, setRascunhos] = useState<Respostas>({})
   const [lgpd, setLgpd] = useState(false)
   const [erro, setErro] = useState("")
   const [enviando, setEnviando] = useState(false)
@@ -58,6 +62,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   }, [])
 
   const pergunta = proximaPergunta(schema, respostas)
+  const passo = passoAtual(schema, respostas)
   const visiveis = perguntasVisiveis(schema, respostas)
   const completo = formularioCompleto(schema, respostas)
   const respondidas = visiveis.filter((p) => respostas[p.id] !== undefined).length
@@ -101,15 +106,22 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   }
 
   function responder() {
-    if (!pergunta) return
-    if (pergunta.obrigatoria && !valorPreenchido(rascunho)) {
-      setErro("Esta resposta é obrigatória.")
+    if (passo.length === 0) return
+    if (!passoCompleto(passo, rascunhos)) {
+      setErro(
+        passo.length > 1 ? "Preencha os campos obrigatórios." : "Esta resposta é obrigatória."
+      )
       return
     }
     setErro("")
-    const atualizadas = limparRespostas(schema, { ...respostas, [pergunta.id]: rascunho })
+    const novas: Respostas = { ...respostas }
+    for (const p of passo) {
+      const v = rascunhos[p.id]
+      if (v !== undefined) novas[p.id] = v
+    }
+    const atualizadas = limparRespostas(schema, novas)
     setRespostas(atualizadas)
-    setRascunho("")
+    setRascunhos({})
     void salvarParcial(atualizadas)
   }
 
@@ -123,15 +135,17 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
   // A DECISÃO (há rascunho? é diferente do último envio?) vive em
   // lib/forms/draft-save.ts — puro e testado. Aqui só a rede.
   const salvarRascunho = useCallback(() => {
-    const pronto = prepararSalvamentoDeRascunho({
-      pergunta,
-      rascunho,
-      respostas,
-      ultimaAssinatura: ultimoEnviado.current,
-    })
-    if (!pronto) return
-    void salvarParcial(pronto.payload)
-  }, [pergunta, rascunho, respostas, salvarParcial])
+    const preenchidos: Respostas = {}
+    for (const p of passo) {
+      const v = rascunhos[p.id]
+      if (v !== undefined && valorPreenchido(v)) preenchidos[p.id] = v
+    }
+    if (Object.keys(preenchidos).length === 0) return
+    const payload = { ...respostas, ...preenchidos }
+    const assinatura = JSON.stringify(payload)
+    if (assinatura === ultimoEnviado.current) return
+    void salvarParcial(payload)
+  }, [passo, rascunhos, respostas, salvarParcial])
 
   // Fechar/esconder a aba é o momento em que mais se perde: mobile mata a página
   // sem aviso, e `visibilitychange` é o único evento confiável nesse caso
@@ -144,10 +158,12 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
     return () => document.removeEventListener("visibilitychange", aoEsconder)
   }, [salvarRascunho])
 
-  // Rascunho acompanha a pergunta da vez (múltipla começa como lista).
+  // Rascunhos acompanham o passo da vez. A chave do effect é a lista de ids do
+  // passo: mudou de passo, limpa; continuou no mesmo, preserva o que foi digitado.
+  const chaveDoPasso = passo.map((p) => p.id).join("|")
   useEffect(() => {
-    setRascunho(pergunta?.tipo === "multipla" ? [] : "")
-  }, [pergunta?.id, pergunta?.tipo])
+    setRascunhos({})
+  }, [chaveDoPasso])
 
   async function finalizar() {
     if (!lgpd) {
@@ -247,21 +263,33 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
         />
       </div>
 
-      {pergunta ? (
+      {passo.length > 0 ? (
         <div>
-          <label className="block text-sm font-medium text-stone-100">
-            {pergunta.titulo}
-            {pergunta.obrigatoria ? <span className="ml-1 text-violet-400">*</span> : null}
-          </label>
-          {pergunta.ajuda ? <p className="mt-1 text-xs text-stone-500">{pergunta.ajuda}</p> : null}
+          {/* Story 75-336 — `intro` da primeira pergunta do passo é a frase amigável. */}
+          {passo[0]?.intro ? (
+            <p className="mb-4 whitespace-pre-line text-sm leading-relaxed text-stone-300">
+              {passo[0].intro}
+            </p>
+          ) : null}
 
-          <div className="mt-3">
-            <CampoDaPergunta
-              pergunta={pergunta}
-              valor={rascunho}
-              onChange={setRascunho}
-              onBlur={salvarRascunho}
-            />
+          <div className="space-y-4">
+            {passo.map((p) => (
+              <div key={p.id}>
+                <label className="block text-sm font-medium text-stone-100">
+                  {p.titulo}
+                  {p.obrigatoria ? <span className="ml-1 text-violet-400">*</span> : null}
+                </label>
+                {p.ajuda ? <p className="mt-1 text-xs text-stone-500">{p.ajuda}</p> : null}
+                <div className="mt-2">
+                  <CampoDaPergunta
+                    pergunta={p}
+                    valor={rascunhos[p.id] ?? (p.tipo === "multipla" ? [] : "")}
+                    onChange={(v) => setRascunhos((atual) => ({ ...atual, [p.id]: v }))}
+                    onBlur={salvarRascunho}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
 
           {erro ? <p className="mt-3 text-sm text-red-400">{erro}</p> : null}
@@ -391,7 +419,8 @@ function CampoDaPergunta({
       onBlur={onBlur}
       inputMode={pergunta.tipo === "telefone" ? "tel" : pergunta.tipo === "numero" ? "numeric" : undefined}
       className={inputCls}
-      autoFocus
+      // Sem autoFocus: com dois campos no mesmo passo (Story 75-336) eles
+      // brigariam pelo foco, e no celular o teclado subiria sobre o segundo.
     />
   )
 }
