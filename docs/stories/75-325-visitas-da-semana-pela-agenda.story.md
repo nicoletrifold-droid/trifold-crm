@@ -1,6 +1,6 @@
 # Story 75-325 — "Visitas da semana" sai da agenda, não de uma coluna quase sempre nula
 
-**Story ID:** 75-325 · **Status:** InReview · **Estimativa:** XS (~1 pt)
+**Story ID:** 75-325 · **Status:** Done · **Estimativa:** XS (~1 pt)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · Origem: auditoria do Analytics (17/08), item 6
 
 ## O relato e o diagnóstico

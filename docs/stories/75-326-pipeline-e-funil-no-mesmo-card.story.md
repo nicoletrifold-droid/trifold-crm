@@ -1,6 +1,6 @@
 # Story 75-326 — Pipeline e Funil: uma régua, duas leituras
 
-**Story ID:** 75-326 · **Status:** InReview · **Estimativa:** S (~2 pts)
+**Story ID:** 75-326 · **Status:** Done · **Estimativa:** S (~2 pts)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · **Decisão do Marcos (17/08)**, escolhida entre 3 opções
 
 ## A pergunta que originou a story

@@ -1,6 +1,6 @@
 # Story 75-321 — "Visita realizada" volta a significar que a visita aconteceu
 
-**Story ID:** 75-321 · **Status:** InReview · **Estimativa:** S (~3 pts)
+**Story ID:** 75-321 · **Status:** Done · **Estimativa:** S (~3 pts)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · Origem: auditoria do Analytics pedida pelo Marcos (17/08)
 
 ## O relato e o diagnóstico

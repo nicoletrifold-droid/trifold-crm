@@ -1,6 +1,6 @@
 # Story 75-322 — "Visitas realizadas": uma definição só (tela = PDF)
 
-**Story ID:** 75-322 · **Status:** InReview · **Estimativa:** XS (~2 pts)
+**Story ID:** 75-322 · **Status:** Done · **Estimativa:** XS (~2 pts)
 **Fluxo:** @sm → @po GO → @dev → @qa → @devops · Origem: auditoria do Analytics (17/08), item 1
 
 ## O relato e o diagnóstico
