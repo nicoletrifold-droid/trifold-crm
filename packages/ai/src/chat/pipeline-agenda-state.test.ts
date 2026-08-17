@@ -84,7 +84,6 @@ function seed(collectedData: Row, opts?: { historicoDaNicole?: string; visitProp
       : [],
     appointments: opts?.appointments ?? [],
     activities: [],
-    lead_facts: [],
     properties: [],
   }
 }

@@ -6,8 +6,12 @@
  * e ela nunca agendou nada. O `updateLeadMemory` recebe a fala da PRÓPRIA Nicole
  * e manda o Haiku "incorporar informação nova" — sem uma linha sobre compromisso
  * e sem consultar `appointments`. O resumo volta ao contexto do turno seguinte
- * (`memory/loader.ts`, fallback do `ai_summary`, ativo em 100 % dos turnos
- * enquanto L1/L2/L3 estiverem vazios), então ela repete com mais confiança.
+ * (Story 87-16: o caminho agora é DIRETO — `chat/pipeline.ts`, bloco
+ * `memoryContext`, que injeta o `ai_summary` sob `MEMORIA DO LEAD (resumo):`.
+ * Antes ele passava pelo carregador progressivo do MemPalace, e era o `""` da
+ * tabela inexistente que ARMAVA o fallback; o carregador foi enterrado e a
+ * injeção ficou, byte a byte. Ativa em 624 de 1.052 turnos, 59,3 % em 30 dias),
+ * então ela repete com mais confiança.
  *
  * Este módulo é a **terceira camada** do desenho, e é a única que é garantia:
  *   1. a verdade vem do banco, com data ABSOLUTA (`renderFatoDeAgenda`);

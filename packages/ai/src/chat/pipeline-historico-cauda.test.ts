@@ -165,7 +165,6 @@ function seed(input: {
     messages: input.msgs,
     appointments: [],
     activities: [],
-    lead_facts: [],
     properties: input.properties ?? [],
   }
 }

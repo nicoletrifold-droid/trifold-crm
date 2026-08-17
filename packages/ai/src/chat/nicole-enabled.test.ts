@@ -302,7 +302,6 @@ function seedDoTurno(linhas: Row[]) {
     messages: [],
     appointments: [],
     activities: [],
-    lead_facts: [],
     system_events: [],
     properties: linhas,
   }

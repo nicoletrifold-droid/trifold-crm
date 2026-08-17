@@ -8,6 +8,7 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "seed": "tsx scripts/run-seed.ts && tsx scripts/seed-properties.ts",
+    "db:objects:check": "tsx scripts/check-db-objects.ts",
     "prompts:check": "tsx scripts/dump-agent-prompts.ts --check",
     "prompts:write": "tsx scripts/dump-agent-prompts.ts --write",
     "test": "vitest run",

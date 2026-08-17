@@ -106,7 +106,6 @@ function seedDoIncidente(sabadoIso: string) {
     ],
     appointments: [],
     activities: [],
-    lead_facts: [],
     properties: [],
   }
 }

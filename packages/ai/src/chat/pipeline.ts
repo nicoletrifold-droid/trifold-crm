@@ -29,13 +29,10 @@ import {
   guardStageForAssignedLead,
   stripManualInterestLevel,
 } from "../flows"
-import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
 import type { AgendaState } from "../flows/agenda-state"
-import { loadMemoryContext } from "../memory/loader"
-import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
 import type { DbPromptOverrides } from "../prompts"
 import { isBusinessHours } from "../utils/business-hours"
@@ -675,21 +672,27 @@ export async function processMessageWithMetadata(
   // Property live data context
   const propertyDataContext = buildPropertyDataContext(properties, identifiedPropertyId)
 
-  // Lead memory context — Progressive Loading (MemPalace-inspired L1/L2/L3)
+  // Memória do lead = `ai_summary`. O MemPalace (L1/L2/L3) foi enterrado na
+  // Story 87-16: as duas tabelas e a RPC dele NUNCA existiram em produção
+  // (`to_regclass` = null; a migration 012 está registrada como aplicada e nunca
+  // foi — os nomes ficam no histórico do git, sha a60a1bc6). E o ÚNICO efeito
+  // VIVO do carregador progressivo (`packages/ai/src/memory/`, removido) era o
+  // fallback que este bloco herdou: era o `return ""` da tabela inexistente que
+  // ARMAVA a injeção do `ai_summary`, presente em 624 de 1.052 turnos (59,3 %)
+  // nos 30 dias anteriores ao deploy.
+  //
+  // A string abaixo é IDÊNTICA, byte a byte, à que o carregador removido
+  // produzia — INCLUSIVE o "(resumo)". Os outros dois cabeçalhos do código
+  // antigo ("(informacoes de conversas anteriores)", do `catch`, e
+  // "(fatos ativos)", do L1) NUNCA rodaram: `supabase-js` não lança em erro de
+  // PostgREST, então aquele `catch` era decorativo. Não é lugar de melhorar o
+  // cabeçalho — congelado por `pipeline-ai-summary-no-prompt.test.ts`.
+  //
+  // A guarda dupla é redundante de propósito: `currentSummary` só é atribuído
+  // dentro do `if (conversation?.lead_id)` logo acima. Legibilidade, não lógica.
   let memoryContext = ""
-  if (conversation?.lead_id) {
-    try {
-      const memCtx = await loadMemoryContext(supabase, conversation.lead_id, message, currentSummary)
-      const parts = [memCtx.l1Snapshot, memCtx.l2TopicMemories, memCtx.l3DeepSearch].filter(Boolean)
-      if (parts.length > 0) {
-        memoryContext = `\n${parts.join("\n\n")}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
-      }
-    } catch {
-      // Fallback to ai_summary if progressive loading fails
-      memoryContext = currentSummary
-        ? `\nMEMORIA DO LEAD (informacoes de conversas anteriores):\n${currentSummary}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
-        : ""
-    }
+  if (conversation?.lead_id && currentSummary) {
+    memoryContext = `\nMEMORIA DO LEAD (resumo):\n${currentSummary}\n\nUse essas informacoes para personalizar o atendimento. Chame pelo nome, referencie o que ja conversaram.\n`
   }
 
   // Lead context — inject known fields so Nicole never re-asks them (Story 21.2)
@@ -1632,48 +1635,20 @@ export async function processMessageWithMetadata(
     ...(nicoleInvitedVisit ? { visit_proposed: true } : {}),
   })
 
-  // 12.5 Memory system — regex extraction + lead_facts + Haiku batch (MemPalace-inspired)
+  // 12.5 Memória do lead — o `ai_summary`, e só ele.
+  //
+  // Story 87-16: a seção tinha três partes e duas foram enterradas. Saíram a
+  // `12.5a` (extração por regex → tabela de fatos, 3 round-trips por fato) e a
+  // `12.5c` (Haiku + embeddings → tabela de fragmentos), porque nenhuma das
+  // duas tabelas jamais existiu em produção. O que fica é a `12.5b` —
+  // `atualizarResumoComLastro`, da Story 87-7, que grava o `ai_summary` com
+  // guarda de lastro. A régua `npm run db:objects:check` (AC9) existe para que
+  // esta classe de defeito não volte em silêncio.
+  //
   // Story 75-187: roda também quando o handoff (sinal) dispara — a Nicole continua
   // atendendo, então a memória continua sendo alimentada.
   if (conversation?.lead_id) {
     const leadId = conversation.lead_id
-
-    // 12.5a Deterministic regex extraction → lead_facts (zero-cost, every message)
-    try {
-      const extractedFacts = extractFactsFromMessage(message)
-      for (const fact of extractedFacts) {
-        // Temporal invalidation: expire old fact if predicate changes
-        await supabase
-          .from("lead_facts")
-          .update({ valid_to: new Date().toISOString() })
-          .eq("lead_id", leadId)
-          .eq("predicate", fact.predicate)
-          .is("valid_to", null)
-          .neq("object", fact.object)
-
-        // Insert new fact (only if different from current active)
-        const { data: existing } = await supabase
-          .from("lead_facts")
-          .select("id")
-          .eq("lead_id", leadId)
-          .eq("predicate", fact.predicate)
-          .eq("object", fact.object)
-          .is("valid_to", null)
-          .limit(1)
-          .maybeSingle()
-
-        if (!existing) {
-          await supabase.from("lead_facts").insert({
-            lead_id: leadId,
-            predicate: fact.predicate,
-            object: fact.object,
-            confidence: fact.confidence,
-          })
-        }
-      }
-    } catch (err) {
-      console.error("Regex extraction failed (non-blocking):", err)
-    }
 
     // 12.5b Haiku memory update — every 5 messages (batch mode)
     // Count recent messages to decide if it's time for a Haiku pass
@@ -1705,10 +1680,6 @@ export async function processMessageWithMetadata(
         onEvent: emit,
       }).catch((err) => console.error("Lead memory update failed:", err))
     }
-
-    // 12.5c Memory fragments → lead_memories (async, non-blocking)
-    processConversationTurn(supabase, anthropic, leadId, message, assistantMessage)
-      .catch((err) => console.error("Memory writer failed (non-blocking):", err))
   }
 
   // 13. Return response with metadata
