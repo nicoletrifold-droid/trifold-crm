@@ -228,9 +228,9 @@ export function AgendaStep({
                   onClick={() => escolherDia(c.date!)}
                   className={`aspect-square rounded-full text-sm transition ${
                     selecionado
-                      ? "bg-violet-600 font-semibold text-white"
+                      ? "bg-orange-600 font-semibold text-white"
                       : c.disponivel
-                        ? "bg-violet-500/10 font-medium text-violet-300 hover:bg-violet-500/25"
+                        ? "bg-orange-500/10 font-medium text-orange-300 hover:bg-orange-500/25"
                         : "text-stone-600"
                   }`}
                 >
@@ -261,7 +261,7 @@ export function AgendaStep({
                       type="button"
                       disabled={enviando}
                       onClick={() => void agendar(s.startIso)}
-                      className="w-full rounded-lg border border-violet-500/40 bg-transparent px-3 py-2.5 text-sm font-medium text-violet-300 transition hover:border-violet-400 hover:bg-violet-500/10 disabled:opacity-50"
+                      className="w-full rounded-lg border border-orange-500/40 bg-transparent px-3 py-2.5 text-sm font-medium text-orange-300 transition hover:border-orange-400 hover:bg-orange-500/10 disabled:opacity-50"
                     >
                       {s.labelLocal}
                     </button>
