@@ -164,3 +164,33 @@ export function parseFormSchema(raw: unknown): FormSchema {
       : {}),
   }
 }
+
+/**
+ * O formulário consegue gerar lead? (@qa, gate 75-330)
+ *
+ * Sem uma pergunta `campo_contato: "nome"` E outra `"telefone"`, o formulário
+ * roda bonito até o fim e **falha só no envio** — para o lead, com uma mensagem
+ * que ele não tem como resolver. O resultado seria uma campanha paga rodando e
+ * coletando ZERO leads, com o defeito visível só para quem clicou no anúncio.
+ *
+ * Por isso a checagem é na GRAVAÇÃO, não na execução. Formulário vazio
+ * (`perguntas: []`) passa de propósito: é o estado inicial de um formulário
+ * recém-criado, que ainda está sendo montado — e a página pública já recusa
+ * servir formulário sem perguntas.
+ *
+ * @returns lista de problemas; vazia = pode publicar.
+ */
+export function problemasParaPublicar(schema: FormSchema): string[] {
+  if (schema.perguntas.length === 0) return []
+
+  const contatos = new Set(schema.perguntas.map((p) => p.campo_contato).filter(Boolean))
+  const faltando: string[] = []
+  if (!contatos.has("nome")) faltando.push('campo_contato: "nome"')
+  if (!contatos.has("telefone")) faltando.push('campo_contato: "telefone"')
+
+  if (faltando.length === 0) return []
+  return [
+    `Sem ${faltando.join(" e ")}, o formulário não consegue criar o lead e o envio vai falhar ` +
+      `para quem preencher. Marque a pergunta correspondente com esse campo.`,
+  ]
+}

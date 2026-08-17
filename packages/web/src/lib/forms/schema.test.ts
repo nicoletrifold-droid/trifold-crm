@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseFormSchema, FormSchemaInvalido } from "./schema"
+import { parseFormSchema, problemasParaPublicar, FormSchemaInvalido } from "./schema"
 
 // Story 75-330 — AC8. O schema é editado em produção por quem não é dev: o erro
 // precisa dizer QUAL pergunta está errada, não "Unexpected token".
@@ -96,5 +96,38 @@ describe("parseFormSchema", () => {
 
   it("formulário vazio é válido — é o estado inicial de um formulário novo", () => {
     expect(parseFormSchema({ perguntas: [] })).toEqual({ perguntas: [] })
+  })
+})
+
+// ⛔ REGRESSÃO (@qa, gate 75-330) — sem campo de contato o formulário rodava
+// inteiro e só falhava NO ENVIO, para o lead: campanha paga coletando zero,
+// com o defeito visível apenas para quem clicou no anúncio.
+describe("problemasParaPublicar", () => {
+  const comContato = parseFormSchema({
+    perguntas: [
+      { id: "n", tipo: "texto", titulo: "Nome", campo_contato: "nome" },
+      { id: "t", tipo: "telefone", titulo: "WhatsApp", campo_contato: "telefone" },
+    ],
+  })
+
+  it("formulário com nome e telefone pode publicar", () => {
+    expect(problemasParaPublicar(comContato)).toEqual([])
+  })
+
+  it("sem telefone, acusa — o lead não teria como ser criado", () => {
+    const s = parseFormSchema({
+      perguntas: [{ id: "n", tipo: "texto", titulo: "Nome", campo_contato: "nome" }],
+    })
+    expect(problemasParaPublicar(s)).toHaveLength(1)
+    expect(problemasParaPublicar(s)[0]).toMatch(/telefone/)
+  })
+
+  it("sem nenhum campo de contato, acusa os dois", () => {
+    const s = parseFormSchema({ perguntas: [{ id: "x", tipo: "texto", titulo: "Qualquer" }] })
+    expect(problemasParaPublicar(s)[0]).toMatch(/nome.*telefone/)
+  })
+
+  it("formulário VAZIO passa — é rascunho recém-criado, não publicação", () => {
+    expect(problemasParaPublicar({ perguntas: [] })).toEqual([])
   })
 })

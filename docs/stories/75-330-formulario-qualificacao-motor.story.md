@@ -1,6 +1,6 @@
 # Story 75-330 — Motor do formulário público de qualificação
 
-**Status:** InProgress
+**Status:** InReview
 **Tipo:** Feature nova (rota pública + tabelas novas)
 **Epic:** 89 — Formulário de qualificação para tráfego pago
 **Story ID:** 75-330
@@ -268,3 +268,4 @@ score no próprio teste (10 + 20 = 30, não 25). Corrigido o teste, não o códi
 |------|-------|---------|
 | 17/08/2026 | @sm (River) | Story criada a partir do Épico 89, com as decisões D1–D3 do diretor |
 | 17/08/2026 | @po (Pax) | **GO 8/10** — `Draft` → `Ready`. 4 correções aplicadas: AC4 (enum `lead_source` + varredura, evita repetir o `22P02` da 181), AC6 (UTM nas colunas dedicadas, não em `metadata`), AC5 (escala 0–100 + decidir sobre `qualification_score`), rate limit com dono. Parecer: `docs/qa/po-validation-75-330.md` |
+| 17/08/2026 | @qa (Quinn) | **CONCERNS** — gate abriu em FAIL: opcional em branco travava o formulário (bloqueante), formulário sem campo de contato falhava só no envio, e o rate limit por IP vazava memória. Os 3 corrigidos com regressão. Parecer: `docs/qa/qa-gate-75-330.md` |

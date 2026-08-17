@@ -43,9 +43,22 @@ export function perguntasVisiveis(schema: FormSchema, respostas: Respostas): Per
 export function proximaPergunta(schema: FormSchema, respostas: Respostas): Pergunta | null {
   for (const pergunta of schema.perguntas) {
     if (!perguntaVisivel(pergunta, respostas)) continue
+
     const r = respostas[pergunta.id]
-    const respondida = Array.isArray(r) ? r.length > 0 : r !== undefined && r !== null && String(r).trim() !== ""
-    if (!respondida) return pergunta
+
+    // Nunca vista: é esta.
+    if (r === undefined || r === null) return pergunta
+
+    // 🔴 A chave EXISTE mas está vazia. Isso significa que a pessoa passou por
+    // esta pergunta e não respondeu — e a diferença entre obrigatória e opcional
+    // decide tudo:
+    //   - opcional  → pular em branco é uma resposta válida. SEGUE.
+    //   - obrigatória → continua pendente (só chega aqui vindo de uma resposta
+    //     parcial carregada do banco; o runner não deixa gravar em branco).
+    // Sem esta distinção, pular uma opcional devolvia a MESMA pergunta para
+    // sempre e o formulário travava — ninguém conseguia terminar.
+    const vazia = Array.isArray(r) ? r.length === 0 : String(r).trim() === ""
+    if (vazia && pergunta.obrigatoria) return pergunta
   }
   return null
 }

@@ -31,12 +31,24 @@ interface LeadForm {
 // ⚠️ LIMITAÇÃO CONHECIDA E ACEITA: na Vercel isso vale POR INSTÂNCIA de lambda.
 // Segura repetição acidental e script ingênuo; NÃO é defesa contra abuso
 // distribuído. Defesa séria de endpoint público é story própria.
+// ⚠️ @qa (gate 75-330): o padrão original do chat é indexado por USUÁRIO
+// (limitado pelo tamanho do time). Aqui a chave é IP de tráfego pago — sem
+// poda, o Map cresce sem teto enquanto a lambda viver e vira vazamento de
+// memória. Por isso a varredura abaixo, que o original não precisava ter.
 const rateLimitMap = new Map<string, number[]>()
+const JANELA_MS = 60 * 1000
+const MAX_POR_JANELA = 30
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now()
-  const janela = 60 * 1000
-  const recentes = (rateLimitMap.get(ip) ?? []).filter((t) => now - t < janela)
-  if (recentes.length >= 30) return false
+
+  // Poda: remove IPs cuja janela já expirou por completo.
+  for (const [chave, marcas] of rateLimitMap) {
+    if (marcas.every((t) => now - t >= JANELA_MS)) rateLimitMap.delete(chave)
+  }
+
+  const recentes = (rateLimitMap.get(ip) ?? []).filter((t) => now - t < JANELA_MS)
+  if (recentes.length >= MAX_POR_JANELA) return false
   recentes.push(now)
   rateLimitMap.set(ip, recentes)
   return true

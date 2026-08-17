@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { parseFormSchema, FormSchemaInvalido } from "@web/lib/forms/schema"
+import { parseFormSchema, problemasParaPublicar, FormSchemaInvalido } from "@web/lib/forms/schema"
 
 // Story 75-330 (Epic 89) — CRUD dos formulários de qualificação.
 // A rota PÚBLICA que executa o formulário é /api/formulario/[token]; esta aqui
@@ -71,7 +71,16 @@ export async function PATCH(request: NextRequest) {
   // JSON quebrado derrubaria a página pública de uma campanha já no ar.
   if (body.schema !== undefined) {
     try {
-      patch.schema = parseFormSchema(body.schema)
+      const schema = parseFormSchema(body.schema)
+      // @qa (gate 75-330): sem campo de contato o formulário roda inteiro e só
+      // falha NO ENVIO, para o lead — campanha paga coletando zero. Barrar aqui
+      // é a diferença entre um erro para o admin agora e um defeito invisível
+      // com o anúncio no ar.
+      const problemas = problemasParaPublicar(schema)
+      if (problemas.length > 0) {
+        return NextResponse.json({ error: problemas.join(" ") }, { status: 400 })
+      }
+      patch.schema = schema
     } catch (e) {
       const motivo = e instanceof FormSchemaInvalido ? e.message : "Formulário inválido."
       return NextResponse.json({ error: motivo }, { status: 400 })

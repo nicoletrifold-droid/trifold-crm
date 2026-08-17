@@ -69,9 +69,32 @@ describe("proximaPergunta", () => {
     expect(proximaPergunta(schema, { ...r, banco: "nao" })).toBeNull()
   })
 
-  it("resposta em branco não conta como respondida", () => {
+  it("OBRIGATÓRIA em branco continua pendente", () => {
     expect(proximaPergunta(schema, { nome: "   " })?.id).toBe("nome")
     expect(proximaPergunta(schema, { nome: "Ana", pagamento: [] as string[] })?.id).toBe("pagamento")
+  })
+
+  // ⛔ REGRESSÃO (@qa, gate 75-330) — este caso TRAVAVA o formulário: pular uma
+  // pergunta opcional devolvia a MESMA pergunta para sempre, e ninguém
+  // conseguia chegar ao envio. Numa campanha paga, isso é o formulário inteiro
+  // não coletando nada de quem deixa um campo opcional em branco.
+  it("OPCIONAL pulada em branco AVANÇA — não devolve a mesma pergunta", () => {
+    const comOpcional: FormSchema = {
+      perguntas: [
+        { id: "nome", tipo: "texto", titulo: "Nome", obrigatoria: true },
+        { id: "obs", tipo: "texto", titulo: "Algo a acrescentar?" }, // opcional
+        { id: "fim", tipo: "texto", titulo: "Última" },
+      ],
+    }
+    expect(proximaPergunta(comOpcional, { nome: "Ana", obs: "" })?.id).toBe("fim")
+    // Idem para múltipla opcional deixada sem marcar nada.
+    const comMultipla: FormSchema = {
+      perguntas: [
+        { id: "m", tipo: "multipla", titulo: "Opcional", opcoes: [{ valor: "a", rotulo: "A" }] },
+        { id: "fim", tipo: "texto", titulo: "Última" },
+      ],
+    }
+    expect(proximaPergunta(comMultipla, { m: [] as string[] })?.id).toBe("fim")
   })
 })
 
