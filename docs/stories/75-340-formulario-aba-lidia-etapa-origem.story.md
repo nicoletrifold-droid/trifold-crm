@@ -101,9 +101,10 @@ Dois cuidados que a correção mantém:
 | `packages/web/src/lib/leads/advance-visita-agendada.test.ts` (novo) | reativação + activity, `lost_reason` residual, e o caso de borda "perdido em etapa posterior não é reativado de mentira" |
 | `packages/web/src/app/api/formulario/[token]/route.test.ts` (novo) | origem do último contato, UTM ausente não apaga a anterior, UTM nova sobrescreve, activity não repete, lead novo inalterado |
 | `packages/web/src/app/api/formulario/[token]/agenda/route.test.ts` | atualizado: a rota chama o helper com o lead e a origem certos |
+| `packages/web/src/app/dashboard/campaigns/_components/campaigns-tabs.contract.test.ts` (novo, do gate @qa) | nenhuma das 4 telas de Campanhas esconde aba por valor fixo — a regressão do AC1 já ocorreu duas vezes |
 | `packages/ai/src/chat/__fixtures__/fake-supabase.ts` | fake passou a entender `not.in` no `.or()` — sem isso o novo guard quebrava 12 testes do pipeline |
 
-**Validações:** 208 arquivos / 2612 testes passando · `type-check` 8/8 · `lint` 0 erros.
+**Validações:** 209 arquivos / 2622 testes passando · `type-check` 8/8 · `lint` 0 erros.
 
 ## File List
 
@@ -123,6 +124,8 @@ Dois cuidados que a correção mantém:
 - `packages/web/src/app/dashboard/leads/[id]/timeline/page.tsx` — rótulos `form_completed` e `lead_source_updated`
 - `packages/ai/src/chat/pipeline.ts` — activity de reativação
 - `packages/ai/src/chat/__fixtures__/fake-supabase.ts`
+- `packages/web/src/app/dashboard/campaigns/_components/campaigns-tabs.contract.test.ts` *(novo, criado no gate @qa)* — trava a regressão da barra de abas
+- `docs/qa/gates/75-340-formulario-aba-lidia-etapa-origem.yml` *(novo)* — gate CONCERNS
 
 ## Dado existente em produção (fora do código)
 
@@ -130,5 +133,40 @@ Varredura em 18/08 nas visitas ativas: **1 lead** ficou com visita marcada e eta
 "Lidia", em Perdido (`lost_reason: "Sem interação"`), visita 22/08 14:00. O "Lucas Teste" já não
 conta: a visita dele foi cancelada depois, então Perdido é coerente.
 
-O código novo só age em agendamentos futuros. Ajustar esse 1 registro é escrita em produção e
-aguarda decisão do Marcos.
+O código novo só age em agendamentos futuros. **Ajuste autorizado pelo Marcos e executado em
+18/08:** o lead "Lidia" (`21726c0f-…`) foi para Visita Agendada, `lost_reason` e
+`lost_reason_grupo` limpos, com activity `lead_reactivated` marcada `backfill: true`.
+
+---
+
+## QA Results
+
+**Gate:** CONCERNS · **Revisado por:** @qa (Quinn) · **18/08** ·
+`docs/qa/gates/75-340-formulario-aba-lidia-etapa-origem.yml`
+
+Nove mutações aplicadas por mim ao código (aplicar · rodar · reverter · conferir md5). **Sete
+mordem**, e os md5 dos três arquivos de produção voltaram idênticos — nenhuma linha alterada pelo
+gate. As duas que não mordiam:
+
+- **AC1 (aba Lídia) estava sem rede** — `showAgente={false}` restaurado passava com 1760 verdes.
+  **Fechei no gate:** criei `campaigns-tabs.contract.test.ts`, que morde a regressão por valor fixo
+  (2 falhas) e também a barra removida de uma tela (2 falhas). Esse defeito já aconteceu duas vezes
+  na mesma barra — por cópia antes da 75-333, por valor agora. **Ação A1 para o @dev: commitar o
+  arquivo, que está untracked.**
+- **Activity de reativação da Nicole** (`pipeline.ts`) sem cobertura — dívida C2 aceita. O que o
+  Marcos pediu (a etapa) é o guard do `shared`, com 18 casos; sem teste ficaram 6 linhas de trilha.
+
+**O que sustenta o CONCERNS é um efeito que o Marcos ainda não sabe que comprou (C1):**
+`analytics-report-data.ts:134` agrupa por `leads.source` no estado **atual** do lead. Um lead que
+entrou por "website" em junho e preenche o formulário em agosto passa a contar como
+`form_qualificacao` **também no recorte de junho**. A ficha e a timeline preservam o rastro
+(`metadata.origem_anterior`, activity `lead_source_updated`), mas nenhum relatório os lê. Se
+atribuição histórica importar, é story própria — não emenda aqui.
+
+Impactos aceitos e registrados: leads em `represamento`/`acao_muffato` passam a sair da coluna ao
+agendar; `lost_reason_grupo` zerado tira o lead das métricas de motivo de perda (mesmo
+comportamento da reativação manual); o trigger 124 já grava `stage_change`, então a activity nova
+acrescenta o motivo, não duplica o registro.
+
+Réguas: 208 arquivos · 2612 passed · 6 expected fail (+10 do teste novo) · type-check 8/8 · lint 0
+erros. CodeRabbit não rodou — CLI configurada para WSL, ambiente darwin.

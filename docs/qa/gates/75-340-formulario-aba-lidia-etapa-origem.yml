@@ -1,0 +1,186 @@
+schema: 1
+storyId: "75-340"
+story: "docs/stories/75-340-formulario-aba-lidia-etapa-origem.story.md"
+title: "Quality Gate — Formulários: aba Lídia sumindo, visita que não move a etapa, origem congelada"
+epic: 89
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-18"
+branch: "fix/75-340-formulario-etapa-origem-aba — commit 5844cecd"
+
+escopo: >
+  Três defeitos independentes reportados pelo Marcos em 18/08 sobre a aba Formulários. O de maior
+  alcance NÃO é o da tela: é a regra de etapa após agendar visita, que a story reescreve no
+  `shared` e que vale para os QUATRO pontos de agendamento do produto (formulário público, link da
+  imobiliária, agenda do CRM e Nicole no WhatsApp).
+
+resumo: >
+  **O código aguenta, e a parte crítica está coberta por mutação.** Apliquei nove mutações — cada
+  uma com aplicar · rodar · reverter · conferir md5 — e as sete que incidem sobre comportamento
+  coberto produzem vermelho: allowlist restaurada derruba 20 testes, payload sem limpar
+  `lost_reason` derruba 4, activity de reativação suprimida derruba 2, "reativado" sem o guard
+  local derruba 1, origem não sobrescrita derruba 2, UTM sobrescrita sem UTM na visita derruba 1.
+  Os md5 dos três arquivos de produção voltaram idênticos aos originais — nenhuma linha mudou
+  durante o gate.
+
+  **Duas mutações NÃO mordiam** e eu tratei cada uma no seu tamanho. A da aba (AC1) eu fechei
+  criando `campaigns-tabs.contract.test.ts`: essa regressão exata já aconteceu duas vezes — por
+  cópia antes da 75-333 e por valor fixo NA própria 75-333 (4f66fc96) — e o teste novo morde os dois sintomas (aba escondida
+  por `false` literal e barra ausente numa das quatro telas). A da Nicole (activity de reativação no
+  pipeline `ai`) fica como dívida declarada: o comportamento crítico dela — a mudança de etapa — é o
+  mesmo guard do `shared`, que tem cobertura; o que está sem teste são seis linhas de trilha.
+
+  **O que sustenta o CONCERNS não é o código: é um efeito que o usuário ainda não sabe que
+  comprou.** Sobrescrever `source` altera a atribuição de origem nos relatórios, não só na ficha —
+  Analytics agrupa por `leads.source` no estado ATUAL do lead. Ver C1.
+
+status_reason: >
+  Liberado para merge. Duas ações antes do push (A1) e duas pendências que não bloqueiam (C1, C2).
+
+acoes_obrigatorias:
+  - id: A0
+    severidade: LOW
+    para: "@dev"
+    titulo: "Atualizar a story: backfill já executado e File List incompleta"
+    detalhe: >
+      A seção "Dado existente em produção" ainda diz que o ajuste do lead "Lidia" aguarda decisão
+      — ele foi autorizado e executado em 18/08. A File List também não lista o contract test nem
+      este gate.
+    status: FECHADO — story atualizada em 18/08
+  - id: A1
+    severidade: HIGH
+    para: "@dev"
+    titulo: "Commitar o teste de contrato das abas que eu criei"
+    detalhe: >
+      `packages/web/src/app/dashboard/campaigns/_components/campaigns-tabs.contract.test.ts` está
+      untracked. Sem ele, AC1 volta a ser a única correção da story sem rede — e é a que já
+      regrediu duas vezes. Validado: morde `showAgente={false}` (2 falhas) e barra removida de uma
+      tela (2 falhas).
+    status: FECHADO — commitado pelo @dev em 18/08
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: impacto-de-negócio-não-declarado
+    titulo: "A origem do último contato reescreve a atribuição histórica em Analytics"
+    detalhe: >
+      `analytics-report-data.ts:134` agrupa por `l.source` — a coluna atual do lead, não um snapshot
+      do momento da entrada. Consequência: um lead que entrou por "website" em junho e preenche o
+      formulário em agosto passa a contar como `form_qualificacao` TAMBÉM no recorte de junho. O
+      pedido do Marcos ("a origem tem que ser o último local") é inequívoco e a story o cumpre; o
+      que falta é ele saber que o relatório de origem muda junto. `metadata.origem_anterior` e a
+      activity `lead_source_updated` preservam o rastro por lead, mas nenhum relatório os lê.
+      Encaminhamento: avisar o Marcos. Se a atribuição histórica importar, é story própria
+      (`lead_source_history` ou snapshot em `leads.source_original`) — não emenda aqui.
+  - id: C2
+    severidade: MEDIUM
+    tipo: dívida-de-teste
+    titulo: "Activity de reativação da Nicole sem cobertura"
+    detalhe: >
+      Mutação M7 (suprimir o `if (!stageErr && estavaPerdido)` em `pipeline.ts`) passa com 756
+      testes verdes. O `pipeline-scheduling.test.ts` não tem cenário de lead em Perdido; montar um
+      custa caro no setup daquele arquivo. Risco aceito: a etapa em si (o que o Marcos pediu) é o
+      guard do `shared`, coberto por 18 casos.
+  - id: C3
+    severidade: LOW
+    tipo: precisão-de-comentário
+    titulo: "O comentário do PERDIDO_STAGE_IDS sugere unificação completa"
+    detalhe: >
+      O texto em `shared/constants/stages.ts` diz que os UUIDs "viviam copiados" em quatro lugares.
+      A story unificou `web/lib/leads/stage-filters` e deu ao pacote `ai` a fonte comum, mas as
+      cópias seguem em `api/leads/[id]/tasks/route.ts`, `api/leads/[id]/notes/route.ts`,
+      `api/leads/[id]/mark-lost/route.ts`, `api/cron/supremo-sync/route.ts` e
+      `components/leads/lead-detail-drawer.tsx`. Nenhuma delas está errada hoje; o comentário é que
+      dá a impressão de que não existem mais. Bônus encontrado no caminho: `tasks/route.ts:6`
+      rotula o UUID `…008` como "Represamento" quando ele é **Perdido** — comentário errado
+      pré-existente, fora do escopo desta story.
+  - id: C4
+    severidade: LOW
+    tipo: tipagem
+    titulo: "`admin as never` no helper"
+    detalhe: >
+      `advance-visita-agendada.ts` passa o `SupabaseClient` como `never` para casar com o tipo
+      estrutural `StageAdvanceClient`. Funciona e é o preço de o `shared` não depender de
+      supabase-js, mas o cast engoliria uma mudança de assinatura futura sem erro de compilação.
+
+impactos_conhecidos_e_aceitos:
+  - titulo: "Leads em `represamento` e `acao_muffato` agora avançam ao agendar visita"
+    detalhe: >
+      Efeito direto de trocar allowlist por blocklist. `represamento` é acervo e `acao_muffato` é
+      coluna exclusiva da Trifold — um lead nelas sai da coluna ao marcar visita. É exatamente o que
+      a decisão do diretor pede ("agendou visita → a etapa é Visita Agendada"), mas quem usa essas
+      colunas como fila de trabalho vai ver o lead migrar.
+  - titulo: "`lost_reason_grupo` é zerado na reativação"
+    detalhe: >
+      O lead reativado sai das métricas de motivo de perda (migration 213). É o mesmo
+      comportamento da reativação MANUAL (`api/leads/[id]/reativar`), que também limpa os dois
+      campos e guarda os anteriores na activity — consistente com o padrão existente, não novidade
+      desta story.
+  - titulo: "Trigger 124 já registra `stage_change`"
+    detalhe: >
+      A activity `lead_reactivated` não substitui nem duplica o registro de etapa: o trigger de
+      banco grava `stage_change` sozinho em toda alteração de `leads.stage_id`. A nova activity
+      acrescenta o MOTIVO, que o trigger não tem como saber.
+
+verificacoes:
+  mutacoes:
+    - id: M1
+      mutacao: "guard volta a allowlist (`not.in` → `in`)"
+      resultado: "20 failed / 23 passed"
+      veredito: MORDE
+    - id: M2
+      mutacao: "payload sem `lost_reason: null` / `lost_reason_grupo: null`"
+      resultado: "4 failed / 39 passed"
+      veredito: MORDE
+    - id: M3
+      mutacao: "helper não insere a activity de reativação"
+      resultado: "2 failed / 41 passed"
+      veredito: MORDE
+    - id: M4
+      mutacao: "helper marca `reativado` sem checar se a etapa regrediria"
+      resultado: "1 failed / 42 passed"
+      veredito: MORDE
+    - id: M5
+      mutacao: "rota do formulário não sobrescreve `source`"
+      resultado: "2 failed / 41 passed"
+      veredito: MORDE
+    - id: M6
+      mutacao: "rota sobrescreve `utm_content` mesmo sem UTM na visita"
+      resultado: "1 failed / 42 passed"
+      veredito: MORDE
+    - id: M7
+      mutacao: "pipeline da Nicole não grava a activity de reativação"
+      resultado: "756 passed — nenhuma falha"
+      veredito: NÃO MORDE
+      encaminhamento: C2
+    - id: M8
+      mutacao: "aba Lídia volta a `showAgente={false}`"
+      resultado_antes: "1760 passed — nenhuma falha"
+      resultado_depois_do_teste_novo: "2 failed / 8 passed"
+      veredito: "FECHADO no gate (A1)"
+    - id: M9
+      mutacao: "barra de abas removida da tela de Meta Ads"
+      resultado_depois_do_teste_novo: "2 failed / 8 passed"
+      veredito: "FECHADO no gate (A1)"
+  md5_pos_gate: "os 3 arquivos de produção mutados voltaram ao hash original — nenhuma linha alterada pelo gate"
+  reguas:
+    testes: "209 arquivos · 2622 passed · 6 expected fail (contract test novo incluído)"
+    type_check: "8/8 pacotes"
+    lint: "0 erros · 26 warnings (pré-existentes)"
+  banco:
+    - "CHECK `leads_lost_reason_grupo_check` (migration 212) aceita NULL — a limpeza não viola constraint"
+    - "Pipeline IMOB confirmado: mesmas `kanban_stages`, filtro por `segmento='imob'` + `lost_reason IS NULL`; o guard não toca `segmento`"
+  coderabbit:
+    executado: false
+    motivo: "CLI configurada para WSL/Ubuntu; ambiente desta sessão é darwin. Revisão manual + mutação no lugar."
+
+dado_de_producao:
+  - "Varredura das visitas ativas em 18/08: 1 lead inconsistente (\"Lidia\", Perdido + visita 22/08)"
+  - "Corrigido pelo @dev com autorização explícita do Marcos: etapa → Visita Agendada, lost_reason limpo, activity de reativação com `backfill: true`"
+  - "\"Lucas Teste\" não entrou no backfill: a visita dele foi cancelada depois, então Perdido é coerente"
+
+pendencia_pos_deploy:
+  - "Confirmar visualmente em crm.trifold.eng.br: a aba Lídia aparece ao entrar em Formulários (usuário com `marketing.gerenciar`)"
+  - "Confirmar que um lead novo que agenda pelo formulário aparece na coluna Visita Agendada do Pipeline"
