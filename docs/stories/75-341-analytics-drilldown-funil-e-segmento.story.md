@@ -1,11 +1,11 @@
 # Story 75-341 — Analytics: clicar no funil abre a lista, e dois endpoints que contavam IMOB
 
-**Status:** Ready for Review
+**Status:** Done
 **Tipo:** Feature (drill-down) + Bug fix (isolamento IMOB em 2 endpoints)
 **Epic:** 75 — CRM Trifold
 **Story ID:** 75-341
 **Complexidade:** M (~5 pts — 1 rota nova, 2 componentes, 0 migrations)
-**Fluxo:** @dev → @qa → @devops
+**Fluxo:** @dev → @qa (mutação) → @devops · **PR #451 mergeado em 18/08**
 **Migrations:** **nenhuma**.
 
 ## O pedido (Marcos, 18/08)
