@@ -1,11 +1,11 @@
 # Story 75-342 — "Leads por Período" conta entradas, não sobreviventes
 
-**Status:** InReview — gate PASS (`docs/qa/gates/75-342-leads-por-periodo-conta-entradas.yml`)
+**Status:** Done — gate PASS · **PR #452 mergeado em 18/08** (squash `bc09c3fa`) · deploy de produção `success` às 20:35 UTC
 **Tipo:** Bug fix (definição divergente) — mesma família da auditoria 75-321..326
 **Epic:** 75 — CRM Trifold
 **Story ID:** 75-342
 **Complexidade:** S (~2 pts — 1 query, 1 rótulo, 1 arquivo de teste novo, 0 migrations)
-**Fluxo:** @dev → @qa → @devops
+**Fluxo:** @sm → @dev → @qa → @devops (executado 18/08)
 **Migrations:** **nenhuma**.
 
 ## O pedido (Marcos, 18/08)
