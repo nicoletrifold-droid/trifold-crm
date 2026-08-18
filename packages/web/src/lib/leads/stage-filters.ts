@@ -1,3 +1,5 @@
+import { PERDIDO_STAGE_IDS } from "@trifold/shared"
+
 /**
  * Fonte única de verdade dos stages excluídos das visões de fluxo de leads.
  * Usado pelo card "Leads ativos" (dashboard) E pela lista "Em atendimento"
@@ -5,10 +7,9 @@
  */
 
 // Perdidos — aba "Perdidos" e exclusão da view ativos.
-export const PERDIDO_STAGE_IDS = [
-  "00000000-0000-0000-0001-000000000008", // Perdido
-  "95327bd7-3e88-4038-aa16-250a74ab085c", // Não Qualificado
-]
+// Story 75-340: os UUIDs moraram aqui até o pacote `ai` precisar da mesma lista.
+// Fonte única agora é `@trifold/shared`; este reexport mantém os imports antigos.
+export { PERDIDO_STAGE_IDS }
 
 // Acervo/legado — fora do fluxo de atendimento (e não são "perdidos").
 // Continuam visíveis no Pipeline kanban.

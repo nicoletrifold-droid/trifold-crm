@@ -8,7 +8,8 @@ import { notifyImobVisitWhatsApp } from "@web/lib/appointments/notify-imob-visit
 import { notifyVisitBookedWhatsApp } from "@web/lib/appointments/visit-whatsapp"
 import { overlaps } from "@web/lib/appointments/governance"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
-import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
+import { normalizePhoneBR, STAGE_IDS } from "@trifold/shared"
+import { advanceVisitaAgendadaComTrilha } from "@web/lib/leads/advance-visita-agendada"
 
 // Deep-link do push — SEMPRE o domínio custom (cookie de sessão; ver memória 75-152).
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
@@ -240,12 +241,17 @@ export async function POST(
     return NextResponse.json({ error: "Não foi possível agendar. Tente novamente." }, { status: 500 })
   }
 
-  // Story 75-196: com a visita GRAVADA, o lead avança para "Visita Agendada"
-  // (guard só-avança; não regride nem ressuscita perdido). Segmento fica
-  // intacto — lead imob segue aparecendo só no pipeline IMOB. Best-effort:
-  // falha de etapa não derruba o agendamento já criado.
+  // Story 75-196 + 75-340: com a visita GRAVADA, o lead avança para "Visita
+  // Agendada" (guard só-não-regride; desde a 75-340 lead perdido também avança,
+  // com activity de reativação). Segmento fica intacto — o lead imob avança na
+  // MESMA etapa e continua aparecendo só no pipeline IMOB, que filtra por
+  // segmento. Best-effort: falha de etapa não derruba o agendamento já criado.
   if (leadId) {
-    await advanceToVisitaAgendada(admin, leadId)
+    await advanceVisitaAgendadaComTrilha(admin, {
+      orgId: imob.org_id,
+      leadId,
+      origem: `link da imobiliária ${imob.nome}`,
+    })
   }
 
   // Story 75-275 — o link da imobiliária passa a espelhar no Google Calendar. Era o

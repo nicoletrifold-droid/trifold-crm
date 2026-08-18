@@ -26,12 +26,18 @@ export interface FakeResult {
 let idSeq = 0
 const nextId = () => `fake-${++idSeq}`
 
-/** `or("stage_id.is.null,stage_id.in.(a,b)")` — só as formas que o código usa. */
+/** `or("stage_id.is.null,stage_id.not.in.(a,b)")` — só as formas que o código usa. */
 function parseOr(expr: string): Pred {
   const parts = expr.split(/,(?![^()]*\))/)
   const preds: Pred[] = parts.map((part) => {
     const isNull = part.match(/^([a-z_]+)\.is\.null$/)
     if (isNull) return (r) => r[isNull[1]!] == null
+    // Story 75-340: o guard de "Visita Agendada" virou blocklist (`not.in`).
+    const notInList = part.match(/^([a-z_]+)\.not\.in\.\((.*)\)$/)
+    if (notInList) {
+      const values = notInList[2]!.split(",").map((v) => v.trim().replace(/^"|"$/g, ""))
+      return (r) => !values.includes(String(r[notInList[1]!]))
+    }
     const inList = part.match(/^([a-z_]+)\.in\.\((.*)\)$/)
     if (inList) {
       const values = inList[2]!.split(",").map((v) => v.trim().replace(/^"|"$/g, ""))

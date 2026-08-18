@@ -45,7 +45,7 @@ import {
   temFalaDeCorretor,
 } from "./conversation-history"
 import type { ConversationMessage } from "./conversation-history"
-import { STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
+import { STAGE_IDS, PERDIDO_STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 
 /**
  * Validates that a visit_availability string contains a day reference,
@@ -1497,10 +1497,25 @@ export async function processMessageWithMetadata(
         }
       }
 
-      // Story 75-196 (muda a 73-1): visita agendada → lead avança para "Visita
-      // Agendada" (guard só-avança no WHERE; nunca regride nem ressuscita perdido).
+      // Story 75-196 (muda a 73-1) + 75-340: visita agendada → lead avança para
+      // "Visita Agendada" (guard no WHERE; só não regride quem já visitou/propôs/
+      // negocia/fechou). Desde a 75-340 o lead PERDIDO também avança: se ele
+      // voltou a falar com a Nicole e marcou visita, está de volta ao funil.
       // Lead da Nicole é segmento='principal' → aparece no pipeline HOUSE.
+      const estavaPerdido = !!currentLead?.stage_id && PERDIDO_STAGE_IDS.includes(currentLead.stage_id)
       const { error: stageErr } = await advanceToVisitaAgendada(supabase, leadId)
+      if (!stageErr && estavaPerdido) {
+        // Mesma trilha que os agendamentos do CRM deixam (ver
+        // web/lib/leads/advance-visita-agendada.ts): sem isso, a timeline mostra
+        // um lead perdido mudando de etapa sem explicação.
+        await supabase.from("activities").insert({
+          org_id: conversation.org_id,
+          lead_id: leadId,
+          type: "lead_reactivated",
+          description: "Lead reativado automaticamente: visita agendada pela Nicole",
+          metadata: { motivo: "Visita agendada pela Nicole", automatico: true, previous_stage_id: currentLead?.stage_id ?? null },
+        })
+      }
       if (stageErr) {
         emit({ level: "warn", category: "ai", event_type: "STAGE_ADVANCE_FAILED", message: `Falha ao mover lead para Visita Agendada: ${stageErr}`, metadata: { lead_id: leadId, appointment_id: createdAppt.id } })
       }

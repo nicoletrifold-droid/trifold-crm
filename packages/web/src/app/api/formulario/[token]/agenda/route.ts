@@ -7,7 +7,7 @@ import { getOrgSchedule } from "@web/lib/roleta/business-time"
 import { PROPERTY_MAP, LOCATIONS, isBookableLocation } from "@web/lib/appointments/locations"
 import { overlaps } from "@web/lib/appointments/governance"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
-import { advanceToVisitaAgendada } from "@trifold/shared"
+import { advanceVisitaAgendadaComTrilha } from "@web/lib/leads/advance-visita-agendada"
 
 // Story 75-331 (Epic 89) — a AGENDA no fim do formulário público.
 //
@@ -217,7 +217,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // AC4 — a ordem importa: só DEPOIS da visita gravada o lead avança de etapa.
   // Ao contrário, um agendamento que falha deixaria o lead carimbado com visita
   // fantasma (lição da Story 75-196).
-  await advanceToVisitaAgendada(admin, leadId)
+  //
+  // Story 75-340: o lead que agenda aqui costuma JÁ EXISTIR na base — vindo de
+  // importação do CRM, de campanha antiga ou marcado como Perdido. A regra
+  // antiga (allowlist de etapas) deixava todos eles parados na etapa velha
+  // apesar da visita marcada. Agora avança de qualquer etapa que não seja
+  // posterior a Visita Agendada, e a saída de Perdido gera activity.
+  await advanceVisitaAgendadaComTrilha(admin, {
+    orgId: form.org_id,
+    leadId,
+    origem: `formulário "${form.nome}"`,
+  })
 
   if (sdr?.id) {
     await admin.from("leads").update({ assigned_broker_id: sdr.id as string }).eq("id", leadId)
