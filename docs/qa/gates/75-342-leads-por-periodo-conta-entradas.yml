@@ -1,0 +1,107 @@
+schema: 1
+storyId: "75-342"
+story: "docs/stories/75-342-leads-por-periodo-conta-entradas.story.md"
+title: "Quality Gate — Leads por Período conta entradas, não sobreviventes"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-18"
+branch: "story/75-342-leads-por-periodo-entradas"
+
+escopo: >
+  Uma query, um rótulo e dois comentários. O risco não está no tamanho da mudança: está em ela ser
+  uma REMOÇÃO de filtro numa rota que não tinha teste nenhum. "Tirar filtro" e "tirar filtro demais"
+  são a mesma linha de diff.
+
+resumo: >
+  **As quatro mutações que importam mordem.** Reintroduzir o filtro de desfecho derruba 6 dos 10
+  casos; tirar `segmento='principal'` derruba 7 (o IMOB volta a contar); tirar o `org_id` recém-
+  adicionado derruba 6; quebrar a paginação derruba exatamente 1 — o caso dos 1001 leads, que é o
+  único que a cobre. Os md5 dos dois arquivos mutados voltaram idênticos.
+
+  A mudança de números em produção é ESPERADA e é o objetivo: o gráfico sobe para a base de
+  entradas. Nenhuma outra tela consome esta rota (grep em `packages/web/src`: só `leads-chart.tsx`),
+  e o PDF não tem série por período — então o raio de impacto é o próprio gráfico.
+
+status_reason: >
+  Liberado para merge. Uma dívida declarada (C1) e uma conferência que só existe pós-deploy (P1).
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: dívida-de-teste
+    titulo: "O rótulo (AC2) não tem rede"
+    detalhe: >
+      Trocar "Entradas no período" de volta para "Total no período" passa com a suíte inteira verde.
+      O projeto não tem infra de teste de componente (sem jsdom) e extrair uma string estática para
+      uma função pura só para testá-la seria cerimônia sem ganho. Risco real: baixo — se o rótulo
+      voltar, o número continua certo; volta a divergência de LEITURA, que é o que a story
+      documenta em comentário no próprio JSX.
+
+impactos_conhecidos_e_aceitos:
+  - titulo: "As barras sobem, e o histórico do gráfico muda"
+    detalhe: >
+      Quem olhar o gráfico depois do deploy vai ver dias mais altos que ontem. É a correção: o
+      número anterior excluía os leads que entraram e depois foram marcados como perdidos. Na
+      janela de 7d medida em 18/08 a diferença era de 10 leads (62 × 52).
+  - titulo: "A paginação deixou de ser precaução"
+    detalhe: >
+      O recorte novo é o mesmo do /executive — 1.650 leads em 90d em prod, contra 612 do recorte
+      antigo. O laço de `fetchAllLeads` já existia (75-269) e agora é o que impede o corte
+      silencioso em 1000. Coberto por teste (M4).
+  - titulo: "`org_id` explícito é acréscimo de escopo do @dev"
+    detalhe: >
+      Uma linha, fora dos ACs, encontrada porque o teste da outra org falhou. Não muda número em
+      produção (RLS isola, org única), alinha esta query às demais 17 do Analytics. Sinalizado ao
+      Marcos no PR — se ele preferir o escopo estrito, a linha sai sozinha.
+
+verificacoes:
+  mutacoes:
+    - id: M1
+      mutacao: "reintroduz `.is(\"lost_reason\", null)` + `.eq(\"is_active\", true)`"
+      resultado: "6 failed / 4 passed"
+      veredito: MORDE
+    - id: M2
+      mutacao: "remove `.eq(\"segmento\", \"principal\")`"
+      resultado: "7 failed / 3 passed"
+      veredito: MORDE
+    - id: M3
+      mutacao: "remove `.eq(\"org_id\", appUser.org_id)`"
+      resultado: "6 failed / 4 passed"
+      veredito: MORDE
+    - id: M4
+      mutacao: "`fetchAllLeads` para na primeira página"
+      resultado: "1 failed / 9 passed"
+      veredito: "MORDE — e só o caso de paginação, que é a precisão desejada"
+    - id: M5
+      mutacao: "rótulo volta para \"Total no período\""
+      resultado: "suíte verde"
+      veredito: NÃO MORDE
+      encaminhamento: C1
+  md5_pos_gate: "route.ts e fetch-all-leads.ts voltaram ao hash original — nenhuma linha alterada pelo gate"
+  reguas:
+    testes: "211 arquivos · 2640 passed · 6 expected fail (pré-existentes)"
+    type_check: "8/8 pacotes"
+    lint: "0 erros · 26 warnings (pré-existentes, nenhum nos arquivos tocados)"
+    build: "OK"
+  raio_de_impacto:
+    - "Consumidores da rota: só `components/analytics/leads-chart.tsx` (grep em packages/web/src)"
+    - "PDF não monta série por período — `analytics-report-data.ts` não tem equivalente deste gráfico"
+    - "`/api/analytics/executive` intocado: já contava entradas, é o parâmetro de comparação pós-deploy"
+  coderabbit:
+    executado: false
+    motivo: "CLI configurada para WSL/Ubuntu; ambiente desta sessão é darwin. Mutação + revisão manual no lugar."
+
+pendencia_pos_deploy:
+  - id: P1
+    detalhe: >
+      Em crm.trifold.eng.br/dashboard/analytics?range=7d, os três números têm que coincidir:
+      régua do Pipeline ("N entradas no período"), card Entradas e o rodapé do gráfico. E o total do
+      "Ritmo de Entradas" tem que bater com o do "Leads por Período" — são os dois gráficos que
+      discordavam. Se não baterem, a causa é outra e a story não terminou.
+  - id: P2
+    detalhe: "Repetir em 30d e 90d (janela maior, diferença maior) e conferir se o dropdown de Origem ganhou alguma origem."

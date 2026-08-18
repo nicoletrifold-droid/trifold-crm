@@ -10,10 +10,15 @@
 // mudança de comportamento — o executive continua com o mesmo recorte e os
 // mesmos números; o `leads-by-period` passa a ter a mesma proteção.
 //
-// O helper recebe um CONSTRUTOR de query em vez de filtros: cada endpoint
-// monta o próprio recorte (que são legitimamente diferentes — o executive não
-// filtra `is_active`/`lost_reason`, o leads-by-period sim) e o helper só cuida
-// da paginação. Unificar os recortes seria mudar número em tela, e não é isto.
+// O helper recebe um CONSTRUTOR de query em vez de filtros: cada endpoint monta
+// o próprio recorte e o helper só cuida da paginação.
+//
+// Story 75-342 — os dois recortes eram diferentes de propósito (o executive não
+// filtrava `is_active`/`lost_reason`, o leads-by-period sim) e hoje são IGUAIS:
+// o filtro de desfecho saiu do leads-by-period, porque fazia o gráfico medir
+// sobreviventes em vez de entradas. Continuam separados por endpoint mesmo assim
+// — unificar aqui esconderia a próxima divergência dentro do helper de paginação,
+// que é o último lugar onde alguém procuraria por ela.
 
 export const LEADS_PAGE_SIZE = 1000
 

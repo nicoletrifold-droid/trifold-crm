@@ -277,7 +277,12 @@ export function LeadsChart({ properties, initialPropertyId, from, to }: Props) {
       {summary && (
         <div className="grid grid-cols-3 gap-3 border-t border-gray-100 pt-4 dark:border-stone-800">
           <div className="text-center">
-            <p className="text-xs text-gray-500 dark:text-stone-400">Total no período</p>
+            {/* Story 75-342 — era "Total no período". Rótulo genérico sobre número
+                específico é como a divergência se reproduz: o número era a contagem
+                SEM os perdidos, e "total" fez parecer que era tudo (régua dizia 62,
+                aqui 52). Agora a base são as entradas, e o rótulo é a palavra que o
+                card do topo da página já usa. */}
+            <p className="text-xs text-gray-500 dark:text-stone-400">Entradas no período</p>
             <p className="mt-0.5 text-2xl font-bold text-gray-900 dark:text-stone-100">{summary.total}</p>
           </div>
           <div className="text-center">

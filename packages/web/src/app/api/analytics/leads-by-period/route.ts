@@ -103,11 +103,13 @@ export async function GET(request: NextRequest) {
   }
 
   // Story 75-269 — a janela inteira, paginada: o PostgREST corta em 1000 em
-  // silêncio (não falha, devolve menos). Medido em prod 04/08: 612 leads em 90d
-  // neste recorte — 61% do teto, ainda não corta, mas o dia em que passar o
-  // gráfico simplesmente mostraria menos sem avisar. Mesmo helper do
-  // /api/analytics/executive, que já paginava porque o recorte DELE (sem
-  // is_active/lost_reason) passa de 1000 com folga (1.650 em 90d).
+  // silêncio (não falha, devolve menos). Mesmo helper do /api/analytics/executive.
+  //
+  // Story 75-342 — a paginação deixou de ser precaução e virou necessidade: com o
+  // recorte antigo eram 612 leads em 90d (medido em prod 04/08, 61% do teto); sem
+  // o filtro de desfecho o recorte passou a ser o MESMO do executive, que já
+  // media 1.650 em 90d. Ou seja: sem este laço, a mudança desta story cortaria o
+  // gráfico de 90 dias em silêncio.
   //
   // O filtro de ORIGEM saiu da query e passou a ser aplicado em JS, ao lado do
   // de empreendimento (que já era assim, ver abaixo): é o que permite conhecer
@@ -121,9 +123,22 @@ export async function GET(request: NextRequest) {
         supabase
           .from("leads")
           .select("created_at, property_interest_id, source")
+          // Story 75-342 — o `org_id` explícito faltava AQUI e só aqui, dentro do
+          // Analytics: as 17 queries da página, o PDF e o /executive todas o têm.
+          // Em produção o RLS já isola (org única hoje), então nada muda em tela —
+          // mas uma contagem que depende só do RLS para significar o que diz é
+          // exatamente o tipo de premissa implícita que esta story está removendo.
+          .eq("org_id", appUser.org_id)
           .eq("segmento", "principal") // Story 75-98: analytics não conta IMOB (fix: faltava aqui)
-          .eq("is_active", true)
-          .is("lost_reason", null)
+          // Story 75-342 — aqui havia `.eq("is_active", true).is("lost_reason", null)`.
+          // Com eles, este gráfico media SOBREVIVENTES: era a única série temporal do
+          // Analytics recortada pelo desfecho do lead, e por isso mostrava 52 onde a
+          // régua do Pipeline, o card Entradas e o "Ritmo de Entradas" mostravam 62 na
+          // mesma tela (medido em 18/08, janela de 7d: 10 leads perdidos/inativos).
+          // O que quebrava não era só a comparação: a barra de um dia ENCOLHIA depois,
+          // quando alguém marcasse como perdido um lead entrado naquele dia. Volume de
+          // entrada não pode depender do desfecho. Quem quer a leitura de sobreviventes
+          // tem o card Ativos, na mesma tela, com a definição escrita (75-179).
           .gte("created_at", from)
           .lte("created_at", to)
           .order("created_at")
