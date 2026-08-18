@@ -32,6 +32,14 @@ export function aceitaOpcoes(tipo: TipoPergunta): boolean {
   return TIPOS_COM_OPCOES.includes(tipo)
 }
 
+/** Substitui as condições, removendo a chave quando não sobra nenhuma. */
+function comCondicoes(p: Pergunta, condicoes: Pergunta["condicoes"]): Pergunta {
+  const copia = { ...p }
+  if (condicoes && condicoes.length > 0) copia.condicoes = condicoes
+  else delete copia.condicoes
+  return copia
+}
+
 /**
  * Id estável a partir do título, único dentro do formulário.
  *
@@ -104,8 +112,7 @@ export function limparCondicoesOrfas(perguntas: Pergunta[]): {
 
     if (validas.length === p.condicoes.length) return p
     removidas.push(p.titulo)
-    const { condicoes: _descartadas, ...resto } = p
-    return validas.length > 0 ? { ...resto, condicoes: validas } : (resto as Pergunta)
+    return comCondicoes(p, validas)
   })
 
   return { perguntas: saida, condicoesRemovidas: removidas }
@@ -163,8 +170,7 @@ function descartarCondicoesVazias(perguntas: Pergunta[]): Pergunta[] {
     if (!p.condicoes?.length) return p
     const validas = p.condicoes.filter((c) => c.em.length > 0)
     if (validas.length === p.condicoes.length) return p
-    const { condicoes: _vazias, ...resto } = p
-    return validas.length > 0 ? { ...resto, condicoes: validas } : (resto as Pergunta)
+    return comCondicoes(p, validas)
   })
 }
 

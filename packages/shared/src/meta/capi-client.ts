@@ -68,7 +68,9 @@ export async function sendCapiEvents(
   options?: SendCapiEventsOptions,
 ): Promise<CapiSendResult> {
   const accessToken = process.env.META_CAPI_ACCESS_TOKEN
-  const datasetId = process.env.META_CAPI_DATASET_ID
+  // Mesmo raciocínio do Pixel do browser: o id do dataset é público e não vale
+  // um deploy mudo. Já o token é segredo de verdade e segue obrigatório abaixo.
+  const datasetId = process.env.META_CAPI_DATASET_ID || '1337310707164669'
 
   if (!accessToken) {
     return { success: false, error: 'META_CAPI_ACCESS_TOKEN is not configured' }

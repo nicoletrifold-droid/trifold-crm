@@ -31,7 +31,18 @@ export const PIXEL_EVENTS = {
   COMPLETE_REGISTRATION: 'CompleteRegistration',
 } as const
 
-export const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim() ?? ''
+/**
+ * Dataset/Pixel da Trifold. Fica embutido de propósito: o id do Pixel NÃO é
+ * segredo — ele aparece no HTML de qualquer site que use Pixel, e o nosso já
+ * está público na landing atual. Deixá-lo como env obrigatória significaria que
+ * um deploy sem a variável configurada simplesmente não rastreia nada, em
+ * silêncio, no meio de uma campanha paga. A env continua tendo prioridade, para
+ * apontar outro dataset em teste sem tocar no código.
+ */
+const PIXEL_ID_PADRAO = '1337310707164669'
+
+export const PIXEL_ID =
+  process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim() || PIXEL_ID_PADRAO
 
 /** Gera o id compartilhado entre o disparo do browser e o da CAPI. */
 export function novoEventId(): string {

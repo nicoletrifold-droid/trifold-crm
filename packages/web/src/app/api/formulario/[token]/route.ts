@@ -187,7 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const utm = body.utm ?? {}
     const { data: existente } = await admin
       .from("leads")
-      .select("id, metadata")
+      .select("id, source, utm_content, metadata")
       .eq("org_id", form.org_id)
       .eq("phone_normalized", telefoneNormalizado)
       .limit(1)
@@ -195,24 +195,71 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (existente) {
       leadId = existente.id as string
-      leadVinculadoAgora = true
-      // Lead que já existia NÃO tem a origem reescrita: quem chegou antes pelo
-      // Meta Ads continua sendo do Meta Ads. Só completamos o que falta.
+
+      // 🔴 Story 75-340 — a origem passa a ser a do ÚLTIMO contato. Até aqui o
+      // lead que já existia mantinha a origem antiga, e a ficha mostrava
+      // "LP Vind Residence" (source=website + utm_content) para quem tinha
+      // ACABADO de preencher o formulário — o corretor lia a origem errada e
+      // ligava falando da campanha errada. Decisão do diretor (18/08): vale o
+      // último lugar por onde a pessoa chegou.
       //
-      // Story 86-9: a atribuição, porém, é REESCRITA — este clique é mais
-      // recente que o anterior, e é o que o Meta precisa para creditar a
-      // conversão ao anúncio certo. `comMetaAd` preserva as demais chaves.
+      // A origem anterior não se perde: vai para `metadata.origem_anterior` e
+      // para a activity `lead_source_updated` abaixo.
+      const sourceAnterior = (existente.source as string | null) ?? null
+      const metadataAtual = (existente.metadata as Record<string, unknown> | null) ?? {}
+      const trocouOrigem = sourceAnterior !== "form_qualificacao"
+      const agoraIso = new Date().toISOString()
+
+      leadVinculadoAgora = true
       await admin
         .from("leads")
         .update({
           ...(contato.email ? { email: contato.email } : {}),
+          source: "form_qualificacao",
+          // UTM só é sobrescrita quando ESTA visita trouxe UTM — link sem
+          // parâmetro não deve apagar a atribuição que já existia.
+          ...(utm.utm_source ? { utm_source: utm.utm_source } : {}),
+          ...(utm.utm_medium ? { utm_medium: utm.utm_medium } : {}),
+          ...(utm.utm_campaign ? { utm_campaign: utm.utm_campaign } : {}),
+          ...(utm.utm_content ? { utm_content: utm.utm_content } : {}),
+          ...(utm.utm_term ? { utm_term: utm.utm_term } : {}),
+          // Story 75-340 monta a origem nova + `origem_anterior`; a 86-9 acrescenta
+          // `meta_ad` por cima. `comMetaAd` só adiciona a sua chave e preserva o
+          // resto do objeto, então as duas lógicas convivem sem se anular.
           metadata: comMetaAd(
-            existente.metadata as Record<string, unknown> | null,
+            {
+              ...metadataAtual,
+              form_id: form.id,
+              form_nome: form.nome,
+              ...(trocouOrigem
+                ? {
+                    origem_anterior: {
+                      source: sourceAnterior,
+                      utm_content: (existente.utm_content as string | null) ?? null,
+                      em: agoraIso,
+                    },
+                  }
+                : {}),
+            },
             sinais,
           ),
-          last_contact_at: new Date().toISOString(),
+          last_contact_at: agoraIso,
         })
         .eq("id", leadId)
+
+      if (trocouOrigem) {
+        await admin.from("activities").insert({
+          org_id: form.org_id,
+          lead_id: leadId,
+          type: "lead_source_updated",
+          description: `Origem atualizada para o formulário "${form.nome}"`,
+          metadata: {
+            form_id: form.id,
+            source_anterior: sourceAnterior,
+            source_novo: "form_qualificacao",
+          },
+        })
+      }
     } else {
       const { data: novo, error: erroLead } = await admin
         .from("leads")
