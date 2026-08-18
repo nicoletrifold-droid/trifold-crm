@@ -120,6 +120,10 @@ function estadoBase() {
       lead("lead-simone", REPRESAMENTO, { name: "Simone Fogliato Flores", assigned_broker_id: "broker-1" }),
       lead("lead-ana", VISITA, { name: "Ana" }),
       lead("lead-bruno", NOVO, { name: "Bruno" }),
+      // Entrou no FIM do período e avançou DEPOIS do fim: é por isso que a janela
+      // do histórico vai de `from` até AGORA, e não até `to`. Sem esse lead na
+      // fixture, encurtar a janela na rota passava despercebido.
+      lead("lead-tardio", NOVO, { name: "Tardio", created_at: "2026-08-17T12:00:00.000Z" }),
       // IMOB: não pode aparecer em NADA do analytics (Story 75-98).
       lead("lead-imob", FECHOU, { name: "Imob Fantasma", segmento: "imob" }),
       // Fora da janela: entrou antes do período.
@@ -132,6 +136,7 @@ function estadoBase() {
       mudanca("lead-simone", FECHOU, REPRESAMENTO),
       mudanca("lead-imob", VISITA, FECHOU), // IMOB no histórico: precisa ser descartado
       mudanca("lead-outra-org", VISITA, FECHOU),
+      { ...mudanca("lead-tardio", NOVO, VISITA), created_at: "2026-08-19T09:00:00.000Z" },
     ],
     users: [{ id: "broker-1", name: "Corretor Um" }],
   }
@@ -167,6 +172,18 @@ describe("GET /api/analytics/funnel-leads", () => {
     expect(json.leads[0]!.etapa_atual).toBe("Represamento")
     expect(json.leads[0]!.corretor).toBe("Corretor Um")
     expect(json.leads[0]!.phone).toBeTruthy()
+  })
+
+  it("conta quem avançou DEPOIS do fim do período (janela do histórico vai até agora)", async () => {
+    const res = await get({ stage: VISITA, modo: "chegaram" })
+    const json = (await res.json()) as { total: number; leads: Array<{ name: string }> }
+    const nomes = json.leads.map((l) => l.name)
+    // "Tardio" entrou em 17/08 (dentro) e mudou para Visita Agendada em 19/08
+    // (fora): chegou à etapa do mesmo jeito, e é o que a régua da tela mostra.
+    expect(nomes).toContain("Tardio")
+    // A Simone também passou por Visita Agendada, no `from_stage` da mudança dela.
+    expect(nomes).toContain("Simone Fogliato Flores")
+    expect(nomes).toContain("Ana") // está lá agora
   })
 
   it("modo agora: devolve só quem está na etapa hoje", async () => {

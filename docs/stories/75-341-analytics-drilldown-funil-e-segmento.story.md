@@ -92,11 +92,11 @@ na mão. O painel ainda exibe "card marcava N" se os números discordarem em pro
 
 | Arquivo | O que cobre |
 |---|---|
-| `api/analytics/funnel-leads/route.test.ts` *(novo)* | os dois modos; a lista batendo com `buildPipelineRows` etapa por etapa; IMOB fora pelas duas portas (coorte e histórico); filtro de corretor valendo (e o inverso, para o teste não passar por zerar tudo); 404/400; 403 sem capability |
+| `api/analytics/funnel-leads/route.test.ts` *(novo)* | os dois modos; a lista batendo com `buildPipelineRows` etapa por etapa; IMOB fora pelas duas portas (coorte e histórico); lead que avançou DEPOIS do fim do período (a janela do histórico vai até agora); filtro de corretor valendo (e o inverso, para o teste não passar por zerar tudo); 404/400; 403 sem capability |
 | `lib/analytics/funnel-reached.test.ts` | segue verde após extrair `buildReachedSets` |
 | `lib/analytics/funnel-tiers.test.ts` | segue verde após `stageId` entrar no andar |
 
-**Validações:** 210 arquivos / 2629 testes passando · `type-check` 8/8 · `lint` 0 erros · `build` OK
+**Validações:** 210 arquivos / 2630 testes passando · `type-check` 8/8 · `lint` 0 erros · `build` OK
 (rota registrada como `ƒ /api/analytics/funnel-leads`).
 
 ## File List
