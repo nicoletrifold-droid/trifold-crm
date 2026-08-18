@@ -13,7 +13,10 @@ describe('buildCapiUserData', () => {
   it('always includes external_id as SHA-256(leadId)', () => {
     const ud = buildCapiUserData({ leadId: 'lead-123' })
     expect(ud.external_id).toEqual([sha256Hex('lead-123')])
-    expect(ud.external_id[0]).toMatch(HEX64)
+    // `external_id` passou a ser opcional na 86-9 (ha eventos antes de o lead
+    // existir). Com `leadId` presente ele SEMPRE vem — o assert abaixo garante
+    // justamente isso, alem do formato.
+    expect(ud.external_id?.[0]).toMatch(HEX64)
   })
 
   it('hashes email into em after normalization', () => {
@@ -96,7 +99,7 @@ describe('buildCapiUserData', () => {
       ...(ud.ph ?? []),
       ...(ud.fn ?? []),
       ...(ud.ln ?? []),
-      ...ud.external_id,
+      ...(ud.external_id ?? []),
     ]
 
     // Every hashed field is a 64-char hex string...

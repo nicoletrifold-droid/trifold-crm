@@ -132,15 +132,22 @@ describe('sendCapiEvents', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns an error when META_CAPI_DATASET_ID is missing (no fetch)', async () => {
+  // Story 86-9 — o dataset deixou de ser obrigatório: passou a ter valor padrão
+  // no código, porque o id é PÚBLICO (aparece no HTML de qualquer site com Pixel)
+  // e uma env faltando derrubaria o rastreamento em silêncio no meio de campanha
+  // paga. O token continua obrigatório — esse sim é segredo (teste acima).
+  it('cai no dataset padrão quando META_CAPI_DATASET_ID não está configurado', async () => {
     delete process.env.META_CAPI_DATASET_ID
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ events_received: 1 }), { status: 200 }),
+    )
 
     const result = await sendCapiEvents([makeEvent()])
 
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('META_CAPI_DATASET_ID')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.success).toBe(true)
+    // A URL tem de apontar para o dataset da Trifold, não para 'undefined'.
+    const url = String(fetchMock.mock.calls[0]?.[0])
+    expect(url).toContain('/1337310707164669/events')
   })
 
   it('returns success with 0 events received when given an empty batch (no fetch)', async () => {

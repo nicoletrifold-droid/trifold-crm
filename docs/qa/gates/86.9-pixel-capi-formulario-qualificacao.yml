@@ -1,0 +1,117 @@
+storyId: "86-9"
+title: "Pixel Meta + eventos CAPI no formulário de qualificação (alvo EMQ ≥ 9)"
+reviewer: "Quinn (@qa)"
+reviewed_at: "2026-08-17"
+branch: "story/86-9-pixel-capi-formulario"
+commit: "ce2c41f4"
+
+verdict: PASS
+verdict_rationale: >
+  A primeira passagem foi FAIL por uma corrida de carregamento que descartava o
+  `ViewContent` do browser e fazia o par server-side sair sem `fbp` — a chave que
+  esta story existe para consertar. Corrigido no commit 77f3b489 e coberto por
+  teste que trava a decisão. Restam apenas itens que dependem de deploy.
+verdict_history:
+  - iteration: 1
+    verdict: FAIL
+    at: "2026-08-17"
+    reason: "86.9-QA-001 (high) — evento do browser perdido em corrida com o carregamento do script"
+  - iteration: 2
+    verdict: PASS
+    at: "2026-08-17"
+    reason: "86.9-QA-001 corrigido e testado; suíte em 209 arquivos / 2623 testes"
+
+checks:
+  code_review: PASS
+  unit_tests: PASS          # 209 arquivos / 2623 testes; 40 novos
+  acceptance_criteria: PASS # AC1–AC10 verificados; AC11 depende de deploy
+  no_regressions: PASS      # suíte completa verde; contrato do "Visitou" testado
+  performance: PASS         # script assíncrono; envio CAPI fora do caminho da resposta
+  security: PASS            # ver notas
+  documentation: PASS
+
+issues:
+  - id: "86.9-QA-001"
+    severity: high
+    category: correctness
+    title: "O `ViewContent` do browser é descartado e o do servidor sai sem `fbp`"
+    evidence: |
+      `meta-pixel.tsx:33` usa `<Script strategy="afterInteractive">`, que executa
+      o snippet DEPOIS da hidratação. O `useEffect` que dispara o `ViewContent`
+      (`form-runner.tsx:139`) roda NA hidratação — ou seja, sempre antes.
+
+      Consequências, ambas silenciosas:
+        1. `window.fbq` ainda é `undefined`, e o guard de `pixelTrack` retorna
+           sem fazer nada. O `ViewContent` do browser simplesmente não acontece,
+           e o par server-side perde a deduplicação.
+        2. O cookie `_fbp` só passa a existir quando o `fbevents.js` roda. Como o
+           POST para `/api/formulario/[token]/tracking` sai antes disso,
+           `coletarAtribuicao()` devolve `{}` e o evento chega ao Meta sem `fbp`.
+
+      O item 2 é a reincidência exata do problema medido no baseline: `fbp` em
+      9,2%. A story passaria no gate entregando o mesmo sintoma que veio corrigir.
+    affects_ac: ["AC1", "AC3", "AC6"]
+    recommendation: |
+      Disparar os eventos do browser apenas quando o Pixel estiver de fato
+      carregado. Duas correções combinadas:
+        a) Em `pixel-events.ts`, uma fila: quando `window.fbq` não existe ainda,
+           reter o evento e drená-lo assim que existir (com teto de tentativas
+           para não vazar em quem usa bloqueador).
+        b) O POST server-side do `ViewContent` deve sair DEPOIS de o Pixel ter
+           criado o `_fbp`, para que o evento carregue a chave.
+    status: FIXED
+    fixed_in: "77f3b489"
+    fix_verification: |
+      `quandoPixelPronto()` sonda `window.fbq` a cada 100ms por até 5s, e os dois
+      disparos passaram a ser Pixel-primeiro / POST-depois. Verificado por
+      `pixel-events.test.ts` (window simulado + fake timers), cobrindo os três
+      caminhos: o script chega depois, já está presente, ou nunca chega. O último
+      também assere `vi.getTimerCount() === 0` — a espera não pode virar um timer
+      vazado por página em quem usa bloqueador de anúncios.
+
+  - id: "86.9-QA-002"
+    severity: medium
+    category: data
+    title: "A atribuição de um lead pré-existente é sobrescrita"
+    evidence: |
+      Em `api/formulario/[token]/route.ts`, o lead já existente tem
+      `metadata.meta_ad` reescrito com o clique atual. Um lead que veio de outra
+      campanha e reapareceu por este formulário perde a atribuição original.
+    recommendation: >
+      Comportamento deliberado e comentado no código (o clique mais recente é o
+      que o Meta usa para creditar a conversão). Aceito. Se no futuro houver
+      análise de primeira origem, preservar o `meta_ad` anterior sob
+      `meta_ad_first`.
+    status: ACCEPTED
+
+  - id: "86.9-QA-003"
+    severity: low
+    category: process
+    title: "AC11 não verificável antes do deploy"
+    evidence: "Depende de `NEXT_PUBLIC_META_PIXEL_ID` provisionada e de um preenchimento real no Test Events."
+    recommendation: "Manter como tarefa do @devops. Não bloqueia o merge, bloqueia o 'Done'."
+    status: OPEN
+
+security_notes: |
+  - Endpoint público novo (`/tracking`) com rate limit próprio de 60 req/min por
+    IP e por instância — mesma limitação já aceita nas outras rotas públicas.
+  - A rota recusa `Lead` e `CompleteRegistration` por design: um endpoint público
+    que os aceitasse seria um canal aberto para inflar conversão. Coberto por teste.
+  - Resposta idêntica para token inexistente, mal formado e formulário inativo —
+    não vaza a existência do formulário. Coberto por teste.
+  - PII: `em`/`ph`/`fn`/`ln`/`external_id`/`st` hasheados; `fbc`/`fbp`/IP/UA em
+    texto puro por exigência do Meta. Nenhum deles em log. Coberto por teste.
+
+positive_notes: |
+  - A escolha de deixar o SERVIDOR decidir quais eventos saem (e o browser apenas
+    espelhar) elimina de raiz a divergência de contagem entre os dois lados, e de
+    quebra fecha o endpoint público contra conversão forjada.
+  - O teste que proíbe `ct` inferida trava uma decisão que, revertida por engano,
+    degradaria o EMQ sem gerar erro nenhum.
+  - O contrato do evento "Visitou" (86-3/86-4) tem teste de não-regressão próprio.
+
+next_action: >
+  Liberado para @devops: provisionar `NEXT_PUBLIC_META_PIXEL_ID` via REST API
+  (nunca `vercel env add` por pipe), abrir o PR e deployar. Depois do deploy,
+  fechar o AC11 no Test Events e só então marcar a story como Done. A nota
+  EMQ ≥ 9 é acompanhamento pós-deploy, não gate de merge.
