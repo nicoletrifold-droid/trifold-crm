@@ -5,7 +5,8 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 import { resolveVisitBrokerOnCreate, formatVisitWhen } from "@web/lib/appointments/sync-visit-owner"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
-import { normalizePhoneBR, STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
+import { normalizePhoneBR, STAGE_IDS } from "@trifold/shared"
+import { advanceVisitaAgendadaComTrilha } from "@web/lib/leads/advance-visita-agendada"
 import { isConflict, type AppointmentTeam } from "@web/lib/appointments/governance"
 
 // Story 81-1 — stamping da EQUIPE do compromisso, decidido no servidor:
@@ -307,11 +308,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Story 75-196: visita gravada → lead avança para "Visita Agendada" (guard
-  // só-avança no WHERE: não regride visitou/proposta/…, não ressuscita perdido,
-  // no_show remarcado volta). Best-effort — não derruba o agendamento criado.
+  // Story 75-196 + 75-340: visita gravada → lead avança para "Visita Agendada"
+  // (guard no WHERE: não regride visitou/proposta/negociando/fechou). Desde a
+  // 75-340 lead PERDIDO também avança — agendou visita, está de volta ao funil —
+  // e a reativação vira activity. Best-effort: não derruba o agendamento criado.
   if (leadId) {
-    await advanceToVisitaAgendada(supabase, leadId)
+    await advanceVisitaAgendadaComTrilha(supabase, {
+      orgId: appUser.org_id,
+      leadId,
+      origem: "agendamento no CRM",
+      userId: appUser.id,
+    })
   }
 
   // Story 75-275 — espelho no Google Calendar (a copa lê para preparar café).

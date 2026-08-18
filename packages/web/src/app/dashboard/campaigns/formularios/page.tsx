@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { montarLinhas, abandonoPorPergunta, type RespostaCrua } from "@web/lib/forms/response-list"
 import { CampaignsTabs } from "../_components/campaigns-tabs"
@@ -72,7 +72,14 @@ export default async function FormulariosPage({
 
   return (
     <div>
-      <CampaignsTabs showAgente={false} showFormularios />
+      {/* 🔴 `showAgente` PRECISA da capability real. Passar `false` fixo aqui fazia a
+          aba "Lídia" DESAPARECER ao entrar em Formulários — exatamente a falha
+          silenciosa que o cabeçalho do CampaignsTabs descreve, só que por valor
+          em vez de por cópia. */}
+      <CampaignsTabs
+        showAgente={await can(user.id, user.orgId, "marketing.gerenciar")}
+        showFormularios
+      />
 
       <div className="mb-6">
         <h1 className="text-xl font-bold text-stone-900 dark:text-stone-100">Formulários</h1>

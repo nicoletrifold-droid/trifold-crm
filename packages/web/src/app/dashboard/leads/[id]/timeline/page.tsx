@@ -72,6 +72,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   bolsao_in: "Entrou no bolsão",
   stale_lead: "Lead parado",
   meta_webhook_received: "Evento Meta recebido",
+  form_completed: "Formulário preenchido",
+  lead_source_updated: "Origem atualizada",
 }
 
 const ACTIVITY_ICONS: Record<string, string> = {
@@ -104,6 +106,8 @@ const ACTIVITY_ICONS: Record<string, string> = {
   bolsao_in: "📥",
   stale_lead: "😴",
   meta_webhook_received: "📣",
+  form_completed: "🧾",
+  lead_source_updated: "🔁",
 }
 
 // Ator quando user_id é NULL (ação automatizada): sub-rótulo por tipo.

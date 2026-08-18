@@ -31,10 +31,19 @@ vi.mock("@web/lib/appointments/google-mirror", () => ({
   },
 }))
 
-const avancados: string[] = []
-vi.mock("@trifold/shared", () => ({
-  advanceToVisitaAgendada: async (_c: unknown, leadId: string) => {
-    avancados.push(leadId)
+// Story 75-340 — a rota não chama mais o guard do shared direto: chama o helper
+// que avança a etapa E registra a reativação. O comportamento dele (blocklist,
+// limpeza de lost_reason, activity) tem teste próprio em
+// `lib/leads/advance-visita-agendada.test.ts`; aqui só interessa que a rota o
+// chame com o lead certo, DEPOIS de gravar a visita.
+const avancados: Array<{ leadId: string; origem: string }> = []
+vi.mock("@web/lib/leads/advance-visita-agendada", () => ({
+  advanceVisitaAgendadaComTrilha: async (
+    _c: unknown,
+    { leadId, origem }: { leadId: string; origem: string }
+  ) => {
+    avancados.push({ leadId, origem })
+    return { error: null, reativado: false }
   },
 }))
 
@@ -179,7 +188,8 @@ describe("POST /api/formulario/[token]/agenda", () => {
     expect(visita.team).toBe("house") // não é o fluxo da imobiliária
     expect(visita.duration_minutes).toBe(60)
 
-    expect(avancados).toEqual(["lead-1"]) // etapa DEPOIS da visita gravada (AC4)
+    // etapa DEPOIS da visita gravada (AC4), com a origem que vai na trilha
+    expect(avancados).toEqual([{ leadId: "lead-1", origem: 'formulário "Campanha Vind"' }])
     expect(db.leads[0]!.assigned_broker_id).toBe("sdr-1") // AC5
     expect(mirrored).toHaveLength(1) // espelho no Google
   })
