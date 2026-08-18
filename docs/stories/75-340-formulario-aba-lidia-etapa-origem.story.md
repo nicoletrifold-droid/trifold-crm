@@ -1,11 +1,11 @@
 # Story 75-340 — Formulários: aba Lídia sumindo, visita que não move a etapa, origem congelada
 
-**Status:** Ready for Review
+**Status:** Done
 **Tipo:** Bug fix (3 defeitos independentes, mesma tela de origem)
 **Epic:** 89 — Formulário de qualificação para tráfego pago
 **Story ID:** 75-340
 **Complexidade:** M (~5 pts — 1 regra de pipeline revisada em 4 pontos de agendamento, 0 migrations)
-**Fluxo:** @dev → @qa → @devops
+**Fluxo:** @dev → @qa (CONCERNS) → @devops · **PR #450 mergeado em 18/08**
 **Depende de:** 75-330 a 75-339 (aba Formulários já em produção)
 **Migrations:** **nenhuma**.
 
