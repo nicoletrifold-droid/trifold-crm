@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
     .from("leads")
     .select("utm_campaign, stage:kanban_stages(slug)")
     .eq("org_id", appUser.org_id)
+    .eq("segmento", "principal") // Story 75-341: analytics não conta IMOB (faltava aqui)
     .eq("is_active", true)
     .is("lost_reason", null)
     .not("utm_campaign", "is", null)
