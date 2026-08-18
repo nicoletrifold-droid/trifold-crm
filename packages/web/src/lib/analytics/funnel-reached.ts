@@ -54,16 +54,22 @@ function stageIdsFromMetadata(metadata: unknown): string[] {
 }
 
 /**
- * Conta, por etapa, quantos leads DISTINTOS da coorte chegaram até ela.
+ * Quais leads da coorte chegaram a cada etapa — `stage_id → Set<lead_id>`.
+ *
+ * Story 75-341: era um detalhe interno de `buildReachedCounts`; virou exportada
+ * porque o drill-down (clicar num andar do funil e ver a LISTA) precisa
+ * exatamente do conjunto que produziu o número. Derivar os dois da mesma função
+ * é o que impede a lista de discordar da contagem que a pessoa clicou — e essa
+ * divergência seria invisível até alguém contar as linhas na mão.
  *
  * `changes` pode trazer linhas de leads fora da coorte (a query é recortada por
  * período, não por lista de ids — `.in()` com centenas de uuid estoura a URL do
  * PostgREST): elas são descartadas aqui pelo cruzamento com `leads`.
  */
-export function buildReachedCounts(
+export function buildReachedSets(
   leads: LeadStageRow[],
   changes: StageChangeRow[]
-): Map<string, number> {
+): Map<string, Set<string>> {
   const cohort = new Set(leads.map((l) => l.id))
   /** stage_id → leads distintos que passaram por ela. */
   const byStage = new Map<string, Set<string>>()
@@ -89,7 +95,17 @@ export function buildReachedCounts(
     }
   }
 
-  return new Map([...byStage].map(([stageId, set]) => [stageId, set.size]))
+  return byStage
+}
+
+/** Conta, por etapa, quantos leads DISTINTOS da coorte chegaram até ela. */
+export function buildReachedCounts(
+  leads: LeadStageRow[],
+  changes: StageChangeRow[]
+): Map<string, number> {
+  return new Map(
+    [...buildReachedSets(leads, changes)].map(([stageId, set]) => [stageId, set.size])
+  )
 }
 
 export interface StageDef {

@@ -1,10 +1,11 @@
 import { createClient } from "@web/lib/supabase/server"
-import Link from "next/link"
 import { getServerUser } from "@web/lib/auth"
 import { getOrgSchedule, businessMinutesBetweenSchedule } from "@web/lib/roleta/business-time"
 import { SOURCE_LABELS_SHORT } from "@web/lib/constants"
 import { LeadsChart } from "@web/components/analytics/leads-chart"
 import { ConversionFunnel } from "@web/components/analytics/conversion-funnel"
+// Story 75-341 — a régua virou client: cada número abre a lista dos seus leads.
+import { PipelineRuler } from "@web/components/analytics/pipeline-ruler"
 import { pickFunnelTiers } from "@web/lib/analytics/funnel-tiers"
 import { ExecutiveCharts } from "@web/components/analytics/executive-charts"
 import { AnalyticsPeriodSelector } from "@web/components/analytics/analytics-period-selector"
@@ -681,38 +682,14 @@ export default async function AnalyticsPage({
       {/* Story 75-318/319 — régua do Pipeline entre os cards e o Leads por Período.
           75-319: os counts SEGUEM O PERÍODO (mesma fonte do Funil) — decisão do
           Marcos após os prints de 7d×30d; a foto "agora" fica no Dashboard. */}
-      <div className="rounded-lg bg-white p-4 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-stone-100">
-          Pipeline <span className="text-xs font-normal text-stone-400">· {rangeLabel} · {funnelBase} entradas no período</span>
-        </h2>
-        <p className="mb-3 text-xs text-stone-500 dark:text-stone-400">
-          <strong className="font-semibold">agora</strong> = onde o lead está hoje (cada lead conta
-          uma vez, a linha fecha as {funnelBase} entradas) · <strong className="font-semibold">chegaram</strong> =
-          passaram por aqui (o mesmo lead entra em várias etapas, então esta linha não soma).
-        </p>
-        <div className="overflow-x-auto">
-          <div className="flex min-w-max gap-1.5">
-            {pipelineRows.map((stage) => (
-              <Link
-                key={stage.id}
-                href={`/dashboard/pipeline?stage=${stage.slug}`}
-                className="flex-1 cursor-pointer rounded-md px-2.5 py-2 text-center transition-[filter] hover:brightness-125"
-                style={{ backgroundColor: `${stage.color}15` }}
-              >
-                <p className="whitespace-nowrap text-[11px] font-medium" style={{ color: stage.color }}>
-                  {stage.name}
-                </p>
-                <p className="mt-0.5 text-base font-bold tabular-nums text-gray-900 dark:text-stone-100">
-                  {stage.agora}
-                </p>
-                <p className="text-[11px] font-semibold tabular-nums text-stone-500 dark:text-stone-400">
-                  {stage.chegaram} <span className="font-normal">chegaram</span>
-                </p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
+      <PipelineRuler
+        rows={pipelineRows}
+        base={funnelBase}
+        from={sinceISO}
+        to={untilISO}
+        filterQuery={serializeAnalyticsFilters(filters)}
+        rangeLabel={rangeLabel}
+      />
 
       {/* Leads por Período — gráfico (granularidade local; período vem da URL) */}
       <LeadsChart
@@ -746,9 +723,20 @@ export default async function AnalyticsPage({
         <h2 className="mb-1 text-lg font-semibold dark:text-stone-100">Funil de Conversão <span className="text-sm font-normal text-stone-400">· {rangeLabel}</span></h2>
         <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
           {funnelBase} entradas no período · desenha a coluna <strong className="font-semibold">chegaram</strong> da
-          régua acima: quem passou por cada etapa, incluindo quem já avançou ou se perdeu depois.
+          régua acima: quem passou por cada etapa, incluindo quem já avançou ou se perdeu depois.{" "}
+          <span className="text-stone-400">Clique num andar para ver os leads.</span>
         </p>
-        <ConversionFunnel tiers={pickFunnelTiers(pipelineRows.map((r) => ({ ...r, count: r.chegaram })))} base={funnelBase} />
+        <ConversionFunnel
+          tiers={pickFunnelTiers(pipelineRows.map((r) => ({ ...r, count: r.chegaram })))}
+          base={funnelBase}
+          /* Story 75-341 — clicar num andar abre a lista de quem chegou nele. */
+          drilldown={{
+            from: sinceISO,
+            to: untilISO,
+            filterQuery: serializeAnalyticsFilters(filters),
+            rangeLabel,
+          }}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

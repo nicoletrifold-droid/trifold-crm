@@ -4,6 +4,8 @@
 // período para os andares pelo SLUG (fallback por nome normalizado).
 
 export interface FunnelStageInput {
+  /** Story 75-341 — id da etapa: é o que o drill-down usa ao clicar no andar. */
+  id?: string
   name: string
   slug?: string | null
   color?: string | null
@@ -14,6 +16,13 @@ export interface FunnelTierEntry {
   label: string
   count: number
   color: string
+  /**
+   * Story 75-341 — a etapa que ESTE andar representa. Sai daqui (e não de um
+   * segundo `pick` no componente) porque o andar pode ter vindo do fallback por
+   * NOME: quem sabe qual etapa foi escolhida é `pick`, não quem desenha.
+   * `undefined` = nenhuma etapa casou; o andar mostra 0 e não é clicável.
+   */
+  stageId?: string
 }
 
 export interface FunnelTiers {
@@ -43,6 +52,7 @@ function pick(
     label: byName?.name ?? nomeAlvo,
     count: byName?.count ?? 0,
     color: byName?.color || fallbackColor,
+    stageId: byName?.id,
   }
 }
 

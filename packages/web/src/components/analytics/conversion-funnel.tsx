@@ -7,13 +7,26 @@
 // animação de água enchendo cada andar. Respeita prefers-reduced-motion
 // (líquido fica estático). SVG puro — sem lib externa (CSP dos padrões da casa).
 
-import { liquidFillFraction, type FunnelTiers } from "@web/lib/analytics/funnel-tiers"
+import { useState } from "react"
+import { liquidFillFraction, type FunnelTiers, type FunnelTierEntry } from "@web/lib/analytics/funnel-tiers"
+import { StageLeadsDrawer, type StageLeadsAlvo } from "./stage-leads-drawer"
 
 interface ConversionFunnelProps {
   tiers: FunnelTiers
   /** Story 75-323 — entradas do período: régua do nível e base das conversões.
    *  Ausente (ou 0) mantém o comportamento da 75-320, com o maior andar no teto. */
   base?: number
+  /**
+   * Story 75-341 — quando presente, cada andar abre a listagem dos leads que
+   * compõem o número dele. Ausente, o funil segue puramente ilustrativo (é o que
+   * mantém o componente utilizável fora da tela de Analytics, ex.: no PDF).
+   */
+  drilldown?: {
+    from: string
+    to: string
+    filterQuery?: string
+    rangeLabel: string
+  }
 }
 
 // Geometria: viewBox 0..720 de largura; andares centrados em x=360.
@@ -157,7 +170,51 @@ function TierText({
   )
 }
 
-export function ConversionFunnel({ tiers, base }: ConversionFunnelProps) {
+/**
+ * Área clicável de um andar: um `<path>` transparente POR CIMA do líquido.
+ *
+ * O alvo é o trapézio, não um retângulo: os andares do funil se aproximam nas
+ * laterais, e um retângulo de largura cheia roubaria o clique do vizinho de cima
+ * — no andar dividido (Visita Agendada | Visitou), roubaria metade do andar.
+ */
+function TierHitArea({
+  path,
+  tier,
+  onPick,
+}: {
+  path: string
+  tier: FunnelTierEntry
+  onPick: (tier: FunnelTierEntry) => void
+}) {
+  const ativo = !!tier.stageId && tier.count > 0
+  if (!ativo) return null
+  return (
+    <path
+      d={path}
+      fill="transparent"
+      role="button"
+      tabIndex={0}
+      aria-label={`Ver os ${tier.count} leads que chegaram a ${tier.label}`}
+      style={{ cursor: "pointer", outline: "none" }}
+      onClick={() => onPick(tier)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onPick(tier)
+        }
+      }}
+    />
+  )
+}
+
+export function ConversionFunnel({ tiers, base, drilldown }: ConversionFunnelProps) {
+  const [alvo, setAlvo] = useState<StageLeadsAlvo | null>(null)
+  const escolher = (tier: FunnelTierEntry) => {
+    if (!drilldown || !tier.stageId) return
+    // Sempre "chegaram": é a coluna que o funil desenha (Story 75-323). Abrir
+    // "agora" aqui mostraria uma lista menor que o número clicado.
+    setAlvo({ stageId: tier.stageId, modo: "chegaram", label: tier.label, esperado: tier.count })
+  }
   const [t1, t2, t3, t4] = TIERS
   // 75-320: o maior andar dita a régua — ele fica "cheio" e os demais proporcionais.
   // 75-323: com o número de entradas do período em mãos, a régua passa a ser ELE.
@@ -200,7 +257,32 @@ export function ConversionFunnel({ tiers, base }: ConversionFunnelProps) {
         {/* Andar 4 — Fechamento */}
         <LiquidTier clipId="funil-t4" path={trapezoid(t4.top, t4.bottom, t4.y, t4.h)} color={tiers.fechamento.color} y={t4.y} h={t4.h} delay={1.5} fill={nivel(tiers.fechamento.count)} />
         <TierText x={360} y={t4.y + t4.h / 2} label={tiers.fechamento.label} count={tiers.fechamento.count} share={share(tiers.fechamento.count)} />
+
+        {/* Story 75-341 — as áreas clicáveis vêm DEPOIS de todo o desenho: no SVG
+            quem é pintado por último recebe o clique, e o `TierText` acima usa
+            `pointerEvents: none` justamente para não bloquear. */}
+        {drilldown && (
+          <g>
+            <TierHitArea path={trapezoid(t1.top, t1.bottom, t1.y, t1.h)} tier={tiers.atendimento} onPick={escolher} />
+            <TierHitArea path={halfTrapezoid(t2.top, t2.bottom, t2.y, t2.h, "left")} tier={tiers.visitaAgendada} onPick={escolher} />
+            <TierHitArea path={halfTrapezoid(t2.top, t2.bottom, t2.y, t2.h, "right")} tier={tiers.visitou} onPick={escolher} />
+            <TierHitArea path={trapezoid(t3.top, t3.bottom, t3.y, t3.h)} tier={tiers.proposta} onPick={escolher} />
+            <TierHitArea path={trapezoid(t4.top, t4.bottom, t4.y, t4.h)} tier={tiers.fechamento} onPick={escolher} />
+          </g>
+        )}
       </svg>
+
+      {drilldown && alvo && (
+        <StageLeadsDrawer
+          key={`${alvo.stageId}-${alvo.modo}`}
+          alvo={alvo}
+          from={drilldown.from}
+          to={drilldown.to}
+          filterQuery={drilldown.filterQuery}
+          rangeLabel={drilldown.rangeLabel}
+          onClose={() => setAlvo(null)}
+        />
+      )}
     </div>
   )
 }
