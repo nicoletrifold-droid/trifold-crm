@@ -74,6 +74,13 @@ aparecendo só no quadro dele — era a dúvida levantada pelo Marcos.
 
 ## AC3 — A origem passa a ser a do último contato
 
+> **Decisão do Marcos (18/08), depois do gate:** o efeito colateral em Analytics — o relatório de
+> origem agrupa pela coluna ATUAL do lead, então a atribuição de meses passados muda quando um lead
+> antigo volta pelo formulário — foi apresentado e **aceito**. Fica como está, para reavaliar depois.
+> Não é descuido: é dívida escolhida com o número na mão (1.810 leads na base, 5 respostas de
+> formulário na data). O reparo segue possível porque `metadata.origem_anterior` e a activity
+> `lead_source_updated` preservam a origem de entrada lead por lead.
+
 **Causa:** deliberada até aqui. O código dizia, em comentário, "lead que já existia NÃO tem a
 origem reescrita: quem chegou antes pelo Meta Ads continua sendo do Meta Ads".
 

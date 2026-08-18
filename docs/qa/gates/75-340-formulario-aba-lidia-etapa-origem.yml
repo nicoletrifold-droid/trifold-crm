@@ -72,8 +72,13 @@ concerns:
       pedido do Marcos ("a origem tem que ser o último local") é inequívoco e a story o cumpre; o
       que falta é ele saber que o relatório de origem muda junto. `metadata.origem_anterior` e a
       activity `lead_source_updated` preservam o rastro por lead, mas nenhum relatório os lê.
-      Encaminhamento: avisar o Marcos. Se a atribuição histórica importar, é story própria
-      (`lead_source_history` ou snapshot em `leads.source_original`) — não emenda aqui.
+      Encaminhamento: CONCLUÍDO em 18/08 — apresentado ao Marcos com o mecanismo, o efeito
+      retroativo e a escala (1.810 leads na base, 5 respostas de formulário). **Decisão dele:
+      DEIXAR COMO ESTÁ e reavaliar depois.** Dívida consciente, não descuido. Gatilho para
+      reabrir: quando o relatório de origem passar a ser usado para decidir verba e a divergência
+      incomodar. Reparo continua possível — `metadata.origem_anterior` e a activity
+      `lead_source_updated` guardam a origem de entrada lead por lead, então um backfill futuro
+      para uma coluna `source_entrada` é reconstruível (mais trabalhoso, não perdido).
   - id: C2
     severidade: MEDIUM
     tipo: dívida-de-teste
