@@ -12,7 +12,7 @@ import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-fee
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 // Story 75-330 (Epic 89) — respostas do formulário de qualificação na ficha (AC9).
 import { FormResponsesPanel } from "@web/components/leads/form-responses-panel"
-import { fetchRespostaDoLead } from "@web/lib/forms/lead-responses"
+import { fetchRespostasDoLead } from "@web/lib/forms/lead-responses"
 
 
 export default async function BrokerLeadDetailPage({
@@ -170,7 +170,7 @@ export default async function BrokerLeadDetailPage({
 
   // Story 75-330 (Epic 89) — AC9. Devolve null quando o lead não veio de
   // formulário, e o painel não renderiza.
-  const respostaFormulario = await fetchRespostaDoLead(lead.id as string, user.orgId)
+  const respostasFormulario = await fetchRespostasDoLead(lead.id as string, user.orgId)
 
   return (
     <div className="space-y-6">
@@ -288,16 +288,22 @@ export default async function BrokerLeadDetailPage({
           qualificação, em texto legível. Fica logo acima do chat porque é o
           contexto que o corretor precisa ANTES de escrever a primeira mensagem.
           Sem resposta de formulário, o painel não renderiza nada. */}
-      {respostaFormulario && (
+      {/* Story 75-343 — TODAS as respostas, da mais nova para a mais antiga (era
+          só a última). Um lead que preencheu duas campanhas tinha a primeira
+          apagada da ficha; e o corretor precisa ver o mesmo que a SDR vê no
+          /dashboard, senão são duas verdades para a mesma pergunta. */}
+      {respostasFormulario.map((resposta) => (
         <FormResponsesPanel
-          formNome={respostaFormulario.formNome}
-          respostas={respostaFormulario.respostas}
-          score={respostaFormulario.score}
-          preenchidoEm={respostaFormulario.preenchidoEm}
-          parcial={respostaFormulario.parcial}
-          resumoIa={respostaFormulario.resumoIa}
+          key={resposta.id}
+          formNome={resposta.formNome}
+          respostas={resposta.respostas}
+          score={resposta.score}
+          preenchidoEm={resposta.preenchidoEm}
+          parcial={resposta.parcial}
+          parouEm={resposta.parouEm}
+          resumoIa={resposta.resumoIa}
         />
-      )}
+      ))}
 
       {/*
         Conversation — Story 63-5: a área de chat (header + histórico + bolhas +

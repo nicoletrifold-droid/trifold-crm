@@ -14,6 +14,12 @@ export interface FormResponsesPanelProps {
   preenchidoEm: string | null
   /** Resposta parcial = a pessoa abandonou no meio. Isso é informação de venda. */
   parcial: boolean
+  /**
+   * Story 75-343 — a pergunta em que a pessoa travou. "Não terminou" diz que ela
+   * parou; isto diz ONDE, que é o que a SDR precisa para retomar a conversa no
+   * ponto certo em vez de recomeçar. Ausente em resposta completa.
+   */
+  parouEm?: string | null
   /** Story 75-332 — leitura da IA sobre as respostas abertas. Ausente = sem espaço vazio (AC7). */
   resumoIa?: string | null
 }
@@ -24,6 +30,7 @@ export function FormResponsesPanel({
   score,
   preenchidoEm,
   parcial,
+  parouEm,
   resumoIa,
 }: FormResponsesPanelProps) {
   if (respostas.length === 0) return null
@@ -57,6 +64,15 @@ export function FormResponsesPanel({
           )}
         </div>
       </div>
+
+      {/* Story 75-343 — onde a pessoa parou, logo abaixo do cabeçalho: é a
+          primeira coisa a saber numa resposta abandonada, antes de ler o que ela
+          respondeu. Mesma regra da coluna "Parou em" da tela de Formulários. */}
+      {parcial && parouEm ? (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <span className="font-semibold">Parou em:</span> {parouEm}
+        </p>
+      ) : null}
 
       {/* Story 75-332 — o que a IA leu nas respostas abertas, ANTES das respostas
           cruas: é o que o corretor lê para abrir a conversa. Sem resumo (IA
