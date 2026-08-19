@@ -1,10 +1,10 @@
 # Story 75-345 — Quem recebe o relatório diário sai do CRM (e o gerente comercial entra)
 
-**Status:** Review
+**Status:** Done — gate PASS · **PR #455 mergeado em 19/08** (squash `0e0fbdf8`) · deploy `success` · lista semeada e conferida em produção
 **Tipo:** Feature (configuração que era env de dev) + atende pedido direto
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~4 pts — 1 tela, 1 helper, 1 cron, 0 migrations)
-**Fluxo:** @sm → @dev → @qa → @devops
+**Fluxo:** @sm → @dev → @qa → @devops (executado 19/08)
 **Migrations:** **nenhuma** — a lista mora em `organizations.settings` (jsonb que já existe, mesmo
 lugar do `materiais_url` da 75-117).
 
@@ -88,7 +88,9 @@ id selecionado que não existe mais, lista vazia (= só a env) e número inváli
 - [x] **AC1** — tela `/dashboard/configuracoes/relatorio-diario` (escolha por pessoa, indisponíveis
       listados com o motivo), card na landing, sub-módulo no `SUBMODULE_MAP`.
 - [x] **AC2** — cron resolve usuários escolhidos + env, dedup por `normalizePhoneBR`.
-- [ ] **AC3** — semear Alexandre + Joabe em produção (**depois do deploy**).
+- [x] **AC3** — lista semeada em produção pelo Management API (UPDATE idempotente: seleciona os ids
+      PELO TELEFONE, então rodar de novo não duplica nem quebra). Verificado por query: **Alexandre
+      Guimaraes Nicolau (admin)** e **Joabe Albuquerque Silva (gerente-comercial)**.
 - [x] **AC4** — `recipients.test.ts` (9 casos) + `daily-report/route.test.ts` (5 casos, novo).
 
 ### Decisões de implementação
