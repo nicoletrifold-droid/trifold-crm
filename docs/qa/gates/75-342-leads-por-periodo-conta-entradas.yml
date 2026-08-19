@@ -98,6 +98,7 @@ verificacoes:
 
 pendencia_pos_deploy:
   - id: P1
+    status: FECHADO — Marcos conferiu em 19/08 e confirmou que os números bateram
     detalhe: >
       Em crm.trifold.eng.br/dashboard/analytics?range=7d, os três números têm que coincidir:
       régua do Pipeline ("N entradas no período"), card Entradas e o rodapé do gráfico. E o total do

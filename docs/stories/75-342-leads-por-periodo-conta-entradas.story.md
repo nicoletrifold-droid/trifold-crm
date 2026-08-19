@@ -101,7 +101,13 @@ O item 3 é o que impede que "tirar filtro" vire "tirar filtro demais".
   dele (linhas 11-15) cita a diferença de recorte entre as duas rotas e **precisa ser atualizado**,
   senão vira documentação mentindo.
 
-## Verificar depois do deploy
+## ✅ Verificado em produção (Marcos, 19/08)
+
+Ele conferiu na tela e **os números bateram** — a régua do Pipeline, o card Entradas e o rodapé do
+gráfico passaram a mostrar a mesma base, e os dois gráficos de série temporal da página pararam de
+discordar. É o que fecha a story: o defeito era de definição, e a prova é visual.
+
+## Checklist usado na conferência
 
 - Em `?range=7d`, "Leads por Período" tem que mostrar o **mesmo** número do card Entradas e do
   "62 entradas no período" da régua. Se os três não baterem, a causa é outra e a story não terminou.
