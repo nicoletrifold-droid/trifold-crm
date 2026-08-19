@@ -1,11 +1,11 @@
 # Story 75-343 — As respostas do formulário na ficha do /dashboard (a tela da SDR)
 
-**Status:** Review
+**Status:** Done — gate PASS · **PR #453 mergeado em 19/08** (squash `019a41ec`) · deploy de produção `success` às 12:16 UTC
 **Tipo:** Bug fix (entrega incompleta da AC9 da 75-330) + melhoria (onde parou · histórico no plural)
 **Epic:** 89 — Formulário de qualificação para tráfego pago
 **Story ID:** 75-343
 **Complexidade:** S (~3 pts — 1 helper, 1 componente, 2 páginas, 0 migrations)
-**Fluxo:** @sm → @dev → @qa → @devops
+**Fluxo:** @sm → @dev → @qa → @devops (executado 19/08)
 **Migrations:** **nenhuma** — o dado já está gravado desde a 75-330 (mig 232).
 
 ## O pedido (Marcos, 19/08)
