@@ -1,6 +1,6 @@
 # Story 75-349 — Destravar a troca de modelo da Nicole (hoje, trocar pelo painel derruba a Nicole em silêncio)
 
-**Status:** InReview — gate PASS
+**Status:** Done — gate PASS · **PR #460 mergeado em 19/08** (squash) · deploy de produção `success`
 **Tipo:** Dívida técnica bloqueante (2 incompatibilidades com a geração atual de modelos)
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~2 pts — 1 arquivo, 0 migrations)

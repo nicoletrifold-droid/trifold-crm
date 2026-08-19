@@ -1,6 +1,6 @@
 # Story 75-347 — A finalidade (moradia × investimento) entra na conversa: perguntar, ler e pesar
 
-**Status:** InReview — gate PASS · código + prompts de produção aplicados em 19/08
+**Status:** Done — gate PASS · **PR #458 mergeado em 19/08** (squash) · deploy de produção `success`
 **Tipo:** Qualificação da Nicole (dado que existe e ninguém usa) + correção da régua de calor
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~5 pts — 2 prompts no painel, 3 arquivos de código, 0 migrations)

@@ -1,6 +1,6 @@
 # Story 75-348 — A forma da resposta da Nicole: abertura que varia, uma ideia por mensagem, e nenhuma promessa que ninguém cumpre
 
-**Status:** InReview — gate PASS · prompts de produção aplicados em 19/08 · divisão em blocos DESLIGADA
+**Status:** Done — gate PASS · **PR #459 mergeado em 19/08** (squash) · deploy de produção `success` · divisão em blocos DESLIGADA
 **Tipo:** Prompt (painel) + 1 ajuste de envio
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S/M (~3 pts — 2 prompts no painel, 1 arquivo de código, 0 migrations)
