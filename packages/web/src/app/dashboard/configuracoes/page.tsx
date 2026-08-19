@@ -1,98 +1,36 @@
 import { getServerUser } from "@web/lib/auth"
-import { can } from "@web/lib/permissions"
+import { can, canAccess } from "@web/lib/permissions"
 import { createClient } from "@web/lib/supabase/server"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { NotificationToggle } from "@web/components/notification-toggle"
 import { AprovacaoEmailToggle } from "./_components/aprovacao-email-toggle"
-
-const CONFIG_CARDS = [
-  {
-    href: "/dashboard/configuracoes/empresa",
-    icon: "◈",
-    title: "Empresa",
-    description: "Dados da organização",
-  },
-  {
-    href: "/dashboard/configuracoes/usuarios",
-    icon: "◎",
-    title: "Usuários",
-    description: "Gerenciar usuários e permissões",
-  },
-  {
-    href: "/dashboard/configuracoes/corretores",
-    icon: "◈",
-    title: "Corretores",
-    description: "Cadastro e gestão de corretores",
-  },
-  {
-    href: "/dashboard/configuracoes/clientes",
-    icon: "◉",
-    title: "Clientes",
-    description: "Cadastro de clientes e vínculos com obras",
-  },
-  {
-    href: "/dashboard/configuracoes/horario",
-    icon: "▣",
-    title: "Horário Comercial",
-    description: "Horários de atendimento",
-  },
-  {
-    href: "/dashboard/configuracoes/integracoes",
-    icon: "⟁",
-    title: "Integrações",
-    description: "Meta Ads, WhatsApp, Telegram",
-  },
-  {
-    href: "/dashboard/configuracoes/nicole",
-    icon: "◬",
-    title: "Nicole",
-    description: "Personalidade e treinamento da IA",
-  },
-  {
-    href: "/dashboard/configuracoes/pipeline",
-    icon: "▦",
-    title: "Etapas do Pipeline",
-    description: "Configurar etapas do funil de vendas",
-  },
-  {
-    href: "/dashboard/pipeline/config",
-    icon: "△",
-    title: "Follow-up",
-    description: "Regras de follow-up por etapa",
-  },
-  {
-    href: "/dashboard/configuracoes/perfil-acesso",
-    icon: "◫",
-    title: "Perfil de Acesso",
-    description: "Permissões por perfil de usuário",
-  },
-  {
-    href: "/dashboard/configuracoes/relatorio-diario",
-    icon: "✉",
-    title: "Relatório Diário",
-    description: "Quem recebe o resumo de leads das 7h59 no WhatsApp",
-  },
-  {
-    href: "/dashboard/configuracoes/materiais",
-    icon: "◲",
-    title: "Central de Materiais",
-    description: "Link dos materiais de marketing para os corretores",
-  },
-]
-
-// Cards visíveis para gerente-comercial
-const GERENTE_ALLOWED: string[] = [
-  "/dashboard/configuracoes/corretores",
-  "/dashboard/configuracoes/nicole",
-  "/dashboard/pipeline/config",
-]
+// Story 75-346 — a lista de atalhos e a permissão de cada um vivem em um lugar só,
+// com teste que reprova card sem permissão declarada.
+import { CONFIG_CARDS, cardsVisiveis, chavesDosCards } from "@web/lib/config-cards"
 
 export default async function ConfiguracoesPage() {
   const user = await getServerUser()
-  const isGerenteComercial = user.role === "gerente-comercial"
-  const visibleCards = isGerenteComercial
-    ? CONFIG_CARDS.filter((c) => GERENTE_ALLOWED.includes(c.href))
-    : CONFIG_CARDS
+
+  // Story 75-346 — os atalhos saem da MATRIZ, não de uma lista de perfis no código.
+  // Antes: `GERENTE_ALLOWED` (três hrefs fixos para gerente-comercial) e todos os
+  // doze para qualquer outro perfil. Duas consequências, as duas corrigidas aqui:
+  // tela nova nascia invisível para quem tinha a permissão (foi o que barrou a
+  // 75-345), e esta landing — que NÃO tem gate — anunciava doze atalhos a qualquer
+  // autenticado que digitasse a URL.
+  //
+  // Uma pergunta por CHAVE distinta, não por card: "Empresa" e "Central de
+  // Materiais" compartilham `configuracoes.empresa`.
+  const chaves = chavesDosCards(CONFIG_CARDS)
+  const respostas = new Map(
+    await Promise.all(
+      chaves.map(async (chave) => [chave, await canAccess(user.id, user.orgId, chave)] as const)
+    )
+  )
+  const visibleCards = cardsVisiveis(CONFIG_CARDS, (chave) => respostas.get(chave) ?? false)
+
+  // Nenhum atalho = nada a fazer aqui. É o gate que a tela nunca teve.
+  if (visibleCards.length === 0) redirect("/dashboard")
 
   // Story 75-210: preferência de e-mail de aprovação — só quem recebe (admin/supervisor).
   // 75-308: elegibilidade ao e-mail de aprovação é a capability própria.

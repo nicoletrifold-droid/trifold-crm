@@ -1,33 +1,25 @@
 import { getServerUser } from "@web/lib/auth"
+import { canAccess } from "@web/lib/permissions"
 import Link from "next/link"
-
-const ALL_CARDS = [
-  {
-    href: "/dashboard/configuracoes/personalidade",
-    icon: "◬",
-    title: "Personalidade",
-    description: "Prompts e comportamento da IA",
-    roles: ["admin", "supervisor"],
-  },
-  {
-    href: "/dashboard/configuracoes/nicole/treinamento",
-    icon: "◎",
-    title: "Treinamento",
-    description: "Base de conhecimento sobre empreendimentos",
-    roles: ["admin", "supervisor", "gerente-comercial"],
-  },
-  {
-    href: "/dashboard/configuracoes/nicole/midia",
-    icon: "▦",
-    title: "Mídia",
-    description: "Imagens e PDFs para enviar nas conversas",
-    roles: ["admin", "supervisor", "gerente-comercial"],
-  },
-]
+import { redirect } from "next/navigation"
+// Story 75-346 — os cards deste hub seguiam `roles: ["admin", …]`: nome de perfil no
+// código, o mesmo defeito da landing de Configurações. Agora cada card pergunta a
+// capability que a própria tela filha exige.
+import { NICOLE_CARDS, cardsVisiveis, chavesDosCards } from "@web/lib/config-cards"
 
 export default async function NicolePage() {
   const user = await getServerUser()
-  const NICOLE_CARDS = ALL_CARDS.filter(c => c.roles.includes(user.role))
+
+  const chaves = chavesDosCards(NICOLE_CARDS)
+  const respostas = new Map(
+    await Promise.all(
+      chaves.map(async (chave) => [chave, await canAccess(user.id, user.orgId, chave)] as const)
+    )
+  )
+  const cards = cardsVisiveis(NICOLE_CARDS, (chave) => respostas.get(chave) ?? false)
+
+  // Sem nenhuma das três telas liberadas, este hub é um beco sem saída.
+  if (cards.length === 0) redirect("/dashboard/configuracoes")
 
   return (
     <div className="space-y-6">
@@ -45,7 +37,7 @@ export default async function NicolePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {NICOLE_CARDS.map((card) => (
+        {cards.map((card) => (
           <Link
             key={card.href}
             href={card.href}
