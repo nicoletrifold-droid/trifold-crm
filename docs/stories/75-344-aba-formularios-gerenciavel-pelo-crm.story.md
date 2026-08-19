@@ -1,11 +1,11 @@
 # Story 75-344 — A aba Formulários liberável pelo CRM (e a convenção para abas)
 
-**Status:** Review
+**Status:** Done — gate PASS · **PR #454 mergeado em 19/08** (squash `2cce4619`) · deploy de produção `success` às 13:04 UTC
 **Tipo:** Bug fix de governança (acesso que só o dev consegue dar) + fechamento de furo de gate
 **Epic:** 75 — CRM Trifold (encosta no 89 e em Perfis de Acesso 2.0)
 **Story ID:** 75-344
 **Complexidade:** M (~4 pts — 1 mapa, 4 telas, 1 sidebar, 0 migrations)
-**Fluxo:** @sm → @dev → @qa → @devops
+**Fluxo:** @sm → @dev → @qa → @devops (executado 19/08)
 **Migrations:** **nenhuma** — quem concede é o Marcos, na tela, gravando a linha `role_permissions`.
 
 ## O pedido (Marcos, 19/08)
