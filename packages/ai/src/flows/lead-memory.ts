@@ -1,3 +1,4 @@
+import { textoDaResposta } from "../client/anthropic"
 import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
@@ -97,10 +98,8 @@ REGRAS OBRIGATORIAS:
       messages: [{ role: "user", content: prompt }],
     })
 
-    const firstBlock = response.content[0]
-    return firstBlock && firstBlock.type === "text"
-      ? firstBlock.text
-      : currentSummary ?? ""
+    // Story 75-349 — por FILTRO, nunca por posição (thinking pode vir no bloco 0).
+    return textoDaResposta(response.content) || currentSummary || ""
   } catch (error) {
     console.error("Error updating lead memory:", error)
     return currentSummary ?? ""

@@ -1,0 +1,92 @@
+schema: 1
+storyId: "75-349"
+story: "docs/stories/75-349-destravar-troca-de-modelo-da-nicole.story.md"
+title: "Quality Gate — Destravar a troca de modelo da Nicole"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "75-349-destravar-modelo"
+
+escopo: >
+  Dívida técnica em dois pontos do caminho quente da Nicole, mais a mesma classe de defeito em cinco
+  leitores espalhados pelo repo. Esta story NÃO troca o modelo — remove a armadilha que fazia a troca
+  (feita pelo BANCO, sem deploy) derrubar a conversa.
+
+resumo: >
+  **Os dois bloqueios eram reais e mediram diferente do que eu supunha.** O primeiro é o que parecia:
+  `temperature` vai em toda chamada (`pipeline.ts`) e a geração atual devolve 400 — verificado que a
+  Nicole é o ÚNICO consumidor do repo que envia sampling, então o estrago era só dela, mas total.
+
+  O segundo é PIOR do que "responde vazio", e a leitura do código corrigiu minha primeira conclusão:
+  com `content[0]` sendo `thinking`, o texto sai vazio, cai no `SANITIZED_EMPTY_FALLBACK` (75-279) e o
+  lead recebe **uma frase neutra em todo turno**. Não é silêncio — é uma conversa que PARECE funcionar
+  enquanto joga fora tudo que o modelo disse. Falha sem exceção e sem log, a mesma família do token da
+  Meta (75-289).
+
+  **Achado não previsto na story:** `/api/leads/[id]/handoff/route.ts` ainda carregava
+  `claude-haiku-4-20250414` — a string que a 82-1 unificou em `/summary` e no cron e **deixou passar
+  aqui**. Esse modelo não existe mais no catálogo: toda chamada dessa rota falhava na API, e o `catch`
+  ao redor engolia o erro e seguia sem resumo. Corrigido no mesmo PR por ser exatamente a classe de
+  defeito da story (string de modelo fora da constante compartilhada).
+
+status_reason: >
+  Liberado para merge. Nenhuma mudança de comportamento com o modelo atual: `claude-sonnet-4-6`
+  continua recebendo `temperature` 0,70, e a leitura de uma resposta de um bloco só é idêntica.
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: manutenção
+    titulo: "`MODELOS_COM_SAMPLING` é uma lista que envelhece"
+    detalhe: >
+      É lista de PERMISSÃO por desenho: modelo desconhecido sai SEM `temperature`. O pior caso de um
+      esquecimento é uma resposta mais determinística; o pior caso da lista invertida (bloqueio) seria
+      uma conversa que não acontece. Há teste que acende se `ANTHROPIC_MODELS.sonnet` passar a apontar
+      para um modelo com sampling.
+  - id: C2
+    severidade: LOW
+    tipo: escopo-ampliado-conscientemente
+    titulo: "Cinco leitores fora do escopo original foram convertidos"
+    detalhe: >
+      `handoff`, `summary`, `memory/writer`, `classify-contact` e `lead-memory` liam por posição. Todos
+      rodam em Haiku (sem thinking por padrão), então nenhum estava quebrado hoje — mas manter cinco
+      cópias da leitura frágil é rearmar a armadilha para a próxima troca. Três flows já tinham a
+      leitura certa com comentário; agora todos usam a MESMA função. Lição da 75-268.
+
+verificacoes:
+  - id: V1
+    o_que: "Modelo atual segue recebendo temperature"
+    resultado: "PASS — `claude-sonnet-4-6` → `temperature: 0.7` na requisição (teste de fiação)."
+  - id: V2
+    o_que: "Geração nova não recebe temperature"
+    resultado: "PASS — sonnet-5, opus-5, opus-4-7/4-8, fable-5 → parâmetro ausente."
+  - id: V3
+    o_que: "Fala lida com thinking no bloco 0"
+    resultado: "PASS — retorna o texto real, não o `SANITIZED_EMPTY_FALLBACK`."
+  - id: V4
+    o_que: "Resposta sem texto acende evento"
+    resultado: "PASS — `nicole_resposta_vazia`, level error, com `model` e `tipos_de_bloco` no metadata."
+  - id: V5
+    o_que: "Turno normal não acende o evento"
+    resultado: "PASS — controle negativo (sem ele o evento poderia disparar sempre e o teste ficaria verde)."
+  - id: V6
+    o_que: "A fixture mede o modelo CONFIGURADO, não o default"
+    resultado: >
+      PASS — `is_active: true` na linha de `agent_config` é obrigatório: sem ele `loadAgentConfig` cai
+      no default do código (sonnet-4-6) e o teste passaria medindo o fallback. Pego durante o
+      desenvolvimento, documentado na fixture.
+  - id: V7
+    o_que: "String de modelo inexistente no /handoff"
+    resultado: "PASS — `claude-haiku-4-20250414` → `ANTHROPIC_MODELS.haiku`."
+  - id: V8
+    o_que: "Suíte, tipos, lint, build"
+    resultado: "PASS — 226 arquivos / 2.768 testes ✅ · type-check 8/8 ✅ · lint 0 erros ✅ · build --force exit 0 ✅"
+
+fora_de_escopo:
+  - "Trocar o modelo. É decisão do Marcos depois de 75-347/75-348 rodarem — senão não se sabe o que melhorou."
+  - "Fable 5 segue descartado para WhatsApp: thinking sempre ligado, turnos de minutos, $10/$50 por MTok."

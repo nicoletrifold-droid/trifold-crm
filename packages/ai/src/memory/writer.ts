@@ -1,3 +1,4 @@
+import { textoDaResposta } from "../client/anthropic"
 /**
  * Memory Writer — populates lead_memories with semantic fragments per conversation turn.
  * Inspired by MemPalace's verbatim storage layer.
@@ -75,8 +76,8 @@ export async function extractMemoryFragments(
       { timeout: 10000 }
     )
 
-    const firstBlock = response.content[0]
-    const text = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+    // Story 75-349 — por FILTRO, nunca por posição (thinking pode vir no bloco 0).
+    const text = textoDaResposta(response.content)
     return parseFragments(text)
   } catch {
     return []

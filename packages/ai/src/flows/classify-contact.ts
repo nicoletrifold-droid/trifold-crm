@@ -1,3 +1,4 @@
+import { textoDaResposta } from "../client/anthropic"
 /**
  * Classificação de contato: lead de compra vs. não-lead.
  *
@@ -91,8 +92,8 @@ Mensagem do contato:
       { timeout: 15000 }
     )
 
-    const firstBlock = response.content[0]
-    const text = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+    // Story 75-349 — por FILTRO, nunca por posição (thinking pode vir no bloco 0).
+    const text = textoDaResposta(response.content)
     return parseContactClassification(text)
   } catch {
     // Falha de rede/timeout/API → nunca bloquear um comprador real.
