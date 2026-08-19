@@ -1074,11 +1074,15 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       mensagem: "qual o preço?",
       bloco: "qual o preço?",
       papeis: ["user", "assistant", "user", "assistant", "user"],
-      // Story 75-347 — movidos de propósito: o `<lead_context>` ganhou as regras
-      // 4 e 5 (não reperguntar finalidade/prazo). **+254 bytes nos DOIS cenários**,
-      // e essa igualdade é a prova de que a mudança ficou confinada ao bloco novo.
-      sha256: "a3a17df5383c3745eec6a1ae33599f6a6bff38f9b8f97729f6b3e44f62285f93",
-      length: 30510,
+      // Story 75-347 — o `<lead_context>` ganhou as regras 4 e 5 (não reperguntar
+      // finalidade/prazo): +254 bytes.
+      // Story 75-348 — os FALLBACKS de código mudaram (teto único de 2 parágrafos na
+      // personalidade; fim da promessa de retorno em RN8/RN9 e no visit-scheduling):
+      // +695 bytes. Estes turnos-ouro rodam sem override de banco, então medem o
+      // fallback — que é justamente o que não pode contradizer o painel.
+      // **+695 nos DOIS cenários** — a igualdade do delta é a prova do confinamento.
+      sha256: "5751a3a1b91a40ebcf9020982be7338b907ce64c00ccbb0833d156f94eae1793",
+      length: 31205,
     },
     {
       nome: "(b) primeira mensagem, só o lead → SEM bloco de não-reintro",
@@ -1086,9 +1090,9 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       mensagem: "tem apartamento de 3 quartos?",
       bloco: "tem apartamento de 3 quartos?",
       papeis: ["user", "user"],
-      // Story 75-347 — idem: 30.082 + 254 = 30.336.
-      sha256: "3fe68ad2311a21e958e7ed271c7357affaeb716d3af918bf0a10fa595ae06273",
-      length: 30336,
+      // Story 75-347 — idem: 30.082 + 254 = 30.336. Story 75-348: + 695 = 31.031.
+      sha256: "36d494a47d057f80ffef72ecf4141ac0ebc1248ed43c16e9684c750f00eb0558",
+      length: 31031,
     },
   ]
 

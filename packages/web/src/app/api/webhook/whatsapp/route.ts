@@ -23,6 +23,7 @@ import { maybeRouteInboundToRelationship } from "@web/lib/relacionamento/route-i
 import { transcribeAudio } from "@web/lib/transcription/transcribe"
 import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 import { sendWhatsAppTypingIndicator } from "@web/lib/whatsapp/send-typing-indicator"
+import { dividirResposta, divisaoEmBlocosLigada } from "@web/lib/whatsapp/split-response"
 import { calculateTypingDelay } from "@web/lib/whatsapp/typing-delay"
 import {
   alertCredencialMorta,
@@ -1054,19 +1055,33 @@ export async function POST(request: NextRequest) {
         )
 
         const whatsappUrl = `https://graph.facebook.com/v21.0/${config.phone_number_id}/messages`
-        await fetch(whatsappUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${config.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: fromRaw,
-            type: "text",
-            text: { body: response },
-          }),
-        })
+        // Story 75-348 — a fala pode sair em DOIS balões (contexto, depois pergunta),
+        // do jeito que gente escreve. Com a flag desligada, `dividirResposta` devolve
+        // um bloco só e este laço é byte-a-byte o envio de antes.
+        //
+        // SEQUENCIAL de propósito: `Promise.all` aqui entregaria as duas mensagens
+        // fora de ordem no aparelho do lead — a pergunta antes do contexto. E a
+        // pausa entre elas é a mesma `calculateTypingDelay`, agora medida sobre o
+        // bloco que vem, não sobre a resposta inteira.
+        const blocos = divisaoEmBlocosLigada() ? dividirResposta(response) : [response]
+        for (const [indice, bloco] of blocos.entries()) {
+          if (indice > 0) {
+            await new Promise((resolve) => setTimeout(resolve, calculateTypingDelay(bloco)))
+          }
+          await fetch(whatsappUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${config.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: fromRaw,
+              type: "text",
+              text: { body: bloco },
+            }),
+          })
+        }
 
         // Story 75-17 — Nicole envia mídia da biblioteca SE o lead pediu material
         // (planta/foto/tabela do empreendimento de interesse). Aditivo e seguro:

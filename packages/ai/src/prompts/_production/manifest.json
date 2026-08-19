@@ -1,6 +1,6 @@
 {
   "story": "87-0",
-  "captured_at": "2026-08-19T16:55:24.140Z",
+  "captured_at": "2026-08-19T17:05:24.773Z",
   "org_id": "00000000-0000-0000-0000-000000000001",
   "source": {
     "table": "agent_prompts",
@@ -18,14 +18,14 @@
       "name": "Guardrails da IA",
       "type": "guardrail",
       "is_active": true,
-      "updated_at": "2026-08-10T13:50:53.564243+00:00",
-      "char_count": 9070,
-      "sha256": "1eb1d414d8e4ef003683cef1c14314bb827e8621a5f8ccbd0c845dd1fc1bef84",
-      "raw_char_count": 9070,
-      "raw_sha256": "1eb1d414d8e4ef003683cef1c14314bb827e8621a5f8ccbd0c845dd1fc1bef84",
+      "updated_at": "2026-08-19T17:03:15.313013+00:00",
+      "char_count": 9448,
+      "sha256": "ef89ede4bd5e4ff1350d8c49a283166925e3cb5d49ee8624a3df5cbb7b5a15d0",
+      "raw_char_count": 9448,
+      "raw_sha256": "ef89ede4bd5e4ff1350d8c49a283166925e3cb5d49ee8624a3df5cbb7b5a15d0",
       "file": "guardrails.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     },
     {
       "slug": "handoff-summary",
@@ -39,7 +39,7 @@
       "raw_sha256": "f54514cdd1ae5245cef97bd1d0bab3884a7ddb788fd24929599aa5be785542f8",
       "file": "handoff-summary.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     },
     {
       "slug": "off-hours",
@@ -53,7 +53,7 @@
       "raw_sha256": "0aacca8f7e1e597b33e7065c950a07a75e1d72e3d73a16622a55935647662d3f",
       "file": "off-hours.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     },
     {
       "slug": "property-presentation",
@@ -67,7 +67,7 @@
       "raw_sha256": "162025c7f202b22ba11d5ae12bca17f7b0c4dcc670119cc08aab567d86c78433",
       "file": "property-presentation.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     },
     {
       "slug": "qualification-flow",
@@ -81,35 +81,35 @@
       "raw_sha256": "e114314a50a6bb6153011120e53f568ac9713b1354e8be49d801958cbc7c9f6d",
       "file": "qualification-flow.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     },
     {
       "slug": "system-personality",
       "name": "Personalidade Nicole",
       "type": "system",
       "is_active": true,
-      "updated_at": "2026-08-10T13:50:54.827+00:00",
-      "char_count": 2477,
-      "sha256": "c24c5713ee6bd232f21418188253ae6c77439d1297f2781af0e76a136c6f4ea2",
-      "raw_char_count": 2478,
-      "raw_sha256": "4341764325cd147d2d36f50bc9f88ca325b450808bf6c174f1c8bcc4a8bbfaff",
+      "updated_at": "2026-08-19T17:03:15.313013+00:00",
+      "char_count": 3602,
+      "sha256": "3d71bcd7b9632c3c1585b72ad98078bf52007d2fad25a26bcc6946499295d671",
+      "raw_char_count": 3602,
+      "raw_sha256": "3d71bcd7b9632c3c1585b72ad98078bf52007d2fad25a26bcc6946499295d671",
       "file": "system-personality.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     },
     {
       "slug": "visit-scheduling",
       "name": "Agendamento de Visitas",
       "type": "system",
       "is_active": true,
-      "updated_at": "2026-08-10T13:51:00.00538+00:00",
-      "char_count": 5104,
-      "sha256": "11f5ee05fe6ef07f7012cb631715da2d3b11a6e0a9e1e58de7d8c5eb359ec379",
-      "raw_char_count": 5105,
-      "raw_sha256": "1de7d9dab077b73ac42a2c4da80dff6715c85c4c5c172f40d8e9bc6f727bba1d",
+      "updated_at": "2026-08-19T17:03:15.313013+00:00",
+      "char_count": 5559,
+      "sha256": "407f6bfa6211adcca3129faef63e3b1477e9886d4b51c6c2b2a291f8d9eee23b",
+      "raw_char_count": 5559,
+      "raw_sha256": "407f6bfa6211adcca3129faef63e3b1477e9886d4b51c6c2b2a291f8d9eee23b",
       "file": "visit-scheduling.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T16:55:24.140Z"
+      "captured_at": "2026-08-19T17:05:24.773Z"
     }
   ]
 }
