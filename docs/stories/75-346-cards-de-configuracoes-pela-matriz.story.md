@@ -1,10 +1,10 @@
 # Story 75-346 — Os atalhos de Configurações saem da matriz, não de uma lista de perfis no código
 
-**Status:** Review
+**Status:** Done — gate PASS · **PR #457 mergeado em 19/08** (squash `c35ecee0`) · deploy de produção `success`
 **Tipo:** Bug fix de governança (permissão que não abre porta) + furo de exposição na landing
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~4 pts — 2 telas, 1 lib pura, 0 migrations)
-**Fluxo:** @sm → @dev → @qa → @devops
+**Fluxo:** @sm → @dev → @qa → @devops (executado 19/08)
 **Migrations:** **nenhuma**.
 
 ## O pedido (Marcos, 19/08)
