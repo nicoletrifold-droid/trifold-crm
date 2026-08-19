@@ -1,4 +1,4 @@
-import { textoDaResposta } from "../client/anthropic"
+import { textoDaResposta, ANTHROPIC_MODELS } from "../client/anthropic"
 import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
@@ -93,7 +93,7 @@ REGRAS OBRIGATORIAS:
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: ANTHROPIC_MODELS.haiku,
       max_tokens: 600,
       messages: [{ role: "user", content: prompt }],
     })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAnthropicClient } from "@trifold/ai"
+import { createAnthropicClient, ANTHROPIC_MODELS } from "@trifold/ai"
 import {
   buildContext,
   fetchPipelineAggregates,
@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
       try {
         const claudeStream = anthropic.messages.stream(
           {
-            model: "claude-sonnet-4-6",
+            model: ANTHROPIC_MODELS.sonnet46,
             max_tokens: 2048,
             system: `${AGENT_SYSTEM_PROMPT}\n\n---\n\n${contextText}`,
             messages: [

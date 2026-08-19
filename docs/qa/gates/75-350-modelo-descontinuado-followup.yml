@@ -1,0 +1,116 @@
+schema: 1
+storyId: "75-350"
+story: "docs/stories/75-350-modelo-descontinuado-matou-o-followup.story.md"
+title: "Quality Gate — Modelo descontinuado matou o follow-up pós-visita"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "75-350-modelo-descontinuado-followup"
+
+escopo: >
+  Um incidente de produção de 29 dias com três defeitos empilhados: a string de modelo morta, a
+  ausência de guarda que transformava o 404 de um lead em morte do cron inteiro, e uma porta que
+  gravava "enviado" sem enviar. O risco de consertar está na AC3 — ela faz leads voltarem a RECEBER
+  mensagem, e isso é mudança de comportamento voltada para fora.
+
+resumo: >
+  **O e-mail da Anthropic era a ponta de um fio de 29 dias.** A string
+  `claude-3-5-haiku-latest` (alias que resolvia para um modelo descontinuado) vivia num lugar só — a
+  mensagem pós-visita da Nicole. Mas o efeito não ficou nela:
+
+  **Medido em `system_events`:** o cron de follow-up concluiu 19 vezes em julho, a última em **21/07
+  18:00 UTC**, e **ZERO vezes de 22/07 a 19/08** — enquanto seguia rodando de 2 em 2 horas e gravando
+  90 a 500 eventos por dia. Zero eventos de erro no período: a exceção escapava antes de qualquer log,
+  e o `FOLLOWUP_EXECUTED` (a única prova de que o cron terminava) vinha DEPOIS do bloco que estourava.
+
+  **Isto fecha um pendente do backlog** que estava aberto desde 11/08 ("pós-visita 17 feedbacks → 0
+  mensagens; achar POR QUE antes de consertar"). O porquê é este 404.
+
+  **E o conserto do modelo desmascarou um segundo defeito:** a porta do feedback do corretor nunca
+  chamou o WhatsApp. Gravava `status: "sent"`, `sent_at` e linha em `messages` — e não há envio nem
+  trigger (conferido em produção). Consertar só o modelo trocaria um no-op silencioso por uma mentira
+  no CRM, então as duas coisas vão no mesmo PR.
+
+status_reason: >
+  Liberado para merge. Uma mudança de comportamento declarada e voltada para fora (C1) e uma correção
+  de dado histórico registrada (C2).
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: mudança-de-comportamento-voltada-para-fora
+    titulo: "O lead volta a receber mensagem quando o corretor preenche o feedback"
+    detalhe: >
+      Antes: nada era enviado (a porta só registrava). Depois: `sendFollowUpMessage` é chamado de
+      verdade, respeitando a janela de 24h do WhatsApp. É a intenção original do recurso — a atividade
+      já dizia "Nicole enviou follow-up pos-visita" —, mas é mensagem para cliente real e por isso está
+      declarada aqui e no PR. Fora da janela nada é enviado e nada é gravado como entregue.
+  - id: C2
+    severidade: LOW
+    tipo: dado-histórico
+    titulo: "`follow_up_log` tem registros antigos que dizem `sent` sem envio"
+    detalhe: >
+      Todo pós-visita gravado pela porta do feedback antes deste PR está no banco como `status: 'sent'`
+      com `sent_at` preenchido, e há linhas em `messages` que o lead nunca recebeu. Esta story NÃO faz
+      backfill: reescrever histórico de conversa é pior que conviver com ele documentado. Se algum
+      relatório de follow-up for construído sobre esses dados, precisa saber que antes de 19/08/2026 o
+      `sent` dessa origem não significa entrega.
+  - id: C3
+    severidade: LOW
+    tipo: escopo-ampliado-conscientemente
+    titulo: "Sete literais de modelo migrados para a constante"
+    detalhe: >
+      A AC6 (contrato) só passa a verde se o repo inteiro estiver limpo. Foram migrados 7 literais em 6
+      arquivos, incluindo os defaults do pipeline. Nenhum ID mudou de valor: é substituição de literal
+      por constante com o MESMO valor, verificada pelo type-check e pela suíte.
+
+verificacoes:
+  - id: V1
+    o_que: "A string morta e o alias"
+    resultado: "PASS — `ANTHROPIC_MODELS.haiku` (= `claude-haiku-4-5-20251001`, a substituição do e-mail)."
+  - id: V2
+    o_que: "Falha de um lead não aborta o cron"
+    resultado: "PASS — try/catch POR agendamento + `FOLLOWUP_POST_VISIT_ERRO` (level error) + contador no recibo."
+  - id: V3
+    o_que: "A porta do feedback envia de verdade"
+    resultado: >
+      PASS — `sendFollowUpMessage` extraída da rota do cron para `lib/whatsapp/`; as duas portas usam o
+      mesmo remetente. Extração é movimento puro: o cron chama a MESMA função, sem alteração de lógica.
+  - id: V4
+    o_que: "Fora da janela de 24h não vira mensagem entregue"
+    resultado: >
+      PASS — `registroDoPosVisita` decide, e o teste cobre janela fechada, erro de API e credencial
+      ausente. A porta do feedback gravava `messages` em todos esses casos.
+  - id: V5
+    o_que: "Erro de API deixa de contar como enviado (mentira menor do cron)"
+    resultado: "PASS — `status: 'sent'` agora exige `envio.sent === true`. Teste explícito."
+  - id: V6
+    o_que: "O catch silencioso do feedback"
+    resultado: "PASS — `logEventOnce` AGUARDADO (última escrita antes do response; fire-and-forget morre no return — 87-6)."
+  - id: V7
+    o_que: "Contrato de IDs de modelo"
+    resultado: >
+      PASS — varredura de `packages/*/src`; literal fora de `client/anthropic.ts` reprova e `-latest`
+      reprova em qualquer lugar. Inclui guarda contra varredura vazia (>200 arquivos), senão um caminho
+      errado deixaria o contrato verde sem varrer nada.
+  - id: V8
+    o_que: "Mutação"
+    resultado: >
+      PASS — devolver `claude-3-5-haiku-latest` ao arquivo derruba 2 dos 3 casos do contrato. Rodado
+      vermelho e restaurado.
+  - id: V9
+    o_que: "Suíte, tipos, lint, build"
+    resultado: "PASS — 229 arquivos / 2.790 testes ✅ · type-check 8/8 ✅ · lint 0 erros ✅ · build --force exit 0 ✅"
+
+evidencia:
+  medicao_do_incidente:
+    - "FOLLOWUP_EXECUTED: 19 em julho (última 21/07 18:00 UTC) · 0 em agosto"
+    - "22/07 a 19/08: 0 conclusões, 90 a 500 tentativas/dia, 0 eventos de erro"
+    - "triggers em `messages` em produção: só update_conversation_last_msg e bump_lead_last_contact — nenhum envia"
+  pendente_que_isto_responde:
+    - "backlog 11/08: pós-visita 17 feedbacks → 0 mensagens ('achar POR QUE antes de consertar')"

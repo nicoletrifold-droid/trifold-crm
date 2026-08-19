@@ -10,6 +10,14 @@ export const ANTHROPIC_MODELS = {
   haiku: "claude-haiku-4-5-20251001",
   /** Raciocínio sobre comportamento/recomendações (análise do lead). */
   sonnet: "claude-sonnet-5",
+  /**
+   * Story 75-350 — geração anterior, ainda com sampling, **pinada de propósito**
+   * onde o comportamento foi calibrado com ela: o default da Nicole quando
+   * `agent_config.model_primary` vem vazio, o agente interno do dashboard e a
+   * extração do termo. Não é "modelo velho esquecido" — é escolha; trocar exige
+   * reconferir prompt e, no caso da Nicole, `supportsSampling` (75-349).
+   */
+  sonnet46: "claude-sonnet-4-6",
 } as const
 
 export function createAnthropicClient() {

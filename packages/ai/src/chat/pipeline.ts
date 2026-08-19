@@ -35,7 +35,7 @@ import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, reso
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
 import type { AgendaState } from "../flows/agenda-state"
-import { supportsSampling, textoDaResposta } from "../client/anthropic"
+import { supportsSampling, textoDaResposta, ANTHROPIC_MODELS } from "../client/anthropic"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -1819,7 +1819,7 @@ async function loadAgentConfig(
     return {
       personality_prompt: null,
       guardrails: [],
-      model_primary: "claude-sonnet-4-6",
+      model_primary: ANTHROPIC_MODELS.sonnet46,
       temperature: 0.7,
       max_tokens: 1024,
       greeting_message: null,
@@ -1848,7 +1848,7 @@ async function loadAgentConfig(
   return {
     personality_prompt: data.personality_prompt,
     guardrails: Array.isArray(data.guardrails) ? data.guardrails : [],
-    model_primary: data.model_primary ?? "claude-sonnet-4-6",
+    model_primary: data.model_primary ?? ANTHROPIC_MODELS.sonnet46,
     temperature: data.temperature ?? 0.7,
     max_tokens: data.max_tokens ?? 1024,
     business_hours: data.business_hours as

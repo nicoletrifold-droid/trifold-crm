@@ -1,10 +1,10 @@
 // Story 75-127 (Etapa 2) — Extração dos dados dos documentos da pasta via visão do
 // Claude. Baixa RG/CNH, CPF e comprovante de endereço (e variantes cônjuge/PJ) do
 // bucket privado, manda pro Claude e recebe JSON estruturado (tool-use).
-import { createAnthropicClient } from "@trifold/ai"
+import { createAnthropicClient, ANTHROPIC_MODELS } from "@trifold/ai"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-const MODEL = "claude-sonnet-4-6"
+const MODEL = ANTHROPIC_MODELS.sonnet46
 
 export interface PessoaExtraida {
   nome?: string | null

@@ -1,3 +1,6 @@
+import { registroDoPosVisita } from "@web/lib/appointments/post-visit-record"
+import { sendFollowUpMessage } from "@web/lib/whatsapp/send-followup-message"
+import { logEventOnce } from "@web/lib/logger"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 /**
@@ -127,7 +130,7 @@ export async function applyVisitFeedback(
       // Get property info from the appointment
       const { data: apptFull } = await supabase
         .from("appointments")
-        .select("property_id, lead:leads!lead_id(name, ai_summary), property:properties!property_id(name)")
+        .select("property_id, lead:leads!lead_id(name, phone, ai_summary), property:properties!property_id(name)")
         .eq("id", appointment.id)
         .single()
 
@@ -149,53 +152,106 @@ export async function applyVisitFeedback(
           aiSummary,
         })
 
-        // Create follow_up_log entry
-        await supabase.from("follow_up_log").insert({
-          org_id: appointment.org_id,
-          lead_id: appointment.lead_id,
-          type: "post_visit",
-          status: "sent",
-          scheduled_at: new Date().toISOString(),
-          sent_at: new Date().toISOString(),
-          message,
-        })
-
-        // Send message via conversation
-        const { data: conversations } = await supabase
+        // Story 75-350 — ESTA PORTA NÃO MANDAVA NADA.
+        //
+        // Ela gravava `follow_up_log` com `status: "sent"` e `sent_at`, mais uma
+        // linha em `messages`, e nunca chamava o WhatsApp: não havia envio aqui,
+        // e não existe trigger em `messages` que envie (conferido em produção —
+        // só `update_conversation_last_msg` e `bump_lead_last_contact`). O CRM
+        // dizia "Nicole enviou follow-up pós-visita" e o lead não recebia nada.
+        //
+        // Agora usa o MESMO remetente do cron, que checa a janela de 24h do
+        // WhatsApp antes de tentar. E a regra que o cron já documentava passa a
+        // valer aqui: fora da janela o lead não recebeu texto livre, então NÃO se
+        // persiste isso como mensagem entregue.
+        const { data: convs } = await supabase
           .from("conversations")
-          .select("id")
+          .select("id, last_message_at")
           .eq("lead_id", appointment.lead_id)
           .order("last_message_at", { ascending: false })
           .limit(1)
 
-        if (conversations && conversations.length > 0) {
-          const conversationId = conversations[0]!.id
+        const conv = convs && convs.length > 0 ? convs[0]! : null
+        const leadPhone = (leadInfo as { phone?: string } | null)?.phone || ""
+
+        const envio = await sendFollowUpMessage(
+          supabase,
+          appointment.org_id,
+          leadPhone,
+          message,
+          conv?.last_message_at ?? null
+        )
+
+        // A decisão de "o que gravar" é a MESMA dos dois lados (post-visit-record).
+        const registro = registroDoPosVisita(envio, body.interest_after)
+
+        await supabase.from("follow_up_log").insert({
+          org_id: appointment.org_id,
+          lead_id: appointment.lead_id,
+          type: "post_visit",
+          status: registro.status,
+          scheduled_at: new Date().toISOString(),
+          sent_at: registro.gravarSentAt ? new Date().toISOString() : null,
+          message,
+          metadata: {
+            channel: envio.channel,
+            appointment_id: appointment.id,
+            origem: "feedback_do_corretor",
+            ...(envio.reason ? { reason: envio.reason } : {}),
+          },
+        })
+
+        if (registro.gravarMensagem && conv) {
           await supabase.from("messages").insert({
-            conversation_id: conversationId,
+            conversation_id: conv.id,
             role: "assistant",
             content: message,
-            metadata: { source: "post_visit_followup", appointment_id: appointment.id },
+            metadata: { source: "post_visit_followup", appointment_id: appointment.id, channel: envio.channel },
           })
 
           await supabase
             .from("conversations")
             .update({ last_message_at: new Date().toISOString() })
-            .eq("id", conversationId)
+            .eq("id", conv.id)
         }
 
-        // Activity log
+        // Activity log — descreve o que ACONTECEU, não o que se pretendia.
         await supabase.from("activities").insert({
           org_id: appointment.org_id,
           lead_id: appointment.lead_id,
           type: "followup_post_visit",
-          description: `Nicole enviou follow-up pos-visita (interesse: ${body.interest_after})`,
-          metadata: { appointment_id: appointment.id, feedback_id: feedback.id },
+          description: registro.descricao,
+          metadata: {
+            appointment_id: appointment.id,
+            feedback_id: feedback.id,
+            channel: envio.channel,
+            sent: envio.sent,
+            reason: envio.reason,
+          },
         })
       }
     }
   } catch (followupErr) {
-    // Non-blocking: log but don't fail the feedback response
-    console.error("Post-visit followup error:", followupErr)
+    // Story 75-350 — fail-open segue valendo (o feedback do corretor NÃO pode
+    // falhar por causa do follow-up), mas invisível não. Este `catch` só fazia
+    // `console.error`: quando o modelo do follow-up passou a devolver 404, os 17
+    // feedbacks de 11/08 viraram ZERO mensagem sem uma linha no banco.
+    //
+    // `logEventOnce` (aguardado) e não `logEvent`: esta é a última escrita antes
+    // do response, e em lambda o fire-and-forget morre no `return` (Story 87-6).
+    await logEventOnce({
+      level: "error",
+      category: "ai",
+      event_type: "POS_VISITA_FOLLOWUP_ERRO",
+      message: `Follow-up pós-visita falhou no feedback do corretor: ${followupErr instanceof Error ? followupErr.message : String(followupErr)}`,
+      metadata: {
+        appointment_id: appointment.id,
+        lead_id: appointment.lead_id,
+        erro: followupErr instanceof Error ? followupErr.message : String(followupErr),
+      },
+      org_id: appointment.org_id,
+      source: "lib/appointments/visit-feedback-core",
+    })
   }
 
   return { feedback }
