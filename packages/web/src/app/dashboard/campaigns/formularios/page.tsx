@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { getServerUser } from "@web/lib/auth"
-import { can, canAccess } from "@web/lib/permissions"
+import { resolverAcessoCampanhas } from "@web/lib/campaigns/access"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { montarLinhas, abandonoPorPergunta, type RespostaCrua } from "@web/lib/forms/response-list"
 import { CampaignsTabs } from "../_components/campaigns-tabs"
@@ -29,7 +29,12 @@ export default async function FormulariosPage({
   searchParams: Promise<{ form?: string; status?: string; pagina?: string }>
 }) {
   const user = await getServerUser()
-  if (!(await canAccess(user.id, user.orgId, "campanhas"))) notFound()
+  // Story 75-344 — o gate desta tela é o SUB-MÓDULO. `canAccess` herda do módulo
+  // pai quando o perfil não tem linha explícita, então quem já entrava continua
+  // entrando; o que muda é que agora existe uma chave só desta aba, e o Marcos a
+  // liga para gerente-comercial e SDR pela tela de Perfil de Acesso.
+  const acesso = await resolverAcessoCampanhas(user.id, user.orgId)
+  if (!acesso.formularios) notFound()
 
   const filtros = await searchParams
   const pagina = Math.max(1, Number(filtros.pagina) || 1)
@@ -77,8 +82,9 @@ export default async function FormulariosPage({
           silenciosa que o cabeçalho do CampaignsTabs descreve, só que por valor
           em vez de por cópia. */}
       <CampaignsTabs
-        showAgente={await can(user.id, user.orgId, "marketing.gerenciar")}
-        showFormularios
+        showAgente={acesso.agente}
+        showFormularios={acesso.formularios}
+        showModuloCampanhas={acesso.modulo}
       />
 
       <div className="mb-6">

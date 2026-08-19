@@ -118,7 +118,33 @@ export const SUBMODULE_MAP: Record<string, Record<string, string>> = {
   leads: {
     "leads.qualificacao": "Qualificação Comercial",
   },
+  // Story 75-344 — a aba Formulários de Campanhas. Antes ela seguia o módulo
+  // INTEIRO: dar Formulários à SDR significava dar também a base de campanhas e o
+  // Meta Ads, e a única alternativa era linha no banco feita por dev. Agora é uma
+  // chave na tela.
+  campanhas: {
+    "campanhas.formularios": "Formulários",
+  },
 }
+
+/**
+ * COMO TORNAR UMA ABA/SUBMENU LIBERÁVEL PELO CRM (convenção, Story 75-344)
+ *
+ * A matriz de Perfil de Acesso já renderiza estas sub-linhas com toggle por
+ * perfil e grava a chave dotted em `role_permissions`; `canAccess` já resolve
+ * dotted (exceção do usuário → linha do perfil → HERANÇA do pai). O que falta,
+ * a cada aba, são três passos — e os três são obrigatórios:
+ *
+ *   1. `canAccess("pai.sub")` gateando a PÁGINA e a ABA. Sub-módulo no mapa sem
+ *      gate no código é botão que mente: liga, desliga, nada acontece.
+ *   2. a entrada aqui, com o rótulo como o humano lê na tela.
+ *   3. o menu do pai passando a ser "módulo OU sub-módulo" (ver
+ *      `podeVerMenuConfig` e `podeVerMenuCampanhas`). Sem isso a chave concede um
+ *      lugar INALCANÇÁVEL: a permissão existe e a pessoa não tem como chegar lá.
+ *
+ * A herança é o que faz o passo 1 ser seguro: quem já tem o módulo pai continua
+ * entrando sem nenhuma linha nova.
+ */
 
 /**
  * Story 75-251 — o item "Config" da sidebar deve aparecer para quem tem o módulo
@@ -147,4 +173,21 @@ export function podeVerMenuConfig(permissions: Record<string, boolean>): boolean
     if (permissions[tela]) return true
   }
   return false
+}
+
+/**
+ * Story 75-344 — o item "Campanhas" da sidebar aparece para quem tem o módulo OU
+ * a TELA de Formulários.
+ *
+ * Mesma forma da `podeVerMenuConfig`, por um motivo mais simples do que o dela:
+ * aqui não há risco de escalada (o sub-módulo é uma tela só), o problema é o
+ * oposto — sem esta função, conceder `campanhas.formularios` dá uma permissão que
+ * não leva a lugar nenhum, porque o item de menu exige o módulo. Permissão que
+ * não abre porta é pior que permissão negada: parece concedida na matriz.
+ *
+ * PURA: só olha o mapa de permissões, sem I/O.
+ */
+export function podeVerMenuCampanhas(permissions: Record<string, boolean>): boolean {
+  if (permissions["campanhas"]) return true
+  return Boolean(permissions["campanhas.formularios"])
 }

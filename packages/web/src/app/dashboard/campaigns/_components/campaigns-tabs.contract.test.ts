@@ -31,8 +31,15 @@ const TELAS = [
   "agente/agente-client.tsx", // Lídia
 ] as const
 
-/** Props de visibilidade do `CampaignsTabs` que precisam vir de capability. */
-const PROPS = ["showAgente", "showFormularios"] as const
+/**
+ * Props de visibilidade do `CampaignsTabs` que precisam vir de capability.
+ *
+ * Story 75-344: `showModuloCampanhas` entrou aqui. As abas CRM e Meta Ads deixaram
+ * de aparecer sempre e passaram a seguir o módulo — se uma tela fixar essa prop
+ * em `false`, ela some as duas abas de quem TEM o módulo: é o mesmo defeito da
+ * "Lídia" que este teste nasceu para pegar.
+ */
+const PROPS = ["showAgente", "showFormularios", "showModuloCampanhas"] as const
 
 function fonte(tela: string): string {
   return readFileSync(join(RAIZ, tela), "utf8")
@@ -62,10 +69,15 @@ describe("CampaignsTabs — nenhuma tela de Campanhas esconde aba por valor fixo
 
   it("a tela de Formulários decide a aba da Lídia por capability (o defeito de 18/08)", () => {
     const uso = usoDasAbas(fonte("formularios/page.tsx"))!
-    // Ou vem de `can(...)`, ou vem de uma variável já resolvida por `can(...)`
-    // no mesmo arquivo — o que não pode é ser constante.
-    expect(uso).toMatch(/showAgente=\{(await )?can\(|showAgente=\{show/)
-    expect(fonte("formularios/page.tsx")).toContain('"marketing.gerenciar"')
+    // Vem de `can(...)`, de uma variável resolvida no próprio arquivo, ou — desde a
+    // Story 75-344 — do `acesso` devolvido por `resolverAcessoCampanhas`. O que não
+    // pode é ser constante.
+    expect(uso).toMatch(/showAgente=\{(await )?can\(|showAgente=\{show|showAgente=\{acesso\./)
+    // A capability saiu das quatro telas e passou a viver num lugar só. Se ela
+    // desaparecer DE LÁ, a aba da Lídia volta a ser decidida por outra coisa.
+    expect(readFileSync(join(RAIZ, "../../../lib/campaigns/access.ts"), "utf8")).toContain(
+      '"marketing.gerenciar"'
+    )
   })
 
   it("a tela da Lídia é a única que pode fixar `showAgente` (ela É a aba ativa)", () => {

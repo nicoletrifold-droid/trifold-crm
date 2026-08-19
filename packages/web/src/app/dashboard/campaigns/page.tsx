@@ -1,7 +1,8 @@
+import { notFound, redirect } from "next/navigation"
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { can } from "@web/lib/permissions"
-import { canAccess } from "@web/lib/permissions"
+// Story 75-344 — as três respostas de acesso do módulo vêm de um lugar só.
+import { resolverAcessoCampanhas, destinoSemModuloCampanhas } from "@web/lib/campaigns/access"
 import Link from "next/link"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 // Story 75-333: a barra de abas era copiada aqui, na tela Meta e na da Lídia.
@@ -17,6 +18,19 @@ const STATUS_BADGES: Record<string, { label: string; className: string }> = {
 
 export default async function CampaignsPage() {
   const user = await getServerUser()
+
+  // Story 75-344 — GATE DE SERVIDOR, que esta rota não tinha. O `NAV_MODULE_MAP`
+  // do layout só filtra a sidebar: sem isto, qualquer autenticado abria a base de
+  // campanhas pela URL. E, com o sub-módulo de Formulários existindo, passa a
+  // haver gente COM permissão de Campanhas que não pode ver esta aba — essa vai
+  // para a aba que lhe pertence em vez de tomar um 404.
+  const acesso = await resolverAcessoCampanhas(user.id, user.orgId)
+  if (!acesso.modulo) {
+    const destino = destinoSemModuloCampanhas(acesso)
+    if (destino) redirect(destino)
+    notFound()
+  }
+
   const supabase = await createClient()
 
   const { data: campaigns } = await supabase
@@ -76,8 +90,9 @@ export default async function CampaignsPage() {
 
       {/* 75-301: aba do agente segue a capability do marketingGuard (matriz/exceções) */}
       <CampaignsTabs
-        showAgente={await can(user.id, user.orgId, "marketing.gerenciar")}
-        showFormularios={await canAccess(user.id, user.orgId, "campanhas")}
+        showAgente={acesso.agente}
+        showFormularios={acesso.formularios}
+        showModuloCampanhas={acesso.modulo}
       />
 
       {(!campaigns || campaigns.length === 0) ? (

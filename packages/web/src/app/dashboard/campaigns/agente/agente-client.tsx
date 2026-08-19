@@ -961,9 +961,12 @@ export default function AgenteClient({
   // Story 75-333 — a barra de abas virou compartilhada; a visibilidade da aba
   // de Formulários vem do servidor, que é quem sabe o módulo do usuário.
   showFormulariosTab,
+  showModuloCampanhas,
 }: {
   properties: PropertyOption[]
   showFormulariosTab: boolean
+  /** Story 75-344 — abas CRM e Meta Ads seguem o módulo `campanhas`. */
+  showModuloCampanhas: boolean
 }) {
   const [posts, setPosts] = useState<MarketingPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -1178,7 +1181,11 @@ export default function AgenteClient({
         </div>
       </div>
 
-      <CampaignsTabs showAgente showFormularios={showFormulariosTab} />
+      <CampaignsTabs
+        showAgente
+        showFormularios={showFormulariosTab}
+        showModuloCampanhas={showModuloCampanhas}
+      />
 
       {/* Erros de geração/ação com retry */}
       {generateError && (

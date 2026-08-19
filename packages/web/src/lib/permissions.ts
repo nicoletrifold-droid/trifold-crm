@@ -1,7 +1,7 @@
 import { unstable_cache, revalidateTag } from "next/cache"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
-export { ALL_MODULES, MODULE_LABELS, MODULE_DESCRIPTIONS, podeVerMenuConfig } from "./permissions-modules"
+export { ALL_MODULES, MODULE_LABELS, MODULE_DESCRIPTIONS, podeVerMenuConfig, podeVerMenuCampanhas } from "./permissions-modules"
 import { ALL_MODULES } from "./permissions-modules"
 import { adminMatrixKeys, type CapabilityKey } from "./capabilities"
 

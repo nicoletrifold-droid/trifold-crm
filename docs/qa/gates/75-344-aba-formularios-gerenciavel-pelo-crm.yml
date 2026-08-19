@@ -1,0 +1,110 @@
+schema: 1
+storyId: "75-344"
+story: "docs/stories/75-344-aba-formularios-gerenciavel-pelo-crm.story.md"
+title: "Quality Gate — Aba Formulários liberável pelo CRM (convenção para abas/submenus)"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "story/75-344-aba-formularios-gerenciavel-pelo-crm"
+
+escopo: >
+  Uma aba que só o dev conseguia liberar passa a ser uma linha na matriz de Perfil de Acesso. O risco
+  não é o mapa: é a combinação "permissão nova + gates novos em rotas que não tinham gate nenhum",
+  que pode ao mesmo tempo conceder um lugar inalcançável e tirar acesso de quem já entrava.
+
+resumo: >
+  **As cinco mutações mordem.** Tirar o sub-módulo do mapa derruba 2 casos; o menu voltar a exigir só
+  o módulo derruba 1; inverter a ordem do destino derruba 1; remover o gate de servidor da tela de
+  CRM derruba 1; a tela de Formulários voltar a gatear pelo módulo derruba 2.
+
+  Os dois riscos do escopo foram tratados no desenho, não na esperança: o "lugar inalcançável" pelo
+  `podeVerMenuCampanhas` + href direto (com teste), e o "tirar acesso de quem já entrava" pela
+  HERANÇA do `canAccess` (quem tem o módulo `campanhas` não precisa de linha nova) + redirect em vez
+  de 404 nas duas rotas que ganharam gate.
+
+status_reason: >
+  Liberado para merge. Uma dívida declarada (C1) e a conferência na tela (P1–P4).
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: cobertura
+    titulo: "Os gates e as abas são vigiados por teste de CÓDIGO-FONTE, não por execução"
+    detalhe: >
+      As quatro telas são server components async (sessão + permissões + Supabase). Os dois contract
+      tests garantem forma (existe gate, a chave é a certa, nenhuma prop de visibilidade é
+      constante), não comportamento em runtime. É o mesmo compromisso que a 75-340 assumiu para
+      aquela barra — e foi um teste desse tipo que pegou a regressão de lá. Mitigado por P1–P4.
+  - id: C2
+    severidade: LOW
+    tipo: dado-de-produção-não-verificado
+    titulo: "Não sabemos quais perfis têm o módulo `campanhas` hoje"
+    detalhe: >
+      Sem PAT do Supabase nesta máquina. Consequência prática: nenhuma, porque a mudança é
+      retrocompatível por herança e o corte novo (abas CRM/Meta seguindo o módulo) só afeta quem já
+      não podia abri-las. Vale conferir na tela (P4).
+
+impactos_conhecidos_e_aceitos:
+  - titulo: "Duas rotas passaram a barrar por URL"
+    detalhe: >
+      `/dashboard/campaigns` e `/dashboard/campaigns/meta` não tinham gate de servidor — dívida
+      registrada em comentário desde a 75-333. Agora quem não tem o módulo é redirecionado para a
+      aba que pode ver, ou toma 404. Isso é fechamento de furo, e muda o que um usuário sem o módulo
+      consegue abrir digitando a URL.
+  - titulo: "As abas CRM e Meta Ads podem desaparecer para alguém"
+    detalhe: >
+      Elas apareciam SEMPRE. Passam a seguir o módulo. Quem via as duas sem ter o módulo via abas
+      que não podia abrir; agora não vê. Nenhum perfil perde acesso a algo que conseguia usar.
+  - titulo: "A chave não concede nada sozinha"
+    detalhe: >
+      Nenhuma migration, nenhum seed: enquanto o Marcos não ligar `Formulários` para
+      gerente-comercial e SDR na tela, o comportamento em produção é idêntico ao de hoje.
+
+verificacoes:
+  mutacoes:
+    - id: M1
+      mutacao: "remove `campanhas` do SUBMODULE_MAP"
+      resultado: "2 failed / 31 passed"
+      veredito: MORDE
+    - id: M2
+      mutacao: "`podeVerMenuCampanhas` volta a exigir só o módulo"
+      resultado: "1 failed / 32 passed"
+      veredito: "MORDE — é o caso da story (SDR sem o módulo)"
+    - id: M3
+      mutacao: "destino prioriza a Lídia em vez de Formulários"
+      resultado: "1 failed / 32 passed"
+      veredito: MORDE
+    - id: M4
+      mutacao: "gate de servidor da tela de CRM neutralizado"
+      resultado: "1 failed / 32 passed"
+      veredito: MORDE
+    - id: M5
+      mutacao: "Formulários volta a gatear pelo módulo"
+      resultado: "2 failed / 31 passed"
+      veredito: MORDE
+  reguas:
+    testes: "218 arquivos · 2702 passed · 6 expected fail (pré-existentes)"
+    type_check: "8/8 pacotes"
+    lint: "0 erros · 26 warnings (pré-existentes)"
+    build: "OK"
+  nota_de_metodo: >
+    Durante a rodada de mutação eu restaurei arquivos com `git checkout --` sobre trabalho AINDA NÃO
+    COMMITADO e perdi as duas telas (os backups colidiram: os dois arquivos se chamam `page.tsx`).
+    Reapliquei e reconferi tudo — suíte, type-check, lint e build verdes depois. Lição para a
+    próxima: commitar ANTES de mutar, e nunca usar `git checkout` como desfazer de mutação em
+    working tree suja.
+
+pendencia_pos_deploy:
+  - id: P1
+    detalhe: "Perfil de Acesso: buscar \"formu\" acha a linha Formulários sob Campanhas."
+  - id: P2
+    detalhe: "Ligar para Gerente Comercial e SDR; entrar como uma delas: sidebar mostra Campanhas e o clique cai em Formulários, sem as abas CRM/Meta Ads."
+  - id: P3
+    detalhe: "Com esse perfil, abrir /dashboard/campaigns na URL: cai em Formulários (não na base de campanhas)."
+  - id: P4
+    detalhe: "Admin/Supervisor: as quatro abas seguem lá, e o perfil de marketing continua entrando na Lídia."

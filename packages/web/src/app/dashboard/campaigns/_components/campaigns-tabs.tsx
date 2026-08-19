@@ -28,17 +28,26 @@ interface Aba {
 export function CampaignsTabs({
   showAgente,
   showFormularios,
+  showModuloCampanhas,
 }: {
   /** Story 75-219/75-301 — aba da Lídia segue a capability do marketingGuard. */
   showAgente: boolean
-  /** Story 75-333 — aba de Formulários segue o módulo `campanhas`. */
+  /** Story 75-344 — aba de Formulários segue o SUB-MÓDULO `campanhas.formularios`. */
   showFormularios: boolean
+  /**
+   * Story 75-344 — CRM e Meta Ads seguem o módulo `campanhas`.
+   *
+   * Antes as duas apareciam SEMPRE. Com o sub-módulo de Formulários existindo,
+   * isso passaria a mostrar duas abas que a pessoa não pode abrir — e abas
+   * inalcançáveis são o mesmo defeito de "botão que mente", visto do outro lado.
+   */
+  showModuloCampanhas: boolean
 }) {
   const pathname = usePathname()
 
   const abas: Aba[] = [
-    { href: "/dashboard/campaigns", label: "CRM" },
-    { href: "/dashboard/campaigns/meta", label: "Meta Ads" },
+    { href: "/dashboard/campaigns", label: "CRM", visivel: showModuloCampanhas },
+    { href: "/dashboard/campaigns/meta", label: "Meta Ads", visivel: showModuloCampanhas },
     { href: "/dashboard/campaigns/formularios", label: "Formulários", visivel: showFormularios },
     { href: "/dashboard/campaigns/agente", label: "Lídia", visivel: showAgente },
   ]
