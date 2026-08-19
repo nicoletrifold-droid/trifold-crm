@@ -12,8 +12,31 @@ import {
 } from "./visit-slot"
 import { AGENDA_STATE_KEY, buildAgendaState, hasAgendaFact } from "./agenda-state"
 
+/**
+ * Story 75-347 — a régua de calor deixou de premiar "aceitou visita" acima de tudo.
+ *
+ * O que foi medido em produção (90 dias, 19/08) e motivou a mudança de dois pesos:
+ *
+ *  - **A ordem estava invertida.** No-show por calor do lead na hora da visita:
+ *    `hot` 63,6% · `warm` 56,3% · `cold` 52,2%. Quem o sistema chamava de quente
+ *    faltava MAIS que o frio — o oposto do que a régua promete.
+ *  - **A causa, medida em 303 conversas:** 34 leads estavam `hot` e **28 deles
+ *    (82%) só eram `hot` pelos 20 pontos de `visit_availability`**. Sem esse peso
+ *    cairiam abaixo de 70. "Quente" queria dizer "aceitou marcar" — e aceitar
+ *    marcar por educação é exatamente o que produz falta.
+ *  - **`finalidade` valia zero** e estava nula em 83% dos leads (1.515 de 1.826),
+ *    apesar de existir no banco desde a mig 154. É o dado que diz se o lead quer
+ *    MORAR ou INVESTIR, o que muda a abordagem inteira — e ninguém perguntava.
+ *
+ * Efeito simulado nos dados reais antes de mudar: `hot` 34 → 24 (11 saem, 1 entra).
+ * Os 11 que saem eram quentes só por terem aceitado uma visita.
+ *
+ * A soma segue **100** — o teste `pesos-somam-100` congela isso, porque os cortes
+ * 70/40 de `interestLevelFromScore` só significam algo se o total não mudar.
+ */
 const SCORE_WEIGHTS: Record<string, number> = {
   name: 10,
+  finalidade: 10,
   property_interest: 15,
   bedrooms: 10,
   floor: 10,
@@ -21,11 +44,15 @@ const SCORE_WEIGHTS: Record<string, number> = {
   garages: 5,
   has_down_payment: 15,
   source: 5,
-  visit_availability: 20,
+  visit_availability: 10,
 }
 
 const QUALIFICATION_STEPS = [
   "name",
+  // Story 75-347 — a finalidade vem ANTES da ficha técnica: perguntar metragem,
+  // andar e vista sem saber se é moradia ou investimento é ficha de corretor,
+  // não conversa. O prompt `qualification-flow` tem a mesma ordem.
+  "finalidade",
   "property_interest",
   "bedrooms",
   "floor",
@@ -191,6 +218,41 @@ export function extractCollectedData(
           updated.name = capitalizeName(candidate)
         }
       }
+    }
+  }
+
+  // Story 75-347 — finalidade (moradia × investimento).
+  //
+  // 🔥 SOMENTE `origem: "lead"`, e isto não é preciosismo: a pergunta da própria
+  // Nicole ("você busca pra morar ou como investimento?") contém as DUAS palavras.
+  // Extrair da fala dela carimbaria a finalidade a partir da PERGUNTA, que é
+  // exatamente o veneno da 87-4 — lá, 10 de 13 `visit_availability` inspecionados
+  // em 07/08 eram fala dela, incluindo uma recusa do lead lida como disponibilidade.
+  // Fato de qualificação sem citação de mensagem `role='user'` não vira estado.
+  if (!updated.finalidade && opts?.origem === "lead") {
+    const querMorar =
+      /\b(?:pra|para)\s+(?:eu\s+)?morar\b/.test(lower) ||
+      /\bmoradia\b/.test(lower) ||
+      /\bmorar\s+(?:nele|nela|l[áa]|a[íi])\b/.test(lower) ||
+      /\b(?:minha|nossa)\s+(?:fam[íi]lia|casa)\b/.test(lower) ||
+      /\bpra\s+(?:mim|n[óo]s)\b/.test(lower) ||
+      /\bprimeiro\s+(?:im[óo]vel|apartamento)\b/.test(lower) ||
+      /\bsair\s+do\s+aluguel\b/.test(lower)
+    const querInvestir =
+      /\binvestimento\b/.test(lower) ||
+      /\binvestir\b/.test(lower) ||
+      /\bpra\s+alugar\b/.test(lower) ||
+      /\b(?:para|pra)\s+loca[çc][ãa]o\b/.test(lower) ||
+      /\bvaloriza[çc][ãa]o\b/.test(lower) ||
+      /\brenda\s+(?:extra|passiva)\b/.test(lower) ||
+      /\brentabilidade\b/.test(lower)
+
+    if (querMorar && querInvestir) {
+      updated.finalidade = "ambos"
+    } else if (querMorar) {
+      updated.finalidade = "moradia"
+    } else if (querInvestir) {
+      updated.finalidade = "investimento"
     }
   }
 

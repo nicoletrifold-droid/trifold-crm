@@ -687,8 +687,9 @@ describe("AC8 — os dois eventos de observabilidade", () => {
     expect(ev.metadata!.chaves).toEqual([
       "visit_availability", "visit_pending_date", "visit_pending_hour", "visit_pending_minute",
     ])
-    // B2 — a queda de score vai no evento: 10 (nome) + 20 (agenda) → 10.
-    expect(ev.metadata!.score_antes).toBe(30)
+    // B2 — a queda de score vai no evento: 10 (nome) + 10 (agenda) → 10.
+    // Story 75-347: a agenda vale 10, não 20 — o total antes caiu de 30 para 20.
+    expect(ev.metadata!.score_antes).toBe(20)
     expect(ev.metadata!.score_depois).toBe(10)
     // E não volta no turno seguinte: o `collected_data` persistido já sai limpo.
     semChavesLegadas(t.estado)

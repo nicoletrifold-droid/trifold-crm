@@ -424,21 +424,24 @@ describe("B2 — um dono só para os 20 pontos de agenda", () => {
   //
   // A regra agora é uma só, dos dois lados: `hasAgendaFact(collected_data que
   // será persistido)`. Os testes abaixo fixam as três combinações.
+  // Story 75-347 — a régua mudou dos DOIS lados (é a MESMA função): `finalidade`
+  // entrou valendo 10 e `visit_availability` caiu de 20 para 10. O perfil completo
+  // passa a incluir a finalidade, senão "completo" não é completo.
   const PERFIL_COMPLETO = {
-    name: "Ana", property_interest: "vind", bedrooms: 2, floor: "alto",
+    name: "Ana", finalidade: "moradia", property_interest: "vind", bedrooms: 2, floor: "alto",
     view: "frente", garages: 1, has_down_payment: true, source: "meta_ads",
-  } // 10+15+10+10+10+5+15+5 = 80, sem os 20 de agenda
+  } // 10+10+15+10+10+10+5+15+5 = 90, sem os 10 de agenda
 
-  it("🔴 o Haiku alucinar `visit_availability` NÃO vale 20 pontos", async () => {
+  it("🔴 o Haiku alucinar `visit_availability` NÃO vale os pontos de agenda", async () => {
     // O fato não vai para o estado persistido — logo não pode valer score.
     collectedDataAtual = { ...PERFIL_COMPLETO }
     extractedData = { visit_availability: "sábado às 10h" }
     await rodar()
     expect(estadoPersistido()).not.toHaveProperty("visit_availability")
-    expect(leadPatch().qualification_score).toBe(80)
+    expect(leadPatch().qualification_score).toBe(90)
   })
 
-  it("um `agenda_state` LEGÍTIMO vale os 20 — e o cron concorda com o pipeline", async () => {
+  it("um `agenda_state` LEGÍTIMO vale os 10 — e o cron concorda com o pipeline", async () => {
     collectedDataAtual = {
       ...PERFIL_COMPLETO,
       agenda_state: {
@@ -461,7 +464,7 @@ describe("B2 — um dono só para os 20 pontos de agenda", () => {
     extractedData = {}
     await rodar()
     expect(estadoPersistido()).not.toHaveProperty("visit_availability")
-    expect(leadPatch().qualification_score).toBe(80)
+    expect(leadPatch().qualification_score).toBe(90)
   })
 
   it("o score do cron == o score calculado sobre o estado que ele persistiu", async () => {
@@ -516,11 +519,11 @@ describe("AC8 — o recibo do descarte também sai por AQUI (achado do re-gate)"
   })
 
   it("🔴 e carrega a QUEDA DE SCORE, que é o que o comercial precisa explicar", async () => {
-    collectedDataAtual = { ...RESIDUO } // name(10) + agenda(20) = 30 → 10
+    collectedDataAtual = { ...RESIDUO } // name(10) + agenda(10) = 20 → 10 (75-347)
     extractedData = {}
     await rodar()
     const ev = recibo()!
-    expect(ev.metadata.score_antes).toBe(30)
+    expect(ev.metadata.score_antes).toBe(20)
     expect(ev.metadata.score_depois).toBe(10)
     // E o score que foi gravado no lead é o de DEPOIS — o recibo não mente.
     expect(leadPatch().qualification_score).toBe(10)

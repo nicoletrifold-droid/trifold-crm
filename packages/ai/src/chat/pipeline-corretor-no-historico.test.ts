@@ -1074,8 +1074,11 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       mensagem: "qual o preço?",
       bloco: "qual o preço?",
       papeis: ["user", "assistant", "user", "assistant", "user"],
-      sha256: "3ec9480d84f943732ccc4f2ce4e760a2db110c16de7114e207dd5e7405eb0aa3",
-      length: 30256,
+      // Story 75-347 — movidos de propósito: o `<lead_context>` ganhou as regras
+      // 4 e 5 (não reperguntar finalidade/prazo). **+254 bytes nos DOIS cenários**,
+      // e essa igualdade é a prova de que a mudança ficou confinada ao bloco novo.
+      sha256: "a3a17df5383c3745eec6a1ae33599f6a6bff38f9b8f97729f6b3e44f62285f93",
+      length: 30510,
     },
     {
       nome: "(b) primeira mensagem, só o lead → SEM bloco de não-reintro",
@@ -1083,8 +1086,9 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       mensagem: "tem apartamento de 3 quartos?",
       bloco: "tem apartamento de 3 quartos?",
       papeis: ["user", "user"],
-      sha256: "d634f39ecc852edb9c55c1ad8069c5a946cc82138853d159110b813153183371",
-      length: 30082,
+      // Story 75-347 — idem: 30.082 + 254 = 30.336.
+      sha256: "3fe68ad2311a21e958e7ed271c7357affaeb716d3af918bf0a10fa595ae06273",
+      length: 30336,
     },
   ]
 
