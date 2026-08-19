@@ -1,0 +1,111 @@
+schema: 1
+storyId: "75-348"
+story: "docs/stories/75-348-forma-da-resposta-da-nicole.story.md"
+title: "Quality Gate — A forma da resposta da Nicole"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "75-348-forma-da-resposta"
+
+escopo: >
+  Quatro mudanças em três prompts de PRODUÇÃO (o que a Nicole fala com lead pago) mais uma função de
+  envio atrás de flag. O risco não está distribuído por igual: a divisão em dois balões é a única
+  parte que pode partir uma confirmação de visita no meio — e essa classe de falha já custou um
+  incidente (75-245). Por isso a divisão nasce DESLIGADA e com teste próprio.
+
+resumo: >
+  **A repetição não era criatividade do modelo: era prompt prescritivo.** Os três prints do Marcos
+  chegaram com a MESMA mensagem template do Meta, histórico vazio e prompt igual — e o
+  `system-personality` de produção não tinha uma linha pedindo variação de abertura (o "varie suas
+  respostas" vivia só no lembrete final do código, depois de a estrutura já estar decidida).
+
+  Dois agravantes encontrados na leitura e corrigidos aqui: **o teto de tamanho era contraditório**
+  (banco dizia "3-4 frases", código dizia "2-3 parágrafos" — ela obedecia ao maior), e **o guardrail
+  mandava prometer um retorno que não existe** (RN8/RN9: "já te retorno, combinado?"). A 75-268 matou
+  essa frase só para agenda; o `visit-scheduling` ainda a AUTORIZAVA explicitamente para preço de
+  unidade e detalhe técnico de obra. Os dois lados foram fechados no mesmo PR — senão um slug
+  desmentiria o outro.
+
+status_reason: >
+  Liberado para merge. A divisão em blocos entra desligada por decisão de medição, não por dúvida
+  técnica.
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: decisão-de-medição
+    titulo: "A divisão em dois balões vai desligada (`NICOLE_RESPOSTA_EM_BLOCOS`)"
+    detalhe: >
+      Ligar a mudança de escrita (prompt) e a divisão de envio no mesmo dia tornaria impossível saber
+      qual das duas melhorou a conversa. A flag existe para separar as duas medições. Para ligar:
+      `scripts/vercel-env-set.sh` (NUNCA `vercel env add` por stdin — grava vazio, dois incidentes) e
+      `vercel redeploy`. Só o literal `true` liga; o vazio da Vercel não liga, e há teste para isso.
+  - id: C2
+    severidade: LOW
+    tipo: atribuição-de-efeito
+    titulo: "75-347 e 75-348 chegam à produção no mesmo dia"
+    detalhe: >
+      As duas mexem no que a Nicole fala. Quando o no-show for remedido daqui a algumas semanas, o
+      efeito será do CONJUNTO — não dá para atribuir a uma das duas. Foi decisão consciente do Marcos
+      ("quero tudo"), e está registrado aqui para ninguém concluir causalidade errada depois.
+  - id: C3
+    severidade: LOW
+    tipo: infra-transiente
+    titulo: "Um `npm run build` falhou de forma transiente"
+    detalhe: >
+      Três invocações do turbo encadeadas na mesma linha (type-check; lint; build) produziram um
+      `Failed: @trifold/web#build` sem erro no output. Reexecutado com `turbo run build --force`
+      (0 cache, 4/4 tasks): exit 0. Não há falha de build no código desta story.
+
+verificacoes:
+  - id: V1
+    o_que: "Playbook de abertura no prompt de produção"
+    resultado: "PASS — seção ABERTURA — NUNCA A MESMA com 4 ângulos + proibição de despejar ficha técnica."
+  - id: V2
+    o_que: "Teto único de tamanho nos DOIS lugares"
+    resultado: "PASS — banco e fallback de código dizem o mesmo: 2 parágrafos, 1 pergunta, uma ideia."
+  - id: V3
+    o_que: "A promessa de retorno morre em TODOS os assuntos"
+    resultado: >
+      PASS — RN8/RN9 reescritos com caminho concreto no mesmo turno, e a autorização explícita do
+      `visit-scheduling` ("vale SO para preço de unidade, detalhe técnico de obra") foi revogada.
+  - id: V4
+    o_que: "Piso de qualificação antes do convite (ETAPA 0)"
+    resultado: "PASS — sem finalidade e prazo, pergunta em vez de convidar."
+  - id: V5
+    o_que: "Divisor: confirmação de agenda nunca se parte"
+    resultado: "PASS — dia e horário viajam juntos (75-245). Teste explícito, mais fail-closed para [SISTEMA]."
+  - id: V6
+    o_que: "Divisor: teto de 2 blocos e pergunta no último"
+    resultado: "PASS — 4 parágrafos saem como 2; pergunta fora do fim cancela a divisão."
+  - id: V7
+    o_que: "Envio sequencial, ordem garantida"
+    resultado: >
+      PASS — laço `for...of` com `await`, nunca `Promise.all`: paralelo entregaria a pergunta antes do
+      contexto no aparelho do lead. Com a flag desligada o laço é byte-a-byte o envio de antes.
+  - id: V8
+    o_que: "Hash-ouro do system prompt"
+    resultado: >
+      PASS — movido de propósito: +695 bytes nos DOIS cenários-ouro (30.510→31.205 e 30.336→31.031).
+      Estes turnos rodam SEM override de banco, então medem o fallback de código — que é exatamente o
+      que não pode contradizer o painel.
+  - id: V9
+    o_que: "Paridade repo × produção"
+    resultado: "PASS — `dump-agent-prompts --check` exit 0 nos 7 slugs."
+  - id: V10
+    o_que: "Suíte, tipos, lint, build"
+    resultado: "PASS — 225 arquivos / 2.766 testes ✅ · type-check 8/8 ✅ · lint 0 erros ✅ · build --force exit 0 ✅"
+
+evidencia:
+  prompts_aplicados:
+    - "system-personality: 2.477 → 3.602 chars (seção de abertura + teto único)"
+    - "guardrails: 9.070 → 9.447 chars (RN8/RN9 sem promessa de retorno)"
+    - "visit-scheduling: 5.104 → 5.559 chars (ETAPA 0 + revogação da autorização da promessa)"
+  medicao_que_sustenta_a_ac4:
+    - "314 leads conversaram com a Nicole em 90 dias → 8 visitas criadas por ela"
+    - "no-show por calor: hot 63,6% · warm 56,3% · cold 52,2% — o 'sim' de educação vira falta"

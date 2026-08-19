@@ -1,6 +1,6 @@
 # Story 75-348 — A forma da resposta da Nicole: abertura que varia, uma ideia por mensagem, e nenhuma promessa que ninguém cumpre
 
-**Status:** Draft
+**Status:** InReview — gate PASS · prompts de produção aplicados em 19/08 · divisão em blocos DESLIGADA
 **Tipo:** Prompt (painel) + 1 ajuste de envio
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S/M (~3 pts — 2 prompts no painel, 1 arquivo de código, 0 migrations)
@@ -101,14 +101,45 @@ nesta story: primeiro medimos o efeito de AC1-AC4 isolado, senão não sabemos o
 O divisor de blocos é função pura (entra texto, sai `string[]`), testada sem DOM: nunca mais de 2,
 nunca divide bloco com `[SISTEMA]`, nunca separa a pergunta do fim, texto curto sai inteiro.
 
-## File List (previsto)
+## Dev Agent Record
+
+- [x] **AC1** — `system-personality`: seção ABERTURA — NUNCA A MESMA, 4 ângulos, proibição de despejar
+      ficha técnica na primeira mensagem. 2.477 → 3.602 chars.
+- [x] **AC2** — teto único (2 parágrafos, 1 pergunta, uma ideia) no banco **e** no fallback do código.
+- [x] **AC3** — RN8/RN9 sem promessa de retorno + **a autorização explícita no `visit-scheduling` foi
+      revogada** ("vale SO para preço de unidade, detalhe técnico de obra"). Sem isso, um slug
+      desmentiria o outro e a story não pegaria.
+- [x] **AC4** — ETAPA 0 no `visit-scheduling`: sem finalidade e prazo, pergunta em vez de convidar.
+- [x] **AC5** — `dividirResposta` + envio sequencial atrás de `NICOLE_RESPOSTA_EM_BLOCOS`, desligada.
+- [x] **AC6** — 12 casos, sem DOM, a maioria NEGATIVOS (o que não pode ser dividido).
+
+### Decisões de implementação
+
+- **A maior parte do teste do divisor é negativa.** Um teste que só verificasse "divide em dois"
+  ficaria verde com uma função que parte confirmação de visita no meio — a falha da 75-245. Então:
+  confirmação de agenda, marcação `[SISTEMA]` vazada, pergunta fora do fim e texto curto **saem
+  inteiros**, cada um com caso próprio.
+- **Envio sequencial, nunca `Promise.all`.** Paralelo entregaria a pergunta antes do contexto.
+- **O teto de 160 caracteres** é a régua de "isso já é curto" (tamanho de um SMS). A fixture do teste
+  é o texto REAL do print de 19/08 — foi ele que revelou que minha primeira fixture ficava abaixo do
+  teto e o teste nasceria mentindo.
+- **A flag desligada é decisão de medição, não dúvida técnica** (ver C1/C2 no gate).
+
+### Validações
+
+`npx vitest run` 225 arquivos / **2.766 testes** ✅ · `type-check` 8/8 ✅ · `lint` 0 erros ✅ ·
+`turbo run build --force` exit 0 ✅ · `dump-agent-prompts --check` exit 0 ✅
+
+## File List
 
 - `packages/ai/src/prompts/_production/system-personality.txt` — AC1/AC2 *(gerado)*
 - `packages/ai/src/prompts/_production/guardrails.txt` — AC3 *(gerado)*
 - `packages/ai/src/prompts/_production/visit-scheduling.txt` — AC4 *(gerado)*
 - `packages/ai/src/prompts/_production/manifest.json` — *(gerado)*
 - `packages/ai/src/prompts/personality.ts` · `guardrails.ts` — AC2/AC3 no **fallback** de bootstrap (para o código não contradizer o banco)
-- `packages/web/src/lib/whatsapp/split-response.ts` *(novo)* + teste — AC5/AC6
+- `packages/web/src/lib/whatsapp/split-response.ts` *(novo)* + `split-response.test.ts` *(novo)* — AC5/AC6
+- `packages/ai/src/prompts/visit-scheduling.ts` — AC3 no fallback (a autorização revogada)
+- `packages/ai/src/chat/pipeline-corretor-no-historico.test.ts` — hash-ouro (+695 nos dois cenários)
 - `packages/web/src/app/api/webhook/whatsapp/route.ts` — AC5
 - `docs/qa/gates/75-348-forma-da-resposta.yml` *(novo)*
 
