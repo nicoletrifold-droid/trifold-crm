@@ -1,0 +1,103 @@
+schema: 1
+storyId: "75-347"
+story: "docs/stories/75-347-finalidade-moradia-investimento-na-conversa.story.md"
+title: "Quality Gate — A finalidade (moradia × investimento) entra na conversa"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "75-347-finalidade-na-conversa"
+
+escopo: >
+  Três mudanças de risco diferente no mesmo caminho: (1) o prompt de qualificação em PRODUÇÃO — o que
+  a Nicole fala com lead pago; (2) a injeção de um campo no system prompt, que move o hash-ouro do
+  turno; (3) a MUDANÇA DE DOIS PESOS da régua de calor, que alimenta `interest_level`,
+  `qualification_status` e o gatilho de `shouldHandoff`. O risco não é o campo novo: é a régua.
+
+resumo: >
+  **O que sustenta o PASS é a medição em produção, não o teste.** Antes de escrever uma linha, medi
+  90 dias em `dsopqkqjkmhytudaaolv`: o no-show por calor está INVERTIDO (`hot` 63,6% · `warm` 56,3% ·
+  `cold` 52,2%), e a causa é aritmética — 34 leads estavam `hot` e **28 (82%) só eram `hot` pelos 20
+  pontos de "aceitou visita"**. A `finalidade` valia zero e estava nula em 83% dos leads (1.515/1.826).
+
+  **Efeito da nova régua simulado nos dados reais (303 conversas): `hot` 34 → 24 (11 saem, 1 entra),
+  `warm` 68 → 82.** Os 11 que saem eram quentes só por terem aceitado uma visita — é exatamente o que
+  a story quer desfazer.
+
+  **Mutação medida:** desligar a injeção do `<lead_context>` e remover a guarda de não-sobrescrita
+  derruba 3 dos 6 testes de fiação (rodado, confirmado vermelho e restaurado). Extrair a finalidade da
+  fala da NICOLE (a `origem: "assistant"`) é caso de teste próprio — a pergunta dela contém as duas
+  palavras, e sem o fail-closed a story reproduziria a 87-4.
+
+status_reason: >
+  Liberado para merge. Uma mudança de comportamento declarada (11 leads mudam de faixa de calor) e
+  dois concerns registrados.
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: mudança-de-comportamento-declarada
+    titulo: "11 leads deixam de ser `hot` no primeiro turno após o deploy"
+    detalhe: >
+      O score alimenta `shouldHandoff` (≥ 70 + pergunta de preço). Menos leads `hot` significa menos
+      handoff automático por score — e é o efeito PRETENDIDO, porque o `hot` de hoje falta mais que o
+      `cold`. O calor escolhido por humano continua vencendo (`stripManualInterestLevel`, 75-237). O
+      recálculo acontece por conversa, no próximo turno de cada lead — não há backfill, e não deve
+      haver: reprocessar 303 conversas mudaria badge de lead que ninguém está atendendo.
+  - id: C2
+    severidade: LOW
+    tipo: precisão-da-extração
+    titulo: "A extração de finalidade é por palavra-chave, não por modelo"
+    detalhe: >
+      Segue o padrão que já existe em `extractCollectedData` (nome, entrada, origem): barato, sem
+      chamada extra de API, e roda no mesmo turno. O custo é recall — "quero pra minha mãe morar"
+      pega; "é pro meu filho" não. Aceito de propósito: o campo só é ESCRITO quando está vazio, então
+      um miss não estraga dado, apenas deixa a Nicole perguntar. Se o recall se mostrar baixo em
+      produção, o caminho é o cron `enrich-leads` (que já roda Haiku sobre a conversa), não um
+      segundo extrator no caminho quente.
+
+verificacoes:
+  - id: V1
+    o_que: "Pesos somam 100 e os cortes 70/40 continuam significando o mesmo"
+    resultado: "PASS — teste `pesos-somam-100` congela a soma; `finalidade` 10 + `visit_availability` 10."
+  - id: V2
+    o_que: "Lead que SÓ aceitou visita não chega a `hot`"
+    resultado: "PASS — era o defeito medido (82% dos hot). Teste explícito."
+  - id: V3
+    o_que: "Fail-closed da extração (a pergunta da Nicole tem as duas palavras)"
+    resultado: "PASS — `origem: assistant` e origem ausente não escrevem nada."
+  - id: V4
+    o_que: "Não sobrescreve finalidade do Meta / humano"
+    resultado: "PASS — mesma regra do `process-lead.ts:270`; mutação derruba o teste."
+  - id: V5
+    o_que: "A régua de calor tem uma fonte só"
+    resultado: >
+      PASS — `pipeline.ts` passou a importar `interestLevelFromScore`. Era a TERCEIRA cópia à mão dos
+      cortes: a 75-332 unificou o formulário e o cron e deixou de fora o caminho principal, o da
+      Nicole. Números idênticos hoje; a próxima recalibração não divergirá por caminho.
+  - id: V6
+    o_que: "Hash-ouro do system prompt"
+    resultado: >
+      PASS — movido de propósito, +254 bytes nos DOIS cenários-ouro (30.256→30.510 e 30.082→30.336).
+      A igualdade do delta é a prova de que a mudança ficou confinada às duas regras novas.
+  - id: V7
+    o_que: "Paridade repo × produção dos prompts"
+    resultado: "PASS — `dump-agent-prompts.ts --check` sai 0 nos 7 slugs após a aplicação."
+  - id: V8
+    o_que: "Suíte, tipos, lint, build"
+    resultado: "PASS — 224 arquivos / 2.754 testes ✅ · type-check 8/8 ✅ · lint 0 erros ✅ · build OK ✅"
+
+evidencia:
+  medicoes:
+    - "no-show por criador (90d): broker 47,2% (49) · admin 70,6% (22) · nicole 60% (6, n baixo)"
+    - "no-show por calor (90d): hot 63,6% · warm 56,3% · cold 52,2% — ordem invertida"
+    - "28 de 34 leads `hot` (82%) só eram hot pelos 20 pontos de agenda"
+    - "finalidade nula em 1.515 de 1.826 leads (83%); nas conversas da Nicole, 281 de 303 (93%)"
+    - "funil: 314 leads conversaram com a Nicole → 8 visitas criadas por ela → 31 com qualquer visita"
+  prompts_aplicados:
+    - "qualification-flow: 2.458 → 3.222 chars (finalidade como item 2, renumeração 2-9 → 3-10)"
+    - "property-presentation: 4.526 → 5.266 chars (seção ANGULO PELA FINALIDADE)"

@@ -1,6 +1,6 @@
 {
   "story": "87-0",
-  "captured_at": "2026-08-11T12:06:59.633Z",
+  "captured_at": "2026-08-19T16:55:24.140Z",
   "org_id": "00000000-0000-0000-0000-000000000001",
   "source": {
     "table": "agent_prompts",
@@ -25,7 +25,7 @@
       "raw_sha256": "1eb1d414d8e4ef003683cef1c14314bb827e8621a5f8ccbd0c845dd1fc1bef84",
       "file": "guardrails.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     },
     {
       "slug": "handoff-summary",
@@ -39,7 +39,7 @@
       "raw_sha256": "f54514cdd1ae5245cef97bd1d0bab3884a7ddb788fd24929599aa5be785542f8",
       "file": "handoff-summary.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     },
     {
       "slug": "off-hours",
@@ -53,35 +53,35 @@
       "raw_sha256": "0aacca8f7e1e597b33e7065c950a07a75e1d72e3d73a16622a55935647662d3f",
       "file": "off-hours.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     },
     {
       "slug": "property-presentation",
       "name": "Apresentacao de Empreendimentos",
       "type": "system",
       "is_active": true,
-      "updated_at": "2026-08-10T13:50:58.600381+00:00",
-      "char_count": 4525,
-      "sha256": "1af195a6a313126bf4809bdce4b25476060a558893fb841c4f232c05beb269b1",
-      "raw_char_count": 4526,
-      "raw_sha256": "dca56c13076f05fffcf83c9c53aec25003039bcbf3f3d7ad4306d547437aa392",
+      "updated_at": "2026-08-19T16:55:16.093766+00:00",
+      "char_count": 5265,
+      "sha256": "276ea4803b996d3841b904993992f12367a3546a4ee3d33275d06d9545fb34b2",
+      "raw_char_count": 5266,
+      "raw_sha256": "162025c7f202b22ba11d5ae12bca17f7b0c4dcc670119cc08aab567d86c78433",
       "file": "property-presentation.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     },
     {
       "slug": "qualification-flow",
       "name": "Fluxo de Qualificacao",
       "type": "qualification",
       "is_active": true,
-      "updated_at": "2026-08-10T13:50:57.382295+00:00",
-      "char_count": 2457,
-      "sha256": "2e5b07fa1e7d868e84a3dd5488512470dcc081628a434c8f727ee668f5ba7083",
-      "raw_char_count": 2458,
-      "raw_sha256": "997b18af834a104ee1fc3cae73563842e0af3422df918223bcea0df6a631185f",
+      "updated_at": "2026-08-19T16:55:16.093766+00:00",
+      "char_count": 3222,
+      "sha256": "e114314a50a6bb6153011120e53f568ac9713b1354e8be49d801958cbc7c9f6d",
+      "raw_char_count": 3222,
+      "raw_sha256": "e114314a50a6bb6153011120e53f568ac9713b1354e8be49d801958cbc7c9f6d",
       "file": "qualification-flow.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     },
     {
       "slug": "system-personality",
@@ -95,7 +95,7 @@
       "raw_sha256": "4341764325cd147d2d36f50bc9f88ca325b450808bf6c174f1c8bcc4a8bbfaff",
       "file": "system-personality.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     },
     {
       "slug": "visit-scheduling",
@@ -109,7 +109,7 @@
       "raw_sha256": "1de7d9dab077b73ac42a2c4da80dff6715c85c4c5c172f40d8e9bc6f727bba1d",
       "file": "visit-scheduling.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-11T12:06:59.633Z"
+      "captured_at": "2026-08-19T16:55:24.140Z"
     }
   ]
 }

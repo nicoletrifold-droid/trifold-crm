@@ -28,6 +28,7 @@ import {
   atualizarResumoComLastro,
   guardStageForAssignedLead,
   stripManualInterestLevel,
+  interestLevelFromScore,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
@@ -646,10 +647,17 @@ export async function processMessageWithMetadata(
   let leadQualStatus: string | null = null
   let leadUtmCampaign: string | null = null
   let leadUtmSource: string | null = null
+  // Story 75-347 — a finalidade (moradia × investimento) e o prazo já existem no
+  // banco (mig 154 / form do Meta, 75-114) e NUNCA chegavam à Nicole: ela repetia
+  // uma pergunta que o lead já tinha respondido no formulário. Medido em 19/08:
+  // 311 dos 1.826 leads de 90 dias tinham finalidade preenchida — e ela reperguntava
+  // em todos.
+  let leadFinalidade: string | null = null
+  let leadPrazoCompra: string | null = null
   if (conversation?.lead_id) {
     const { data: leadData } = await supabase
       .from("leads")
-      .select("ai_summary, stage_id, name, phone, source, qualification_status, utm_source, utm_campaign")
+      .select("ai_summary, stage_id, name, phone, source, qualification_status, utm_source, utm_campaign, finalidade, prazo_compra")
       .eq("id", conversation.lead_id)
       .single()
     currentSummary = leadData?.ai_summary ?? null
@@ -660,6 +668,8 @@ export async function processMessageWithMetadata(
     leadQualStatus = leadData?.qualification_status ?? null
     leadUtmCampaign = leadData?.utm_campaign ?? null
     leadUtmSource = leadData?.utm_source ?? null
+    leadFinalidade = leadData?.finalidade ?? null
+    leadPrazoCompra = leadData?.prazo_compra ?? null
   }
 
   // 7. Build system prompt with flow context + datetime + memory
@@ -700,6 +710,8 @@ export async function processMessageWithMetadata(
         qualificationStatus: leadQualStatus,
         utmCampaign: leadUtmCampaign,
         utmSource: leadUtmSource,
+        finalidade: leadFinalidade,
+        prazoCompra: leadPrazoCompra,
       })
     : ""
 
@@ -1337,7 +1349,7 @@ export async function processMessageWithMetadata(
     // Fetch current lead state for conditional logic
     const { data: currentLead } = await supabase
       .from("leads")
-      .select("stage_id, property_interest_id, assigned_broker_id, interest_level_manual")
+      .select("stage_id, property_interest_id, assigned_broker_id, interest_level_manual, finalidade")
       .eq("id", leadId)
       .single()
 
@@ -1405,11 +1417,23 @@ export async function processMessageWithMetadata(
     if (finalData.garages) leadPatch.preferred_garage_count = finalData.garages
     if (finalData.garage_count) leadPatch.preferred_garage_count = finalData.garage_count
     if (finalData.has_down_payment !== undefined) leadPatch.has_down_payment = finalData.has_down_payment
+    // Story 75-347 — a finalidade só é ESCRITA quando ainda não existe. O que veio
+    // do formulário do Meta (75-114) ou foi digitado por humano manda: mesma regra
+    // do `process-lead.ts:270`. A extração é por palavra-chave sobre a fala do
+    // lead — boa o bastante para preencher o vazio, não para corrigir um humano.
+    if (finalData.finalidade && !currentLead?.finalidade) {
+      leadPatch.finalidade = finalData.finalidade
+    }
     if (finalData.email) leadPatch.email = finalData.email
     if (finalData.source) leadPatch.source = finalData.source
     leadPatch.qualification_score = updatedScore
     leadPatch.qualification_status = updatedScore >= 70 ? "qualified" : updatedScore > 0 ? "in_progress" : "not_started"
-    leadPatch.interest_level = updatedScore >= 70 ? "hot" : updatedScore >= 40 ? "warm" : "cold"
+    // Story 75-347 (AC5) — a régua de calor tem UMA fonte. Esta linha reproduzia
+    // os cortes 70/40 à mão: a 75-332 extraiu `interestLevelFromScore` para acabar
+    // com as réguas divergentes e deixou de fora justamente o caminho principal, o
+    // da própria Nicole. Os números são idênticos hoje; o que muda é que a próxima
+    // recalibração não vale para o formulário e o cron e deixa o pipeline atrás.
+    leadPatch.interest_level = interestLevelFromScore(updatedScore)
     // Story 75-237 — temperatura escolhida por humano manda: a IA não desfaz.
     stripManualInterestLevel(leadPatch, currentLead as Record<string, unknown> | null)
 
@@ -1961,18 +1985,39 @@ function buildSystemPrompt(
   return [...promptBlocks, dynamicBlock]
 }
 
+/** Story 75-347 — rótulos legíveis. Enviar "ate_3m" cru para o modelo é ruído. */
+const FINALIDADE_LABEL: Record<string, string> = {
+  moradia: "moradia (para morar)",
+  investimento: "investimento",
+  ambos: "moradia e investimento",
+}
+const PRAZO_LABEL: Record<string, string> = {
+  imediato: "imediato",
+  ate_3m: "até 3 meses",
+  "3_6m": "3 a 6 meses",
+  mais_6m: "mais de 6 meses",
+}
+
 function buildLeadContext(params: {
   name: string | null
   source: string | null
   qualificationStatus: string | null
   utmCampaign: string | null
   utmSource: string | null
+  finalidade?: string | null
+  prazoCompra?: string | null
 }): string {
   const lines: string[] = []
   if (params.name) lines.push(`Nome: ${params.name}`)
   if (params.source) lines.push(`Fonte: ${params.source}`)
   if (params.utmCampaign) lines.push(`Campanha: ${params.utmCampaign}`)
   if (params.utmSource) lines.push(`Origem UTM: ${params.utmSource}`)
+  if (params.finalidade) {
+    lines.push(`Finalidade: ${FINALIDADE_LABEL[params.finalidade] ?? params.finalidade}`)
+  }
+  if (params.prazoCompra) {
+    lines.push(`Prazo de compra: ${PRAZO_LABEL[params.prazoCompra] ?? params.prazoCompra}`)
+  }
   if (params.qualificationStatus && params.qualificationStatus !== "not_started") {
     lines.push(`Status de qualificação: ${params.qualificationStatus}`)
   }
@@ -1987,6 +2032,9 @@ function buildLeadContext(params: {
     "1. Se o NOME do lead está preenchido acima, use-o e NÃO pergunte o nome novamente.\n" +
     "2. Se a FONTE indica campanha (meta_ads, google_ads), o lead já demonstrou interesse — pule apresentações genéricas.\n" +
     "3. NÃO repita informações que já constam no lead_context.\n" +
+    // Story 75-347 — a regra que impede a repergunta e define o ângulo da conversa.
+    "4. Se a FINALIDADE está preenchida acima, NÃO pergunte de novo — e use o ângulo dela: moradia fala de rotina, família e entrega; investimento fala de valorização, locação e momento de compra.\n" +
+    "5. Se o PRAZO DE COMPRA está preenchido acima, NÃO pergunte de novo.\n" +
     "=== END PERSONALIZATION RULES ===\n"
   )
 }

@@ -39,7 +39,9 @@ describe("calculateQualificationScore", () => {
   })
 
   it("returns correct score for half the fields", () => {
-    // name=10 + bedrooms=10 + has_down_payment=15 + visit_availability=20 = 55
+    // Story 75-347 — `visit_availability` caiu de 20 para 10 (aceitar visita
+    // deixou de ser o maior peso da régua), então este total caiu de 55 para 45.
+    // name=10 + bedrooms=10 + has_down_payment=15 + visit_availability=10 = 45
     expect(
       calculateQualificationScore({
         name: "Maria",
@@ -47,13 +49,16 @@ describe("calculateQualificationScore", () => {
         has_down_payment: true,
         visit_availability: true,
       })
-    ).toBe(55)
+    ).toBe(45)
   })
 
   it("returns 100 for all fields filled", () => {
     expect(
       calculateQualificationScore({
         name: "Carlos",
+        // Story 75-347 — a finalidade entrou na régua: sem ela, "todos os campos"
+        // não são todos, e o total não fecha 100.
+        finalidade: "moradia",
         property_interest: "yarden",
         bedrooms: 2,
         floor: "alto",
@@ -70,6 +75,9 @@ describe("calculateQualificationScore", () => {
     expect(
       calculateQualificationScore({
         name: "Carlos",
+        // Story 75-347 — a finalidade entrou na régua: sem ela, "todos os campos"
+        // não são todos, e o total não fecha 100.
+        finalidade: "moradia",
         property_interest: "yarden",
         bedrooms: 2,
         floor: "alto",
@@ -99,14 +107,18 @@ describe("getNextQualificationStep", () => {
     expect(getNextQualificationStep({})).toBe("name")
   })
 
-  it("returns 'property_interest' after name is collected", () => {
-    expect(getNextQualificationStep({ name: "Ana" })).toBe("property_interest")
+  it("returns 'finalidade' after name is collected", () => {
+    // Story 75-347 — a finalidade (moradia × investimento) vem antes da ficha
+    // técnica: é ela que define o ângulo da conversa inteira.
+    expect(getNextQualificationStep({ name: "Ana" })).toBe("finalidade")
+    expect(getNextQualificationStep({ name: "Ana", finalidade: "moradia" })).toBe("property_interest")
   })
 
   it("skips to first missing step", () => {
     expect(
       getNextQualificationStep({
         name: "Ana",
+        finalidade: "investimento",
         property_interest: "vind",
         bedrooms: 2,
       })
@@ -117,6 +129,9 @@ describe("getNextQualificationStep", () => {
     expect(
       getNextQualificationStep({
         name: "Carlos",
+        // Story 75-347 — a finalidade entrou na régua: sem ela, "todos os campos"
+        // não são todos, e o total não fecha 100.
+        finalidade: "moradia",
         property_interest: "yarden",
         bedrooms: 2,
         floor: "alto",
@@ -140,6 +155,7 @@ describe("getNextQualificationStep", () => {
   it("follows correct step order", () => {
     const steps = [
       "name",
+      "finalidade",
       "property_interest",
       "bedrooms",
       "floor",
