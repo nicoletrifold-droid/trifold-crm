@@ -19,6 +19,7 @@ import {
   novoEventId,
   pixelTrack,
   pixelIdentificar,
+  quandoFbpPronto,
 } from "@web/lib/meta/pixel-events"
 import { normalizePhoneBR } from "@trifold/shared"
 import {
@@ -169,6 +170,12 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
         content_name: schema.perguntas[0]?.titulo,
         content_category: "form_qualificacao",
       })
+      // 🔴 Defeito 86.9-QA-004 — esperar `window.fbq` NAO basta: aquilo e o stub,
+      // criado de forma sincrona. O `_fbp` so nasce quando o `fbevents.js` real
+      // chega. Medido em producao: `fbp` em 6,8% aqui contra 100% nos eventos
+      // seguintes. `coletarAtribuicao()` abaixo le o cookie — entao a espera
+      // precisa ser por ELE.
+      await quandoFbpPronto()
       await fetch(`/api/formulario/${token}/tracking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -263,6 +270,7 @@ export function FormRunner({ token, schema }: FormRunnerProps) {
         await pixelTrack(PIXEL_EVENTS.INITIATE_CHECKOUT, id, {
           content_category: "form_qualificacao",
         })
+        await quandoFbpPronto()
         await fetch(`/api/formulario/${token}/tracking`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
