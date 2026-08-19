@@ -111,6 +111,8 @@ export const SUBMODULE_MAP: Record<string, Record<string, string>> = {
     "configuracoes.personalidade": "Personalidade Nicole",
     "configuracoes.pipeline": "Etapas do Pipeline",
     "configuracoes.perfil-acesso": "Perfil de Acesso",
+    // Story 75-345 — quem recebe o relatório diário de leads no WhatsApp.
+    "configuracoes.relatorio-diario": "Relatório Diário",
   },
   sistema: {
     "sistema.notificacoes-financeiras": "Notificações Financeiras",
