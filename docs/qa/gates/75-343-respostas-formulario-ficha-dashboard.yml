@@ -1,0 +1,116 @@
+schema: 1
+storyId: "75-343"
+story: "docs/stories/75-343-respostas-do-formulario-na-ficha-do-dashboard.story.md"
+title: "Quality Gate — Respostas do formulário na ficha do /dashboard (a tela da SDR)"
+epic: 89
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "story/75-343-respostas-formulario-ficha-dashboard"
+
+escopo: >
+  A AC9 da 75-330 tinha sido entregue só no /broker. Esta story leva o painel para a ficha do
+  /dashboard — a única que a SDR abre —, acrescenta "onde a pessoa parou" e passa a listar TODAS as
+  respostas do lead em vez de só a última.
+
+resumo: >
+  **As cinco mutações mordem, cada uma em exatamente um caso** — o teste é preciso, não redundante:
+  `parouEm` fixo em null derruba 1, aceitar resposta vazia derruba 1, tolerar schema quebrado como
+  formulário vazio derruba 1, inverter a ordem derruba 1, tirar o escopo de org derruba 1. md5 do
+  helper idêntico ao original depois do gate.
+
+  A parte que a suíte NÃO alcança é a fiação de JSX (o painel aparecer nas duas abas, e o "Parou em"
+  só em parcial): o projeto não tem jsdom. Está em C1, com conferência visual pós-deploy.
+
+status_reason: >
+  Liberado para merge. Uma dívida declarada (C1) e a conferência visual (P1/P2).
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: dívida-de-teste
+    titulo: "A fiação de JSX não tem rede"
+    detalhe: >
+      Remover `{painelFormulario()}` de uma das abas, ou trocar `parcial && parouEm` por só
+      `parouEm`, passa com a suíte verde. Sem jsdom no projeto, a alternativa seria extrair a
+      decisão "mostra ou não" para função pura — mas aqui a decisão JÁ é pura (`parcial`,
+      `parouEm` vêm prontos do helper, testados): o que sobra no JSX é posicionamento, que se
+      confere olhando. Mitigado por P1.
+  - id: C2
+    severidade: LOW
+    tipo: escopo
+    titulo: "A ficha do corretor mudou junto"
+    detalhe: >
+      `/broker/leads/[id]` passou a listar TODAS as respostas (era só a última) e ganha o "Parou
+      em". Foi decisão declarada na AC3 — helper e componente são compartilhados, e deixar o
+      corretor vendo menos que a SDR criaria duas verdades para a mesma pergunta. Efeito prático
+      hoje: nenhum lead da base tem duas respostas, então a tela dele só ganha o "Parou em".
+
+impactos_conhecidos_e_aceitos:
+  - titulo: "As respostas 'sem contato' continuam invisíveis na ficha — e têm de continuar"
+    detalhe: >
+      3 das 6 respostas de ontem não têm lead (a pessoa saiu antes de nome+telefone). Não existe
+      ficha onde mostrá-las; elas vivem na tela de Formulários, que é de onde a oferta ativa sai.
+      Limite do dado, não da tela.
+  - titulo: "Nenhuma activity nova é criada"
+    detalhe: >
+      Resposta parcial continua sem `form_completed` — de propósito: uma linha de timeline por POST
+      parcial poluiria o Histórico. A visibilidade vem do painel, que lê a tabela.
+  - titulo: "Uma query a mais por abertura de ficha de lead"
+    detalhe: >
+      `fetchRespostasDoLead` roda em toda abertura de `/dashboard/leads/[id]`, inclusive para lead
+      que nunca preencheu formulário (volta vazia). Índice parcial
+      `idx_lead_form_responses_lead` (mig 232) cobre exatamente este acesso.
+
+verificacoes:
+  mutacoes:
+    - id: M1
+      mutacao: "`parouEm` sempre null"
+      resultado: "1 failed / 7 passed"
+      veredito: MORDE
+    - id: M2
+      mutacao: "aceita resposta sem nenhuma pergunta respondida (painel vazio)"
+      resultado: "1 failed / 7 passed"
+      veredito: MORDE
+    - id: M3
+      mutacao: "schema quebrado vira formulário vazio em vez de sumir"
+      resultado: "1 failed / 7 passed"
+      veredito: MORDE
+    - id: M4
+      mutacao: "ordem ascendente (mais antiga primeiro)"
+      resultado: "1 failed / 7 passed"
+      veredito: MORDE
+    - id: M5
+      mutacao: "remove `.eq(\"org_id\", orgId)`"
+      resultado: "1 failed / 7 passed"
+      veredito: "MORDE — e é a mutação que mais importa: a tabela tem RLS sem policies e é lida com service-role"
+    - id: M6
+      mutacao: "painel removido de uma das abas"
+      resultado: "suíte verde"
+      veredito: NÃO MORDE
+      encaminhamento: C1
+  md5_pos_gate: "lead-responses.ts voltou ao hash original — nenhuma linha alterada pelo gate"
+  reguas:
+    testes: "216 arquivos · 2687 passed · 6 expected fail (pré-existentes)"
+    type_check: "8/8 pacotes"
+    lint: "0 erros · 26 warnings (pré-existentes)"
+    build: "OK — /dashboard/leads/[id] e /broker/leads/[id] compilam"
+  seguranca:
+    - "Leitura com service-role escopada por `lead_id` + `org_id` no WHERE (RLS sem policies, mig 232) — coberto por M5"
+    - "A página já está atrás de autenticação; nenhuma rota pública nova"
+
+pendencia_pos_deploy:
+  - id: P1
+    detalhe: >
+      Ficha da Thereza Hosp (14b88a50-d7d8-4e21-882b-a5c703c1e27b): as respostas aparecem na Info E
+      no Histórico, com score 44 e SEM linha "Parou em".
+  - id: P2
+    detalhe: >
+      Ficha do Gabriel Henrique (parcial): mostra o que ele respondeu, o selo "Não terminou" e
+      "Parou em: Quando você pensa em investir em um imóvel em Maringá, o que mais te atrai?".
+  - id: P3
+    detalhe: "Lead que nunca preencheu formulário: ficha inalterada, sem bloco vazio."

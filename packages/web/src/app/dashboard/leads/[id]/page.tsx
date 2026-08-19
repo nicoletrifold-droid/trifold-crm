@@ -7,6 +7,12 @@ import { isUuid } from "@web/lib/uuid"
 // Story 82-2 — aba "Análise IA" (substitui o Resumo IA; painel compartilhado c/ /broker)
 import { BehaviorAnalysisPanel, type BehaviorAnalysisData } from "@web/components/leads/behavior-analysis-panel"
 import { EditLeadToggle } from "./_components/edit-lead-toggle"
+// Story 75-343 — as respostas do formulário de qualificação nesta ficha. O painel
+// existia desde a 75-330 (AC9) mas só tinha sido ligado no /broker, e quem NÃO é
+// corretor (a SDR, entre outros) cai aqui no login — era a única ficha de lead sem
+// o contexto do formulário.
+import { FormResponsesPanel } from "@web/components/leads/form-responses-panel"
+import { fetchRespostasDoLead } from "@web/lib/forms/lead-responses"
 import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-feedback-entry-button"
 import { FINALIDADE_LABELS, PRAZO_COMPRA_LABELS, FORMA_PAGAMENTO_LABELS, formatLeadPerfil } from "@web/lib/leads/enrich"
 // Story 75-155 — reuso do componente de conversa do corretor para dar PARIDADE de
@@ -184,6 +190,29 @@ export default async function LeadDetailPage({
     .order("created_at", { ascending: false })
     .limit(20)
 
+  // Story 75-343 — respostas do formulário (completas E parciais), da mais nova
+  // para a mais antiga. Quem abandonou no meio NÃO tem activity — a
+  // `form_completed` só é gravada na conclusão —, então a timeline não serve para
+  // mostrar essa resposta: ela precisa de bloco próprio, alimentado pela tabela.
+  const respostasFormulario = await fetchRespostasDoLead(id, user.orgId)
+
+  // Story 75-343 — o mesmo bloco aparece na Info e no Histórico (decisão do
+  // Marcos: "coloca nos dois"). Uma função só para não duplicar o JSX e não deixar
+  // as duas cópias divergirem depois.
+  const painelFormulario = () =>
+    respostasFormulario.map((resposta) => (
+      <FormResponsesPanel
+        key={resposta.id}
+        formNome={resposta.formNome}
+        respostas={resposta.respostas}
+        score={resposta.score}
+        preenchidoEm={resposta.preenchidoEm}
+        parcial={resposta.parcial}
+        parouEm={resposta.parouEm}
+        resumoIa={resposta.resumoIa}
+      />
+    ))
+
   // Helper to get collected data value as string
   const cd = (key: string): string | null => {
     const v = collectedData[key]
@@ -360,6 +389,10 @@ export default async function LeadDetailPage({
 
       {/* Tab Content */}
       {activeTab === "info" && (
+        <div className="space-y-4">
+        {/* Story 75-343 — ACIMA das "Informações": é a aba que abre por padrão, e
+            o que o lead respondeu é o contexto que decide a abordagem. */}
+        {painelFormulario()}
         <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">
           <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-stone-100">
             Informações
@@ -418,6 +451,7 @@ export default async function LeadDetailPage({
             </div>
           )}
         </div>
+        </div>
       )}
 
       {activeTab === "conversa" && (
@@ -446,6 +480,11 @@ export default async function LeadDetailPage({
 
       {activeTab === "timeline" && (
         <div className="space-y-4">
+          {/* Story 75-343 — onde o Marcos foi procurar. Fica acima de "Atividades"
+              porque a resposta PARCIAL não gera activity nenhuma: sem este bloco,
+              o lead que parou no meio do formulário não deixa rastro aqui. */}
+          {painelFormulario()}
+
           {/* Link to full timeline page */}
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">Atividades</h2>
