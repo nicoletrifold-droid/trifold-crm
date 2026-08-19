@@ -174,10 +174,13 @@ export default function CampaignsMetaClient({
   isAdmin,
   showAgenteTab,
   showFormulariosTab,
+  showModuloCampanhas,
 }: {
   isAdmin: boolean
   showAgenteTab: boolean
   showFormulariosTab: boolean
+  /** Story 75-344 — abas CRM e Meta Ads seguem o módulo. */
+  showModuloCampanhas: boolean
 }) {
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -283,7 +286,11 @@ export default function CampaignsMetaClient({
       </div>
 
       {/* Tabs */}
-      <CampaignsTabs showAgente={showAgenteTab} showFormularios={showFormulariosTab} />
+      <CampaignsTabs
+        showAgente={showAgenteTab}
+        showFormularios={showFormulariosTab}
+        showModuloCampanhas={showModuloCampanhas}
+      />
 
       {/* Filtros de saúde — B-5: só exibe quando análise de inteligência já rodou */}
       {data?.alerts_initialized ? (

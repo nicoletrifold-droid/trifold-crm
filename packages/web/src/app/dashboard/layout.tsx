@@ -1,7 +1,7 @@
 import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { can, getUserPermissions, podeVerMenuConfig } from "@web/lib/permissions"
+import { can, getUserPermissions, podeVerMenuConfig, podeVerMenuCampanhas } from "@web/lib/permissions"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 import { getUpcomingAppointmentsCount } from "@web/lib/agenda/appointments-count"
 import { redirect } from "next/navigation"
@@ -200,11 +200,23 @@ export default async function DashboardLayout({
 
   // Sidebar dinâmico: cada item é incluído se a permissão do módulo for true.
   const baseFiltered = NAV_ITEMS_BASE.filter((item) => {
+    // Story 75-344 — Campanhas também aparece para quem só tem a TELA de
+    // Formulários (`campanhas.formularios`), como Config e Sistema já fazem com
+    // seus sub-módulos. Sem esta linha, conceder o sub-módulo na matriz daria uma
+    // permissão sem porta: a pessoa tem acesso à tela e nenhum caminho até ela.
+    if (item.href === "/dashboard/campaigns") return podeVerMenuCampanhas(permissions)
     if (!permissions[NAV_MODULE_MAP[item.href]!]) return false
     return true
-  }).map((item) =>
-    item.href === "/dashboard/agenda" ? { ...item, badge: agendaCount } : item
-  )
+  }).map((item) => {
+    if (item.href === "/dashboard/agenda") return { ...item, badge: agendaCount }
+    // Story 75-344 — sem o módulo, o item leva DIRETO à aba que a pessoa pode ver.
+    // A rota `/dashboard/campaigns` redirecionaria de todo jeito (gate novo na
+    // página), mas mandar o menu para o lugar certo evita o salto visível.
+    if (item.href === "/dashboard/campaigns" && !permissions["campanhas"]) {
+      return { ...item, href: "/dashboard/campaigns/formularios" }
+    }
+    return item
+  })
 
   // Itens inseridos logo ABAIXO da Roleta, só para admin/gerente-comercial:
   // Bolsão (Story 75-73) e Fluxo de Pagamento. Gate hardcoded (não passa pelo
