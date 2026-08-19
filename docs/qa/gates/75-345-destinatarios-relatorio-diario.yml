@@ -1,0 +1,112 @@
+schema: 1
+storyId: "75-345"
+story: "docs/stories/75-345-destinatarios-relatorio-diario-pelo-crm.story.md"
+title: "Quality Gate — Destinatários do relatório diário pelo CRM"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "story/75-345-destinatarios-relatorio-diario"
+
+escopo: >
+  Quem recebe o relatório diário das 07:59 sai da env da Vercel e passa a ser escolha na tela. O
+  risco não é a tela: é o envio. Errar aqui manda (ou deixa de mandar) WhatsApp para o diretor e
+  para o gerente comercial, e ninguém descobre até alguém reclamar — este relatório não grava nada
+  no banco.
+
+resumo: >
+  **As cinco mutações mordem.** Tirar o dedup derruba 4 casos; ignorar `is_active` derruba 2; afrouxar
+  o parse do jsonb derruba 1; o cron voltar a ler só a env derruba 1; tirar o sub-módulo do mapa
+  derruba 2. Working tree limpa depois do gate (`git status` vazio) — e desta vez as mutações
+  rodaram **sobre trabalho já commitado**, que é a correção do erro de método de ontem.
+
+  Os dois cenários que mais me preocupavam estão cobertos por teste: mensagem DUPLICADA (o telefone
+  do Alexandre está na env E no cadastro dele) e "lista vazia" (que tem de se comportar exatamente
+  como antes do deploy, senão o diretor deixa de receber no dia do deploy).
+
+status_reason: >
+  Liberado para merge. Uma dívida herdada (C1), uma decisão de arquitetura registrada (C2) e a
+  aplicação em produção (P1–P3).
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: observabilidade
+    titulo: "O envio continua sem rastro — dívida herdada, fora do escopo por decisão do Marcos"
+    detalhe: >
+      `sendDailyReport` chama a Graph API e não grava nada: nem linha em `messages`, nem log. Se o
+      token de `whatsapp_config` rotacionar (como em 10/08), o relatório para de chegar em silêncio,
+      e o alerta de saúde da 75-289 não cobre este caminho porque ele mede `send_error` em
+      `messages`. Eu levantei e ele respondeu "no momento é outra demanda". Esta story melhora um
+      pouco o que dá para ver: o JSON de retorno passa a incluir `destinatarios` (quem, não só
+      quantos), o que aparece no log da Vercel.
+  - id: C2
+    severidade: LOW
+    tipo: decisão-de-arquitetura
+    titulo: "Lista de distribuição NÃO é capability — e isso é deliberado"
+    detalhe: >
+      A ideia inicial era `relatorios.receber_diario` na matriz. Descartada: na matriz o admin é
+      `true` por construção (`adminFullMatrix`), e produção tem 5 admins ativos (2 com telefone) —
+      a capability faria o Marcos e qualquer admin futuro receberem WhatsApp às 07:59 sem pedir. É a
+      mesma distinção que a F3-4 registrou ao deixar `dashboard.ver_equipe` fora do modelo:
+      composição de UX ≠ autorização. Fica escrito no cabeçalho de `recipients.ts` para não ser
+      "corrigido" depois.
+
+impactos_conhecidos_e_aceitos:
+  - titulo: "Uma query a mais por execução do cron"
+    detalhe: "Uma leitura de `organizations.settings` + uma de `users` por dia. Irrelevante."
+  - titulo: "A env continua existindo"
+    detalhe: >
+      Mantida de propósito: é a porta para número que NÃO é usuário do CRM e é o que garante
+      continuidade se a lista estiver vazia. Efeito colateral aceito: existem dois lugares de onde
+      um número pode vir — mitigado pelo dedup normalizado e pelo `destinatarios` no retorno.
+  - titulo: "Quem edita a lista é quem tem a tela"
+    detalhe: >
+      `configuracoes.relatorio-diario` (sub-módulo novo, ligável na matriz). A server action confere
+      a permissão DE NOVO e valida os ids contra usuários ativos da org — formulário de cliente não
+      escolhe telefone alheio.
+
+verificacoes:
+  mutacoes:
+    - id: M1
+      mutacao: "remove o dedup por número normalizado"
+      resultado: "4 failed / 62 passed"
+      veredito: "MORDE — é o pior defeito possível aqui (mensagem duplicada para o diretor)"
+    - id: M2
+      mutacao: "ignora `is_active` do usuário selecionado"
+      resultado: "2 failed / 64 passed"
+      veredito: MORDE
+    - id: M3
+      mutacao: "`parseIdsSelecionados` aceita qualquer item do jsonb"
+      resultado: "1 failed / 65 passed"
+      veredito: MORDE
+    - id: M4
+      mutacao: "cron volta a montar a lista só da env"
+      resultado: "1 failed / 65 passed"
+      veredito: "MORDE — era a falha silenciosa da story (o Joabe simplesmente não receberia)"
+    - id: M5
+      mutacao: "remove o sub-módulo do SUBMODULE_MAP"
+      resultado: "2 failed / 64 passed"
+      veredito: MORDE
+  pos_gate: "`git status` limpo; mutações aplicadas sobre commit (lição da 75-344)"
+  reguas:
+    testes: "219 arquivos · 2713 passed · 6 expected fail (pré-existentes)"
+    type_check: "8/8 pacotes"
+    lint: "0 erros · 26 warnings (pré-existentes)"
+    build: "OK — rota /dashboard/configuracoes/relatorio-diario registrada"
+  dado_de_producao:
+    - "5544984070700 = Alexandre Guimaraes Nicolau (admin, ativo, telefone no cadastro)"
+    - "5544988441602 = Joabe Albuquerque Silva (gerente-comercial, ativo, telefone no cadastro) — o número que o Marcos passou"
+    - "5 admins ativos, 2 com telefone → foi o que descartou o caminho da capability"
+
+pendencia_pos_deploy:
+  - id: P1
+    detalhe: "Semear a lista em produção com Alexandre + Joabe (Management API, idempotente) e conferir por query."
+  - id: P2
+    detalhe: "Abrir Configurações › Relatório Diário e ver os dois marcados; usuários sem telefone na seção de indisponíveis."
+  - id: P3
+    detalhe: "Amanhã 07:59 BRT: os dois recebem, UMA mensagem cada."

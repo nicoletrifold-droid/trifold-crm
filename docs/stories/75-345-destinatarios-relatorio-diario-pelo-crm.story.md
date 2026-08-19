@@ -1,6 +1,6 @@
 # Story 75-345 — Quem recebe o relatório diário sai do CRM (e o gerente comercial entra)
 
-**Status:** Ready for Dev
+**Status:** Review
 **Tipo:** Feature (configuração que era env de dev) + atende pedido direto
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~4 pts — 1 tela, 1 helper, 1 cron, 0 migrations)
@@ -83,6 +83,27 @@ id selecionado que não existe mais, lista vazia (= só a env) e número inváli
   fica registrado, não entra aqui.
 - **O filtro `GERENTE_ALLOWED` da landing de Configurações** (role hardcoded) não é tocado.
 
+## Dev Agent Record
+
+- [x] **AC1** — tela `/dashboard/configuracoes/relatorio-diario` (escolha por pessoa, indisponíveis
+      listados com o motivo), card na landing, sub-módulo no `SUBMODULE_MAP`.
+- [x] **AC2** — cron resolve usuários escolhidos + env, dedup por `normalizePhoneBR`.
+- [ ] **AC3** — semear Alexandre + Joabe em produção (**depois do deploy**).
+- [x] **AC4** — `recipients.test.ts` (9 casos) + `daily-report/route.test.ts` (5 casos, novo).
+
+### Decisões de implementação
+
+- **Rótulo do perfil sai da tabela `roles`** (`getOrgRoles`), não de um mapa nome→rótulo novo: não
+  existe `ROLE_LABELS` no projeto e criar um seria duplicar a fonte.
+- **A server action revalida a permissão e valida os ids** contra usuários ativos da org. O
+  formulário é do cliente: uma lista de ids arbitrários viraria envio para telefone alheio.
+- **O retorno do cron passou a incluir `destinatarios`** — quem recebeu, não só quantos. É a única
+  observabilidade possível hoje sem sair do escopo (ver C1 do gate).
+
+### Validações
+
+`npm test` 219 arquivos / 2713 testes ✅ · `type-check` 8/8 ✅ · `lint` 0 erros ✅ · `build` OK ✅
+
 ## File List (previsto)
 
 - `packages/web/src/lib/reports/recipients.ts` *(novo)* + `recipients.test.ts` *(novo)* — AC2/AC4
@@ -90,6 +111,9 @@ id selecionado que não existe mais, lista vazia (= só a env) e número inváli
 - `packages/web/src/lib/permissions-modules.ts` — sub-módulo da tela nova
 - `packages/web/src/app/dashboard/configuracoes/page.tsx` — card
 - `packages/web/src/app/api/cron/daily-report/route.ts` — AC2
+- `packages/web/src/app/api/cron/daily-report/route.test.ts` *(novo)* — AC4
+- `packages/web/src/lib/permissions-modules.test.ts` — AC4
+- `docs/qa/gates/75-345-destinatarios-relatorio-diario.yml` *(novo)*
 
 ## Verificar depois do deploy
 
