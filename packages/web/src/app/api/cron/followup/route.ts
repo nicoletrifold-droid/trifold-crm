@@ -72,7 +72,13 @@ export async function GET(request: NextRequest) {
   }
 
   let alertsCreated = 0
+  // Story 75-351 — `messagesSent` contava LEADS PROCESSADOS, não mensagens
+  // entregues: o `++` fica depois das duas ramificações (enviou / pulou). O recibo
+  // da run de 19/08 20:02 dizia "16 messages" com **zero** entregas — 84 puladas
+  // por janela de 24h fechada. Quem lesse o log concluiria que o follow-up estava
+  // funcionando. Agora são dois números, e o nome de cada um diz o que ele é.
   let messagesSent = 0
+  let messagesSkipped = 0
   let processed = 0
 
   // Fetch all active follow-up rules with stage info
@@ -218,7 +224,17 @@ export async function GET(request: NextRequest) {
         //  - WhatsApp window closed   → status='skipped' + metadata.reason
         //  - other failure (best-effort) → status='sent' (message stored, retry by broker)
         const skipped = !result.sent && result.reason === "WHATSAPP_WINDOW_CLOSED"
-        await supabase.from("follow_up_log").insert({
+        // Story 75-351 — o `{ error }` deste insert era DESCARTADO, e ele falhava
+        // 100% das vezes: `follow_up_log.metadata` não existia (a coluna só nasceu
+        // na migration 233). Medido em 19/08: `alert_broker` 465 linhas — o único
+        // insert sem `metadata` — contra `nicole_sent` 0 e `post_visit` 0, sempre.
+        //
+        // 🔥 O ESTRAGO NÃO É O DADO, É O COOLDOWN: a janela de 48h por lead é lida
+        // desta tabela. Sem a linha, o mesmo lead volta a ser elegível a cada run
+        // de 2h — o follow-up podia repetir várias vezes ao dia para a mesma
+        // pessoa. Não explodiu antes só porque a janela de 24h do WhatsApp estava
+        // fechada para quase todos (0 enviadas em julho e agosto, 4.493 puladas).
+        const { error: erroDoLog } = await supabase.from("follow_up_log").insert({
           org_id: rule.org_id,
           lead_id: lead.id,
           rule_id: rule.id,
@@ -229,6 +245,19 @@ export async function GET(request: NextRequest) {
           message,
           metadata: skipped ? { reason: result.reason, channel: result.channel } : { channel: result.channel },
         })
+        if (erroDoLog) {
+          // A mensagem já foi enviada; não há como desfazer. O que se pode fazer é
+          // GRITAR, porque sem esta linha o cooldown deste lead não existe.
+          logEvent({
+            level: "error",
+            category: "cron",
+            event_type: "FOLLOWUP_LOG_FALHOU",
+            message: `follow_up_log não gravou para o lead ${lead.id} — COOLDOWN DE 48H COMPROMETIDO: ${erroDoLog.message}`,
+            metadata: { lead_id: lead.id, type: "nicole_sent", enviado: result.sent, erro: erroDoLog.message },
+            org_id: rule.org_id,
+            source: "api/cron/followup",
+          })
+        }
 
         if (result.sent) {
           logEvent({
@@ -282,7 +311,8 @@ export async function GET(request: NextRequest) {
           metadata: { rule_id: rule.id, stage_id: rule.stage_id, channel: result.channel, sent: result.sent, reason: result.reason },
         })
 
-        messagesSent++
+        if (result.sent) messagesSent++
+        else messagesSkipped++
       } else if (daysSinceLastContact >= rule.alert_days) {
         // Create alert for broker
         await supabase.from("follow_up_log").insert({
@@ -336,6 +366,8 @@ export async function GET(request: NextRequest) {
   // --- Post-visit follow-up ---
   // Find completed appointments with no post_visit follow-up log in the last 48h
   let postVisitSent = 0
+  /** Processados (com ou sem entrega) — o `postVisitSent` conta só quem recebeu. */
+  let postVisitProcessados = 0
   // Story 75-350 — erro de pós-visita vira NÚMERO no recibo do cron. Sem isso, a
   // única diferença entre "não havia o que enviar" e "tudo falhou" é ninguém ver.
   let postVisitErros = 0
@@ -434,7 +466,11 @@ export async function GET(request: NextRequest) {
         const registro = registroDoPosVisita(result, interestLevel)
 
         // Create follow_up_log entry reflecting the send outcome (AC4/T3)
-        await supabase.from("follow_up_log").insert({
+        // Story 75-351 — `throw` de propósito: este insert é o que segura o
+        // cooldown de 48h do pós-visita. Falhar aqui em silêncio fazia o mesmo
+        // agendamento ser reprocessado a cada 2 horas, indefinidamente. Com o
+        // `throw`, o try/catch por agendamento da 75-350 registra e segue.
+        const { error: erroDoLogPosVisita } = await supabase.from("follow_up_log").insert({
           org_id: appt.org_id,
           lead_id: appt.lead_id,
           type: "post_visit",
@@ -448,6 +484,9 @@ export async function GET(request: NextRequest) {
             ...(result.reason ? { reason: result.reason } : {}),
           },
         })
+        if (erroDoLogPosVisita) {
+          throw new Error(`follow_up_log não gravou (cooldown de 48h comprometido): ${erroDoLogPosVisita.message}`)
+        }
 
         if (result.sent) {
           logEvent({
@@ -497,7 +536,8 @@ export async function GET(request: NextRequest) {
           metadata: { appointment_id: appt.id, channel: result.channel, sent: result.sent, reason: result.reason },
         })
 
-        postVisitSent++
+        postVisitProcessados++
+        if (result.sent) postVisitSent++
       } catch (err) {
         // Fail-open POR LEAD, e ruidoso: o próximo agendamento continua sendo
         // processado, mas o erro deixa rastro no banco (não só no console da
@@ -525,8 +565,17 @@ export async function GET(request: NextRequest) {
     level: processed > 0 ? "info" : "info",
     category: "cron",
     event_type: "FOLLOWUP_EXECUTED",
-    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} messages, ${postVisitSent} post-visit (${postVisitErros} erros), ${noShowDetected} no-show`,
-    metadata: { processed, alerts_created: alertsCreated, messages_sent: messagesSent, post_visit_sent: postVisitSent, post_visit_erros: postVisitErros, no_show_detected: noShowDetected },
+    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} enviadas / ${messagesSkipped} puladas, pós-visita ${postVisitSent} enviadas de ${postVisitProcessados} (${postVisitErros} erros), ${noShowDetected} no-show`,
+    metadata: {
+      processed,
+      alerts_created: alertsCreated,
+      messages_sent: messagesSent,
+      messages_skipped: messagesSkipped,
+      post_visit_sent: postVisitSent,
+      post_visit_processados: postVisitProcessados,
+      post_visit_erros: postVisitErros,
+      no_show_detected: noShowDetected,
+    },
     source: "api/cron/followup",
   })
 
@@ -534,7 +583,9 @@ export async function GET(request: NextRequest) {
     processed,
     alerts_created: alertsCreated,
     messages_sent: messagesSent,
+    messages_skipped: messagesSkipped,
     post_visit_sent: postVisitSent,
+    post_visit_processados: postVisitProcessados,
     post_visit_erros: postVisitErros,
     no_show_detected: noShowDetected,
   })
