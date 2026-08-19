@@ -5,6 +5,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk"
+import { ANTHROPIC_MODELS } from "../client/anthropic"
 
 interface PostVisitParams {
   anthropic: Anthropic
@@ -64,7 +65,17 @@ export async function generatePostVisitMessage(params: PostVisitParams): Promise
     .join("\n")
 
   const response = await anthropic.messages.create({
-    model: "claude-3-5-haiku-latest",
+    // Story 75-350 — era `claude-3-5-haiku-latest`. O alias resolvia para
+    // `claude-3-5-haiku-20241022`, descontinuado pela Anthropic, e a chamada passou
+    // a devolver **404 not_found_error**. Efeito medido em produção: o cron de
+    // follow-up parou de CONCLUIR em 22/07/2026 (último `FOLLOWUP_EXECUTED` em
+    // 21/07; zero desde então, com 90 a 500 tentativas por dia e ZERO erros
+    // logados — a exceção escapava antes de qualquer log).
+    //
+    // 🔥 A LIÇÃO É O ALIAS, não a data: `-latest` é alvo móvel. Ele muda debaixo
+    // do deploy, sem PR, sem aviso e sem teste que acenda. Modelo se pina por ID,
+    // sempre, e vindo da constante compartilhada.
+    model: ANTHROPIC_MODELS.haiku,
     max_tokens: 256,
     messages: [{ role: "user", content: userPrompt }],
     system: systemPrompt,

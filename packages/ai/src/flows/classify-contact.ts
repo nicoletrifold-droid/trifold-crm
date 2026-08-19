@@ -1,4 +1,4 @@
-import { textoDaResposta } from "../client/anthropic"
+import { textoDaResposta, ANTHROPIC_MODELS } from "../client/anthropic"
 /**
  * Classificação de contato: lead de compra vs. não-lead.
  *
@@ -85,7 +85,7 @@ Mensagem do contato:
   try {
     const response = await anthropic.messages.create(
       {
-        model: "claude-haiku-4-5-20251001",
+        model: ANTHROPIC_MODELS.haiku,
         max_tokens: 200,
         messages: [{ role: "user", content: prompt }],
       },
