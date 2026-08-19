@@ -1,6 +1,6 @@
 # Story 75-350 — O modelo descontinuado que matou o follow-up pós-visita (e derrubava o cron inteiro)
 
-**Status:** InReview — gate PASS
+**Status:** Done — gate PASS · **PR #461 mergeado em 19/08** (squash `1290527e`) · deploy de produção `success` às 18:16 UTC · ⏳ aguardando a run das 20:00 UTC para confirmar o `FOLLOWUP_EXECUTED`
 **Tipo:** Incidente de produção (4 semanas) + a causa-raiz de um pendente antigo do backlog
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~5 pts — 1 string, 1 blindagem de cron, 1 porta que mentia, 0 migrations)
