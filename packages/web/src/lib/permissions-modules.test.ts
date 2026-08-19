@@ -108,3 +108,19 @@ describe("podeVerMenuCampanhas", () => {
     expect(podeVerMenuCampanhas({ campanhas: true, "campanhas.formularios": false })).toBe(true)
   })
 })
+
+// Story 75-345 — a tela nova de Configurações entra no mapa (convenção da 75-344:
+// só entra sub-módulo que já tem gate real, e a página gateia por esta chave).
+describe("SUBMODULE_MAP.configuracoes — Relatório Diário", () => {
+  it("registra configuracoes.relatorio-diario", () => {
+    expect(SUBMODULE_MAP.configuracoes?.["configuracoes.relatorio-diario"]).toBe("Relatório Diário")
+  })
+
+  it("a tela nova concede o menu Config sozinha, sem abrir o pai", () => {
+    // `podeVerMenuConfig` conta TELAS do mapa: sem a entrada acima, quem recebesse
+    // só esta permissão teria a tela e nenhum caminho até ela (a armadilha da 75-344).
+    expect(
+      podeVerMenuConfig({ configuracoes: false, "configuracoes.relatorio-diario": true })
+    ).toBe(true)
+  })
+})

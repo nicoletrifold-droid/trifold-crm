@@ -67,6 +67,12 @@ const CONFIG_CARDS = [
     description: "Permissões por perfil de usuário",
   },
   {
+    href: "/dashboard/configuracoes/relatorio-diario",
+    icon: "✉",
+    title: "Relatório Diário",
+    description: "Quem recebe o resumo de leads das 7h59 no WhatsApp",
+  },
+  {
     href: "/dashboard/configuracoes/materiais",
     icon: "◲",
     title: "Central de Materiais",
