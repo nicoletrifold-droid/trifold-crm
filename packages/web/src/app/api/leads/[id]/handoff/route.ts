@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
-import { createAnthropicClient } from "@trifold/ai"
+import { createAnthropicClient, textoDaResposta, ANTHROPIC_MODELS } from "@trifold/ai"
 
 export async function POST(
   request: NextRequest,
@@ -144,14 +144,17 @@ Seja conciso e objetivo.`
 
     const anthropic = createAnthropicClient()
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-20250414",
+      // Story 75-349 — a 82-1 unificou esta string em /summary e no cron e DEIXOU
+      // ESTA PASSAR: `claude-haiku-4-20250414` não existe mais no catálogo. Toda
+      // chamada desta rota falhava na API (o catch abaixo engolia e seguia sem
+      // resumo). Mesma lição da 75-268: guarda aplicada a um caminho e não ao outro.
+      model: ANTHROPIC_MODELS.haiku,
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     })
 
-    const firstBlock = message.content[0]
-    summary =
-      firstBlock && firstBlock.type === "text" ? firstBlock.text : null
+    // Story 75-349 — por FILTRO, nunca por posição (thinking pode vir no bloco 0).
+    summary = textoDaResposta(message.content) || null
 
     // Save summary to lead
     if (summary) {

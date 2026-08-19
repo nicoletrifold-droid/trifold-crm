@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
-import { createAnthropicClient, ANTHROPIC_MODELS } from "@trifold/ai"
+import { createAnthropicClient, ANTHROPIC_MODELS, textoDaResposta } from "@trifold/ai"
 
 export async function POST(
   _req: NextRequest,
@@ -128,9 +128,8 @@ Seja conciso e objetivo.`
       messages: [{ role: "user", content: prompt }],
     })
 
-    const firstBlock = message.content[0]
-    const summary =
-      firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+    // Story 75-349 — por FILTRO, nunca por posição (thinking pode vir no bloco 0).
+    const summary = textoDaResposta(message.content)
 
     // Save summary to lead
     const { error: updateError } = await supabase

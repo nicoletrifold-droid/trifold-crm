@@ -35,6 +35,7 @@ import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, reso
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
 import type { AgendaState } from "../flows/agenda-state"
+import { supportsSampling, textoDaResposta } from "../client/anthropic"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
 import { buildSystemPrompt as buildPromptFromCode, OFF_HOURS_PROMPT } from "../prompts"
@@ -1127,11 +1128,15 @@ export async function processMessageWithMetadata(
   ]
 
   const claudeStart = Date.now()
+  // Story 75-349 — `temperature` só vai para modelo que ainda aceita sampling. A
+  // geração atual devolve 400, e como `model_primary` mora no banco, a troca pela
+  // tela derrubava a Nicole sem deploy nenhum.
+  const mandaTemperature = supportsSampling(agentConfig.model_primary)
   const response = await anthropic.messages.create(
     {
       model: agentConfig.model_primary,
       max_tokens: agentConfig.max_tokens,
-      temperature: agentConfig.temperature,
+      ...(mandaTemperature ? { temperature: agentConfig.temperature } : {}),
       system: systemBlocks,
       messages,
     },
@@ -1185,9 +1190,25 @@ export async function processMessageWithMetadata(
     },
   })
 
-  const firstBlock = response.content[0]
-  const rawAssistantMessage =
-    firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
+  // Story 75-349 — por FILTRO, nunca por posição: com thinking ligado (padrão na
+  // geração atual) o bloco 0 é `thinking` e a leitura antiga descartava a fala.
+  const rawAssistantMessage = textoDaResposta(response.content)
+  if (!rawAssistantMessage.trim()) {
+    // Falha que não se anuncia: o `SANITIZED_EMPTY_FALLBACK` logo abaixo manda uma
+    // frase neutra e a conversa PARECE funcionar. Medir é parte do conserto — foi o
+    // que faltou no token da Meta (75-289), que caiu em silêncio por horas.
+    emit({
+      level: "error",
+      category: "ai",
+      event_type: "nicole_resposta_vazia",
+      message: "Resposta do modelo sem bloco de texto — fala descartada",
+      metadata: {
+        model: agentConfig.model_primary,
+        tipos_de_bloco: response.content.map((b) => b.type),
+        temperature_enviada: mandaTemperature,
+      },
+    })
+  }
 
   // Story 75-279 — higieniza ANTES de qualquer consumidor (ver stripSystemBlocks).
   const { text: cleanedMessage, stripped: leakedSystemBlock } =
