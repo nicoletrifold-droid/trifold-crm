@@ -111,6 +111,51 @@ export async function pixelIdentificar(identidade: IdentidadePixel): Promise<voi
 const INTERVALO_MS = 100
 const MAX_TENTATIVAS = 50 // 5s — além disso, o script não vem mais (bloqueador)
 
+/**
+ * Espera o cookie `_fbp` EXISTIR — que é coisa diferente de `window.fbq` existir.
+ *
+ * [Defeito 86.9-QA-004, medido em produção 24h após o deploy]
+ *
+ * O snippet do Meta define `window.fbq` de forma SÍNCRONA, mas isso é só o stub
+ * que enfileira chamadas; o `fbevents.js` real carrega depois, assíncrono, e é
+ * ELE quem grava o `_fbp`. Esperar por `window.fbq` (como fazíamos) libera na
+ * hora, e o POST server-side sai antes de o cookie nascer.
+ *
+ * O efeito foi medido: `fbp` em **6,8%** no `ViewContent` (que dispara no
+ * carregamento) contra **100%** no `Lead` e no `InitiateCheckout`, que só
+ * acontecem depois de o script ter carregado. Para o disparo no Pixel o stub
+ * basta — a fila é drenada quando o script chega. Para LER a atribuição, não.
+ */
+export function quandoFbpPronto(): Promise<boolean> {
+  if (typeof window === 'undefined' || !PIXEL_ID) return Promise.resolve(false)
+
+  const temFbp = (): boolean => {
+    try {
+      return document.cookie.includes('_fbp=')
+    } catch {
+      return false
+    }
+  }
+  if (temFbp()) return Promise.resolve(true)
+
+  return new Promise((resolve) => {
+    let tentativas = 0
+    const timer = setInterval(() => {
+      if (temFbp()) {
+        clearInterval(timer)
+        resolve(true)
+        return
+      }
+      // Bloqueador de anúncios nunca deixa o cookie nascer: desistimos e o
+      // evento sai sem `fbp`, que é o melhor possível nesse caso.
+      if (++tentativas >= MAX_TENTATIVAS) {
+        clearInterval(timer)
+        resolve(false)
+      }
+    }, INTERVALO_MS)
+  })
+}
+
 export function quandoPixelPronto(): Promise<boolean> {
   if (typeof window === 'undefined' || !PIXEL_ID) return Promise.resolve(false)
   if (window.fbq) return Promise.resolve(true)

@@ -103,3 +103,45 @@ describe("pixelIdentificar (Advanced Matching)", () => {
     expect(atual.chamadas).toHaveLength(0)
   })
 })
+
+/**
+ * Defeito 86.9-QA-004 — medido em PRODUCAO 24h apos o deploy: `fbp` em 6,8% no
+ * `ViewContent` contra 100% no `Lead`. A causa era esperar `window.fbq` (o stub
+ * sincrono) em vez do cookie, que so nasce com o `fbevents.js` real.
+ */
+describe("quandoFbpPronto espera o COOKIE, nao o stub", () => {
+  it("nao libera enquanto so existe window.fbq (o stub) sem cookie", async () => {
+    const { quandoFbpPronto } = await import("./pixel-events")
+    pixelCarrega() // stub presente...
+    vi.stubGlobal("document", { cookie: "" }) // ...mas o _fbp ainda nao existe
+
+    const promessa = quandoFbpPronto()
+    await vi.advanceTimersByTimeAsync(300)
+    let resolveu = false
+    void promessa.then(() => { resolveu = true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(resolveu).toBe(false)
+
+    // o fbevents.js real chega e grava o cookie
+    vi.stubGlobal("document", { cookie: "_fbp=fb.1.123.456" })
+    await vi.advanceTimersByTimeAsync(150)
+    await expect(promessa).resolves.toBe(true)
+  })
+
+  it("libera na hora quando o cookie ja existe", async () => {
+    const { quandoFbpPronto } = await import("./pixel-events")
+    vi.stubGlobal("document", { cookie: "outro=1; _fbp=fb.1.9.9; mais=2" })
+    await expect(quandoFbpPronto()).resolves.toBe(true)
+  })
+
+  it("desiste apos o teto sem vazar timer (bloqueador de anuncios)", async () => {
+    const { quandoFbpPronto } = await import("./pixel-events")
+    vi.stubGlobal("document", { cookie: "" })
+
+    const promessa = quandoFbpPronto()
+    await vi.advanceTimersByTimeAsync(6000)
+
+    await expect(promessa).resolves.toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
