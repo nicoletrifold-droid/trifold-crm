@@ -1,0 +1,133 @@
+schema: 1
+storyId: "75-346"
+story: "docs/stories/75-346-cards-de-configuracoes-pela-matriz.story.md"
+title: "Quality Gate — Atalhos de Configurações derivados da matriz"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "story/75-346-cards-configuracoes-pela-matriz"
+
+escopo: >
+  A landing de Configurações e o hub da Nicole paravam de listar telas conforme uma lista de perfis
+  escrita no código. O risco de consertar isso não é a lista: é MUDAR QUEM VÊ O QUÊ em 11 perfis de
+  uma vez — para mais (concessão indevida) ou para menos (alguém perde um atalho que usava).
+
+resumo: >
+  **Seis mutações, todas mordem.** Card sem permissão declarada derruba 4 casos; trocar OU por E
+  derruba 2; tirar o dedup de chaves derruba 1; chave errada no Follow-up derruba 1; tirar o redirect
+  da landing derruba 1; o hub voltar a filtrar por `user.role` derruba 1.
+
+  **O que sustenta o PASS não é o teste, é a simulação:** rodei a resolução de permissão real
+  (exceção → linha do perfil → herança do pai) contra `role_permissions` de produção, perfil por
+  perfil, ANTES de escrever código. Nenhum perfil ganha atalho que a matriz não conceda, e nenhum
+  perde atalho que conseguisse usar.
+
+status_reason: >
+  Liberado para merge. Uma mudança visível declarada (o Gerente Comercial ganha um card) e duas
+  dívidas herdadas registradas (C1, C2).
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: dívida-herdada
+    titulo: "Empresa, Horário e Etapas do Pipeline continuam abertas por URL"
+    detalhe: >
+      As três não barram a entrada: mostram conteúdo só-leitura e usam a chave apenas para liberar a
+      edição. O card passa a seguir a chave de EDIÇÃO (é o que ele promete), mas quem digitar a URL
+      continua vendo a tela em modo leitura. Não gatear foi decisão consciente desta story: tirar a
+      leitura de quem hoje a tem é mudança de comportamento que ninguém pediu. Se for para fechar,
+      é story própria, com a mesma simulação por perfil.
+  - id: C2
+    severidade: LOW
+    tipo: dívida-herdada
+    titulo: "Restam listas de card por perfil em outros hubs"
+    detalhe: >
+      Esta story cobriu Configurações e o hub da Nicole. O hub do Sistema tem o seu próprio "modo
+      restrito" (75-150-b) e não entrou aqui. Nenhum outro hub foi auditado — se aparecer o mesmo
+      sintoma ("tela nova invisível para quem tem a permissão"), a receita agora existe:
+      `lib/config-cards.ts` + `cardsVisiveis`.
+
+impactos_conhecidos_e_aceitos:
+  - titulo: "⚠️ Gerente Comercial passa a ver 'Etapas do Pipeline'"
+    detalhe: >
+      Medido em produção: a matriz JÁ diz `configuracoes.pipeline = true` para esse perfil. A lista
+      fixa mostrava Follow-up e escondia essa. Depois desta story a matriz manda — e se não era a
+      intenção, o lugar de corrigir passa a ser a tela de Perfil de Acesso, não o código. É o ponto
+      da story, mas é mudança visível e o Marcos precisa saber.
+  - titulo: "Perfis sem Configurações deixam de ver 12 atalhos ao digitar a URL"
+    detalhe: >
+      Corretor, SDR e Consultoria passam de 12 para 1 (Follow-up, que têm pelo módulo `pipeline`);
+      Obras, IMOB, Social Media, Aux-Administrativo e Gerente de Relacionamento vão para 0 e caem no
+      redirect novo. Nenhum deles tem o item Config na sidebar — só chegavam pela URL, e nenhum
+      perde acesso a algo que conseguisse usar.
+  - titulo: "Hub da Nicole: zero mudança"
+    detalhe: >
+      Simulado para os 11 perfis: o recorte por capability reproduz exatamente o que os `roles: [...]`
+      faziam à mão (admin/supervisor as três telas; gerente-comercial Treinamento + Mídia; os demais
+      nenhuma). Aqui só morre nome de role.
+  - titulo: "Uma consulta por CHAVE, não por card"
+    detalhe: >
+      12 cards, 14 chaves distintas resolvidas em paralelo; "Empresa" e "Central de Materiais"
+      compartilham `configuracoes.empresa` e ela é perguntada uma vez.
+
+verificacoes:
+  simulacao_producao:
+    metodo: >
+      Query em `role_permissions` (org Trifold) + resolução idêntica à do app (exceção → linha exata →
+      herança do pai; admin = tudo), comparando a visibilidade ANTES (lista fixa) e DEPOIS (matriz),
+      para os 11 perfis e os 12 cards.
+    resultado:
+      - "Administrador 12 → 12 (igual)"
+      - "Supervisor 12 → 12 (igual)"
+      - "Gerente Comercial 3 → 4 (+ Etapas do Pipeline)"
+      - "Corretor · Consultoria · SDR 12 → 1"
+      - "Obras · IMOB · Social Media · Aux-Administrativo · Ger. Relacionamento 12 → 0"
+      - "Hub da Nicole: nenhuma diferença em nenhum perfil"
+  mutacoes:
+    - id: M1
+      mutacao: "card sem permissão declarada"
+      resultado: "4 failed / 7 passed"
+      veredito: "MORDE — é a trava contra o defeito de origem"
+    - id: M2
+      mutacao: "`cardsVisiveis` exige TODAS as chaves (E em vez de OU)"
+      resultado: "2 failed / 9 passed"
+      veredito: "MORDE — quebraria o guard composto de Corretores e o hub da Nicole"
+    - id: M3
+      mutacao: "`chavesDosCards` deixa de deduplicar"
+      resultado: "1 failed / 10 passed"
+      veredito: MORDE
+    - id: M4
+      mutacao: "Follow-up com `configuracoes.pipeline` em vez do módulo `pipeline`"
+      resultado: "1 failed / 10 passed"
+      veredito: "MORDE — esconderia o card de corretor e SDR"
+    - id: M5
+      mutacao: "landing sem o `redirect` de zero cards"
+      resultado: "1 failed / 16 passed"
+      veredito: "MORDE (depois do contract test novo; sem ele, passava verde)"
+    - id: M6
+      mutacao: "hub da Nicole volta a filtrar por `user.role`"
+      resultado: "1 failed / 16 passed"
+      veredito: MORDE
+  pos_gate: "mutações sobre commit; `git status` limpo (só o contract test novo, adicionado no gate)"
+  reguas:
+    testes: "221 arquivos · 2729 passed · 6 expected fail (pré-existentes) — +6 com o contract test do gate"
+    type_check: "8/8 pacotes"
+    lint: "0 erros · 26 warnings (pré-existentes)"
+    build: "OK"
+
+pendencia_pos_deploy:
+  - id: P1
+    detalhe: "Admin e Supervisor: os doze atalhos, como antes."
+  - id: P2
+    detalhe: >
+      Ligar `configuracoes.relatorio-diario` para o Gerente Comercial na matriz e confirmar que o
+      card APARECE para ele — é o teste do que motivou a story. Pode desligar depois.
+  - id: P3
+    detalhe: "Entrar como corretor e abrir /dashboard/configuracoes pela URL: cai no dashboard."
+  - id: P4
+    detalhe: "Conferir com o Marcos se 'Etapas do Pipeline' para o Gerente Comercial é intenção (a matriz diz que sim)."

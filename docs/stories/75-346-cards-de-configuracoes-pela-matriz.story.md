@@ -1,6 +1,6 @@
 # Story 75-346 — Os atalhos de Configurações saem da matriz, não de uma lista de perfis no código
 
-**Status:** Ready for Dev
+**Status:** Review
 **Tipo:** Bug fix de governança (permissão que não abre porta) + furo de exposição na landing
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~4 pts — 2 telas, 1 lib pura, 0 migrations)
@@ -101,11 +101,34 @@ Dois pontos que valem a atenção do Marcos:
 
 O hub da Nicole: **zero mudança** para todos os perfis (medido igual). Lá é só matar nome de role.
 
+## Dev Agent Record
+
+- [x] **AC1** — `GERENTE_ALLOWED` morto; cards derivados por `canAccess`, uma consulta por CHAVE
+      distinta (não por card).
+- [x] **AC2** — `redirect("/dashboard")` quando não há nenhum atalho.
+- [x] **AC3** — hub da Nicole pela mesma régua; `roles: [...]` mortos.
+- [x] **AC4** — `config-cards.test.ts` (11 casos, inclui "todo card declara permissão") +
+      `configuracoes-gate.contract.test.ts` (6 casos, criado no gate para travar a fiação).
+
+### Decisões de implementação
+
+- **O contract test ignora comentários.** O comentário que conta a história cita `GERENTE_ALLOWED`
+  pelo nome; a asserção olha código, então o teste remove comentários antes de comparar. Sem isso,
+  documentar o passado reprovaria o teste.
+- **Não gatear Empresa/Horário/Etapas** (ver C1 do gate): elas mostram só-leitura e a chave é de
+  edição. Fechar a leitura seria mudança que ninguém pediu.
+
+### Validações
+
+`npm test` 221 arquivos / 2729 testes ✅ · `type-check` 8/8 ✅ · `lint` 0 erros ✅ · `build` OK ✅
+
 ## File List (previsto)
 
 - `packages/web/src/lib/config-cards.ts` *(novo)* + `config-cards.test.ts` *(novo)* — AC1/AC3/AC4
 - `packages/web/src/app/dashboard/configuracoes/page.tsx` — AC1/AC2
 - `packages/web/src/app/dashboard/configuracoes/nicole/page.tsx` — AC3
+- `packages/web/src/app/dashboard/configuracoes/configuracoes-gate.contract.test.ts` *(novo)* — AC4
+- `docs/qa/gates/75-346-cards-configuracoes-pela-matriz.yml` *(novo)*
 
 ## Verificar depois do deploy
 
