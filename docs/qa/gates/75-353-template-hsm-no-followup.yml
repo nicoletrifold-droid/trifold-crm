@@ -1,0 +1,145 @@
+schema: 1
+storyId: "75-353"
+story: "docs/stories/75-353-template-hsm-no-followup.story.md"
+title: "Quality Gate — Template HSM no follow-up (o follow-up finalmente entrega)"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-20"
+branch: "75-353-template-hsm-no-followup"
+depends_on: "PR #462 (75-351) e PR #463 (75-352) — esta branch nasce da 352 e depende do metadata.template que ela gravou"
+migrations: ["235_followup_template_hsm_e_optout.sql — NÃO aplicada; additiva; validada em prod em transação REVERTIDA"]
+
+escopo: >
+  O follow-up manda texto livre e a Meta só aceita texto livre dentro de 24h da última mensagem do
+  lead — mas follow-up existe para lead calado. Resultado: 0 entregas em 20 dias, ~4.700 puladas. Esta
+  story habilita entrega por template HSM aprovado fora da janela, com os freios que marketing
+  automático exige (cap por lead + opt-out real), e mantém o comportamento atual até alguém escolher um
+  template na tela.
+
+resumo: >
+  **A condição que dispara o follow-up é a mesma que proíbe a entrega.** Template aprovado resolve, e
+  os `abertura_*` já entregam ~128 msgs/semana pelo botão manual. Decisão do Marcos em 20/08: sim,
+  automatizar — o que traz junto a obrigação de não virar spam, porque nota de qualidade da WABA é o
+  ativo de entrega da empresa inteira.
+
+  **O plano mudou no meio, e os dados são o motivo.** Conferindo antes de codar: o cron
+  `appointment-whatsapp-reminders` JÁ manda `lembrete_visita_*` 24h/3h antes por template (flags
+  `whatsapp_reminded_24h`/`_3h` gravados em todos os agendamentos de 13–18/08), e 4 dos 9 leads na
+  etapa "Visita Agendada" já tiveram a visita — para eles o texto "confirmando sua visita amanhã" é
+  FALSO. Em vez de templatizar a duplicação, `nicole_takeover_days = 9999` nas regras de Visita
+  Agendada e Visitou (feito em prod hoje), preservando o ramo de alerta ao corretor.
+
+status_reason: >
+  Liberado para merge. Deploy é neutro por construção (nenhuma regra com template após a migration);
+  ligar é ato de quem opera a tela. Ordem de deploy é obrigatória: a migration 235 ANTES do código.
+
+acoes_obrigatorias:
+  - id: A1
+    titulo: "Aplicar a migration 235 antes do merge"
+    detalhe: >
+      O select dos leads no cron passa a pedir `marketing_optout_at`. Sem a coluna, o PostgREST reprova
+      o select inteiro, `leads` vem nulo e o `if (!leads) continue` para o follow-up EM SILÊNCIO. É a
+      mesma classe de falha da 75-350/351, e por isso a ordem não é preferência.
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: risco-de-negócio-assumido
+    titulo: "Template de marketing automático é custo por envio e risco de reputação"
+    detalhe: >
+      Decisão explícita do Marcos (20/08). Mitigado por: cap de 7 dias por lead (configurável),
+      opt-out respeitado antes de qualquer envio, horário 08–20 BRT herdado do cron, cooldown de 48h da
+      esteira e `whatsapp_send_log` registrando custo e falha. O que NÃO está mitigado: ninguém mede
+      resposta ao template ainda — a eficácia (respondeu? virou visita?) é candidata a story própria,
+      e sem ela a decisão de manter ligado fica sem lastro.
+  - id: C2
+    severidade: MEDIUM
+    tipo: dependência-externa
+    titulo: "Uma chamada à Graph API por run, no caminho do envio"
+    detalhe: >
+      A listagem de templates aprovados acontece uma vez por run (não por lead) e só se alguma regra usa
+      template. Falha → nenhum template sai naquela run, com `FOLLOWUP_TEMPLATES_INDISPONIVEIS` level
+      error; o texto livre dentro da janela segue normal. É fail-closed no caminho pago, de propósito:
+      mandar sem validar renderia 132000 cobrado.
+  - id: C3
+    severidade: LOW
+    tipo: heurística-de-texto
+    titulo: "Casamento de opt-out é estreito por escolha"
+    detalhe: >
+      Frase inteira, não substring. Um lead que escreva algo fora das frases previstas não é marcado —
+      e o inverso (marcar quem não pediu) foi julgado pior, porque calaria alguém que quer conversar.
+      Verificação pós-deploy nº 5 na story: se `marketing_optout_at` ficar em 0 por semanas COM template
+      ativo, a lista precisa crescer.
+  - id: C4
+    severidade: LOW
+    tipo: fora-do-escopo-consertado
+    titulo: "`sendVisitTemplate` nunca registrou envio — corrigido aqui"
+    detalhe: >
+      Achado ao investigar por que `whatsapp_send_log` não tinha `lembrete_visita_cliente` em 7 dias: a
+      função não chamava `logWhatsappSend`. Os lembretes saíam (flags provam), o custo e a taxa de falha
+      é que eram cegos. Entrou nesta story porque é a MESMA tabela que a story passa a alimentar; sem
+      isso, a medição de custo continuaria pela metade.
+
+verificacoes:
+  - id: V1
+    o_que: "Fora da janela, com template, entrega"
+    resultado: >
+      PASS — teste do remetente: template chamado com phone_number_id/token/nome/params corretos,
+      resultado `{ sent: true, via: "template", template }`, e texto livre NÃO tentado.
+  - id: V2
+    o_que: "Comportamento anterior preservado"
+    resultado: >
+      PASS — fora da janela SEM template devolve `WHATSAPP_WINDOW_CLOSED` sem tocar na Meta; DENTRO da
+      janela manda texto livre e não gasta template pago. Migration validada em prod: **0 regras com
+      template depois de aplicar** — o deploy não muda nada até alguém configurar.
+  - id: V3
+    o_que: "Os cinco freios"
+    resultado: >
+      PASS — 13 testes na função pura: regra sem template · opt-out (inclusive vencendo o cap) · cap com
+      dias restantes · limite exato libera · `hsmMinDays = 0` desliga o cap · template desconhecido ·
+      template não aprovado · listagem vazia (falha da Meta) → nada sai.
+  - id: V4
+    o_que: "Opt-out não cala quem quer conversar"
+    resultado: >
+      PASS — reconhece "Parar promoções"/"Stop promotions"/"descadastrar"/"me remova da lista" (com
+      acento, caixa e "por favor"); NÃO reconhece "pode parar de chover que eu vou visitar", "quero
+      receber mais informações", "não quero mais receber ligação, prefiro whatsapp", "parar" isolado.
+  - id: V5
+    o_que: "A conversa espelha o que o lead leu"
+    resultado: >
+      PASS — `messages.content` recebe o corpo do template renderizado (vindo da Meta na run), com
+      `metadata.via`/`metadata.template`; a atividade diz "por template X (fora da janela)" ou o motivo
+      em português. Nada de cópia hardcoded do corpo (lição da 75-166).
+  - id: V6
+    o_que: "Custo visível"
+    resultado: >
+      PASS — `whatsapp_send_log` recebe sucesso e falha do template de follow-up (category marketing,
+      recipient lead) e agora também os `lembrete_visita_*` (category utility, recipient lead/corretor).
+  - id: V7
+    o_que: "Quem liga é quem opera a tela"
+    resultado: >
+      PASS — Pipeline → Config ganha select de template (só os que o código sabe preencher) e o campo de
+      intervalo mínimo, com texto explicando que sem template o lead frio não recebe.
+  - id: V8
+    o_que: "Suíte, tipos, lint"
+    resultado: >
+      PASS — 233 arquivos / 2.824 testes ✅ (18 novos) · type-check 8/8 ✅ · eslint 0 erros (3 warnings
+      pré-existentes de import morto).
+
+evidencia:
+  o_defeito:
+    - "20 dias: 0 entregas ao lead, ~4.700 tentativas puladas por WHATSAPP_WINDOW_CLOSED"
+    - "7 dias por etapa: Atendimento 1.560/46 leads · Visitou 312/7 · Visita Agendada 244/12"
+    - "comentário no próprio código: 'Approved templates (HSM) for the out-of-window case are explicit backlog'"
+  a_mensagem_de_visita_ja_tem_dono:
+    - "appointment-whatsapp-reminders manda lembrete_visita_cliente/_corretor 24h e 3h antes, por template, 08–20 BRT"
+    - "flags whatsapp_reminded_24h/_3h gravados em TODOS os agendamentos de 13 a 18/08 (prod)"
+    - "4 dos 9 leads em Visita Agendada já tiveram a visita e não têm nada agendado à frente"
+  config_aplicada_em_prod:
+    - "nicole_takeover_days = 9999 em Visita Agendada e Visitou (20/08, decisão do Marcos)"
+    - "NÃO is_active=false: preservaria o alerta 'lead parado' (30d: Atendimento 224 · V.Agendada 31 · Visitou 22)"
+  migration_em_transacao_revertida:
+    - "2 colunas em follow_up_rules, 1 em leads, índice criado, hsm_min_days default 7, 0 regras com template"
